@@ -15,11 +15,15 @@ package me.ahoo.cosec.architecture
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.readText
 
 /**
- * RFC 0011 §3 and G6: every project sits in exactly one group, at `<group>/<name>`, and the files that list projects
- * by hand (the PR labeler, the bug report template, the integration test workflow) list each one.
+ * RFC 0011 §3 and G6: every project sits in exactly one group, at `<group>/<name>`, the files that list projects by
+ * hand (the PR labeler, the bug report template) list each one, and CI, which derives its jobs from the groups
+ * (`scripts/ci/plan.py`), tests each one.
  */
 class ProjectListTest {
     companion object {
@@ -48,6 +52,11 @@ class ProjectListTest {
 
         /** No tests to run: the BOMs, the coverage report, and the gateway server, which `docker-deploy` builds. */
         private val UNTESTED = setOf("bom", "dependencies", "code-coverage-report", "gateway-server")
+
+        /** The projects whose tests write a JaCoCo report: the root build's library projects. */
+        private val COVERED: Set<String> = requireNotNull(System.getProperty("cosec.coverage.projects")) {
+            "cosec.coverage.projects is not set: run the rules through Gradle."
+        }.split(';').filter { it.isNotBlank() }.toSet()
 
         fun artifactOf(project: String): String = "cosec-$project"
     }
@@ -86,9 +95,35 @@ class ProjectListTest {
     }
 
     @Test
-    fun `the integration test workflow checks every tested project`() {
-        val workflow = Projects.root.resolve(".github/workflows/integration-test.yml").readText()
-        val checked = Regex("""([a-z0-9-]+):check\b""").findAll(workflow).map { it.groupValues[1] }.toSet()
-        checked.assert().containsExactlyInAnyOrderElementsOf(PROJECTS.filterNot { it in UNTESTED })
+    fun `CI checks every tested project once, in a job of its own group`() {
+        val jobs = ciPlan()["jobs"].items().map { it["group"].asString() to it["projects"].asString().split(' ') }
+        jobs.flatMap { it.second }.assert().containsExactlyInAnyOrderElementsOf(PROJECTS.filterNot { it in UNTESTED })
+        for ((group, projects) in jobs) {
+            GROUPS.getValue(group).assert().containsAll(projects)
+        }
     }
+
+    @Test
+    fun `CI leaves out only the untested projects, and expects a coverage report from every library project`() {
+        val plan = ciPlan()
+        plan["excluded"].strings().assert().containsExactlyInAnyOrderElementsOf(UNTESTED)
+        plan["uncovered"].strings().assert()
+            .containsExactlyInAnyOrderElementsOf(PROJECTS.filterNot { it in UNTESTED || it in COVERED })
+    }
+
+    /** The plan CI runs, from the script itself, which also fails when the groups and `codecov.yml` disagree. */
+    private fun ciPlan(): JsonNode {
+        val process = ProcessBuilder("python3", "-I", "scripts/ci/plan.py", "--root", Projects.root.toString())
+            .directory(Projects.root.toFile())
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        process.waitFor(1, TimeUnit.MINUTES).assert().isTrue()
+        process.exitValue().assert().describedAs(output).isZero()
+        return JsonMapper.builder().build().readTree(output)
+    }
+
+    private fun JsonNode.items(): List<JsonNode> = (0 until size()).map { get(it) }
+
+    private fun JsonNode.strings(): List<String> = items().map { it.asString() }
 }

@@ -105,6 +105,7 @@ configure(libraryProjects) {
     kotlinJvm()
     jmhBenchmarks()
     junitTests()
+    coverageReport()
 
     dependencies {
         if (this@configure in pureProjects) {
@@ -346,6 +347,7 @@ fun Project.kotlinJvm() {
 
 /** JUnit 5 with the test libraries every module shares. */
 fun Project.junitTests() {
+    val onCi = providers.environmentVariable("CI").isPresent
     tasks.withType<Test> {
         useJUnitPlatform()
         testLogging {
@@ -353,6 +355,8 @@ fun Project.junitTests() {
         }
         // fix logging missing code for JacocoPlugin
         jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
+        // A cache hit would pass CI on another build's results, and give Codecov another build's coverage.
+        outputs.doNotCacheIf("CI runs every test") { onCi }
     }
     dependencies {
         testImplementation(platform(rootProject.libs.junit.bom))
@@ -365,6 +369,26 @@ fun Project.junitTests() {
         testImplementation("org.junit.jupiter:junit-jupiter-params")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    }
+}
+
+/**
+ * `check` writes the module's JaCoCo XML, which CI uploads to Codecov (scripts/ci/plan.py). It holds the module's tests
+ * against its own classes and those of the projects on its test runtime classpath, as the aggregated report does, so
+ * Codecov's merge of the uploads gives the same coverage.
+ */
+fun Project.coverageReport() {
+    val selfPath = path
+    val report = tasks.named<JacocoReport>("jacocoTestReport") {
+        reports.xml.required.set(true)
+        classDirectories.from(
+            configurations["testRuntimeClasspath"].incoming.artifactView {
+                componentFilter { it is ProjectComponentIdentifier && it.projectPath != selfPath }
+            }.files
+        )
+    }
+    tasks.named("check") {
+        dependsOn(report)
     }
 }
 

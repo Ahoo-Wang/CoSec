@@ -49,12 +49,12 @@
 
 | 编号 | 改动 | 成本 |
 |---|---|---|
-| C1 | `Pipeline` 遇到不认识的义务种类即拒绝（500，`obligation-unsupported`），不跳过；新规则 `OBL-3`，配变异体 | 几行与一个测试 |
+| C1 | `Pipeline` 对 sealed `Obligation` 用穷尽的 `when`（不带 `else`）分派，不跳过任何种类：新增一种义务时，处理路径不更新就编译不过；模型比管道新（版本错配）时请求以 500 失败，绝不放行。新规则 `OBL-3`（构建级），由 `ObligationDispatchTest` 守护 | 几行与一个架构测试 |
 | C2 | `cosec.control.http.base-path` 默认改为 `/cosec/control`，路由固定在 `{base-path}/v1/...`，覆盖 `base-path` 不再丢掉版本 | 一个默认值与路由前缀 |
 | C3 | `Identity.Method` 接受任何非空值（约定 `jwt`、`apikey`）：外部 IdP 落地后，网关发出新的方法名时，8.0 的下游不会把它当作格式错误 | 解码器一处 |
 
 三项合成一个 PR（`fix!`），排在 RFC 0008 PR-5（死代码清理）之后、RFC 0009 之前。文档：`wiki/operations/configuration.md`（`base-path`）、
-`wiki/integration/web.md`（500 的新原因）、`wiki/operations/upgrading.md`。
+`wiki/integration/web.md`（版本错配时的 500）、`wiki/operations/upgrading.md`。
 
 ## 4. 决定记录
 
@@ -62,3 +62,4 @@
 |---|---|---|
 | Q1 | GA 前只做"不做会静默放行"和"几乎零成本"的改动；不为未来功能预先抽象公共 SPI | 2026-10-28 |
 | Q2 | 密钥轮换、外部 IdP、委托、配额、mTLS、请求签名等在功能到来时设计接口 | 2026-10-28 |
+| Q3 | C1 采用穷尽 `when`（方案 C）而非运行时拒绝分支：漏处理在编译期暴露，运行时只剩版本错配一种情况 | 2026-10-28 |

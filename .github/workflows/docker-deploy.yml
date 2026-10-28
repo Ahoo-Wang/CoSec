@@ -16,17 +16,30 @@ on:
   schedule:
     - cron: '0 10 * * *'
   push:
-    branches:
-      - '**'
+    branches: [ main, 7.x, 'release/**' ]
     tags:
       - 'v*.*.*'
+  # Only what can change the image or this workflow (platform/ holds the Dockerfile); main pushes and the nightly
+  # run catch the rest.
   pull_request:
     branches:
       - 'main'
+    paths:
+      - 'platform/**'
+      - 'host/**'
+      - 'gradle/**'
+      - '.github/workflows/docker-deploy.yml'
+      - '.github/actions/setup-java-gradle/**'
+
+concurrency:
+  group: docker-deploy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   docker-deploy:
     name: Push Docker image
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -35,13 +48,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Set up JDK 17
-        uses: actions/setup-java@v6
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          server-id: github
-          settings-path: ${{ github.workspace }}
+
+      - name: Set up Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build Dist
         run: ./gradlew gateway-server:installDist
@@ -104,6 +113,7 @@ jobs:
     name: AOT smoke
     needs: docker-deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -115,11 +125,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Set up JDK 17
-        uses: actions/setup-java@v6
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+      - name: Set up Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
       - name: Build cosec-migrate
         run: ./gradlew :migrate:installDist
       - name: Login to GHCR
