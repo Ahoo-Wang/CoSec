@@ -73,6 +73,7 @@ private val log = KotlinLogging.logger {}
     RuntimeAuthorizationProperties::class,
     RevocationProperties::class,
     RequiredListenerProperties::class,
+    ListenerProperties::class,
 )
 class CoSecPipelineAutoConfiguration {
     @Bean
@@ -88,14 +89,16 @@ class CoSecPipelineAutoConfiguration {
     /**
      * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
      * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
+     * On shutdown, delivers what is queued for up to `cosec.observability.listener.drain-timeout`, then drops the rest.
      */
-    @Bean(destroyMethod = "cancel")
+    @Bean(destroyMethod = "drain")
     @ConditionalOnMissingBean
     fun cosecDecisionListeners(
         listeners: ObjectProvider<DecisionListener>,
         sinks: ObjectProvider<AuditEventSink>,
         beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
+        listenerProperties: ListenerProperties,
     ): DecisionListeners {
         val names = IdentityHashMap<AuditEventSink, String>()
         beans.getBeansOfType(AuditEventSink::class.java).forEach { (name, sink) -> names[sink] = name }
@@ -104,7 +107,12 @@ class CoSecPipelineAutoConfiguration {
             sinks.orderedStream().toList().filter { it !is DecisionListener }
                 .map { it to AuditListener.of(it, names.getValue(it)) }
         val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
-        return DecisionListeners(ordered.map { it.second }, requiredListenerProperties.timeout.toKotlinDuration())
+        return DecisionListeners(
+            ordered.map { it.second },
+            requiredListenerProperties.timeout.toKotlinDuration(),
+            queueCapacity = listenerProperties.queueCapacity,
+            drainTimeout = listenerProperties.drainTimeout.toKotlinDuration(),
+        )
     }
 
     /**
