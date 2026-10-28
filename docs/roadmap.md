@@ -261,8 +261,13 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **网关身份传递取代 7.x 注入模式**：下游在可信内网，不复制密钥；`CoSec-Identity` v1 只含 `v`、`tenant`、`sub`、`scope`、当前作用域的生效 `roles`、`auth{method,jti,exp}`、`iat`、`rid` 与白名单 `claims`；匿名不发；网关始终清理入站的同名头；`forwardAuthorization` 默认 false | 2026-10-28 | #1124 |
 | **`cosec-testkit` 作为独立发布模块**（部分推翻 RFC 0008 Q11：核心不依赖 JUnit），第一版只做引擎级场景 | 2026-10-28 | [RFC 0008 §6 Q11](rfc/0008-conformance-and-direct-build.md) |
 | **租户文档的限流变更不需要额外审批**：计数器按文档隔离（`OBL-2`），平台规则叠加生效，租户只影响自己 | 2026-10-28 | #1122 |
+| **模块目录统一去掉 `cosec-` 前缀**，与 `model/`、`engine/` 一致；Gradle 项目名与 Maven 坐标保持 `cosec-*` | 2026-10-28 | #1132、AGENTS.md |
+| **死代码清理按引用判断**：8.0 路径上没有 `main` 引用、不是扩展点、文档不教的代码一律删除，G 系列守卫防回潮（RFC 0008 PR-5 扩大范围） | 2026-10-28 | [RFC 0008](rfc/0008-conformance-and-direct-build.md) PR-5 |
+| **身份与凭据分层**：主体 / 凭据 / 委托；API Key 不携带授予、只能收窄；`principal.type`、`auth.method` 为属性；拒绝带 `act` 的 token；委托放到 8.1 | 2026-10-28 | [RFC 0009](rfc/0009-identity-and-credentials.md) |
 
 ## 10. 尚未派发的下一步
+
+- **2026-10-28 起的顺序**：RFC 0008 PR-5（死代码清理，扩大范围）→ [RFC 0009](rfc/0009-identity-and-credentials.md) PR-1 至 PR-3（GA 前）→ PR-6 → RC 前提。
 
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
