@@ -35,6 +35,11 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
@@ -271,6 +276,50 @@ class ShadowWindowTest {
         refused { changes.publish(ALICE_OP, change.id) }.assert().isEqualTo(428)
         changes.publish(ALICE_OP, change.id, ShadowAck(closed.shadow!!.window, closed.shadow!!.closed!!.counts)).state
             .assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    /**
+     * Review M2: providers must match on every host. A candidate the control host checks clean against a provider an
+     * instance does not have cannot be compiled there; that instance reports CANDIDATE_ERROR and the window blocks.
+     */
+    @Test
+    fun `an instance without the control host's attribute provider blocks the window`() = runBlocking<Unit> {
+        bootstrap()
+        val country = Attribute.external("ext.geo.country", AttributeType.STRING)
+        val withGeo = Changes(
+            store,
+            revisions,
+            { ChangeId("g${ids.incrementAndGet()}") },
+            PERMIT_ALL,
+            clock,
+            ChangeOptions(shadow = options),
+            attributes = AttributeCatalog.of(listOf(country)),
+            reports = reports,
+        )
+        val geo = PolicyDefinition(
+            PolicyId("geo"),
+            false,
+            null,
+            listOf(
+                StatementSource(
+                    "",
+                    Effect.DENY,
+                    listOf("http:GET"),
+                    condition = Condition.Eq(country.path, Literal.Str("NZ")),
+                ),
+            ),
+        )
+        val change = withGeo.propose(ALICE_OP, StoreFixtures.ACME, 1, listOf(Operation.PutPolicy(geo)), "geo")
+        change.state.assert().isEqualTo(ChangeState.CHECKED)
+        withGeo.stage(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        // This instance compiles with no attribute providers.
+        val instance = Instance("no-geo")
+        instance.get("/orders/1").assert().isEqualTo(200)
+        instance.sampled(1)
+        instance.reporter.flush()
+        val closed = withGeo.shadowed(change.id)
+        closed.shadow!!.closed!!.blocked.assert().isTrue()
+        closed.shadow!!.closed!!.counts.keys.assert().contains(ShadowOutcome.CANDIDATE_ERROR.name)
     }
 
     @Test

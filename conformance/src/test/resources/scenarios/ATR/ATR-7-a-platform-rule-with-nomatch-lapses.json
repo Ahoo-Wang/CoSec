@@ -1,0 +1,64 @@
+{
+  "rules": [
+    "ATR-7"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The platform's rule says onMissing nomatch and its attribute is unavailable: the rule does not count the request, so an exhausted bucket does not refuse it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "zone",
+          "action": "*",
+          "condition": {
+            "eq": [
+              "ext.geo.zone",
+              "eu"
+            ]
+          },
+          "onMissing": "nomatch",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.zone": "string"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "rateLimiter": {
+    "exhausted": [
+      "zone"
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

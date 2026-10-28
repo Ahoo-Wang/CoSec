@@ -14,6 +14,7 @@
 package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -35,6 +36,8 @@ object EntryDigest {
 
     fun of(binding: Binding, kind: DocumentKind, owner: String): String =
         sha256(PolicyDocumentCodec.bindingTree(binding, kind, owner))
+
+    fun of(rule: RateLimitSource): String = sha256(PolicyDocumentCodec.rateLimitTree(rule))
 
     internal fun sha256(tree: JsonNode): String = hex(CoSecJsonSerializer.writeValueAsBytes(tree))
 
@@ -89,6 +92,7 @@ object Operations {
         private val owner: String
         private val policies = LinkedHashMap<String, PolicyDefinition>()
         private val bindings = LinkedHashMap<String, Binding>()
+        private val rateLimits = LinkedHashMap<String, RateLimitSource>()
         private var catalog = base?.catalog
         private var limits = base?.limits
         private var attributes = base?.attributes
@@ -101,40 +105,29 @@ object Operations {
             this.owner = owner
             base?.policies?.forEach { policies[it.id.value] = it }
             base?.bindings?.forEach { bindings[it.id.value] = it }
+            base?.rateLimits?.forEach { rateLimits[it.id] = it }
         }
 
         fun apply(path: String, operation: Operation) {
             when (operation) {
-                is Operation.PutPolicy -> {
-                    val id = operation.policy.id.value
-                    if (ifMatch(path, operation.ifMatch, policies[id]?.let(EntryDigest::of))) {
-                        policies[id] = operation.policy
-                    }
-                }
+                is Operation.PutPolicy ->
+                    put(path, policies, operation.policy.id.value, operation.policy, operation.ifMatch, EntryDigest::of)
+                is Operation.RemovePolicy ->
+                    remove(path, "policy", policies, operation.id.value, operation.ifMatch, EntryDigest::of)
+                is Operation.PutBinding ->
+                    put(path, bindings, operation.binding.id.value, operation.binding, operation.ifMatch, ::digest)
+                is Operation.RemoveBinding ->
+                    remove(path, "binding", bindings, operation.id.value, operation.ifMatch, ::digest)
+                is Operation.PutRateLimit ->
+                    put(path, rateLimits, operation.rule.id, operation.rule, operation.ifMatch, EntryDigest::of)
+                is Operation.RemoveRateLimit ->
+                    remove(path, "rate limit", rateLimits, operation.id, operation.ifMatch, EntryDigest::of)
+                else -> section(path, operation)
+            }
+        }
 
-                is Operation.RemovePolicy -> remove(
-                    path,
-                    "policy",
-                    policies,
-                    operation.id.value,
-                    operation.ifMatch,
-                    EntryDigest::of
-                )
-                is Operation.PutBinding -> {
-                    val id = operation.binding.id.value
-                    if (ifMatch(path, operation.ifMatch, bindings[id]?.let(::digest))) {
-                        bindings[id] = operation.binding
-                    }
-                }
-
-                is Operation.RemoveBinding -> remove(
-                    path,
-                    "binding",
-                    bindings,
-                    operation.id.value,
-                    operation.ifMatch,
-                    ::digest
-                )
+        private fun section(path: String, operation: Operation) {
+            when (operation) {
                 is Operation.PutCatalog -> section(path, DocumentKind.APP, "only an app document has a catalog") {
                     catalog = operation.catalog
                 }
@@ -147,19 +140,31 @@ object Operations {
                     limits = operation.limits
                 }
 
-                is Operation.SetAttributes -> section(
-                    path,
-                    DocumentKind.PLATFORM,
-                    "only the platform document declares attributes"
-                ) {
-                    attributes = operation.attributes
-                }
+                is Operation.SetAttributes ->
+                    section(path, DocumentKind.PLATFORM, "only the platform document declares attributes") {
+                        attributes = operation.attributes
+                    }
 
                 is Operation.SetBoundary -> if (kind == DocumentKind.APP) {
                     findings += Finding("OPERATION", path, "an app document names no boundary", UNPROCESSABLE)
                 } else {
                     boundary = operation.boundary
                 }
+
+                else -> error("Not a section operation: $operation")
+            }
+        }
+
+        private fun <T> put(
+            path: String,
+            entries: MutableMap<String, T>,
+            id: String,
+            value: T,
+            ifMatch: String?,
+            digest: (T) -> String,
+        ) {
+            if (ifMatch(path, ifMatch, entries[id]?.let(digest))) {
+                entries[id] = value
             }
         }
 
@@ -205,8 +210,7 @@ object Operations {
             limits = limits,
             attributes = attributes,
             boundary = boundary,
-            // No operation changes a document's rate limit rules yet: the base's are kept as they are (RFC 0006 §8).
-            rateLimits = base?.rateLimits.orEmpty(),
+            rateLimits = rateLimits.values.toList(),
         )
     }
 
@@ -228,7 +232,11 @@ object Operations {
             val current = bindings[binding.id.value]?.let { EntryDigest.of(it, kind, owner) }
             if (current != EntryDigest.of(binding, kind, owner)) operations += Operation.PutBinding(binding, current)
         }
+        operations += rateLimits(base, desired)
         if (mode == ApplyMode.REPLACE) {
+            val keepRateLimits = desired.rateLimits.map { it.id }.toSet()
+            base?.rateLimits?.filter { it.id !in keepRateLimits }
+                ?.forEach { operations += Operation.RemoveRateLimit(it.id, EntryDigest.of(it)) }
             val keepPolicies = desired.policies.map { it.id.value }.toSet()
             base?.policies?.filter { it.id.value !in keepPolicies }
                 ?.forEach { operations += Operation.RemovePolicy(it.id, EntryDigest.of(it)) }
@@ -237,6 +245,29 @@ object Operations {
                 ?.forEach { operations += Operation.RemoveBinding(it.id, EntryDigest.of(it, kind, owner)) }
         }
         operations += sections(kind, base, desired, mode == ApplyMode.REPLACE)
+        return operations
+    }
+
+    /**
+     * The rate limit operations that make [base]'s rules [desired]'s, in [desired]'s order: obligations run in rule
+     * order and a 429 names the first exhausted rule, so order is content. A put replaces a rule where it stands and
+     * appends a new one; every rule after the first one out of place is removed and put again, in order.
+     */
+    private fun rateLimits(base: PolicyDocument?, desired: PolicyDocument): List<Operation> {
+        val current = base?.rateLimits.orEmpty().associateBy { it.id }
+        val wanted = desired.rateLimits.map { it.id }
+        val standing = base?.rateLimits.orEmpty().map { it.id }.filter { it in wanted }
+        val inPlace = standing.zip(wanted).takeWhile { (stands, wants) -> stands == wants }.size
+        val operations = ArrayList<Operation>()
+        desired.rateLimits.forEachIndexed { i, rule ->
+            val digest = current[rule.id]?.let(EntryDigest::of)
+            if (digest != null && i >= inPlace) {
+                operations += Operation.RemoveRateLimit(rule.id, digest)
+                operations += Operation.PutRateLimit(rule)
+            } else if (digest != EntryDigest.of(rule)) {
+                operations += Operation.PutRateLimit(rule, digest)
+            }
+        }
         return operations
     }
 
