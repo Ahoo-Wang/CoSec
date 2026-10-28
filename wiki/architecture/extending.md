@@ -1,216 +1,306 @@
 ---
 title: "Extending CoSec"
-description: "Add your own conditions, actions, repositories, rate limiter backends and hooks."
+description: "Plug your own authenticators, membership sources, attribute providers, decision listeners, rate limiters, stores and route maps into the 8.0 pipeline."
 ---
 
 # Extending CoSec
 
-For developers who need behavior CoSec does not ship. This page lists every extension point, what it must
-guarantee (purity, no event-loop blocking, fail closed) and how to register it. The guarantees come from the
-[architecture invariants](./overview.md#invariants); an extension that breaks one weakens the whole decision.
+For developers who need behavior CoSec does not ship. This page lists every extension point of the 8.0 pipeline and
+control plane, what each one must guarantee, and how the starter picks it up. The guarantees come from the
+[architecture invariants](./overview.md#invariants): an extension that blocks a thread or hides a failure weakens every
+decision.
 
 ## Extension points
 
-With the starter, you extend CoSec by declaring a bean. The starter's beans are `@ConditionalOnMissingBean`, so a
-bean of the same type replaces the default. Without Spring, pass your implementation to the constructor of the
-class that uses it (for example `SimpleAuthorization`).
+With the starter you extend CoSec by declaring a Spring bean. Some extension points collect every bean of their type;
+the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, pass your
+implementation to the class that uses it, usually through `PipelineComponents`.
 
-| Extension point | Module | Replace it to |
-|---|---|---|
-| `ConditionMatcherFactory`, `ActionMatcherFactory` | `cosec-core` | Add a condition or action type to the policy language. |
-| `PolicyRepository`, `AppRolePermissionRepository` | `cosec-core` | Keep policies and role grants somewhere other than Redis. |
-| `BlacklistChecker` | `cosec-core` | Deny requests before any policy is evaluated. |
-| `RootPrincipalMatcher` | `cosec-core` | Decide which principals bypass authorization. |
-| `RateLimitRuleProvider`, `RateLimiter` | `cosec-core` | Load rate limit rules from elsewhere; count permits somewhere other than Redis or memory. |
-| `ShadowPolicyProvider`, `ShadowEventSink` | `cosec-core` | Supply shadow candidates from elsewhere; send shadow diffs somewhere other than the log. |
-| `CoSecAuthorizationCustomizer`, `Authorization` | starter, `cosec-api` | Wrap or replace the decision. |
-| `RequestAttributesAppender` | `cosec-core` | Add request attributes that conditions can read. |
-| `SecurityContextParser`, `TokenStore`, `ApiKeyStore` | `cosec-core` | Resolve the principal differently; store revocations or API keys elsewhere. |
-| `Authentication`, `AbstractSwitchTenantAuthentication`, `SocialUserPrincipalConverter` | `cosec-api`, `cosec-core`, `cosec-social` | Add login methods, tenant switching, social user mapping. |
-| `AuditEventSink` | `cosec-api` | Send audit events to your own system. |
+| Extension point | Module | Implement it to | The starter takes |
+|---|---|---|---|
+| `Authenticator` | `cosec-runtime` | Accept another kind of credential, or replace token and API key authentication. | one bean, replacing the built-in one |
+| `TokenStore`, `RevocationReader` | `cosec-core` | Keep revoked tokens somewhere other than Redis. | one bean of each |
+| `ApiKeyReader` | `cosec-core` | Look API keys up somewhere other than memory or Redis. | one bean |
+| `MembershipProvider` | `cosec-core` | Supply the roles and attached policies of principals whose token does not carry them. | one bean |
+| `AttributeProvider` | `cosec-runtime` | Give conditions external attributes (`ext.<provider>.<name>`), including the blacklist. | every bean |
+| `DecisionListener` | `cosec-runtime` | Observe every decision: audit, alerting, analytics. | every bean |
+| `RateLimiter` | `cosec-runtime` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
+| `SnapshotDocumentStore` | `cosec-core` | Keep policy documents somewhere other than Redis. | one bean, without `cache-support` |
+| `BridgeContextContributor` | `cosec-runtime` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
+| `ChangeListener` | `cosec-control` | Observe or gate control-plane changes. | every bean, with `control-support` |
+| Route maps | `cosec-core` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
 
 Changing one of these interfaces (rather than implementing it) is a breaking change for every application that
 implements it.
 
-There is no separate decision listener. To observe decisions, wrap the authorization (see
-[Authorization hooks](#authorization-hooks)) or implement an `AuditEventSink`. A listener API is proposed in
-[RFC 0001](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md) and does not exist yet.
+## Rules every extension follows
 
-## Custom conditions and actions
+The pipeline calls every SPI on the request path, often on a Netty event loop. Every SPI here follows the same
+contract:
 
-Add a matcher only when the built-in actions and conditions cannot express the rule; composing `path`, `bool` and
-the part conditions covers most cases (see the [policy language](../policies/language.md)). A matcher type is a
-**factory** registered under a type name, and policies refer to it as `{ "<type>": { ...configuration } }`:
+- **Never block the calling thread.** The SPIs are `suspend` functions (the snapshot store returns
+  `CompletableFuture`s). A suspending client is fine. An implementation over a blocking client (JDBC, a blocking HTTP
+  client) moves the call to its own bounded executor, for example with `withContext(myDispatcher)`. Do not use
+  `Dispatchers.IO` inside CoSec modules (`RuntimeBoundaryTest` forbids it there); in your own code, prefer a bounded
+  executor sized for the dependency.
+- **Report failure by throwing.** Never answer "nothing" for a lookup that failed: an empty membership list, a missing
+  attribute or "not revoked" can each turn a deny into a permit. The pipeline turns a thrown exception or a timeout into
+  `Indeterminate`, which answers `503` unless a DENY matches.
+- **Do not catch cancellation.** A client that goes away cancels the request's coroutine. Rethrow
+  `CancellationException`, and do not use `runCatching` around a suspending call.
+- **Keep it cheap.** Each call has a timeout (see [Configuration](../operations/configuration.md)); the whole request
+  has `cosec.pipeline.timeout`. A local answer that does not suspend costs no thread switch and no timer.
+
+## Authenticators
+
+`Authenticator` turns a request's credentials (`Credentials.token`, `Credentials.apiKey`) into an `AuthnResult`:
+
+| Result | When | What happens |
+|---|---|---|
+| `Authenticated(principal, method)` | The credential is valid. | The request is evaluated as that principal; `method` goes to audit. |
+| `Anonymous` | No credential. | The request is evaluated as the anonymous principal. |
+| `Rejected(reason)` | The credential is invalid, expired or revoked. | The request is evaluated as anonymous; a deny answers `401` with that reason. |
+| `Unavailable(cause)` | A dependency failed. | `503`. A thrown exception is treated the same way. |
+
+An `AuthenticatedPrincipal` names its id, tenant, membership source (the token's claims, or the
+[membership provider](#memberships)) and attributes. Conditions read the attributes as `subject.attributes.<name>`.
+
+An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
+parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
+(`cosec.pipeline.api-key-header`).
+
+The starter's default is a `CompositeAuthenticator`: a request with an API key is judged by the API key authenticator
+alone (when `cosec.api-key.enabled`), any other request by the JWT `TokenAuthenticator`. **Your `Authenticator` bean
+replaces all of it.** To accept another token format and keep the built-in ones, build them yourself and delegate:
 
 ```kotlin
-// "businessHours": matches Monday–Friday between `from` and `to` (hours) in `zone`.
-class BusinessHoursConditionMatcherFactory : ConditionMatcherFactory {
-    companion object {
-        const val TYPE = "businessHours"
+@Bean
+fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys: ApiKeyReader): Authenticator {
+    val builtIn = CompositeAuthenticator(
+        TokenAuthenticator(JwtTokenVerifier(algorithm), revocations),
+        ApiKeyAuthenticator(keys),
+    )
+    val sessions = SessionTokenAuthenticator() // your own Authenticator for "Session ..." tokens
+    return Authenticator { credentials ->
+        if (credentials.token?.startsWith("Session ") == true) {
+            sessions.authenticate(credentials)
+        } else {
+            builtIn.authenticate(credentials)
+        }
     }
-
-    override val type: String = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher =
-        BusinessHoursConditionMatcher(configuration)
 }
+```
 
-class BusinessHoursConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(BusinessHoursConditionMatcherFactory.TYPE, configuration) {
-    private val zone = ZoneId.of(configuration.getRequired("zone").asString())
-    private val from = configuration.getRequired("from").asInt()
-    private val to = configuration.getRequired("to").asInt()
+Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier`: revocation is
+checked through the suspending `RevocationReader`. How tokens, claims and memberships work for users is in
+[Authentication](../integration/authentication.md).
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        val now = ZonedDateTime.now(zone)
-        return now.dayOfWeek < DayOfWeek.SATURDAY && now.hour in from until to
+## Credentials and revocation
+
+| Extension point | Contract |
+|---|---|
+| `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
+| `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. |
+| `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
+
+With `cache-support`, the starter wires `CoCacheTokenStore` and its reader. Without it, JWT fails startup unless you
+register a `TokenStore` and a `RevocationReader` (or set `cosec.jwt.enabled=false`). Registering
+`RevocationReader.NONE` is an explicit choice to revoke nothing.
+
+The revocation read is one of the two documented exceptions to failing closed: a store whose degraded read cannot answer
+reports "not revoked" itself. Anything a `RevocationReader` throws still answers `503`. The exceptions are listed in the
+[security model](../guide/security-model.md).
+
+## Memberships
+
+A token carries a principal's roles and attached policies as claims, or, when they change often or do not fit, the
+provider marker instead. For those principals the pipeline asks the `MembershipProvider`:
+
+```kotlin
+fun interface MembershipProvider {
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships
+}
+```
+
+- Answer `Memberships(Memberships.Source.PROVIDER, roles, attachments)`: roles by space (`SpaceId.DEFAULT` for the
+  default space) and attached policy ids, in order. Any other source is rejected.
+- Answer `Memberships(PROVIDER, emptyMap(), emptyList())` for an unknown principal. Throw when the lookup fails.
+- A failure, a timeout (`cosec.authorization.membership.timeout`) or a missing provider makes the request `503`, never
+  "no roles": no roles would also mean that no DENY bound to a role applies.
+
+`InMemoryMembershipProvider` (`cosec-core`) is for tests. `CoCacheMembershipProvider` (`cosec-cocache`) caches what your
+`MembershipLoader` answers in Redis, shared by every instance; call its `invalidate` when a principal's memberships
+change. The starter registers neither: declare the one you want as a bean.
+
+## External attributes
+
+Conditions read the request, the principal and the scope directly. Anything else (a department from a directory, a risk
+score, the client's region) comes from an `AttributeProvider`:
+
+```kotlin
+@Component
+class DirectoryAttributeProvider(private val directory: DirectoryClient) : AttributeProvider {
+    override val attributes = listOf(AttributeDeclaration("ext.directory.department", AttributeType.STRING))
+
+    override val timeout: Duration = 200.milliseconds // kotlin.time; null uses cosec.authorization.attributes.timeout
+
+    override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
+        if (!request.subject.authenticated) {
+            return emptyMap() // absent: a comparison with it is false
+        }
+        val department = directory.departmentOf(request.subject.tenantId, request.subject.id) // suspends, throws on failure
+        return if (department == null) emptyMap() else mapOf("ext.directory.department" to department)
     }
 }
 ```
 
 ```json
-"condition": { "businessHours": { "zone": "Asia/Shanghai", "from": 9, "to": 18 } }
+{ "eq": ["ext.directory.department", "finance"] }
 ```
 
-**Base classes.** Extend `AbstractConditionMatcher` (it handles `negate`) or `PartConditionMatcher` (it also extracts
-a request or context `part`). For actions, extend `AbstractActionMatcher` (it handles `method`) and implement
-`ActionMatcherFactory`. The interfaces are in `me.ahoo.cosec.policy.condition` and `me.ahoo.cosec.policy.action`.
+- **Declare every attribute** as `ext.<provider>.<name>` with its type: `STRING`, `BOOL`, `STRING_SET` or `IP`. Each
+  path is declared once across all providers. The declarations form the attribute catalog that documents compile
+  against: a policy that reads an `ext.` path nobody declares does not compile. A platform document may also declare
+  the catalog, so the control plane and every instance agree.
+- **Values.** Return values by path, of the declared type. A path left out is *absent*. A value of the wrong type, a
+  thrown exception or a timeout makes the attributes asked for *unavailable*, and each statement that reads them follows
+  its `onMissing` setting ([Policy language](../policies/language.md)).
+- **Stages.** A stage-B attribute (the default) is fetched only when the engine's plan says this request could read it,
+  after the scope is resolved. A stage-A attribute is fetched on every request, before the scope, together with the
+  memberships. Use stage A only for attributes that decide what is loaded, as the blacklist does.
+- **What a provider sees.** `AttributeRequest` holds the subject, the resolved scope (null in stage A), the action,
+  the resource, the client address, the request id and the device id, never another attribute's value.
 
-### Registering a factory
+**The blacklist** is a stage-A provider: `BlacklistAttributeProvider(source)` declares `ext.blacklist.principal`,
+`ext.blacklist.ip` and `ext.blacklist.device`, and a request one of them blocks meets the built-in DENY
+`cosec:blacklist`. Implement `BlacklistSource.contains(kind, value)` over your store (principals are
+`<tenant>:<principal id>`), or use `InMemoryBlacklistSource`, and declare the provider as a bean. A source that fails
+never means "not blocked": the request is `503` unless a DENY matches.
 
-There are two ways, and both end in the same registry (`ConditionMatcherFactoryProvider`,
-`ActionMatcherFactoryProvider`):
+With `ip2region-support`, the starter registers `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`,
+`.city`, `.isp`).
 
-- **`ServiceLoader`**, for any environment. List the factory class in
-  `src/main/resources/META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory` (or
-  `…/me.ahoo.cosec.policy.action.ActionMatcherFactory`). The registry loads these entries when it is first used.
-- **A Spring bean**, when the factory needs Spring-managed dependencies. The starter's `MatcherFactoryRegister`
-  registers every `ConditionMatcherFactory` and `ActionMatcherFactory` bean at startup, before local policies are
-  loaded into the repository.
+## Decision listeners
 
-The last registration of a type wins. A Spring bean is registered after the `ServiceLoader` entries, so it reliably
-replaces a built-in type; between two `ServiceLoader` entries for the same type, classpath order decides. Do not
-register one type both ways unless you mean to replace it.
-
-### Rules for matchers
-
-- **Do no I/O and keep no state.** Matchers run for every request, including denied ones, possibly on an event loop.
-  Read configuration once, in the constructor. A quota is a [rate limit rule](../policies/rate-limiting.md), not
-  a matcher. Throwing denies the request.
-- **Mark blocking matchers.** If a condition matcher must block (a network or database call), implement
-  `me.ahoo.cosec.policy.BlockingAware` with `requiresBlocking = true`. `SimpleAuthorization` then evaluates the
-  layer containing it on `boundedElastic`; other layers stay on the caller's thread. A composite matcher must report
-  `true` when any child does, as `bool` does. Action matchers are never inspected: they must not block.
-- **Skip side effects during evaluation-only runs.** Saving a policy validates it by running every condition once
-  against a mock request, and explaining a decision runs conditions too. A matcher with an unavoidable external side
-  effect checks `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) and skips it when `true`. Policy and
-  request data cannot set this marker.
-- **Path variables are scoped to their statement.** A matcher that reads path variables in code
-  (`securityContext.getPathVariables()`) is invisible to the load-time scope check, which only inspects
-  configuration strings. The variables are cleared before every statement matches its action, so such a matcher sees
-  only the variables captured by its own statement's `path` action. In a policy-level or app-permission condition,
-  under any other action, and inside an action matcher, it sees none.
-
-Add a test that creates the matcher through its factory and checks a match and a non-match. If you changed
-registration, also deserialize one policy using the new type, so a missing service entry or bean fails the test.
-
-## Authorization hooks
-
-| Extension point | Contract |
-|---|---|
-| `BlacklistChecker` | `check(request, context): Mono<Boolean>`, `false` = blocked. Runs first, for every principal including root. |
-| `RootPrincipalMatcher` | `isRoot(principal): Boolean`. A root principal bypasses every policy and permission, but not the blacklist. The starter uses `RootPrincipalMatcher.NONE` unless `cosec.authorization.root-enabled=true`, then `DEFAULT` ([Root principal](../guide/security-model.md#root-principal)). Provide your own to require a stronger signal, such as a signed claim. |
-| `CoSecAuthorizationCustomizer` | `customize(authorization): Authorization`. Wraps the starter's authorization outside rate limiting and inside auditing and tracing; customizers apply in `@Order` order. Metrics are added this way. |
-| `Authorization` | Replaces the whole chain. A replacement gets no auditing, rate limiting or shadow mode (tracing still wraps it); compose `AuditingAuthorization`, `RateLimitingAuthorization` and `ShadowAuthorization` yourself. |
-
-A decorator should implement `DecisionAuthorization` and forward `decide(...)` rather than only `authorize(...)`, so
-the matched `VerifyContext` still reaches auditing, tracing and explanation. Where each decorator sits is described
-in the [authorization chain](./overview.md#authorization-chain).
-
-## Repositories
-
-`PolicyRepository` and `AppRolePermissionRepository` are what authorization reads. `cosec-cocache` implements them
-on Redis; with any other store, you implement them.
+A `DecisionListener` observes every `DecisionEvent`: the outcome and status, the decision and the statement and binding
+that decided it, the document revisions, the subject, scope, action and resource, the status (never the value) of each
+external attribute, and the trace. It cannot change the decision.
 
 ```kotlin
-interface PolicyRepository {
-    fun getGlobalPolicy(): Mono<List<Policy>>
-    fun getPolicies(policyIds: Set<String>): Mono<List<Policy>>
-    fun setPolicy(policy: Policy): Mono<Void>
-}
+@Component
+class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
+    override val name = "break-glass-alerts" // unique among the listeners
 
-interface AppRolePermissionRepository {
-    fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission>
+    override suspend fun onDecision(event: DecisionEvent) {
+        if (event.breakGlass) {
+            pager.page("break-glass used by ${event.subject.tenant}/${event.subject.id}")
+        }
+    }
 }
 ```
 
-An implementation must keep these promises:
+| `delivery` | Delivered | A failure |
+|---|---|---|
+| `BEST_EFFORT` (default) | Queued without suspending into the listener's own bounded queue, handled off the request path. A full queue drops the event. | Logged and counted; the response is unchanged. |
+| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.audit.required.timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
 
-- **`getPolicies` returns only the policies it found.** Do not invent placeholders and do not fail for ids you do not
-  have: `SimpleAuthorization` compares the result with the requested ids and fails the request with
-  `MissingPolicyException` when one is missing. `LocalPolicyInitializer` relies on the same contract to decide which
-  local policies still need to be written.
-- **`getGlobalPolicy` must not silently drop policies.** Return every policy of type `global`. If your store keeps an
-  index separately from the content, fail when an indexed policy has no content: dropping it could drop a global
-  `DENY` and widen access.
-- **Failures are errors.** Signal a failed read as an error, never as an empty result. An error denies the request
-  (`500`); an empty result would be read as "no policy", which can allow.
-- **`getAppRolePermission` returns only the grants made in `appId` for `spaceId`.** The `roleIds` passed in are already
-  the principal's roles that apply in that space, with their `@space` suffix removed. Never return grants made in
-  another app or space. Return an empty `Mono` when the app has no app permission.
-- **Do not block the subscriber.** Return a `Mono` that does its I/O without blocking, or move blocking I/O to
-  `Schedulers.boundedElastic()`. Answer from memory without a thread hop when you can: authorization reads the
-  repositories on every request.
-- **Writes must not open a window that widens access.** If a write touches several keys (content and an index),
-  order them so that a reader in between sees at most the old or the new state, never a policy applied where it
-  does not belong.
+- A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
+- A REQUIRED listener should be idempotent by `event.id`: a write that timed out may still have succeeded.
+- Every `DecisionListener` bean is registered, in `@Order` order. The starter adds the audit log
+  (`LoggingAuditListener`, unless `cosec.audit.enabled=false`), and, with their features, `MetricsListener`,
+  `TracingListener`, `KafkaAuditListener` and the shadow listener. Events, metrics and spans are described in
+  [Observability](../operations/observability.md).
 
-Storage choices and operating Redis are covered in [Storage](../operations/storage.md).
+## Rate limiters
 
-## Rate limiter backends
+`RateLimiter` counts the permits of a permit's rate limit obligations:
 
-| Extension point | Contract |
-|---|---|
-| `RateLimitRuleProvider` | `getRules(): List<RateLimitRule>`. Called on every allowed request: answer from memory. `RateLimitRuleProvider.of(rules)` rejects duplicate ids. |
-| `RateLimiter` | `tryAcquire(ruleId, bucket, rateLimit): Mono<RateLimitResult>` spends one permit from the bucket and reports the permits left. `RateLimit.resultOf(...)` builds the result from a sliding-window estimate. |
+```kotlin
+fun interface RateLimiter {
+    suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult
+}
+```
 
-A `RateLimiter` must not block the subscribing thread, which is a Netty event loop under WebFlux and Gateway: run
-blocking I/O on `boundedElastic`. Signal a failure as an error; the rule's `strictFailure` decides whether it
-rejects the request. Rules, keys and failure behavior for users are in [Rate limiting](../policies/rate-limiting.md).
+Spend one permit of `limit` from `bucket` of rule `ruleId` and report what is left; `RateLimiter.window(limit)` gives
+the sliding window both built-in limiters use, and its `resultOf(...)` builds the result. Throw when the backend
+fails: the rule's `strictFailure` then decides between `503` and skipping the rule. With `cache-support` and a
+`ReactiveStringRedisTemplate`, the starter registers `ReactiveRedisRateLimiter`, which counts across instances; otherwise
+the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and headers are in
+[Rate limiting](../policies/rate-limiting.md).
 
-## Shadow mode
+## Snapshot document stores
 
-| Extension point | Contract |
-|---|---|
-| `ShadowPolicyProvider` | `getPolicies()` and `getAppPermissions()` return candidates that replace the enforced item with the same id, or add new ones. Called for every shadowed request: answer from memory, and return the same list instance so the overlay is reused. Fail loudly on a candidate you cannot load: a candidate left out silently makes the run report "no difference". |
-| `ShadowEventSink` | `publish(diff)` receives each difference. Runs on the request path: hand it off rather than block. |
+`SnapshotDocumentStore` is where `SnapshotSource` reads the platform, app and tenant documents:
 
-How to use shadow mode is in [Testing policies](../policies/testing.md#trying-changes-in-shadow-mode).
+- `read(key)` may answer from a local copy (report its maximum age as `localCopyMaxAge`); `readIfChanged(key, known)`
+  must read the store of record and answer `Unchanged` when the digest matches; `subscribe(listener)` reports changes
+  after they are readable.
+- Every method returns without blocking and never throws: a failure completes the future exceptionally. A stored value
+  that cannot be decoded carries a `SnapshotFormatException` in its cause chain.
+- Never delete a document. A key that once had a document and then reads as absent fails closed.
 
-## Request and security context
+With `cache-support`, the starter uses `RedisSnapshotDocumentStore`, and the control plane writes through the same Redis.
+Without it, the starter registers an `InMemorySnapshotDocumentStore`; put documents into it with `put(key, document)`, or
+declare your own `SnapshotDocumentStore` bean instead. Requests fail closed until a platform document is there.
 
-| Extension point | Contract |
-|---|---|
-| `RequestAttributesAppender` | `append(request): Request`. Enrich each request with attributes that conditions read as `request.attributes.<name>`; return a new request with `request.mergeAttributes(...)`. |
-| `SecurityContextParser` | `parse(request): SecurityContext`. Throw `TokenVerificationException` for an invalid credential: the caller is treated as anonymous and a denial reports the token failure. Any other exception answers `500`. `parse` is synchronous and runs on the caller's thread unless token revocation or a blocking API key store is enabled, so a parser that does I/O must not run on an event loop otherwise. |
-| `TokenStore` | `revoke(tokenId, ttl)` and `isRevoked(tokenId)`. Consulted on every authenticated request when revocation is enabled: keep lookups cheap. The entry must outlive the refresh token bound to the token id. |
-| `ApiKeyStore` | `findByHash(hash): ApiKey?`. Called while parsing the security context; a store that does I/O needs `cosec.api-key.store-blocking=true`. |
+## Bridge context
 
-## Authentication
+The adapters start each request's coroutine with a context captured on the thread that received it. A
+`BridgeContextContributor` adds to that context, so a thread-local your code relies on is restored whenever the pipeline
+resumes on another thread:
 
-| Extension point | Contract |
-|---|---|
-| `Authentication<C, CoSecPrincipal>` | Adds a login method for credentials of type `C`. The starter registers every `Authentication` bean. |
-| `AbstractSwitchTenantAuthentication` | Base class for letting principals switch tenants. |
-| `SocialUserPrincipalConverter` | `convert(provider, socialUser): Mono<CoSecPrincipal>` maps a social login's user to your principal. |
+```kotlin
+fun interface BridgeContextContributor {
+    fun capture(): CoroutineContext
+}
+```
 
-Tokens, login and revocation for users are in [Authentication](../integration/authentication.md).
+The starter registers `MdcContextContributor` (the SLF4J MDC) and, with `opentelemetry-support`, the OpenTelemetry
+context. Every `BridgeContextContributor` bean is used, in `@Order` order. `capture` runs once per request: keep it cheap.
 
-## Auditing
+## Change listeners
 
-Implement `AuditEventSink` (`publish(event)`, in `cosec-api`) to send audit events to your own system. Your bean
-replaces both the logging sink and the Kafka sink. Publishing runs on the request path, so hand events off
-asynchronously instead of blocking. An exception from the sink is logged and never changes the decision. The event
-fields are described in [Observability](../operations/observability.md#audit-events).
+With `control-support`, a `ChangeListener` receives a `ChangeEvent` for every step of a change: proposed, checked,
+shadowed, approved, publishing, published, break-glass requested or approved, and so on. An event never carries document
+content.
+
+- A `REQUIRED` listener gates publishing and every step of creating break-glass: the step happens only after every
+  REQUIRED listener recorded it within 5 s, otherwise it fails with `503` and writes nothing. Creating break-glass
+  needs at least one REQUIRED listener.
+- Other events, and every event to a `BEST_EFFORT` listener, are delivered off the caller; a failure is logged.
+- The starter registers `LoggingChangeListener` only when the application declares no `ChangeListener`. To keep the log
+  next to your own listener, declare it as a bean too.
+
+`cosec-kafka` provides `KafkaChangeListener(kafkaOperations, topic, delivery)` (default topic `cosec-control-audit`);
+the starter does not register it, so declare it as a bean. With `Delivery.REQUIRED`, configure the producer with
+`acks=all`.
+
+## Route maps
+
+By default a request's action is `http:<METHOD>` and its resource `http:path:<path>`. A route map gives a service's
+routes their own actions and typed resources (`order:read` on `order/{orderId}`), so policies are written in the
+service's terms. Mapped requests get the route's action; every other request keeps the `http` namespace.
+
+```json
+{
+  "service": "order",
+  "routes": [
+    { "method": "GET", "path": "/orders/{orderId}", "action": "order:read", "resource": "order/{orderId}" },
+    { "method": "POST", "path": "/orders/{orderId}/cancel", "action": "order:cancel", "resource": "order/{orderId}" }
+  ]
+}
+```
+
+- The starter loads the route maps listed in `cosec.authorization.routes.location` (default
+  `classpath:cosec-routes.json`, comma-separated) at startup. A missing or invalid map, or two routes one request could
+  match, fails startup. That includes the default location: a WebFlux or WebMvc service without a route map sets the
+  property empty. A gateway host loads none.
+- With `openapi-support` and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both documents from
+  the service's OpenAPI description: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
+  (catalog and permission policies) to publish through the control plane.
+
+The file is read strictly: an unknown or missing field fails it
+([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)).
+App documents and catalogs are in [Role permissions](../policies/role-permissions.md).
 
 **Next:** how to propose and land a change, in [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md), and the build rules and invariants for changing CoSec, in [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md).
