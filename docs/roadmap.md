@@ -191,22 +191,19 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 7. 进行中
 
-**2026-10-28 S1b 之后的修复批**（S5 写文档时对照代码发现，加一次只读排查；全部在 S5 之前修，8.0 不留"已知限制"）：
+**2026-10-28 状态**（S1b 之后的修复批 #1118–#1125 与 S5 文档 #1131 均已合入）：
 
 | PR | 内容 | 状态 |
 |---|---|---|
-| #1118 | `fix(runtime)`：Pipeline 把宿主属性（`http.*`、`request.attributes.*`）交给引擎，此前恒为缺失，基于它们的 DENY 不生效（放行方向）；模拟器同样读属性；重复且不同值的请求头判为不确定；主机名小写；策略不得读取凭据类请求头（编译时拒绝）；`PIP-9` 与两个变异体 | ✅ 已合入 |
-| #1119 | `fix(runtime)`：执行 `cosec.authorization.snapshot.fail-closed.*`（唯一调用点随 #1114 删除，放行方向）；`SNP-5` | ✅ 已合入 |
-| #1123 | `fix(runtime)`：`trace-level` 进入决策事件；刷新与 Pipeline 共用吊销的时钟容差 | ✅ 已合入 |
-| #1120 | `fix(starter)`：装配黑名单（未注册即 DENY 不生效，放行方向）、成员关系缓存、Kafka 变更监听器（`required` 而无 Kafka 时启动失败）、可叠加的变更监听器、`AuditEventSink` | 审查通过，自动合并 |
-| #1121 | `feat(control)!`：`ControlStore.documents()`/`openChanges()`/`releaseLease`，修订保留与影子窗口关闭的调度器 | 审查通过，排在 #1120 后 |
-| #1122 | `fix(control)`：限流规则可经变更修改（此前 `:apply` 静默丢弃）、`setBoundary` 经 HTTP、候选按宿主的属性目录校验、`nomatch` 规则文本统一、规则顺序进入 `diff`；`OBL-2` 锁定计数器按文档隔离 | 审查通过，自动合并 |
-| #1124 | `feat!`：网关把验证过的身份经 `CoSec-Identity` 传给下游，下游 `cosec.pipeline.mode=gateway`（取代 7.x 不验签的注入模式）；`PIP-10` | 修审查发现（高危：网关主机在 `mode=gateway`、mode 拼写错误或 `cosec.enabled=false` 时丢失伪造头清理） |
-| #1125 | `refactor!`：删除不验签的 token 解析路径（`PIP-11` 构建守护）、L3、`cosec.authentication.login.enabled` | 修审查发现（陈旧配置键；新增未知 `cosec.*` 属性启动检查） |
-| 待开 | `fix`：快照就绪探针（RFC 0003 X6）与监听器排空（RFC 0006 X8） | 实现中 |
-| 待开 | `feat`：8.0 策略测试工具 `cosec-testkit`（L15） | 排队 |
+| #1127–#1130 | 快照就绪与监听器排空（RFC 0003 X6、RFC 0006 X8）、8.0 策略测试工具、CND-5 对所有属性引用拒绝凭据类请求头（含 Unicode 折叠绕过）、testkit 按平台的限制与属性目录编译 | ✅ 已合入 |
+| #1136、#1137 | RFC 0008 PR-5：删除 8.0 路径不再使用的代码（扩大范围）；去掉无用依赖 | ✅ 已合入 |
+| #1138 | RFC 0010 C1–C3：义务按穷尽 `when` 分派（`OBL-3`，构建级）；控制面 API 在 `{base-path}/v1`；`CoSec-Identity` 接受任何认证方式名 | ✅ 已合入 |
+| #1139 | RFC 0011 PR-1：模块分组目录，项目名去掉 `cosec-` 前缀 | ✅ 已合入 |
+| #1146、#1147 | CI：Codecov 自 #1139 起读到 0 %（上传路径过期，上传器转而搜到配置缓存文件）；CI 重构为一个按目录组推导的矩阵（`scripts/ci/plan.py`）、单一门禁 `CI`、覆盖率由各组上传合并、CI 上测试不走构建缓存；每次推送的 runner 时间 4384 s → 1141 s。必需检查改为 `CI`、`Analyze (java-kotlin)`、`Semantic PR Title`（此前 Architecture、Conformance 等守护测试不是必需检查） | ✅ 已合入 |
+| #1141 | RFC 0011 PR-2：`spi` 模块、拆散 `core/`、starter 按类路径装配（STA-1：缺 Redis 模板或 REQUIRED 的 Kafka 审计即启动失败）、§5 的例外规则 | 审查通过，合入 main 后等 CI，自动合并 |
+| #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | 独立审查通过，叠在 #1141 上，之后改指向 `main` |
 
-之后 S5 按最终状态写文档。
+#1141、#1144 合入后：RFC 0009 PR-3 → RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -272,9 +269,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 - **2026-10-28 起的顺序**：RFC 0008 PR-5（死代码清理，扩大范围）→ [RFC 0010](rfc/0010-ga-extension-points.md) 的 C1–C3（一个 PR）→ [RFC 0011](rfc/0011-module-architecture.md) PR-1、PR-2 → [RFC 0009](rfc/0009-identity-and-credentials.md) PR-1、PR-3（PR-2 移到 8.1）→ RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
 
-可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
+可以穿插进行（不在主线上）：
 
-- S1b 的前置：#1103 合入（变异体与线程修复）；在 CI 上跑 `property-stress.yml` 与 `jmh-v7-v8.yml`（v8 ≥ v7）；随后 S1b 本身（草稿 #1104）（`refactor!`，注册 8.0 的自动配置、删除 7.x 的自动配置，带 §3.9 的证据）。S1b 同时处理 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`，并在 AGENTS.md 的 Mental model 开头加过渡说明。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0005 PR-5（#1079）、RFC 0006 PR-5（#1078）的第 1 轮，RFC 0007 PR-3 至 PR-9 的第 1 轮（#1095 已修复 PR-4 至 PR-9 的第 1 轮发现，其中 K1 为高危），之前合入、只做过第 1 轮的 PR 的第 2 轮，#1097 的审查；各表中"—"表示尚无已合入的修复 PR。
