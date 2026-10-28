@@ -14,7 +14,7 @@
 package me.ahoo.cosec.control
 
 /**
- * Names the `cosec-control` module (RFC 0007 §5.1) until RFC 0007 PR-4 adds `ControlStore`. It also gives
- * `ControlBoundaryTest` a class to check, so the rule cannot pass on an empty module.
+ * Names the `cosec-control` module (RFC 0007 §5.1): `ControlBoundaryTest` locates the module's classes through it, so the
+ * rule cannot pass on a classpath that misses them.
  */
 internal object ControlModule

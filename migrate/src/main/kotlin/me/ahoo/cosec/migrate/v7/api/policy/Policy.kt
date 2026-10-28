@@ -15,8 +15,8 @@ package me.ahoo.cosec.migrate.v7.api.policy
 
 import me.ahoo.cosec.api.Named
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.migrate.v7.api.context.request.Request
 
 /** Type alias for policy identifier */
 internal typealias PolicyId = String

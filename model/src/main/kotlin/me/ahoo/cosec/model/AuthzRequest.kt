@@ -43,7 +43,7 @@ class Subject(
  *
  * It can only be [declared]: it comes from client headers or query parameters (`CoSec-App-Id`, `CoSec-Space-Id`) and
  * nobody has checked membership. Checked scopes are `me.ahoo.cosec.model.scope.Scope`, which only `ScopeResolver`
- * constructs (RFC 0004 §4.6); this class is removed with the layers (RFC 0004 PR-8).
+ * constructs (RFC 0004 §4.6).
  */
 class Scope private constructor(val tenantId: String, val appId: String, val spaceId: String, val source: Source) {
     enum class Source { DECLARED, RESOLVED }

@@ -22,7 +22,7 @@ import java.time.Duration
  */
 class SnapshotFormatException(message: String, cause: Throwable? = null) : CoSecException(message, cause)
 
-/** A snapshot document cannot be used; the layers it feeds fail closed. [key] names the document. */
+/** A snapshot document cannot be used; every evaluation that reads it fails closed. [key] names the document. */
 class SnapshotUnavailableException(val key: SnapshotKey, message: String, cause: Throwable? = null) :
     CoSecException("Snapshot document [$key] is unavailable: $message", cause)
 

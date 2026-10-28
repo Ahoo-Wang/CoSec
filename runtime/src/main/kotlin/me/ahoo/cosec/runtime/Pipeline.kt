@@ -72,10 +72,10 @@ private val log = KotlinLogging.logger {}
 /**
  * The request pipeline (RFC 0006 §5.8): one suspend function from [HttpFacts] to [Outcome], which adapters write.
  *
- * Normalize the path and read the `CoSec-*` parameters (400 when ambiguous) → [Authenticator] → memberships, together
- * with the stage-A attributes such as the blacklist → scope → snapshot view → attribute plan and the stage-B
- * attributes → engine → [StatusMapping] (§5.4) → REQUIRED decision listeners, then BEST_EFFORT ones (§9). Rate-limit
- * obligations (PR-5) join later; the starter wires the pipeline at the switch.
+ * Normalize the path and read the `CoSec-*` parameters (400 when ambiguous) → route resolution → [Authenticator] →
+ * memberships, together with the stage-A attributes such as the blacklist → scope → snapshot view → attribute plan and
+ * the stage-B attributes → engine → rate-limit obligations, after a permit only → [StatusMapping] (§5.4) → REQUIRED
+ * decision listeners, then BEST_EFFORT ones (§9).
  *
  * Fail closed, structurally: only a [Decision.Permit] makes an outcome that proceeds. Each SPI call that fails, throws
  * or does not answer in time is a 503; an exception nothing modelled is a 500; and an external cancellation makes no
@@ -459,8 +459,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     /**
-     * The request's subject. Until the request model changes at the switch, the engine reads the RFC 0002 types: it
-     * takes the tenant from the scope and reads only the subject's id and whether it is authenticated.
+     * The request's subject in the engine's request (`AuthzRequest`): the engine takes the tenant from the scope and
+     * reads only the subject's id and whether it is authenticated.
      */
     private fun subject(principal: AuthenticatedPrincipal?, tenant: TenantId): Subject = Subject(
         id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,

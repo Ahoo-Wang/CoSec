@@ -11,19 +11,19 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.context.request
+package me.ahoo.cosec.migrate.v7.api.context.request
 
-typealias RequestId = String
+typealias AppId = String
 
 /**
- * Interface for entities that have a request ID for tracing.
+ * Interface for entities that have an application ID.
  *
  * @see Request
  */
-interface RequestIdCapable {
+interface AppIdCapable {
     companion object {
-        const val REQUEST_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Request-Id"
+        const val APP_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}App-Id"
     }
 
-    val requestId: RequestId
+    val appId: AppId
 }

@@ -81,6 +81,9 @@ class UnknownProperties(
             "cosec.authorization.cache.history." to "removed",
             "cosec.authorization.cache.migration." to "removed",
             "cosec.authorization.cache.token.concurrency-level" to "removed: ignored since CoCache 5",
+            "cosec.authorization.cache.token.expire-after-write" to
+                "cosec.authorization.cache.token.local-max-age, a duration (30s)",
+            "cosec.authorization.cache.token.expire-unit" to "removed: the durations carry their unit",
             "cosec.authorization.gateway.enabled" to "removed: the gateway filter comes with gatewaySupport",
             "cosec.limiter." to "removed: rate limit rules are in the platform document",
             "cosec.shadow." to "removed: shadow windows are control-plane operations; see cosec.authorization.shadow.*",

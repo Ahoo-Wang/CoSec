@@ -192,17 +192,16 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.cache.key-prefix` | string | `cosec` | Prefix of the revocation keys, with a trailing `:` removed. Independent of `cosec.authorization.snapshot.key-prefix`. |
-| `cosec.authorization.cache.token.*` | [local cache settings](#local-cache-settings) | `expire-after-write: 30`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
+| `cosec.authorization.cache.token.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
 
 ### Local cache settings
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `maximum-size` | long | CoCache's | Maximum entries in the local copy. |
+| `maximum-size` | long | `100000` | Maximum entries in the local copy. |
 | `initial-capacity` | int | CoCache's | Initial capacity of the local copy. |
-| `expire-after-write` | long, in `expire-unit` | CoCache's | How long a local copy lives at most (CoCache's `local-max-age`): the bound on staleness when an invalidation message is lost. |
-| `expire-after-access` | long, in `expire-unit` | none | Drop a local copy not read for this long. |
-| `expire-unit` | `TimeUnit` | `SECONDS` | Unit of the two expiry settings. |
+| `local-max-age` | duration (a bare number is seconds) | `30s` | How long a local copy lives at most: the bound on staleness when an invalidation message is lost. |
+| `expire-after-access` | duration (a bare number is seconds) | none | Drop a local copy not read for this long. |
 
 These size and age the local copy only. A revocation's lifetime in Redis is set when it is written.
 

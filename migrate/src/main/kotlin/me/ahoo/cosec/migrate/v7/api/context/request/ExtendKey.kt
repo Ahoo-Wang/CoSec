@@ -11,17 +11,9 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.context
+package me.ahoo.cosec.migrate.v7.api.context.request
 
-import me.ahoo.cosec.api.context.request.AppIdCapable
-import me.ahoo.cosec.api.context.request.DeviceIdCapable
-import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Test
+const val COSEC_EXTEND_KEY_PREFIX = "CoSec-"
 
-class RequestTest {
-    @Test
-    fun appIdKey() {
-        AppIdCapable.APP_ID_KEY.assert().isEqualTo("CoSec-App-Id")
-        DeviceIdCapable.DEVICE_ID_KEY.assert().isEqualTo("CoSec-Device-Id")
-    }
-}
+/** The 7.x request parameter that declares the space. */
+const val SPACE_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Space-Id"

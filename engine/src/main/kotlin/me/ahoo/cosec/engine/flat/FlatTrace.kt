@@ -21,7 +21,7 @@ import me.ahoo.cosec.model.scope.Scope
 
 /**
  * What one evaluation over bindings did (RFC 0004 §6.5), recorded at [me.ahoo.cosec.engine.TraceLevel.FULL] or
- * [me.ahoo.cosec.engine.TraceLevel.EXHAUSTIVE]. It replaces the layered trace when the layers go (PR-8).
+ * [me.ahoo.cosec.engine.TraceLevel.EXHAUSTIVE].
  *
  * [candidates] are in evaluation order: the DENY statements of every candidate in candidate order, then the ALLOW ones.
  * Both levels list every statement of every candidate, those the candidate index left out included, with what ruled

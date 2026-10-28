@@ -26,10 +26,11 @@ import java.util.Collections
 /**
  * The membership claims of a token (RFC 0004 §4.5.1).
  *
- * They are the 7.x `roles` and `policies` claims, read as they are, so no token has to be reissued: `role` is a role
+ * They are a signed cache of the principal's memberships, carried in the token so that the pipeline does not have to ask
+ * a [MembershipProvider] on every request. The `roles` and `policies` claims are read as they are: `role` is a role
  * in the default space, `role@space` a role in `space`, and an entry [parseRole] rejects (empty role or space,
  * more than one `@`) applies nowhere and is kept in [Memberships.malformed]. Strings are taken exactly, with no
- * trimming or case folding. One difference: `role@*` is malformed too, because `*` means
+ * trimming or case folding. `role@*` is malformed too, because `*` means
  * any space in snapshot documents and is not a space id. `policies` become [Memberships.attachments], in claim
  * order.
  *

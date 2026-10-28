@@ -17,8 +17,9 @@ import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
+import org.springframework.boot.convert.DurationUnit
 import java.time.Duration
-import java.util.concurrent.TimeUnit
+import java.time.temporal.ChronoUnit
 
 /**
  * `cosec.authorization.cache.*`: the token revocation caches. The policy snapshot has its own properties
@@ -28,7 +29,7 @@ import java.util.concurrent.TimeUnit
 class CacheProperties(
     @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC,
     @NestedConfigurationProperty
-    var token: CacheConfiguration = CacheConfiguration(expireAfterWrite = 30, maximumSize = 100_000),
+    var token: CacheConfiguration = CacheConfiguration(),
 ) {
     companion object {
         const val PREFIX: String = CoSec.COSEC_PREFIX + "authorization.cache"
@@ -36,42 +37,37 @@ class CacheProperties(
 }
 
 /**
- * Local (in-process) cache settings. Unset values ([UNSET]) keep CoCache's defaults: 10,000 entries and a local copy
- * that lives at most 5 minutes (`localMaxAge`).
+ * Local (in-process) cache settings of the revocation caches. The defaults are on the fields, not on the property that
+ * holds them: constructor binding builds this from its own defaults as soon as one key is set, so `maximum-size` alone
+ * must not drop `local-max-age` to CoCache's 5 minutes. A null value keeps CoCache's default.
  */
 data class CacheConfiguration(
-    var initialCapacity: Int = UNSET.toInt(),
-    var maximumSize: Long = UNSET,
-    var expireUnit: TimeUnit = TimeUnit.SECONDS,
-    var expireAfterWrite: Long = UNSET,
-    var expireAfterAccess: Long = UNSET
+    /** How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost. */
+    @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
+    var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE,
+    var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE,
+    var initialCapacity: Int? = null,
+    /** Drops a local copy not read for this long. A number without a unit is seconds, as the expiry settings always were. */
+    @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
+    var expireAfterAccess: Duration? = null,
 ) {
     companion object {
-        const val UNSET = -1L
+        /** How stale a revocation may be on an instance that missed its invalidation message. */
+        val DEFAULT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
+        const val DEFAULT_MAXIMUM_SIZE: Long = 100_000
     }
 
-    /**
-     * [expireAfterWrite] bounds how long a local copy lives (CoCache's `localMaxAge`, which has no unlimited setting);
-     * the other values size the local cache.
-     */
     fun toCachePolicy(base: CachePolicy): CachePolicy {
         val local = base.local
         return base.toBuilder()
             .local(
                 local.copy(
-                    maximumSize = maximumSize.takeIf { it != UNSET } ?: local.maximumSize,
-                    initialCapacity = initialCapacity.takeIf { it != UNSET.toInt() } ?: local.initialCapacity,
-                    expireAfterAccess = expireAfterAccess.toDuration() ?: local.expireAfterAccess,
+                    maximumSize = maximumSize ?: local.maximumSize,
+                    initialCapacity = initialCapacity ?: local.initialCapacity,
+                    expireAfterAccess = expireAfterAccess ?: local.expireAfterAccess,
                 )
             )
-            .localMaxAge(expireAfterWrite.toDuration() ?: base.localMaxAge)
+            .localMaxAge(localMaxAge ?: base.localMaxAge)
             .build()
-    }
-
-    private fun Long.toDuration(): Duration? {
-        if (this == UNSET) {
-            return null
-        }
-        return Duration.of(this, expireUnit.toChronoUnit())
     }
 }

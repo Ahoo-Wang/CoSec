@@ -21,7 +21,7 @@ import java.time.Instant
  * [SnapshotSource.load], and its result is shared by every request until a newer revision replaces it, so it must be
  * immutable.
  *
- * An entry that fails to compile should be recorded in the result (RFC 0003 §3.4 `Broken`) so that only the layers
+ * An entry that fails to compile should be recorded in the result (RFC 0003 §3.4 `Broken`) so that only the evaluations
  * reading it fail. Throwing fails the whole document closed.
  */
 fun interface SnapshotCompiler<out T : Any> {

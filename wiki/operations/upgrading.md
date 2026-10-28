@@ -418,6 +418,9 @@ Code that uses any of these no longer compiles or is no longer called.
 | Shadow mode (`ShadowAuthorization`, `ShadowPolicyProvider`, `cosec.shadow.*` files) | Shadow windows of control-plane changes; see [Testing policies](../policies/testing.md). |
 | `AccessAnalyzer` | The control plane's `analyze`. |
 | `PolicyTestKit` (`cosec-core`) | `PolicyTestKit` in the `cosec-testkit` module ([Policy test suites](#policy-test-suites)). |
+| The 7.x request model of `cosec-api`: `Request`, `Attributes`, `AppIdCapable`, `DeviceIdCapable`, `RequestIdCapable` (with their `AppId`, `DeviceId`, `RequestId` aliases), `COSEC_EXTEND_KEY_PREFIX`, `SpaceIdCapable.SPACE_ID_KEY`; `RequestSecurityContexts` and `InvalidRequestPathException` (`cosec-core`) | None: adapters read `HttpFacts`, and the security context carries the checked `scope`. `SpaceIdCapable` and `SpaceId` remain for `SpacedRoleId`. |
+| `InternalIds` (`cosec-api`) | None. |
+| `me.ahoo.cosec.limiter.RateLimiter` and its `LocalRateLimiter`, `RedisRateLimiter` (`cosec-cocache`) | `me.ahoo.cosec.runtime.ratelimit.RateLimiter`, a suspending SPI; the starter registers its `LocalRateLimiter` or `ReactiveRedisRateLimiter` ([Rate limiting](../policies/rate-limiting.md)). `RateLimit` and `RateLimitResult` remain. |
 | `Jwts.toPrincipal(String)`, `Jwts.decode`, `Jwts.verifyTimeClaims` | None: `Jwts` is internal to `cosec-jwt`. Turn a token into a principal with `TokenVerifier.verify`, which checks the signature. |
 | `PrincipalConverter`, `TokenVerifier.toPrincipal` | `TokenVerifier.verify`. |
 | `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
@@ -473,6 +476,8 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.authorization.cache.history.` | Removed. |
 | `cosec.authorization.cache.migration.` | Removed. |
 | `cosec.authorization.cache.token.concurrency-level` | Removed: ignored since CoCache 5. |
+| `cosec.authorization.cache.token.expire-after-write` | `cosec.authorization.cache.token.local-max-age`, a duration (`30s`). |
+| `cosec.authorization.cache.token.expire-unit` | Removed: the durations carry their unit. `expire-after-access` is a duration too; a bare number is still seconds. |
 | `cosec.authorization.gateway.enabled` | Removed: the gateway filter comes with `gatewaySupport`. |
 | `cosec.limiter.` | Removed: rate limit rules are in the platform document ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)); a different limiter key prefix needs a `RateLimiter` bean of your own. |
 | `cosec.shadow.` | Removed: shadow windows are control-plane operations; each instance's part is `cosec.authorization.shadow.*`. |

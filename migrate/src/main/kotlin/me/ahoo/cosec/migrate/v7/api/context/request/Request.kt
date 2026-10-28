@@ -11,13 +11,14 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.context.request
+package me.ahoo.cosec.migrate.v7.api.context.request
 
-import me.ahoo.cosec.api.context.Attributes
-import me.ahoo.cosec.api.context.request.AppIdCapable.Companion.APP_ID_KEY
-import me.ahoo.cosec.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY
-import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
-import me.ahoo.cosec.api.context.request.SpaceIdCapable.Companion.SPACE_ID_KEY
+import me.ahoo.cosec.api.context.request.SpaceId
+import me.ahoo.cosec.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.migrate.v7.api.context.Attributes
+import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable.Companion.APP_ID_KEY
+import me.ahoo.cosec.migrate.v7.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY
+import me.ahoo.cosec.migrate.v7.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import java.net.URI
 
 /**
@@ -52,7 +53,7 @@ interface Request :
     /**
      * The space/tenant ID, resolved from header or query parameter.
      *
-     * @see SpaceIdCapable.SPACE_ID_KEY
+     * @see SPACE_ID_KEY
      */
     override val spaceId: SpaceId
         get() {

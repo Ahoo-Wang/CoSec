@@ -20,9 +20,12 @@ enum class TraceLevel {
     /** Only the decision. */
     OFF,
 
-    /** Also every group and rule of each layer the decision reaches, including the rules after the deciding one. */
+    /**
+     * Also every statement of every candidate, with what ruled each out; evaluation stops where the untraced one stops,
+     * except that it finishes the pass that decided.
+     */
     FULL,
 
-    /** Also the layers the decision does not reach. */
+    /** As [FULL], and the ALLOW pass is evaluated even when the DENY pass decided. */
     EXHAUSTIVE,
 }

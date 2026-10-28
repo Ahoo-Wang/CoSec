@@ -52,10 +52,10 @@ enum class ChangeState {
     /** Proposed, with the findings of its last check; not checked clean. */
     DRAFT,
 
-    /** Checked clean against its base: validation and compile (and, with RFC 0007 PR-6, authorization and grants). */
+    /** Checked clean against its base: validation, compile, authorization and grants. */
     CHECKED,
 
-    /** Holding the document's staging slot while its shadow window runs (RFC 0007 PR-7). */
+    /** Holding the document's staging slot while its shadow window runs (RFC 0007 §6.4). */
     SHADOWING,
 
     SHADOWED,

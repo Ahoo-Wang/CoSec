@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.context
+package me.ahoo.cosec.migrate.v7.api.context
 
 /**
  * Generic interface for entities that have attributes.

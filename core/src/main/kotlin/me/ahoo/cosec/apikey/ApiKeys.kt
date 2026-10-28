@@ -59,8 +59,8 @@ data class ApiKey(
 }
 
 /**
- * Looks up API keys by hash. Called while parsing the security context: an implementation that blocks (a database
- * or Redis lookup) needs the parse to run off the event loop (`cosec.api-key.store-blocking=true` in the starter).
+ * Looks up API keys by hash, synchronously: the store keys are provisioned into (`InMemoryApiKeyStore`, and
+ * `RedisApiKeyStore` in `cosec-cocache`). Requests never read it: the pipeline reads keys through [ApiKeyReader].
  */
 fun interface ApiKeyStore {
     fun findByHash(hash: String): ApiKey?
@@ -68,8 +68,7 @@ fun interface ApiKeyStore {
 
 /**
  * The read side of an API key store for the coroutine pipeline (RFC 0006 §5.3.2): never blocks the calling thread, which
- * may be an event loop. It sits next to [ApiKeyStore], which the 7.x [ApiKeySecurityContextParser] reads synchronously
- * until the switch removes that path (RFC 0008 §4.4). A lookup that fails throws: the request is answered 503.
+ * may be an event loop. A lookup that fails throws: the request is answered 503.
  */
 fun interface ApiKeyReader {
     suspend fun findByHash(hash: String): ApiKey?

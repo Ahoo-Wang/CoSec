@@ -14,8 +14,8 @@
 package me.ahoo.cosec.migrate.v7.api.policy
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.migrate.v7.api.authorization.AuthorizeResult
+import me.ahoo.cosec.migrate.v7.api.context.request.Request
 
 /**
  * Interface for verifying permissions.

@@ -13,13 +13,13 @@
 
 package me.ahoo.cosec.migrate.v7.cache
 
-import me.ahoo.cosec.api.context.request.AppId
-import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.SpaceId
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.api.principal.RoleIdCapable
 import me.ahoo.cosec.api.principal.SpacedRoleId
+import me.ahoo.cosec.migrate.v7.api.context.request.AppId
+import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable
 
 /**
  * The key of a role's grants: the role in one space of one app. [toString] is the Redis key suffix,

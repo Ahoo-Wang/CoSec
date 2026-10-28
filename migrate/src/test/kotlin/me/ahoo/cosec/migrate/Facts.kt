@@ -14,11 +14,11 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.AppIdCapable
-import me.ahoo.cosec.api.context.request.DeviceIdCapable
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
+import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable
+import me.ahoo.cosec.migrate.v7.api.context.request.DeviceIdCapable
+import me.ahoo.cosec.migrate.v7.api.context.request.SPACE_ID_KEY
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
 import me.ahoo.cosec.migrate.v7.policy.action.setPathVariables
 import me.ahoo.cosec.migrate.v7.policy.condition.ConditionMatcherFactory
@@ -72,7 +72,7 @@ data class Facts(
     fun request(): Pair<EvaluateRequest, SecurityContext> {
         val headers = this.headers + mapOf(
             AppIdCapable.APP_ID_KEY to appId,
-            SpaceIdCapable.SPACE_ID_KEY to spaceId,
+            SPACE_ID_KEY to spaceId,
             DeviceIdCapable.DEVICE_ID_KEY to deviceId,
         )
         val request = EvaluateRequest(

@@ -21,7 +21,7 @@ import java.time.Instant
 
 /**
  * The [RevocationReader] over the caches [CoCacheTokenStore] writes: the non-blocking reads the coroutine pipeline makes
- * (RFC 0006 §5.3.2), where [CoCacheTokenStore] answers the 7.x path synchronously.
+ * (RFC 0006 §5.3.2). [CoCacheTokenStore] answers the same questions synchronously, for login and refresh.
  *
  * Both reads go through CoCache's async view. A local hit answers on the caller's thread without suspending (RFC 0006
  * T1); a miss reads Redis without blocking any thread and completes on CoCache's async pool, from which the pipeline

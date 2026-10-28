@@ -137,7 +137,7 @@ class PolicyCompiler(
         val strict = with(source.statement) {
             StatementSource(name, Effect.DENY, actions, resources, condition, onMissing)
         }
-        // A rate limit rule has no confirmation flow: as before RFC 0007 N6, only the platform may let one lapse.
+        // A rate limit rule has no confirmation flow, so only the platform may let one lapse (ATR-7).
         val statement = statement(0, strict, "$", errors, unconfirmedLapse = kind == DocumentKind.PLATFORM)
         val key = source.key?.let { path -> key(path, statement, errors) }
         if (errors.isNotEmpty()) {

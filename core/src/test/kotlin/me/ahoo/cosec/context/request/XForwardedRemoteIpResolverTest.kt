@@ -14,17 +14,16 @@
 package me.ahoo.cosec.context.request
 
 import io.mockk.mockk
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class XForwardedRemoteIpResolverTest {
-    private val defaultRemoteIpResolver: RemoteIpResolver<Request> = RemoteIpResolver { "default" }
+    private val defaultRemoteIpResolver: RemoteIpResolver<Any> = RemoteIpResolver { "default" }
 
     @Test
     fun resolveWhenMultiValues() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
                 return listOf("", "")
             }
         }
@@ -33,8 +32,8 @@ class XForwardedRemoteIpResolverTest {
 
     @Test
     fun resolveWhenNull() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
                 return null
             }
         }
@@ -43,8 +42,8 @@ class XForwardedRemoteIpResolverTest {
 
     @Test
     fun resolve() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
                 return listOf("ipAddress")
             }
         }
@@ -53,8 +52,8 @@ class XForwardedRemoteIpResolverTest {
 
     @Test
     fun resolveMulti() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
                 return listOf("ipAddress0, ipAddress1, ipAddress2")
             }
         }
@@ -63,9 +62,9 @@ class XForwardedRemoteIpResolverTest {
 
     @Test
     fun resolveWhenMaxTrustedIndexZero() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
             override val maxTrustedIndex: Int get() = 0
-            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
                 return listOf("ipAddress")
             }
         }
@@ -75,9 +74,9 @@ class XForwardedRemoteIpResolverTest {
 
     @Test
     fun resolveWhenMaxTrustedIndexOne() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
             override val maxTrustedIndex: Int get() = 1
-            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
                 return listOf("ipAddress0, ipAddress1, ipAddress2")
             }
         }

@@ -11,6 +11,17 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.context.request
+package me.ahoo.cosec.migrate.v7.api.context
 
-const val COSEC_EXTEND_KEY_PREFIX = "CoSec-"
+import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable
+import me.ahoo.cosec.migrate.v7.api.context.request.DeviceIdCapable
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+
+class RequestTest {
+    @Test
+    fun appIdKey() {
+        AppIdCapable.APP_ID_KEY.assert().isEqualTo("CoSec-App-Id")
+        DeviceIdCapable.DEVICE_ID_KEY.assert().isEqualTo("CoSec-Device-Id")
+    }
+}
