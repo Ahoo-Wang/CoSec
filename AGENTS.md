@@ -12,12 +12,13 @@ a change that fails to compile. When unsure, deny, and ask.
 ## Feedback loop
 
 ```bash
-./gradlew :cosec-core:check                       # tests + detekt for one module (what CI runs per module)
-./gradlew :cosec-engine:test --tests "me.ahoo.cosec.engine.flat.FlatEnginePropertyTest"
+./gradlew :core:check                             # tests + detekt for one module (what CI runs per module)
+./gradlew :engine:test --tests "me.ahoo.cosec.engine.flat.FlatEnginePropertyTest"
 ./gradlew check                                   # every module
-./gradlew :cosec-engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
+./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
+./gradlew :architecture:check                     # structural rules across modules: purity, boundaries, project list
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck             # break each security rule on purpose, expect a test to fail (manual, not in check)
@@ -37,10 +38,10 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   `gh workflow run jmh-v7-v8.yml` compares 7.x (`SimpleAuthorizationBenchmark`, `SecurityPipelineBenchmark`) with
   8.0 (`FlatAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
 - `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-core`):
-  `./gradlew :cosec-core:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale, and
+  `./gradlew :core:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale, and
   `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that changes a document format
   changes the descriptor.
-- `:conformance:mutationCheck` applies each patch in `conformance/mutants/` in a temporary worktree and requires a
+- `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
   failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
   mutants the change kills in the PR.
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
@@ -55,7 +56,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   (needs Chrome), `pnpm check:docs`, `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 A change is done when `check` passes for every module it touches and for its dependents (e.g. a
-`cosec-runtime` change also runs `:cosec-spring-boot-starter:check` and `:e2e:check`), and the docs below are updated.
+`cosec-runtime` change also runs `:spring-boot:check` and `:e2e:check`), and the docs below are updated.
 
 ## Mental model
 
@@ -63,10 +64,16 @@ Read [`wiki/architecture/overview.md`](wiki/architecture/overview.md) before tou
 the adapters, snapshots or the control plane. The parts that take several files to see:
 
 - **Layers.** `model ← engine ← runtime ← {adapters, stores, authenticators, listeners}`, and `control` on top.
-  Every module directory is its name without `cosec-` (`core/`, `spring-boot-starter/`, `gateway-server/`), mapped in
-  `settings.gradle.kts`; project paths and artifact ids keep the prefix (`:cosec-core:check`, `me.ahoo.cosec:cosec-core`).
-  Rule guards in `conformance/src/test/resources/rules/` name the directory (`core:SnapshotRecompileTest`).
-  - `cosec-model` (`model/`) and `cosec-engine` (`engine/`) depend on the Kotlin standard library only:
+  Projects sit in group directories (RFC 0011 §3): `api/`, `core/` (`model`, `engine`, `runtime`, `control`, `core`),
+  `backends/`, `edge/`, `extensions/`, `host/` (`spring-boot`), `migration/`, `test/` (`testkit`, `conformance`,
+  `architecture`, `e2e`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project is named after
+  its directory, without the group or a `cosec-` prefix (`:core:check`, `:spring-boot:check`); artifact ids keep the
+  prefix (`me.ahoo.cosec:cosec-core`), and the starter's stays `cosec-spring-boot-starter` until RFC 0011 PR-2.
+  `test/architecture` holds the structural rules that scan several modules (purity, boundaries, the project list in
+  `ProjectListTest`, the catalog); adding a project means adding it there, in `settings.gradle.kts`, the labeler, the
+  bug report template and `integration-test.yml`. Rule guards in `test/conformance/src/test/resources/rules/` name
+  the project (`core:SnapshotRecompileTest`, `architecture:EnginePurityTest`).
+  - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library only:
     `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the SLF4J
     default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
     engine holds the compiler, the indexes and the flat evaluator (`engine/flat/`).
@@ -74,23 +81,23 @@ the adapters, snapshots or the control plane. The parts that take several files 
     descriptors that generate `schema/` (`snapshot/format/`), `SnapshotSource`, route maps, membership claims,
     tokens and API keys. `cosec-api` is the thin contract module left over from 7.x (principal, token,
     `SecurityContext`, audit events).
-  - `cosec-runtime` (`runtime/`) is the coroutine `Pipeline` and its SPIs. Coroutines stay in `runtime/` and the
+  - `cosec-runtime` (`core/runtime/`) is the coroutine `Pipeline` and its SPIs. Coroutines stay in `runtime/` and the
     adapters: `RuntimeBoundaryTest` fails when `runtime/`, `engine/` or `model/` code references `reactor.*`, when a
     data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API,
     `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or `Dispatchers.IO`, or when it uses `runCatching`
     (it swallows cancellation).
-  - `cosec-control` (`control/`) is the control plane: the only writer of policy documents. `ControlBoundaryTest`
+  - `cosec-control` (`core/control/`) is the control plane: the only writer of policy documents. `ControlBoundaryTest`
     fails when one of its classes is outside `me.ahoo.cosec.control`, references Spring, `reactor.*`, the coroutine
     or Reactive Streams bridges or a Redis client, or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
   - Every other module adapts one technology: `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` (HTTP bridges),
     `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits),
     `cosec-jwt`, `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`, `cosec-kafka` (decision listeners),
-    `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps). `cosec-migrate` (`migrate/`) converts
+    `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps). `cosec-migrate` (`migration/migrate/`) converts
     7.x data, and holds the only copy of the 7.x model (`me.ahoo.cosec.migrate.v7`).
-  - `cosec-testkit` (`testkit/`) is the policy test kit applications run their own scenarios with. It depends on
+  - `cosec-testkit` (`test/testkit/`) is the policy test kit applications run their own scenarios with. It depends on
     `cosec-core` and `junit-jupiter-api` (api: `DynamicTest` is part of its API) and on `cosec-runtime`
     (implementation, for `MembershipResolver`). It holds the engine level of the scenario format, which `conformance`
-    reuses: change the format there, not in `conformance/`.
+    reuses: change the format there, not in `test/conformance/`.
   - `cosec-spring-boot-starter` wires them through Gradle feature variants (`webfluxSupport`, `cacheSupport`,
     `controlSupport`, …), so an application pulls in only what it asks for.
 - **Request path.** Adapter (`PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`) reads
@@ -130,7 +137,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | **Snapshot and control-plane caches never expire (`ttl = null`) and throw on failed reads (`ReadFailureMode.THROW`)**, applied after any CoCache customizer or property; Redis must run with `maxmemory-policy noeviction` | Redis is the store of record; expiry, eviction or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest`, `CoSecPipelineAutoConfigurationTest` (SNP-3) |
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `FlatAuthorizationBenchmark`, `PipelineBenchmark` |
 
-Every normative rule of the RFCs has an id in `conformance/src/test/resources/rules/` and the tests that guard it;
+Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` and the tests that guard it;
 `verifyRuleCoverage` fails when a rule loses them.
 
 ## Where a change has to land
@@ -156,7 +163,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A new place a document reads an attribute (a condition operand, a rate limit `key`, anything later) | resolve it through `ConditionChecker.attribute`, which refuses credential headers (CND-5) for every reference; never `Attribute.parse` directly |
 | Extension points (SPIs) | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
-| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
+| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `test/conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
 | Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use

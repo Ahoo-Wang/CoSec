@@ -49,11 +49,11 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ### 迁移数据 {#migrating-the-data}
 
-`cosec-migrate` 是 `migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。用你要部署的版本的 CoSec 源码构建它：
+`cosec-migrate` 是 `migration/migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。用你要部署的版本的 CoSec 源码构建它：
 
 ```bash
-./gradlew :cosec-migrate:installDist
-migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
+./gradlew :migrate:installDist
+migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
 它有四个命令。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。

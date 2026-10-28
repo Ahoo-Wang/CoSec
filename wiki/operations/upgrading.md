@@ -64,12 +64,12 @@ What is different, in short:
 
 ### Migrating the data
 
-`cosec-migrate` is a one-time command-line tool in the `migrate/` module. No application depends on it, and the starter
+`cosec-migrate` is a one-time command-line tool in the `migration/migrate/` module. No application depends on it, and the starter
 never does. Build it from the CoSec sources of the version you deploy:
 
 ```bash
-./gradlew :cosec-migrate:installDist
-migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
+./gradlew :migrate:installDist
+migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
 It has four commands. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.

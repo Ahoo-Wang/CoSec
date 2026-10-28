@@ -89,7 +89,7 @@ pattern of the rule.
 
 Rules of different documents never share buckets: a platform rule counts under its own id, an app rule under
 `app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`
-([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
+([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
 A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
 the platform's quotas.
 

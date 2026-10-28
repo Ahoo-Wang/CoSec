@@ -26,19 +26,20 @@ plugins {
     alias(libs.plugins.jmh)
     jacoco
 }
-val dependenciesProject = project(":cosec-dependencies")
+val dependenciesProject = project(":dependencies")
 val bomProjects = setOf(
-    project(":cosec-bom"),
+    project(":bom"),
     dependenciesProject,
 )
 
 val serverProjects = setOf(
-    project(":cosec-gateway-server"),
+    project(":gateway-server"),
 )
 val codeCoverageReportProject = project(":code-coverage-report")
 // Test-only modules (RFC 0008 §3.1): never published, so neither in the BOM nor in any publication.
 val testOnlyProjects = setOf(
     project(":conformance"),
+    project(":architecture"),
     project(":e2e"),
 )
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
@@ -46,9 +47,18 @@ val libraryProjects = publishProjects - bomProjects
 
 // Modules of the decision engine (RFC 0002 §2): they depend on the Kotlin standard library only.
 val pureProjects = setOf(
-    project(":cosec-model"),
-    project(":cosec-engine"),
+    project(":model"),
+    project(":engine"),
 )
+
+/**
+ * RFC 0011 D1: a project is named after its directory, and its artifact keeps the cosec- prefix. The starter keeps its
+ * published name until RFC 0011 PR-2 renames it with the move to classpath-driven configuration (D2).
+ */
+fun artifactIdOf(project: Project): String = when (project.name) {
+    "spring-boot" -> "cosec-spring-boot-starter"
+    else -> "cosec-${project.name}"
+}
 
 ext.set("libraryProjects", libraryProjects)
 
@@ -89,6 +99,9 @@ configure(libraryProjects) {
     configure<JavaPluginExtension> {
         withJavadocJar()
         withSourcesJar()
+    }
+    configure<BasePluginExtension> {
+        archivesName.set(artifactIdOf(project))
     }
     kotlinJvm()
     jmhBenchmarks()
@@ -162,7 +175,7 @@ configure(pureProjects) {
 }
 
 /*
- * RFC 0008 §3.5: the property tests the rule registry (conformance/src/test/resources/rules/<FAMILY>.json) names, with
+ * RFC 0008 §3.5: the property tests the rule registry (test/conformance/src/test/resources/rules/<FAMILY>.json) names, with
  * -PpropertyIterations random cases each (default 1,000,000). Not part of check, which runs them with their own fixed
  * counts. A test reads the count from the system property cosec.property.iterations.
  */
@@ -171,7 +184,7 @@ val propertyStress = tasks.register("propertyStress") {
     description = "Runs the registered property tests with -PpropertyIterations random cases (default 1,000,000)."
 }
 
-val ruleRegistry = layout.projectDirectory.dir("conformance/src/test/resources/rules")
+val ruleRegistry = project(":conformance").layout.projectDirectory.dir("src/test/resources/rules")
 
 @Suppress("UNCHECKED_CAST")
 val registeredProperties = ruleRegistry.asFile.listFiles().orEmpty()
@@ -184,10 +197,10 @@ val registeredProperties = ruleRegistry.asFile.listFiles().orEmpty()
     }
 registeredProperties
     .flatMap { (it["properties"] as List<String>?).orEmpty() }
-    // module:Class#test name
+    // project:Class#test name
     .groupBy({ it.substringBefore(':') }, { it.substringAfter(':').substringBefore('#') })
-    .forEach { (directory, classes) ->
-        val target = subprojects.single { it.projectDir.name == directory }
+    .forEach { (name, classes) ->
+        val target = project(":$name")
         val test = target.the<SourceSetContainer>()["test"]
         val stress = target.tasks.register<Test>("propertyStress") {
             group = "verification"
@@ -245,6 +258,7 @@ configure(publishProjects) {
             val publishComponentName = if (isBom) "javaPlatform" else "java"
             create<MavenPublication>(publishName) {
                 from(components[publishComponentName])
+                artifactId = artifactIdOf(project)
                 pom {
                     name.set(rootProject.name)
                     description.set(getPropertyOf("description"))

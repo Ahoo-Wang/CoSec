@@ -1,0 +1,67 @@
+{
+  "rules": [
+    {
+      "id": "SNP-1",
+      "source": "RFC 0003 §6",
+      "statement": "Every document one evaluation reads comes from a single revision (P7).",
+      "level": "timing",
+      "properties": [
+        "core:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument"
+      ],
+      "pending": null,
+      "guards": [
+        "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from"
+      ]
+    },
+    {
+      "id": "SNP-2",
+      "source": "RFC 0003 §4.4",
+      "statement": "For one key, installs happen in the order loads started (P6).",
+      "level": "timing",
+      "properties": [
+        "core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
+        "core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-3",
+      "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
+      "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
+      "level": "startup",
+      "guards": [
+        "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
+        "cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
+        "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
+        "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-4",
+      "source": "RFC 0007 §3.1 N3; RFC 0008 §4.4 (review finding S4)",
+      "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed.",
+      "level": "timing",
+      "properties": [
+        "core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily"
+      ],
+      "pending": null,
+      "guards": [
+        "core:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
+        "core:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
+        "core:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
+        "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again"
+      ]
+    },
+    {
+      "id": "SNP-5",
+      "source": "RFC 0003 §4.5",
+      "statement": "A tenant configured to fail closed on lag (`cosec.authorization.snapshot.fail-closed.tenants`) is not decided on when the oldest document its evaluation reads was last confirmed by the store longer ago than `fail-closed.max-lag`: the request is indeterminate (503) unless a DENY matches. Other tenants, and views within the bound, are decided as usual.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:DocumentSnapshotViewsTest#a fail-closed tenant past its lag bound is unresolved, others decide"
+      ],
+      "pending": null
+    }
+  ]
+}

@@ -5,76 +5,79 @@
 
 'module: api':
   - changed-files:
-      - any-glob-to-any-file: 'api/**'
+      - any-glob-to-any-file: 'api/api/**'
 'module: core':
   - changed-files:
-      - any-glob-to-any-file: 'core/**'
+      - any-glob-to-any-file: 'core/core/**'
 'module: jwt':
   - changed-files:
-      - any-glob-to-any-file: 'jwt/**'
+      - any-glob-to-any-file: 'extensions/jwt/**'
 'module: cocache':
   - changed-files:
-      - any-glob-to-any-file: 'cocache/**'
+      - any-glob-to-any-file: 'backends/cocache/**'
 'module: social':
   - changed-files:
-      - any-glob-to-any-file: 'social/**'
+      - any-glob-to-any-file: 'extensions/social/**'
 'module: webmvc':
   - changed-files:
-      - any-glob-to-any-file: 'webmvc/**'
+      - any-glob-to-any-file: 'edge/webmvc/**'
 'module: webflux':
   - changed-files:
-      - any-glob-to-any-file: 'webflux/**'
+      - any-glob-to-any-file: 'edge/webflux/**'
 'module: gateway':
   - changed-files:
-      - any-glob-to-any-file: 'gateway/**'
+      - any-glob-to-any-file: 'edge/gateway/**'
 'module: gateway-server':
   - changed-files:
-      - any-glob-to-any-file: 'gateway-server/**'
+      - any-glob-to-any-file: 'platform/gateway-server/**'
 'module: opentelemetry':
   - changed-files:
-      - any-glob-to-any-file: 'opentelemetry/**'
+      - any-glob-to-any-file: 'extensions/opentelemetry/**'
 'module: ip2region':
   - changed-files:
-      - any-glob-to-any-file: 'ip2region/**'
+      - any-glob-to-any-file: 'extensions/ip2region/**'
 'module: openapi':
   - changed-files:
-      - any-glob-to-any-file: 'openapi/**'
+      - any-glob-to-any-file: 'edge/openapi/**'
 'module: micrometer':
   - changed-files:
-      - any-glob-to-any-file: 'micrometer/**'
+      - any-glob-to-any-file: 'extensions/micrometer/**'
 'module: migrate':
   - changed-files:
-      - any-glob-to-any-file: 'migrate/**'
+      - any-glob-to-any-file: 'migration/migrate/**'
 'module: e2e':
   - changed-files:
-      - any-glob-to-any-file: 'e2e/**'
+      - any-glob-to-any-file: 'test/e2e/**'
 'module: kafka':
   - changed-files:
-      - any-glob-to-any-file: 'kafka/**'
+      - any-glob-to-any-file: 'backends/kafka/**'
 'module: engine':
   - changed-files:
-      - any-glob-to-any-file: ['model/**', 'engine/**']
+      - any-glob-to-any-file: ['core/model/**', 'core/engine/**']
 'module: runtime':
   - changed-files:
-      - any-glob-to-any-file: 'runtime/**'
+      - any-glob-to-any-file: 'core/runtime/**'
 'module: control':
   - changed-files:
-      - any-glob-to-any-file: 'control/**'
+      - any-glob-to-any-file: 'core/control/**'
 'module: testkit':
   - changed-files:
-      - any-glob-to-any-file: 'testkit/**'
+      - any-glob-to-any-file: 'test/testkit/**'
 'module: conformance':
   - changed-files:
-      - any-glob-to-any-file: 'conformance/**'
-'module: spring-boot-starter':
+      - any-glob-to-any-file: 'test/conformance/**'
+'module: spring-boot':
   - changed-files:
-      - any-glob-to-any-file: 'spring-boot-starter/**'
+      - any-glob-to-any-file: 'host/spring-boot/**'
+'module: architecture':
+  - changed-files:
+      - any-glob-to-any-file: 'test/architecture/**'
 'module: bom':
   - changed-files:
-      - any-glob-to-any-file: 'bom/**'
+      - any-glob-to-any-file: 'bom/bom/**'
 'module: dependencies':
   - changed-files:
-      - any-glob-to-any-file: 'dependencies/**'
+      - any-glob-to-any-file: 'bom/dependencies/**'
 
 'area: docs':
   - changed-files:

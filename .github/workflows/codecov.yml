@@ -2,10 +2,10 @@ name: Codecov
 on:
   push:
     paths-ignore:
-      - 'gateway-server/**'
+      - 'platform/gateway-server/**'
   pull_request:
     paths-ignore:
-      - 'gateway-server/**'
+      - 'platform/gateway-server/**'
 
 permissions:
   contents: read

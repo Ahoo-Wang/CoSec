@@ -320,7 +320,7 @@ and a rate limit rule's `key` alike. A document with such a reference does not c
 `cosec-migrate` alike. A DENY with `prefix` on `authorization` would let a document's author learn another principal's
 token one character at a time, and a key on it would count requests per token. `cosec-identity` is what a gateway forwards to the services behind it; at the
 gateway it is only the client's claim. The list is fixed
-([`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt));
+([`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt));
 a host that reads API keys from another header is not covered by it.
 
 A header sent more than once reads as its value when every copy is the same. When the copies differ, the header has no
@@ -602,7 +602,7 @@ example in VS Code's `settings.json`:
 ```
 
 The files are generated from the format descriptors in `cosec-core`
-([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
+([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
 and never edited by hand. A test keeps them and the document reader in agreement: what one accepts, the other accepts.
 
 Passing the schema is necessary, not sufficient. JSON Schema cannot express, among others: which of the three

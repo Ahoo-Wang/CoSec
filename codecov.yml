@@ -14,5 +14,5 @@ coverage:
         target: auto
         threshold: 1%
 ignore:
-  - "api/.*"
-  - "gateway-server/.*"
+  - "api/api/.*"
+  - "platform/gateway-server/.*"

@@ -126,8 +126,8 @@ CoSec 依据**文档**做决策：一份作用于所有租户的平台文档，�
 在 CoSec 源码目录中构建 `cosec-migrate`：
 
 ```bash
-./gradlew :cosec-migrate:installDist
-# 工具位于 migrate/build/install/cosec-migrate/bin/cosec-migrate
+./gradlew :migrate:installDist
+# 工具位于 migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
 ```
 
 `publish` 按 `convert` 写出的格式读取目录：它只发布 `report.json` 列出的文件，并逐个核对其中记录的 SHA-256，因此事后被修改过的内容不会被发布。对你自己编写的文档，需要写出这份报告：

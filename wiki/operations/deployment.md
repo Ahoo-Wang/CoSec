@@ -12,7 +12,7 @@ Kubernetes manifests in the repository, how CI checks the image, and the JDK 25 
 
 ## The image
 
-CI builds the image from [`gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/Dockerfile)
+CI builds the image from [`platform/gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/Dockerfile)
 on every push and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/cosec-gateway` and
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
@@ -169,7 +169,7 @@ on it restarts the pod.
 
 After the image is pushed, the `aot-smoke` job of
 [`docker-deploy.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/docker-deploy.yml) runs
-[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-smoke.sh) against a Redis 7
+[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-smoke.sh) against a Redis 7
 service container. It publishes a platform document with `cosec-migrate publish`, starts the image with
 `-XX:AOTMode=on` (a cache that cannot be mapped fails the job), adds a `/smoke/**` route to the gateway's own health
 endpoint, and checks that the health probe answers `200`, an anonymous request `401` with
@@ -197,7 +197,7 @@ work again. No code changes and no Spring AOT are involved.
 ### How the image uses it
 
 The `Dockerfile` trains the cache in its final stage with
-[`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-train.sh), against the exact
+[`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-train.sh), against the exact
 jars and path the container runs, and writes it to `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`.
 
 1. **Record.** The script starts the gateway with `-XX:AOTMode=record` and the same JVM options as production,

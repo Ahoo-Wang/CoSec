@@ -1,0 +1,17 @@
+# Rule: MEM-4
+# Mutant: refresh reads subject revocations without the skew, so a token the pipeline refuses is renewed
+# Tests: :core:test --tests me.ahoo.cosec.token.SubjectRevocationTest
+
+diff --git a/core/core/src/main/kotlin/me/ahoo/cosec/token/RevocableTokenVerifier.kt b/core/core/src/main/kotlin/me/ahoo/cosec/token/RevocableTokenVerifier.kt
+index cf87a833..a1e0bfa1 100644
+--- a/core/core/src/main/kotlin/me/ahoo/cosec/token/RevocableTokenVerifier.kt
++++ b/core/core/src/main/kotlin/me/ahoo/cosec/token/RevocableTokenVerifier.kt
+@@ -100,7 +100,7 @@ class RevocableTokenVerifier(
+     private fun checkSubjectNotRevoked(tokenPrincipal: TokenPrincipal) {
+         val tenant = MembershipClaims.tenantOf(tokenPrincipal)
+         val revokedBefore = tokenStore.subjectRevokedBefore(tenant, PrincipalId(tokenPrincipal.id))
+-        if (SubjectRevocation.revokes(revokedBefore, tokenPrincipal, skew)) {
++        if (SubjectRevocation.revokes(revokedBefore, tokenPrincipal, Duration.ZERO)) {
+             throw TokenRevokedException(
+                 "The tokens of principal [${tokenPrincipal.id}] issued before [$revokedBefore] have been revoked."
+             )
