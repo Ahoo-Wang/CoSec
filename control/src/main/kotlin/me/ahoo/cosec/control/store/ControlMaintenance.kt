@@ -61,6 +61,7 @@ class ControlMaintenance(
     private val holder: String = UUID.randomUUID().toString()
 
     /** One reclamation pass; what was removed, by document. Nothing when an open change cannot be read. */
+    @Suppress("TooGenericExceptionCaught")
     suspend fun reclaim(): Map<SnapshotKey, Reclaimed> {
         val open = try {
             openChanges()

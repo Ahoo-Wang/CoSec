@@ -143,7 +143,14 @@ class CoCacheControlStoreTest {
                     }
             }
             val store = store(node, lists = lists, clock = clock, changes = failing)
-            assertThrownBy<IllegalStateException> { runBlocking { store.putChange(null, change("c1", ChangeState.DRAFT)) } }
+            assertThrownBy<IllegalStateException> {
+                runBlocking {
+                    store.putChange(
+                        null,
+                        change("c1", ChangeState.DRAFT)
+                    )
+                }
+            }
             // Another instance reads the list while c1 is listed and missing: it is not dropped.
             val reader = store(node, lists = lists, clock = clock, changes = changes)
             reader.openChanges().assert().containsExactly(ChangeId("c1"))
