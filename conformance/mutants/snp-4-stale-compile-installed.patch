@@ -1,0 +1,17 @@
+# Rule: SNP-4
+# Mutant: a load that compiled with the old inputs installs and answers its waiters
+# Tests: :cosec-core:test --tests me.ahoo.cosec.snapshot.SnapshotRecompileTest :cosec-runtime:test --tests me.ahoo.cosec.runtime.snapshot.PlatformCompilerInFlightTest
+
+diff --git a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
+index 1060f1d9..f0159ccd 100644
+--- a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
++++ b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
+@@ -1106,7 +1106,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+             }
+             val stale = install && key != sharedKey && load.epoch < compileEpoch.get() &&
+                 (entry.origin == EntryOrigin.DOCUMENT || entry.origin == EntryOrigin.UNCOMPILABLE)
+-            val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
++            val withheld = false
+             try {
+                 if (install && !withheld) {
+                     recordInstall(entry)
