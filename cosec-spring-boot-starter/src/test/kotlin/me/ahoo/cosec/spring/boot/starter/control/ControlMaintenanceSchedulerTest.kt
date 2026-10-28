@@ -15,6 +15,10 @@ package me.ahoo.cosec.spring.boot.starter.control
 
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -47,6 +51,36 @@ class ControlMaintenanceSchedulerTest {
         scheduler.stop()
         scheduler.isRunning.assert().isFalse()
         reclaims.get().assert().isGreaterThanOrEqualTo(3)
+        shadows.get().assert().isGreaterThanOrEqualTo(3)
+    }
+
+    /** Coordinator review: a pass's own timeout, or an Error, must not end the loop silently. */
+    @Test
+    fun `a pass that times out or throws an error does not stop the next`() {
+        val timeout: Throwable = try {
+            runBlocking { withTimeout(1) { delay(1_000) } }
+            error("unreachable")
+        } catch (e: TimeoutCancellationException) {
+            e
+        }
+        val shadows = AtomicInteger()
+        val maintenance = mockk<ControlMaintenance> {
+            coEvery { reclaim() } returns emptyMap()
+            coEvery { closeShadowWindows() } answers {
+                when (shadows.incrementAndGet()) {
+                    1 -> throw timeout
+                    2 -> throw AssertionError("an error")
+                    else -> emptyList()
+                }
+            }
+        }
+        val scheduler = ControlMaintenanceScheduler(maintenance, Duration.ofHours(1), Duration.ofMillis(20))
+        scheduler.start()
+        val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+        while (shadows.get() < 3 && System.nanoTime() < deadline) {
+            Thread.sleep(10)
+        }
+        scheduler.stop()
         shadows.get().assert().isGreaterThanOrEqualTo(3)
     }
 

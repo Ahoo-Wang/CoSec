@@ -19,13 +19,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import me.ahoo.cosec.control.store.ControlMaintenance
 import org.springframework.context.SmartLifecycle
 import java.time.Duration
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.toKotlinDuration
 
 private val log = KotlinLogging.logger {}
@@ -55,15 +56,18 @@ class ControlMaintenanceScheduler(
         this.scope = scope
     }
 
+    /**
+     * Runs [pass] every [interval] until [stop]. Whatever a pass throws, a timeout's cancellation or an `Error` included,
+     * is logged and the next pass runs; only the cancellation of this scheduler's own scope ends the loop.
+     */
     @Suppress("TooGenericExceptionCaught")
     private fun CoroutineScope.every(interval: Duration, pass: suspend () -> Unit) = launch {
         while (isActive) {
             delay(interval.toKotlinDuration())
             try {
                 pass()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                currentCoroutineContext().ensureActive()
                 log.warn(e) { "A control-plane maintenance pass failed; the next one tries again." }
             }
         }

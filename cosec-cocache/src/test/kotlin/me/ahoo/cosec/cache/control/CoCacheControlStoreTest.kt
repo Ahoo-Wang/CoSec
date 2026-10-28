@@ -46,6 +46,7 @@ import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -64,17 +65,21 @@ class CoCacheControlStoreTest {
     private fun store(
         node: SnapshotNode,
         heads: Cache<SnapshotKey, SnapshotDocument> = node.cache,
-        lists: Cache<String, Set<String>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        lists: Cache<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        clock: Clock = Clock.systemUTC(),
+        changes: Cache<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
     ) = CoCacheControlStore(
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
         references = node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
-        changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+        changes = changes,
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = lists,
+        clock = clock,
+        missingGrace = Duration.ofHours(1),
     )
 
     private fun change(id: String, state: ChangeState) = ChangeRequest(
@@ -111,10 +116,51 @@ class CoCacheControlStoreTest {
             store.openChanges().assert().containsExactly(ChangeId("c2"))
 
             // A removal lost after the terminal write: the id is dropped the next time the list is read.
-            lists.put("open-changes", setOf("c1", "c2", "gone"))
+            val listed = lists.get("open-changes")!!
+            lists.put("open-changes", listed + ("c1" to Instant.EPOCH))
             store.openChanges().assert().containsExactly(ChangeId("c2"))
-            lists.get("open-changes").assert().isEqualTo(setOf("c2"))
+            lists.get("open-changes")!!.keys.assert().containsExactly("c2")
         }
+    }
+
+    /** Coordinator review: a change listed but not written yet is being written, or its write failed. */
+    @Test
+    fun `a listed change that is missing stays until the grace has passed`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
+            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+            val changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
+            // The first write fails after the id was listed.
+            val failing = object : Cache<ChangeId, ChangeRequest> by changes {
+                override fun async(): AsyncCache<ChangeId, ChangeRequest> =
+                    object : AsyncCache<ChangeId, ChangeRequest> by changes.async() {
+                        override fun putIfMatch(
+                            key: ChangeId,
+                            expected: Digest?,
+                            value: ChangeRequest
+                        ): CompletableFuture<ConditionalPut> =
+                            CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
+                    }
+            }
+            val store = store(node, lists = lists, clock = clock, changes = failing)
+            assertThrownBy<IllegalStateException> { runBlocking { store.putChange(null, change("c1", ChangeState.DRAFT)) } }
+            // Another instance reads the list while c1 is listed and missing: it is not dropped.
+            val reader = store(node, lists = lists, clock = clock, changes = changes)
+            reader.openChanges().assert().containsExactly(ChangeId("c1"))
+            clock.now = clock.now.plus(Duration.ofMinutes(59))
+            reader.openChanges().assert().containsExactly(ChangeId("c1"))
+            clock.now = clock.now.plus(Duration.ofMinutes(2))
+            reader.openChanges().assert().isEmpty()
+            lists.get("open-changes")!!.assert().isEmpty()
+        }
+    }
+
+    private class MutableClock(var now: Instant) : Clock() {
+        override fun instant(): Instant = now
+
+        override fun getZone(): java.time.ZoneId = java.time.ZoneOffset.UTC
+
+        override fun withZone(zone: java.time.ZoneId): Clock = this
     }
 
     @Test

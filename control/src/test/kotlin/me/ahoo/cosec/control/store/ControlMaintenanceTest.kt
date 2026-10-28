@@ -72,7 +72,7 @@ class ControlMaintenanceTest {
     }
 
     @Test
-    fun `shadow windows are closed by one instance per period`() = runBlocking<Unit> {
+    fun `shadow windows are closed by whoever holds the lease, which a pass releases`() = runBlocking<Unit> {
         published()
         val other = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
         val first = staged("first")
@@ -80,12 +80,44 @@ class ControlMaintenanceTest {
         changes.get(first).state.assert().isEqualTo(ChangeState.READY)
         changes.abandon(ALICE_OP, first)
 
-        // The other instance waits for the lease; the window stays open until it is its turn.
+        // While another instance holds the lease, the window stays open.
         val second = staged("second", base = 1)
+        store.acquireLease(ControlMaintenance.SHADOW_LEASE, "someone", Duration.ofMinutes(2)).assert().isTrue()
         other.closeShadowWindows().assert().isEmpty()
         changes.get(second).state.assert().isEqualTo(ChangeState.SHADOWING)
-        clock.now = clock.now.plus(Duration.ofMinutes(1))
+        store.releaseLease(ControlMaintenance.SHADOW_LEASE, "someone")
+        // The first pass released its lease: the other instance need not wait for it to expire.
         other.closeShadowWindows().map { it.id }.assert().containsExactly(second)
+    }
+
+    @Test
+    fun `a pass that cannot read an open change reclaims nothing`() = runBlocking<Unit> {
+        val failing = object : ControlStore by store {
+            override suspend fun change(id: ChangeId) =
+                if (id.value == "c1") error("Redis is down") else store.change(id)
+        }
+        val blindRevisions = Revisions(failing, clock, revisions.retention)
+        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blind = ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1))
+        val first = published().digest
+        published()
+        changes.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
+        published()
+        clock.now = clock.now.plus(Duration.ofDays(1))
+
+        blind.reclaim().assert().isEmpty()
+        store.recordDigests(ACME).assert().contains(first)
+    }
+
+    @Test
+    fun `a change nobody finishes expires and leaves the open list`() = runBlocking<Unit> {
+        published()
+        val stale = changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(allow("read"))), "stale")
+        store.openChanges().assert().containsExactly(stale.id)
+        clock.now = clock.now.plus(Duration.ofDays(8))
+        maintenance.closeShadowWindows()
+        store.change(stale.id)!!.value.state.assert().isEqualTo(ChangeState.EXPIRED)
+        store.openChanges().assert().isEmpty()
     }
 
     private suspend fun staged(policy: String, base: Long = 1): ChangeId {

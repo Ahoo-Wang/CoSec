@@ -40,7 +40,9 @@ import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
+import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 
 /**
  * The [ControlStore] over CoCache and Redis (RFC 0007 §5.2). The heads are the snapshot documents the data plane
@@ -67,9 +69,16 @@ class CoCacheControlStore(
     /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
     private val candidates: Cache<SnapshotKey, StoredCandidate>,
     /** The document keys and the ids of changes that may be open ([documents], [openChanges]). */
-    private val lists: Cache<String, Set<String>>,
+    private val lists: Cache<String, Map<String, Instant>>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
+    private val clock: Clock = Clock.systemUTC(),
+    /**
+     * How long a listed change may be missing before [openChanges] drops it (`cosec.control.revisions.orphan-age`):
+     * a change is listed before it is written, so one being written right now is missing for a moment, and one whose
+     * first write failed is missing for good.
+     */
+    private val missingGrace: Duration = DEFAULT_MISSING_GRACE,
 ) : ControlStore {
     override fun digestOf(document: SnapshotDocument): SnapshotDigest = digest(SnapshotDocumentCodec, document)
 
@@ -113,13 +122,14 @@ class CoCacheControlStore(
     /** A first index write lists [key] before it is written, so [documents] never misses a document. */
     override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
         if (expected == null) {
-            updateList(DOCUMENTS) { it + SnapshotKeyEncoder.encode(key) }
+            val entry = SnapshotKeyEncoder.encode(key)
+            updateList(DOCUMENTS) { if (entry in it) it else it + (entry to clock.instant()) }
         }
         return put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
     }
 
     override suspend fun documents(): Set<SnapshotKey> =
-        read(lists, DOCUMENTS)?.first.orEmpty().mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
+        read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
@@ -142,12 +152,14 @@ class CoCacheControlStore(
         read(changes, id)?.let { (value, digest) -> Versioned(value, digest) }
 
     /**
-     * A change is listed open before its first write and unlisted after the write that makes it terminal. When that
-     * removal fails, the change is terminal and still listed: [openChanges] drops it the next time it is read.
+     * A change is listed open, with the time, before its first write and unlisted after the write that makes it
+     * terminal. When that removal fails, the change is terminal and still listed: [openChanges] drops it the next time
+     * it is read.
      */
     override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
         if (expected == null) {
-            updateList(OPEN_CHANGES) { it + change.id.value }
+            val id = change.id.value
+            updateList(OPEN_CHANGES) { if (id in it) it else it + (id to clock.instant()) }
         }
         val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
         if (written && change.state.terminal) {
@@ -156,13 +168,21 @@ class CoCacheControlStore(
         return written
     }
 
+    /**
+     * The listed changes that are not terminal. A terminal one is dropped; so is one missing for longer than
+     * [missingGrace], whose first write failed. One missing for less may be being written right now: it stays.
+     */
     override suspend fun openChanges(): Set<ChangeId> {
         val listed = read(lists, OPEN_CHANGES)?.first.orEmpty()
-        val closed = listed.filterTo(HashSet()) { id -> read(changes, ChangeId(id))?.first?.state?.terminal ?: true }
+        val expired = clock.instant().minus(missingGrace)
+        val closed = listed.filterTo(HashMap()) { (id, listedAt) ->
+            val change = read(changes, ChangeId(id))?.first
+            change?.state?.terminal ?: listedAt.isBefore(expired)
+        }.keys
         if (closed.isNotEmpty()) {
             updateList(OPEN_CHANGES) { it - closed }
         }
-        return (listed - closed).mapTo(LinkedHashSet(), ::ChangeId)
+        return (listed.keys - closed).mapTo(LinkedHashSet(), ::ChangeId)
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
@@ -189,15 +209,22 @@ class CoCacheControlStore(
         return (read(leases, name)?.first) == holder
     }
 
+    /** Read, then removed if still [holder]'s: while it holds the lease no one else can take it, so nothing is lost. */
+    override suspend fun releaseLease(name: String, holder: String) {
+        if (read(leases, name)?.first == holder) {
+            leases.async().invalidate(name).await()
+        }
+    }
+
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
-    private suspend fun updateList(name: String, next: (Set<String>) -> Set<String>) {
+    private suspend fun updateList(name: String, next: (Map<String, Instant>) -> Map<String, Instant>) {
         repeat(MAX_LIST_ATTEMPTS) {
             val current = read(lists, name)
             val value = next(current?.first.orEmpty())
             if (value == current?.first) {
                 return
             }
-            if (put(lists, name, current?.second, value, digest(StringSetCodec, value)) is Put.Written) {
+            if (put(lists, name, current?.second, value, digest(ListedCodec, value)) is Put.Written) {
                 return
             }
         }
@@ -258,6 +285,9 @@ class CoCacheControlStore(
         private const val OPEN_CHANGES = "open-changes"
         private const val MAX_LIST_ATTEMPTS = 16
 
+        /** As `cosec.control.revisions.orphan-age`'s default. */
+        val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)
+
         /** The digest CoCache computes for [value] stored with [codec]. */
         fun <V> digest(codec: Codec<V>, value: V): SnapshotDigest = SnapshotDigest(
             Digest.of(Envelope.Scalar(codec.encode(value))).sha1
@@ -269,6 +299,7 @@ class CoCacheControlStore(
             heads: PolicySnapshotCache,
             keyPrefix: String = CoSec.COSEC,
             onPublished: (SnapshotKey) -> Unit = {},
+            missingGrace: Duration = DEFAULT_MISSING_GRACE,
         ): CoCacheControlStore = CoCacheControlStore(
             heads = heads,
             records = runtime.create(ControlCacheSpecs.revisionRecord(keyPrefix)),
@@ -280,6 +311,7 @@ class CoCacheControlStore(
             candidates = runtime.create(ShadowCacheSpecs.candidate(keyPrefix)),
             lists = runtime.create(ControlCacheSpecs.list(keyPrefix)),
             onPublished = onPublished,
+            missingGrace = missingGrace,
         )
     }
 }

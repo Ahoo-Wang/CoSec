@@ -97,11 +97,14 @@ class CoSecControlAutoConfiguration {
         heads: PolicySnapshotCache,
         documents: RedisSnapshotDocumentStore,
         properties: RuntimeAuthorizationProperties,
+        control: ControlProperties,
     ): ControlStore = CoCacheControlStore.create(
         runtime,
         heads,
         properties.snapshot.keyPrefix,
-        documents::notifyChanged
+        documents::notifyChanged,
+        // A change listed but missing this long had its first write fail.
+        missingGrace = control.revisions.orphanAge,
     )
 
     @Bean

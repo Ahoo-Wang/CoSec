@@ -152,6 +152,14 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         true
     }
 
+    override suspend fun releaseLease(name: String, holder: String) {
+        synchronized(lock) {
+            if (leases[name]?.first == holder) {
+                leases.remove(name)
+            }
+        }
+    }
+
     /** Test access: the record keys of [key], to assert what was written and reclaimed. */
     fun recordDigests(key: SnapshotKey): Set<SnapshotDigest> =
         synchronized(lock) { records.keys.filter { it.first == key }.mapTo(HashSet()) { it.second } }
