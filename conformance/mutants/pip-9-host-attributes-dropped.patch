@@ -1,0 +1,17 @@
+# Rule: PIP-9
+# Mutant: the pipeline evaluates a request without its host attributes, so headers and request attributes read as absent
+# Tests: :conformance:test
+
+diff --git a/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 4048a866..eb98124f 100644
+--- a/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -295,7 +295,7 @@ class Pipeline(components: PipelineComponents) {
+                 blocked = blacklist.blocked,
+             ),
+         )
+-        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts))
++        val request = FlatRequest(authz, scope, memberships, clock.millis())
+         val decision = evaluate(request, view, fetched, record)
+         breakGlass(requestId, traceId, decision, view, record)?.let { return it }
+         return decided(requestId, traceId, decision, authn, security(requestId, principal, request, decision))

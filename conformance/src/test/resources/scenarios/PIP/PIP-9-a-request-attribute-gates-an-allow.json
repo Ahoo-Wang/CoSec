@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "PIP-9"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The ALLOW gated on the gateway's route id permits the request whose route is orders.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "by-route",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "request.attributes.cosec.audit.routeId",
+                  "orders"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "by-route",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "by-route"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "requestAttributes": {
+      "cosec.audit.routeId": "orders"
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

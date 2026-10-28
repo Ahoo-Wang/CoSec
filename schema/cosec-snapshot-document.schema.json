@@ -437,8 +437,8 @@
         },
         "id": {
           "examples": [
-            "g:deny-ip",
-            "r:editor:read"
+            "deny-ip",
+            "editor-read"
           ],
           "type": "string"
         },

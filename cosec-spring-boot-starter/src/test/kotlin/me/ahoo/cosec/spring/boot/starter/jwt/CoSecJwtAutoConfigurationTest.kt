@@ -131,6 +131,22 @@ class CoSecJwtAutoConfigurationTest {
             }
     }
 
+    /** Review A7: refresh reads subject revocations with the same skew as the pipeline. */
+    @Test
+    fun theRefreshVerifierTakesTheRevocationSkew() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "cosec.authentication.revocation.skew=PT30S",
+            )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                ReflectionTestUtils.getField(context.getBean(TokenVerifier::class.java), "skew")
+                    .assert().isEqualTo(Duration.ofSeconds(30))
+            }
+    }
+
     /** Revocation is always on: without a store that records it, logout would silently do nothing. */
     @Test
     fun contextFailsWithoutTokenStore() {

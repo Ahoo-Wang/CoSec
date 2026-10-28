@@ -75,7 +75,7 @@ class TokenAuthenticatorTest {
         principal: () -> TokenPrincipal,
         revocations: RevocationReader = RevocationReader.NONE,
         token: String? = "t",
-        skew: java.time.Duration = TokenAuthenticator.DEFAULT_REVOCATION_SKEW,
+        skew: java.time.Duration = me.ahoo.cosec.token.SubjectRevocation.DEFAULT_SKEW,
     ): AuthnResult = TokenAuthenticator(
         Verifier(mapOf("t" to principal)),
         revocations,

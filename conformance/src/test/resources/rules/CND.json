@@ -43,6 +43,16 @@
         "model:ConditionCheckerTest"
       ],
       "pending": null
+    },
+    {
+      "id": "CND-5",
+      "source": "RFC 0005 §3.2",
+      "statement": "No condition may read a credential header: `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie` or `x-api-key`, in any case. A document with such a condition does not compile, through the control plane and cosec-migrate alike.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionCheckerTest#credential headers are refused"
+      ],
+      "pending": null
     }
   ]
 }
