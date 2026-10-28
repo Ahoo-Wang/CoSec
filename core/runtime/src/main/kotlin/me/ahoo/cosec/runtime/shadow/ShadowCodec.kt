@@ -13,10 +13,10 @@
 
 package me.ahoo.cosec.runtime.shadow
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode

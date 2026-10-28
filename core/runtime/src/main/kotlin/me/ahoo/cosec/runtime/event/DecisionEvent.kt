@@ -26,7 +26,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.ProblemType
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthnResult
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 

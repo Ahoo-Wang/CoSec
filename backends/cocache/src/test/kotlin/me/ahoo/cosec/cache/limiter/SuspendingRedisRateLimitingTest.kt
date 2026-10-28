@@ -32,9 +32,9 @@ class SuspendingRedisRateLimitingTest {
         factory.destroy()
     }
 
-    private val platform = me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler().compile(
-        me.ahoo.cosec.snapshot.SnapshotKey.Platform,
-        me.ahoo.cosec.snapshot.SnapshotDocument(
+    private val platform = me.ahoo.cosec.runtime.document.PolicyDocumentCompiler().compile(
+        me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform,
+        me.ahoo.cosec.spi.snapshot.SnapshotDocument(
             2,
             1,
             java.time.Instant.parse("2026-10-26T00:00:00Z"),
@@ -66,7 +66,7 @@ class SuspendingRedisRateLimitingTest {
         )
         val pipeline = me.ahoo.cosec.runtime.Pipeline(
             me.ahoo.cosec.runtime.PipelineComponents(
-                { me.ahoo.cosec.runtime.authn.AuthnResult.Anonymous },
+                { me.ahoo.cosec.spi.authn.AuthnResult.Anonymous },
                 me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource(views),
                 rateLimiter = limiter,
             )

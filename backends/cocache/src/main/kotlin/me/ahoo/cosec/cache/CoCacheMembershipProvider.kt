@@ -14,7 +14,7 @@
 package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cosec.membership.MembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId

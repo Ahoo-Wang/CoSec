@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.fail

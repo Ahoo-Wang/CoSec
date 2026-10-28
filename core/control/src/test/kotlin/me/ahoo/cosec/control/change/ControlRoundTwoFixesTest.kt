@@ -51,9 +51,9 @@ import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
@@ -358,7 +358,7 @@ class ControlRoundTwoFixesTest {
 
             override suspend fun decideAs(
                 operator: Operator,
-                principal: me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal,
+                principal: me.ahoo.cosec.spi.authn.AuthenticatedPrincipal,
                 memberships: me.ahoo.cosec.model.Memberships,
                 action: me.ahoo.cosec.model.Action,
                 resource: me.ahoo.cosec.model.Resource,
@@ -371,10 +371,10 @@ class ControlRoundTwoFixesTest {
         )
         ChangeAuthority(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
         // The pipeline's authorizer: no request, no decision; documents it cannot confirm, no decision either.
-        val principal = me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal(
+        val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
             pia.actor.tenant,
-            me.ahoo.cosec.runtime.authn.MembershipSource.Provider,
+            me.ahoo.cosec.spi.authn.MembershipSource.Provider,
         )
         val approve = me.ahoo.cosec.control.authz.ControlActions.APPROVE
         val document = me.ahoo.cosec.control.authz.ControlResources.document(SnapshotKey.Platform)

@@ -24,7 +24,7 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
-            "core:PolicyDocumentCodecTest#the wildcard is only ever Any",
+            "runtime:PolicyDocumentCodecTest#the wildcard is only ever Any",
             "architecture:OneDecisionPathTest#onlyStatusMappingConstructsOutcomes",
             "architecture:OneDecisionPathTest#adaptersNeverSeeDecisions",
             "architecture:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
@@ -32,7 +32,7 @@ object GuardAllowlist {
             "spring-boot:WebAdapterParityTest#the three adapters make the same decision event",
             "architecture:ScopeConstructionTest#onlyTheResolverConstructsScopes",
             "architecture:ScopeConstructionTest#scopeIsNotADataClass",
-            "core:PolicyDocumentCodecTest#a scope is never decoded",
+            "runtime:PolicyDocumentCodecTest#a scope is never decoded",
             "architecture:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
             "architecture:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode",
             "architecture:ObligationDispatchTest#obligations are dispatched by an exhaustive when without else",
@@ -46,13 +46,13 @@ object GuardAllowlist {
             "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn",
         ),
         "timing" to setOf(
-            "core:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",
+            "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",
             "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from",
-            "core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
-            "core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
-            "core:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
-            "core:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
-            "core:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
+            "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
+            "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
+            "runtime:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
+            "runtime:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
+            "runtime:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
             "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again",
         ),
     )

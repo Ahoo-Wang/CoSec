@@ -18,7 +18,7 @@ import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 
 /**

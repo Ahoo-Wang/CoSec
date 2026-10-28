@@ -12,7 +12,7 @@
  */
 
 dependencies {
-    implementation(project(":core"))
+    implementation(project(":runtime"))
     // Ip2RegionAttributeProvider (RFC 0006 §5.4.5) implements the runtime's AttributeProvider.
     implementation(project(":runtime"))
     api("org.lionsoul:ip2region")

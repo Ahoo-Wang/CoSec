@@ -13,11 +13,17 @@
 
 package me.ahoo.cosec.runtime.authn
 
-import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeyReader
-import me.ahoo.cosec.apikey.ApiKeys
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
+
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Clock

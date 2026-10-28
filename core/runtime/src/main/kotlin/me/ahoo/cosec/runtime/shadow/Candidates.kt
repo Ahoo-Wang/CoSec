@@ -17,8 +17,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant

@@ -19,14 +19,14 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.snapshot.SnapshotDigest
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.DocumentCompileException
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.DocumentCompileException
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 
 /** The limits of what a change may publish (RFC 0007 §6.2 V2), and how changes expire and are approved. */
 class ChangeOptions(

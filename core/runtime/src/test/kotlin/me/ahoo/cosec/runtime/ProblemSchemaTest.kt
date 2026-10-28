@@ -17,8 +17,8 @@ import com.networknt.schema.Schema
 import com.networknt.schema.SchemaLocation
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
-import me.ahoo.cosec.snapshot.format.DocumentFormats
-import me.ahoo.cosec.snapshot.format.JsonSchemaWriter
+import me.ahoo.cosec.runtime.document.format.DocumentFormats
+import me.ahoo.cosec.runtime.document.format.JsonSchemaWriter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.json.JsonMapper

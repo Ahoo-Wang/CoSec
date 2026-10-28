@@ -16,9 +16,9 @@ package me.ahoo.cosec.runtime.shadow
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

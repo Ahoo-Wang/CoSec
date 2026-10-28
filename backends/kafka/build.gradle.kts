@@ -12,9 +12,9 @@
  */
 
 dependencies {
-    api(project(":api"))
+    api(project(":spi"))
+    implementation("tools.jackson.core:jackson-databind")
     api("org.springframework.kafka:spring-kafka")
-    implementation(project(":core"))
     // KafkaAuditListener (RFC 0006 §9.5.3) is a decision listener of the coroutine pipeline.
     api(project(":runtime"))
     // KafkaChangeListener (RFC 0007 §10.5) records the control plane's change events; the control plane brings it.

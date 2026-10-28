@@ -62,7 +62,8 @@ java {
 }
 dependencies {
     kapt(platform(project(":dependencies")))
-    api(project(":core"))
+    api(project(":runtime"))
+    api(project(":login"))
     api(project(":jwt"))
     api(project(":runtime"))
     "webmvcSupportImplementation"(project(":webmvc"))

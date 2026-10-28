@@ -24,8 +24,8 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.Memberships
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.time.Duration

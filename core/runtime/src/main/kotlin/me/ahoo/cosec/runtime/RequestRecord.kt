@@ -25,7 +25,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.OutcomeSummary
 import me.ahoo.cosec.runtime.event.ReplayHandle

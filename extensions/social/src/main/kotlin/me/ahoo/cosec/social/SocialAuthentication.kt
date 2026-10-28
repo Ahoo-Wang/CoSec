@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.api.authentication.Authentication
+import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 

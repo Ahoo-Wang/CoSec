@@ -19,8 +19,8 @@ import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.token.TokenRevoker
-import me.ahoo.cosec.token.TokenStore
+import me.ahoo.cosec.spi.token.TokenRevoker
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes

@@ -23,8 +23,8 @@ import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration

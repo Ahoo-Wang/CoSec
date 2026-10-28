@@ -33,8 +33,8 @@ import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener

@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.identity.Identity
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 

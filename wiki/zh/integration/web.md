@@ -200,7 +200,7 @@ val securityContext = exchange.getSecurityContext()
 **Spring MVC**：从绑定到线程的持有者中读取，或从 Servlet 请求中读取。请求完成时过滤器会清除持有者，因此要在请求线程上读取，不要在你自己启动的线程上读取。
 
 ```kotlin
-import me.ahoo.cosec.context.SecurityContextHolder
+import me.ahoo.cosec.servlet.SecurityContextHolder
 import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 
 val securityContext = SecurityContextHolder.requiredContext

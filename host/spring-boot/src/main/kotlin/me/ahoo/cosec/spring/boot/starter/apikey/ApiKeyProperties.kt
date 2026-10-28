@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.apikey
 
-import me.ahoo.cosec.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties

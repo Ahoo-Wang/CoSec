@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate.v7.serialization
 
-import me.ahoo.cosec.limiter.RateLimit
+import me.ahoo.cosec.spi.ratelimit.RateLimit
 import me.ahoo.cosec.migrate.v7.api.policy.ActionMatcher
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
 import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule

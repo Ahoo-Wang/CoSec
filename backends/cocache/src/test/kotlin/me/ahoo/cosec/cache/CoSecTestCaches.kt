@@ -21,7 +21,7 @@ import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.redis.RedisBackend
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
 
 /**

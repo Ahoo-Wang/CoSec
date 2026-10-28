@@ -18,8 +18,8 @@ import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.source
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

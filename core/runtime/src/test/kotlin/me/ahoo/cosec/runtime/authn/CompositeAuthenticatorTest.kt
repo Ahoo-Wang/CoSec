@@ -13,6 +13,10 @@
 
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+
 import kotlinx.coroutines.test.runTest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

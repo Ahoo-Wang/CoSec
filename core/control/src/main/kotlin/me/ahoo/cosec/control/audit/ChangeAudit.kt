@@ -28,8 +28,8 @@ import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.ShadowSummary
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Actor
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.Actor
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
@@ -229,6 +229,6 @@ object ChangeEventJson {
                 "counts"
             ).apply { shadow.counts.toSortedMap().forEach { (outcome, count) -> put(outcome, count) } }
         }
-        return me.ahoo.cosec.serialization.CoSecJsonSerializer.writeValueAsString(root)
+        return me.ahoo.cosec.runtime.json.CoSecJsonSerializer.writeValueAsString(root)
     }
 }

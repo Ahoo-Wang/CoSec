@@ -20,7 +20,7 @@ import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
-import me.ahoo.cosec.membership.MembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.COCACHE_AUTO_CONFIGURATION
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties

@@ -15,7 +15,7 @@ package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.model.Memberships
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

@@ -15,7 +15,7 @@ package me.ahoo.cosec.cache.limiter
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

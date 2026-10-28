@@ -13,12 +13,14 @@
 
 package me.ahoo.cosec.runtime.ratelimit
 
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
+
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.limiter.RateLimitResult
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.Basis
@@ -28,9 +30,9 @@ import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration

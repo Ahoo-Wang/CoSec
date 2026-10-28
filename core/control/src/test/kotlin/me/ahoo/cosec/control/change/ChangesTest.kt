@@ -20,12 +20,12 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Catalog
-import me.ahoo.cosec.snapshot.document.CatalogGroup
-import me.ahoo.cosec.snapshot.document.CatalogPermission
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.Catalog
+import me.ahoo.cosec.runtime.document.CatalogGroup
+import me.ahoo.cosec.runtime.document.CatalogPermission
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -290,7 +290,7 @@ class ChangesTest {
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(slot)).assert().isEqualTo(slot)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(StageSlot.FREE)).assert().isEqualTo(StageSlot.FREE)
         listOf("{}", """{"id":"x"}""", "[]", "not json").forEach { text ->
-            assertThrownBy<me.ahoo.cosec.snapshot.SnapshotFormatException> {
+            assertThrownBy<me.ahoo.cosec.spi.snapshot.SnapshotFormatException> {
                 ChangeRequestCodec.decode(
                     text.encodeToByteArray()
                 )
@@ -321,7 +321,7 @@ class ChangesTest {
             me.ahoo.cosec.model.decision.RateLimitSpec(10.0),
         )
         val (kind, owner) = me.ahoo.cosec.control.store.Revisions.ownerOf(ACME)
-        val limited = me.ahoo.cosec.snapshot.document.PolicyDocument(
+        val limited = me.ahoo.cosec.runtime.document.PolicyDocument(
             kind,
             owner,
             1,

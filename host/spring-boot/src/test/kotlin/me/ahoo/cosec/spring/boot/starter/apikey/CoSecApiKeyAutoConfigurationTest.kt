@@ -13,15 +13,15 @@
 package me.ahoo.cosec.spring.boot.starter.apikey
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.apikey.ApiKeyReader
-import me.ahoo.cosec.apikey.ApiKeyStore
-import me.ahoo.cosec.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.apikey.ApiKeyStore
+import me.ahoo.cosec.spi.apikey.ApiKeys
 import me.ahoo.cosec.cache.RedisApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
-import me.ahoo.cosec.runtime.authn.Credentials
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.test.asserts.assert

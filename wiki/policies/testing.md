@@ -297,8 +297,8 @@ compiler the control plane and every instance use, from `cosec-core`:
 
 ```kotlin
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import java.io.File
 
 val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platform.json").readBytes())

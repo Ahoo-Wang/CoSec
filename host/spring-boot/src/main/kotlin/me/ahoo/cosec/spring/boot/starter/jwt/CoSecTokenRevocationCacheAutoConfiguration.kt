@@ -24,7 +24,7 @@ import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
-import me.ahoo.cosec.token.TokenStore
+import me.ahoo.cosec.spi.token.TokenStore
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean

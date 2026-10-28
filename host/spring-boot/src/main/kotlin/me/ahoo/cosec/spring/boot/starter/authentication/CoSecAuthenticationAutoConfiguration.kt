@@ -12,12 +12,12 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.api.authentication.Authentication
-import me.ahoo.cosec.api.authentication.AuthenticationProvider
-import me.ahoo.cosec.api.authentication.Credentials
+import me.ahoo.cosec.login.Authentication
+import me.ahoo.cosec.login.AuthenticationProvider
+import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.authentication.CompositeAuthentication
-import me.ahoo.cosec.authentication.DefaultAuthenticationProvider
+import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean

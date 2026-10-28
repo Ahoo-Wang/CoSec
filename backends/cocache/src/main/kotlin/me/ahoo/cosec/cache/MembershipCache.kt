@@ -21,7 +21,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import tools.jackson.databind.JsonNode
 import java.util.Collections
 

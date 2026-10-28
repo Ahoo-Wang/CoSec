@@ -20,10 +20,10 @@ import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.snapshot.SnapshotDigest
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Nested
@@ -63,7 +63,7 @@ class RevisionsTest {
 
     private fun publish(
         key: SnapshotKey = ACME,
-        document: me.ahoo.cosec.snapshot.document.PolicyDocument = candidate(
+        document: me.ahoo.cosec.runtime.document.PolicyDocument = candidate(
             key
         ),
         change: String = "c"
@@ -72,7 +72,7 @@ class RevisionsTest {
 
     private fun published(
         key: SnapshotKey = ACME,
-        document: me.ahoo.cosec.snapshot.document.PolicyDocument = candidate(
+        document: me.ahoo.cosec.runtime.document.PolicyDocument = candidate(
             key
         )
     ) =

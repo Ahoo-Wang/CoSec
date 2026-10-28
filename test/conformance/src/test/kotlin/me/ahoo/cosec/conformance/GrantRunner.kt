@@ -22,7 +22,7 @@ import me.ahoo.cosec.control.grant.GrantStatement
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
-import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId

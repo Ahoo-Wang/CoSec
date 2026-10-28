@@ -358,7 +358,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 | `PolicyTestKit`（`cosec-core`） | `cosec-testkit` 模块中的 `PolicyTestKit`（[策略测试套件](#policy-test-suites)）。 |
 | `cosec-api` 中 7.x 的请求模型：`Request`、`Attributes`、`AppIdCapable`、`DeviceIdCapable`、`RequestIdCapable`（及其别名 `AppId`、`DeviceId`、`RequestId`）、`COSEC_EXTEND_KEY_PREFIX`、`SpaceIdCapable.SPACE_ID_KEY`；`cosec-core` 的 `RequestSecurityContexts` 和 `InvalidRequestPathException` | 无：适配器读取 `HttpFacts`，安全上下文携带校验后的 `scope`。`SpaceIdCapable` 和 `SpaceId` 为 `SpacedRoleId` 保留。 |
 | `InternalIds`（`cosec-api`） | 无。 |
-| `me.ahoo.cosec.limiter.RateLimiter` 及其 `LocalRateLimiter`、`RedisRateLimiter`（`cosec-cocache`） | 挂起的 SPI `me.ahoo.cosec.runtime.ratelimit.RateLimiter`；starter 注册它的 `LocalRateLimiter` 或 `ReactiveRedisRateLimiter`（[限流](../policies/rate-limiting.md)）。`RateLimit` 和 `RateLimitResult` 保留。 |
+| `me.ahoo.cosec.limiter.RateLimiter` 及其 `LocalRateLimiter`、`RedisRateLimiter`（`cosec-cocache`） | 挂起的 SPI `me.ahoo.cosec.spi.ratelimit.RateLimiter`；starter 注册它的 `LocalRateLimiter` 或 `ReactiveRedisRateLimiter`（[限流](../policies/rate-limiting.md)）。`RateLimit` 和 `RateLimitResult` 保留。 |
 | `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用会校验签名的 `TokenVerifier.verify` 把令牌变成主体。 |
 | `PrincipalConverter`、`TokenVerifier.toPrincipal` | `TokenVerifier.verify`。 |
 | `AuthorizationChecker.check(...)`：`Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`，挂起函数；`cosec-webflux` 提供 `Mono<Boolean>` 形式，`cosec-webmvc` 提供阻塞形式（[代码中的检查](../integration/checks.md)）。 |

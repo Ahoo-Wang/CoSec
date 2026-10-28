@@ -14,15 +14,15 @@
 package me.ahoo.cosec.runtime.identity
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.identity.IdentityCodec
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts

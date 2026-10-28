@@ -15,7 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.identity.IdentityCodec
+import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.util.unit.DataSize

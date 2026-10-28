@@ -34,8 +34,8 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
@@ -44,7 +44,7 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

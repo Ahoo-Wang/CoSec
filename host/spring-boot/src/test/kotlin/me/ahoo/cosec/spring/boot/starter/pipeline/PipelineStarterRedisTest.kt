@@ -25,25 +25,25 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Actor
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.TokenConverter
-import me.ahoo.cosec.token.TokenRevoker
+import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -166,7 +166,7 @@ class PipelineStarterRedisTest {
             val alice = token(context, "acme", "alice")
             client.status("/orders/1", alice).assert().isEqualTo(200)
             context.getBean(TokenRevoker::class.java).revoke(
-                me.ahoo.cosec.token.SimpleAccessToken(alice)
+                me.ahoo.cosec.runtime.token.SimpleAccessToken(alice)
             )
             val revoked = client.get().uri("/orders/1").header(HttpHeaders.AUTHORIZATION, alice)
                 .exchange().expectStatus().isEqualTo(401).expectBody(String::class.java).returnResult().responseBody!!

@@ -12,7 +12,7 @@
  */
 
 dependencies {
-    api(project(":core"))
+    api(project(":runtime"))
     api(project(":jwt"))
     // The bridge to the coroutine pipeline (RFC 0006 §7.3): mono {} from kotlinx-coroutines-reactor.
     api(project(":runtime"))

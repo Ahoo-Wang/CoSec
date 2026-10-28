@@ -13,20 +13,26 @@
 
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
+
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.findInDelegationChain
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.api.findInDelegationChain
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.token.ExpiresAtCapable
-import me.ahoo.cosec.token.RevocableTokenVerifier
-import me.ahoo.cosec.token.RevocationReader
-import me.ahoo.cosec.token.SimpleAccessToken
-import me.ahoo.cosec.token.SubjectRevocation
-import me.ahoo.cosec.token.TokenExpiredException
-import me.ahoo.cosec.token.TokenRevokedException
-import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.TokenVerifier
+import me.ahoo.cosec.spi.token.ExpiresAtCapable
+import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.runtime.token.SimpleAccessToken
+import me.ahoo.cosec.spi.token.SubjectRevocation
+import me.ahoo.cosec.spi.token.TokenExpiredException
+import me.ahoo.cosec.spi.token.TokenRevokedException
+import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenVerifier
 import java.time.Duration
 
 /**
@@ -40,7 +46,7 @@ import java.time.Duration
  * - The memberships come from the token as [MembershipSource.of] reads them.
  *
  * Give it the plain verifier (such as `JwtTokenVerifier`), not a [RevocableTokenVerifier]: that one reads the
- * [me.ahoo.cosec.token.TokenStore] synchronously, which may block. A [RevocationReader] that cannot be read answers
+ * [me.ahoo.cosec.spi.token.TokenStore] synchronously, which may block. A [RevocationReader] that cannot be read answers
  * "not revoked" itself, the documented exception to fail closed; anything it or [verifier] throws otherwise reaches
  * the pipeline, which answers 503.
  */

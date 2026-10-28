@@ -33,8 +33,8 @@ import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.CoSecTestCaches
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers

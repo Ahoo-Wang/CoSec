@@ -28,7 +28,7 @@ import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties

@@ -19,7 +19,7 @@ import me.ahoo.cosec.runtime.audit.AuditEvents
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
 import java.util.concurrent.ArrayBlockingQueue

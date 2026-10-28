@@ -14,8 +14,8 @@
 package me.ahoo.cosec.gateway
 
 import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.context.request.RemoteIpResolver
-import me.ahoo.cosec.identity.IdentityCodec
+import me.ahoo.cosec.runtime.http.RemoteIpResolver
+import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor

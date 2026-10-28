@@ -45,11 +45,16 @@ val testOnlyProjects = setOf(
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
 val libraryProjects = publishProjects - bomProjects
 
-// Modules of the decision engine (RFC 0002 §2): they depend on the Kotlin standard library only.
+// The contracts and the decision engine (RFC 0002 §2, RFC 0011 §5): the Kotlin standard library only.
 val pureProjects = setOf(
+    project(":annotations"),
+    project(":api"),
     project(":model"),
     project(":engine"),
 )
+
+// The ports (RFC 0011 §3): what a third party implements, so no logging facade forced on it.
+val spiProject = project(":spi")
 
 /**
  * RFC 0011 D1: a project is named after its directory, and its artifact keeps the cosec- prefix. The starter keeps its
@@ -113,7 +118,9 @@ configure(libraryProjects) {
             testImplementation(platform(dependenciesProject))
         } else {
             api(platform(dependenciesProject))
-            implementation("org.slf4j:slf4j-api")
+            if (this@configure != spiProject) {
+                implementation("org.slf4j:slf4j-api")
+            }
         }
         jmh(platform(dependenciesProject))
         jmh("org.openjdk.jmh:jmh-core")

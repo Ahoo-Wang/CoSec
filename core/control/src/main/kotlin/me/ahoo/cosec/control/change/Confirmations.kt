@@ -19,11 +19,11 @@ import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition
-import me.ahoo.cosec.snapshot.document.Actor
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Duration
 import java.time.Instant

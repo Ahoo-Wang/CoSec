@@ -19,8 +19,8 @@ import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocument
 
 /**
  * The grant analysis's view of snapshot documents (RFC 0004 §7.1): what [GrantAnalyzer] reads from the documents the

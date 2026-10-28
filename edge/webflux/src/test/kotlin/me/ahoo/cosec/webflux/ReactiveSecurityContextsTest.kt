@@ -14,8 +14,8 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.context.SimpleSecurityContext
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext

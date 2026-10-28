@@ -14,9 +14,9 @@
 package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeyReader
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 
 /**

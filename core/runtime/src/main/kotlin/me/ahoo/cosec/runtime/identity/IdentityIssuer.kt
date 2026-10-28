@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.runtime.identity
 
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.identity.IdentityCodec
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.runtime.RequestSecurity
 import java.time.Clock
 

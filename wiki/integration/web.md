@@ -259,7 +259,7 @@ val securityContext = exchange.getSecurityContext()
 request completes, so read it on the request thread, not on a thread you started yourself.
 
 ```kotlin
-import me.ahoo.cosec.context.SecurityContextHolder
+import me.ahoo.cosec.servlet.SecurityContextHolder
 import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 
 val securityContext = SecurityContextHolder.requiredContext

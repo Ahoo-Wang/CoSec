@@ -33,13 +33,13 @@ import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Actor
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
-import me.ahoo.cosec.snapshot.document.ShadowWindow
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.ShadowWindow
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 

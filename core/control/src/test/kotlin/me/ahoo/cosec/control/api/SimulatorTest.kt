@@ -24,8 +24,8 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

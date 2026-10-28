@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.membership.MembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.runtime.PipelineFixtures.LoadingViews
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
@@ -28,7 +28,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
-import me.ahoo.cosec.runtime.authn.Authenticator
+import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

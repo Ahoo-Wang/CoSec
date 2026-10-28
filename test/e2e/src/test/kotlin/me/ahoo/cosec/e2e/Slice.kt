@@ -27,18 +27,18 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.SnapshotOptions
-import me.ahoo.cosec.snapshot.SnapshotSource
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineIntegrationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
@@ -142,7 +142,7 @@ class Slice(
  * RFC 0006 PR-3.
  */
 object TokenAuthenticator : Authenticator {
-    override suspend fun authenticate(credentials: me.ahoo.cosec.runtime.authn.Credentials): AuthnResult {
+    override suspend fun authenticate(credentials: me.ahoo.cosec.spi.authn.Credentials): AuthnResult {
         val token = credentials.token?.removePrefix("Bearer ") ?: return AuthnResult.Anonymous
         if (token == "invalid") {
             return AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)

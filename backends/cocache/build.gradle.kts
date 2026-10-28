@@ -12,7 +12,7 @@
  */
 
 dependencies {
-    api(project(":core"))
+    api(project(":spi"))
     api("me.ahoo.cocache:cocache-core")
     api("me.ahoo.cocache:cocache-codec-jackson")
     api("me.ahoo.cocache:cocache-redis")

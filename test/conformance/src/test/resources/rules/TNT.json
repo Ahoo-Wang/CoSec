@@ -33,7 +33,7 @@
       "statement": "A tenant document may bind an app's permission policy only scoped to that app; the binding resolves the policy from that app's document in the same view, and anywhere else the document does not compile.",
       "level": "engine",
       "guards": [
-        "core:PolicyDocumentCompilerTest#permission policies live in their app's document"
+        "runtime:PolicyDocumentCompilerTest#permission policies live in their app's document"
       ],
       "pending": null
     }

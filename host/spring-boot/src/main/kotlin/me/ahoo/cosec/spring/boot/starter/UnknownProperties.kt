@@ -14,7 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment

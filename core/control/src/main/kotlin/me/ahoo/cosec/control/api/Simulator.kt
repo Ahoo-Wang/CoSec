@@ -21,7 +21,7 @@ import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.engine.flat.ViewVersion
-import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -44,9 +44,9 @@ import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**

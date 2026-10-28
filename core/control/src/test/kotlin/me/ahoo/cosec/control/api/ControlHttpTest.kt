@@ -17,7 +17,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode

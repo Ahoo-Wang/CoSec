@@ -14,7 +14,8 @@
 // The policy test kit (RFC 0008 Q11): a user's scenarios against the user's own documents, through the engine level
 // of the scenario format the conformance suite also runs. JUnit 5 is part of its API (DynamicTest).
 dependencies {
-    api(project(":core"))
+    api(project(":runtime"))
+    implementation("tools.jackson.core:jackson-databind")
     api("org.junit.jupiter:junit-jupiter-api")
     // MembershipResolver: memberships from claims and a provider, merged as the pipeline merges them.
     implementation(project(":runtime"))

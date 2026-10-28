@@ -36,8 +36,8 @@ import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.runtime.shadow.ShadowReportSink
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 

@@ -21,9 +21,9 @@ import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.SnapshotOptions
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll

@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.runtime.RequestGate
+
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -22,9 +24,9 @@ import kotlinx.coroutines.isActive
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.identity.IdentityOverflowException
-import me.ahoo.cosec.limiter.RateLimitResult
-import me.ahoo.cosec.membership.MembershipUnavailableException
+import me.ahoo.cosec.spi.identity.IdentityOverflowException
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
+import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -42,16 +44,16 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.route.RouteResolution
+import me.ahoo.cosec.runtime.route.RouteResolution
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
-import me.ahoo.cosec.runtime.authn.Credentials
-import me.ahoo.cosec.runtime.authn.MembershipSource
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters

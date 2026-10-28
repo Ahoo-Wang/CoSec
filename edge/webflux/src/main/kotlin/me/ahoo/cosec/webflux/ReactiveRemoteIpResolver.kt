@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.context.request.RemoteIpResolver
+import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
 object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {

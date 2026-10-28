@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.runtime.http.HttpFacts
+
 /**
  * The `CoSec-*` request parameters a client may send as a header or as a query parameter. Empty means not sent.
  *

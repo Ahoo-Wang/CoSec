@@ -15,7 +15,7 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 
 /**

@@ -27,7 +27,7 @@
       "statement": "Membership claims read as 7.x RoleScope: `role` is a role in the default space, `role@space` a role in that space only, and a malformed entry (empty role or space, more than one @, `role@*`) applies in no space.",
       "level": "engine",
       "guards": [
-        "core:MembershipClaimsTest"
+        "runtime:MembershipClaimsTest"
       ],
       "pending": null
     },
@@ -38,8 +38,8 @@
       "level": "pipeline",
       "guards": [
         "runtime:TokenAuthenticatorTest#aRevokedSubjectsOlderTokensAreRejected",
-        "core:RevocationReaderTest#subjectRevocation",
-        "core:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
+        "spi:RevocationReaderTest#subjectRevocation",
+        "runtime:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
         "spring-boot:CoSecJwtAutoConfigurationTest#theRefreshVerifierTakesTheRevocationSkew"
       ],
       "pending": null

@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode

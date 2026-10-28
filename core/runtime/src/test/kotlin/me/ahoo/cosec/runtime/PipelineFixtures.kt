@@ -29,9 +29,9 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts

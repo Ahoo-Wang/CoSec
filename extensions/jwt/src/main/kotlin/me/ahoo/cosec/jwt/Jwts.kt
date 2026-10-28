@@ -19,12 +19,12 @@ import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.membership.MembershipClaims
-import me.ahoo.cosec.membership.MembershipMarkedPrincipal
-import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.SimpleTokenPrincipal
-import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
 
 /**
  * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its

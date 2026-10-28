@@ -16,26 +16,13 @@ package me.ahoo.cosec.runtime.ratelimit
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.limiter.RateLimit
-import me.ahoo.cosec.limiter.RateLimitResult
+import me.ahoo.cosec.spi.ratelimit.RateLimit
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
-
-/**
- * SPI (RFC 0006 §8.4): counts permits per bucket of a rate limit rule. Like every SPI of the pipeline it must not block
- * the calling thread. A failure is reported by throwing; the rule's `strictFailure` decides what it means (§8.3).
- */
-fun interface RateLimiter {
-    /** Acquires one permit of [limit] from [bucket] of rule [ruleId]. */
-    suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult
-
-    companion object {
-        /** [limit] as the 7.x sliding window computes it, so both limiters answer alike. */
-        fun window(limit: RateLimitSpec): RateLimit = RateLimit(limit.permitsPerSecond, limit.windowSeconds)
-    }
-}
 
 /**
  * An in-memory [RateLimiter], counting per JVM with the sliding window of the Redis one, without suspending.

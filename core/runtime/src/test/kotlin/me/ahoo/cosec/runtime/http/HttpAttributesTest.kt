@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.runtime.http.Headers
+
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput

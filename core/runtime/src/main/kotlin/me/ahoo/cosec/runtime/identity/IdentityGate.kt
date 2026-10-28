@@ -16,9 +16,9 @@ package me.ahoo.cosec.runtime.identity
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.identity.IdentityCodec
-import me.ahoo.cosec.identity.IdentityFormatException
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -41,7 +41,7 @@ import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.RequestIds
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.StatusMapping
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts

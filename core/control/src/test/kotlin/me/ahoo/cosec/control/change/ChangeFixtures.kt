@@ -37,9 +37,9 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Actor
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDefinition
 import java.util.concurrent.atomic.AtomicInteger
 
 /** A control plane over an in-memory store and a clock the test moves. */

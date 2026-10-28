@@ -15,12 +15,12 @@ package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import me.ahoo.cosec.membership.MembershipProvider
-import me.ahoo.cosec.membership.MembershipUnavailableException
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.authn.MembershipSource
+import me.ahoo.cosec.spi.authn.MembershipSource
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds

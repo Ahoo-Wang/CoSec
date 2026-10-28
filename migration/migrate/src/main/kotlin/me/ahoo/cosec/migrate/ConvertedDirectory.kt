@@ -14,10 +14,10 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.net.URLDecoder

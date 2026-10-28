@@ -12,7 +12,7 @@
       ],
       "guards": [
         "engine:BoundaryTest",
-        "core:PolicyDocumentCompilerTest#boundaries live in the platform, only allow, and are never bound"
+        "runtime:PolicyDocumentCompilerTest#boundaries live in the platform, only allow, and are never bound"
       ],
       "pending": null
     }

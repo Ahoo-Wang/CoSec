@@ -22,9 +22,9 @@ import me.ahoo.cosec.migrate.Fixtures7x.source
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

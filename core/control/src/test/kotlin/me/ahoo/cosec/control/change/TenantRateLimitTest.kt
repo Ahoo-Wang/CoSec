@@ -21,7 +21,7 @@ import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger

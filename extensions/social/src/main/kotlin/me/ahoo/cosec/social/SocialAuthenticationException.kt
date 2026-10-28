@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.CoSecException
+import me.ahoo.cosec.model.CoSecException
 
 /**
  * SocialAuthenticationException.

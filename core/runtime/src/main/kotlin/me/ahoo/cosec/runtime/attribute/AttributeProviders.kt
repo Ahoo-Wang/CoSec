@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.runtime.attribute
 
+import me.ahoo.cosec.spi.attribute.AttributeDeclaration
+import me.ahoo.cosec.spi.attribute.AttributeProvider
+
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.engine.flat.AttributeStatus
 import me.ahoo.cosec.engine.flat.ExternalValues

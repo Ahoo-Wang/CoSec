@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.identity.IdentityCodec
-import me.ahoo.cosec.limiter.RateLimitResult
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.runtime.http.CoSecParameters
 
 /**

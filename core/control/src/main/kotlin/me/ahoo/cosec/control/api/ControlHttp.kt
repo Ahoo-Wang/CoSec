@@ -31,10 +31,10 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -296,7 +296,7 @@ class ControlHttp(private val plane: ControlPlane) {
         ChangeRequestCodec.encode(change)
     )
 
-    private fun document(document: me.ahoo.cosec.snapshot.document.PolicyDocument) = ControlHttpResponse(
+    private fun document(document: me.ahoo.cosec.runtime.document.PolicyDocument) = ControlHttpResponse(
         OK,
         JSON,
         PolicyDocumentCodec.encode(document)

@@ -1,0 +1,86 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.runtime.http
+
+import io.mockk.mockk
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+
+class XForwardedRemoteIpResolverTest {
+    private val defaultRemoteIpResolver: RemoteIpResolver<Any> = RemoteIpResolver { "default" }
+
+    @Test
+    fun resolveWhenMultiValues() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
+                return listOf("", "")
+            }
+        }
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    }
+
+    @Test
+    fun resolveWhenNull() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
+                return null
+            }
+        }
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    }
+
+    @Test
+    fun resolve() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
+                return listOf("ipAddress")
+            }
+        }
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress")
+    }
+
+    @Test
+    fun resolveMulti() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
+                return listOf("ipAddress0, ipAddress1, ipAddress2")
+            }
+        }
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress0")
+    }
+
+    @Test
+    fun resolveWhenMaxTrustedIndexZero() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override val maxTrustedIndex: Int get() = 0
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
+                return listOf("ipAddress")
+            }
+        }
+        // maxTrustedIndex = 0 means: do not trust X-Forwarded-For at all.
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    }
+
+    @Test
+    fun resolveWhenMaxTrustedIndexOne() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
+            override val maxTrustedIndex: Int get() = 1
+            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
+                return listOf("ipAddress0, ipAddress1, ipAddress2")
+            }
+        }
+        // Trust exactly one hop: the rightmost entry is the one appended by the closest proxy.
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress2")
+    }
+}

@@ -18,7 +18,7 @@ import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.snapshot.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -95,7 +95,7 @@ class OperationsTest {
     fun `rate limit operations keep through the stored change`() {
         val node = ChangeRequestCodec.operation(
             ACME,
-            me.ahoo.cosec.serialization.CoSecJsonSerializer.readTree(
+            me.ahoo.cosec.runtime.json.CoSecJsonSerializer.readTree(
                 """{"op":"putRateLimit","rateLimit":{"id":"r","action":"order:read","permitsPerSecond":5},"ifMatch":"x"}"""
             ),
         ) as Operation.PutRateLimit
@@ -103,7 +103,7 @@ class OperationsTest {
         node.ifMatch.assert().isEqualTo("x")
         val removed = ChangeRequestCodec.operation(
             ACME,
-            me.ahoo.cosec.serialization.CoSecJsonSerializer.readTree("""{"op":"removeRateLimit","id":"r"}"""),
+            me.ahoo.cosec.runtime.json.CoSecJsonSerializer.readTree("""{"op":"removeRateLimit","id":"r"}"""),
         ) as Operation.RemoveRateLimit
         removed.id.assert().isEqualTo("r")
 
