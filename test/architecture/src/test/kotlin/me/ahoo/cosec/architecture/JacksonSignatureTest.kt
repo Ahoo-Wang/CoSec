@@ -13,78 +13,31 @@
 
 package me.ahoo.cosec.architecture
 
-import com.tngtech.archunit.core.domain.JavaClass
-import com.tngtech.archunit.core.domain.JavaCodeUnit
-import com.tngtech.archunit.core.domain.JavaMember
-import com.tngtech.archunit.core.domain.JavaModifier
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.lang.reflect.Method
-import kotlin.reflect.KVisibility
-import kotlin.reflect.jvm.kotlinFunction
 
-/**
- * RFC 0011 D3: the public signatures of the contracts and the core carry no Jackson type, so a Jackson major upgrade is
- * never a breaking change of CoSec. A member CoSec's own modules need marks itself `@InternalCoSecApi` (RFC 0011 D4).
- *
- * Kotlin `internal` compiles to public bytecode, so visibility comes from the Kotlin metadata; `@InternalCoSecApi` is
- * kept in the class files only, so it comes from ArchUnit.
- */
+/** Technology types that stay implementation details: they never appear in a public signature (RFC 0011 D3, §5). */
 class JacksonSignatureTest {
-    private val inner = setOf("api", "core")
-    private val internalApi = "me.ahoo.cosec.annotations.InternalCoSecApi"
-
-    private fun isPublicKotlin(javaClass: JavaClass): Boolean {
-        if (javaClass.isAnonymousClass || javaClass.modifiers.contains(JavaModifier.SYNTHETIC)) return false
-        if (!javaClass.modifiers.contains(JavaModifier.PUBLIC)) return false
-        if (javaClass.isAnnotatedWith(internalApi)) return false
-        javaClass.enclosingClass.orElse(null)?.let { if (!isPublicKotlin(it)) return false }
-        val type = javaClass.reflect()
-        val metadata = type.getAnnotation(Metadata::class.java) ?: return true
-        if (metadata.kind != 1) return true
-        return try {
-            type.kotlin.visibility.let { it == KVisibility.PUBLIC || it == KVisibility.PROTECTED }
-        } catch (_: UnsupportedOperationException) {
-            false
-        }
-    }
-
-    private fun isPublic(member: JavaMember): Boolean {
-        val modifiers = member.modifiers
-        if (JavaModifier.SYNTHETIC in modifiers || JavaModifier.BRIDGE in modifiers) return false
-        if (JavaModifier.PUBLIC !in modifiers && JavaModifier.PROTECTED !in modifiers) return false
-        if (member.isAnnotatedWith(internalApi)) return false
-        // Kotlin mangles the names of internal functions and accessors with the module name.
-        if ('$' in member.name) return false
-        val method = (member as? JavaCodeUnit)?.let { runCatching { it.reflect() }.getOrNull() } as? Method
-        val visibility = method?.kotlinFunction?.visibility
-        return visibility == null || visibility == KVisibility.PUBLIC || visibility == KVisibility.PROTECTED
-    }
-
-    private fun signature(member: JavaMember): String = when (member) {
-        is JavaCodeUnit -> runCatching { (member.reflect() as? Method)?.toGenericString() }.getOrNull()
-            ?: member.fullName + member.rawReturnType.name
-        else -> member.fullName + (member as? com.tngtech.archunit.core.domain.JavaField)?.rawType?.name
-    }
-
+    /**
+     * D3: the contracts and the core carry no Jackson type, so a Jackson major upgrade is never a breaking change of
+     * CoSec. A member CoSec's own modules need marks itself `@InternalCoSecApi` (D4).
+     */
     @Test
     fun `the contracts and the core carry no Jackson type in a public signature`() {
-        val checked = SourceRulesTest.CLASSES
-            .filter { javaClass -> SourceRulesTest.projectOf(javaClass)?.let { Projects.groupOf(it) in inner } == true }
-            .filter(::isPublicKotlin)
+        val checked = PublicSignatures.classes { Projects.groupOf(it) in setOf("api", "core") }
         // The rule sees the codec: a filter that let nothing through would pass vacuously.
         checked.map { it.name }.assert().contains("me.ahoo.cosec.runtime.document.PolicyDocumentCodec")
-        val violations = checked
-            .flatMap { javaClass ->
-                val supertypes = (listOfNotNull(javaClass.rawSuperclass.orElse(null)) + javaClass.rawInterfaces)
-                    .filter { it.name.startsWith("tools.jackson.") }
-                    .map { "${javaClass.name} extends ${it.name}" }
-                val members = (javaClass.methods + javaClass.constructors + javaClass.fields)
-                    .filter(::isPublic)
-                    .map(::signature)
-                    .filter { "tools.jackson." in it }
-                supertypes + members
-            }
-        violations.assert().isEmpty()
+        PublicSignatures.violations(checked, Regex("""tools\.jackson\.""")).assert().isEmpty()
+    }
+
+    /**
+     * `cocache` reads Redis through Spring Data Redis's reactive API (the reviewed Reactor exception of
+     * `SourceRulesTest`), and keeps it inside: its public API is the suspending SPIs, so no Reactor type reaches a caller.
+     */
+    @Test
+    fun `cocache carries no Reactor type in a public signature`() {
+        val checked = PublicSignatures.classes { it == "cocache" }
+        checked.map { it.name }.assert().contains("me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter")
+        PublicSignatures.violations(checked, Regex("""(?<![\w.])reactor\.""")).assert().isEmpty()
     }
 }

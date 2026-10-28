@@ -129,7 +129,8 @@ The rules behind the picture:
   `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
   `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; a package belongs to one module;
   opt-ins to the internal API only in CoSec's own sources.
-- `JacksonSignatureTest`, the purity and boundary tests above, the one-decision-path and token rules, the project list
+- `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
+  `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
 
 ## Request path

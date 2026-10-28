@@ -63,7 +63,7 @@ flowchart BT
 
 - `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程），或当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端时失败。
 - `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge、extensions 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口和 `CoSecJson` 进入 `cosec-runtime` 与 `cosec-control`；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
-- `JacksonSignatureTest`，上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
+- `JacksonSignatureTest`（`api/` 与 `core/` 的公共签名中没有 Jackson 类型；`cosec-cocache` 在内部以响应式方式读取 Redis，但其公共签名中没有 Reactor 类型），上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
 
 ## 请求路径 {#request-path}
 

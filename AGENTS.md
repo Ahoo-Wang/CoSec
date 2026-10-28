@@ -77,10 +77,11 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library and `spi` adds coroutines;
   `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client), `SourceRulesTest`
-  (Reactor only in edge, extensions and host, plus cocache's reactive Redis client; no Spring, Servlet or Redis client
+  (Reactor only in edge, extensions and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports and `CoSecJson`;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
-  `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`), `EnginePurityTest`,
+  `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
+  `cosec-cocache`), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler, the bug report template and `integration-test.yml`. Rule guards in
