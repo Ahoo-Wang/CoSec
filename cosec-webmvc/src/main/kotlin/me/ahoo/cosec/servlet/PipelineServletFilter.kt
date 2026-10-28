@@ -26,8 +26,8 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
-import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.ProblemEncoder
+import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -73,7 +73,7 @@ object ServletHttpFactsReader {
  * removed once the request completes, whatever happens.
  */
 class PipelineServletFilter(
-    private val pipeline: Pipeline,
+    private val pipeline: RequestGate,
     private val contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,
     /** The app this host serves (RFC 0004 §4.6); [ServletHttpFactsReader.NO_HOST] when the request declares it. */

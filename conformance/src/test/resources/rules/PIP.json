@@ -109,6 +109,18 @@
         "cosec-spring-boot-starter:WebAdapterParityTest#the gateway gives the engine the route id"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-10",
+      "source": "RFC 0006 §7.3 (identity propagation, replacing 7.x inject)",
+      "statement": "A gateway never forwards an identity a client sent: CoSec-Identity is stripped from every request before anything reads it, whatever the mode or cosec.enabled, and the routing filters send only the identity the pipeline verified on a permit for an authenticated principal (unless the route opts out), so no route or global filter can add one.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:IdentityForwardingTest",
+        "cosec-gateway:PipelineGatewayFilterTest",
+        "cosec-gateway:IdentityGuardTest"
+      ],
+      "pending": null
     }
   ]
 }
