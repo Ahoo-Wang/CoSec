@@ -27,7 +27,7 @@ on:
         description: 'Head ref (branch or SHA) compared against base'
         required: true
       module:
-        description: 'Gradle module with the benchmarks, e.g. cosec-engine, cosec-core, e2e'
+        description: 'Gradle module with the benchmarks, e.g. engine, core, e2e'
         required: true
       include:
         description: 'JMH include regex, e.g. HttpPathPatternBenchmark'
