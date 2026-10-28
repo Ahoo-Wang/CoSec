@@ -17,9 +17,9 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.findInDelegationChain
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.PrincipalId
+import java.time.Duration
 
 /**
  * [TokenVerifier] decorator that rejects revoked tokens.
@@ -32,13 +32,19 @@ import me.ahoo.cosec.model.PrincipalId
  *
  * @param delegate the actual verification implementation
  * @param tokenStore the revocation store
+ * @param skew `cosec.authentication.revocation.skew`, as the pipeline reads it ([SubjectRevocation])
  * @throws TokenRevokedException when a delegate-verified token's id is revoked, or
  * its principal's tokens were revoked after it was issued
  */
 class RevocableTokenVerifier(
     private val delegate: TokenVerifier,
-    private val tokenStore: TokenStore
+    private val tokenStore: TokenStore,
+    private val skew: Duration = SubjectRevocation.DEFAULT_SKEW,
 ) : TokenVerifier by delegate {
+    init {
+        require(!skew.isNegative) { "The revocation skew must not be negative, not $skew." }
+    }
+
 
     /**
      * @param T the expected principal type
@@ -94,8 +100,7 @@ class RevocableTokenVerifier(
     private fun checkSubjectNotRevoked(tokenPrincipal: TokenPrincipal) {
         val tenant = MembershipClaims.tenantOf(tokenPrincipal)
         val revokedBefore = tokenStore.subjectRevokedBefore(tenant, PrincipalId(tokenPrincipal.id))
-        val issuedAt = tokenPrincipal.findInDelegationChain<IssuedAtCapable>()?.issuedAt
-        if (SubjectRevocation.revokes(revokedBefore, issuedAt)) {
+        if (SubjectRevocation.revokes(revokedBefore, tokenPrincipal, skew)) {
             throw TokenRevokedException(
                 "The tokens of principal [${tokenPrincipal.id}] issued before [$revokedBefore] have been revoked."
             )
