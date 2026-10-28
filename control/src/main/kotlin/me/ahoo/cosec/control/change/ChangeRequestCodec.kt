@@ -247,6 +247,10 @@ object ChangeRequestCodec {
                 .set("binding", PolicyDocumentCodec.bindingTree(operation.binding, kind, owner))
 
             is Operation.RemoveBinding -> item.put("op", "removeBinding").put("id", operation.id.value)
+            is Operation.PutRateLimit -> item.put("op", "putRateLimit")
+                .set("rateLimit", PolicyDocumentCodec.rateLimitTree(operation.rule))
+
+            is Operation.RemoveRateLimit -> item.put("op", "removeRateLimit").put("id", operation.id)
             is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes, is Operation.SetBoundary ->
                 sectionTree(item, operation)
         }
@@ -278,6 +282,8 @@ object ChangeRequestCodec {
         is Operation.RemovePolicy -> operation.ifMatch
         is Operation.PutBinding -> operation.ifMatch
         is Operation.RemoveBinding -> operation.ifMatch
+        is Operation.PutRateLimit -> operation.ifMatch
+        is Operation.RemoveRateLimit -> operation.ifMatch
         else -> null
     }
 
@@ -353,7 +359,9 @@ object ChangeRequestCodec {
     /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */
     fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
         val (kind, owner) = Revisions.ownerOf(key)
-        node.only("op", "policy", "id", "binding", "catalog", "limits", "attributes", "ifMatch")
+        node.only(
+            "op", "policy", "id", "binding", "rateLimit", "catalog", "limits", "attributes", "ifMatch",
+        )
         operation(node, kind, owner)
     }
 
@@ -370,6 +378,11 @@ object ChangeRequestCodec {
                 ifMatch
             )
             "removeBinding" -> Operation.RemoveBinding(BindingId(node.need("id").text()), ifMatch)
+            "putRateLimit" -> Operation.PutRateLimit(
+                PolicyDocumentCodec.decodeRateLimit(node.need("rateLimit")),
+                ifMatch
+            )
+            "removeRateLimit" -> Operation.RemoveRateLimit(node.need("id").text(), ifMatch)
             "putCatalog" -> Operation.PutCatalog(node.get("catalog")?.let { PolicyDocumentCodec.decodeCatalog(it) })
             "setLimits" -> Operation.SetLimits(
                 node.get("limits")?.let {

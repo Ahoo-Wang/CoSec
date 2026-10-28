@@ -398,6 +398,10 @@ object PolicyDocumentCodec {
 
     fun catalogTree(catalog: Catalog): ObjectNode = catalog(catalog)
 
+    fun rateLimitTree(rule: RateLimitSource): ObjectNode = rateLimit(rule)
+
+    fun decodeRateLimit(tree: JsonNode, path: String = ROOT): RateLimitSource = rateLimit(DocumentNode(tree, path))
+
     fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
 
     fun encode(document: PolicyDocument): ByteArray = CoSecJsonSerializer.writeValueAsBytes(tree(document))

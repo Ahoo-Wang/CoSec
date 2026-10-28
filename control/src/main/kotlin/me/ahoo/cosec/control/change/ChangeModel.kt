@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
@@ -91,6 +92,11 @@ sealed interface Operation {
     class PutBinding(val binding: Binding, val ifMatch: String? = null) : Operation
 
     class RemoveBinding(val id: BindingId, val ifMatch: String? = null) : Operation
+
+    /** Adds the rate limit rule (RFC 0006 §8.1), or replaces the one of the same id. */
+    class PutRateLimit(val rule: RateLimitSource, val ifMatch: String? = null) : Operation
+
+    class RemoveRateLimit(val id: String, val ifMatch: String? = null) : Operation
 
     /** An app document's catalog; `null` removes it. */
     class PutCatalog(val catalog: Catalog?) : Operation

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -35,6 +36,8 @@ object EntryDigest {
 
     fun of(binding: Binding, kind: DocumentKind, owner: String): String =
         sha256(PolicyDocumentCodec.bindingTree(binding, kind, owner))
+
+    fun of(rule: RateLimitSource): String = sha256(PolicyDocumentCodec.rateLimitTree(rule))
 
     internal fun sha256(tree: JsonNode): String = hex(CoSecJsonSerializer.writeValueAsBytes(tree))
 
@@ -89,6 +92,7 @@ object Operations {
         private val owner: String
         private val policies = LinkedHashMap<String, PolicyDefinition>()
         private val bindings = LinkedHashMap<String, Binding>()
+        private val rateLimits = LinkedHashMap<String, RateLimitSource>()
         private var catalog = base?.catalog
         private var limits = base?.limits
         private var attributes = base?.attributes
@@ -101,6 +105,7 @@ object Operations {
             this.owner = owner
             base?.policies?.forEach { policies[it.id.value] = it }
             base?.bindings?.forEach { bindings[it.id.value] = it }
+            base?.rateLimits?.forEach { rateLimits[it.id] = it }
         }
 
         fun apply(path: String, operation: Operation) {
@@ -134,6 +139,21 @@ object Operations {
                     operation.id.value,
                     operation.ifMatch,
                     ::digest
+                )
+                is Operation.PutRateLimit -> {
+                    val id = operation.rule.id
+                    if (ifMatch(path, operation.ifMatch, rateLimits[id]?.let(EntryDigest::of))) {
+                        rateLimits[id] = operation.rule
+                    }
+                }
+
+                is Operation.RemoveRateLimit -> remove(
+                    path,
+                    "rate limit",
+                    rateLimits,
+                    operation.id,
+                    operation.ifMatch,
+                    EntryDigest::of
                 )
                 is Operation.PutCatalog -> section(path, DocumentKind.APP, "only an app document has a catalog") {
                     catalog = operation.catalog
@@ -205,8 +225,7 @@ object Operations {
             limits = limits,
             attributes = attributes,
             boundary = boundary,
-            // No operation changes a document's rate limit rules yet: the base's are kept as they are (RFC 0006 §8).
-            rateLimits = base?.rateLimits.orEmpty(),
+            rateLimits = rateLimits.values.toList(),
         )
     }
 
@@ -228,7 +247,15 @@ object Operations {
             val current = bindings[binding.id.value]?.let { EntryDigest.of(it, kind, owner) }
             if (current != EntryDigest.of(binding, kind, owner)) operations += Operation.PutBinding(binding, current)
         }
+        val rateLimits = base?.rateLimits?.associateBy { it.id }.orEmpty()
+        for (rule in desired.rateLimits) {
+            val current = rateLimits[rule.id]?.let(EntryDigest::of)
+            if (current != EntryDigest.of(rule)) operations += Operation.PutRateLimit(rule, current)
+        }
         if (mode == ApplyMode.REPLACE) {
+            val keepRateLimits = desired.rateLimits.map { it.id }.toSet()
+            base?.rateLimits?.filter { it.id !in keepRateLimits }
+                ?.forEach { operations += Operation.RemoveRateLimit(it.id, EntryDigest.of(it)) }
             val keepPolicies = desired.policies.map { it.id.value }.toSet()
             base?.policies?.filter { it.id.value !in keepPolicies }
                 ?.forEach { operations += Operation.RemovePolicy(it.id, EntryDigest.of(it)) }

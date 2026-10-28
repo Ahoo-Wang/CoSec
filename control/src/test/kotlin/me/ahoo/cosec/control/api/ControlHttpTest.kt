@@ -78,6 +78,15 @@ class ControlHttpTest {
     }
 
     @Test
+    fun `rate limit operations are read from the request`() {
+        val rateLimit = """{"document":"tenant:acme","base":1,"note":"limit",""" +
+            """"operations":[{"op":"putRateLimit","rateLimit":{"id":"reads","action":"order:read","permitsPerSecond":5}}]}"""
+        val (created, change) = call("POST", "/changes", rateLimit)
+        created.assert().isEqualTo(201)
+        change.get("state").asString().assert().isEqualTo("CHECKED")
+    }
+
+    @Test
     fun `documents, history and diffs`() {
         call("GET", "/documents/tenant:acme").second.get("bindings").size().assert().isEqualTo(2)
         call("GET", "/documents/platform").first.assert().isEqualTo(403)

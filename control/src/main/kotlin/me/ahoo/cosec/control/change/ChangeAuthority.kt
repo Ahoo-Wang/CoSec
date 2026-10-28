@@ -137,6 +137,16 @@ class ChangeAuthority(
                     ControlActions.WRITE,
                     entry(key, BINDING, operation.id.value)
                 )
+                is Operation.PutRateLimit -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, RATE_LIMIT, operation.rule.id)
+                )
+                is Operation.RemoveRateLimit -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, RATE_LIMIT, operation.id)
+                )
                 is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
                 is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
                 is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
@@ -349,6 +359,7 @@ class ChangeAuthority(
         const val UNAVAILABLE = 503
         const val POLICY = "policy"
         const val BINDING = "binding"
+        const val RATE_LIMIT = "rateLimit"
         const val NOT_ANALYZED = "NOT_ANALYZED"
         const val BREAK_GLASS = "BREAK_GLASS"
     }

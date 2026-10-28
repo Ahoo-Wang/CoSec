@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
@@ -50,6 +51,7 @@ import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Actor
+import me.ahoo.cosec.snapshot.document.PolicyDocument
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import tools.jackson.databind.JsonNode
@@ -80,7 +82,10 @@ import java.time.Instant
  *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
- *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } } ],
+ *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
+ *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
+ *            { "rateLimits": "platform" } ],   // the rule ids of the document's head, in order
+ *  operations also take { "putRateLimit": { ...a rule... } } and { "removeRateLimit": "id" }
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
@@ -186,6 +191,9 @@ object ChangeRunner : ScenarioRunner {
                     report(argument)
                 } else if (action == "simulate") {
                     simulate(argument)
+                } else if (action == "rateLimits") {
+                    val head = revisions.head(documentKey(argument.text()))
+                    "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
                 } else {
                     try {
                         step(action, argument).also { named[it.id.value] = it }.state.name
@@ -203,6 +211,7 @@ object ChangeRunner : ScenarioRunner {
 
         private suspend fun step(action: String, argument: JsonNode): ChangeRequest = when (action) {
             "propose" -> propose(argument)
+            "apply" -> apply(argument)
             "rollback" -> rollback(argument)
             "shadowed" -> changes.shadowed(ChangeId(argument.text()))
             "approve" -> target(argument, "candidate").let { (id, op, node) ->
@@ -313,6 +322,17 @@ object ChangeRunner : ScenarioRunner {
             return changes.propose(by(argument, key), key, head, operations, "scenario", kind)
         }
 
+        /** `:apply` (RFC 0007 §6.7): the change that makes the document's head into `desired`, by `mode`. */
+        private suspend fun apply(argument: JsonNode): ChangeRequest {
+            argument.only("change", "by", "document", "desired", "mode")
+            val key = documentKey(argument.required("document").text())
+            documents += key
+            next = ChangeId(argument.required("change").text())
+            val desired = decode(key, argument.required("desired"), revisions.head(key)?.revision ?: 0)
+            val mode = ApplyMode.valueOf(argument.required("mode").text())
+            return plane.apply(by(argument, key), key, desired, mode, "scenario")
+        }
+
         /** `{ "change": "c2", "by": "walt", "document": "platform", "revision": 1 }`: a rollback (RFC 0007 §5.6). */
         private suspend fun rollback(argument: JsonNode): ChangeRequest {
             argument.only("change", "by", "document", "revision")
@@ -360,11 +380,7 @@ object ChangeRunner : ScenarioRunner {
             documents.get("apps")?.fields().orEmpty().entries.map { (app, it) -> SnapshotKey.App(app) to it } +
             documents.get("tenants")?.fields().orEmpty().entries.map { (tenant, it) -> SnapshotKey.Tenant(tenant) to it }
         for ((key, body) in all) {
-            val (kind, owner) = Revisions.ownerOf(key)
-            val document = JsonNodeFactory.instance.objectNode()
-                .put("schema", PolicyDocumentCodec.SCHEMA).put("revision", 1).put("publishedAt", NOW.toString())
-            document.setAll(body as? ObjectNode ?: throw ScenarioFormatException("The $key document is not an object"))
-            val decoded = PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document))
+            val decoded = decode(key, body, 0)
             revisions.publish(
                 key,
                 revisions.head(key),
@@ -372,6 +388,15 @@ object ChangeRunner : ScenarioRunner {
                 Publication("bootstrap", ProvenanceKind.BOOTSTRAP, PLATFORM.actor)
             )
         }
+    }
+
+    /** A scenario's document body as [key]'s document, one revision past [head]. */
+    fun decode(key: SnapshotKey, body: JsonNode, head: Long): PolicyDocument {
+        val (kind, owner) = Revisions.ownerOf(key)
+        val document = JsonNodeFactory.instance.objectNode()
+            .put("schema", PolicyDocumentCodec.SCHEMA).put("revision", head + 1).put("publishedAt", NOW.toString())
+        document.setAll(body as? ObjectNode ?: throw ScenarioFormatException("The $key document is not an object"))
+        return PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document))
     }
 
     /** An operator's token attributes: `{ "level": 3, "oncall": true, "teams": ["red"] }`, as a token's claims read. */
@@ -400,6 +425,8 @@ object ChangeRunner : ScenarioRunner {
             "putBinding" -> Operation.PutBinding(PolicyDocumentCodec.decodeBinding(value, kind, owner))
             "removePolicy" -> Operation.RemovePolicy(PolicyId(value.text()))
             "removeBinding" -> Operation.RemoveBinding(BindingId(value.text()))
+            "putRateLimit" -> Operation.PutRateLimit(PolicyDocumentCodec.decodeRateLimit(value))
+            "removeRateLimit" -> Operation.RemoveRateLimit(value.text())
             else -> throw ScenarioFormatException("Unknown operation $name")
         }
     }

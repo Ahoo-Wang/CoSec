@@ -189,6 +189,16 @@
       "guards": [
         "control:ControlRoundTwoFixesTest#a rollback needs cosec read before it says which revisions exist"
       ]
+    },
+    {
+      "id": "CTL-19",
+      "source": "RFC 0007 §6.7, §10.1",
+      "statement": "A document's rate limit rules change only through a change: putRateLimit and removeRateLimit operations, or an :apply whose desired document sets them (all of them with REPLACE). A change that names no rate limit keeps the head's rules as they are.",
+      "level": "control",
+      "guards": [
+        "control:OperationsTest#rate limits are put, removed and diffed"
+      ],
+      "pending": null
     }
   ]
 }
