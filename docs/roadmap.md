@@ -3,7 +3,7 @@
 > 目标架构见 [RFC 0001](rfc/0001-target-architecture.md)，各阶段的细化设计见各自的 RFC。本文只记录**进度**：每个阶段走到了哪一步、
 > 还差什么、在等谁的决定。决策和理由以 RFC 为准；本文与 RFC 不一致时，以 RFC 为准并修正本文。
 >
-> 更新于 2026-10-27，基线 `main` @ `60d85012`（#1108）。
+> 更新于 2026-10-27，基线 `main` @ `7467cc18`（#1104，S1b）。
 >
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
@@ -23,7 +23,7 @@
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-4 已合入（PR-4 #1051）；RFC 0004 PR-4 已合入（#1052）；RFC 0004 PR-4b 已合入（#1053）；RFC 0004 PR-5（`cosec-migrate` 的 `convert`）已合入（#1067）；RFC 0005 PR-6（条件翻译）已合入（#1069）；RFC 0005 PR-5（路由映射）已合入（#1079）。实现部分完成，余下的只有切换步骤（S1–S5） | ✅ 实现完成 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 已合入）；PR-2 已合入（#1044）；PR-3 已合入（#1054、#1055、#1057）；PR-4 已合入（#1066）；PR-6 已合入（#1068）；PR-7（适配器桥接）已合入（#1070）；PR-3 至 PR-7 的第 1 轮审查修复已合入（#1072）；PR-5（限流义务）已合入（#1078）。实现部分完成；`Pipeline` 改为接收一个 `PipelineComponents`（#1088）；BEST_EFFORT 监听器的批量交接与阶段 A 黑名单的代价（#1096）已合入。starter 对 8.0 路径的装配（未注册）已合入（S1a，#1097），注册与 7.x 的删除是 S1b | ✅ 实现完成 |
 | 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）、PR-6a（授出分析，#1059）、PR-4（修订与发布，#1064）、PR-5（校验、编译与暂存，#1071）、PR-6（写操作的授权与审批，#1076）、PR-7（影子窗口，#1080）、PR-8（break-glass、租户自助、变更审计，#1087）、PR-3（平台边界，#1075，Q24 已接受）、PR-9（库与 HTTP，#1091）已合入；控制面第 1 轮审查修复（K1–K4）已合入（#1095）。starter 的 `controlSupport` 装配（未注册）在 S1a（#1097）。实现部分完成，余下的是 S1b 的注册 | ✅ 实现完成 |
-| — | 规范一致性套件、端到端切片与切换 S1–S5 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26），路线图审查修订（2026-10-26） | PR-1（套件）已合入（#1045）；PR-3（7.0 基线）已合入（#1065）；PR-2（变异检查）已合入（#1086）；S1a（starter 装配 8.0 路径，未注册）已合入（#1097）；S1b 等 §3.9 的证据 | 🟡 进行中 |
+| — | 规范一致性套件、端到端切片与切换 S1–S5 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26），路线图审查修订（2026-10-26） | PR-1（套件）已合入（#1045）；PR-3（7.0 基线）已合入（#1065）；PR-2（变异检查）已合入（#1086）；S1a（starter 装配 8.0 路径，未注册）已合入（#1097）；S1b（不可回退点）已合入（#1104）；S2–S4 合并为一个删除 PR，进行中 | 🟡 进行中 |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：目标架构全部达成、每个 PR 做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
 切换 PR 的通过标准是一致性套件全绿、每条规则有正反例、不变量性质在固定种子与一次百万例运行下通过、变异体全部被杀死、
@@ -168,8 +168,8 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 | 端到端切片 | `e2e/` 测试模块：快照 → 扁平引擎 → 协程 Pipeline → WebFlux 桥接，真实 CoCache 与 Redis；第一次 JMH/k6 测量（RFC 0008 §4.4.3） | RFC 0005 PR-4 ✓、RFC 0004 PR-4 ✓、PR-4b ✓、RFC 0006 PR-2 ✓ | 已合入（#1056）：快照到 Pipeline 一段与第一次 JMH 测量（`anonymous` 只有 7.0 的 61 %）；计时器修复（#1058）后四个场景为 7.0 的 196–314 %，见 `docs/perf/e2e-slice/`；WebFlux 桥接随 RFC 0006 PR-7（#1070）合入；k6 端到端测量未做；#1073（已合入）测量黑名单与决策监听器经切片的代价，#1096 据此优化 BEST_EFFORT 的交接与阶段 A 黑名单；CI 的 JMH A/B 工作流（#1084 加入，#1090 把默认值调到 1 fork、2 次预热、3 次测量并在运行前估算时长、超过 80 分钟即失败、超时 90 分钟、去掉串行的 concurrency 组，#1094 给作业加 Redis 服务使 `e2e` 与 `cosec-cocache` 的基准能跑）可作首次信号，S1 的门槛仍在空闲机器上测 |
 | ~~RFC 0008 PR-4~~ | ~~切换~~：2026-10-26 拆成 S1–S5（RFC 0008 §4.4.1） | — | — |
 | S1a | `feat(starter): add the 8.0 auto-configuration`（RFC 0008 §4.4 的 S1 拆分，2026-10-27 批准）：加法，可以 revert；8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，由测试与端到端切片显式加载；没有开关，也没有 7.x 脚手架 | 其余全部实现 PR、端到端切片 | ✅ 已合入（#1097） |
-| S1b | `refactor!: wire the 8.0 path in the starter`：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0；`aot-smoke` 作业；不可回退点，带 RFC 0008 §3.9 第 1–5 条的证据 | S1a ✓；§3.9 第 1–5 条 | 草稿 #1104：清单全部完成（含 S1a 第 1 轮审查的 6 项与 S6 守护白名单），`mutationCheck` 17/17；等合并 `main`、把 `SNP-4` 移到 `timing`、在最终 head 上取证据。维护者已授权：证据齐备且全绿即合入（2026-10-27） |
-| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | 未开工；S1b 合入后派发 |
+| S1b | `refactor!: wire the 8.0 path in the starter`：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0；`aot-smoke` 作业；不可回退点，带 RFC 0008 §3.9 第 1–5 条的证据 | S1a ✓；§3.9 第 1–5 条 | ✅ 已合入（#1104，`7467cc18`，2026-10-27）。§3.9 证据（head `c2753727`）：CI 全绿；没有 `pending` 规则（`SNP-1`/`SNP-2`/`SNP-4` 为 `timing`）；百万例 `property-stress.yml` [40640041416](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640041416) 全部通过；`mutationCheck` 21/21；`jmh-v7-v8.yml` [40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212) 7 个场景全部 PASS（授权 364–601 %，Pipeline 126–219 %） |
+| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | 进行中（2026-10-27 派发） |
 | S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | 删除 PR 合入后写完并合入 | 未开工 |
 | RFC 0008 PR-5、PR-6 | RC 前清理：按 RFC 0008 §4.6 的清单删除遗留代码、构建配置与文档中的版本沿革，加入守护 G1–G7；清单清空（"保留"项除外）是 RC 前提 | S5；RFC 0008 §6 Q9–Q15 ✓（2026-10-26 批准） | 等 S5（L17、L31 可以提前） |
 | RC 安全审查 | 集成系统的威胁模型审查：多租户隔离、控制面越权与授出分析、break-glass、快照与缓存投毒、problem+json 泄露、DoS；发现全部在 RC 前修复（RFC 0008 §3.9） | S1 后开始；PR-5、PR-6 后做最后一遍 | 未开工 |
@@ -195,7 +195,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 - **百万例 `property-stress.yml` 在 `main` 上全部通过**：`model`、`engine`、`runtime`、`control`（[40628433863](https://github.com/Ahoo-Wang/CoSec/actions/runs/40628433863)），`cosec-core`（#1111 之后重跑，[40635399876](https://github.com/Ahoo-Wang/CoSec/actions/runs/40635399876)）。S1b 的证据在它自己的最终 head 上再跑一次。
 - #1108（`fix(runtime)`，N3 重新编译覆盖加载中的槽位，审查发现 S4）：按旧平台编译的加载不安装，无法重新编译即 fail closed 并按退避重试；新规则 `SNP-4`（`pending`，S1b 把它移到 `timing`）；变异体拆成 4 个，全部被杀死。已合入。
-- S1b 草稿 #1104：见 §6。合入顺序：#1108 → S1b 合并 `main` 并处理 `SNP-4` → 在最终 head 上跑 `jmh-v7-v8.yml`、`property-stress.yml`、`mutationCheck` → 合入。
+- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。下一步是 S2–S4 的删除 PR（进行中），然后 S5 文档，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - #1106、#1107 草稿只作保存，不合入。
