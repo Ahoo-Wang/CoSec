@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.snapshot.DocumentState
@@ -25,7 +26,6 @@ import org.springframework.boot.availability.ReadinessState
 import org.springframework.boot.health.contributor.Status
 import org.springframework.context.ApplicationEventPublisher
 import java.time.Duration
-import java.util.concurrent.CopyOnWriteArrayList
 
 /** The states of [SnapshotHealthIndicator] and [SnapshotReadiness] the starter test does not reach. */
 class SnapshotHealthIndicatorTest {
@@ -57,20 +57,12 @@ class SnapshotHealthIndicatorTest {
         health(DocumentState.Present(Any()), true).status.assert().isEqualTo(Status.UP)
     }
 
-    /** The readiness states published, through the publisher's one abstract method. */
-    private class Recording {
-        val states = CopyOnWriteArrayList<ReadinessState>()
-        val publisher = ApplicationEventPublisher { event ->
-            states += (event as AvailabilityChangeEvent<*>).state as ReadinessState
-        }
-    }
-
     @Test
     fun `a ready snapshot accepts at once, and refusals or its own events are ignored`() {
-        val recording = Recording()
+        val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
         SnapshotReadiness(
             source(DocumentState.Present(Any()), true),
-            recording.publisher,
+            publisher,
             Duration.ofMillis(10)
         ).use { readiness ->
             readiness.isReady.assert().isTrue()
@@ -79,16 +71,16 @@ class SnapshotHealthIndicatorTest {
             readiness.onApplicationEvent(AvailabilityChangeEvent(this, ReadinessState.ACCEPTING_TRAFFIC))
             Thread.sleep(100)
             // Spring's own acceptance stands: nothing to refuse, nothing to announce.
-            recording.states.assert().isEmpty()
+            confirmVerified(publisher)
         }
     }
 
     @Test
     fun `nothing is announced before the application has started`() {
-        val recording = Recording()
-        SnapshotReadiness(source(DocumentState.Present(Any()), true), recording.publisher, Duration.ofMillis(10)).use {
+        val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
+        SnapshotReadiness(source(DocumentState.Present(Any()), true), publisher, Duration.ofMillis(10)).use {
             Thread.sleep(100)
-            recording.states.assert().isEmpty()
+            confirmVerified(publisher)
         }
     }
 }
