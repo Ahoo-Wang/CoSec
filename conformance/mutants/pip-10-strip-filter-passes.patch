@@ -3,7 +3,7 @@
 # Tests: :cosec-gateway:test --tests me.ahoo.cosec.gateway.IdentityGuardTest
 
 diff --git a/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt b/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
-index 560d337a..2c72fe7a 100644
+index e44050e3..013c8a56 100644
 --- a/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
 +++ b/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
 @@ -29,7 +29,7 @@ import reactor.core.publisher.Mono
@@ -14,4 +14,4 @@ index 560d337a..2c72fe7a 100644
 +        if (true || !exchange.request.headers.containsHeader(IdentityCodec.HEADER)) {
              return chain.filter(exchange)
          }
-         val stripped = exchange.mutate().request { it.headers { headers -> headers.remove(IdentityCodec.HEADER) } }.build()
+         val stripped = exchange.mutate().request {

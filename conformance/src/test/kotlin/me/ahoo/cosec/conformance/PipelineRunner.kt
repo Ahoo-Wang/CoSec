@@ -234,7 +234,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     /** The scenario's request through [pipeline]: cancelled at [cancelAt], through a gateway's filters, or plainly. */
-    private fun answer(node: JsonNode, pipeline: Pipeline, cancelAt: String?, reached: CompletableDeferred<Unit>): Outcome {
+    private fun answer(
+        node: JsonNode,
+        pipeline: Pipeline,
+        cancelAt: String?,
+        reached: CompletableDeferred<Unit>
+    ): Outcome {
         val http = node.get("http") ?: EMPTY
         val facts = facts(http)
         if (cancelAt != null) {
@@ -301,7 +306,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val exchange = MockServerWebExchange.from(request)
         val route = Route.async().id("scenario").uri(URI.create("http://backend")).predicate { true }
         gateway.get("route")?.let {
-            it.only("identity");
+            it.only("identity")
             route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.required("identity").booleanValue())
         }
         exchange.attributes[GATEWAY_ROUTE_ATTR] = route.build()
