@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
+import kotlinx.coroutines.awaitCancellation
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
@@ -87,7 +88,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.awaitCancellation
 
 /**
  * One decision path (RFC 0006 §6.3, `PIP-1`): the WebFlux filter, the gateway filter and the servlet filter, over the

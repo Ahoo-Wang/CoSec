@@ -25,7 +25,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
- * The ids the format descriptors show as examples, and so `schema/*.schema.json` and editors, are ids a change may
+ * The ids the format descriptors show as examples, and so the generated schema files and editors, are ids a change may
  * put: none uses a prefix [ChangeChecks] reserves for built-in policies and `cosec-migrate` (V2).
  */
 class DescriptorExampleIdsTest {

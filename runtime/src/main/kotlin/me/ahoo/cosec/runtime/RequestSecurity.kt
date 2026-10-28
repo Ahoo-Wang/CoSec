@@ -13,16 +13,16 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.model.condition.ConditionInput
-import me.ahoo.cosec.engine.flat.AbsentAttributes
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.engine.flat.AbsentAttributes
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Subject
+import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope

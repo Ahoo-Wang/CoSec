@@ -548,7 +548,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             cookies = Cookies.EMPTY,
             remoteAddress = REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
-            requestAttributes = node.get("requestAttributes")?.fields().orEmpty().mapValues { (_, value) -> value.text() },
+            requestAttributes = node.get(
+                "requestAttributes"
+            )?.fields().orEmpty().mapValues { (_, value) -> value.text() },
         )
     }
 

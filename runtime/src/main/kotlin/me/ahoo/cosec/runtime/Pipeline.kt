@@ -420,7 +420,9 @@ class Pipeline(components: PipelineComponents) {
             // Nothing fetched reads as ExternalValues.NONE: every external attribute is missing.
             request
         } else {
-            with(request) { FlatRequest(this.request, scope, memberships, time, attributes, fetched.toExternalValues()) }
+            with(
+                request
+            ) { FlatRequest(this.request, scope, memberships, time, attributes, fetched.toExternalValues()) }
         }
         val decision = engine.evaluate(evaluated, view, options.traceLevel).decision
         record?.let {
