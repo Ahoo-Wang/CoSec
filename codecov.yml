@@ -1,3 +1,10 @@
+codecov:
+  notify:
+    # One upload per CI test job with coverage (scripts/ci/plan.py fails CI when this count is wrong): the statuses
+    # wait for all of them, so a partial merge is never reported as the commit's coverage.
+    after_n_builds: 7
+comment:
+  after_n_builds: 7
 coverage:
   range: 60..100
   round: down
