@@ -241,11 +241,20 @@ class StarterWiringTest {
             pipelineRunner.withPropertyValues("cosec.audit.kafka.delivery=required"),
             kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required", "cosec.audit.enabled=false"),
             kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required", "cosec.audit.kafka.enabled=false"),
+            pipelineRunner.withPropertyValues("cosec.audit.kafka.delivery= required "),
         ).forEach { runner ->
             runner.run { context ->
                 context.startupFailure!!.rootCause().message.assert()
                     .contains("cosec.audit.kafka.delivery=required, but no Kafka audit listener was created")
             }
+        }
+    }
+
+    @Test
+    fun `a Kafka audit delivery that is neither required nor best-effort fails startup`() {
+        kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=sometimes").run { context ->
+            context.startupFailure!!.rootCause().message.assert()
+                .contains("cosec.audit.kafka.delivery=[sometimes] is neither required nor best-effort")
         }
     }
 

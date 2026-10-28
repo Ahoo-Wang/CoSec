@@ -46,6 +46,8 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosid.StringIdGenerator
 import org.springframework.beans.factory.ListableBeanFactory
@@ -116,12 +118,12 @@ class CoSecPipelineAutoConfiguration {
             sinks.orderedStream().toList().filter { it !is DecisionListener }
                 .map { it to AuditListener.of(it, names.getValue(it)) }
         val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
-        val requiredKafka = environment.getProperty(KAFKA_AUDIT_DELIVERY_KEY).equals("required", ignoreCase = true)
+        val requiredKafka = kafkaAuditDelivery(environment) == Delivery.REQUIRED
         check(
             !requiredKafka ||
                 ordered.any { it.second.name == KAFKA_AUDIT_LISTENER && it.second.delivery == Delivery.REQUIRED }
         ) {
-            "$KAFKA_AUDIT_DELIVERY_KEY=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
+            "${KafkaAuditProperties.DELIVERY_KEY}=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
                 "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
                 "cosec.audit.kafka.enabled=true (STA-1)."
         }
@@ -242,7 +244,6 @@ class CoSecPipelineAutoConfiguration {
     companion object {
         /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
         private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
-        private const val KAFKA_AUDIT_DELIVERY_KEY = "cosec.audit.kafka.delivery"
 
         /** No token verifier: a request without a token is anonymous, one with a token is rejected. */
         private val NO_TOKEN = Authenticator { credentials ->

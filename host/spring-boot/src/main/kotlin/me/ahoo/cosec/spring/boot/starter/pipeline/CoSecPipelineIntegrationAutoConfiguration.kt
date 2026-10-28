@@ -25,13 +25,13 @@ import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.audit.LoggingAuditListener
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
-import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionProperties
 import me.ahoo.cosec.spring.boot.starter.micrometer.MetricsProperties
 import org.springframework.beans.factory.ObjectProvider
@@ -129,10 +129,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         ): KafkaAuditListener = KafkaAuditListener(
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
-            // Read as Boot binds enums, whatever conversion service the environment has: `required`, `best-effort`.
-            environment.getProperty(KAFKA_DELIVERY_KEY)
-                ?.let { Delivery.valueOf(it.trim().uppercase().replace('-', '_')) }
-                ?: Delivery.BEST_EFFORT,
+            kafkaAuditDelivery(environment),
         )
     }
 

@@ -13,8 +13,10 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -92,17 +94,20 @@ class CoSecModuleCheckAutoConfiguration {
             )
     }
 
+    /** Read with the listener's own parse ([kafkaAuditDelivery]), so the check and the listener never disagree. */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(value = [KafkaAuditProperties.PREFIX + ".delivery"], havingValue = "required")
     class RequiredKafkaAudit {
         @Bean
-        fun cosecKafkaAuditModuleCheck(context: ApplicationContext): InitializingBean =
-            requireModule(
-                context,
-                "me.ahoo.cosec.kafka.KafkaAuditListener",
-                "cosec-kafka",
-                "${KafkaAuditProperties.PREFIX}.delivery=required",
-            )
+        fun cosecKafkaAuditModuleCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+            if (kafkaAuditDelivery(context.environment) == Delivery.REQUIRED) {
+                requireModule(
+                    context,
+                    "me.ahoo.cosec.kafka.KafkaAuditListener",
+                    "cosec-kafka",
+                    "${KafkaAuditProperties.DELIVERY_KEY}=required",
+                ).afterPropertiesSet()
+            }
+        }
     }
 
     /**

@@ -119,6 +119,12 @@ class CoSecModuleCheckAutoConfigurationTest {
                 .withPropertyValues("cosec.audit.kafka.delivery=required"),
             "cosec-kafka",
         )
+        // The listener's own parse: case and surrounding spaces do not matter.
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.kafka.KafkaAuditListener"))
+                .withPropertyValues("cosec.audit.kafka.delivery= REQUIRED "),
+            "cosec-kafka",
+        )
     }
 
     @Test
