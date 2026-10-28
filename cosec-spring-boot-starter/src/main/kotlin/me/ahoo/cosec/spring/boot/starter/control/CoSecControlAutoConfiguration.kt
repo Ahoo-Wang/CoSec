@@ -202,7 +202,10 @@ class CoSecControlAutoConfiguration {
      */
     @Bean(destroyMethod = "cancel")
     @ConditionalOnMissingBean
-    fun cosecChangeListeners(listeners: ObjectProvider<ChangeListener>, properties: ControlProperties): ChangeListeners {
+    fun cosecChangeListeners(
+        listeners: ObjectProvider<ChangeListener>,
+        properties: ControlProperties
+    ): ChangeListeners {
         val all = listeners.orderedStream().toList()
         val kafka = properties.audit.kafka
         check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {

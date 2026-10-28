@@ -206,7 +206,10 @@ class StarterWiringTest {
             .run { context ->
                 context.startupFailure.assert().isNull()
                 val names = context.getBean(DecisionListeners::class.java).stats.map { it.listener }
-                names.filter { it == "listening" || it == "firstSink" }.assert().containsExactly("firstSink", "listening")
+                names.filter { it == "listening" || it == "firstSink" }.assert().containsExactly(
+                    "firstSink",
+                    "listening"
+                )
                 status(context, token(context, "bob")).assert().isEqualTo(200)
                 val deadline = System.nanoTime() + 5_000_000_000L
                 while (listening.events.get() == 0 && System.nanoTime() < deadline) {
@@ -311,7 +314,8 @@ class StarterWiringTest {
     fun `memberships that cannot be read make the request a 503`() {
         val failing = mockk<MembershipCache> {
             every { async() } returns mockk<AsyncCache<String, Memberships>> {
-                every { get(any()) } returns CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
+                every { get(any()) } returns
+                    CompletableFuture.failedFuture<Memberships>(IllegalStateException("Redis is down"))
             }
         }
         cachedPipelineRunner.withBean(MembershipCache::class.java, { failing }).run { context ->
