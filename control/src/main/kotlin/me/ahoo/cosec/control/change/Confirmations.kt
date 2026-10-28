@@ -154,7 +154,9 @@ internal object NomatchConfirmations {
 
 /**
  * Break-glass (RFC 0007 §8): bindings created only by a change of kind `BREAK_GLASS`, which carries nothing else, with
- * an expiry no further than [maxDuration] from [now] (checked again when it publishes).
+ * an expiry no further than [maxDuration] from [now] (checked again when it publishes). What a live break-glass binding
+ * grants is its policy's statements, so that policy does not change while the binding lives (round-2 review R4):
+ * otherwise an ordinary change, or a rollback, would widen an approved emergency grant without a second person.
  */
 internal object BreakGlassRules {
     fun findings(
@@ -181,8 +183,31 @@ internal object BreakGlassRules {
         if (request) {
             findings += onlyBreakGlass(operations, before.values.filter { it.breakGlass }.map { it.id }.toSet())
         }
+        findings += grantedPolicies(base, candidate, now)
         return findings
     }
+
+    /** The policies of [candidate] a break-glass binding live at [now] grants, changed from [base]. */
+    private fun grantedPolicies(base: PolicyDocument?, candidate: PolicyDocument, now: Instant): List<Finding> {
+        val granted = live(candidate, now).map { it.policy }.toSet()
+        val before = base?.policies.orEmpty().associateBy { it.id }
+        return candidate.policies.withIndex().filter { (_, policy) ->
+            policy.id in granted && before[policy.id]?.let(EntryDigest::of) != EntryDigest.of(policy)
+        }.map { (i, policy) ->
+            Finding(
+                "V5",
+                "$.policies[$i]",
+                "[${policy.id.value}] is granted by a live break-glass binding: revoke it before changing the policy",
+                UNPROCESSABLE
+            )
+        }
+    }
+
+    /** The break-glass bindings of [document] that have not expired at [now]: what still grants. */
+    private fun live(document: PolicyDocument?, now: Instant): List<me.ahoo.cosec.model.Binding> =
+        document?.bindings.orEmpty().filter { binding ->
+            binding.breakGlass && binding.expiresAt?.let { it > now.toEpochMilli() } ?: true
+        }
 
     /** What is wrong with changed binding [i], [binding], that was [previous], in a change that is a [request] or not. */
     private fun binding(
@@ -216,13 +241,18 @@ internal object BreakGlassRules {
     }
 
     /**
-     * Whether [operations] create or alter a break-glass binding of [base]: one that puts a break-glass binding, or puts
-     * another binding over one. Every break-glass rule keys on this, never on the change's kind alone (review K1):
-     * `cosec:breakglass`, the REQUIRED audit and its `BREAK_GLASS_REQUESTED` event. Removing one only narrows.
+     * Whether [operations] create or alter a break-glass binding of [base]: one that puts a break-glass binding, puts
+     * another binding over one, or puts the policy a binding live at [now] grants (round-2 review R4). Every
+     * break-glass rule keys on this, never on the change's kind alone (review K1): `cosec:breakglass`, the REQUIRED
+     * audit and its `BREAK_GLASS_REQUESTED` event. A rollback is no exception. Removing one only narrows.
      */
-    fun touches(operations: List<Operation>, base: PolicyDocument?): Boolean {
+    fun touches(operations: List<Operation>, base: PolicyDocument?, now: Instant): Boolean {
         val glass = base?.bindings.orEmpty().filter { it.breakGlass }.map { it.id }.toSet()
-        return operations.any { it is Operation.PutBinding && (it.binding.breakGlass || it.binding.id in glass) }
+        val granted = live(base, now).map { it.policy }.toSet()
+        return operations.any {
+            (it is Operation.PutBinding && (it.binding.breakGlass || it.binding.id in glass)) ||
+                (it is Operation.PutPolicy && it.policy.id in granted)
+        }
     }
 
     /** The operations of a break-glass change that neither create nor revoke a break-glass binding. */

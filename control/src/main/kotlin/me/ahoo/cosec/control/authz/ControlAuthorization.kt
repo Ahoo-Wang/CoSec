@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.RequestSecurity
+import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Actor
 
@@ -72,6 +73,19 @@ enum class ControlDecision {
  */
 fun interface ControlAuthorizer {
     suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision
+
+    /**
+     * [action] on [resource] for [principal] with [memberships], a principal recorded earlier (the approver of a
+     * change, RFC 0007 §7.5), asked in [operator]'s request, on the current documents. Indeterminate unless an
+     * implementation can check a recorded principal: an approval that cannot be checked again does not count.
+     */
+    suspend fun decideAs(
+        operator: Operator,
+        principal: AuthenticatedPrincipal,
+        memberships: Memberships,
+        action: Action,
+        resource: Resource,
+    ): ControlDecision = ControlDecision.INDETERMINATE
 }
 
 /**
@@ -98,24 +112,45 @@ class PipelineControlAuthorizer(
     private val confirmation: DocumentConfirmation,
     private val app: AppId = CONTROL_APP,
 ) : ControlAuthorizer {
-    @Suppress("TooGenericExceptionCaught")
     override suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision {
         val security = operator.security ?: return ControlDecision.DENY
-        try {
-            confirmation.confirm(
-                setOf(SnapshotKey.Platform, SnapshotKey.Tenant(operator.tenant.value), SnapshotKey.App(app.value))
-            )
-        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.warn(e) { "Confirming the documents of $operator failed - indeterminate." }
+        if (!confirmed(operator.tenant, operator.toString())) {
             return ControlDecision.INDETERMINATE
         }
-        return when (checker.decide(security, app, action, resource)) {
-            is Decision.Permit -> ControlDecision.PERMIT
-            is Decision.Deny -> ControlDecision.DENY
-            is Decision.Indeterminate -> ControlDecision.INDETERMINATE
+        return of(checker.decide(security, app, action, resource))
+    }
+
+    /** As [decide], for [principal] as recorded, through the runtime's own entry point (round-2 review R3). */
+    override suspend fun decideAs(
+        operator: Operator,
+        principal: AuthenticatedPrincipal,
+        memberships: Memberships,
+        action: Action,
+        resource: Resource,
+    ): ControlDecision {
+        val security = operator.security ?: return ControlDecision.DENY
+        if (!confirmed(principal.tenant, "${principal.id.value}@${principal.tenant.value}")) {
+            return ControlDecision.INDETERMINATE
         }
+        return of(checker.decideAs(security, principal, memberships, app, action, resource))
+    }
+
+    /** Whether the documents an evaluation for [tenant] reads are confirmed current; a failure is indeterminate. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun confirmed(tenant: TenantId, who: String): Boolean = try {
+        confirmation.confirm(setOf(SnapshotKey.Platform, SnapshotKey.Tenant(tenant.value), SnapshotKey.App(app.value)))
+        true
+    } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "Confirming the documents of $who failed - indeterminate." }
+        false
+    }
+
+    private fun of(decision: Decision): ControlDecision = when (decision) {
+        is Decision.Permit -> ControlDecision.PERMIT
+        is Decision.Deny -> ControlDecision.DENY
+        is Decision.Indeterminate -> ControlDecision.INDETERMINATE
     }
 
     companion object {

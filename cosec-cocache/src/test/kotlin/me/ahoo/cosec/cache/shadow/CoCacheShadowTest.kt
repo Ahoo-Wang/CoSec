@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache.shadow
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cosec.cache.control.CoCacheControlStore
@@ -30,6 +31,7 @@ import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -111,6 +113,30 @@ class CoCacheShadowTest {
         reports.forEach { it.counts.getValue(ShadowOutcome.NARROWED).assert().isEqualTo(3L) }
         reports.first().samples.getValue(ShadowOutcome.NARROWED).single().principal.assert().isEqualTo("bob")
         sinks.first().reports("another").assert().isEmpty()
+    }
+
+    /** Round-2 review R1: each instance's report has a key of its own, which an ACL can confine that instance to. */
+    @Test
+    fun `each instance's report has its own key, and one under another's key is not counted`() = runBlocking<Unit> {
+        val sink = CoCacheShadowReports.create(node().runtime, keyPrefix, clock)
+        sink.write(report("i0", 1))
+        sink.write(report("i1", 2))
+        // Read directly, from another node: one report per key, `<p>:shadow:report:<window>:<instance>`.
+        val raw = node().runtime
+        val reports = raw.create(ShadowCacheSpecs.reports(keyPrefix))
+        val reporters = raw.create(ShadowCacheSpecs.reporters(keyPrefix))
+        reports.async().get("c1@1:i0").await()!!.counts.getValue(ShadowOutcome.NARROWED).assert().isEqualTo(1L)
+        reports.async().get("c1@1:i1").await()!!.counts.getValue(ShadowOutcome.NARROWED).assert().isEqualTo(2L)
+        reporters.async().get("c1@1").await().assert().isEqualTo(setOf("i0", "i1"))
+        // An instance whose entry was dropped from the window's reporters is back with its next report.
+        reporters.async().put("c1@1", setOf("i0")).await()
+        sink.reports("c1@1").map { it.instance }.assert().containsExactly("i0")
+        sink.write(report("i1", 3))
+        sink.reports("c1@1").associate { it.instance to it.counts.getValue(ShadowOutcome.NARROWED) }.assert()
+            .isEqualTo(mapOf("i0" to 1L, "i1" to 3L))
+        // A report under one instance's key that says it is another's is an error, never a sample.
+        reports.async().put("c1@1:i1", report("i2", 9)).await()
+        assertThrownBy<IllegalStateException> { runBlocking { sink.reports("c1@1") } }
     }
 
     @Test

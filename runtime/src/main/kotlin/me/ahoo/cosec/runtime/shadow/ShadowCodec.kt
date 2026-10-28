@@ -55,21 +55,10 @@ object ShadowCodec {
         )
     }
 
-    /** Every instance's report of one window, by instance. */
-    fun encodeReports(reports: Map<String, ShadowReport>): ByteArray = write(
-        factory.objectNode().apply {
-            reports.toSortedMap().forEach { (instance, report) ->
-                set(
-                    instance,
-                    report(report)
-                )
-            }
-        },
-    )
+    /** One instance's report of one window: each is kept apart, so that no instance writes another's (review R1). */
+    fun encodeReport(report: ShadowReport): ByteArray = write(report(report))
 
-    fun decodeReports(bytes: ByteArray): Map<String, ShadowReport> = guarded {
-        read(bytes).properties().associate { (instance, node) -> instance to report(node) }
-    }
+    fun decodeReport(bytes: ByteArray): ShadowReport = guarded { report(read(bytes)) }
 
     /** Every instance's last status, by instance. */
     fun encodeStatuses(statuses: Map<String, InstanceStatus>): ByteArray = write(

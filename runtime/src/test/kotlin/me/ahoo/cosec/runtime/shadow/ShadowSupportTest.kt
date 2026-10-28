@@ -156,9 +156,7 @@ class ShadowSupportTest {
             clock.now,
             null,
         )
-        ShadowCodec.decodeReports(
-            ShadowCodec.encodeReports(mapOf("i1" to report))
-        ).assert().isEqualTo(mapOf("i1" to report))
+        ShadowCodec.decodeReport(ShadowCodec.encodeReport(report)).assert().isEqualTo(report)
         val status = InstanceStatus(
             "i1",
             clock.now,
@@ -174,9 +172,7 @@ class ShadowSupportTest {
             assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeCandidate(text.encodeToByteArray()) }
         }
         assertThrownBy<SnapshotFormatException> {
-            ShadowCodec.decodeReports(
-                """{"i1":{"window":"w"}}""".encodeToByteArray()
-            )
+            ShadowCodec.decodeReport("""{"window":"w"}""".encodeToByteArray())
         }
         assertThrownBy<SnapshotFormatException> {
             ShadowCodec.decodeStatuses(

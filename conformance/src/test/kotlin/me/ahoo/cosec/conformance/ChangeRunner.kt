@@ -65,7 +65,7 @@ import java.time.Instant
  *
  * ```jsonc
  * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
- * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [] } },
+ * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [], "attributes": { "level": 3 } } },
  * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" } },
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
@@ -76,6 +76,8 @@ import java.time.Instant
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
+ *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
+ *            { "outage": true },   // every check is indeterminate until { "outage": false }
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } } ],
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
@@ -109,12 +111,13 @@ object ChangeRunner : ScenarioRunner {
         private val engine = ControlEngine(revisions)
         private val authorized = node.has("operators")
         private val operators = node.get("operators")?.fields().orEmpty().entries.associate { (name, operator) ->
-            operator.only("tenant", "roles", "policies")
+            operator.only("tenant", "roles", "policies", "attributes")
             name to engine.operator(
                 TenantId(operator.required("tenant").text()),
                 name,
                 operator.get("roles")?.strings().orEmpty(),
                 operator.get("policies")?.strings().orEmpty(),
+                operator.get("attributes")?.let(::attributes).orEmpty(),
             )
         }
         private var next: ChangeId? = null
@@ -163,6 +166,9 @@ object ChangeRunner : ScenarioRunner {
                 if (action == "advance") {
                     clock.now = clock.now.plus(Duration.parse(argument.text()))
                     "advanced"
+                } else if (action == "outage") {
+                    engine.outage = argument.bool()
+                    if (engine.outage) "down" else "up"
                 } else if (action == "report") {
                     report(argument)
                 } else if (action == "simulate") {
@@ -184,6 +190,7 @@ object ChangeRunner : ScenarioRunner {
 
         private suspend fun step(action: String, argument: JsonNode): ChangeRequest = when (action) {
             "propose" -> propose(argument)
+            "rollback" -> rollback(argument)
             "shadowed" -> changes.shadowed(ChangeId(argument.text()))
             "approve" -> target(argument, "candidate").let { (id, op, node) ->
                 changes.approve(op, id, candidate(id, node))
@@ -290,8 +297,17 @@ object ChangeRunner : ScenarioRunner {
             return changes.propose(by(argument, key), key, head, operations, "scenario", kind)
         }
 
+        /** `{ "change": "c2", "by": "walt", "document": "platform", "revision": 1 }`: a rollback (RFC 0007 §5.6). */
+        private suspend fun rollback(argument: JsonNode): ChangeRequest {
+            argument.only("change", "by", "document", "revision")
+            val key = documentKey(argument.required("document").text())
+            documents += key
+            next = ChangeId(argument.required("change").text())
+            return changes.rollback(by(argument, key), key, argument.required("revision").asLong(), "scenario")
+        }
+
         private suspend fun candidate(id: ChangeId, node: JsonNode): String = when (val which = node.get("candidate")?.text() ?: "own") {
-            "own" -> changes.get(id).candidate.orEmpty()
+            "own" -> store.change(id)?.value?.candidate.orEmpty()
             "other" -> "0".repeat(DIGEST_LENGTH)
             else -> throw ScenarioFormatException("candidate is own or other, not $which")
         }
@@ -316,7 +332,8 @@ object ChangeRunner : ScenarioRunner {
                 argument.only("change", "by", *fields)
             }
             val id = ChangeId(if (argument.isString) argument.text() else argument.required("change").text())
-            return Triple(id, by(argument, changes.get(id).key), argument)
+            // A change that does not exist is still named, so that the step answers for it as for any other.
+            return Triple(id, by(argument, store.change(id)?.value?.key ?: SnapshotKey.Platform), argument)
         }
     }
 
@@ -339,6 +356,24 @@ object ChangeRunner : ScenarioRunner {
                 Publication("bootstrap", ProvenanceKind.BOOTSTRAP, PLATFORM.actor)
             )
         }
+    }
+
+    /** An operator's token attributes: `{ "level": 3, "oncall": true, "teams": ["red"] }`, as a token's claims read. */
+    fun attributes(node: JsonNode): Map<String, Any> {
+        if (!node.isObject) {
+            throw ScenarioFormatException("attributes is an object: $node")
+        }
+        return node.fields().entries.associate { (name, value) -> name to value(value) }
+    }
+
+    private fun value(node: JsonNode): Any = when {
+        node.isString -> node.text()
+        node.isBoolean -> node.booleanValue()
+        node.isIntegralNumber -> node.longValue()
+        node.isNumber -> node.doubleValue()
+        node.isArray -> node.values().map(::value)
+        node.isObject -> attributes(node)
+        else -> throw ScenarioFormatException("An attribute is a string, number, boolean, array or object: $node")
     }
 
     fun operation(key: SnapshotKey, node: JsonNode): Operation {

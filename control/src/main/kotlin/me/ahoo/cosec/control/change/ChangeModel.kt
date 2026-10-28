@@ -195,7 +195,11 @@ data class Approval(
     val candidate: String,
     val covers: List<String>,
     val memberships: Memberships? = null,
-    val attributes: Map<String, String> = emptyMap(),
+    /**
+     * The approver's token attributes as authenticated, of every JSON type (round-2 review R2): strings, numbers,
+     * booleans, lists and objects, so that the check at publish reads what the approval was decided on.
+     */
+    val attributes: Map<String, Any> = emptyMap(),
 )
 
 /**

@@ -27,10 +27,19 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
      * The summary of [state] at [now] when the window may close, or null while it stays open: an instance could not
      * compile or evaluate the candidate (closes at once, blocked); enough time and samples (closes); the longest window
      * (closes, insufficient).
+     *
+     * The total is the sum of one report per instance, each that instance's cumulative report (review R1): a report of
+     * another window, or a second report of one instance, is an error that keeps the window open, never a sample.
      */
     suspend fun close(state: ShadowState, now: Instant): ShadowSummary? {
         val counts = ShadowOutcome.entries.associate { it.name to 0L }.toMutableMap()
-        for (report in reports.reports(state.window)) {
+        val read = reports.reports(state.window)
+        check(
+            read.all { it.window == state.window }
+        ) { "A report read for window ${state.window} is of another window" }
+        val twice = read.groupingBy { it.instance }.eachCount().filterValues { it > 1 }.keys
+        check(twice.isEmpty()) { "Instances ${twice.sorted()} reported more than once on window ${state.window}" }
+        for (report in read) {
             report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }
         }
         val effective = ShadowOutcome.entries.filter { it.effective }.sumOf { counts.getValue(it.name) }

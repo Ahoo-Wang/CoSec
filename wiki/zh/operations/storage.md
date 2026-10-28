@@ -165,6 +165,37 @@ CoSec 数据指 `<prefix>:policy:`、`<prefix>:global:policy`、`<prefix>:app:pe
   策略和授权；`volatile-*` 策略可能删掉吊销记录，让对应令牌重新被接受。使用 `noeviction` 并按数据量规划实例容量。因为有
   全局策略索引，CoCache 会在启动时检查该策略（`cocache.redis.set-cache-eviction-check`，默认 `warn`）。
 
+### 控制面与影子窗口的 key {#control-plane-and-shadow-keys}
+
+8.0 中，控制面与数据面实例还共用一组 key。`<s>` 是 `cosec.pipeline.snapshot.key-prefix`（默认 `cosec`），去掉末尾的 `:`。
+
+| Key | 写入方 | 内容 |
+|---|---|---|
+| `<s>:snapshot:<document>` | 控制面、`cosec-migrate` | 已发布的策略文档，每个实例据此执法 |
+| `<s>:candidate:<document>` | 控制面 | 影子窗口打开期间，文档暂存的候选 |
+| `<s>:control:*` | 控制面 | 修订记录、修订索引、反向引用、租约、变更与暂存槽 |
+| `<s>:shadow:report:<window>:<instance>` | 只有数据面实例 `<instance>` | 该实例对影子窗口 `<window>`（`<changeId>@<epoch ms>`）的累计报告；每次写入替换它之前的报告；最后一次写入 8 天后过期 |
+| `<s>:shadow:reporters:<window>` | 每个数据面实例 | 报告过 `<window>` 的实例 id；实例把自己加进去，自己的 id 丢失时每次写入都会再加回去；过期时间同上 |
+| `<s>:shadow:status:instances` | 每个数据面实例 | 每个实例已安装的修订，供传播视图使用；超过一分钟的条目不计 |
+
+一个窗口的数字是每个实例一份报告之和，每份都是该实例最新的报告。控制面按原样读取这些报告：它们决定窗口何时关闭，以及发布者
+确认什么。某个实例的 key 下的报告若写着另一个实例或另一个窗口，就是错误，窗口保持打开。因此：
+
+- 只有数据面实例可以写 `<s>:shadow:*`。数据面凭据对 `<s>:snapshot:*`、`<s>:candidate:*`、`<s>:control:*` 只读；只有控制面写它们。
+- 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许写自己的报告 key（`<s>:shadow:report:*:<instance>`）。
+  每个实例仍然要写 `<s>:shadow:reporters:*` 和 `<s>:shadow:status:*`。行为异常的实例可以把另一个实例的 id 从窗口的报告者中删掉，
+  直到那个实例再次写入为止，最多一个上报周期（10 秒）。
+
+实例 `pod-a`、默认前缀的示例（Redis 7 ACL 语法；`%R~` 表示只读）：
+
+```text
+ACL SETUSER cosec-pod-a on >change-me resetkeys %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:control:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+```
+
+再加上该实例其他功能用到的 key 和频道（上面的 [Redis key](#redis-keys)、CoCache 的失效频道），以及
+[CoCache 列出的命令](https://cocache.ahoo.me/operations/#acl)。上线前用 `ACL DRYRUN` 检查这个用户：CoCache 通过 Lua 脚本写入，
+Redis 会逐个 key 检查。
+
 ## Redis 不可用时 {#when-redis-is-unavailable}
 
 | 数据 | 行为 |

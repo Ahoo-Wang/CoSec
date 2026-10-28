@@ -1,0 +1,102 @@
+{
+  "rules": [
+    "CTL-16"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Round-2 review R1: i1 and i2 report 4 samples, then i1 reports again, cumulatively: its 4 replace its 2, so the window holds 6 and closes; the publisher acknowledges 3 SAME and 3 NARROWED.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT0S",
+      "minSamples": 6,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 1,
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i2",
+        "counts": {
+          "NARROWED": 1,
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 2,
+          "SAME": 2
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": {
+          "NARROWED": 3,
+          "SAME": 3
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "reported",
+      "SHADOWING",
+      "reported",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

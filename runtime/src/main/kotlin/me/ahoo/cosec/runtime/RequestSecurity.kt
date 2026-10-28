@@ -69,9 +69,11 @@ class RequestSecurity internal constructor(
      * This request as [principal] with [memberships], in the default scope of [principal]'s tenant; null when that
      * scope does not resolve. For checking again what a principal recorded earlier may do, such as the approver of a
      * control-plane change when it publishes (RFC 0007 §7.5): it reads the current documents, and the environment of
-     * this request, not the one the principal had.
+     * this request, not the one the principal had. Internal (round-2 review R3): a [RequestSecurity] is a permitted
+     * request, which a route trusts, so nothing outside the pipeline mints one; [AuthorizationChecker.decideAs] is the
+     * way in, and it hands back a decision only.
      */
-    fun asPrincipal(principal: AuthenticatedPrincipal, memberships: Memberships): RequestSecurity? {
+    internal fun asPrincipal(principal: AuthenticatedPrincipal, memberships: Memberships): RequestSecurity? {
         val member = ScopeSubject(principal.tenant, true, memberships)
         val resolved = ScopeResolver.resolve(member, DeclaredScope("", ""), HostScope(null))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null

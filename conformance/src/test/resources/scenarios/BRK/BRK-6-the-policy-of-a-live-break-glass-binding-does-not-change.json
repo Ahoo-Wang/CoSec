@@ -1,0 +1,152 @@
+{
+  "rules": [
+    "BRK-6"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Round-2 review R4: rita's break-glass binding grants emergency; widening emergency is a break-glass change, so walt, without cosec:breakglass, is refused (403), and plato's proposal never checks clean (V5).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "emergency",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "glass",
+          "subject": {
+            "principal": "rita",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "emergency",
+          "breakGlass": true,
+          "expiresAt": "2026-11-01T01:00:00Z"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "walt",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "emergency",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "emergency",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 403",
+      "DRAFT"
+    ],
+    "errors": {
+      "c2": [
+        "V5"
+      ]
+    },
+    "heads": {
+      "platform": 1
+    }
+  }
+}
