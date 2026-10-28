@@ -58,7 +58,9 @@ class SubjectRevocationJwtTest {
 
     private val tokenStore = MapTokenStore()
     private val converter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
-    private val verifier = RevocableTokenVerifier(JwtTokenVerifier(JwtFixture.ALGORITHM), tokenStore)
+
+    // No skew: these tests place revocations to the millisecond of the tokens' `iat`.
+    private val verifier = RevocableTokenVerifier(JwtTokenVerifier(JwtFixture.ALGORITHM), tokenStore, Duration.ZERO)
     private val revoker = DefaultTokenRevoker(verifier, tokenStore, Duration.ofDays(7))
     private val tenant = TenantId("tenant")
 

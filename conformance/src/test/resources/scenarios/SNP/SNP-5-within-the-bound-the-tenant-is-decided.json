@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "SNP-5"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same tenant 300 s after the store confirmed its documents is within its bound: decided and permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "snapshot": {
+    "failClosed": {
+      "tenants": [
+        "acme"
+      ],
+      "maxLagSeconds": 300
+    },
+    "lagSeconds": 300
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "acme"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

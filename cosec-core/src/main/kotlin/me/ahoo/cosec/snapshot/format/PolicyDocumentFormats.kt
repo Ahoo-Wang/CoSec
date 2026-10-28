@@ -39,7 +39,7 @@ internal object PolicyDocumentFormats {
         description = "\"[subject] is subject to [policy] in [app] and [space]\" (RFC 0004 §4.2). `*` means any, and only that.",
         root = ObjectType(
             listOf(
-                Field("id", StringType(examples = listOf("g:deny-ip", "r:editor:read")), required = true),
+                Field("id", StringType(examples = listOf("deny-ip", "editor-read")), required = true),
                 Field(
                     "subject",
                     AnyOf(

@@ -303,10 +303,19 @@ class ConditionChecker(
             return false
         }
 
-        /** Paths take names (`subject.attributes.<name>`), so they are bounded like literals. */
+        /**
+         * Paths take names (`subject.attributes.<name>`), so they are bounded like literals. A credential header is
+         * never readable ([CREDENTIAL_HEADERS]).
+         */
         private fun attribute(path: String, at: String): Attribute? {
             string(path, at) ?: return null
-            Attribute.parse(path)?.let { return it }
+            Attribute.parse(path)?.let { attribute ->
+                if (attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in CREDENTIAL_HEADERS) {
+                    error(at, "`$path` is a credential header, which no condition may read")
+                    return null
+                }
+                return attribute
+            }
             if (Attribute.isExternalPath(path)) {
                 return catalog.external(path)
                     ?: null.also { error(at, "external attribute `$path` is not declared by any registered AttributeProvider") }
@@ -346,6 +355,15 @@ class ConditionChecker(
     }
 
     companion object {
+        /**
+         * Headers that carry credentials (RFC 0005 §3.2, `CND-5`). A condition on one would let a document's author
+         * learn another principal's token through decisions: a `prefix` DENY on `authorization`, and the statement the
+         * audit names, tell one character at a time. `x-api-key` is the starter's default API key header; a host that
+         * reads keys from another header is not covered by this list.
+         */
+        val CREDENTIAL_HEADERS: Set<String> =
+            setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key")
+
         private const val ROOT = "$"
         private const val IPV4_BITS = 32
         private const val IPV6_BITS = 128

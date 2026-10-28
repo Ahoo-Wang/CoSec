@@ -42,6 +42,8 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocument
@@ -50,7 +52,8 @@ import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * A request to decide without making it (RFC 0007 §10.3): who asks, with which memberships, in which scope, for which
- * action and resource. It describes the principal, so any principal of the caller's reach can be simulated.
+ * action and resource, with which headers and request attributes. It describes the principal, so any principal of the
+ * caller's reach can be simulated.
  */
 data class SimulatedRequest(
     val tenant: TenantId,
@@ -63,6 +66,10 @@ data class SimulatedRequest(
     val resource: Resource,
     val remoteIp: String = "",
     val time: Long,
+    /** The request's headers by name, each with its values in order: what `http.*` conditions read. */
+    val headers: Map<String, List<String>> = emptyMap(),
+    /** What the host knows besides HTTP, such as a gateway's route id: what `request.attributes.*` conditions read. */
+    val requestAttributes: Map<String, String> = emptyMap(),
 )
 
 /** The revisions of the documents to decide on (RFC 0006 §9.2's `snapshotVersion`): what an audit event records. */
@@ -108,7 +115,13 @@ class Simulator(
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),
         )
         return engine.evaluate(
-            FlatRequest(authz, scope, memberships, request.time),
+            FlatRequest(
+                authz,
+                scope,
+                memberships,
+                request.time,
+                HttpAttributes(Headers.of(request.headers), request.requestAttributes),
+            ),
             view(scope, documents),
             TraceLevel.FULL
         )

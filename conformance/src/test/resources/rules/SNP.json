@@ -52,6 +52,16 @@
         "cosec-core:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
         "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again"
       ]
+    },
+    {
+      "id": "SNP-5",
+      "source": "RFC 0003 §4.5",
+      "statement": "A tenant configured to fail closed on lag (`cosec.authorization.snapshot.fail-closed.tenants`) is not decided on when the oldest document its evaluation reads was last confirmed by the store longer ago than `fail-closed.max-lag`: the request is indeterminate (503) unless a DENY matches. Other tenants, and views within the bound, are decided as usual.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:DocumentSnapshotViewsTest#a fail-closed tenant past its lag bound is unresolved, others decide"
+      ],
+      "pending": null
     }
   ]
 }

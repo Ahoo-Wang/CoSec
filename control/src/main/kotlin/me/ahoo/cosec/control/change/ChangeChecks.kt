@@ -252,10 +252,10 @@ class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
 
     private fun Set<SnapshotKey>.sorted(): List<String> = map { it.toString() }.sorted()
 
-    private companion object {
-        const val BAD_REQUEST = 400
-        const val UNPROCESSABLE = 422
-        val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
+    internal companion object {
+        private const val BAD_REQUEST = 400
+        private const val UNPROCESSABLE = 422
+        private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
         val RESERVED = listOf("cosec:", "g:", "r:")
     }
 }

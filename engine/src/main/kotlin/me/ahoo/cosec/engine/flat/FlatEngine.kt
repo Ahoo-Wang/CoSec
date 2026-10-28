@@ -65,7 +65,7 @@ class FlatRequest(
     val memberships: Memberships,
     /** The request time in epoch milliseconds, for binding expiry and `environment.time`. The engine reads no clock. */
     val time: Long,
-    /** The host's attributes. Must keep the [ConditionInput] contract: reads never throw. */
+    /** The host's attributes, read under the [ConditionInput] contract. */
     val attributes: ConditionInput = AbsentAttributes,
     /** The external attributes fetched for the [AttributePlan] (RFC 0006 §5.4); none by default. */
     val external: ExternalValues = ExternalValues.NONE,

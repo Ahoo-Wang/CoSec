@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "SNP-5"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Tenant acme fails closed past 300 s of lag; its documents were confirmed 301 s ago: 503, though the ALLOW matches.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "snapshot": {
+    "failClosed": {
+      "tenants": [
+        "acme"
+      ],
+      "maxLagSeconds": 300
+    },
+    "lagSeconds": 301
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "acme"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

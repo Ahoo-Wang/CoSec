@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime.event
 
 import me.ahoo.cosec.engine.flat.AttributeStatus
 import me.ahoo.cosec.engine.flat.FlatRequest
+import me.ahoo.cosec.engine.flat.FlatTrace
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
@@ -47,6 +48,11 @@ class DecisionEvent internal constructor(
     val outcome: OutcomeSummary,
     /** The engine's decision; null when the request did not reach it. */
     val decision: Decision?,
+    /**
+     * What the engine looked at, to the depth `cosec.pipeline.trace-level` asks for: null at `OFF` (the default, which
+     * costs nothing) and when the request did not reach the engine.
+     */
+    val evaluationTrace: FlatTrace?,
     /** Whether the permit applied through a break-glass binding (RFC 0004 §4.8). */
     val breakGlass: Boolean,
     /** The revisions of the documents the decision read, (platform, app, tenant). */
@@ -78,8 +84,8 @@ class DecisionEvent internal constructor(
 
     /** A copy for best-effort listeners, after the REQUIRED ones answered. */
     internal fun final(outcome: OutcomeSummary, requiredFailures: List<String>, replay: ReplayHandle?) = DecisionEvent(
-        id, requestId, time, elapsedNanos, kind, outcome, decision, breakGlass, snapshotVersion, subject, scope, action,
-        resource, request, attributes, trace, requiredFailures, replay,
+        id, requestId, time, elapsedNanos, kind, outcome, decision, evaluationTrace, breakGlass, snapshotVersion, subject,
+        scope, action, resource, request, attributes, trace, requiredFailures, replay,
     )
 
     override fun toString(): String = "DecisionEvent(id=$id, requestId=$requestId, kind=$kind, outcome=$outcome)"
@@ -160,6 +166,11 @@ class RequestSummary internal constructor(
     val remoteIp: String,
     /** Empty when the request names no device. */
     val deviceId: String,
+    /**
+     * The gateway route the request came through (the request attribute `cosec.audit.routeId`, which conditions read
+     * as `request.attributes.cosec.audit.routeId`); null for other adapters.
+     */
+    val routeId: String? = null,
 )
 
 /**

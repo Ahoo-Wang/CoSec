@@ -54,6 +54,7 @@ import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
+import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
@@ -202,7 +203,7 @@ class Pipeline(components: PipelineComponents) {
             )
         }
         val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
-        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
+        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
         val decision = evaluate(request, view, fetchedAttributes(), null)
         // A check writes no audit, and every use of break-glass is written to a REQUIRED one (§9.4.3): a check that
         // only break-glass permits is refused (review A1).
@@ -294,7 +295,7 @@ class Pipeline(components: PipelineComponents) {
                 blocked = blacklist.blocked,
             ),
         )
-        val request = FlatRequest(authz, scope, memberships, clock.millis())
+        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts))
         val decision = evaluate(request, view, fetched, record)
         breakGlass(requestId, traceId, decision, view, record)?.let { return it }
         return decided(requestId, traceId, decision, authn, security(requestId, principal, request, decision))
@@ -377,7 +378,7 @@ class Pipeline(components: PipelineComponents) {
         request: FlatRequest,
         decision: Decision,
     ): RequestSecurity? = if (decision is Decision.Permit) {
-        RequestSecurity(requestId, principal, request.scope, request.memberships, request.request)
+        RequestSecurity(requestId, principal, request.scope, request.memberships, request.request, request.attributes)
     } else {
         null
     }
@@ -419,14 +420,17 @@ class Pipeline(components: PipelineComponents) {
             // Nothing fetched reads as ExternalValues.NONE: every external attribute is missing.
             request
         } else {
-            with(request) { FlatRequest(this.request, scope, memberships, time, external = fetched.toExternalValues()) }
+            with(
+                request
+            ) { FlatRequest(this.request, scope, memberships, time, attributes, fetched.toExternalValues()) }
         }
-        val decision = engine.evaluate(evaluated, view, options.traceLevel).decision
+        val evaluation = engine.evaluate(evaluated, view, options.traceLevel)
         record?.let {
             it.request = evaluated
-            it.decision = decision
+            it.decision = evaluation.decision
+            it.evaluationTrace = evaluation.trace
         }
-        return decision
+        return evaluation.decision
     }
 
     /**
