@@ -97,9 +97,11 @@ class SnapshotHealthIndicatorTest {
         SnapshotReadiness(source(null, false), publisher, availability, Duration.ofMillis(10)).use { readiness ->
             readiness.onApplicationEvent(AvailabilityChangeEvent(this, ReadinessState.ACCEPTING_TRAFFIC))
             verify(timeout = 5_000, atLeast = 3) {
-                publisher.publishEvent(match<ApplicationEvent> {
-                    (it as AvailabilityChangeEvent<*>).state == ReadinessState.REFUSING_TRAFFIC
-                })
+                publisher.publishEvent(
+                    match<ApplicationEvent> {
+                        (it as AvailabilityChangeEvent<*>).state == ReadinessState.REFUSING_TRAFFIC
+                    }
+                )
             }
         }
     }
