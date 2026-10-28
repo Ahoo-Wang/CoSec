@@ -479,7 +479,7 @@ Reference one from a file with `$schema`, which the parser ignores:
 ```
 
 The files are generated from the document format descriptors in `cosec-core`
-([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
+([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
 and never edited by hand. A test binds the descriptors to the parsers: documents generated from them must parse, and
 documents with a required field dropped, an unknown field added, a value of the wrong type, a value outside its enum or
 range, or one of a value's counter-examples (such as `25:00` for a time of day) must fail the schema. Each

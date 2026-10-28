@@ -17,7 +17,7 @@
       "level": "engine",
       "guards": [
         "runtime:MembershipResolverTest",
-        "cosec-cocache:MembershipCacheFailureTest"
+        "cocache:MembershipCacheFailureTest"
       ],
       "pending": null
     },
@@ -27,7 +27,7 @@
       "statement": "Membership claims read as 7.x RoleScope: `role` is a role in the default space, `role@space` a role in that space only, and a malformed entry (empty role or space, more than one @, `role@*`) applies in no space.",
       "level": "engine",
       "guards": [
-        "cosec-core:MembershipClaimsTest"
+        "core:MembershipClaimsTest"
       ],
       "pending": null
     },
@@ -38,9 +38,9 @@
       "level": "pipeline",
       "guards": [
         "runtime:TokenAuthenticatorTest#aRevokedSubjectsOlderTokensAreRejected",
-        "cosec-core:RevocationReaderTest#subjectRevocation",
-        "cosec-core:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
-        "cosec-spring-boot-starter:CoSecJwtAutoConfigurationTest#theRefreshVerifierTakesTheRevocationSkew"
+        "core:RevocationReaderTest#subjectRevocation",
+        "core:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
+        "spring-boot-starter:CoSecJwtAutoConfigurationTest#theRefreshVerifierTakesTheRevocationSkew"
       ],
       "pending": null
     }

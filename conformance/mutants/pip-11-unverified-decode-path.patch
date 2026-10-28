@@ -2,11 +2,11 @@
 # Mutant: an unverified decode path comes back: a principal from a token whose signature nobody checked
 # Tests: :cosec-spring-boot-starter:test --tests me.ahoo.cosec.spring.boot.starter.UnverifiedTokenTest
 
-diff --git a/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt b/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt
+diff --git a/jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt b/jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt
 new file mode 100644
 index 00000000..ac5fa1dd
 --- /dev/null
-+++ b/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt
++++ b/jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt
 @@ -0,0 +1,21 @@
 +/*
 + * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].

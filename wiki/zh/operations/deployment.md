@@ -10,7 +10,7 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 
 ## 镜像 {#the-image}
 
-CI 在每次推送时用 [`cosec-gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/Dockerfile)
+CI 在每次推送时用 [`gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/Dockerfile)
 构建镜像，发布为 `ahoowang/cosec-gateway`、`ghcr.io/ahoo-wang/cosec-gateway` 和
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以镜像发布，从不作为库发布。
 
@@ -43,7 +43,7 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 
 ### 镜像如何使用它 {#how-the-image-uses-it}
 
-`Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-train.sh)
+`Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-train.sh)
 训练缓存，所用的 jar 和路径与容器运行时完全一致，结果写入 `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`。
 
 1. **记录。** 脚本用 `-XX:AOTMode=record` 和与生产相同的 JVM 参数启动网关，等到 `/actuator/health/liveness` 有响应后发送几个请求，

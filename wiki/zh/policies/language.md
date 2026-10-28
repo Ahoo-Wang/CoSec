@@ -440,7 +440,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 ```
 
 这些文件由 `cosec-core` 中的文档格式描述
-（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，
+（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，
 不手工修改。一项测试把格式描述和解析器绑在一起：由描述生成的文档必须能解析；删掉必填字段、加上未知字段、改错值类型、
 取值超出枚举或范围，或换成某个值的反例（例如时刻写成 `25:00`）的文档，schema 必须拒绝。每个反例也必须被解析器拒绝，
 在 8.0 文档中则必须被编译器拒绝。

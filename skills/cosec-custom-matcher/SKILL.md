@@ -19,9 +19,9 @@ Add a matcher only after confirming that the built-ins cannot express the rule. 
 
 Before editing, inspect the target CoSec version's interfaces and the nearest built-in matcher. In a CoSec checkout, the authoritative files are:
 
-- `cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/RequestMatcher.kt`
-- `cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/`
-- `cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/`
+- `api/src/main/kotlin/me/ahoo/cosec/api/principal/RequestMatcher.kt`
+- `core/src/main/kotlin/me/ahoo/cosec/policy/action/`
+- `core/src/main/kotlin/me/ahoo/cosec/policy/condition/`
 
 ## Minimal condition matcher
 

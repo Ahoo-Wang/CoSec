@@ -32,7 +32,7 @@
       "level": "pipeline",
       "guards": [
         "engine:ExternalAttributesTest",
-        "cosec-core:ExternalAttributeDocumentTest"
+        "core:ExternalAttributeDocumentTest"
       ],
       "pending": null,
       "superseded": "ATR-6"
@@ -43,7 +43,7 @@
       "statement": "A policy that reads an external attribute no registered AttributeProvider declares does not compile.",
       "level": "pipeline",
       "guards": [
-        "cosec-core:ExternalAttributeDocumentTest"
+        "core:ExternalAttributeDocumentTest"
       ],
       "pending": null
     },
@@ -64,7 +64,7 @@
       "level": "pipeline",
       "guards": [
         "engine:ExternalAttributesTest",
-        "cosec-core:ExternalAttributeDocumentTest"
+        "core:ExternalAttributeDocumentTest"
       ],
       "pending": null
     },

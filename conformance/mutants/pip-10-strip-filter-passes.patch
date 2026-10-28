@@ -2,10 +2,10 @@
 # Mutant: the gateway's identity strip lets a client's CoSec-Identity through
 # Tests: :cosec-gateway:test --tests me.ahoo.cosec.gateway.IdentityGuardTest
 
-diff --git a/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt b/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
+diff --git a/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt b/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
 index e44050e3..013c8a56 100644
---- a/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
-+++ b/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
+--- a/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
++++ b/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
 @@ -29,7 +29,7 @@ import reactor.core.publisher.Mono
   */
  class IdentityStripFilter : GlobalFilter, Ordered {

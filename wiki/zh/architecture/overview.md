@@ -49,7 +49,7 @@ flowchart BT
 - **`cosec-runtime`**（目录为 `runtime/`）将容纳 8.0 新增的协程请求 Pipeline（[RFC 0006](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0006-coroutine-pipeline.md)），依赖 `cosec-engine` 和 `cosec-core`。协程只出现在这个模块和 Web 适配器里，Reactor 只出现在适配器的桥接处：`RuntimeBoundaryTest`（ArchUnit）在 `runtime/`、`engine/` 或 `model/` 的代码引用 `reactor.*`、数据面 SPI 的签名含有 Reactor 类型，`runtime/` 引用 Spring、Servlet API、协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时失败。`cosec-core` 仍把 Reactor 带上类路径，所以这个测试检查的是代码引用，而不是依赖。目前模块还是空的。
 - **`cosec-control`**（目录为 `control/`）将容纳 8.0 新增的控制面：修订、发布流程和控制面写入的授权（[RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md)），依赖 `cosec-runtime`。它是由适配器装配的库：`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类（不论包名），在其中有类不在 `me.ahoo.cosec.control` 包下、引用 Spring、`reactor.*`、通往 Reactor 的协程或 Reactive Streams 桥接或 Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。与 `RuntimeBoundaryTest` 一样，它检查的是代码引用，而不是依赖。目前模块还是空的。
 - **其余每个库模块只适配一种技术**：JWT、基于 CoCache 的 Redis、OAuth、OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka，或一种 Web 技术栈。适配模块里不做任何决策。
-- **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。新增集成意味着新增一个模块和一个 variant，而不是给 starter 增加硬依赖。能力及其对应的模块列在[简介](../guide/introduction.md#modules)中。
+- **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。新增集成意味着新增一个模块和一个 variant，而不是给 starter 增加硬依赖。能力及其对应的模块列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-gateway-server`** 是基于 starter 的开箱即用应用，永不发布。
 
 ## 请求路径 {#request-path}
@@ -74,7 +74,7 @@ sequenceDiagram
 
 贡献者需要了解的要点：
 
-- [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt) 承担所有与传输层无关的步骤，**包括全部状态码和错误映射**。适配器（WebFlux 和 Gateway 用 [`ReactiveSecurityFilter`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)，WebMvc 用 [`AbstractAuthorizationInterceptor`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt)）只负责把 `SecurityDecision` 转成响应。让适配器自行判断的修改会破坏一致性，应当放进管道。
+- [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt) 承担所有与传输层无关的步骤，**包括全部状态码和错误映射**。适配器（WebFlux 和 Gateway 用 [`ReactiveSecurityFilter`](https://github.com/Ahoo-Wang/CoSec/blob/main/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)，WebMvc 用 [`AbstractAuthorizationInterceptor`](https://github.com/Ahoo-Wang/CoSec/blob/main/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt)）只负责把 `SecurityDecision` 转成响应。让适配器自行判断的修改会破坏一致性，应当放进管道。
 - 每种结果都会变成 `SecurityDecision`，包括 `Authorization` 同步抛出的异常。没有任何错误会逃出管道。
 - `SecurityContextParser.parse` 是同步的。它在调用方线程上运行；只有解析可能阻塞时（开启了令牌吊销，或 API key存储需要 I/O），starter 才把它移到 `boundedElastic`。`TokenVerificationException` 会让调用方变为匿名，并在拒绝结果中报告；其他异常一律按错误处理。
 - 适配器写出的状态码和响应头，以及应用代码如何读取安全上下文，面向用户的说明见 [Web 集成](../integration/web.md#responses-and-status-codes)。
@@ -109,7 +109,7 @@ flowchart LR
 - 影子模式**直接**包裹 `SimpleAuthorization`，位于限流之内，因为它比较的是纯决策：影子评估绝不能消耗许可。
 - 定制器（`CoSecAuthorizationCustomizer`，按 `@Order` 顺序应用）包裹限流的结果，位于审计和追踪之内。
 
-每个装饰器都实现 [`DecisionAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/AuthorizationDecision.kt) 并转发 `decide(...)`。结果是一个 `AuthorizationDecision`，以值的形式携带匹配到的 `VerifyContext`（哪条策略、哪条语句作出了决定），审计、追踪和解释无需重新求值就能看到匹配结果。只实现 `authorize(...)` 的装饰器会丢掉这个上下文。
+每个装饰器都实现 [`DecisionAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/authorization/AuthorizationDecision.kt) 并转发 `decide(...)`。结果是一个 `AuthorizationDecision`，以值的形式携带匹配到的 `VerifyContext`（哪条策略、哪条语句作出了决定），审计、追踪和解释无需重新求值就能看到匹配结果。只实现 `authorize(...)` 的装饰器会丢掉这个上下文。
 
 应用用来[在代码中检查权限](../integration/checks.md)的 `AuthorizationChecker` 使用链外的一个普通 `SimpleAuthorization`：检查既不审计，也不限流。
 
@@ -137,7 +137,7 @@ flowchart LR
 
 仓库是 `cosec-core` 中的接口（`PolicyRepository`、`AppRolePermissionRepository`）。`cosec-cocache` 中的 Redis 实现基于 [CoCache 6](https://cocache.ahoo.me)。设计上的决定：
 
-- **Redis 是权威存储，本地缓存只是它的视图。** [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt) 声明所有缓存。策略和权限缓存永不过期，Redis 读取失败时抛出异常。starter 在所有 CoCache 定制器或属性之后应用这一点，配置无法放宽它。
+- **Redis 是权威存储，本地缓存只是它的视图。** [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt) 声明所有缓存。策略和权限缓存永不过期，Redis 读取失败时抛出异常。starter 在所有 CoCache 定制器或属性之后应用这一点，配置无法放宽它。
 - **本地命中不切换线程。** 仓库通过 CoCache 的异步视图读取。本地命中是一个已完成的 future，仓库在调用方线程上直接应答；未命中时以非阻塞方式读 Redis，请求在 `boundedElastic` 上继续。
 - **缺失的数据会失败，而不是被跳过。** 仓库没有返回的主体策略会让授权以 `MissingPolicyException` 失败（管道应答 `500`）。全局策略索引同样如此：有索引而无内容的 id 会失败，因为缺失的可能正是一条全局 `DENY`。角色授权引用了其应用没有定义的权限 id 时同样会失败，抛出 `MissingPermissionException`。
 - **并发发布不会扩大访问范围。** 全局策略索引是一个 CoCache `SetCache`，通过原子的 `add` / `remove` 更新，并且先写内容、后写索引项。读取方只应用内容类型为 `global` 的已索引策略（`GlobalPolicyConsistencyTest`、`GlobalPolicyIndexConcurrencyIntegrationTest`）。
@@ -149,13 +149,13 @@ flowchart LR
 
 CoSec 7.0 以 CoCache 6 的布局存储 Redis 数据。未迁移的 6.x 数据并不总在 7.0 查找的位置：以 `:` 结尾的键前缀、更改过的前缀或回滚过的迁移，都会让它留在别处。7.0 会把所有策略、全局 `DENY` 和吊销记录都读成*不存在*，这会导致放行，而且不会出现任何读取错误来暴露问题。
 
-所以在创建任何 CoSec 缓存之前，starter 会用 [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt) 检查标记键 `<p>:meta:schema`：只要 Redis 中有 CoSec 数据却没有 7.0 的标记，就以 `CoSecSchemaException` 终止启动。迁移最后才写入标记，
+所以在创建任何 CoSec 缓存之前，starter 会用 [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt) 检查标记键 `<p>:meta:schema`：只要 Redis 中有 CoSec 数据却没有 7.0 的标记，就以 `CoSecSchemaException` 终止启动。迁移最后才写入标记，
 所以迁移只做了一半时仍会终止启动。每种状态及其结果见[Schema 标记](../operations/storage.md#schema-marker)，如何执行迁移见
 [迁移数据](../operations/upgrading.md#migrating-the-data)。该检查由 `CoSecSchemaMarkerTest` 和 `CoSecCacheSchemaAutoConfigurationTest` 守护。
 
 ## 性能 {#performance}
 
-`SimpleAuthorizationBenchmark`（`cosec-core/src/jmh`）使用内存仓库测量热路径：3 条全局策略（共 25 条语句）、2 条主体策略（共 20 条语句），以及一个含 51 条权限的应用权限。吞吐是单线程每秒的决策数，时间是它的倒数，分配是每次决策分配的字节数（`gc.alloc.rate.norm`）。
+`SimpleAuthorizationBenchmark`（`core/src/jmh`）使用内存仓库测量热路径：3 条全局策略（共 25 条语句）、2 条主体策略（共 20 条语句），以及一个含 51 条权限的应用权限。吞吐是单线程每秒的决策数，时间是它的倒数，分配是每次决策分配的字节数（`gc.alloc.rate.norm`）。
 
 | 场景 | 吞吐 | 时间 | 分配 |
 |---|---|---|---|
@@ -199,7 +199,7 @@ CoSec 7.0 以 CoCache 6 的布局存储 Redis 数据。未迁移的 6.x 数据�
 
 ```bash
 ./gradlew :cosec-core:jmhJar
-java -jar cosec-core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
+java -jar core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
   -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh.json \
   -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
 ```

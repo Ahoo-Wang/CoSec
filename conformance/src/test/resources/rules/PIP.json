@@ -10,8 +10,8 @@
         "runtime:OneDecisionPathTest#onlyStatusMappingConstructsOutcomes",
         "runtime:OneDecisionPathTest#adaptersNeverSeeDecisions",
         "runtime:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
-        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike",
-        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters make the same decision event"
+        "spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "spring-boot-starter:WebAdapterParityTest#the three adapters make the same decision event"
       ]
     },
     {
@@ -81,7 +81,7 @@
       "statement": "Only the revocation store's own degraded read may count a token as not revoked (the documented exception to failing closed); an error the revocation check reports fails the request with 503, never accepts the token.",
       "level": "pipeline",
       "guards": [
-        "cosec-cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
+        "cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
         "runtime:TokenAuthenticatorTest#otherFailuresPropagate"
       ],
       "pending": null
@@ -94,7 +94,7 @@
       "guards": [
         "runtime:ApiKeyAuthenticatorTest",
         "runtime:CompositeAuthenticatorTest#aKeyIsJudgedAlone",
-        "cosec-cocache:RedisApiKeyReaderTest#anUnreachableRedisThrows"
+        "cocache:RedisApiKeyReaderTest#anUnreachableRedisThrows"
       ],
       "pending": null
     },
@@ -105,8 +105,8 @@
       "level": "pipeline",
       "guards": [
         "runtime:HostAttributesPipelineTest",
-        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters give the engine the same host attributes",
-        "cosec-spring-boot-starter:WebAdapterParityTest#the gateway gives the engine the route id"
+        "spring-boot-starter:WebAdapterParityTest#the three adapters give the engine the same host attributes",
+        "spring-boot-starter:WebAdapterParityTest#the gateway gives the engine the route id"
       ],
       "pending": null
     },
@@ -117,8 +117,8 @@
       "level": "pipeline",
       "guards": [
         "runtime:IdentityForwardingTest",
-        "cosec-gateway:PipelineGatewayFilterTest",
-        "cosec-gateway:IdentityGuardTest"
+        "gateway:PipelineGatewayFilterTest",
+        "gateway:IdentityGuardTest"
       ],
       "pending": null
     },
@@ -128,8 +128,8 @@
       "statement": "Only the verifier turns a token into a principal: no class of CoSec decodes a JWT, or reads its claims as a principal, without verifying its signature first.",
       "level": "build",
       "guards": [
-        "cosec-spring-boot-starter:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
-        "cosec-spring-boot-starter:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode"
+        "spring-boot-starter:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
+        "spring-boot-starter:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode"
       ],
       "pending": null
     }

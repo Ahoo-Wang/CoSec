@@ -12,7 +12,7 @@
       ],
       "guards": [
         "engine:BoundaryTest",
-        "cosec-core:PolicyDocumentCompilerTest#boundaries live in the platform, only allow, and are never bound"
+        "core:PolicyDocumentCompilerTest#boundaries live in the platform, only allow, and are never bound"
       ],
       "pending": null
     }

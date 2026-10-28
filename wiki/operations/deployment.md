@@ -11,7 +11,7 @@ AOT cache it ships with: what it speeds up, when the JVM ignores it, and how to 
 
 ## The image
 
-CI builds the image from [`cosec-gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/Dockerfile)
+CI builds the image from [`gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/Dockerfile)
 on every push and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/cosec-gateway` and
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
@@ -53,7 +53,7 @@ work again. No code changes and no Spring AOT are involved.
 ### How the image uses it
 
 The `Dockerfile` trains the cache in its final stage with
-[`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-train.sh), against the exact
+[`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-train.sh), against the exact
 jars and path the container runs, and writes it to `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`.
 
 1. **Record.** The script starts the gateway with `-XX:AOTMode=record` and the same JVM options as production,

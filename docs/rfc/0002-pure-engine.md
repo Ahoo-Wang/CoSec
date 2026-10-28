@@ -503,7 +503,7 @@ trace 只是在同一个循环里加记录（§5.1）：`OFF` 时不记录、不
 
 ### 4.2 与现在的 `SimpleAuthorization` 逐条对照
 
-| # | 现在的行为（`cosec-core/.../authorization/SimpleAuthorization.kt` 等） | 引擎中的对应 | 是否一致 |
+| # | 现在的行为（`core/.../authorization/SimpleAuthorization.kt` 等） | 引擎中的对应 | 是否一致 |
 |---|---|---|---|
 | S1 | `decide` 先调用 `blacklistChecker.check`；`false` 时返回 `BLACKLIST_DECISION`，不检查 root，不读仓库；检查本身出错 → 错误信号 | 检查仍在适配层最先执行（它返回 `Mono`），结果进 `environment.blocked`；引擎第一步返回 `Deny(Blacklist)`；`requiresPolicies` 为 false，不读仓库；检查出错时适配层还没调用引擎，错误照常传播 | 一致 |
 | S2 | 未被拉黑时 `rootPrincipalMatcher.isRoot(principal)` 为真 → `ROOT_DECISION`，跳过全部三层；默认 `RootPrincipalMatcher.NONE` | `subject.root` 由同一个 `RootPrincipalMatcher` 判定，引擎第二步返回 `Permit(Root)`，不读仓库 | 一致 |
@@ -670,7 +670,7 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
 
 ### 7.1 目标
 
-以 `cosec-core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（场景 `global`、`role`、`none`）为基线：
+以 `core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（场景 `global`、`role`、`none`）为基线：
 
 | 指标 | 目标 |
 |---|---|
@@ -765,7 +765,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | `SimpleAuthorizationTest`、`InRoleSpaceTest`、`PathVariableScopeTest`、`ResourceCheckTest`、`RootPrincipalIdentityTest`、`AuthorizationCheckerTest`、`ShadowAuthorizationTest`、`ShadowAppPermissionTest`、`AuthorizationDecisionTest` 改为 JUnit 参数化测试，对 `SimpleAuthorization` 和 `EngineAuthorization` 各跑一遍；`cosec-cocache` 的 `MissingPolicyFailClosedTest`、`RolePermissionScopeTest` 和 starter 的 `StrictCacheFailureTest`、`WebAdapterParityTest` 分别用旧实现和（由测试配置换入的）`EngineAuthorization` 各跑一遍 | 每次 `check` |
-| `PolicyTestKit` 套件 | 仓库内 `cosec-core/src/test/resources/cosec-policy-test/` 下的套件（`orders`、`spaces`，以及预期失败的 `broken`、`failing`），经 `PolicyTestKit.parity`（测试夹具中的扩展函数）；维护者指定的部署可以用 `main` 的本地构建经同一入口、以 `file:` 位置跑自己的套件 | 每次 `check`；下游自愿 |
+| `PolicyTestKit` 套件 | 仓库内 `core/src/test/resources/cosec-policy-test/` 下的套件（`orders`、`spaces`，以及预期失败的 `broken`、`failing`），经 `PolicyTestKit.parity`（测试夹具中的扩展函数）；维护者指定的部署可以用 `main` 的本地构建经同一入口、以 `file:` 位置跑自己的套件 | 每次 `check`；下游自愿 |
 | 随机生成 | 扩展 `ExplainerConsistencyTest` 的生成器（删除前把它挪到 `EngineParityPropertyTest`）：动作覆盖 `path`（含 `{var}`、`#{...}` 模板）、`all`、`composite`；条件覆盖 `all`、`bool`、`eq`/`in`/`startsWith`（含 `request.path.var.*`）、`inRole`（带与不带 `@space`）、`authenticated`、`negate`、一个按概率抛异常的测试匹配器、一个 `BlockingAware` 测试匹配器；数据覆盖缺失的主体策略、按层抛错的仓库、空 `Mono`、`*` 授予、授予不存在的权限 id（S10a）、带后缀的角色和非默认空间、黑名单、root | `check` 跑固定种子 2,000 例；`./gradlew :cosec-core:engineParity -PparityIterations=1000000` 手动跑百万例（不挂到 `check`），PR-6 前必须跑过一次并附结果 |
 | 真实数据离线回放 | 从维护者指定的真实部署（§10 Q7）导出的策略、角色权限和请求样本，用回放工具在本地比较（§8.2.1） | PR-4 合入之后、PR-6 合入之前；发现差异并修复后重跑 |
 
@@ -782,13 +782,13 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 "与样本中记录的决策一致的比例"也是门槛的一部分（2026-10-25 修订，原为只作参考）：漏导了策略或应用权限的导出数据里，两个实现同样地
 隐式拒绝一切，彼此一致却什么也没有证明，只有与记录的决策对照才看得出来。门槛要求这个比例不低于 90%（§8.3），期间策略的正常变动应远小于这个余量。
 
-**请求样本的来源**：审计事件（[`AuditEvent`](../../cosec-api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt)，由
-[`AuditEventExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/audit/AuditEventExtractor.kt) 构造，经 Kafka 或日志 sink 收集）在 `main` 上
+**请求样本的来源**：审计事件（[`AuditEvent`](../../api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt)，由
+[`AuditEventExtractor`](../../core/src/main/kotlin/me/ahoo/cosec/audit/AuditEventExtractor.kt) 构造，经 Kafka 或日志 sink 收集）在 `main` 上
 已经带有回放所需的大部分字段：`tenantId`；主体的 `id`、`authenticated`、`roles`（原样，含 `@space` 后缀）、`policies`；请求的 `id`、`appId`、
 `spaceId`（空值记为 `null`，回放还原为空串）、`remoteIp`、`method`、`path`、`device.id`、`routeId`；`timestamp`；授权结果的 `decision`、
 `reasonCode` 和 `source`（含 `BLACKLIST`、`ROOT` 以及做出决策的策略语句或角色权限）。
 
-决策可能读到、而审计事件**没有**的输入（以 [`PartExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/PartExtractor.kt)
+决策可能读到、而审计事件**没有**的输入（以 [`PartExtractor`](../../core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/PartExtractor.kt)
 和各条件匹配器为准）：
 
 | 输入 | 谁会读 | 回放时 |
@@ -954,21 +954,21 @@ PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开
 
 本文对现有行为的描述，以 `0436acb4` 时的下列代码为准：
 
-- 决策：`cosec-core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、
+- 决策：`core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、
   `AuthorizationDecision.kt`、`MissingPolicyException.kt`、`blacklist/BlacklistChecker.kt`、`policy/BlockingAware.kt`
 - 路径变量：`policy/PathVariableScope.kt`、`policy/action/PathActionMatcher.kt`（`PATH_VARIABLES_KEY`、`ReplaceablePathActionMatcher`、
   路径解析缓存）、`policy/condition/part/PartExtractor.kt`、`limiter/RateLimitRule.kt`
 - 匹配器：`policy/condition/context/InRoleConditionMatcher.kt`、`policy/action/CompositeActionMatcher.kt`、
   `policy/action/AbstractActionMatcher.kt`、`policy/condition/AbstractConditionMatcher.kt`、`policy/condition/part/BoundedRegex.kt`
-- 第二、第三份算法：`cosec-api/.../policy/Policy.kt`、`Statement.kt`、`PermissionVerifier.kt`；
-  `cosec-core/.../explain/AuthorizationExplainer.kt`、`Explanation.kt`、`SnapshotRepositories.kt`、`DecisionRefs.kt`；
-  `cosec-core/src/test/.../explain/ExplainerConsistencyTest.kt`
+- 第二、第三份算法：`api/.../policy/Policy.kt`、`Statement.kt`、`PermissionVerifier.kt`；
+  `core/.../explain/AuthorizationExplainer.kt`、`Explanation.kt`、`SnapshotRepositories.kt`、`DecisionRefs.kt`；
+  `core/src/test/.../explain/ExplainerConsistencyTest.kt`
 - 间接使用者：`shadow/ShadowAuthorization.kt`、`ShadowDiff.kt`、`authorization/AuthorizationChecker.kt`、`analysis/AccessAnalyzer.kt`、
   `testkit/PolicyTestKit.kt`、`policy/DefaultPolicyEvaluator.kt`、`permission/DefaultAppPermissionEvaluator.kt`
 - 状态码：`pipeline/SecurityPipeline.kt`、`pipeline/SecurityDecision.kt`
 - 数据类：`policy/PolicyData.kt`、`permission/AppPermissionData.kt`（惰性 `permissionIndexer`、预先计算的 `requiresBlocking`）、
   `context/SimpleSecurityContext.kt`（`ConcurrentHashMap` 属性）
 - 构建：根 `build.gradle.kts`（库模块默认依赖、JMH 配置、`jvmToolchain(17)`）、`gradle/libs.versions.toml`、
-  `cosec-core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`
-- starter：`cosec-spring-boot-starter/.../authorization/CoSecAuthorizationAutoConfiguration.kt`（影子包在 `SimpleAuthorization` 外、
+  `core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`
+- starter：`spring-boot-starter/.../authorization/CoSecAuthorizationAutoConfiguration.kt`（影子包在 `SimpleAuthorization` 外、
   限流之内）、`AuthorizationProperties.kt`（`cosec.authorization.*`）

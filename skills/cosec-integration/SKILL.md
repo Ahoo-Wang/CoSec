@@ -107,4 +107,4 @@ Start the application or run its context test, then verify:
 - a request over a rate limit rule returns 429 with `Retry-After` and `RateLimit-*` headers;
 - Redis-backed features work from more than one instance when cluster-wide behavior is required.
 
-In a CoSec checkout, treat `cosec-spring-boot-starter/build.gradle.kts` and the `*Properties.kt` / auto-configuration classes under `cosec-spring-boot-starter/src/main/kotlin` as the source of truth for capabilities, defaults, and activation conditions.
+In a CoSec checkout, treat `spring-boot-starter/build.gradle.kts` and the `*Properties.kt` / auto-configuration classes under `spring-boot-starter/src/main/kotlin` as the source of truth for capabilities, defaults, and activation conditions.

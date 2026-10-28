@@ -79,7 +79,7 @@ Arrows point at what a module depends on. The rules behind the picture:
 - **Every other library module adapts exactly one technology**: JWT, Redis through CoCache, OAuth, OpenTelemetry,
   Micrometer, OpenAPI, ip2region, Kafka, or one web stack. An adapter module never contains a decision.
 - **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
-  [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts):
+  [`spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/spring-boot-starter/build.gradle.kts):
   the adapter module is a dependency of that variant only, and its auto-configuration is guarded by
   `@ConditionalOnClass`, so it is active only when the application requests the capability. A new integration
   is a new module plus a new variant, never a new hard dependency of the starter. The capabilities and the modules
@@ -108,11 +108,11 @@ sequenceDiagram
 
 What a contributor needs to know about this path:
 
-- [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt)
+- [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt)
   owns every transport-independent step, **including all status and error mapping**. The adapters
-  ([`ReactiveSecurityFilter`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)
+  ([`ReactiveSecurityFilter`](https://github.com/Ahoo-Wang/CoSec/blob/main/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)
   for WebFlux and Gateway,
-  [`AbstractAuthorizationInterceptor`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt)
+  [`AbstractAuthorizationInterceptor`](https://github.com/Ahoo-Wang/CoSec/blob/main/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt)
   for WebMvc) only turn a `SecurityDecision` into a response. A change that makes an adapter decide something
   breaks parity; put it in the pipeline instead.
 - Every outcome, including an exception thrown synchronously by an `Authorization`, becomes a `SecurityDecision`.
@@ -158,7 +158,7 @@ Why this order:
   sit inside auditing and tracing.
 
 Every decorator implements
-[`DecisionAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/AuthorizationDecision.kt)
+[`DecisionAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/authorization/AuthorizationDecision.kt)
 and forwards `decide(...)`. The result is an `AuthorizationDecision` that carries the matched `VerifyContext` (which
 policy and statement decided) as a value, so auditing, tracing and explanation see what matched without
 re-evaluating. A decorator that only implements `authorize(...)` would drop that context.
@@ -195,7 +195,7 @@ The repositories are interfaces in `cosec-core` (`PolicyRepository`, `AppRolePer
 implementations in `cosec-cocache` are built on [CoCache 6](https://cocache.ahoo.me). The design decisions:
 
 - **Redis is the store of record; the local cache is a view of it.**
-  [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)
+  [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)
   declares every cache. Policy and permission caches never expire and throw on a failed Redis read. The starter
   applies this after any CoCache customizer or property, so configuration cannot loosen it.
 - **Local hits cost no thread hop.** Repositories read through CoCache's async view. A local hit is an already
@@ -222,7 +222,7 @@ prefix ending in `:`, a changed prefix or a rolled-back migration leaves it else
 policy, global `DENY` and revocation as *missing*, which fails open, and no read error would ever reveal it.
 
 So before any CoSec cache is created, the starter runs
-[`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt)
+[`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt)
 against the marker key `<p>:meta:schema`: while CoSec data exists in Redis without the 7.0 marker, startup stops
 with `CoSecSchemaException`. The migration writes the marker last, so a half-finished migration still stops startup.
 Each state and its outcome is in [Schema marker](../operations/storage.md#schema-marker), and running the migration
@@ -231,7 +231,7 @@ in [Migrating the data](../operations/upgrading.md#migrating-the-data). The chec
 
 ## Performance
 
-`SimpleAuthorizationBenchmark` (`cosec-core/src/jmh`) measures the hot path with in-memory repositories: three
+`SimpleAuthorizationBenchmark` (`core/src/jmh`) measures the hot path with in-memory repositories: three
 global policies (25 statements), two principal policies (20 statements) and an app permission with 51 permissions.
 Throughput is decisions per second on one thread; time is its inverse; allocation is bytes allocated per decision
 (`gc.alloc.rate.norm`).
@@ -297,7 +297,7 @@ Build the benchmark jar and run it with the same settings:
 
 ```bash
 ./gradlew :cosec-core:jmhJar
-java -jar cosec-core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
+java -jar core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
   -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh.json \
   -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
 ```

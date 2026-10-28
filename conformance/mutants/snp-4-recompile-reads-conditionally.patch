@@ -2,10 +2,10 @@
 # Mutant: a recompiling load sends a conditional read, and Unchanged confirms the old compilation
 # Tests: :cosec-core:test --tests me.ahoo.cosec.snapshot.SnapshotRecompileTest
 
-diff --git a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
+diff --git a/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt b/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
 index 1060f1d9..d02a36c7 100644
---- a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
-+++ b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
+--- a/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
++++ b/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
 @@ -893,7 +893,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                  return store.read(key)
              }

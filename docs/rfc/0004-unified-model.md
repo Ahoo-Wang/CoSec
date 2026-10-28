@@ -125,7 +125,7 @@ RFC 0002、0003 的粒度。按"改的是什么"分成两篇：
 | I14 | §3.2 示例：成员关系声明写作 `roles: {"blog/team-a": ["editor"]}`，键是 `应用/空间` | 7.x 的空间与应用无关：`editor@team-a` 在 team-a 里对请求所在的任何应用生效，授予才区分应用 | 成员关系的键只是空间；应用维度由绑定表达（§4.5）。现有的 `roles` 列表格式（`role@space`）就是按作用域写的声明，直接沿用，不需要重新签发 token。Q12 |
 | I15 | §3.2："`Catalog` 供 UI、生成器、校验使用，不参与评估" | 7.x 的 `AppPermission.condition` 参与评估（应用条件不命中，整个角色层不生效） | 应用条件转换为每条权限策略的策略级条件（§5.1），`Catalog` 只保留不参与评估的部分 |
 | I16 | §3.4、§3.2：快照"按租户分区"，暗含数据属于某个租户 | 7.x 的数据没有租户归属（RFC 0003 I1）。`Policy.tenantId` 虽然存在，授权从不读它，生成器还总是写默认租户 | 转换后的数据默认全部放进平台层，租户层起初为空（§5.2）。Q5 |
-| I17 | §7.1："紧急撤销靠吊销该主体的全部 token" | 7.x 只有按单个 token 吊销（[`TokenRevoker`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/token/TokenRevoker.kt)），没有"吊销某个主体的全部 token" | 本阶段增加按主体吊销（§4.5.3），否则"成员关系默认来自 token 声明"这个已确认的决定缺少它依赖的紧急手段。Q13 |
+| I17 | §7.1："紧急撤销靠吊销该主体的全部 token" | 7.x 只有按单个 token 吊销（[`TokenRevoker`](../../core/src/main/kotlin/me/ahoo/cosec/token/TokenRevoker.kt)），没有"吊销某个主体的全部 token" | 本阶段增加按主体吊销（§4.5.3），否则"成员关系默认来自 token 声明"这个已确认的决定缺少它依赖的紧急手段。Q13 |
 
 ---
 
@@ -289,11 +289,11 @@ Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请�
 **不需要重新签发 token**：解析规则与 `RoleScope.parse` 完全相同，同一份 token 在 7.x 与 8.0 中得到同样的角色作用域。这是选择沿用列表格式、
 而不是 RFC 0001 示例里的对象格式的主要理由（Q12）。
 
-**token 体积阈值**：CoSec 自己的签发方（[`JwtTokenConverter`](../../cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt)）
+**token 体积阈值**：CoSec 自己的签发方（[`JwtTokenConverter`](../../jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt)）
 在 `roles` 与 `policies` 序列化后超过 `cosec.jwt.membership-claim-limit`（默认 4 KB，RFC 0001 §7.1）时，不写这两个声明，改写
 `cosec.membership: "provider"`。第三方签发方可以照做。
 
-**撤销延迟**：等于 access token 的寿命。默认 10 分钟（[`JwtProperties`](../../cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt)），
+**撤销延迟**：等于 access token 的寿命。默认 10 分钟（[`JwtProperties`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt)），
 满足 RFC 0001 §7.1 的"不超过 15 分钟"。`wiki/integration/authentication.md` 和 `wiki/operations/configuration.md` 写明这个上限。
 
 #### 4.5.2 `MembershipProvider`
@@ -366,7 +366,7 @@ sealed interface ScopeResolution {
 
 | 部分 | 7.x | 8.0（本阶段） |
 |---|---|---|
-| 名单 | 用户实现的 [`BlacklistChecker`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt)（`Mono<Boolean>`，CoSec 自身没有实现），在 `SimpleAuthorization` 里最先调用 | 不变：仍最先调用，结果写进 `environment.blocked`（RFC 0002 已经这样做）。第 5 阶段改为 `AttributeProvider`，并拆成主体、IP、设备三个集合 |
+| 名单 | 用户实现的 [`BlacklistChecker`](../../core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt)（`Mono<Boolean>`，CoSec 自身没有实现），在 `SimpleAuthorization` 里最先调用 | 不变：仍最先调用，结果写进 `environment.blocked`（RFC 0002 已经这样做）。第 5 阶段改为 `AttributeProvider`，并拆成主体、IP、设备三个集合 |
 | 规则 | `SimpleAuthorization` 里的一行 `if`，先于 root | 平台层的一条 DENY 语句 `cosec:blacklist#0`：动作 `*`、条件"`environment.blocked` 为真"。**编译时注入**每个 `Platform` 组合，不存进 Redis 的文档，所以不可能被误删；排在所有候选语句的最前面（§6.3） |
 | 出错 | 检查器的错误信号 → 500 | 检查器失败时 `environment.blocked` 为"未知"，这条 DENY 的匹配结果是 `ERROR`：没有别的 DENY 命中就是 `Indeterminate` → 500；有别的 DENY 命中就是 403（改动 C1b） |
 
@@ -428,7 +428,7 @@ sealed interface ScopeResolution {
 | 方案 | 做法 | 评价 |
 |---|---|---|
 | **A. 全部放进平台层（已决定，默认）** | 全局策略、全部非全局策略（可附加）、全部应用文档都属于平台层；租户文档为空 | 语义与 7.x 相同：任何主体能附加任何策略，角色授予对所有租户里的同名角色生效。门槛 A 的差异只来自 C1–C3。缺点是"同名角色跨租户"这个 7.x 的风险原样保留（§5.4） |
-| B. 按 `Policy.tenantId` 放进租户文档（`--partition=by-owner`） | 非全局策略按 `tenantId` 分到租户文档 | 改变语义：主体不能再附加别的租户的策略。7.x 的生成器（[`OpenAPIPolicyGenerator`](../../cosec-openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIPolicyGenerator.kt)）总是写默认租户，`tenantId` 多半不反映真实归属，按它分区会让大量附加失效（500）。作为可选项提供，转换工具报告每个租户的策略数和跨租户附加的样本数（需要请求样本） |
+| B. 按 `Policy.tenantId` 放进租户文档（`--partition=by-owner`） | 非全局策略按 `tenantId` 分到租户文档 | 改变语义：主体不能再附加别的租户的策略。7.x 的生成器（[`OpenAPIPolicyGenerator`](../../openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIPolicyGenerator.kt)）总是写默认租户，`tenantId` 多半不反映真实归属，按它分区会让大量附加失效（500）。作为可选项提供，转换工具报告每个租户的策略数和跨租户附加的样本数（需要请求样本） |
 | C. 角色授予复制到每个租户 | 每个租户一份应用文档 | 规模乘以租户数；转换工具不知道有哪些租户；新租户没有授予 |
 
 A 不是终点：第 6 阶段控制面让租户写自己的数据，运维可以逐步把共享数据收窄。本阶段交付的是**机制**：租户文档、租户隔离的编译检查、
@@ -817,7 +817,7 @@ class Evidence(val classId: String, val statement: StatementRef?, val detail: St
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | RFC 0003 §8.2 第一行的测试集，参数化为"第 3 阶段实现 / 本阶段实现"两边各跑一遍；预期不同的断言按类别标注（例如 root 的用例改为 C2 的预期），每一处在 PR 描述里列出 | 每次 `check`，直到 PR-8 |
-| `PolicyTestKit` 套件 | `cosec-core/src/test/resources/cosec-policy-test/` 下的套件经转换后两边各跑一遍 | 每次 `check` |
+| `PolicyTestKit` 套件 | `core/src/test/resources/cosec-policy-test/` 下的套件经转换后两边各跑一遍 | 每次 `check` |
 | 合成语料 | §9.2 每一类的正例与反例 | 每次 `check` |
 | 随机生成 | 复用 RFC 0002/0003 的生成器，另加：成员关系（含非成员空间、`malformed`）、break-glass 绑定（含过期）、按概率抛错的 DENY/ALLOW 和前置条件、缺失的附加、不可用的文档；数据经转换工具转换 | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-7 前必须跑过一次。**随机语料同样要求未归类差异为零** |
 | 真实数据离线回放 | RFC 0002 §8.2.1 的同一批导出，不需要重新导出；基准是第 3 阶段实现在原始导出上，候选是本阶段实现在 `cosec-migrate convert --from-files` 的输出上 | PR-6 合入之后、PR-7 合入之前 |
@@ -1007,16 +1007,16 @@ PR-1、PR-3 可以立即并行；PR-2 只等 PR-1。RFC 0005 的 PR-1（AST 类�
 
 本文对现有行为的描述，以 `main` @ `334da022` 的下列代码为准：
 
-- 契约：`cosec-api/.../principal/CoSecPrincipal.kt`（`ROOT_ID`、`isRoot`）、`RoleCapable.kt`（`SpacedRoleId`、`roles` 的作用域约定）、`PolicyCapable.kt`、
+- 契约：`api/.../principal/CoSecPrincipal.kt`（`ROOT_ID`、`isRoot`）、`RoleCapable.kt`（`SpacedRoleId`、`roles` 的作用域约定）、`PolicyCapable.kt`、
   `policy/Policy.kt`、`PolicyType.kt`、`Statement.kt`、`permission/AppPermission.kt`、`AppRolePermission.kt`、`RolePermission.kt`、`PermissionGroup.kt`（`spaced`）、
   `MissingPermissionException.kt`、`context/request/Request.kt`（`appId`、`spaceId` 来自 Header 或 Query）、`SpaceIdCapable.kt`、`tenant/Tenant.kt`、`CoSec.kt`、
   `audit/AuditEvent.kt`（`AuditSourceType`）
-- 决策：`cosec-core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`MissingPolicyException.kt`、
+- 决策：`core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`MissingPolicyException.kt`、
   `blacklist/BlacklistChecker.kt`、`context/SimpleSecurityContext.kt`（租户来自主体）、`context/DefaultSecurityContextParser.kt`
 - 匹配器（本阶段不改，RFC 0005 翻译）：`policy/condition/context/InRoleConditionMatcher.kt`、`InTenantConditionMatcher.kt`、`policy/condition/part/PartExtractor.kt`
 - 引擎：`model/src/main/kotlin/me/ahoo/cosec/model/AuthzRequest.kt`、`Decision.kt`、`LayerKind.kt`；`engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt`、`PolicySet.kt`、`Evaluator.kt`
-- 认证：`cosec-jwt/.../JwtTokenConverter.kt`、`Jwts.kt`（`roles`、`policies`、`tenantId` 声明）、`cosec-core/.../token/TokenRevoker.kt`、`RevocableTokenVerifier.kt`、
-  `cosec-spring-boot-starter/.../jwt/JwtProperties.kt`（access token 默认 10 分钟）
-- 存储：RFC 0003 附录 B 的全部；`cosec-cocache/.../cache/AppSpacedRoleId.kt`、`CoSecSchemaMarker.kt`
-- 生成器：`cosec-openapi/.../generator/OpenAPIPolicyGenerator.kt`（`tenantId` 总是默认租户）、`OpenAPIAppPermissionGenerator.kt`
-- Gateway：`cosec-gateway/.../GatewayRouteRequestAttributesAppender.kt`（路由 id 进入请求属性）
+- 认证：`jwt/.../JwtTokenConverter.kt`、`Jwts.kt`（`roles`、`policies`、`tenantId` 声明）、`core/.../token/TokenRevoker.kt`、`RevocableTokenVerifier.kt`、
+  `spring-boot-starter/.../jwt/JwtProperties.kt`（access token 默认 10 分钟）
+- 存储：RFC 0003 附录 B 的全部；`cocache/.../cache/AppSpacedRoleId.kt`、`CoSecSchemaMarker.kt`
+- 生成器：`openapi/.../generator/OpenAPIPolicyGenerator.kt`（`tenantId` 总是默认租户）、`OpenAPIAppPermissionGenerator.kt`
+- Gateway：`gateway/.../GatewayRouteRequestAttributesAppender.kt`（路由 id 进入请求属性）

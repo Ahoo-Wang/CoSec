@@ -14,7 +14,7 @@
       "level": "build",
       "pending": null,
       "guards": [
-        "cosec-core:PolicyDocumentCodecTest#the wildcard is only ever Any"
+        "core:PolicyDocumentCodecTest#the wildcard is only ever Any"
       ]
     },
     {

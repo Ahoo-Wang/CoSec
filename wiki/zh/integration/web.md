@@ -262,7 +262,7 @@ docker run -p 8080:8080 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
 ```
 
 镜像也发布为 `ghcr.io/ahoo-wang/cosec-gateway`。路由和 CoSec 通过标准的 Spring 配置来设置；默认值见它的
-[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/src/main/resources/application.yaml)。
+[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/src/main/resources/application.yaml)。
 Kubernetes 清单示例在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中。它们从名为 `cosec-jwt-secret`
 的 Secret 读取 JWT 密钥；请先创建这个 Secret，并把镜像标签设为你部署的版本：
 
