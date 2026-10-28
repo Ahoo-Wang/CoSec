@@ -1004,7 +1004,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     guarded(load) { compileAndInstall(load, read) }
                 }
             } catch (rejected: RejectedExecutionException) {
-                onTransientFailure(load, SnapshotUnavailableException(key, "the compile queue is full", rejected), rejected = true)
+                onTransientFailure(
+                    load,
+                    SnapshotUnavailableException(key, "the compile queue is full", rejected),
+                    rejected = true
+                )
             }
         }
 
@@ -1142,22 +1146,31 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 next = null
                 empty = installed == null
             }
-            val answer = if (withheld && nextLoad == null) {
-                failedEntry(SnapshotUnavailableException(key, "compiled with inputs that changed"), clock.instant())
-            } else {
-                entry
-            }
+            val answer = answerFor(entry, withheld, nextLoad)
             try {
                 startOrAnswer(nextLoad, unanswered, answer)
             } finally {
                 housekeep(empty, install)
-                if (withheld && nextLoad != null) {
-                    nextLoad.result.whenComplete { next, error ->
-                        load.result.complete(next ?: transientFailure(clock.instant(), unwrap(error)))
-                    }
-                } else {
-                    load.result.complete(answer)
-                }
+                answerWaiters(load, answer, nextLoad.takeIf { withheld })
+            }
+        }
+
+        /** [entry], unless it is withheld and no load follows to compile it again (the source is closing): a failure. */
+        private fun answerFor(entry: SnapshotEntry<T>, withheld: Boolean, nextLoad: Load?): SnapshotEntry<T> =
+            if (withheld && nextLoad == null) {
+                failedEntry(SnapshotUnavailableException(key, "compiled with inputs that changed"), clock.instant())
+            } else {
+                entry
+            }
+
+        /** Completes [load]'s future with [answer], or with what [recompiling] installs in place of a withheld entry. */
+        private fun answerWaiters(load: Load, answer: SnapshotEntry<T>, recompiling: Load?) {
+            if (recompiling == null) {
+                load.result.complete(answer)
+                return
+            }
+            recompiling.result.whenComplete { next, error ->
+                load.result.complete(next ?: transientFailure(clock.instant(), unwrap(error)))
             }
         }
 
