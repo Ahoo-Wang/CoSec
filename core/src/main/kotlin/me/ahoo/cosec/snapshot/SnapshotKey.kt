@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.snapshot
 
-import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.scope.ScopeResolver
 
@@ -61,7 +60,7 @@ sealed interface SnapshotKey {
      * One app's document, loaded on demand and evicted least recently used: its catalog, permission policies and role
      * bindings.
      */
-    data class App(val appId: AppId) : SnapshotKey {
+    data class App(val appId: String) : SnapshotKey {
         init {
             require(
                 isValidAppId(appId)
@@ -76,7 +75,7 @@ sealed interface SnapshotKey {
             const val APP_ID_SEPARATOR = ":"
 
             /** Whether [appId] can name an app document; the same rule as the Redis key of role grants. */
-            fun isValidAppId(appId: AppId): Boolean = appId.isNotEmpty() && !appId.contains(APP_ID_SEPARATOR)
+            fun isValidAppId(appId: String): Boolean = appId.isNotEmpty() && !appId.contains(APP_ID_SEPARATOR)
         }
     }
 }

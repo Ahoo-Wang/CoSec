@@ -23,8 +23,8 @@ import me.ahoo.cosec.model.TenantId
 import java.time.Clock
 
 /**
- * Authenticates the request's API key (RFC 0006 §5.3.2), as `ApiKeySecurityContextParser` does on the 7.x path: the key
- * is hashed (CPU work), and [keys] is asked for the hash without blocking.
+ * Authenticates the request's API key (RFC 0006 §5.3.2): the key is hashed (CPU work), and [keys] is asked for the hash
+ * without blocking.
  *
  * - No key: [AuthnResult.Anonymous].
  * - An unknown, disabled or expired key: [AuthnResult.RejectReason.API_KEY_INVALID]. The request is evaluated as

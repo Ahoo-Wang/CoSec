@@ -15,8 +15,5 @@ package me.ahoo.cosec.model
 
 /**
  * The effect of a rule.
- *
- * Coexists with `me.ahoo.cosec.api.policy.Effect` until the models are unified (RFC 0002 §2.1): `cosec-model` must not
- * depend on `cosec-api`, which brings Reactor with it.
  */
 enum class Effect { ALLOW, DENY }

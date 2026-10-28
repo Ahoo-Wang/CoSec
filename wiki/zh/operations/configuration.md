@@ -188,7 +188,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authorization.cache.key-prefix` | string | `cosec` | 吊销 key 的前缀，去掉末尾的 `:`。与 `cosec.authorization.snapshot.key-prefix` 无关。 |
-| `cosec.authorization.cache.token.*` | [本地缓存设置](#local-cache-settings) | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
+| `cosec.authorization.cache.token.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
@@ -196,9 +196,8 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 |---|---|---|---|
 | `maximum-size` | long | CoCache 的默认值 | 本地副本的最大条目数。 |
 | `initial-capacity` | int | CoCache 的默认值 | 本地副本的初始容量。 |
-| `expire-after-write` | long，单位为 `expire-unit` | CoCache 的默认值 | 本地副本最多存活多久（CoCache 的 `local-max-age`）：失效消息丢失时陈旧程度的上限。 |
-| `expire-after-access` | long，单位为 `expire-unit` | 无 | 这么久没被读取的本地副本被丢弃。 |
-| `expire-unit` | `TimeUnit` | `SECONDS` | 两个过期设置的单位。 |
+| `local-max-age` | duration（不带单位的数字表示秒） | CoCache 的默认值 | 本地副本最多存活多久：失效消息丢失时陈旧程度的上限。 |
+| `expire-after-access` | duration（不带单位的数字表示秒） | 无 | 这么久没被读取的本地副本被丢弃。 |
 
 这些设置只决定本地副本的大小和寿命。吊销记录在 Redis 中的寿命在写入时确定。
 

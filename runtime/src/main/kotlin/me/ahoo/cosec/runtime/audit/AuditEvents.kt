@@ -46,9 +46,9 @@ import java.time.Instant
  * Maps a [DecisionEvent] to the audit record of `cosec-api` (RFC 0006 §9.5.3). The audit keeps the detailed reason the
  * response body does not: explicit and implicit denies apart, token rejections by kind, the cause of a 503.
  *
- * The source types stay those of 7.x until RFC 0004 X1 replaces them at the switch: a binding of the platform or a
- * tenant document is a global policy, an attachment a principal policy, a role binding of an app document a role
- * permission, the builtin rule the blacklist.
+ * The audit record keeps its source types, so consumers of the audit stream read the same fields: a binding of the
+ * platform or a tenant document is a global policy, an attachment a principal policy, a role binding of an app document
+ * a role permission, the builtin rule the blacklist.
  */
 object AuditEvents {
     fun from(event: DecisionEvent): AuditEvent {

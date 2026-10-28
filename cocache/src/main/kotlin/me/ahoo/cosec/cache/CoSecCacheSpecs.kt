@@ -13,16 +13,13 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.codec.jackson.JacksonCodec
-import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
-import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
@@ -59,7 +56,7 @@ object CoSecCacheSpecs {
      */
     val DEFAULT_MEMBERSHIP_TTL: Duration = Duration.ofMinutes(1)
 
-    /** The snapshot documents of RFC 0003 (§4.1); nothing reads them before RFC 0003 PR-5 wires them. */
+    /** The snapshot documents of RFC 0003 (§4.1): the store of record the snapshot source loads. */
     const val POLICY_SNAPSHOT_CACHE_NAME = "PolicySnapshotCache"
 
     /**
@@ -310,9 +307,3 @@ object CoSecCacheSpecs {
         keyEncoder(KeyEncoder.ofToString())
     }
 }
-
-/**
- * Creates the cache declared by [spec] and exposes it as [C], one of CoSec's cache interfaces.
- */
-inline fun <reified C : Cache<K, V>, K : Any, V : Any> CacheRuntime.createCache(spec: CacheSpec<K, V>): C =
-    CacheProxies.create(C::class.java, create(spec))

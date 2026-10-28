@@ -32,7 +32,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * Compiling checks only what the index relies on: unique ids, which subjects each kind of document binds, the shape of
  * break-glass bindings, that every binding can apply to some request, and references a platform document cannot leave
  * open. The checks between documents (tenant isolation, the principal binding limit) belong to the snapshot compiler
- * (RFC 0004 PR-4). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
+ * (`PolicyDocumentCompiler` in `cosec-core`). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
  * platform update never recompiles them (§3 I5), and a policy the platform no longer has makes the request
  * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2). For the same reason a tenant policy whose id the
  * platform also defines is found per request, and makes it [me.ahoo.cosec.model.decision.Cause.AmbiguousPolicy]

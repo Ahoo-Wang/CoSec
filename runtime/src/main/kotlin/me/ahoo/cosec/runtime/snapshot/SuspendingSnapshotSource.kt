@@ -47,7 +47,7 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
 
 /**
  * Composes snapshot views from installed documents: the RFC 0003 `SnapshotSource` contract over the platform, app and
- * tenant documents of RFC 0004, which implement it (RFC 0004 PR-4). The SPI stays future-based (RFC 0003 Q10);
+ * tenant documents of RFC 0004, which implement it. The SPI stays future-based (RFC 0003 Q10);
  * [SuspendingSnapshotSource] is the pipeline's view of it.
  */
 interface SnapshotViews {

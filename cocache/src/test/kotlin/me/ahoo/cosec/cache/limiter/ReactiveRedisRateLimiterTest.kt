@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache.limiter
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.model.decision.RateLimitSpec
+import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -26,8 +27,8 @@ import org.springframework.data.redis.core.StringRedisTemplate
 import java.util.UUID
 
 /**
- * RFC 0006 §8.4: the suspending Redis limiter counts with the Lua script of the 7.x one, in the same keys, against real
- * Redis; a failure is thrown. That it never blocks its caller is in `SnapshotStoreBlockHoundTest`.
+ * RFC 0006 §8.4: the suspending Redis limiter counts atomically in Redis, in the keys earlier releases count in, against
+ * real Redis; a failure is thrown. That it never blocks its caller is in `SnapshotStoreBlockHoundTest`.
  */
 class ReactiveRedisRateLimiterTest {
     private val factory = connectionFactory("localhost", 6379)
@@ -40,13 +41,16 @@ class ReactiveRedisRateLimiterTest {
     }
 
     @Test
-    fun countsInTheBucketsOfThe7xLimiter() = runBlocking<Unit> {
+    fun countsInTheKeysEarlierReleasesCountIn() = runBlocking<Unit> {
         val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix) { clock }
-        val legacy = RedisRateLimiter(StringRedisTemplate(factory), prefix) { clock }
         val limit = RateLimitSpec(2.0)
         limiter.tryAcquire("rule", "global", limit).remaining.assert().isEqualTo(1)
-        // The 7.x limiter on another instance spends from the same bucket during a rolling upgrade.
-        legacy.acquire("rule", "global", RedisRateLimiterTestLimits.of(limit), clock).allowed.assert().isTrue()
+        // `<keyPrefix>:<ruleId>:<bucket>:<windowIndex>`, the layout an instance of an earlier release increments
+        // during a rolling upgrade: its count is spent here too.
+        val key = "$prefix:rule:global:${clock / RateLimiter.window(limit).windowMillis}"
+        val redis = StringRedisTemplate(factory)
+        redis.opsForValue().get(key).assert().isEqualTo("1")
+        redis.opsForValue().increment(key)
         val exhausted = limiter.tryAcquire("rule", "global", limit)
         exhausted.allowed.assert().isFalse()
         exhausted.remaining.assert().isZero()
@@ -71,9 +75,4 @@ class ReactiveRedisRateLimiterTest {
                 start()
             }
     }
-}
-
-/** The 7.x quota of a spec, as the pipeline's limiters read it. */
-internal object RedisRateLimiterTestLimits {
-    fun of(limit: RateLimitSpec) = me.ahoo.cosec.runtime.ratelimit.RateLimiter.window(limit)
 }

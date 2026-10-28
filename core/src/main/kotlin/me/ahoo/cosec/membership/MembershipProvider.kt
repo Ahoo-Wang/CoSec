@@ -25,7 +25,7 @@ import me.ahoo.cosec.model.TenantId
  * contract: failure means deny. A failed or late answer makes the memberships unavailable, and the request fails closed
  * with 503; it never counts as "no memberships", because no roles also means no `inRole` DENY matches.
  *
- * A suspend function since RFC 0006 PR-3 (Q11): it replaces the `CompletableFuture` form, which was never released.
+ * A suspend function, like every data-plane SPI (RFC 0006 Q11).
  */
 fun interface MembershipProvider {
     /**

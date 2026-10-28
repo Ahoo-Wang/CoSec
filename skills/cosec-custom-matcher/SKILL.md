@@ -146,7 +146,7 @@ fun interface RateLimiter {
 }
 ```
 
-Implement `me.ahoo.cosec.runtime.ratelimit.RateLimiter` (not the older `me.ahoo.cosec.limiter.RateLimiter`). The rules
+Implement `me.ahoo.cosec.runtime.ratelimit.RateLimiter`. The rules
 stay in the documents; the limiter only counts. Return `RateLimitResult(allowed, limit, remaining, resetAfter)`; use
 `RateLimiter.window(limit)` for the same sliding window as the built-in limiters. Throw when the store fails: the
 rule's `strictFailure` then decides (skip, or 503). The built-ins are `ReactiveRedisRateLimiter` (with a

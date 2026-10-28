@@ -145,7 +145,7 @@ interface AuditEvent {
     val authorization: AuditAuthorization
     val trace: AuditTrace?
 
-    /** The documents the decision read; null when it read none, or for events of the 7.x path (RFC 0006 §9.5.3). */
+    /** The documents the decision read; null when it read none (RFC 0006 §9.5.3). */
     val snapshotVersion: AuditSnapshotVersion? get() = null
 
     /** The binding the deciding statement applied through, or `attached:<policy>`; null when none. */

@@ -20,10 +20,8 @@ import me.ahoo.cosec.model.TenantId
 
 /**
  * A checked scope (RFC 0004 §4.1). Only [ScopeResolver] constructs one (RFC 0001 P4): the constructor is internal to
- * this module, and `ScopeConstructionTest` checks that nothing else in it calls the constructor.
- *
- * It lives in its own package because `me.ahoo.cosec.model.Scope`, the declared scope of RFC 0002, stays in use until
- * the switch to bindings (RFC 0004 PR-7).
+ * this module, and `ScopeConstructionTest` checks that nothing else in it calls the constructor. The declared scope a
+ * client asks for is `me.ahoo.cosec.model.Scope`.
  */
 class Scope internal constructor(
     val tenant: TenantId,

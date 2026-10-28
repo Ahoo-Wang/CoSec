@@ -19,8 +19,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * How the [Pipeline] bounds and reads a request. The defaults are RFC 0006 Q25's; the `cosec.*` properties that set
- * them arrive with the starter wiring at the switch (RFC 0008 §4.4).
+ * How the [Pipeline] bounds and reads a request. The defaults are RFC 0006 Q25's; the starter sets them from the
+ * `cosec.pipeline.*` properties.
  */
 class PipelineOptions(
     /** The whole evaluation (`cosec.pipeline.timeout`): an upper bound, not the sum of the stages. Then 503. */
