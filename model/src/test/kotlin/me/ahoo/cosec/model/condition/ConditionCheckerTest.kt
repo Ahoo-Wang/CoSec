@@ -51,7 +51,7 @@ class ConditionCheckerTest {
                     )
                 )
         }
-        errors(Condition.Exists("http.header.x-debug")).assert().isEmpty()
+        checked(Condition.Exists("http.header.x-debug"))
     }
 
     @Test

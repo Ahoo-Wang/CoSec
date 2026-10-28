@@ -37,6 +37,7 @@
   },
   "request": {},
   "expect": {
-    "decision": "Deny"
+    "decision": "Deny",
+    "by": null
   }
 }
