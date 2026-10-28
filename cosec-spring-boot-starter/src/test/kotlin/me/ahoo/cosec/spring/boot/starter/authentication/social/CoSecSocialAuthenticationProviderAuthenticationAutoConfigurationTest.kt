@@ -20,7 +20,7 @@ import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialProviderManager
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
+import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.zhyd.oauth.cache.AuthStateCache
@@ -104,7 +104,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
     @Test
     fun contextLoadsDisable() {
         contextRunner
-            .withPropertyValues("${ConditionalOnAuthenticationEnabled.ENABLED_KEY}=false")
+            .withPropertyValues("${ConditionalOnLoginEnabled.ENABLED_KEY}=false")
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,

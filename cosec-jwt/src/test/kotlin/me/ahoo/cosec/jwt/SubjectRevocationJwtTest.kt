@@ -80,7 +80,6 @@ class SubjectRevocationJwtTest {
         revoker.revokeSubject(tenant, PrincipalId("alice"), issuedAt(token).plusMillis(1))
 
         assertThrows<TokenRevokedException> { verifier.verify<TokenPrincipal>(token) }
-        assertThrows<TokenRevokedException> { verifier.toPrincipal(token) }
         assertThrows<TokenRevokedException> { verifier.refresh<TokenPrincipal>(token) }
         assertDoesNotThrow { verifier.verify<TokenPrincipal>(bobToken) }
     }

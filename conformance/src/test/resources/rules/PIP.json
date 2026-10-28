@@ -121,6 +121,17 @@
         "cosec-gateway:IdentityGuardTest"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-11",
+      "source": "RFC 0004 §4.5, RFC 0006 §5.3.2 (7.x inject mode removed)",
+      "statement": "Only the verifier turns a token into a principal: no class of CoSec decodes a JWT, or reads its claims as a principal, without verifying its signature first.",
+      "level": "build",
+      "guards": [
+        "cosec-spring-boot-starter:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
+        "cosec-spring-boot-starter:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode"
+      ],
+      "pending": null
     }
   ]
 }

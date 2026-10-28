@@ -1,4 +1,5 @@
 me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.CoSecPropertyCheckAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.pipeline.CoSecIdentityGuardAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authentication.social.CoSecSocialAuthenticationAutoConfiguration

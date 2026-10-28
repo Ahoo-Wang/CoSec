@@ -40,7 +40,8 @@ cosec:
     kafka:
       enabled: false
   authentication:
-    enabled: false
+    login:
+      enabled: false
   jwt:
     algorithm: hmac256
     # Required. No fallback: a well-known default would let anyone mint valid tokens.

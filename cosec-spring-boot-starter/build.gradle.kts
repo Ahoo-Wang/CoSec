@@ -88,6 +88,8 @@ dependencies {
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     kapt("org.springframework.boot:spring-boot-autoconfigure-processor")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // UnverifiedTokenTest: the classpath of every feature, so no module can decode a token without verifying it.
+    testImplementation("com.tngtech.archunit:archunit-junit5")
     testImplementation("org.springframework.boot:spring-boot-webflux")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
     testImplementation("me.ahoo.cosid:cosid-test")
