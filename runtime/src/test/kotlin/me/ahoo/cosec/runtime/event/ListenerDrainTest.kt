@@ -59,4 +59,27 @@ class ListenerDrainTest {
         ((System.nanoTime() - started) / 1_000_000).assert().isLessThan(5_000)
         listener.delivered.get().assert().isEqualTo(0)
     }
+
+    @Test
+    fun `an interrupted drain stops waiting and keeps the interrupt`() {
+        val listener = Counting(10.seconds)
+        val listeners = DecisionListeners(listOf(listener), drainTimeout = 5.seconds)
+        publish(listeners, 1)
+        Thread.currentThread().interrupt()
+        try {
+            listeners.drain().assert().isFalse()
+            Thread.currentThread().isInterrupted.assert().isTrue()
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun `cancelling drops what is queued`() {
+        val listener = Counting(10.seconds)
+        val listeners = DecisionListeners(listOf(listener))
+        publish(listeners, 2)
+        listeners.cancel()
+        listener.delivered.get().assert().isEqualTo(0)
+    }
 }
