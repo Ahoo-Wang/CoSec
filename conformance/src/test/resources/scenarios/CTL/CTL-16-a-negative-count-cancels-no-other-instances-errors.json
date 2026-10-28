@@ -1,0 +1,84 @@
+{
+  "rules": [
+    "CTL-16"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Coordinator review of #1110: i1 could not evaluate the candidate; i2 reports CANDIDATE_ERROR -1 to cancel it. A negative count is an error, not a sample: the window stays open (503) and the change does not publish.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT0S",
+      "minSamples": 6,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "CANDIDATE_ERROR": 1,
+          "SAME": 3
+        }
+      }
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i2",
+        "counts": {
+          "CANDIDATE_ERROR": -1,
+          "SAME": 3
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": "summary"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "reported",
+      "refused 503",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

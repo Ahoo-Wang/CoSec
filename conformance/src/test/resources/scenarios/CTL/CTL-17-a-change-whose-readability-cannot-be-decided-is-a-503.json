@@ -1,0 +1,154 @@
+{
+  "rules": [
+    "CTL-17"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Round-2 review R6: while the documents a check reads cannot be confirmed, walt (who may read it) and gil (of another tenant) are answered 503 for plato's change c1 and for c9, which does not exist, at every step; plato, its author, still reads it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "gil": {
+      "tenant": "globex"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "outage": true
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "walt"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "walt"
+      }
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "abandon": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "approve": {
+        "change": "c9",
+        "by": "gil"
+      }
+    },
+    {
+      "publish": {
+        "change": "c9",
+        "by": "walt"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "down",
+      "refused 503",
+      "refused 503",
+      "refused 503",
+      "refused 503",
+      "refused 503",
+      "refused 503"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 1
+    }
+  }
+}

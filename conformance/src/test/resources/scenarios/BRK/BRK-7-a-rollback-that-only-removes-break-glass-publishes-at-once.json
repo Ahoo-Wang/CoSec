@@ -1,0 +1,171 @@
+{
+  "rules": [
+    "BRK-7"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Round-2 review R4: plato's break-glass request, approved by pia, is revision 2; walt rolls back to revision 1, which only removes it: no cosec:breakglass, no window, published.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "emergency",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "rita",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "emergency",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ],
+        "kind": "BREAK_GLASS"
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "pia"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "rollback": {
+        "change": "c2",
+        "by": "walt",
+        "document": "platform",
+        "revision": 1
+      }
+    },
+    {
+      "stage": {
+        "change": "c2",
+        "by": "walt"
+      }
+    },
+    {
+      "publish": {
+        "change": "c2",
+        "by": "walt"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "AWAITING_APPROVAL",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 3
+    },
+    "escalations": {
+      "c1": [
+        "BREAK_GLASS"
+      ]
+    }
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "rules": [
+    "APR-5"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Round-2 review R2: after ada approves, plato makes the approver policy require level 4; publishing checks ada again with the level 3 she approved with, and the change goes back to awaiting approval.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "approver",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:approve",
+                "cosec:read"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ],
+              "condition": {
+                "and": [
+                  {
+                    "eq": [
+                      "subject.attributes.level",
+                      "3"
+                    ]
+                  },
+                  {
+                    "eq": [
+                      "subject.attributes.oncall",
+                      "true"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "ada",
+          "subject": {
+            "principal": "ada",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "approver"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "ada": {
+      "tenant": "(platform)",
+      "attributes": {
+        "level": 3,
+        "oncall": true,
+        "teams": [
+          "red",
+          "blue"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "walt",
+        "document": "app:order",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "perm:order/read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "walt"
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "ada"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "approver",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": [
+                    "cosec:approve",
+                    "cosec:read"
+                  ],
+                  "resource": [
+                    "doc/**",
+                    "scope/**"
+                  ],
+                  "condition": {
+                    "and": [
+                      {
+                        "eq": [
+                          "subject.attributes.level",
+                          "4"
+                        ]
+                      },
+                      {
+                        "eq": [
+                          "subject.attributes.oncall",
+                          "true"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": {
+        "change": "c2",
+        "by": "plato"
+      }
+    },
+    {
+      "shadowed": "c2"
+    },
+    {
+      "publish": {
+        "change": "c2",
+        "by": "plato"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "walt"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "AWAITING_APPROVAL",
+      "READY",
+      "CHECKED",
+      "SHADOWING",
+      "READY",
+      "PUBLISHED",
+      "AWAITING_APPROVAL"
+    ],
+    "errors": {
+      "c1": [
+        "APPROVAL"
+      ],
+      "c2": []
+    },
+    "heads": {
+      "app:order": 0,
+      "platform": 2
+    },
+    "escalations": {
+      "c1": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

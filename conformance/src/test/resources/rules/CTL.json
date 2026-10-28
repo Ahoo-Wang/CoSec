@@ -157,6 +157,38 @@
         "control:ControlReviewFixesTest#a change another tenant may not read is the same 404 at every step, before its state",
         "control:ControlHttpTest#a body kind is refused, and another tenant's change answers like a missing one"
       ]
+    },
+    {
+      "id": "CTL-16",
+      "source": "RFC 0007 §6.4; round-2 review R1 and its review",
+      "statement": "A shadow window's numbers are the sum of one report per instance, each that instance's latest cumulative report: an instance's report replaces only its own. A second report of one instance, a report of another window, a negative count, or no report from an instance seen reporting on the window keeps it open instead of being counted, and one instance's CANDIDATE_ERROR blocks the window by itself.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a window sums one report per instance, and anything else keeps it open",
+        "cosec-cocache:CoCacheShadowTest#each instance's report has its own key, and one under another's key is not counted",
+        "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes"
+      ]
+    },
+    {
+      "id": "CTL-17",
+      "source": "RFC 0007 §7.2, §10.2; round-2 review R6",
+      "statement": "When whether the caller may read a change cannot be decided (a store or snapshot read fails), every step that names it is a 503, for a change that exists and for one that does not; 404 stays for a change that does not exist or that the caller may not read.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a change whose readability cannot be decided is a 503 at every step, whether or not it exists"
+      ]
+    },
+    {
+      "id": "CTL-18",
+      "source": "RFC 0007 §5.6; round-2 review R5",
+      "statement": "A rollback needs cosec:read on its document before it says whether a revision exists or shows its entries.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a rollback needs cosec read before it says which revisions exist"
+      ]
     }
   ]
 }

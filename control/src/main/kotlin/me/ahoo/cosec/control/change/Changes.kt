@@ -20,6 +20,7 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.RevisionRef
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.store.ControlStore
@@ -134,7 +135,7 @@ class Changes(
     ): ChangeRequest {
         val head = revisions.head(key)
         // Keyed on what the change does, not on its kind (review K1).
-        val breakGlass = BreakGlassRules.touches(operations, head?.document)
+        val breakGlass = BreakGlassRules.touches(operations, head?.document, clock.instant())
         authority.authorize(author, key, operations, kind, breakGlass || kind == ProvenanceKind.BREAK_GLASS)
         requireAudit(breakGlass)
         if ((head?.revision ?: 0) != base) {
@@ -186,9 +187,15 @@ class Changes(
         return propose(author, key, head?.revision ?: 0, Operations.diff(key, head?.document, desired, mode), note)
     }
 
-    /** Rollback (RFC 0007 §5.6): a change that makes [key] what it was at [revision], checked like any other. */
+    /**
+     * Rollback (RFC 0007 §5.6): a change that makes [key] what it was at [revision], checked like any other: every
+     * break-glass rule keys on what it does (a rollback that would bring a break-glass binding back never checks clean),
+     * and so do the reserved names, the grant analysis, the approval and the shadow window. The change shows the old
+     * revision's entries, and whether a revision exists is history, so [author] needs `cosec:read` on the document
+     * before either is looked at (round-2 review R5).
+     */
     suspend fun rollback(author: Operator, key: SnapshotKey, revision: Long, note: String): ChangeRequest {
-        authority.isolate(author, key)
+        authority.require(author, key, ControlActions.READ)
         val head = revisions.head(key) ?: throw ChangeRejectedException(NOT_FOUND, "[$key] has no document")
         val body = revisions.revision(key, revision)
             ?: throw ChangeRejectedException(GONE, "[$key] keeps no revision $revision")
@@ -202,23 +209,44 @@ class Changes(
     /**
      * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
      * keeps them from, or that they neither wrote nor may `cosec:read`, is the same 404, before its state is looked at
-     * or expired. A missing change still costs one authorization, so that how long the answer takes says as little as
-     * the answer; what it cannot equalize is the store read of a change that exists.
+     * or expired.
+     *
+     * Whether they may read it is decided once, whatever the change is: on its document when the hard rule lets them
+     * act on it, on their own tenant's document (the platform's, for the platform) otherwise, so that a missing change
+     * costs one authorization too. When that decision is indeterminate, or the change cannot be read, the answer is a
+     * 503, never a 404 (round-2 review R6): "cannot tell" is not "does not exist", and, the same for every change, it
+     * tells nothing of which exist. What the decision cannot equalize is the store read of a change that exists.
      */
     suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest {
-        val stored = store.change(id)?.value
-        val key = stored?.key ?: SnapshotKey.Platform
-        val own = stored != null && stored.author == operator.actor && TenantIsolation.allows(operator, key)
-        val readable = own || authority.holds(operator, key, ControlActions.READ)
-        if (stored == null || !readable) {
-            throw ChangeRejectedException(NOT_FOUND, "no change ${id.value}")
+        val reachable = stored(id)?.takeIf { TenantIsolation.allows(operator, it.key) }
+        if (reachable != null && reachable.author == operator.actor) {
+            return expired(reachable)
         }
-        return expired(stored)
+        val key = reachable?.key ?: if (operator.platform) SnapshotKey.Platform else SnapshotKey.Tenant(operator.tenant.value)
+        val decision = authority.decide(operator, key, ControlActions.READ)
+        if (decision == ControlDecision.PERMIT && reachable != null) {
+            return expired(reachable)
+        }
+        throw if (decision == ControlDecision.INDETERMINATE) {
+            ChangeRejectedException(UNAVAILABLE, "whether change ${id.value} may be read could not be decided")
+        } else {
+            ChangeRejectedException(NOT_FOUND, "no change ${id.value}")
+        }
+    }
+
+    /** The stored change [id]; a store that cannot be read is a 503, never "no change". */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun stored(id: ChangeId): ChangeRequest? = try {
+        store.change(id)?.value
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "change ${id.value} could not be read", e)
     }
 
     /** Whether [change] creates or alters a break-glass binding of its document's current head. */
     private suspend fun touchesBreakGlass(change: ChangeRequest): Boolean =
-        BreakGlassRules.touches(change.operations, revisions.head(change.key)?.document)
+        BreakGlassRules.touches(change.operations, revisions.head(change.key)?.document, clock.instant())
 
     /**
      * Replays a `CONFLICTED` change (or one not staged yet: `DRAFT`, `CHECKED`) on the current head and runs every
@@ -294,15 +322,22 @@ class Changes(
             return settle(change, ChangeState.CONFLICTED, from = setOf(ChangeState.SHADOWING))
         }
         @Suppress("TooGenericExceptionCaught")
-        val summary = try {
-            windows.close(state, clock.instant())
+        val look = try {
+            windows.look(state, clock.instant())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             throw ChangeRejectedException(UNAVAILABLE, "the shadow reports of ${state.window} could not be read", e)
-        } ?: return change
+        }
+        // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
+        val seen = state.copy(reporters = look.reporters)
+        val summary = look.summary ?: return if (seen == state) {
+            change
+        } else {
+            transition(id, setOf(ChangeState.SHADOWING)) { it.copy(shadow = seen) }
+        }
         val closed = transition(id, setOf(ChangeState.SHADOWING)) {
-            it.copy(state = afterWindow(it), shadow = state.copy(closed = summary))
+            it.copy(state = afterWindow(it), shadow = seen.copy(closed = summary))
         }
         withdraw(closed)
         audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
@@ -358,7 +393,8 @@ class Changes(
                 candidate,
                 current.escalations.map { it.subject },
                 operator.memberships,
-                operator.attributes,
+                // Every attribute, not only the strings the grant analysis reads (round-2 review R2).
+                operator.security?.principal?.attributes ?: operator.attributes,
             )
             current.copy(
                 state = ChangeState.READY,
@@ -441,7 +477,7 @@ class Changes(
             }
         }
         val candidate = applied(change, head?.document).first!!
-        requireAudit(BreakGlassRules.touches(change.operations, head?.document))
+        requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
         val settled = when (
             val outcome = revisions.publish(

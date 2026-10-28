@@ -31,6 +31,7 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
@@ -75,6 +76,17 @@ class ChangeAuthority(
     suspend fun require(operator: Operator, key: SnapshotKey, action: Action) {
         isolate(operator, key)
         require(operator, action, ControlResources.document(key))
+    }
+
+    /**
+     * The decision on [action] over [key] for [operator], after the hard rule (a deny when it does not let them act
+     * on [key]); an error is indeterminate. For the steps that answer "cannot tell" apart from "no".
+     */
+    suspend fun decide(operator: Operator, key: SnapshotKey, action: Action): ControlDecision {
+        if (!TenantIsolation.allows(operator, key)) {
+            return ControlDecision.DENY
+        }
+        return decide(operator, action, ControlResources.document(key))
     }
 
     /** Whether [operator] holds [action] on [key]; only a permit is true, and the hard rule comes first. */
@@ -228,21 +240,43 @@ class ChangeAuthority(
         }
         val approval = change.approval ?: return "it needs an approval"
         val memberships = approval.memberships ?: return "the approval does not say what its approver held"
+        if (publisher.security == null) {
+            return "the approver's right to approve cannot be checked again"
+        }
         val principal = AuthenticatedPrincipal(
             approval.approver.principal,
             approval.approver.tenant,
             MembershipSource.Provider,
             approval.attributes,
         )
-        val security = publisher.security?.asPrincipal(principal, memberships)
-            ?: return "the approver's right to approve cannot be checked again"
-        val approver = Operator(approval.approver, memberships, approval.attributes, security)
-        return if (holds(approver, change.key, ControlActions.APPROVE)) {
-            null
-        } else {
-            "the approver no longer holds cosec:approve on the document"
-        }
+        val approver = Operator(approval.approver, memberships, strings(approval.attributes))
+        val permitted = TenantIsolation.allows(approver, change.key) &&
+            decideAs(publisher, principal, memberships, ControlActions.APPROVE, ControlResources.document(change.key)) ==
+            ControlDecision.PERMIT
+        return if (permitted) null else "the approver no longer holds cosec:approve on the document"
     }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun decideAs(
+        publisher: Operator,
+        principal: AuthenticatedPrincipal,
+        memberships: Memberships,
+        action: Action,
+        resource: Resource,
+    ): ControlDecision = try {
+        authorizer.decideAs(publisher, principal, memberships, action, resource)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) {
+            "${action.namespace}:${action.verb} on ${resource.type}/${resource.id} as recorded failed - indeterminate."
+        }
+        ControlDecision.INDETERMINATE
+    }
+
+    /** The string-valued attributes, as the grant analysis and [Operator.attributes] read them. */
+    private fun strings(attributes: Map<String, Any>): Map<String, String> =
+        attributes.mapNotNull { (name, value) -> (value as? String)?.let { name to it } }.toMap()
 
     private suspend fun require(operator: Operator, action: Action, resource: Resource) {
         when (decide(operator, action, resource)) {
