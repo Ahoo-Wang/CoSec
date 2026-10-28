@@ -28,12 +28,19 @@ dependencies {
 
 val projectDirectories = rootProject.subprojects.joinToString(";") { "${it.name}=${it.projectDir.absolutePath}" }
 
+@Suppress("UNCHECKED_CAST")
+val coveredProjects = (rootProject.ext.get("libraryProjects") as Iterable<Project>).joinToString(";") { it.name }
+
 tasks.named<Test>("test") {
     systemProperty("cosec.projects", projectDirectories)
+    systemProperty("cosec.coverage.projects", coveredProjects)
     systemProperty("cosec.repository.root", rootProject.layout.projectDirectory.asFile.absolutePath)
-    // The rules read build scripts, the catalog, settings and CI files: they are inputs.
+    // The rules read build scripts, the catalog, settings and CI files, and run CI's plan: they are inputs.
     inputs.files(rootProject.fileTree(rootProject.layout.projectDirectory) {
-        include("settings.gradle.kts", "**/build.gradle.kts", "gradle/libs.versions.toml", ".github/**/*.yml")
+        include(
+            "settings.gradle.kts", "**/build.gradle.kts", "gradle/libs.versions.toml", ".github/**/*.yml",
+            "scripts/ci/**", "codecov.yml",
+        )
         exclude("**/build/**", "**/node_modules/**")
     })
 }

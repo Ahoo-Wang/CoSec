@@ -25,7 +25,12 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 ```
 
 - `cosec-cocache` and `cosec-spring-boot-starter` tests need Redis on `localhost:6379`
-  (`docker run -d -p 6379:6379 redis:7`). Without it they fail; that is not your change breaking them.
+  (`docker run -d -p 6379:6379 redis:7`), as do the others in `REDIS` in `scripts/ci/plan.py`. Without it they fail;
+  that is not your change breaking them.
+- CI (`.github/workflows/ci.yml`) runs `<project>:check` in one job per group of `settings.gradle.kts`, as
+  `scripts/ci/plan.py` derives them, and each job uploads the JaCoCo XML that `check` writes to Codecov. On CI, tests
+  never come from the build cache. The `CI` job passes only when every other job passed; it is the required check. A
+  project whose tests need Redis goes in the script's `REDIS`.
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
   (`FlatAuthorizationBenchmark`, `FlatEngineBenchmark`, `CompiledEngineBenchmark`) and the whole pipeline's
   (`:e2e` `PipelineBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
@@ -70,8 +75,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   its directory, without the group or a `cosec-` prefix (`:core:check`, `:spring-boot:check`); artifact ids keep the
   prefix (`me.ahoo.cosec:cosec-core`), and the starter's stays `cosec-spring-boot-starter` until RFC 0011 PR-2.
   `test/architecture` holds the structural rules that scan several modules (purity, boundaries, the project list in
-  `ProjectListTest`, the catalog); adding a project means adding it there, in `settings.gradle.kts`, the labeler, the
-  bug report template and `integration-test.yml`. Rule guards in `test/conformance/src/test/resources/rules/` name
+  `ProjectListTest`, the catalog); adding a project means adding it there, in `settings.gradle.kts`, the labeler and
+  the bug report template, and CI picks it up from `settings.gradle.kts`. Rule guards in `test/conformance/src/test/resources/rules/` name
   the project (`core:SnapshotRecompileTest`, `architecture:EnginePurityTest`).
   - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library only:
     `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the SLF4J

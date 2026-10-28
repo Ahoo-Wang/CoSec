@@ -1,0 +1,137 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
+# new project needs no change here. Each job uploads its own coverage to Codecov. The `CI` job is the one required
+# check: it passes only when every other job here passed.
+name: CI
+on:
+  push:
+    branches: [ main, 7.x, 'release/**' ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Derive the test jobs from settings.gradle.kts
+        id: plan
+        run: python3 -I scripts/ci/plan.py --github-output "$GITHUB_OUTPUT"
+
+  test:
+    name: Test ${{ matrix.name }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # One group failing must not hide the others.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Start Redis
+        if: matrix.redis
+        run: |
+          docker run --detach --name redis --publish 6379:6379 redis:7
+          timeout 60 sh -c 'until docker exec redis redis-cli ping; do sleep 1; done'
+
+      - name: Set up Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
+
+      - name: Check ${{ matrix.projects }}
+        env:
+          TASKS: ${{ matrix.tasks }}
+        run: |
+          read -ra tasks <<< "$TASKS"
+          ./gradlew "${tasks[@]}" --continue --stacktrace
+
+      # Without a report the uploader would send nothing, or whatever it found, and Codecov once read that as 0 %:
+      # every covered project with tests must have left one (#1146).
+      - name: Check the coverage reports
+        id: coverage
+        if: matrix.coverage != ''
+        env:
+          REPORTS: ${{ matrix.coverage }}
+        run: |
+          read -ra reports <<< "$REPORTS"
+          for report in "${reports[@]}"; do
+            if [ ! -s "$report" ] || ! grep -q '<counter type="LINE"' "$report"; then
+              echo "::error::no coverage report at $report"
+              exit 1
+            fi
+          done
+          echo "files=$(IFS=,; echo "${reports[*]}")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload coverage to Codecov
+        if: matrix.coverage != ''
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ steps.coverage.outputs.files }}
+          flags: ${{ matrix.name }}
+          name: ${{ matrix.name }}
+          disable_search: true
+          fail_ci_if_error: true
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.name }}
+          path: '*/*/build/reports/tests/'
+          if-no-files-found: ignore
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Lint the workflows
+        run: docker run --rm --volume "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
+
+  ci:
+    name: CI
+    if: always()
+    needs: [ plan, test, actionlint ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # A failed plan skips the tests: skipped and cancelled fail the gate like failed does.
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$RESULTS")
+          if [ -n "$failed" ]; then
+            echo "::error::not every job passed: $(paste -sd ',' <<< "$failed")"
+            exit 1
+          fi
