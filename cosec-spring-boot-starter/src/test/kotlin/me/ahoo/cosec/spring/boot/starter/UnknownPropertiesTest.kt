@@ -41,6 +41,8 @@ class UnknownPropertiesTest {
             "cosec.authorization.snapshot.fail-closed.tenants[0]=acme",
             "cosec.authentication.social.registration.github.client-id=id",
             "cosec.unknown-properties=fail",
+            // Read from the environment by the Kafka audit listener: declared in KafkaAuditProperties for the metadata.
+            "cosec.audit.kafka.delivery=required",
         ).run { context -> context.startupFailure.assert().isNull() }
     }
 
