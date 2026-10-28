@@ -99,8 +99,9 @@ JAVA_OPTS="-XX:AOTMode=create -XX:AOTConfiguration=$CONF -XX:AOTCache=$CACHE" bi
 }
 
 # Prove the production flags can map the cache. AOTMode=on fails instead of falling back; it is used here
-# only. spring.context.exit stops the JVM after the first (bootstrap) context refresh, so this takes a second.
-JAVA_OPTS="-XX:AOTMode=on -XX:AOTCache=$CACHE -Dspring.context.exit=onRefresh $EPHEMERAL_PORTS" bin/cosec-gateway-server >>"$LOG" 2>&1 || {
+# only. spring.context.exit stops the JVM after the context refresh, so this takes a second; the refresh creates
+# the CoCache backend, which TRAIN_OPTS keeps in memory, as there is no Redis here.
+JAVA_OPTS="-XX:AOTMode=on -XX:AOTCache=$CACHE -Dspring.context.exit=onRefresh $TRAIN_OPTS" bin/cosec-gateway-server >>"$LOG" 2>&1 || {
   echo "AOT training: the cache cannot be mapped with the runtime options" >&2
   cat "$LOG" >&2
   exit 1
