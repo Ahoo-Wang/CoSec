@@ -429,6 +429,13 @@ key 代表它之下的每个 key。
   属性设为空即可不使用路由映射，此时每个请求都是 `http` 命名空间中针对其路径的动作。网关不加载路由映射。
 - `cosec.authorization.scope.app-id` 默认不设置。只服务一个应用的宿主请设置它（规则 C4）。
 
+8.0 预览版期间有两项设置变化：
+
+- `cosec.control.http.base-path` 指控制 API 的位置，不含版本：路由位于 `{base-path}/v1` 之下，因此默认值 `/cosec/control` 提供
+  `/cosec/control/v1`。以 `/v1` 结尾的设置去掉这一段即可。
+- CoSec 网关服务只读取 `application.yaml`，不再启动 Spring Cloud 的 bootstrap 上下文。通过 `bootstrap.yaml` 配置它的部署（例如
+  Spring Cloud Config 或 Nacos）改为在 `application.yaml` 中用 `spring.config.import` 引入。
+
 ### 可观测性的变化 {#observability-changes}
 
 - **审计事件**为每个结果写出，包括 `400`、取消的请求、认证失败和错误，由 `kind` 说明是哪一种（`DECIDED`、`BAD_REQUEST`、

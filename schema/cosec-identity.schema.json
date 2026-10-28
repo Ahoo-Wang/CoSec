@@ -21,10 +21,12 @@
           "type": "string"
         },
         "method": {
-          "enum": [
+          "description": "How the principal authenticated: `jwt` and `api-key` are CoSec's own, and an authenticator of another credential names its own.",
+          "examples": [
             "jwt",
             "api-key"
           ],
+          "minLength": 1,
           "type": "string"
         }
       },

@@ -310,7 +310,10 @@ class CoSecPipelineAutoConfigurationTest {
         CoSecControlRoutesAutoConfiguration.apiRootOf(properties).assert().isEqualTo("/admin/cosec/v1")
         CoSecControlRoutesAutoConfiguration.apiRootOf(ControlProperties()).assert().isEqualTo("/cosec/control/v1")
         val mvc = MockMvcBuilders.routerFunctions(
-            CoSecControlRoutesAutoConfiguration.WebMvc().cosecControlRoutes(ControlHttp(mockk<ControlPlane>()), properties)
+            CoSecControlRoutesAutoConfiguration.WebMvc().cosecControlRoutes(
+                ControlHttp(mockk<ControlPlane>()),
+                properties
+            )
         ).build()
         mvc.perform(MockMvcRequestBuilders.get("/admin/cosec/v1/documents/platform"))
             .andExpect(MockMvcResultMatchers.status().isUnauthorized)

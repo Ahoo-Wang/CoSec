@@ -496,6 +496,14 @@ Two defaults need a decision during the upgrade:
   the `http` namespace on its path. A gateway loads no route map.
 - `cosec.authorization.scope.app-id` is unset. Set it on a host that serves one app (rule C4).
 
+Two settings changed during the 8.0 previews:
+
+- `cosec.control.http.base-path` names where the control API is served, without its version: the routes are under
+  `{base-path}/v1`, so the default `/cosec/control` serves `/cosec/control/v1`. A value that ended in `/v1` drops it.
+- The CoSec gateway server reads only `application.yaml`: it no longer starts a Spring Cloud bootstrap context. A
+  deployment that configured it through `bootstrap.yaml`, such as Spring Cloud Config or Nacos, moves that into
+  `application.yaml`, with `spring.config.import`.
+
 ### Observability changes
 
 - **Audit events** are written for every outcome, including `400`, cancelled requests, authentication failures and
