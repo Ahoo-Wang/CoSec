@@ -23,8 +23,8 @@ import java.time.Duration
 class CacheConfigurationTest {
 
     @Test
-    fun toCachePolicyWithDefaultsKeepsCoCacheDefaults() {
-        CacheConfiguration().toCachePolicy(CachePolicy.DEFAULT).toString()
+    fun nullsKeepCoCacheDefaults() {
+        CacheConfiguration(localMaxAge = null, maximumSize = null).toCachePolicy(CachePolicy.DEFAULT).toString()
             .assert().isEqualTo(CachePolicy.DEFAULT.toString())
     }
 
@@ -63,5 +63,14 @@ class CacheConfigurationTest {
         token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(10))
         token.expireAfterAccess.assert().isEqualTo(Duration.ofSeconds(5))
         token.maximumSize.assert().isEqualTo(7L)
+    }
+
+    /** Constructor binding builds the token settings from their own defaults once any key is set. */
+    @Test
+    fun oneKeyKeepsTheOtherDefaults() {
+        val source = MapConfigurationPropertySource(mapOf("cosec.authorization.cache.token.maximum-size" to "500"))
+        val token = Binder(source).bind(CacheProperties.PREFIX, CacheProperties::class.java).get().token
+        token.maximumSize.assert().isEqualTo(500L)
+        token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
     }
 }

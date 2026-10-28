@@ -198,9 +198,9 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `maximum-size` | long | CoCache's | Maximum entries in the local copy. |
+| `maximum-size` | long | `100000` | Maximum entries in the local copy. |
 | `initial-capacity` | int | CoCache's | Initial capacity of the local copy. |
-| `local-max-age` | duration (a bare number is seconds) | CoCache's | How long a local copy lives at most: the bound on staleness when an invalidation message is lost. |
+| `local-max-age` | duration (a bare number is seconds) | `30s` | How long a local copy lives at most: the bound on staleness when an invalidation message is lost. |
 | `expire-after-access` | duration (a bare number is seconds) | none | Drop a local copy not read for this long. |
 
 These size and age the local copy only. A revocation's lifetime in Redis is set when it is written.
