@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.conformance
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -25,6 +27,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
@@ -33,6 +36,7 @@ import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -76,6 +80,7 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.runtime.token.SimpleAccessToken
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
@@ -157,6 +162,9 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
+ *                       // "jwt": the real TokenAuthenticator over the real JwtTokenVerifier, given a token signed from
+ *                       // these claims (valid for an hour from now) in place of the request's Authorization header
+ *                       "jwt": { "jti": "t1", "sub": "alice", "tenantId": "acme", "claims": { "act": { "sub": "agent" } } },
  *                       // "composite": the CompositeAuthenticator, the API key one over "apiKeys" at 2026-11-01
  *                       // ("apiKeysFail": "message" makes the store throw), the token one over "token" if any
  *                       "apiKeys": [{ "key": "k", "id": "billing", "principalId": "svc", "tenantId": "acme", "roles": [...],
@@ -346,9 +354,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug, forwarded(outcome))
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
-        node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "apiKeys", "apiKeysFail")
+        node.only(
+            "result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
+        )
         return when (val result = node.get("result")?.text() ?: "authenticated") {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
+            "jwt" -> TokenAuthenticator(ScenarioJwtVerifier(node.required("jwt")), revocations(revocations))
             "composite" -> CompositeAuthenticator(
                 token = node.get("token")?.let { TokenAuthenticator(ScenarioTokenVerifier(it), revocations(revocations)) }
                     ?: Authenticator { AuthnResult.Anonymous },
@@ -460,6 +471,40 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
 
         override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+    }
+
+    /** Signs the scenario's claims and verifies that token with the real [JwtTokenVerifier], whatever the request sent. */
+    private class ScenarioJwtVerifier(node: JsonNode) : TokenVerifier {
+        private val token: String
+
+        init {
+            node.only("jti", "sub", "tenantId", "claims")
+            val builder = JWT.create()
+                .withJWTId(node.get("jti")?.text() ?: "t1")
+                .withSubject(node.get("sub")?.text() ?: "alice")
+                .withExpiresAt(Instant.now().plusSeconds(3600))
+            node.get("tenantId")?.let { builder.withClaim(Tenant.TENANT_ID_KEY, it.text()) }
+            node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
+                @Suppress("UNCHECKED_CAST")
+                when (val claim = CoSecJson.mapper.treeToValue(value, Any::class.java)) {
+                    null -> builder.withNullClaim(name)
+                    is String -> builder.withClaim(name, claim)
+                    is Map<*, *> -> builder.withClaim(name, claim as Map<String, Any?>)
+                    else -> throw ScenarioFormatException("Claim $name must be a string, an object or null.")
+                }
+            }
+            token = builder.sign(ALGORITHM)
+        }
+
+        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T =
+            VERIFIER.verify(SimpleAccessToken(token))
+
+        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+
+        companion object {
+            private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
+            private val VERIFIER = JwtTokenVerifier(ALGORITHM)
+        }
     }
 
     private fun provider(authentication: JsonNode, node: JsonNode, reached: () -> Unit): MembershipProvider {

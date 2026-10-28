@@ -146,7 +146,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   parameter only with `cosec.pipeline.allow-query-token=true`. API keys from `X-API-Key`
   (`cosec.pipeline.api-key-header`).
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
-  `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512).
+  `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
+  delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4).
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 

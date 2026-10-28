@@ -78,7 +78,7 @@ starter 注册的监听器：
 | 作用域被拒绝 | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
 | 超出租户边界的放行 | `EXPLICIT_DENY` | `BOUNDARY` |
 | 没有任何允许 | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| 凭证被拒绝的请求的任何拒绝 | 同上 | `TOKEN_EXPIRED`、`TOKEN_REVOKED` 或 `TOKEN_INVALID`（API key 也是） |
+| 凭证被拒绝的请求的任何拒绝 | 同上 | `TOKEN_EXPIRED`、`TOKEN_REVOKED` 或 `TOKEN_INVALID`（API key 也是）；带 `act` 声明的令牌为 `DELEGATION_UNSUPPORTED`，响应报告为 `token-invalid` |
 | `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY`（`kind` 为 `BAD_REQUEST`） |
 | `503`，严格的限流规则无法计数 | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | 其他任何 `503`，以及被取消的请求 | `INDETERMINATE` | `INDETERMINATE` |

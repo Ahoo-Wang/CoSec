@@ -119,6 +119,7 @@ object AuditEvents {
         AuthnResult.RejectReason.TOKEN_EXPIRED -> AuditReasonCode.TOKEN_EXPIRED
         AuthnResult.RejectReason.TOKEN_REVOKED -> AuditReasonCode.TOKEN_REVOKED
         AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> AuditReasonCode.TOKEN_INVALID
+        AuthnResult.RejectReason.DELEGATION_UNSUPPORTED -> AuditReasonCode.DELEGATION_UNSUPPORTED
         null -> null
     }
 

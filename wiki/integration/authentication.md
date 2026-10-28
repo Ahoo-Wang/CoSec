@@ -39,6 +39,12 @@ policies decide what anonymous callers may do: a public path still works. If the
 is `401` with the problem type `token-expired`, `token-revoked` or `token-invalid` instead of `unauthorized`
 ([Responses and status codes](./web.md#responses-and-status-codes)).
 
+**Delegation tokens are refused.** A token with an `act` claim (an [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)
+delegation token: `sub` is the party acted for, `act` the one acting) is rejected as `token-invalid`, even when its
+signature and expiry are valid; audit records the reason code `DELEGATION_UNSUPPORTED` (`IDN-4`). Read as its `sub`,
+such a token would give the actor everything the subject may do, and 8.0 does not evaluate delegation. CoSec never
+issues one. A `may_act` claim only says who may act for the subject, so it is ignored.
+
 ## Authenticators
 
 The pipeline reads the request's credentials, then asks one `Authenticator` who the caller is. The starter's is a

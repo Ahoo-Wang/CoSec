@@ -73,6 +73,9 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 
 - **Token:** the issuer and this service must share [`cosec.jwt.secret` and `cosec.jwt.algorithm`](./configuration.md#jwt).
   With `cosec.jwt.enabled=false` every token is rejected.
+- **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
+  audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
+  of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
 - **API key:** the key's SHA-256 is not stored, or the key is disabled or expired
   ([API keys](../integration/authentication.md)). A request that carries an API key is judged by the key alone; its
   token is not read.
