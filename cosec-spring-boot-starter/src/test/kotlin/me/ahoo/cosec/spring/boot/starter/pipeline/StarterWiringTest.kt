@@ -13,8 +13,12 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
@@ -23,12 +27,18 @@ import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
+import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.kafka.KafkaChangeListener
+import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.principal.SimplePrincipal
@@ -38,6 +48,9 @@ import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -61,10 +74,14 @@ import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.ApplicationContext
+import org.springframework.core.annotation.Order
 import org.springframework.kafka.core.KafkaOperations
+import org.springframework.test.util.ReflectionTestUtils
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 /** What the starter registers from the application's own beans: the blacklist, audit sinks, memberships, listeners. */
 class StarterWiringTest {
@@ -95,10 +112,15 @@ class StarterWiringTest {
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
         .withBean(SnapshotDocumentStore::class.java, { documents })
 
-    private fun token(context: ApplicationContext, principal: String): String =
-        context.getBean(TokenConverter::class.java)
-            .toToken(SimpleTenantPrincipal(SimplePrincipal(principal), SimpleTenant(TENANT)))
-            .accessToken
+    private fun token(
+        context: ApplicationContext,
+        principal: String,
+        attributes: Map<String, String> = emptyMap(),
+    ): String = context.getBean(TokenConverter::class.java)
+        .toToken(
+            SimpleTenantPrincipal(SimplePrincipal(principal, emptySet(), emptySet(), attributes), SimpleTenant(TENANT))
+        )
+        .accessToken
 
     private fun status(context: ApplicationContext, token: String): Int {
         val facts = HttpFacts(
@@ -127,6 +149,14 @@ class StarterWiringTest {
     }
 
     @Test
+    fun `a blacklist source that fails makes the request a 503`() {
+        val failing = BlacklistSource { _, _ -> error("The blacklist store is down") }
+        pipelineRunner.withBean(BlacklistSource::class.java, { failing }).run { context ->
+            status(context, token(context, "bob")).assert().isEqualTo(503)
+        }
+    }
+
+    @Test
     fun `without a blacklist source there is no blacklist provider`() {
         pipelineRunner.run { context ->
             context.getBeansOfType(BlacklistAttributeProvider::class.java).assert().isEmpty()
@@ -146,6 +176,44 @@ class StarterWiringTest {
                     Thread.onSpinWait()
                 }
                 events.size.assert().isEqualTo(1)
+            }
+    }
+
+    @Order(2)
+    private class Listening : DecisionListener, AuditEventSink {
+        val events = AtomicInteger()
+        override val name: String = "listening"
+
+        override suspend fun onDecision(event: DecisionEvent) {
+            events.incrementAndGet()
+        }
+
+        override fun publish(event: AuditEvent) {
+            events.incrementAndGet()
+        }
+    }
+
+    @Order(1)
+    private class FirstSink : AuditEventSink {
+        override fun publish(event: AuditEvent) = Unit
+    }
+
+    @Test
+    fun `a sink that is also a listener is registered once, and listeners keep their order`() {
+        val listening = Listening()
+        pipelineRunner.withBean("listening", Listening::class.java, { listening })
+            .withBean("firstSink", FirstSink::class.java, { FirstSink() })
+            .run { context ->
+                context.startupFailure.assert().isNull()
+                val names = context.getBean(DecisionListeners::class.java).stats.map { it.listener }
+                names.filter { it == "listening" || it == "firstSink" }.assert().containsExactly("firstSink", "listening")
+                status(context, token(context, "bob")).assert().isEqualTo(200)
+                val deadline = System.nanoTime() + 5_000_000_000L
+                while (listening.events.get() == 0 && System.nanoTime() < deadline) {
+                    Thread.onSpinWait()
+                }
+                Thread.sleep(100)
+                listening.events.get().assert().isEqualTo(1)
             }
     }
 
@@ -182,6 +250,77 @@ class StarterWiringTest {
         }
     }
 
+    private val cachedPipelineRunner = ApplicationContextRunner()
+        .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
+        .withConfiguration(
+            AutoConfigurations.of(
+                JacksonAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecTokenRevocationCacheAutoConfiguration::class.java,
+                CoSecJwtAutoConfiguration::class.java,
+                CoSecPipelineIntegrationAutoConfiguration::class.java,
+                CoSecMembershipAutoConfiguration::class.java,
+                CoSecSnapshotAutoConfiguration::class.java,
+                CoSecPipelineAutoConfiguration::class.java,
+            ),
+        )
+        .withPropertyValues(
+            "cocache.backend=memory",
+            // The in-memory backend has no maxmemory-policy to read (SNP-3).
+            "cosec.authorization.snapshot.eviction-check=warn",
+            "${JwtProperties.PREFIX}.secret=$SECRET",
+            "cosec.authorization.routes.location=",
+        )
+        .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
+        .withBean(MembershipLoader::class.java, {
+            MembershipLoader { _, principal ->
+                val roles = if (principal.value == "alice") setOf(RoleId("clerk")) else emptySet()
+                Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId("") to roles), emptyList())
+            }
+        })
+
+    /** Publishes [CLERKS] to the snapshot cache and waits until the pipeline decides on it. */
+    private fun published(context: ApplicationContext) {
+        context.getBean(PolicySnapshotCache::class.java).put(
+            SnapshotKey.Platform,
+            SnapshotDocument(
+                SnapshotDocument.DOCUMENT_SCHEMA,
+                1,
+                Instant.parse(PUBLISHED_AT),
+                """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$CLERKS}""".encodeToByteArray(),
+            ),
+        )
+        context.getBean(RedisSnapshotDocumentStore::class.java).notifyChanged(SnapshotKey.Platform)
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (status(context, token(context, "bob")) == 503 && System.nanoTime() < deadline) {
+            Thread.sleep(20)
+        }
+    }
+
+    @Test
+    fun `a provider-marked token is decided with the loader's memberships`() {
+        cachedPipelineRunner.run { context ->
+            context.startupFailure.assert().isNull()
+            published(context)
+            status(context, token(context, "alice", PROVIDER)).assert().isEqualTo(200)
+            status(context, token(context, "bob", PROVIDER)).assert().isEqualTo(403)
+        }
+    }
+
+    @Test
+    fun `memberships that cannot be read make the request a 503`() {
+        val failing = mockk<MembershipCache> {
+            every { async() } returns mockk<AsyncCache<String, Memberships>> {
+                every { get(any()) } returns CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
+            }
+        }
+        cachedPipelineRunner.withBean(MembershipCache::class.java, { failing }).run { context ->
+            context.startupFailure.assert().isNull()
+            published(context)
+            status(context, token(context, "alice", PROVIDER)).assert().isEqualTo(503)
+        }
+    }
+
     private val controlRunner = ApplicationContextRunner()
         .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
         .withConfiguration(
@@ -204,6 +343,7 @@ class StarterWiringTest {
             "cosec.authorization.routes.location=",
         )
         .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
+    private val kafkaControlRunner = controlRunner
         .withBean(KafkaOperations::class.java, { mockk<KafkaOperations<String, String>>(relaxed = true) })
 
     private val ownListener = object : ChangeListener {
@@ -214,7 +354,7 @@ class StarterWiringTest {
 
     @Test
     fun `change listeners add up, and Kafka records changes under its toggle`() {
-        controlRunner.withBean("ownChangeListener", ChangeListener::class.java, { ownListener })
+        kafkaControlRunner.withBean("ownChangeListener", ChangeListener::class.java, { ownListener })
             .withPropertyValues("cosec.control.audit.kafka.delivery=required")
             .run { context ->
                 context.startupFailure.assert().isNull()
@@ -226,14 +366,46 @@ class StarterWiringTest {
                     )
                 context.getBean(KafkaChangeListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
             }
-        controlRunner.withPropertyValues("cosec.control.audit.kafka.enabled=false").run { context ->
+        kafkaControlRunner.withPropertyValues("cosec.control.audit.kafka.enabled=false").run { context ->
             context.startupFailure.assert().isNull()
             context.getBeansOfType(ChangeListener::class.java).keys.assert()
                 .containsExactly("cosecLoggingChangeListener")
         }
     }
 
+    @Test
+    fun `a required Kafka change audit that cannot be created fails startup`() {
+        controlRunner.withPropertyValues("cosec.control.audit.kafka.delivery=required").run { context ->
+            context.startupFailure!!.rootCause().message.assert().contains("delivery=required")
+        }
+        kafkaControlRunner.withPropertyValues(
+            "cosec.control.audit.kafka.delivery=required",
+            "cosec.control.audit.kafka.enabled=false",
+        ).run { context ->
+            context.startupFailure.assert().isNotNull()
+        }
+    }
+
+    @Test
+    fun `change listeners take the required timeout and stop with the context`() {
+        lateinit var listeners: ChangeListeners
+        controlRunner.withPropertyValues("cosec.control.audit.required-timeout=7s").run { context ->
+            context.startupFailure.assert().isNull()
+            listeners = context.getBean(ChangeListeners::class.java)
+            listeners.requiredTimeout.assert().isEqualTo(7.seconds)
+        }
+        (ReflectionTestUtils.getField(listeners, "scope") as CoroutineScope).isActive.assert().isFalse()
+    }
+
+    private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()
+
     private companion object {
+        val PROVIDER = mapOf(MembershipClaims.MARKER_KEY to MembershipClaims.PROVIDER)
+
+        /** clerk, in the default space, may do anything. */
+        const val CLERKS = ""","policies":[{"id":"clerks","statements":[{"effect":"allow","action":"http:*"}]}],""" +
+            """"bindings":[{"id":"clerks","subject":{"role":"clerk"},"app":"*","space":"*","policy":"clerks"}]"""
+
         const val TENANT = "acme"
         const val SECRET = "FyN0Igd80Gas8stTavArGKOYnS9uLwGA_"
         const val PUBLISHED_AT = "2026-10-28T00:00:00Z"
