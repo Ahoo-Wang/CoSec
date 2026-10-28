@@ -1,0 +1,17 @@
+# Rule: PIP-10
+# Mutant: a gateway forwards nothing about a request it has no identity for, so the client's CoSec-Identity is not stripped
+# Tests: :cosec-runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityForwardingTest :conformance:test
+
+diff --git a/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 1b3c4b74..24251176 100644
+--- a/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -396,7 +396,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+     private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
+         val security = outcome.security
+         if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "false") {
+-            return StatusMapping.forwarding(outcome, null)
++            return outcome
+         }
+         return try {
+             StatusMapping.forwarding(outcome, issuer.issue(security))
