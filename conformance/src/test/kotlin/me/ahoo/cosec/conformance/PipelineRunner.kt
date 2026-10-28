@@ -13,15 +13,6 @@
 
 package me.ahoo.cosec.conformance
 
-import java.time.ZoneId
-import tools.jackson.databind.node.ObjectNode
-import me.ahoo.cosec.snapshot.SnapshotOptions
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.snapshot.DocumentSnapshots
-import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
-import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -84,9 +75,16 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
+import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.snapshot.DocumentSnapshots
+import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.SnapshotOptions
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.RevocationReader
 import me.ahoo.cosec.token.SimpleTokenPrincipal
@@ -95,8 +93,10 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.ObjectNode
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
@@ -197,8 +197,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             PipelineComponents(
                 authenticator = authenticator(authentication, node.get("revocations")) { reach("authentication") },
                 snapshots = SuspendingSnapshotSource(
-                    node.get("snapshot")?.takeIf { it.has("failClosed") }?.let { freshness(documents, it, attributes) }
-                        ?: views(snapshot, documents, node.get("snapshot")) { reach("snapshot") }
+                    snapshots(snapshot, documents, node.get("snapshot"), attributes) { reach("snapshot") }
                 ),
                 membershipProvider = provider,
                 idGenerator = StringIdGenerator { REQUEST_ID },
@@ -416,6 +415,16 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
      * The host's own views (`DocumentSnapshotViews` over a `SnapshotSource`) of the scenario's documents, loaded at
      * [NOW], read `lagSeconds` later, with the source failing closed for the `failClosed` tenants (RFC 0003 §4.5).
      */
+    /** A real fail-closed source when the scenario configures `failClosed`, the scenario's views otherwise. */
+    private fun snapshots(
+        snapshot: CompiledSnapshot,
+        documents: JsonNode,
+        node: JsonNode?,
+        attributes: AttributeProviders,
+        reach: () -> Unit,
+    ): SnapshotViews = node?.takeIf { it.has("failClosed") }?.let { freshness(documents, it, attributes) }
+        ?: views(snapshot, documents, node, reach)
+
     private fun freshness(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
         node.only("failClosed", "lagSeconds")
         val failClosed = node.required("failClosed")
@@ -424,12 +433,28 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         fun put(key: SnapshotKey, body: JsonNode) {
             val stored = (body.deepCopy() as ObjectNode)
                 .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", 1).put("publishedAt", NOW)
-            store.put(key, SnapshotDocument(SnapshotDocument.DOCUMENT_SCHEMA, 1, Instant.parse(NOW), stored.toString().encodeToByteArray()))
+            store.put(
+                key,
+                SnapshotDocument(
+                    SnapshotDocument.DOCUMENT_SCHEMA,
+                    1,
+                    Instant.parse(NOW),
+                    stored.toString().encodeToByteArray()
+                )
+            )
         }
         val keys = ArrayList<SnapshotKey>()
         documents.get("platform")?.let { put(SnapshotKey.Platform, it) }
-        documents.get("tenants")?.fields().orEmpty().forEach { (id, body) -> SnapshotKey.Tenant(id).also { keys += it; put(it, body) } }
-        documents.get("apps")?.fields().orEmpty().forEach { (id, body) -> SnapshotKey.App(id).also { keys += it; put(it, body) } }
+        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
+            val key = SnapshotKey.Tenant(id)
+            keys += key
+            put(key, body)
+        }
+        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
+            val key = SnapshotKey.App(id)
+            keys += key
+            put(key, body)
+        }
         val clock = MovingClock(Instant.parse(NOW))
         val options = SnapshotOptions(
             revalidateInterval = java.time.Duration.ZERO,

@@ -243,7 +243,10 @@ class DocumentSnapshotViewsTest {
     /** RFC 0003 §4.5 (`SNP-5`): a fail-closed tenant whose documents lag more than its bound is not decided on. */
     @Test
     fun `a fail-closed tenant past its lag bound is unresolved, others decide`() {
-        publish(SnapshotKey.Platform, allowRead + ""","bindings":[{"id":"read","subject":"*","app":"*","space":"*","policy":"read"}]""")
+        publish(
+            SnapshotKey.Platform,
+            allowRead + ""","bindings":[{"id":"read","subject":"*","app":"*","space":"*","policy":"read"}]"""
+        )
         val clock = MovingClock(Instant.parse("2026-10-26T00:00:00Z"))
         val options = SnapshotOptions(
             revalidateInterval = Duration.ZERO,
