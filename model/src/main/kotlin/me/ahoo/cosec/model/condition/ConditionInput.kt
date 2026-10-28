@@ -16,9 +16,10 @@ package me.ahoo.cosec.model.condition
 /**
  * What a condition reads (RFC 0005 §3.3). The host builds one per request from `AuthzRequest`.
  *
- * Every read is a field read or a hash lookup. Implementations must not throw and should not allocate: evaluation
- * is total only if its input is. An attribute that is absent from the request reads as `null` (or [NO_TIME]); it is
- * not an error (§3.4).
+ * Every read is a field read or a hash lookup, and should not allocate. An attribute that is absent from the request
+ * reads as `null` (or [NO_TIME]); it is not an error (§3.4). A read throws only when the request holds the attribute
+ * but no single value of it (a header sent twice with different values): the statement reading it then errs, which
+ * makes a DENY indeterminate and an ALLOW no match.
  *
  * Each method is called only with attributes of its type. [AttributeType.LABELS] attributes are never read: conditions
  * derive them from the host attribute they belong to.

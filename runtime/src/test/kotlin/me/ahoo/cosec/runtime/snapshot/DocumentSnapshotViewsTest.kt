@@ -39,11 +39,15 @@ import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotOptions
+import me.ahoo.cosec.snapshot.SnapshotStaleException
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 /** The 8.0 source behind the pipeline's views: real store, real compiler, real engine. */
 class DocumentSnapshotViewsTest {
@@ -224,6 +228,51 @@ class DocumentSnapshotViewsTest {
             publish(SnapshotKey.Platform, ""","attributes":[{"path":"ext.geo.inFence","type":"bool"}]""")
             source.reload(SnapshotKey.Platform).join()
             views.load(key).join().tenant.assert().isNotNull()
+        }
+    }
+
+    /** A clock the test moves: how long ago the source confirmed its documents. */
+    private class MovingClock(var now: Instant) : Clock() {
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId): Clock = this
+
+        override fun instant(): Instant = now
+    }
+
+    /** RFC 0003 §4.5 (`SNP-5`): a fail-closed tenant whose documents lag more than its bound is not decided on. */
+    @Test
+    fun `a fail-closed tenant past its lag bound is unresolved, others decide`() {
+        publish(
+            SnapshotKey.Platform,
+            allowRead + ""","bindings":[{"id":"read","subject":"*","app":"*","space":"*","policy":"read"}]"""
+        )
+        val clock = MovingClock(Instant.parse("2026-10-26T00:00:00Z"))
+        val options = SnapshotOptions(
+            revalidateInterval = Duration.ZERO,
+            failClosedTenants = setOf("acme"),
+            failClosedMaxLag = Duration.ofMinutes(5),
+        )
+        DocumentSnapshots.source(store, PolicyDocumentCompiler(), options, clock).use { source ->
+            val views = DocumentSnapshotViews(source)
+            val acme = ViewKey.of(scope("acme"), blocked = false)
+            val beta = ViewKey.of(scope("beta"), blocked = false)
+            views.load(acme).join()
+            views.load(beta).join()
+
+            clock.now = clock.now.plus(Duration.ofMinutes(5))
+            views.peek(acme)!!.unresolved.assert().isEmpty()
+            decide(views.peek(acme)!!, scope("acme")).assert().isInstanceOf(Decision.Permit::class.java)
+
+            clock.now = clock.now.plusSeconds(1)
+            val stale = views.peek(acme)!!
+            val cause = stale.unresolved.single() as Cause.SourceUnavailable
+            cause.document.assert().isEqualTo(DocumentKind.TENANT)
+            (cause.error as SnapshotStaleException).tenantId.assert().isEqualTo("acme")
+            decide(stale, scope("acme")).assert().isInstanceOf(Decision.Indeterminate::class.java)
+            // Another tenant, as stale, is not configured to fail closed.
+            views.peek(beta)!!.unresolved.assert().isEmpty()
+            decide(views.peek(beta)!!, scope("beta")).assert().isInstanceOf(Decision.Permit::class.java)
         }
     }
 

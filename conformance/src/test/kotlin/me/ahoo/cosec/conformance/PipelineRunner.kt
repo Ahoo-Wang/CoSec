@@ -75,9 +75,16 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
+import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.snapshot.DocumentSnapshots
+import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.SnapshotOptions
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.RevocationReader
 import me.ahoo.cosec.token.SimpleTokenPrincipal
@@ -86,8 +93,10 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.ObjectNode
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
@@ -100,13 +109,14 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * compiled as the `engine` runner compiles them and test doubles for every SPI the pipeline calls. The adapters
  * (RFC 0006 PR-7) and listeners (PR-6) are not part of it yet.
  *
- * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and no host facts, so the
- * statements of a pipeline scenario match on action and resource only, never on conditions.
+ * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and the request's host
+ * attributes (`http.*` from the headers, `request.attributes.*` from `requestAttributes`), through the pipeline's own
+ * reading of [HttpFacts], never the runner's.
  *
  * ```jsonc
  * "documents":          { "platform": {...}, "apps": {...}, "tenants": {...}, "unavailable": ["tenant", ...] },
  * "http":               { "method": "GET", "path": "/orders", "query": "a=b", "headers": { "<name>": "v" | ["v", ...] },
- *                         "hostApp": null },
+ *                         "hostApp": null, "requestAttributes": { "<name>": "v" } },
  * "authentication":     { "result": "token" | "anonymous" | "authenticated" | "rejected" | "unavailable" | "throws" | "hangs",
  *                         "reason": "TOKEN_EXPIRED", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                         "membership": "provider" },
@@ -122,7 +132,10 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
  *                       | { "fails": "message" },                       // the check reports an error
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
- * "snapshot":           { "fails": "message" } | { "hangs": true },      // otherwise every document is installed
+ * "snapshot":           { "fails": "message" } | { "hangs": true }       // otherwise every document is installed
+ *                       | { "failClosed": { "tenants": ["acme"], "maxLagSeconds": 300 }, "lagSeconds": 301 },
+ *                       // the host's DocumentSnapshotViews over a SnapshotSource that loaded the documents
+ *                       // lagSeconds before the request
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
  *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000 },
  * // External attributes (RFC 0006 §5.4): providers that declare them, which the documents are compiled against
@@ -185,7 +198,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             PipelineComponents(
                 authenticator = authenticator(authentication, node.get("revocations")) { reach("authentication") },
                 snapshots = SuspendingSnapshotSource(
-                    views(snapshot, documents, node.get("snapshot")) { reach("snapshot") }
+                    snapshots(snapshot, documents, node.get("snapshot"), attributes) { reach("snapshot") }
                 ),
                 membershipProvider = provider,
                 idGenerator = StringIdGenerator { REQUEST_ID },
@@ -390,6 +403,72 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     /** Every document installed, unless the scenario's snapshot source fails or hangs on load. */
+    /** A clock the scenario moves: how long ago the source confirmed its documents. */
+    private class MovingClock(var now: Instant) : Clock() {
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId): Clock = this
+
+        override fun instant(): Instant = now
+    }
+
+    /**
+     * The host's own views (`DocumentSnapshotViews` over a `SnapshotSource`) of the scenario's documents, loaded at
+     * [NOW], read `lagSeconds` later, with the source failing closed for the `failClosed` tenants (RFC 0003 §4.5).
+     */
+    /** A real fail-closed source when the scenario configures `failClosed`, the scenario's views otherwise. */
+    private fun snapshots(
+        snapshot: CompiledSnapshot,
+        documents: JsonNode,
+        node: JsonNode?,
+        attributes: AttributeProviders,
+        reach: () -> Unit,
+    ): SnapshotViews = node?.takeIf { it.has("failClosed") }?.let { freshness(documents, it, attributes) }
+        ?: views(snapshot, documents, node, reach)
+
+    private fun freshness(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
+        node.only("failClosed", "lagSeconds")
+        val failClosed = node.required("failClosed")
+        failClosed.only("tenants", "maxLagSeconds")
+        val store = InMemorySnapshotDocumentStore()
+        fun put(key: SnapshotKey, body: JsonNode) {
+            val stored = (body.deepCopy() as ObjectNode)
+                .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", 1).put("publishedAt", NOW)
+            store.put(
+                key,
+                SnapshotDocument(
+                    SnapshotDocument.DOCUMENT_SCHEMA,
+                    1,
+                    Instant.parse(NOW),
+                    stored.toString().encodeToByteArray()
+                )
+            )
+        }
+        val keys = ArrayList<SnapshotKey>()
+        documents.get("platform")?.let { put(SnapshotKey.Platform, it) }
+        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
+            val key = SnapshotKey.Tenant(id)
+            keys += key
+            put(key, body)
+        }
+        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
+            val key = SnapshotKey.App(id)
+            keys += key
+            put(key, body)
+        }
+        val clock = MovingClock(Instant.parse(NOW))
+        val options = SnapshotOptions(
+            revalidateInterval = java.time.Duration.ZERO,
+            failClosedTenants = failClosed.required("tenants").strings().toSet(),
+            failClosedMaxLag = java.time.Duration.ofSeconds(failClosed.required("maxLagSeconds").asLong()),
+        )
+        val compiler = PlatformCompiler(attributes.catalog)
+        val source = DocumentSnapshots.source(store, compiler, options, clock).also(compiler::bind)
+        source.loadAll(keys).join()
+        clock.now = clock.now.plusSeconds(node.get("lagSeconds")?.asLong() ?: 0)
+        return DocumentSnapshotViews(source, platformRequired = true)
+    }
+
     private fun views(
         snapshot: CompiledSnapshot,
         documents: JsonNode,
@@ -535,7 +614,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun facts(node: JsonNode): HttpFacts {
-        node.only("method", "path", "query", "headers", "hostApp")
+        node.only("method", "path", "query", "headers", "hostApp", "requestAttributes")
         val headers = node.get("headers")?.fields().orEmpty().mapValues { (_, value) ->
             if (value.isArray) value.strings() else listOf(value.text())
         }
@@ -547,6 +626,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             cookies = Cookies.EMPTY,
             remoteAddress = REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
+            requestAttributes = node.get(
+                "requestAttributes"
+            )?.fields().orEmpty().mapValues { (_, value) -> value.text() },
         )
     }
 
