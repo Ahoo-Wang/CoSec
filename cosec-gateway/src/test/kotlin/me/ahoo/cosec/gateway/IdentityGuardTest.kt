@@ -31,12 +31,17 @@ import java.time.Duration
 class IdentityGuardTest {
     @Test
     fun `the strip filter removes a client's identity before anything reads the request`() {
-        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders").header(IdentityCodec.HEADER, "forged"))
+        val exchange = MockServerWebExchange.from(
+            MockServerHttpRequest.get("/orders").header(IdentityCodec.HEADER, "forged")
+        )
         var seen: HttpHeaders? = null
-        IdentityStripFilter().filter(exchange, GatewayFilterChain { next ->
-            seen = next.request.headers
-            Mono.empty()
-        }).block(Duration.ofSeconds(5))
+        IdentityStripFilter().filter(
+            exchange,
+            GatewayFilterChain { next ->
+                seen = next.request.headers
+                Mono.empty()
+            }
+        ).block(Duration.ofSeconds(5))
         seen!!.containsHeader(IdentityCodec.HEADER).assert().isFalse()
         IdentityStripFilter().order.assert().isLessThan(PipelineGatewayFilter.AUTHORIZATION_GATEWAY_FILTER_ORDER)
     }

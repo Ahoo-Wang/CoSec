@@ -39,7 +39,9 @@ import org.springframework.util.ClassUtils
 class CoSecIdentityGuardAutoConfiguration {
     @Bean
     fun cosecPipelineModeCheck(properties: PipelineProperties): InitializingBean = InitializingBean {
-        check(properties.mode != PipelineProperties.Mode.GATEWAY || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)) {
+        check(
+            properties.mode != PipelineProperties.Mode.GATEWAY || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)
+        ) {
             "${PipelineProperties.MODE_KEY}=gateway on a Spring Cloud Gateway host: a gateway decides with policies " +
                 "(enforce), and strips and forwards the identity the services behind it read in gateway mode."
         }

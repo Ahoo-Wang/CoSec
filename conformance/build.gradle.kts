@@ -23,6 +23,7 @@ dependencies {
     testImplementation(project(":cosec-runtime"))
     // PIP-10 through a gateway host's own filters: the identity strip, the pipeline's filter and the last hop.
     testImplementation(project(":cosec-gateway"))
+    testImplementation(project(":cosec-webflux"))
     testImplementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
     testImplementation("org.springframework:spring-test")
 }

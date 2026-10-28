@@ -32,7 +32,13 @@ class IdentityStripFilter : GlobalFilter, Ordered {
         if (!exchange.request.headers.containsHeader(IdentityCodec.HEADER)) {
             return chain.filter(exchange)
         }
-        val stripped = exchange.mutate().request { it.headers { headers -> headers.remove(IdentityCodec.HEADER) } }.build()
+        val stripped = exchange.mutate().request {
+            it.headers { headers ->
+                headers.remove(
+                    IdentityCodec.HEADER
+                )
+            }
+        }.build()
         return chain.filter(stripped)
     }
 

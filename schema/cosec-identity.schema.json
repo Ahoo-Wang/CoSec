@@ -8,7 +8,7 @@
       "additionalProperties": false,
       "properties": {
         "exp": {
-          "description": "When the credential expires; absent when never.",
+          "description": "When the credential expires.",
           "minimum": 0,
           "type": "integer"
         },
@@ -30,7 +30,8 @@
       },
       "required": [
         "method",
-        "jti"
+        "jti",
+        "exp"
       ],
       "type": "object"
     },

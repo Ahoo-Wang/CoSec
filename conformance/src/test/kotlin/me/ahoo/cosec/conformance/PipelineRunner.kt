@@ -226,16 +226,22 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 identity = node.get("identity")?.let(::issuer),
             )
         )
-        val facts = facts(node.get("http") ?: EMPTY)
         try {
-            if (cancelAt != null) {
-                return cancelled(pipeline, facts, reached)
-            }
-            node.get("gateway")?.let { return throughGateway(pipeline, node.get("http") ?: EMPTY, it) }
-            return answered(runBlocking { pipeline.evaluate(facts) })
+            return answer(node, pipeline, cancelAt, reached)
         } finally {
             listeners.cancel()
         }
+    }
+
+    /** The scenario's request through [pipeline]: cancelled at [cancelAt], through a gateway's filters, or plainly. */
+    private fun answer(node: JsonNode, pipeline: Pipeline, cancelAt: String?, reached: CompletableDeferred<Unit>): Outcome {
+        val http = node.get("http") ?: EMPTY
+        val facts = facts(http)
+        if (cancelAt != null) {
+            return cancelled(pipeline, facts, reached)
+        }
+        node.get("gateway")?.let { return throughGateway(pipeline, http, it) }
+        return answered(runBlocking { pipeline.evaluate(facts) })
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -294,7 +300,10 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
         val exchange = MockServerWebExchange.from(request)
         val route = Route.async().id("scenario").uri(URI.create("http://backend")).predicate { true }
-        gateway.get("route")?.let { it.only("identity"); route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.required("identity").booleanValue()) }
+        gateway.get("route")?.let {
+            it.only("identity");
+            route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.required("identity").booleanValue())
+        }
         exchange.attributes[GATEWAY_ROUTE_ATTR] = route.build()
         var sent: HttpHeaders? = null
         IdentityStripFilter().filter(exchange) { stripped ->
