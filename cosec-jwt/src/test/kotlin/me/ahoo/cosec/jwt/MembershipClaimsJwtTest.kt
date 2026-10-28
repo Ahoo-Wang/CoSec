@@ -111,7 +111,9 @@ class MembershipClaimsJwtTest {
         MembershipClaims.tenantOf(parsed).assert().isEqualTo(TenantId.DEFAULT)
         MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken(tenantId = ""))))
             .assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))).assert().isEqualTo(tenant)
+        MembershipClaims.tenantOf(
+            Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))
+        ).assert().isEqualTo(tenant)
         parsed.innermost().assert().isEqualTo(SimplePrincipal("alice", policies, roles, attributes))
     }
 
