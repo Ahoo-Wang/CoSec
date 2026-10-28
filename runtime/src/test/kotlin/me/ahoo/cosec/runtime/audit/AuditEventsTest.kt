@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditReasonCode
+import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
@@ -41,6 +42,7 @@ import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.event.TraceContext
+import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.slf4j.MDC
@@ -62,18 +64,33 @@ class AuditEventsTest {
         decision: Decision,
         authenticator: Authenticator = authenticator(authenticated()),
         path: String = "/orders",
+        requestAttributes: Map<String, String> = emptyMap(),
     ): AuditEvent {
         val capture = Capture()
         val listeners = DecisionListeners(listOf(capture))
         try {
             runBlocking(TraceContext("trace-1", "span-1", true)) {
                 PipelineFixtures.pipeline(authenticator, StubEngine(decision)) { it.copy(listeners = listeners) }
-                    .evaluate(facts(path))
+                    .evaluate(facts(path).withRequestAttributes(requestAttributes))
             }
         } finally {
             listeners.cancel()
         }
         return AuditEvents.from(capture.event!!)
+    }
+
+    private fun HttpFacts.withRequestAttributes(attributes: Map<String, String>) =
+        HttpFacts(method, rawPath, rawQuery, headers, cookies, remoteAddress, host, attributes)
+
+    /** The gateway's route id, a request attribute the engine reads too, is the audit record's route. */
+    @Test
+    fun theRouteIdComesFromTheRequestAttributes() {
+        val permit = Decision.Permit(
+            StatementRef.Policy(PolicyId("orders"), 0, "read", BindingRef.Attached(PolicyId("orders")))
+        )
+        audit(permit, requestAttributes = mapOf(AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to "orders-route"))
+            .request.routeId.assert().isEqualTo("orders-route")
+        audit(permit).request.routeId.assert().isNull()
     }
 
     @Test
