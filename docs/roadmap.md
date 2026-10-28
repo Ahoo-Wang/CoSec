@@ -3,7 +3,7 @@
 > 目标架构见 [RFC 0001](rfc/0001-target-architecture.md)，各阶段的细化设计见各自的 RFC。本文只记录**进度**：每个阶段走到了哪一步、
 > 还差什么、在等谁的决定。决策和理由以 RFC 为准；本文与 RFC 不一致时，以 RFC 为准并修正本文。
 >
-> 更新于 2026-10-28，基线 `main` @ `04c9f65e`（#1114，S2–S4）。
+> 更新于 2026-10-28，基线 `main` @ `7bc9fa88`（#1123）。
 >
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
@@ -191,6 +191,23 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 7. 进行中
 
+**2026-10-28 S1b 之后的修复批**（S5 写文档时对照代码发现，加一次只读排查；全部在 S5 之前修，8.0 不留"已知限制"）：
+
+| PR | 内容 | 状态 |
+|---|---|---|
+| #1118 | `fix(runtime)`：Pipeline 把宿主属性（`http.*`、`request.attributes.*`）交给引擎，此前恒为缺失，基于它们的 DENY 不生效（放行方向）；模拟器同样读属性；重复且不同值的请求头判为不确定；主机名小写；策略不得读取凭据类请求头（编译时拒绝）；`PIP-9` 与两个变异体 | ✅ 已合入 |
+| #1119 | `fix(runtime)`：执行 `cosec.authorization.snapshot.fail-closed.*`（唯一调用点随 #1114 删除，放行方向）；`SNP-5` | ✅ 已合入 |
+| #1123 | `fix(runtime)`：`trace-level` 进入决策事件；刷新与 Pipeline 共用吊销的时钟容差 | ✅ 已合入 |
+| #1120 | `fix(starter)`：装配黑名单（未注册即 DENY 不生效，放行方向）、成员关系缓存、Kafka 变更监听器（`required` 而无 Kafka 时启动失败）、可叠加的变更监听器、`AuditEventSink` | 审查通过，自动合并 |
+| #1121 | `feat(control)!`：`ControlStore.documents()`/`openChanges()`/`releaseLease`，修订保留与影子窗口关闭的调度器 | 审查通过，排在 #1120 后 |
+| #1122 | `fix(control)`：限流规则可经变更修改（此前 `:apply` 静默丢弃）、`setBoundary` 经 HTTP、候选按宿主的属性目录校验、`nomatch` 规则文本统一、规则顺序进入 `diff`；`OBL-2` 锁定计数器按文档隔离 | 审查通过，自动合并 |
+| #1124 | `feat!`：网关把验证过的身份经 `CoSec-Identity` 传给下游，下游 `cosec.pipeline.mode=gateway`（取代 7.x 不验签的注入模式）；`PIP-10` | 修审查发现（高危：网关主机在 `mode=gateway`、mode 拼写错误或 `cosec.enabled=false` 时丢失伪造头清理） |
+| #1125 | `refactor!`：删除不验签的 token 解析路径（`PIP-11` 构建守护）、L3、`cosec.authentication.login.enabled` | 修审查发现（陈旧配置键；新增未知 `cosec.*` 属性启动检查） |
+| 待开 | `fix`：快照就绪探针（RFC 0003 X6）与监听器排空（RFC 0006 X8） | 实现中 |
+| 待开 | `feat`：8.0 策略测试工具 `cosec-testkit`（L15） | 排队 |
+
+之后 S5 按最终状态写文档。
+
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
 - **百万例 `property-stress.yml` 在 `main` 上全部通过**：`model`、`engine`、`runtime`、`control`（[40628433863](https://github.com/Ahoo-Wang/CoSec/actions/runs/40628433863)），`cosec-core`（#1111 之后重跑，[40635399876](https://github.com/Ahoo-Wang/CoSec/actions/runs/40635399876)）。S1b 的证据在它自己的最终 head 上再跑一次。
@@ -206,7 +223,11 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 8. 等待维护者的决定
 
-无。离线回放用的真实数据导出不再需要（RFC 0008）。RFC 0008 §6 的待决问题按推荐执行，维护者可以否决。
+| 事项 | 背景 | 协调者的建议 |
+|---|---|---|
+| #1116 Renovate：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4 | 运行时库的升级按常设规则等维护者 | patch 级，CI 通过即合入 |
+| #1115 Renovate：`ognl` 3.4.x 补丁升级 | #1114 后 `ognl` 只剩 `migrate` 的 `compileOnly`（读取 7.x 数据用） | 合入；L8 余项（无匹配器的读取器）完成后整个删除 |
+| 何时发 8.0 RC / GA | RFC 0001 §6：由维护者决定 | 等 RC 前提全部满足后再议 |
 
 ## 9. 维护者决定（2026-10-26 起）
 
@@ -235,6 +256,11 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **影子报告索引**先用"控制面持久化见过的实例"的方案，不为只增 SET 改动 S1b；信任模型写进 `wiki/operations/storage.md` | 2026-10-27 | #1110、RFC 0007 §6.4 |
 | **S1b 合入授权**：证据（#1104 CI 全绿、`mutationCheck` 全部杀死、S1b head 上的百万例 `property-stress.yml`、`jmh-v7-v8.yml` 每个场景 v8 ≥ v7）齐备即由协调者合入；任何一项不满足就停下报告 | 2026-10-27 | #1104 |
 | **S2–S4 合并为一个删除 PR**，按提交分组审查；S5 独立，在它之后 | 2026-10-27 | [RFC 0008 §4.4.1](rfc/0008-conformance-and-direct-build.md) |
+| **8.0 发布前 SPI 与公共 API 不考虑兼容**，不需要维护者确认；以完美目标架构为先：高内聚、低耦合、代码清洁、可扩展、高性能、安全、易用。仍需确认：运行时依赖版本与发版 | 2026-10-28 | 仅记在本文 |
+| **默认按协调者推荐推进并合入**；需要维护者的事项登记在 §8 | 2026-10-28 | 仅记在本文 |
+| **网关身份传递取代 7.x 注入模式**：下游在可信内网，不复制密钥；`CoSec-Identity` v1 只含 `v`、`tenant`、`sub`、`scope`、当前作用域的生效 `roles`、`auth{method,jti,exp}`、`iat`、`rid` 与白名单 `claims`；匿名不发；网关始终清理入站的同名头；`forwardAuthorization` 默认 false | 2026-10-28 | #1124 |
+| **`cosec-testkit` 作为独立发布模块**（部分推翻 RFC 0008 Q11：核心不依赖 JUnit），第一版只做引擎级场景 | 2026-10-28 | [RFC 0008 §6 Q11](rfc/0008-conformance-and-direct-build.md) |
+| **租户文档的限流变更不需要额外审批**：计数器按文档隔离（`OBL-2`），平台规则叠加生效，租户只影响自己 | 2026-10-28 | #1122 |
 
 ## 10. 尚未派发的下一步
 
