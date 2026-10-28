@@ -30,7 +30,7 @@ import com.tngtech.archunit.lang.ConditionEvents
 import com.tngtech.archunit.lang.SimpleConditionEvent
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.codeUnits
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
-import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.snapshot.SnapshotSource
@@ -123,7 +123,7 @@ class RuntimeBoundaryTest {
         val HOST_PACKAGES = arrayOf("org.springframework..", "jakarta.servlet..", "kotlinx.coroutines.reactor..")
 
         val dataPlaneSpi: DescribedPredicate<JavaClass> = belongToAnyOf(
-            Engine::class.java,
+            FlatEngine::class.java,
             SnapshotSource::class.java,
             SnapshotDocumentStore::class.java,
             SnapshotChangeListener::class.java,

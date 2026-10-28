@@ -66,7 +66,7 @@ object SnapshotDocumentCodec : Codec<SnapshotDocument> {
 
         fun header(): Header {
             val schema = schema ?: malformed("[$SCHEMA] is missing")
-            if (schema !in SnapshotDocument.SCHEMAS) {
+            if (schema != SnapshotDocument.DOCUMENT_SCHEMA) {
                 malformed("schema $schema is not supported")
             }
             val revision = revision ?: malformed("[$REVISION] is missing")

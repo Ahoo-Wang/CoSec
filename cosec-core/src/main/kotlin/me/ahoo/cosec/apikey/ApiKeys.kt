@@ -13,18 +13,12 @@
 
 package me.ahoo.cosec.apikey
 
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.TokenVerificationException
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.time.Clock
 import java.time.Instant
 import java.util.Base64
 
@@ -104,43 +98,5 @@ object ApiKeys {
     fun generate(): String {
         val bytes = ByteArray(KEY_BYTES).also(random::nextBytes)
         return PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-    }
-}
-
-/**
- * A key that is unknown, disabled or expired. Like an invalid token, the request continues as anonymous and a
- * denial answers `401 Token Invalid`.
- */
-class ApiKeyInvalidException(message: String) : TokenVerificationException(message)
-
-/**
- * Resolves the principal from an API key in [header] when the request carries one, and otherwise defers to
- * [delegate] (usually the JWT parser). A request that carries a key is judged by the key alone.
- */
-class ApiKeySecurityContextParser(
-    private val delegate: SecurityContextParser,
-    private val store: ApiKeyStore,
-    private val header: String = DEFAULT_HEADER,
-    private val clock: Clock = Clock.systemUTC()
-) : SecurityContextParser {
-    companion object {
-        const val DEFAULT_HEADER = "X-API-Key"
-    }
-
-    override fun parse(request: Request): SecurityContext {
-        val key = request.getHeader(header)
-        if (key.isBlank()) {
-            return delegate.parse(request)
-        }
-        val apiKey = store.findByHash(ApiKeys.hash(key)) ?: throw ApiKeyInvalidException("Unknown API key.")
-        if (!apiKey.enabled) {
-            throw ApiKeyInvalidException("API key [${apiKey.id}] is disabled.")
-        }
-        apiKey.expiresAt?.let { expiresAt ->
-            if (!clock.instant().isBefore(expiresAt)) {
-                throw ApiKeyInvalidException("API key [${apiKey.id}] expired at [$expiresAt].")
-            }
-        }
-        return SimpleSecurityContext(apiKey.toPrincipal())
     }
 }

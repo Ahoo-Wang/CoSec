@@ -42,9 +42,8 @@ import java.util.function.LongSupplier
 /**
  * Holds the compiled policy snapshot (RFC 0003 §4.2–§4.5, RFC 0004 §7.4): one shared document, which every request needs
  * and which is never evicted, and the documents of each [SnapshotFamily], each family holding up to its own bound and
- * evicting least recently used. RFC 0003's source shares [SnapshotKey.Policies] and has one family of
- * [SnapshotKey.App] documents; the 8.0 source ([documents]) shares [SnapshotKey.Platform] and has the app and tenant
- * families. Every guarantee below holds for every key of every family alike.
+ * evicting least recently used. The 8.0 source ([DocumentSnapshots.source]) shares [SnapshotKey.Platform] and has the
+ * app and tenant families. Every guarantee below holds for every key of every family alike.
  *
  * - [peek] is the hot path: a synchronous in-memory lookup with no future and no I/O, safe on an event loop.
  * - [load] reads and compiles what is missing. The store is read on the caller's thread (stores never block), every
@@ -96,39 +95,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     scheduler: ScheduledExecutorService?,
     private val ticker: LongSupplier,
 ) : AutoCloseable {
-
-    /** RFC 0003's source: the policies document, and app documents. */
-    constructor(
-        store: SnapshotDocumentStore,
-        policiesCompiler: SnapshotCompiler<P>,
-        appCompiler: SnapshotCompiler<A>,
-        options: SnapshotOptions = SnapshotOptions(),
-        clock: Clock = Clock.systemUTC(),
-        metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
-    ) : this(store, policiesCompiler, appCompiler, options, clock, metrics, null, null, System::nanoTime)
-
-    internal constructor(
-        store: SnapshotDocumentStore,
-        policiesCompiler: SnapshotCompiler<P>,
-        appCompiler: SnapshotCompiler<A>,
-        options: SnapshotOptions,
-        clock: Clock,
-        metrics: SnapshotMetrics,
-        compileExecutor: Executor?,
-        scheduler: ScheduledExecutorService?,
-        ticker: LongSupplier,
-    ) : this(
-        store,
-        SnapshotKey.Policies,
-        policiesCompiler,
-        listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps)),
-        options,
-        clock,
-        metrics,
-        compileExecutor,
-        scheduler,
-        ticker,
-    )
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
 

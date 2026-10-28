@@ -30,7 +30,7 @@ import java.io.ByteArrayInputStream
  * field absent. A failed search throws, which makes the attributes unavailable, never absent.
  */
 class Ip2RegionAttributeProvider(
-    ip2regionDb: ByteArray = Ip2RegionRequestAttributesAppender.loadDefaultIp2RegionDb(),
+    ip2regionDb: ByteArray = loadDefaultIp2RegionDb(),
     private val version: Version = Version.IPv4,
 ) : AttributeProvider {
     private val searcher: Searcher =
@@ -64,6 +64,12 @@ class Ip2RegionAttributeProvider(
         const val CITY = "ext.ip2region.city"
         const val ISP = "ext.ip2region.isp"
         private const val UNKNOWN = "0"
+        const val IP2REGION_DB_RESOURCE = "ip2region.xdb"
+
+        fun loadDefaultIp2RegionDb(): ByteArray =
+            Ip2RegionAttributeProvider::class.java.classLoader.getResourceAsStream(IP2REGION_DB_RESOURCE)
+                ?.use { it.readBytes() }
+                ?: throw IllegalStateException("Classpath resource [$IP2REGION_DB_RESOURCE] not found.")
 
         /** Each attribute and its field in the database's `country|region|province|city|isp`. */
         private val FIELDS = linkedMapOf(COUNTRY to 0, PROVINCE to 2, CITY to 3, ISP to 4)

@@ -200,7 +200,6 @@ class EngineRunner(
             action = action,
             resource = resource,
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),
-            host = facts,
         )
         return FlatRequest(authz, scope, memberships, time, facts.host)
     }

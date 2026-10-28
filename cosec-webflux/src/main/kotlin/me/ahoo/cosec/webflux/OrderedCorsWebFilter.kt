@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter.Companion.REACTIVE_AUTHORIZATION_FILTER_ORDER
+import me.ahoo.cosec.webflux.PipelineWebFilter.Companion.REACTIVE_AUTHORIZATION_FILTER_ORDER
 import org.springframework.core.Ordered
 import org.springframework.web.cors.reactive.CorsConfigurationSource
 import org.springframework.web.cors.reactive.CorsProcessor

@@ -87,16 +87,12 @@ class PolicyDocumentCompiler(
         require(principalBindingLimit >= 0) { "The principal binding limit must not be negative." }
     }
 
-    /**
-     * Decodes and compiles a stored document. [SnapshotKey.Policies] is RFC 0003's 7.0-shaped document, which this
-     * compiler does not read.
-     */
+    /** Decodes and compiles a stored document. */
     override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
         val (kind, owner) = when (key) {
             SnapshotKey.Platform -> DocumentKind.PLATFORM to ""
             is SnapshotKey.App -> DocumentKind.APP to key.appId
             is SnapshotKey.Tenant -> DocumentKind.TENANT to key.tenantId
-            SnapshotKey.Policies -> throw SnapshotFormatException("[$key] is not a platform, app or tenant document.")
         }
         if (document.schema != PolicyDocumentCodec.SCHEMA) {
             throw SnapshotFormatException(

@@ -14,11 +14,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeySecurityContextParser
 import me.ahoo.cosec.apikey.ApiKeys
-import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -47,10 +43,6 @@ class RedisApiKeyStoreTest {
         store.findByHash(hash).assert().isEqualTo(apiKey)
         // Only the hash is stored: the key itself is not a Redis key or value.
         stringRedisTemplate.keys("*$key*").assert().isEmpty()
-
-        val parser = ApiKeySecurityContextParser(SecurityContextParser { SimpleSecurityContext.anonymous() }, store)
-        parser.parse(EvaluateRequest(headers = mapOf(ApiKeySecurityContextParser.DEFAULT_HEADER to key)))
-            .principal.id.assert().isEqualTo("svc-billing")
 
         store.save(hash, apiKey.copy(enabled = false))
         store.findByHash(hash)?.enabled.assert().isEqualTo(false)

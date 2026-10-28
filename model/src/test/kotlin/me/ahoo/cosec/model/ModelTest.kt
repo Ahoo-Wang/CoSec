@@ -31,7 +31,6 @@ class ModelTest {
         request.action.assert().isSameAs(action)
         request.resource.assert().isSameAs(resource)
         request.environment.assert().isSameAs(environment)
-        request.host.assert().isSameAs(HostFacts.None)
         listOf(
             subject.id,
             subject.tenantId,
@@ -54,28 +53,5 @@ class ModelTest {
         val scope = Scope.declared("tenant", "app", "space")
         listOf(scope.tenantId, scope.appId, scope.spaceId).assert().containsExactly("tenant", "app", "space")
         scope.source.assert().isEqualTo(Scope.Source.DECLARED)
-    }
-
-    @Test
-    fun `decisions and causes compare by value`() {
-        val error = IllegalStateException("e")
-        val statement = StatementRef.PolicyStatement(LayerKind.GLOBAL, "p", 0, "s")
-        val permission = StatementRef.RolePermission("app", "role", "perm", "name")
-        Decision.Permit(statement).assert().isEqualTo(Decision.Permit(statement.copy()))
-        Decision.Deny(null).assert().isEqualTo(Decision.Deny(null))
-        Decision.Deny(StatementRef.Blacklist).by.assert().isSameAs(StatementRef.Blacklist)
-        Decision.Permit(StatementRef.Root).by.assert().isSameAs(StatementRef.Root)
-
-        val causes = listOf(
-            Cause.MissingPolicies(setOf("p"), error),
-            Cause.MissingPermissions(permission, error),
-            Cause.SourceUnavailable(LayerKind.PRINCIPAL, error),
-            Cause.MatcherFailed(LayerKind.ROLE, "app", permission, error),
-        )
-        causes.assert().allMatch { it.error === error }
-        Decision.Indeterminate(
-            causes[1]
-        ).assert().isEqualTo(Decision.Indeterminate(Cause.MissingPermissions(permission, error)))
-        LayerKind.entries.assert().containsExactly(LayerKind.GLOBAL, LayerKind.PRINCIPAL, LayerKind.ROLE)
     }
 }

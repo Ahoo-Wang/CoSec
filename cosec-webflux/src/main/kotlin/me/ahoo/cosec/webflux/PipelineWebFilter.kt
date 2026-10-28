@@ -131,7 +131,16 @@ class PipelineWebFilter(
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
         filterInternal(exchange) { authorized, _ -> chain.filter(authorized) }
 
-    override fun getOrder(): Int = ReactiveAuthorizationFilter.REACTIVE_AUTHORIZATION_FILTER_ORDER
+    override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
+
+    companion object {
+        /**
+         * Filter order for reactive authorization.
+         * Set to 1000 to run after framework filters (CORS, etc.)
+         * while still running before most application filters.
+         */
+        const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
+    }
 }
 
 /** [AuthorizationChecker.check] for reactive callers (RFC 0006 §7.6): resumes off the caller's I/O thread. */
