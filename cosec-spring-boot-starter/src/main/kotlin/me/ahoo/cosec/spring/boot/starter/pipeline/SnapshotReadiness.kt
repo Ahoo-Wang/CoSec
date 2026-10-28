@@ -62,7 +62,13 @@ class SnapshotReadiness(
         if (isReady) {
             accepting = true
         } else {
-            AvailabilityChangeEvent.publish(publisher, this, ReadinessState.REFUSING_TRAFFIC)
+            // After this dispatch: published from here, the refusal could reach the availability bean before the
+            // acceptance it answers, and be overwritten by it.
+            timer.execute {
+                if (!accepting) {
+                    AvailabilityChangeEvent.publish(publisher, this, ReadinessState.REFUSING_TRAFFIC)
+                }
+            }
         }
     }
 

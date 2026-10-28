@@ -85,6 +85,7 @@ class SnapshotReadinessTest {
             AvailabilityChangeEvent.publish(context, LivenessState.CORRECT)
             // No platform document: every request is a 503, and the instance refuses traffic.
             status(context).assert().isEqualTo(503)
+            waitFor { availability.readinessState == ReadinessState.REFUSING_TRAFFIC }
             availability.readinessState.assert().isEqualTo(ReadinessState.REFUSING_TRAFFIC)
             availability.livenessState.assert().isEqualTo(LivenessState.CORRECT)
             health.health().status.assert().isEqualTo(Status.DOWN)
