@@ -25,7 +25,6 @@ import me.ahoo.cosec.token.SimpleAccessToken
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -86,10 +85,9 @@ class JwtTokenVerifierTest {
         val second: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         val mismatched = SimpleCompositeToken(accessToken = second.accessToken, refreshToken = first.refreshToken)
 
-        val thrown: TokenVerificationException = assertThrows(RefreshTokenMismatchException::class.java) {
+        assertThrows(RefreshTokenMismatchException::class.java) {
             jwtTokenVerifier.refresh<TokenPrincipal>(mismatched)
         }
-        thrown.toAuthorizeResult().reason.assert().isEqualTo("Token Invalid")
     }
 
     @Test

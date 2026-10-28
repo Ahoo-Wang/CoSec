@@ -14,7 +14,7 @@
 package me.ahoo.cosec.membership
 
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
-import me.ahoo.cosec.authorization.RoleScope
+import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
@@ -179,5 +179,68 @@ class MembershipClaimsTest {
     companion object {
         private const val SEED = 20261026
         private const val ITERATIONS = 2_000
+    }
+}
+
+/**
+ * The oracle of MEM-3: 7.x's `RoleScope` as it was when the 7.x path was removed, with its id aliases spelled
+ * `String`. Which of a principal's roles apply in a space.
+ *
+ * A role written `role@space` applies only in `space`; a role without a suffix applies only in the default space.
+ * The request names the space (`CoSec-Space-Id`), which the client controls, so it may only choose among the spaces
+ * the principal's credential states: changing the header never picks up another space's grants. A malformed role
+ * (empty role or space, more than one `@`) applies nowhere.
+ */
+private object RoleScope {
+    private const val SEPARATOR = SpacedRoleId.SPACE_ID_SEPARATOR[0]
+
+    /**
+     * The bare role ids (without the `@space` suffix) of [roles] that apply in [spaceId].
+     */
+    fun rolesIn(spaceId: String, roles: Set<String>): Set<String> {
+        if (roles.isEmpty()) {
+            return roles
+        }
+        // The common case (default space, no spaced roles) keeps the principal's set without allocating.
+        if (spaceId == SpaceIdCapable.DEFAULT && roles.none { it.indexOf(SEPARATOR) >= 0 || it.isEmpty() }) {
+            return roles
+        }
+        val scoped = LinkedHashSet<String>(roles.size)
+        for (role in roles) {
+            roleIdIn(spaceId, role)?.let(scoped::add)
+        }
+        return scoped
+    }
+
+    /**
+     * The bare role id of [role] when it applies in [spaceId], otherwise `null`.
+     */
+    fun roleIdIn(spaceId: String, role: String): String? {
+        val separator = role.indexOf(SEPARATOR)
+        if (separator < 0) {
+            return role.takeIf { spaceId == SpaceIdCapable.DEFAULT && it.isNotEmpty() }
+        }
+        if (separator == 0 || role.indexOf(SEPARATOR, separator + 1) >= 0) {
+            return null
+        }
+        val spaceLength = role.length - separator - 1
+        if (spaceLength == 0 || spaceLength != spaceId.length || !role.regionMatches(separator + 1, spaceId, 0, spaceLength)) {
+            return null
+        }
+        return role.substring(0, separator)
+    }
+
+    /**
+     * Parses [role] (`role` or `role@space`) into its role and space, or `null` when it is malformed and so applies
+     * nowhere. Tools that take role grants as text use the same syntax, so a grant keyed `role@space` matches exactly
+     * the principals [rolesIn] gives that role in that space.
+     */
+    fun parse(role: String): SpacedRoleId? {
+        val separator = role.indexOf(SEPARATOR)
+        if (separator < 0) {
+            return role.takeIf { it.isNotEmpty() }?.let { SpacedRoleId(it) }
+        }
+        val spaceId = role.substring(separator + 1)
+        return roleIdIn(spaceId, role)?.let { SpacedRoleId(it, spaceId) }
     }
 }

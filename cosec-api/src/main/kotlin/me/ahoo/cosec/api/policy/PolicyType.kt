@@ -20,7 +20,7 @@ package me.ahoo.cosec.api.policy
  * - [SYSTEM]: System policies managed by platform administrators
  * - [CUSTOM]: User-defined policies
  *
- * @see Policy
+ * Audit events still name a decision's source by these types (`AuditEvent`).
  */
 enum class PolicyType {
     /**

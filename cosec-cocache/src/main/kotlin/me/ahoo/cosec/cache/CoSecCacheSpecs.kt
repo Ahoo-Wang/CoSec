@@ -19,17 +19,11 @@ import me.ahoo.cocache.codec.jackson.JacksonCodec
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
-import me.ahoo.cocache.core.SetCacheSpec
-import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.context.request.AppId
-import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.Memberships
@@ -43,22 +37,14 @@ import java.time.Duration
  * CoSec's CoCache declarations.
  *
  * CoCache stores an entry under `{keyPrefix}{namespace}:{key}`; each cache sets an empty `keyPrefix` and a namespace
- * of [cacheNamespace] (`cosec:policy`, `cosec:global`, `cosec:app:permission`, `cosec:app:role:permission`,
- * `cosec:token:revoked`, `cosec:token:subject:revoked`, `cosec:snapshot`). Policies, the global policy index, app
- * permissions and revoked tokens keep the keys of CoSec 6.x, unless the key prefix ends with `:`, which 6.x did not
- * trim; role grants moved to the app-scoped `cosec:app:role:permission` in 7.0. The values are CoCache 6's binary format, so data written by CoSec 6.x
- * (CoCache 5) must be migrated before 7.0 reads it: see [CoSecCoCache5Migration], [RolePermissionKeyMigration] and
- * [CoSecSchemaMarker]. Each namespace also names its own invalidation channel `cocache:inv:{namespace}`, so
- * deployments with different key prefixes stay apart.
+ * of [cacheNamespace] (`cosec:token:revoked`, `cosec:token:subject:revoked`, `cosec:snapshot` and so on). Each
+ * namespace also names its own invalidation channel `cocache:inv:{namespace}`, so deployments with different key
+ * prefixes stay apart.
  *
- * Policy and permission caches have no loader: Redis is the store of record. [pinnedPolicy] must therefore be the
+ * Snapshot and control-plane caches have no loader: Redis is the store of record. [pinnedPolicy] must therefore be the
  * last change to every cache's policy, after any customizer or configuration property.
  */
 object CoSecCacheSpecs {
-    const val POLICY_CACHE_NAME = "PolicyCache"
-    const val GLOBAL_POLICY_INDEX_CACHE_NAME = "GlobalPolicyIndexCache"
-    const val APP_PERMISSION_CACHE_NAME = "AppPermissionCache"
-    const val ROLE_PERMISSION_CACHE_NAME = "RolePermissionCache"
     const val REVOKED_TOKEN_CACHE_NAME = "RevokedTokenCache"
 
     /** The principals whose tokens were revoked all at once (RFC 0004 §4.5.3). */
@@ -102,9 +88,6 @@ object CoSecCacheSpecs {
     /** The instances that reported on each shadow window (RFC 0007 §6.4, round-2 review R1). */
     const val SHADOW_REPORTER_CACHE_NAME = "ShadowReporterCache"
 
-    /** Encoded key of the single global policy index entry, whatever key the caller passes. */
-    const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
-
     /** The control plane's caches (RFC 0007 §5.2), created by `CoCacheControlStore.create`, not by the data plane. */
     val CONTROL_CACHE_NAMES: Set<String> = setOf(
         REVISION_RECORD_CACHE_NAME,
@@ -118,10 +101,6 @@ object CoSecCacheSpecs {
 
     /** Names of the caches whose only copy is Redis. */
     val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
-        POLICY_CACHE_NAME,
-        GLOBAL_POLICY_INDEX_CACHE_NAME,
-        APP_PERMISSION_CACHE_NAME,
-        ROLE_PERMISSION_CACHE_NAME,
         POLICY_SNAPSHOT_CACHE_NAME,
         REVISION_RECORD_CACHE_NAME,
         REVISION_INDEX_CACHE_NAME,
@@ -133,10 +112,6 @@ object CoSecCacheSpecs {
     )
 
     private val NAMESPACES: Map<String, String> = mapOf(
-        POLICY_CACHE_NAME to "policy",
-        GLOBAL_POLICY_INDEX_CACHE_NAME to "global",
-        APP_PERMISSION_CACHE_NAME to "app:permission",
-        ROLE_PERMISSION_CACHE_NAME to "app:role:permission",
         REVOKED_TOKEN_CACHE_NAME to "token:revoked",
         // Not under token:revoked, whose keys are token ids.
         REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
@@ -212,48 +187,6 @@ object CoSecCacheSpecs {
         MEMBERSHIP_CACHE_NAME -> policy.expiringFailClosed()
         else -> policy
     }
-
-    fun policy(
-        codec: Codec<Policy>,
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, Policy> = CacheSpec.builder<String, Policy>(POLICY_CACHE_NAME)
-        .storageLayout(keyPrefix)
-        .codec(codec)
-        .policy(policy.storeOfRecord())
-        .build()
-
-    fun globalPolicyIndex(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = SetCacheSpec.DEFAULT_POLICY
-    ): SetCacheSpec<String, String> = SetCacheSpec.builder<String, String>(GLOBAL_POLICY_INDEX_CACHE_NAME)
-        .namespace(cacheNamespace(keyPrefix, GLOBAL_POLICY_INDEX_CACHE_NAME))
-        .keyPrefix("")
-        .keyEncoder { GLOBAL_POLICY_INDEX_ENCODED_KEY }
-        .elementCodec(StringCodec)
-        .policy(policy.storeOfRecord())
-        .build()
-
-    fun appPermission(
-        codec: Codec<AppPermission>,
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<AppId, AppPermission> = CacheSpec.builder<AppId, AppPermission>(APP_PERMISSION_CACHE_NAME)
-        .storageLayout(keyPrefix)
-        .codec(codec)
-        .policy(policy.storeOfRecord())
-        .build()
-
-    fun rolePermission(
-        codec: Codec<Set<PermissionId>>,
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<AppSpacedRoleId, Set<PermissionId>> =
-        CacheSpec.builder<AppSpacedRoleId, Set<PermissionId>>(ROLE_PERMISSION_CACHE_NAME)
-            .storageLayout(keyPrefix)
-            .codec(codec)
-            .policy(policy.storeOfRecord())
-            .build()
 
     /**
      * The snapshot documents (RFC 0003 §4.1): [storeOfRecord] like every policy cache, keys encoded explicitly
@@ -377,9 +310,3 @@ object CoSecCacheSpecs {
  */
 inline fun <reified C : Cache<K, V>, K : Any, V : Any> CacheRuntime.createCache(spec: CacheSpec<K, V>): C =
     CacheProxies.create(C::class.java, create(spec))
-
-/**
- * Creates the global policy index declared by [spec].
- */
-fun CacheRuntime.createGlobalPolicyIndex(spec: SetCacheSpec<String, String>): GlobalPolicyIndexCache =
-    CacheProxies.create(GlobalPolicyIndexCache::class.java, create(spec))

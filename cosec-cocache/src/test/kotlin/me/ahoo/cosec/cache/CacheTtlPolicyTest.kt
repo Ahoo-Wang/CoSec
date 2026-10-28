@@ -41,10 +41,6 @@ class CacheTtlPolicyTest {
         .build()
 
     private val storeOfRecordPolicies: Map<String, CachePolicy> = mapOf(
-        CoSecCacheSpecs.POLICY_CACHE_NAME to CoSecCacheSpecs.policy(codec(), policy = weakened).policy,
-        CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME to CoSecCacheSpecs.globalPolicyIndex(policy = weakened).policy,
-        CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME to CoSecCacheSpecs.appPermission(codec(), policy = weakened).policy,
-        CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to CoSecCacheSpecs.rolePermission(codec(), policy = weakened).policy,
         CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME to CoSecCacheSpecs.policySnapshot(policy = weakened).policy,
         // RFC 0007 §5.2: the control plane's records, indexes, back-references and leases.
         CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME to ControlCacheSpecs.revisionRecord(policy = weakened).policy,

@@ -27,6 +27,7 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.function.LongSupplier
 
 /** A clock the test moves by hand. */
 class ManualClock(@Volatile var now: Instant = Instant.parse("2026-10-21T08:00:00Z")) : Clock() {
@@ -78,7 +79,7 @@ class FakeCompiler : SnapshotCompiler<Compiled> {
 
 fun document(revision: Long, body: String = "p$revision"): SnapshotDocument =
     SnapshotDocument(
-        SnapshotDocument.CURRENT_SCHEMA,
+        SnapshotDocument.DOCUMENT_SCHEMA,
         revision,
         Instant.parse("2026-10-21T08:00:00Z"),
         body.encodeToByteArray()
@@ -304,7 +305,7 @@ fun testSource(
     ticker: AtomicLong = AtomicLong(),
     scheduler: ScheduledExecutorService? = null,
 ): SnapshotSource<Compiled, Compiled> =
-    SnapshotSource(
+    appSource(
         store,
         compiler,
         compiler,
@@ -314,6 +315,33 @@ fun testSource(
         compileExecutor,
         scheduler
     ) { ticker.incrementAndGet() }
+
+/**
+ * The source shape most tests use: the shared platform document and one family of app documents, so a test reads
+ * "the shared document" and "an app" without the tenant family. The guarantees hold for every key of every family.
+ */
+fun <P : Any, A : Any> appSource(
+    store: SnapshotDocumentStore,
+    sharedCompiler: SnapshotCompiler<P>,
+    appCompiler: SnapshotCompiler<A>,
+    options: SnapshotOptions = SnapshotOptions(),
+    clock: Clock = Clock.systemUTC(),
+    metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
+    compileExecutor: Executor? = null,
+    scheduler: ScheduledExecutorService? = null,
+    ticker: LongSupplier = LongSupplier(System::nanoTime),
+): SnapshotSource<P, A> = SnapshotSource(
+    store,
+    SnapshotKey.Platform,
+    sharedCompiler,
+    listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps)),
+    options,
+    clock,
+    metrics,
+    compileExecutor,
+    scheduler,
+    ticker,
+)
 
 /** Whether [key] is installed. Unlike [SnapshotSource.peek], it does not count as an access, so waiting on it cannot change the LRU order. */
 fun SnapshotSource<*, *>.holds(key: SnapshotKey): Boolean = entries().any { it.key == key }

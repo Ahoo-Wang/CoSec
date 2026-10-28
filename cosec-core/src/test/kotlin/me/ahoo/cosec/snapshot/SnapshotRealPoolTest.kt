@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
  */
 class SnapshotRealPoolTest {
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1, "a1"))
         put(APP_B, document(1, "b1"))
     }
@@ -43,7 +43,7 @@ class SnapshotRealPoolTest {
     fun notificationsInstallNewRevisions() {
         testSource(store, compileExecutor = null).use { source ->
             source.load("app-a").get(10, TimeUnit.SECONDS)
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.put(APP_A, document(2, "a2"))
             await { source.revisionOf() == 2L && source.revisionOf("app-a") == 2L }
         }
@@ -52,12 +52,12 @@ class SnapshotRealPoolTest {
     @Test
     fun regressionIsInstalledAndReported() {
         val metrics = RecordingMetrics()
-        store.put(SnapshotKey.Policies, document(5))
+        store.put(SnapshotKey.Platform, document(5))
         testSource(store, metrics = metrics, compileExecutor = null).use { source ->
             source.load().get(10, TimeUnit.SECONDS)
-            store.put(SnapshotKey.Policies, document(3))
+            store.put(SnapshotKey.Platform, document(3))
             await { source.revisionOf() == 3L }
-            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Policies, 5L, 3L))
+            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Platform, 5L, 3L))
         }
     }
 
@@ -86,7 +86,7 @@ class SnapshotRealPoolTest {
         testSource(store, compileExecutor = null).use { source ->
             source.load("app-a").get(10, TimeUnit.SECONDS)
             store.dropNotifications = true
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.put(APP_A, document(2, "a2"))
             store.reset()
             await { source.revisionOf() == 2L && source.revisionOf("app-a") == 2L }

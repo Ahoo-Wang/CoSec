@@ -55,18 +55,15 @@ class PolicySnapshotCache internal constructor(
 }
 
 /**
- * Explicit key encoding (RFC 0003 §10, RFC 0004 §7.1): `platform`, `app:<appId>`, `tenant:<tenantId>` and RFC 0003's
- * `policies`. `KeyEncoder.ofToString()` would need a reflection hint, and would tie the Redis layout to
- * [SnapshotKey.toString].
+ * Explicit key encoding (RFC 0003 §10, RFC 0004 §7.1): `platform`, `app:<appId>` and `tenant:<tenantId>`.
+ * `KeyEncoder.ofToString()` would need a reflection hint, and would tie the Redis layout to [SnapshotKey.toString].
  */
 object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
-    const val POLICIES = "policies"
     const val PLATFORM = "platform"
     const val APP_PREFIX = "app:"
     const val TENANT_PREFIX = "tenant:"
 
     override fun encode(key: SnapshotKey): String = when (key) {
-        SnapshotKey.Policies -> POLICIES
         SnapshotKey.Platform -> PLATFORM
         is SnapshotKey.App -> APP_PREFIX + key.appId
         is SnapshotKey.Tenant -> TENANT_PREFIX + key.tenantId
@@ -74,7 +71,6 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
 
     /** The key [encoded] names, or null when it names none, such as an invalid app or tenant id. */
     fun decode(encoded: String): SnapshotKey? = when {
-        encoded == POLICIES -> SnapshotKey.Policies
         encoded == PLATFORM -> SnapshotKey.Platform
         encoded.startsWith(APP_PREFIX) -> encoded.substring(APP_PREFIX.length)
             .takeIf { SnapshotKey.App.isValidAppId(it) }

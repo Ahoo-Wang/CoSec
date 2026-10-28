@@ -139,7 +139,7 @@ class DocumentSnapshotSourceTest {
             store.publish(SnapshotKey.Platform, 2)
             source.peekAll(emptyList())!!.shared.revision.assert().isEqualTo(2)
             // Another source's key is not this one's to reload.
-            store.notifyChanged(SnapshotKey.Policies)
+            store.notifyChanged(SnapshotKey.Platform)
         }
     }
 
@@ -167,7 +167,7 @@ class DocumentSnapshotSourceTest {
     fun `keys outside the source are refused`() {
         val store = ControllableStore()
         source(store).use { source ->
-            assertThrownBy<IllegalArgumentException> { source.loadAll(listOf(SnapshotKey.Policies)) }
+            assertThrownBy<IllegalArgumentException> { source.loadAll(listOf(SnapshotKey.Platform)) }
             assertThrownBy<IllegalArgumentException> { source.peekAll(listOf(SnapshotKey.Platform)) }
             // RFC 0003's app-only request shape works too: the platform and one app.
             source.load("app-a").join().policiesEntry.key.assert().isEqualTo(SnapshotKey.Platform)
@@ -175,7 +175,7 @@ class DocumentSnapshotSourceTest {
         testSource(store).use { legacy ->
             assertThrownBy<IllegalArgumentException> { legacy.loadAll(listOf(TENANT_A)) }
             assertThrownBy<IllegalArgumentException> { legacy.reload(TENANT_A) }
-            assertThrownBy<IllegalArgumentException> { legacy.prewarm(listOf(SnapshotKey.Platform)).join() }
+            assertThrownBy<IllegalArgumentException> { legacy.prewarm(listOf(TENANT_A)).join() }
         }
         assertThrownBy<IllegalArgumentException> { SnapshotFamily(SnapshotKind.PLATFORM, FakeCompiler(), 1) }
         assertThrownBy<IllegalArgumentException> { SnapshotFamily(SnapshotKind.TENANT, FakeCompiler(), 0) }

@@ -86,7 +86,7 @@ class SnapshotInstallOrderPropertyTest {
         }
     }
 
-    private val keys = listOf(SnapshotKey.Policies, APP_A, APP_B)
+    private val keys = listOf(SnapshotKey.Platform, APP_A, APP_B)
     private val documentKeys = listOf(SnapshotKey.Platform, APP_A, APP_B, TENANT_A, TENANT_B)
 
     @Test
@@ -133,7 +133,7 @@ class SnapshotInstallOrderPropertyTest {
                 ticks::incrementAndGet,
             )
         } else {
-            SnapshotSource(store, FakeCompiler(), FakeCompiler(), options, clock, metrics, executor, null, ticks::incrementAndGet)
+            appSource(store, FakeCompiler(), FakeCompiler(), options, clock, metrics, executor, null, ticks::incrementAndGet)
         }
 
         init {
@@ -267,7 +267,7 @@ class SnapshotInstallOrderPropertyTest {
                 val snapshot = loading.join()
                 snapshot.policiesEntry.revision.assert().describedAs(
                     "seed $seed"
-                ).isEqualTo(run.revisions[SnapshotKey.Policies] ?: 0)
+                ).isEqualTo(run.revisions[SnapshotKey.Platform] ?: 0)
                 snapshot.appEntry!!.revision.assert().describedAs("seed $seed, $app").isEqualTo(run.revisions[app] ?: 0)
             }
 

@@ -30,7 +30,7 @@ import com.tngtech.archunit.lang.ConditionEvents
 import com.tngtech.archunit.lang.SimpleConditionEvent
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.codeUnits
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
-import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.snapshot.SnapshotSource
@@ -39,8 +39,8 @@ import me.ahoo.cosec.snapshot.SnapshotSource
  * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6): the code of `runtime/`, `engine/` and `model/` never
  * references `reactor.*`, and no data-plane SPI signature carries a Reactor type. `runtime/` also stays out of its host
  * (Spring, the Servlet API, the coroutine bridges) and never uses `runCatching`. SPI implementations in other
- * modules may still await a Reactor-based client internally. A classpath check follows once phase 6 rewrites
- * `SnapshotPublisher`.
+ * modules may still await a Reactor-based client internally. A classpath check follows once cosec-core no
+ * longer brings Reactor.
  */
 @AnalyzeClasses(
     packages = ["me.ahoo.cosec.runtime", "me.ahoo.cosec.engine", "me.ahoo.cosec.model", "me.ahoo.cosec.snapshot"],
@@ -123,7 +123,7 @@ class RuntimeBoundaryTest {
         val HOST_PACKAGES = arrayOf("org.springframework..", "jakarta.servlet..", "kotlinx.coroutines.reactor..")
 
         val dataPlaneSpi: DescribedPredicate<JavaClass> = belongToAnyOf(
-            Engine::class.java,
+            FlatEngine::class.java,
             SnapshotSource::class.java,
             SnapshotDocumentStore::class.java,
             SnapshotChangeListener::class.java,

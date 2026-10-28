@@ -24,12 +24,12 @@ import java.time.Instant
 
 class SnapshotDocumentCodecTest {
     private val publishedAt = Instant.parse("2026-10-21T08:00:00Z")
-    private val body = """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[{"id":"p"}]}"""
+    private val body = """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[{"id":"p"}]}"""
 
     @Test
     fun decodesTheHeaderAndKeepsTheWholeBody() {
         val document = SnapshotDocumentCodec.decode(body.encodeToByteArray())
-        document.schema.assert().isEqualTo(SnapshotDocument.CURRENT_SCHEMA)
+        document.schema.assert().isEqualTo(SnapshotDocument.DOCUMENT_SCHEMA)
         document.revision.assert().isEqualTo(42L)
         document.publishedAt.assert().isEqualTo(publishedAt)
         document.bodyBytes().decodeToString().assert().isEqualTo(body)
@@ -37,7 +37,7 @@ class SnapshotDocumentCodecTest {
 
     @Test
     fun encodesTheBodyUnchanged() {
-        val document = SnapshotDocument(1, 42, publishedAt, body.encodeToByteArray())
+        val document = SnapshotDocument(2, 42, publishedAt, body.encodeToByteArray())
         SnapshotDocumentCodec.encode(document).decodeToString().assert().isEqualTo(body)
         SnapshotDocumentCodec.decode(SnapshotDocumentCodec.encode(document)).assert().isEqualTo(document)
     }
@@ -45,52 +45,57 @@ class SnapshotDocumentCodecTest {
     @Test
     fun refusesToEncodeABodyWhoseHeaderDiffers() {
         assertThrows<IllegalArgumentException> {
-            SnapshotDocumentCodec.encode(SnapshotDocument(1, 43, publishedAt, body.encodeToByteArray()))
+            SnapshotDocumentCodec.encode(SnapshotDocument(2, 43, publishedAt, body.encodeToByteArray()))
         }
         assertThrows<IllegalArgumentException> {
-            SnapshotDocumentCodec.encode(SnapshotDocument(1, 42, publishedAt.plusMillis(1), body.encodeToByteArray()))
+            SnapshotDocumentCodec.encode(SnapshotDocument(2, 42, publishedAt.plusMillis(1), body.encodeToByteArray()))
         }
         // A body without its header, as the in-memory store's tests write it, would fail every read.
         assertThrows<SnapshotFormatException> {
             SnapshotDocumentCodec.encode(
-                SnapshotDocument(1, 42, publishedAt, """{"policies":[]}""".encodeToByteArray())
+                SnapshotDocument(2, 42, publishedAt, """{"policies":[]}""".encodeToByteArray())
             )
         }
     }
 
-    /** Until the switch a store holds both RFC 0003's schema 1 and RFC 0004's schema 2; each compiler takes its own. */
+    /** RFC 0004's schema 2 is the one format; RFC 0003's schema 1 is no longer read. */
     @Test
-    fun decodesBothFormatsUntilTheSwitch() {
+    fun decodesOnlyTheDocumentFormat() {
         val platform = """{"schema":2,"revision":7,"publishedAt":"2026-10-21T08:00:00Z","policies":[],"bindings":[]}"""
         SnapshotDocumentCodec.decode(platform.encodeToByteArray()).schema.assert().isEqualTo(2)
+        assertThrows<SnapshotFormatException> {
+            SnapshotDocumentCodec.decode(
+                """{"schema":1,"revision":7,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""".encodeToByteArray()
+            )
+        }
     }
 
     @ParameterizedTest
     @ValueSource(
         strings = [
             // repeated header fields: the compiler rejects them, so must the codec (#1003)
-            """{"schema":1,"revision":42,"revision":43,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
-            """{"schema":1,"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
-            """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","publishedAt":"2026-10-21T08:00:01Z"}""",
+            """{"schema":2,"revision":42,"revision":43,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":2,"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","publishedAt":"2026-10-21T08:00:01Z"}""",
             // a repeated key anywhere in the body
-            """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[],"policies":[]}""",
-            """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[{"id":"a","id":"b"}]}""",
+            """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[],"policies":[]}""",
+            """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[{"id":"a","id":"b"}]}""",
             // missing or mistyped header fields
             """{"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
-            """{"schema":1,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
-            """{"schema":1,"revision":42,"policies":[]}""",
-            """{"schema":"1","revision":42,"publishedAt":"2026-10-21T08:00:00Z"}""",
-            """{"schema":1,"revision":4.2,"publishedAt":"2026-10-21T08:00:00Z"}""",
-            """{"schema":1,"revision":0,"publishedAt":"2026-10-21T08:00:00Z"}""",
-            """{"schema":1,"revision":42,"publishedAt":"yesterday"}""",
-            """{"schema":1,"revision":42,"publishedAt":1}""",
+            """{"schema":2,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":2,"revision":42,"policies":[]}""",
+            """{"schema":"2","revision":42,"publishedAt":"2026-10-21T08:00:00Z"}""",
+            """{"schema":2,"revision":4.2,"publishedAt":"2026-10-21T08:00:00Z"}""",
+            """{"schema":2,"revision":0,"publishedAt":"2026-10-21T08:00:00Z"}""",
+            """{"schema":2,"revision":42,"publishedAt":"yesterday"}""",
+            """{"schema":2,"revision":42,"publishedAt":1}""",
             """{"schema":99999999999,"revision":42,"publishedAt":"2026-10-21T08:00:00Z"}""",
             // a schema this version does not know
             """{"schema":3,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
             // not a document
             """[]""",
-            """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z"} {}""",
-            """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[""",
+            """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z"} {}""",
+            """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[""",
             """""",
         ]
     )

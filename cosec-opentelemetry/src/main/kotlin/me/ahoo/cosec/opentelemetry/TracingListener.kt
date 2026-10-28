@@ -43,12 +43,12 @@ import kotlin.coroutines.CoroutineContext
  * so tracing can neither fail nor hold up a decision. The I/O of the evaluation is a sibling of this span, under the same
  * parent (X3).
  *
- * The attribute keys are those of `CoSecAttributesExtractor`, plus `cosec.snapshot.version` and `cosec.binding.id`.
+ * The attribute keys are those of 7.x's tracing decorator, plus `cosec.snapshot.version` and `cosec.binding.id`.
  */
 class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) : DecisionListener {
     private val tracer: Tracer = openTelemetry.getTracer(
         INSTRUMENTATION_NAME,
-        CoSecInstrumenter.INSTRUMENTATION_VERSION
+        INSTRUMENTATION_VERSION
     )
 
     override val name: String get() = NAME
@@ -100,6 +100,7 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         const val NAME = "tracing"
         const val SPAN_NAME = "cosec.authorize"
         private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
+        private val INSTRUMENTATION_VERSION = TracingListener::class.java.`package`.implementationVersion ?: "2.15.0"
         private const val AUTHORIZE = CoSec.COSEC_PREFIX + "authorize."
         val TENANT_ID = stringKey(CoSec.COSEC_PREFIX + "tenant_id")
         val APP_ID = stringKey(CoSec.COSEC_PREFIX + "app_id")

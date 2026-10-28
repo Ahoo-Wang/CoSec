@@ -204,7 +204,7 @@ registeredProperties
             )
             outputs.upToDateWhen { false }
             maxHeapSize = "2g"
-            // As for engineParity: TRACE logging over a million cases would write gigabytes.
+            // TRACE logging over a million cases would write gigabytes.
             val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
             doFirst {
                 jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +

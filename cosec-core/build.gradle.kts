@@ -11,149 +11,22 @@
  * limitations under the License.
  */
 
-plugins {
-    `java-test-fixtures`
-}
-
 dependencies {
     api(project(":cosec-api"))
     api(project(":cosec-engine"))
     api("me.ahoo.cosid:cosid-core")
-    compileOnly("ognl:ognl")
-    compileOnly("org.springframework:spring-web")
-    compileOnly("org.springframework:spring-expression")
     api("io.github.oshai:kotlin-logging-jvm")
     api("io.projectreactor:reactor-core")
     api("io.projectreactor.kotlin:reactor-kotlin-extensions")
     api("tools.jackson.core:jackson-databind")
     api("tools.jackson.module:jackson-module-kotlin")
-    testImplementation("ognl:ognl")
+    // HttpPathPatternParityTest compares the engine's path patterns with Spring's.
     testImplementation("org.springframework:spring-web")
-    testImplementation("org.springframework:spring-expression")
     testImplementation("io.projectreactor:reactor-test")
     // SchemaConformanceTest validates documents against the generated JSON schemas.
     testImplementation("com.networknt:json-schema-validator")
-
-    testFixturesImplementation(platform(project(":cosec-dependencies")))
-    // Path matchers parse with Spring's PathPatternParser; PolicyTestKit reads suites through its resource resolver.
-    testFixturesImplementation("org.springframework:spring-web")
-    // Replayed policies may hold SpEL or OGNL conditions.
-    testFixturesRuntimeOnly("ognl:ognl")
-    testFixturesRuntimeOnly("org.springframework:spring-expression")
-    testFixturesRuntimeOnly("ch.qos.logback:logback-classic")
 }
 
-/*
- * Test fixtures hold the RFC 0002 decision comparator (DecisionParity) and the offline replay tool. They see cosec-core's
- * internals and are never published: downstream code must not depend on them.
- */
-val javaComponent = components["java"] as AdhocComponentWithVariants
-listOf("testFixturesApiElements", "testFixturesRuntimeElements").forEach {
-    javaComponent.withVariantsFromConfiguration(configurations[it]) { skip() }
-}
-
-val mavenLibrary = the<PublishingExtension>().publications.getByName("mavenLibrary") as MavenPublication
-val verifyTestFixturesUnpublished = tasks.register("verifyTestFixturesUnpublished") {
-    group = "verification"
-    description = "Fails if the publication carries the test fixtures: a variant, an artifact or a POM entry."
-    // Resolved at configuration time as a value: the task itself must not hold the publication (configuration cache).
-    val artifactNames = provider {
-        mavenLibrary.artifacts.map { "${it.file.name} (classifier ${it.classifier})" }
-    }
-    inputs.property("publishedArtifacts", artifactNames)
-    val metadata = tasks.named<GenerateModuleMetadata>("generateMetadataFileForMavenLibraryPublication")
-        .flatMap { it.outputFile }
-    val pom = tasks.named<GenerateMavenPom>("generatePomFileForMavenLibraryPublication").map { it.destination }
-    inputs.file(metadata)
-    inputs.file(pom)
-    doLast {
-        fun mentionsTestFixtures(text: String) = "testFixtures" in text || "test-fixtures" in text
-        val metadataText = metadata.get().asFile.readText()
-        check(!mentionsTestFixtures(metadataText)) {
-            "The published module metadata of ${project.path} offers its test fixtures:\n$metadataText"
-        }
-        val pomText = pom.get().readText()
-        check(!mentionsTestFixtures(pomText)) { "The published POM of ${project.path} names its test fixtures:\n$pomText" }
-        val artifacts = artifactNames.get()
-        check(artifacts.none(::mentionsTestFixtures)) {
-            "The publication of ${project.path} carries test fixture artifacts: $artifacts"
-        }
-    }
-}
-tasks.named("check") {
-    dependsOn(verifyTestFixturesUnpublished)
-}
-// The release workflow publishes without running check. Not generateMetadataFile*: the guard reads its output.
-tasks.matching { it.name.startsWith("publish") }.configureEach {
-    dependsOn(verifyTestFixturesUnpublished)
-}
-
-detekt {
-    source.from("src/testFixtures/kotlin")
-}
-
-/*
- * RFC 0002 §8.2.1: replays exported real traffic through both authorizations, on the maintainer's machine only.
- * Not part of check. Input format: me.ahoo.cosec.parity.DecisionReplay.
- */
-tasks.register<JavaExec>("engineReplay") {
-    group = "verification"
-    description = "Replays -PreplayDir=<dir> through SimpleAuthorization and EngineAuthorization and reports differences."
-    classpath = sourceSets["testFixtures"].runtimeClasspath
-    mainClass.set("me.ahoo.cosec.parity.ReplayMainKt")
-    // WARN, not the tests' TRACE, and no stack trace per failing sample: the report counts failures.
-    jvmArgs("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml")
-    val replayDir = providers.gradleProperty("replayDir")
-    // ReplayGate thresholds, for trying the tool out; the report records the ones used.
-    val gateOptions = mapOf(
-        "replayMinSamples" to "--min-samples",
-        "replayMinDays" to "--min-days",
-        "replayMinDistinctDays" to "--min-distinct-days",
-        "replayMaxBothFailedRate" to "--max-both-failed-rate",
-        "replayMinAgreementRate" to "--min-agreement-rate",
-    ).mapValues { (property, option) -> providers.gradleProperty(property).map { "$option=$it" } }
-    argumentProviders.add(
-        CommandLineArgumentProvider {
-            listOf(replayDir.orNull ?: throw GradleException("Pass the export directory: -PreplayDir=<dir>.")) +
-                gateOptions.values.mapNotNull { it.orNull }
-        }
-    )
-}
-
-/*
- * RFC 0002 §8.2: the random-case parity (EngineParityPropertyTest) with -PparityIterations cases, 1,000,000 by default.
- * Not part of check, which runs it with 2,000.
- */
-tasks.register<Test>("engineParity") {
-    group = "verification"
-    description = "Runs EngineParityPropertyTest with -PparityIterations random cases (default 1,000,000)."
-    testClassesDirs = sourceSets["test"].output.classesDirs
-    classpath = sourceSets["test"].runtimeClasspath
-    filter {
-        includeTestsMatching("me.ahoo.cosec.authorization.engine.EngineParityPropertyTest")
-    }
-    systemProperty("cosec.parity.iterations", providers.gradleProperty("parityIterations").getOrElse("1000000"))
-    // The default 2,000-case run is cheap; a million is not, so never skip it as up to date.
-    outputs.upToDateWhen { false }
-    maxHeapSize = "2g"
-    // Replaces the TRACE configuration every Test task gets: at TRACE, and with a stack trace per failing case, a million
-    // cases log tens of gigabytes. Set at execution, after every configuration action has run.
-    val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
-    doFirst {
-        jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
-            "-Dlogback.configurationFile=$parityLogback"
-    }
-    // Nothing worth keeping is captured; the case count is printed to the console instead.
-    reports.html.required.set(false)
-    reports.junitXml.includeSystemOutLog.set(false)
-    reports.junitXml.includeSystemErrLog.set(false)
-    testLogging.showStandardStreams = true
-}
-
-/*
- * RFC 0007 §10.4: the JSON schemas in schema/ are generated from the document format descriptors
- * (me.ahoo.cosec.snapshot.format.DocumentFormats). verifySchemas fails check when the committed files are stale.
- */
 val schemaDirectory = rootProject.layout.projectDirectory.dir("schema")
 val generateSchemas = tasks.register<JavaExec>("generateSchemas") {
     group = "build"

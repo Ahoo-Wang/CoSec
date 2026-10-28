@@ -416,9 +416,6 @@ class Revisions(
             SnapshotKey.Platform -> DocumentKind.PLATFORM to ""
             is SnapshotKey.App -> DocumentKind.APP to key.appId
             is SnapshotKey.Tenant -> DocumentKind.TENANT to key.tenantId
-            SnapshotKey.Policies -> throw IllegalArgumentException(
-                "The control plane publishes platform, app and tenant documents."
-            )
         }
 
         private fun requireDocumentKey(key: SnapshotKey): SnapshotKey = key.also { ownerOf(it) }

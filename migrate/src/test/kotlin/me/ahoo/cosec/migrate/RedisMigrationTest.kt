@@ -24,14 +24,15 @@ import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
-import me.ahoo.cosec.cache.createGlobalPolicyIndex
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.statement
+import me.ahoo.cosec.migrate.v7.cache.GlobalPolicyIndexCache
+import me.ahoo.cosec.migrate.v7.cache.V7CacheSpecs
+import me.ahoo.cosec.migrate.v7.cache.createGlobalPolicyIndex
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -96,7 +97,7 @@ class RedisMigrationTest {
 
     private fun create(cacheName: String): Cache<String, ByteArray> = runtime.create(
         CacheSpec.builder<String, ByteArray>("Write$cacheName")
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, cacheName))
+            .namespace(V7CacheSpecs.cacheNamespace(keyPrefix, cacheName))
             .keyPrefix("")
             .keyEncoder { it }
             .codec(RawCodec)
@@ -115,7 +116,7 @@ class RedisMigrationTest {
 
     private fun write7x(marker: String = "7") {
         marker(marker)
-        val policies = raw(CoSecCacheSpecs.POLICY_CACHE_NAME)
+        val policies = raw(V7CacheSpecs.POLICY_CACHE_NAME)
         policies.put(
             "g",
             policy(
@@ -143,11 +144,11 @@ class RedisMigrationTest {
         // The policy history is not policy data.
         policies.put("history:c:1", "{}".encodeToByteArray())
         runtime.createGlobalPolicyIndex(
-            CoSecCacheSpecs.globalPolicyIndex(keyPrefix)
+            V7CacheSpecs.globalPolicyIndex(keyPrefix)
         ).add(GlobalPolicyIndexCache.CACHE_KEY, setOf("g"))
         val audit = """{"bool":{"and":[{"path":{"part":"request.path","pattern":"/audit/**"}},{"inRole":{"value":"auditor"}}]}}"""
         val expired = """{"time":{"notAfter":"2020-01-01T00:00:00Z"}}"""
-        raw(CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME).put(
+        raw(V7CacheSpecs.APP_PERMISSION_CACHE_NAME).put(
             "order",
             appPermission(
                 "order",
@@ -157,7 +158,7 @@ class RedisMigrationTest {
                 condition = """{"authenticated":{}}""",
             ).encodeToByteArray(),
         )
-        val grants = raw(CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
+        val grants = raw(V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME)
         grants.put("order:clerk", """["read","audit","expired"]""".encodeToByteArray())
         grants.put("order:admin@team", """["*"]""".encodeToByteArray())
     }
@@ -205,7 +206,7 @@ class RedisMigrationTest {
             compiler.compile(key, document!!)
         }
         // The 7.x data stays: rolling back is not switching.
-        raw(CoSecCacheSpecs.POLICY_CACHE_NAME)["g"].assert().isNotNull()
+        raw(V7CacheSpecs.POLICY_CACHE_NAME)["g"].assert().isNotNull()
 
         val (again, againOutput) = run(
             "publish",

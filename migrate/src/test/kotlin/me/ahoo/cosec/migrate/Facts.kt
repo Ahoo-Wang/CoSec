@@ -13,27 +13,26 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.DeviceIdCapable
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
-import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
+import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
+import me.ahoo.cosec.migrate.v7.policy.action.setPathVariables
+import me.ahoo.cosec.migrate.v7.policy.condition.ConditionMatcherFactory
+import me.ahoo.cosec.migrate.v7.policy.condition.ConditionMatcherFactoryProvider
+import me.ahoo.cosec.migrate.v7.policy.condition.TimeConditionMatcher
+import me.ahoo.cosec.migrate.v7.policy.condition.TimeConditionMatcherFactory
+import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
-import me.ahoo.cosec.policy.EvaluateRequest
-import me.ahoo.cosec.policy.action.setPathVariables
-import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
-import me.ahoo.cosec.policy.condition.TimeConditionMatcher
-import me.ahoo.cosec.policy.condition.TimeConditionMatcherFactory
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.document.JavaZones
 import me.ahoo.cosec.tenant.SimpleTenant
 import java.net.URI
@@ -241,7 +240,7 @@ internal object Matchers7x {
         }
     }
 
-    fun matcher(json: String): ConditionMatcher = CoSecJsonSerializer.readValue(json, ConditionMatcher::class.java)
+    fun matcher(json: String): ConditionMatcher = V7JsonSerializer.readValue(json, ConditionMatcher::class.java)
 
     fun matches(matcher: ConditionMatcher, facts: Facts): Boolean {
         clock.now = facts.time

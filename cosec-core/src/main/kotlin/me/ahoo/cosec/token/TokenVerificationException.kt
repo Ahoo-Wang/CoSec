@@ -14,8 +14,6 @@
 package me.ahoo.cosec.token
 
 import me.ahoo.cosec.CoSecException
-import me.ahoo.cosec.api.authorization.AuthorizeResult
-import me.ahoo.cosec.api.context.SecurityContext
 
 /**
  * Exception thrown when token verification fails.
@@ -31,26 +29,4 @@ open class TokenVerificationException : CoSecException {
     constructor(s: String) : super(s)
     constructor(message: String, cause: Throwable) : super(message, cause)
     constructor(cause: Throwable) : super(cause)
-}
-
-/**
- * Converts a token verification exception to an authorization result.
- */
-fun TokenVerificationException.toAuthorizeResult(): AuthorizeResult {
-    if (this is TokenExpiredException) {
-        return AuthorizeResult.TOKEN_EXPIRED
-    }
-    return AuthorizeResult.deny("Token Invalid")
-}
-
-object TokenVerificationContexts {
-    private const val KEY = "COSEC_TOKEN_VERIFICATION_EXCEPTION"
-
-    fun SecurityContext.setTokenVerificationException(exception: TokenVerificationException): SecurityContext {
-        return setAttributeValue(KEY, exception)
-    }
-
-    fun SecurityContext.getTokenVerificationException(): TokenVerificationException? {
-        return getAttributeValue(KEY)
-    }
 }

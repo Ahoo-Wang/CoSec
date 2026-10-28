@@ -10,12 +10,6 @@
     },
     {
       "$ref": "#/definitions/appDocument"
-    },
-    {
-      "$ref": "#/definitions/policiesDocument"
-    },
-    {
-      "$ref": "#/definitions/legacyAppDocument"
     }
   ],
   "definitions": {
@@ -415,58 +409,6 @@
       ],
       "description": "A condition (RFC 0005 §3.1): one operator."
     },
-    "legacyAppDocument": {
-      "additionalProperties": false,
-      "properties": {
-        "appPermission": {
-          "$ref": "cosec-app-permission.schema.json"
-        },
-        "grants": {
-          "additionalProperties": {
-            "items": {
-              "examples": [
-                "manage.order.ship",
-                "manage.order.read"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "description": "The permission ids granted to each role, keyed `role` or `role@space`.",
-          "propertyNames": {
-            "examples": [
-              "admin",
-              "shipper@team-a"
-            ],
-            "pattern": "^[^@]+(@[^@]+)?$",
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "publishedAt": {
-          "description": "When the revision was published. When present it must equal the stored header.",
-          "examples": [
-            "2026-10-26T00:00:00Z"
-          ],
-          "format": "date-time",
-          "type": "string"
-        },
-        "revision": {
-          "description": "The revision. When present it must equal the stored header.",
-          "minimum": 1,
-          "type": "integer"
-        },
-        "schema": {
-          "const": 1,
-          "description": "The document format version. When present it must equal the stored header.",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "appPermission"
-      ],
-      "type": "object"
-    },
     "platformBinding": {
       "additionalProperties": false,
       "description": "A binding of the platform document: a principal names its tenant.",
@@ -701,39 +643,6 @@
         "schema",
         "revision",
         "publishedAt"
-      ],
-      "type": "object"
-    },
-    "policiesDocument": {
-      "additionalProperties": false,
-      "properties": {
-        "policies": {
-          "items": {
-            "$ref": "cosec-policy.schema.json"
-          },
-          "type": "array"
-        },
-        "publishedAt": {
-          "description": "When the revision was published. When present it must equal the stored header.",
-          "examples": [
-            "2026-10-26T00:00:00Z"
-          ],
-          "format": "date-time",
-          "type": "string"
-        },
-        "revision": {
-          "description": "The revision. When present it must equal the stored header.",
-          "minimum": 1,
-          "type": "integer"
-        },
-        "schema": {
-          "const": 1,
-          "description": "The document format version. When present it must equal the stored header.",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "policies"
       ],
       "type": "object"
     },
@@ -1251,6 +1160,6 @@
       "type": "object"
     }
   },
-  "description": "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
+  "description": "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, schema 2). Ids must be unique. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "title": "CoSec Snapshot Document Schema"
 }

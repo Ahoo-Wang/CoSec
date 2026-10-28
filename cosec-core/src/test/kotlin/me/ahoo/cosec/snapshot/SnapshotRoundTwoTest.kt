@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Regressions for the round-2 review of the snapshot source (#991). */
 class SnapshotRoundTwoTest {
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1, "a1"))
         put(APP_B, document(1, "b1"))
         put(APP_C, document(1, "c1"))
@@ -57,21 +57,21 @@ class SnapshotRoundTwoTest {
     fun errorFromOnInstallLeavesTheKeyLoading() {
         testSource(store, metrics = ErrorMetrics({ AssertionError("meter") }, "onInstall")).use { source ->
             source.load().join().policiesCompiled.revision.assert().isEqualTo(1)
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             source.policiesRevision().assert().isEqualTo(2)
             source.revalidate().get(5, TimeUnit.SECONDS)
-            source.reload(SnapshotKey.Policies).get(5, TimeUnit.SECONDS).revision.assert().isEqualTo(2)
+            source.reload(SnapshotKey.Platform).get(5, TimeUnit.SECONDS).revision.assert().isEqualTo(2)
         }
     }
 
     @Test
     fun errorFromOnRegressionLeavesTheKeyLoading() {
-        store.put(SnapshotKey.Policies, document(5))
+        store.put(SnapshotKey.Platform, document(5))
         testSource(store, metrics = ErrorMetrics({ AssertionError("meter") }, "onRegression")).use { source ->
             source.load().join()
-            store.put(SnapshotKey.Policies, document(3))
+            store.put(SnapshotKey.Platform, document(3))
             source.policiesRevision().assert().isEqualTo(3)
-            store.put(SnapshotKey.Policies, document(4))
+            store.put(SnapshotKey.Platform, document(4))
             source.policiesRevision().assert().isEqualTo(4)
         }
     }
@@ -80,9 +80,9 @@ class SnapshotRoundTwoTest {
     fun errorFromOnDocumentLostStillFailsTheLostDocument() {
         testSource(store, metrics = ErrorMetrics({ AssertionError("meter") }, "onDocumentLost")).use { source ->
             source.load().join()
-            store.remove(SnapshotKey.Policies)
+            store.remove(SnapshotKey.Platform)
             source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             source.policiesRevision().assert().isEqualTo(2)
         }
     }
@@ -91,7 +91,7 @@ class SnapshotRoundTwoTest {
     fun virtualMachineErrorFromOnDocumentLostStillFailsTheLostDocument() {
         testSource(store, metrics = ErrorMetrics({ StackOverflowError("meter") }, "onDocumentLost")).use { source ->
             source.load().join()
-            store.remove(SnapshotKey.Policies)
+            store.remove(SnapshotKey.Platform)
             source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
         }
     }
@@ -100,9 +100,9 @@ class SnapshotRoundTwoTest {
     fun virtualMachineErrorFromOnInstallLeavesTheKeyLoading() {
         testSource(store, metrics = ErrorMetrics({ StackOverflowError("meter") }, "onInstall")).use { source ->
             source.load().join().policies.assert().isInstanceOf(DocumentState.Present::class.java)
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             source.policiesRevision().assert().isEqualTo(2)
-            store.put(SnapshotKey.Policies, document(3))
+            store.put(SnapshotKey.Platform, document(3))
             source.policiesRevision().assert().isEqualTo(3)
         }
     }
@@ -111,7 +111,7 @@ class SnapshotRoundTwoTest {
     fun localCopyThatCannotBeConfirmedLooksAsOldAsItMayBe() {
         val clock = ManualClock()
         store.declaredLocalCopyMaxAge = Duration.ofSeconds(30)
-        store.localCopies[SnapshotKey.Policies] = document(1)
+        store.localCopies[SnapshotKey.Platform] = document(1)
         store.conditionalFailure = IllegalStateException("redis down")
         testSource(store, clock = clock).use { source ->
             source.load().join()
@@ -200,7 +200,7 @@ class SnapshotRoundTwoTest {
     @Test
     fun revalidationOfManyAppsDoesNotGrowTheStack() {
         val inMemory = InMemorySnapshotDocumentStore()
-        inMemory.put(SnapshotKey.Policies, document(1))
+        inMemory.put(SnapshotKey.Platform, document(1))
         val apps = 10_000
         repeat(apps) { inMemory.put(SnapshotKey.App("app-$it"), document(1, "a")) }
         val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = apps * 2)
@@ -225,7 +225,7 @@ class SnapshotRoundTwoTest {
             source.load().join()
             reject.set(true)
             val before = store.conditionalReads.get()
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
 
             Thread.sleep(700)
 
@@ -243,7 +243,7 @@ class SnapshotRoundTwoTest {
         source.load().join()
         store.hold = true
         source.revalidate()
-        val reloaded = source.reload(SnapshotKey.Policies)
+        val reloaded = source.reload(SnapshotKey.Platform)
 
         source.close()
         store.releaseAll()

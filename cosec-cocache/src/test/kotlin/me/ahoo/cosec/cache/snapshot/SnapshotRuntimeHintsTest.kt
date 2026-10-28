@@ -13,10 +13,6 @@
 
 package me.ahoo.cosec.cache.snapshot
 
-import me.ahoo.cosec.policy.action.ActionMatcherFactory
-import me.ahoo.cosec.policy.action.PathActionMatcherFactory
-import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-import me.ahoo.cosec.policy.condition.part.EqConditionMatcherFactory
 import me.ahoo.cosec.serialization.CoSecModule
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -48,9 +44,8 @@ class SnapshotRuntimeHintsTest {
 
     @Test
     fun coversEveryProviderOnTheClasspath() {
-        val providers = listOf(CoSecModule::class.java, PathActionMatcherFactory::class.java, EqConditionMatcherFactory::class.java) +
-            ServiceLoader.load(ActionMatcherFactory::class.java).map { it.javaClass } +
-            ServiceLoader.load(ConditionMatcherFactory::class.java).map { it.javaClass }
+        val providers = listOf(CoSecModule::class.java) +
+            ServiceLoader.load(tools.jackson.databind.JacksonModule::class.java).map { it.javaClass }
         providers.forEach { provider ->
             RuntimeHintsPredicates.reflection().onType(provider)
                 .withMemberCategory(MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS)

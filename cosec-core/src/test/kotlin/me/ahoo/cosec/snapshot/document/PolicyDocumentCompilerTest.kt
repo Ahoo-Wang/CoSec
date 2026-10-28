@@ -261,12 +261,11 @@ class PolicyDocumentCompilerTest {
         assertThrownBy<DocumentCompileException> { PolicyDocumentCompiler.forPlatform(platform).compile(wide) }
     }
 
-    /** DOC-3: a document that is not this version's format fails to decode; RFC 0003's keys are not read either. */
+    /** DOC-3: a document that is not this version's format fails to decode. */
     @Test
     fun `only this format and these keys compile`() {
         assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Platform, stored(platform, schema = 1)) }
             .hasMessageContaining("schema 1")
-        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Policies, stored(platform)) }
         assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Platform, stored(app)) }
             .hasMessageContaining("unknown field catalog")
     }

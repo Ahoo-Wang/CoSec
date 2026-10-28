@@ -24,7 +24,7 @@ import java.time.Duration
 /** Lost and early notifications (F9), resets (F10), revision regressions (F11) and per-tenant fail-closed (F15). */
 class SnapshotRevalidationTest {
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1, "a1"))
         put(APP_B, document(1, "b1"))
     }
@@ -34,7 +34,7 @@ class SnapshotRevalidationTest {
         testSource(store).use { source ->
             source.load("app-a").join()
             store.dropNotifications = true
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(1)
 
             source.revalidate().join()
@@ -46,7 +46,7 @@ class SnapshotRevalidationTest {
     @Test
     fun f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation() {
         val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
-        SnapshotSource(
+        appSource(
             store,
             FakeCompiler(),
             FakeCompiler(),
@@ -56,9 +56,9 @@ class SnapshotRevalidationTest {
         ).use { source ->
             source.load().join()
             // The listener runs before the store serves the new value: the reload it starts still reads revision 1.
-            store.notifyChanged(SnapshotKey.Policies)
+            store.notifyChanged(SnapshotKey.Platform)
             store.dropNotifications = true
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
 
             await { (source.peek()?.policies as? DocumentState.Present)?.compiled?.revision == 2L }
         }
@@ -69,7 +69,7 @@ class SnapshotRevalidationTest {
         testSource(store).use { source ->
             store.hold = true
             val cold = source.load()
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.pending.removeAt(0).release()
             cold.join().policiesCompiled.revision.assert().isEqualTo(1)
 
@@ -85,7 +85,7 @@ class SnapshotRevalidationTest {
             source.load("app-a").join()
             source.load("app-b").join()
             store.dropNotifications = true
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.put(APP_A, document(2, "a2"))
             store.put(APP_B, document(2, "b2"))
 
@@ -105,7 +105,7 @@ class SnapshotRevalidationTest {
             store.dropNotifications = true
             store.hold = true
             source.revalidate()
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.reset()
             store.releaseAll()
             store.releaseAll()
@@ -116,16 +116,16 @@ class SnapshotRevalidationTest {
     @Test
     fun f11LowerRevisionIsInstalledAndReported() {
         val metrics = RecordingMetrics()
-        store.put(SnapshotKey.Policies, document(5))
+        store.put(SnapshotKey.Platform, document(5))
         testSource(store, metrics = metrics).use { source ->
             source.load().join()
 
-            store.put(SnapshotKey.Policies, document(3))
+            store.put(SnapshotKey.Platform, document(3))
 
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(3)
-            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Policies, 5L, 3L))
+            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Platform, 5L, 3L))
 
-            store.put(SnapshotKey.Policies, document(4))
+            store.put(SnapshotKey.Platform, document(4))
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(4)
             metrics.regressions.assert().hasSize(1)
         }
@@ -137,10 +137,10 @@ class SnapshotRevalidationTest {
         testSource(store, metrics = metrics).use { source ->
             source.load().join()
 
-            store.put(SnapshotKey.Policies, document(1, "rewritten"))
+            store.put(SnapshotKey.Platform, document(1, "rewritten"))
 
             source.peek()!!.policiesCompiled.entries.assert().containsExactly("rewritten")
-            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Policies, 1L, 1L))
+            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Platform, 1L, 1L))
         }
     }
 

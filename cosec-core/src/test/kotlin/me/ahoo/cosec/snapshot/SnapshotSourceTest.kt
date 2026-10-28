@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 
 class SnapshotSourceTest {
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1, "a1"))
     }
 
@@ -52,7 +52,7 @@ class SnapshotSourceTest {
             peeked.policiesEntry.assert().isSameAs(loaded.policiesEntry)
             peeked.appEntry.assert().isSameAs(loaded.appEntry)
             metrics.loads.assert().contains(SnapshotKind.APP to LoadOutcome.COLD, SnapshotKind.APP to LoadOutcome.HIT)
-            metrics.installs.map { it.key }.assert().containsExactlyInAnyOrder(SnapshotKey.Policies, APP_A)
+            metrics.installs.map { it.key }.assert().containsExactlyInAnyOrder(SnapshotKey.Platform, APP_A)
         }
     }
 
@@ -100,7 +100,7 @@ class SnapshotSourceTest {
         testSource(store).use { source ->
             source.load("app-a").join()
             val conditionalReads = store.conditionalReads.get()
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.put(APP_A, document(2, "a2"))
             val snapshot = source.peek("app-a")!!
             snapshot.version.assert().isEqualTo(SnapshotVersion(2, 2))
@@ -189,7 +189,7 @@ class SnapshotSourceTest {
             source.peek("app-a").assert().isNotNull()
             source.peek("app-c").assert().isNotNull()
             source.peek().assert().isNotNull()
-            source.entries().map { it.key }.assert().containsExactlyInAnyOrder(SnapshotKey.Policies, APP_A, APP_C)
+            source.entries().map { it.key }.assert().containsExactlyInAnyOrder(SnapshotKey.Platform, APP_A, APP_C)
 
             source.load("app-b").join().appCompiled.entries.assert().containsExactly("b1")
         }
@@ -201,7 +201,7 @@ class SnapshotSourceTest {
             source.load().join()
             store.failure = IllegalStateException("down")
             source.load("app-z").join().app.assert().isInstanceOf(DocumentState.Failed::class.java)
-            source.entries().map { it.key }.assert().containsExactly(SnapshotKey.Policies)
+            source.entries().map { it.key }.assert().containsExactly(SnapshotKey.Platform)
             store.failure = null
             source.load("app-z").join().app.assert().isEqualTo(DocumentState.Absent)
         }
@@ -211,11 +211,11 @@ class SnapshotSourceTest {
     fun prewarmMakesTheSourceReady() {
         testSource(store).use { source ->
             source.isPrewarmed.assert().isFalse()
-            source.prewarm(listOf(SnapshotKey.Policies, APP_A)).get(5, TimeUnit.SECONDS)
+            source.prewarm(listOf(SnapshotKey.Platform, APP_A)).get(5, TimeUnit.SECONDS)
             source.isPrewarmed.assert().isTrue()
             source.peek("app-a").assert().isNotNull()
             store.reads.get().assert().isEqualTo(2)
-            source.prewarm(listOf(SnapshotKey.Policies)).get(5, TimeUnit.SECONDS)
+            source.prewarm(listOf(SnapshotKey.Platform)).get(5, TimeUnit.SECONDS)
             store.reads.get().assert().isEqualTo(2)
         }
     }
@@ -229,7 +229,7 @@ class SnapshotSourceTest {
         )
         testSource(store, options = options).use { source ->
             store.failure = IllegalStateException("down")
-            val prewarm = source.prewarm(listOf(SnapshotKey.Policies, APP_A))
+            val prewarm = source.prewarm(listOf(SnapshotKey.Platform, APP_A))
             await { store.reads.get() >= 6 }
             prewarm.isDone.assert().isFalse()
             source.isPrewarmed.assert().isFalse()
@@ -245,7 +245,7 @@ class SnapshotSourceTest {
         val options = SnapshotOptions(revalidateInterval = Duration.ZERO, prewarmInitialBackoff = Duration.ofMillis(10))
         val source = testSource(store, options = options)
         store.failure = IllegalStateException("down")
-        val prewarm = source.prewarm(listOf(SnapshotKey.Policies))
+        val prewarm = source.prewarm(listOf(SnapshotKey.Platform))
         source.close()
         val error = assertThrows<ExecutionException> { prewarm.get(5, TimeUnit.SECONDS) }
         error.cause.assert().isInstanceOf(IllegalStateException::class.java)
@@ -255,7 +255,7 @@ class SnapshotSourceTest {
     fun reloadLoadsAKeyThatIsNotInstalled() {
         testSource(store).use { source ->
             source.reload(APP_A).join().revision.assert().isEqualTo(1)
-            source.reload(SnapshotKey.Policies).join().revision.assert().isEqualTo(1)
+            source.reload(SnapshotKey.Platform).join().revision.assert().isEqualTo(1)
             source.peek("app-a").assert().isNotNull()
         }
     }
@@ -274,7 +274,7 @@ class SnapshotSourceTest {
     @Test
     fun periodicRevalidationRunsOnItsOwn() {
         val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
-        SnapshotSource(store, FakeCompiler(), FakeCompiler(), options).use { source ->
+        appSource(store, FakeCompiler(), FakeCompiler(), options).use { source ->
             source.load().join()
             val afterLoad = store.conditionalReads.get()
             await { store.conditionalReads.get() >= afterLoad + 2 }

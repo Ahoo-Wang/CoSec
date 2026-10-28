@@ -15,7 +15,6 @@ package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.model.Action
-import me.ahoo.cosec.model.HostFacts
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SpaceId
@@ -29,7 +28,7 @@ import java.net.URI
 /**
  * What the statements of a scenario read about its request: the attribute catalog of RFC 0005 §3.2, filled from the
  * scenario. The engine answers most attributes from its own request; [host] answers the rest (`http.*`,
- * `request.attributes.*`) and injects `"fault"`s. It also travels as the [HostFacts] of the engine's request.
+ * `request.attributes.*`) and injects `"fault"`s.
  */
 class RequestFacts(
     val authenticated: Boolean,
@@ -46,7 +45,7 @@ class RequestFacts(
     /** By lower-case name. */
     val headers: Map<String, String>,
     val requestAttributes: Map<String, String>,
-) : HostFacts {
+) {
     /** The input of a condition; [captures] are the variables of the statement's resource pattern, if any. */
     fun input(captures: Captures?): ConditionInput = FactsInput(this, captures)
 

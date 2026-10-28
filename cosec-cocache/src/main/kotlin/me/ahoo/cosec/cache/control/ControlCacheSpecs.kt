@@ -270,8 +270,6 @@ object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
     override fun decode(bytes: ByteArray): Set<SnapshotKey> =
         read(bytes, WHAT).items(WHAT).mapTo(LinkedHashSet()) { item ->
             val text = item.text(WHAT)
-            SnapshotKeyEncoder.decode(text)?.takeIf {
-                it != SnapshotKey.Policies
-            } ?: malformed(WHAT, "[$text] is not a document key")
+            SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")
         }
 }

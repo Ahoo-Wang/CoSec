@@ -20,9 +20,8 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 /**
  * The key of a snapshot document.
  *
- * - [Platform], [App] and [Tenant] hold the 8.0 documents (RFC 0004 §7.1, schema 2): app and tenant documents may name
- *   platform policies, never the other way round, and each is read and versioned on its own.
- * - [Policies], with [App] in schema 1, is RFC 0003's 7.0-shaped pair (§3.2), removed at the switch (RFC 0008 §4.2).
+ * [Platform], [App] and [Tenant] hold the 8.0 documents (RFC 0004 §7.1, schema 2): app and tenant documents may name
+ * platform policies, never the other way round, and each is read and versioned on its own.
  */
 sealed interface SnapshotKey {
     val kind: SnapshotKind
@@ -58,16 +57,9 @@ sealed interface SnapshotKey {
         }
     }
 
-    /** 7.0-shaped: every policy, global or not. Every request needs it, so it is prewarmed and never evicted. */
-    data object Policies : SnapshotKey {
-        override val kind: SnapshotKind get() = SnapshotKind.POLICIES
-
-        override fun toString(): String = "policies"
-    }
-
     /**
-     * One app's document, loaded on demand and evicted least recently used: in schema 2 its catalog, permission
-     * policies and role bindings; in RFC 0003's schema 1 its permissions and role grants.
+     * One app's document, loaded on demand and evicted least recently used: its catalog, permission policies and role
+     * bindings.
      */
     data class App(val appId: AppId) : SnapshotKey {
         init {
@@ -91,7 +83,6 @@ sealed interface SnapshotKey {
 
 /** The kind of a [SnapshotKey]: low-cardinality, so it can tag metrics where the app id cannot. */
 enum class SnapshotKind {
-    POLICIES,
     APP,
     PLATFORM,
     TENANT,

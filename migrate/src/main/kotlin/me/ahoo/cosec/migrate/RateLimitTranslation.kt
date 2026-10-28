@@ -15,9 +15,9 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.StatementSource
-import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule
+import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 
@@ -52,7 +52,7 @@ internal class RateLimitTranslation(
 ) {
     fun translate(entry: Source7x.Entry, tree: JsonNode): ConvertedRateLimit? {
         val decoded = try {
-            CoSecJsonSerializer.treeToValue(tree, RateLimitRule::class.java)
+            V7JsonSerializer.treeToValue(tree, RateLimitRule::class.java)
         } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
             reject(
                 RejectionKind.UNDECODABLE,

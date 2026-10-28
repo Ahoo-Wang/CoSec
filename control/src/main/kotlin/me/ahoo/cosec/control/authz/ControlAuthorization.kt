@@ -219,9 +219,6 @@ object ControlResources {
         SnapshotKey.Platform -> "platform"
         is SnapshotKey.App -> "app/${segment(key.appId)}"
         is SnapshotKey.Tenant -> "tenant/${segment(key.tenantId)}"
-        SnapshotKey.Policies -> throw IllegalArgumentException(
-            "The control plane writes platform, app and tenant documents."
-        )
     }
 
     /** An owner or scope part that would add a segment could make one document's resource look like another's. */

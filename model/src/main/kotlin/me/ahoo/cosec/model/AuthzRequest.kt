@@ -24,8 +24,6 @@ class AuthzRequest(
     val action: Action,
     val resource: Resource,
     val environment: Environment,
-    /** Host data for the adapted legacy matchers (RFC 0002 stages 2–3). The engine never reads it. */
-    val host: HostFacts = HostFacts.None,
 )
 
 class Subject(
@@ -69,8 +67,3 @@ class Environment(
     /** Decided beforehand by `BlacklistChecker` (RFC 0002 stages 2–3); an attribute provider supplies it later. */
     val blocked: Boolean,
 )
-
-/** Host data the engine does not know about. The adapter in `cosec-core` provides it. */
-interface HostFacts {
-    object None : HostFacts
-}

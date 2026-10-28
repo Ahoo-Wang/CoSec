@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 /** Regressions for the round-1 review of the snapshot source (#988). */
 class SnapshotReviewFixesTest {
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(7, "a7"))
         put(APP_B, document(1, "b1"))
     }
@@ -64,7 +64,7 @@ class SnapshotReviewFixesTest {
         testSource(store, metrics = ThrowingMetrics()).use { source ->
             store.hold = true
             val cold = source.load()
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             store.pending.removeAt(0).release()
 
             cold.join().policiesCompiled.revision.assert().isEqualTo(1)
@@ -73,9 +73,9 @@ class SnapshotReviewFixesTest {
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(2)
 
             store.hold = false
-            store.put(SnapshotKey.Policies, document(1, "lost write"))
+            store.put(SnapshotKey.Platform, document(1, "lost write"))
             source.peek()!!.policiesCompiled.entries.assert().containsExactly("lost write")
-            store.remove(SnapshotKey.Policies)
+            store.remove(SnapshotKey.Platform)
             source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
         }
     }
@@ -125,7 +125,7 @@ class SnapshotReviewFixesTest {
             source.load().join()
             val compiles = compiler.compiled.size
 
-            source.reload(SnapshotKey.Policies).join().revision.assert().isEqualTo(1)
+            source.reload(SnapshotKey.Platform).join().revision.assert().isEqualTo(1)
 
             compiler.compiled.size.assert().isEqualTo(compiles + 1)
         }
@@ -136,8 +136,8 @@ class SnapshotReviewFixesTest {
         testSource(store).use { source ->
             store.hold = true
             val cold = source.load()
-            val reloaded = source.reload(SnapshotKey.Policies)
-            store.put(SnapshotKey.Policies, document(2))
+            val reloaded = source.reload(SnapshotKey.Platform)
+            store.put(SnapshotKey.Platform, document(2))
             store.pending.removeAt(0).release()
             cold.join().policiesCompiled.revision.assert().isEqualTo(1)
             reloaded.isDone.assert().isFalse()
@@ -168,7 +168,7 @@ class SnapshotReviewFixesTest {
             source.load().join().policies.assert().isInstanceOf(DocumentState.Failed::class.java)
             source.peek().assert().isNull()
 
-            store.remove(SnapshotKey.Policies)
+            store.remove(SnapshotKey.Platform)
 
             val failure = (source.load().join().policies as DocumentState.Failed).error
             failure.message.assert().contains("was seen")

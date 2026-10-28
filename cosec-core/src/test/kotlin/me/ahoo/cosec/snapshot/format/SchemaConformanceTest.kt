@@ -17,18 +17,8 @@ import com.networknt.schema.Schema
 import com.networknt.schema.SchemaLocation
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
-import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.api.policy.ActionMatcher
-import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.authorization.engine.Compiled
-import me.ahoo.cosec.authorization.engine.PolicySnapshotCompiler
-import me.ahoo.cosec.limiter.RateLimitRule
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.policy.condition.part.DefaultPartExtractor
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -70,56 +60,10 @@ class SchemaConformanceTest {
         private val ROOTS = DocumentFormats.files.filter { it.root != null && it.name != DocumentFormats.PROBLEM }
 
         /**
-         * What today's codecs accept although the descriptor does not. Each is a property of a codec, not of one field,
-         * so later codecs (RFC 0004 Q10) can drop them one by one; every rule must still excuse at least one mutation.
+         * What today's codecs accept although the descriptor does not. Each is a property of a codec, not of one field;
+         * every rule must still excuse at least one mutation.
          */
         val LENIENCIES: List<Leniency> = listOf(
-            // Also a second key of a matcher object, known or not: the 7.x codecs read only the first (RFC 0004 Q10).
-            Leniency(
-                "fields the codec does not read (unknown ones, a matcher object's keys after the first, \$schema) are " +
-                    "ignored, except at the top level of a snapshot document"
-            ) {
-                (it.kind == MutationKind.UNKNOWN_FIELD || it.field == "\$schema") &&
-                    !(it.topLevel && it.owner.startsWith(DocumentFormats.snapshotDocumentSchema.fileName))
-            },
-            Leniency("a number or boolean is read as a string (JsonNode.asString)") {
-                it.changesTo(JsonKind.NUMBER, JsonKind.INTEGER, JsonKind.BOOLEAN) && JsonKind.STRING in it.acceptedKinds()
-            },
-            Leniency("an integer is read as a boolean (JsonNode.asBoolean)") {
-                it.changesTo(JsonKind.INTEGER) && it.acceptedKinds() == setOf(JsonKind.BOOLEAN)
-            },
-            Leniency("a fractional number is truncated to an integer (JsonNode.asLong)") {
-                it.changesTo(JsonKind.NUMBER) && it.acceptedKinds() == setOf(JsonKind.INTEGER)
-            },
-            Leniency("a non-array is read as an array: a scalar as empty or one item, an object as its values") {
-                it.kind == MutationKind.CHANGE_TYPE && it.replacement != JsonKind.ARRAY && JsonKind.ARRAY in it.acceptedKinds()
-            },
-            Leniency("a matcher configuration that is not an object is read as one without fields") {
-                it.kind == MutationKind.CHANGE_TYPE && it.replacement != JsonKind.OBJECT &&
-                    (it.holder as? ObjectType)?.extension != null
-            },
-            Leniency("path options that are not an object are read as the default options") {
-                it.kind == MutationKind.CHANGE_TYPE && it.field == "options"
-            },
-            // The three below accept a value that then never matches or always fails: never wider than written.
-            Leniency("an empty composite action is read as one that matches no request") {
-                it.kind == MutationKind.OUT_OF_RANGE && it.owner.endsWith("#compositeActionMatcher")
-            },
-            Leniency("an action's method is upper-cased, not checked: an unknown one matches no request") {
-                it.kind == MutationKind.INVALID_VALUE &&
-                    it.declared?.toString().orEmpty().let { declared -> declared.endsWith("#method") || declared.endsWith("#methodValue") }
-            },
-            // Only when a generated pattern sits beside a "." separator; separatorMakesSlashLiteral pins it.
-            Leniency(
-                "with a separator other than /, a path pattern's / is a literal, so its ** is not in the middle",
-                rare = true
-            ) {
-                it.kind == MutationKind.INVALID_VALUE && it.field == "pattern" &&
-                    it.parent?.get("options")?.get("separator")?.asString()?.trim()?.let { separator -> separator != "/" } == true
-            },
-            Leniency("a regular expression timeout below 1 ms is read as is: every match times out and fails closed") {
-                it.kind == MutationKind.OUT_OF_RANGE && it.field == "timeout"
-            },
             Leniency("8.0 documents are decoded here, not compiled: PolicyDocumentValuesTest compiles their values") {
                 it.isValueMutation && it.isPolicyDocument()
             },
@@ -130,16 +74,10 @@ class SchemaConformanceTest {
             owner.startsWith(DocumentFormats.bindingSchema.fileName) ||
                 owner.startsWith(DocumentFormats.catalogSchema.fileName) ||
                 document.get("schema")?.takeIf { it.isIntegralNumber }?.asInt() == PolicyDocumentCodec.SCHEMA
-
-        private fun Mutation.changesTo(vararg kinds: JsonKind): Boolean = kind == MutationKind.CHANGE_TYPE && replacement in kinds
-
-        private fun Mutation.acceptedKinds(): Set<JsonKind> = declared?.let { JsonKind.accepted(it) }.orEmpty()
     }
 
     /** [rare]: the generated documents meet it only for some seeds, so it may excuse nothing for the default one. */
     class Leniency(val name: String, val rare: Boolean = false, val matches: (Mutation) -> Boolean)
-
-    private val compiler = PolicySnapshotCompiler()
 
     private fun schema(file: SchemaFile): Schema = registry.getSchema(
         SchemaLocation.of(DocumentFormats.BASE_URI + file.fileName)
@@ -149,7 +87,7 @@ class SchemaConformanceTest {
         file
     ).validate(node).map { it.toString() }
 
-    /** Null when the codec (or, for a snapshot document, the compiler) accepts [node]; otherwise why it rejects it. */
+    /** Null when the codec accepts [node]; otherwise why it rejects it. */
     @Suppress("TooGenericExceptionCaught")
     private fun codecError(file: SchemaFile, node: JsonNode): Throwable? = try {
         decode(file, node)
@@ -161,23 +99,7 @@ class SchemaConformanceTest {
 
     private fun decode(file: SchemaFile, node: JsonNode) {
         when (file.name) {
-            DocumentFormats.ACTION -> CoSecJsonSerializer.treeToValue(node, ActionMatcher::class.java)
-            DocumentFormats.CONDITION -> CoSecJsonSerializer.treeToValue(node, ConditionMatcher::class.java)
-            DocumentFormats.POLICY -> CoSecJsonSerializer.treeToValue(node, Policy::class.java)
-            DocumentFormats.APP_PERMISSION -> CoSecJsonSerializer.treeToValue(node, AppPermission::class.java)
-            DocumentFormats.RATE_LIMIT_RULE -> {
-                // As LocalRateLimitRuleLoader reads a file: one rule or an array, ids unique.
-                val rules = (if (node.isArray) node.values().toList() else listOf(node))
-                    .map { CoSecJsonSerializer.treeToValue(it, RateLimitRule::class.java) }
-                require(rules.map { it.id }.toSet().size == rules.size) { "Duplicate rule id." }
-            }
-
-            DocumentFormats.SNAPSHOT_DOCUMENT ->
-                if (node.get("schema")?.takeIf { it.isIntegralNumber }?.asInt() == PolicyDocumentCodec.SCHEMA) {
-                    decodeDocument(node)
-                } else {
-                    compile(node)
-                }
+            DocumentFormats.SNAPSHOT_DOCUMENT -> decodeDocument(node)
 
             DocumentFormats.BINDING -> decodeDocument(document().also { it.putArray("bindings").add(node) })
             DocumentFormats.CATALOG -> decodeDocument(document().also { it.set("catalog", node) })
@@ -206,30 +128,6 @@ class SchemaConformanceTest {
         if (errors.size == kinds.size) {
             throw errors.first()
         }
-    }
-
-    private fun compile(node: JsonNode) {
-        val revision = node.get("revision")?.takeIf { it.isIntegralNumber && it.asLong() > 0 }?.asLong() ?: 1
-        val publishedAt = node.get("publishedAt")?.takeIf { it.isString }
-            ?.let { runCatching { Instant.parse(it.asString()) }.getOrNull() } ?: PUBLISHED_AT
-        val document = SnapshotDocument(
-            SnapshotDocument.CURRENT_SCHEMA,
-            revision,
-            publishedAt,
-            CoSecJsonSerializer.writeValueAsBytes(node)
-        )
-        if (node.has("appPermission")) {
-            val appId = node.get("appPermission").get("id")?.takeIf { it.isString }?.asString()
-                ?.takeIf(SnapshotKey.App::isValidAppId) ?: "app"
-            val app = compiler.compileApp(SnapshotKey.App(appId), document)
-            (listOf(app.appPermission) + app.grants.values.flatMap { it.values }).requireOk()
-        } else {
-            compiler.compilePolicies(document).byId.values.requireOk()
-        }
-    }
-
-    private fun Collection<Compiled<*>>.requireOk() {
-        filterIsInstance<Compiled.Broken>().firstOrNull()?.let { throw it.error }
     }
 
     @Test
@@ -305,40 +203,12 @@ class SchemaConformanceTest {
         }
         val entries = when (file.name) {
             DocumentFormats.SNAPSHOT_DOCUMENT -> document.get("policies")?.values()?.toList().orEmpty()
-            DocumentFormats.RATE_LIMIT_RULE -> if (document.isArray) document.values().toList() else emptyList()
             else -> emptyList()
         }
         entries.forEachIndexed { index, entry ->
             (entry as tools.jackson.databind.node.ObjectNode).put("id", "${entry.get("id").asString()}-$index")
         }
         return document
-    }
-
-    @Test
-    fun separatorMakesSlashLiteral() {
-        val node = CoSecJsonSerializer.readTree(
-            """{"path":{"pattern":"/orders/**/items","options":{"separator":"."}}}"""
-        )
-        schemaErrors(DocumentFormats.actionSchema, node).assert().isNotEmpty()
-        codecError(DocumentFormats.actionSchema, node).assert().isNull()
-    }
-
-    @Test
-    fun partValuePatternIsTheSupportedParts() {
-        val pattern = Regex((DocumentFormats.conditionSchema.definitions.getValue("partValue") as StringType).pattern!!)
-        val candidates = listOf(
-            "request.path", "request.method", "request.appId", "request.spaceId", "request.deviceId", "request.remoteIp",
-            "request.origin", "request.origin.host", "request.referer", "request.referer.host", "context.tenantId",
-            "context.principal.id", "request.header.x", "request.header.", "request.attributes.a", "request.attributes.",
-            "resource.owner", "resource.", "context.principal.attributes.dept", "context.principal.attributes.",
-            "request.path.var.id", "request.path.var.", "request.", "request.pathx", "context.principal", "request.query.a",
-            "", "1", "Request.path",
-        )
-        candidates.forEach {
-            pattern.matches(
-                it
-            ).assert().describedAs("partValue pattern on [$it]").isEqualTo(DefaultPartExtractor.isSupported(it))
-        }
     }
 
     /**
@@ -412,27 +282,12 @@ class SchemaConformanceTest {
             val codecError = codecError(file, node)
             when {
                 schemaErrors.isEmpty() == (codecError == null) -> null
-                schemaErrors.isEmpty() && codecError.isUnregisteredMatcherType() -> null
                 else -> "$where (${file.fileName}): schema ${schemaErrors.ifEmpty { "accepts" }}, codec ${codecError ?: "accepts"}"
             }
         }
         println("Checked ${documents.size} repository documents.")
         documents.map { it.file.name }.toSet().assert().describedAs("formats found in the repository")
-            .contains(
-                DocumentFormats.POLICY,
-                DocumentFormats.APP_PERMISSION,
-                DocumentFormats.RATE_LIMIT_RULE,
-                DocumentFormats.SNAPSHOT_DOCUMENT
-            )
+            .contains(DocumentFormats.SNAPSHOT_DOCUMENT)
         disagreements.assert().describedAs(disagreements.joinToString("\n")).isEmpty()
     }
-
-    /**
-     * A matcher type is an extension point: the schema lets any name through, and only the run-time registry knows
-     * whether a factory registers it (a test resource of the starter registers one as a Spring bean).
-     */
-    private fun Throwable?.isUnregisteredMatcherType(): Boolean =
-        generateSequence(
-            this
-        ) { it.cause }.any { Regex("MatcherFactory\\[[^]]+] not found").containsMatchIn(it.message.orEmpty()) }
 }
