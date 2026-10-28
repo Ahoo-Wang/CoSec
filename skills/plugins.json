@@ -3,7 +3,7 @@
   "plugins": [
     {
       "name": "ahoo-cosec-skills",
-      "description": "CoSec skills for integrating a reactive multi-tenant RBAC and policy-based security framework, authoring authorization policies, extending matchers, and troubleshooting access decisions.",
+      "description": "CoSec skills for integrating a reactive multi-tenant RBAC and policy-based security framework, authoring authorization policy documents, extending CoSec, and troubleshooting access decisions.",
       "skills": {
         "include": [
           "cosec-custom-matcher",
@@ -35,7 +35,7 @@
         "capabilities": [
           "Skills"
         ],
-        "defaultPrompt": "Help me integrate CoSec, author authorization policies, implement custom matchers, and troubleshoot authentication or authorization issues."
+        "defaultPrompt": "Help me integrate CoSec, author authorization policy documents, extend CoSec, and troubleshoot authentication or authorization issues."
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -1,7 +1,7 @@
 # CoSec
 
-Multi-tenant, reactive security for Spring: IAM-style policies and role-based permissions, evaluated
-deny-first for every request.
+Multi-tenant, non-blocking authorization for Spring: IAM-style policy documents and role-based permissions,
+evaluated deny-first for every request.
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![GitHub release](https://img.shields.io/github/release/Ahoo-Wang/CoSec.svg)](https://github.com/Ahoo-Wang/CoSec/releases)
@@ -17,37 +17,43 @@ deny-first for every request.
 
 ## Why CoSec
 
-- **Policies as data.** JSON policies with path actions and composable conditions (roles, tenants, headers,
-  IP, expressions). Change them at runtime; every instance sees the change immediately.
-- **Rate limits.** Per-IP, per-user or shared quotas on allowed requests, counted cluster-wide in Redis, with
-  `RateLimit-*` and `Retry-After` headers.
-- **Deny wins, everywhere.** Global policies, the principal's own policies and role permissions are combined
-  deny-first, unmatched requests are denied, and errors deny.
-- **Multi-tenant and role-based.** Tenant-aware principals, plus per-application permission catalogs
-  granted to roles per space.
-- **One pipeline, three stacks.** Spring WebFlux, Spring MVC and Spring Cloud Gateway share the same
-  security pipeline and respond identically.
-- **Fast and reactive.** Built on Project Reactor. About 2 µs per decision, with no event-loop blocking.
-- **Auditable.** An audit event (log or Kafka) and an OpenTelemetry span for every decision, naming the
-  policy or permission that decided it.
+- **Policies as data.** Platform, app and tenant documents in JSON: statements on actions and resources, typed
+  conditions (roles, tenant, app and space, IP ranges, time windows, external attributes), and bindings that say
+  who each policy applies to. Every instance compiles them into a snapshot read from Redis and picks up published
+  changes without a restart.
+- **Deny wins, everywhere.** Any matching DENY overrides every ALLOW, in any document; unmatched requests are
+  denied; a request that cannot be decided fails closed with `503`.
+- **Multi-tenant and role-based.** Tenants own their documents, each app publishes its permission catalog and
+  grants permissions to roles per space, and platform boundaries cap what any tenant can allow.
+- **Reviewed changes.** A control plane validates, simulates and shadow-tests a change on live traffic before it
+  is published, keeps its revisions, and rolls back.
+- **Rate limits.** Per-IP, per-user or shared quotas as document rules, spent only by permitted requests, counted
+  cluster-wide in Redis, with `RateLimit-*` and `Retry-After` headers.
+- **One pipeline, three stacks.** Spring WebFlux, Spring MVC and Spring Cloud Gateway share one pipeline and answer
+  identically, with `application/problem+json` errors.
+- **Fast and non-blocking.** About 2 µs of pipeline overhead per request, with no blocking on the event loop.
+- **Auditable.** A decision event for every request (audit log, Kafka, Micrometer, OpenTelemetry), naming the
+  statement and binding that decided it.
 
 ## How a decision is made
 
 ```mermaid
 flowchart LR
-    R([Request + JWT]) --> BL{Blacklisted?}
-    BL -->|yes| DENY([EXPLICIT_DENY])
-    BL -->|no| ROOT{"Root principal?<br>(only if root is enabled)"}
-    ROOT -->|yes| ALLOW([ALLOW])
-    ROOT -->|no| L["Global policies<br>Principal policies<br>Role permissions"]
-    L --> D{Any DENY matched?}
+    R([Request + token]) --> BL{Blacklisted?}
+    BL -->|yes| DENY([Deny])
+    BL -->|no| D{"Any DENY of the bound<br>policies matched?"}
     D -->|yes| DENY
-    D -->|no| A{Any ALLOW matched?}
-    A -->|yes| ALLOW
-    A -->|no| IMP([IMPLICIT_DENY])
+    D -->|no| U{"Anything that could<br>not be checked?"}
+    U -->|yes| IND([Indeterminate])
+    U -->|no| A{Any ALLOW matched?}
+    A -->|no| DENY
+    A -->|yes| B{Within the tenant's boundary?}
+    B -->|no| DENY
+    B -->|yes| P([Permit])
 ```
 
-Denied anonymous callers get `401`, authenticated callers `403`, and rate-limited requests `429`.
+Denied anonymous callers get `401`, authenticated callers `403`, undecidable requests `503`, and permitted requests
+over a rate limit `429`.
 
 ## Quick start
 
@@ -58,7 +64,7 @@ dependencies {
         capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // or webmvc-support / gateway-support
     }
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // Redis-backed policy storage
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // Redis: snapshot, revocation, rate limits
     }
 }
 ```
@@ -68,19 +74,31 @@ cosec:
   jwt:
     secret: ${COSEC_JWT_SECRET}
   authorization:
-    local-policy:
-      enabled: true          # classpath:cosec-policy/*-policy.json
-      init-repository: true
+    routes:
+      location: ""   # no route map yet: requests are authorized as http:<METHOD> on http:path:<path>
 ```
+
+Redis must run with `maxmemory-policy noeviction`. Publish a platform document (here with
+`cosec-migrate publish`); until one exists, every request is answered `503`:
 
 ```json
 {
-  "id": "app", "name": "App", "category": "app", "description": "", "type": "global", "tenantId": "(platform)",
-  "statements": [
-    { "name": "public", "action": ["/auth/login", "/actuator/health"] },
-    { "name": "authenticated", "action": "/api/**", "condition": { "authenticated": {} } },
-    { "name": "admins-only", "effect": "deny", "action": "/api/admin/**",
-      "condition": { "inRole": { "value": "admin", "negate": true } } }
+  "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
+  "policies": [
+    { "id": "public", "statements": [
+      { "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
+      { "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
+    { "id": "members", "statements": [
+      { "effect": "allow", "action": "http:*", "resource": "http:path:/api/**",
+        "condition": { "eq": ["subject.authenticated", true] } } ] },
+    { "id": "admins-only", "statements": [
+      { "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
+        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] }
+  ],
+  "bindings": [
+    { "id": "public", "subject": "*", "app": "*", "space": "*", "policy": "public" },
+    { "id": "members", "subject": "*", "app": "*", "space": "*", "policy": "members" },
+    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" }
   ]
 }
 ```
@@ -90,8 +108,9 @@ Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issu
 
 ## Modules
 
-The starter brings the core, JWT support and auto-configuration; each integration (WebFlux, MVC, Gateway,
-Redis, OAuth, OpenTelemetry, OpenAPI, ip2region, Kafka) is an opt-in Gradle capability. See
+The starter brings the core, the request pipeline, JWT support and auto-configuration; each integration
+(WebFlux, MVC, Gateway, Redis, control plane, OAuth, OpenTelemetry, Micrometer, OpenAPI, ip2region, Kafka) is an
+opt-in Gradle capability. `cosec-migrate` converts 7.x data and publishes documents. See
 [Modules](https://cosec.ahoo.me/guide/introduction#modules) for the full list. A ready-to-run gateway is
 published as the container image `ahoowang/cosec-gateway`.
 

@@ -1,46 +1,46 @@
 # CoSec
 
-> Multi-tenant, reactive security framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). IAM-style JSON policies and role-based app permissions, evaluated deny-first across global, principal and role layers; JWT authentication; Redis-backed policy storage via CoCache. Kotlin, Java 17, Spring Boot 4, Project Reactor.
+> Multi-tenant, non-blocking authorization framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). Policies are JSON documents (platform, app and tenant) with bindings, compiled into a snapshot every instance reads from Redis; decisions are deny-first and fail closed. JWT and API key authentication with always-on token revocation, rate limits as document rules, and a control plane for reviewed changes, simulation and rollback. Kotlin, Java 17, Spring Boot 4.
 
-Key facts: a DENY matched in any layer overrides any ALLOW; unmatched requests are denied (IMPLICIT_DENY); errors deny. Anonymous denials return 401, authenticated denials 403, exceeded rate limit rules 429. Policies are JSON with `action` (path patterns) and `condition` (single-key objects such as `{"authenticated":{}}`).
+Key facts: any matching DENY overrides every ALLOW; a request nothing allows is denied; a request that cannot be decided (a document that does not compile or cannot be read, an unavailable attribute or membership source) is answered 503. Denied anonymous callers get 401, authenticated ones 403, exceeded rate limit rules 429; every error body is `application/problem+json`. Statements use `service:verb` actions (from a route map) or `http:<METHOD>`, typed or `http:path:` resources, and condition ASTs such as `{"eq": ["subject.authenticated", true]}`.
 
 ## Getting started
 
-- [Introduction](https://cosec.ahoo.me/guide/introduction): what CoSec is, what it decides, the modules and their Gradle capabilities
-- [Quick Start](https://cosec.ahoo.me/guide/quick-start): dependency, configuration, first policy, issuing a token, first denied request
-- [Concepts](https://cosec.ahoo.me/guide/concepts): principals, tenants, requests, policies and statements, app permissions and roles, decisions
-- [Security Model](https://cosec.ahoo.me/guide/security-model): evaluation order, deny-first, default deny, fail closed and its exceptions, tenant isolation, the root principal, hardening checklist
+- [Introduction](https://cosec.ahoo.me/guide/introduction): what CoSec is, what it decides, the modules and the starter's feature variants
+- [Quick Start](https://cosec.ahoo.me/guide/quick-start): dependency, configuration, the first platform document, issuing a token, the first denied request
+- [Concepts](https://cosec.ahoo.me/guide/concepts): principals, tenants, apps and spaces, documents, policies and statements, bindings, memberships, the snapshot, decisions
+- [Security Model](https://cosec.ahoo.me/guide/security-model): the decision algorithm (candidates, deny-first, default deny, Indeterminate, boundaries, break-glass), fail closed and its exceptions, trust boundaries
 
 ## Integration
 
-- [Web Integration](https://cosec.ahoo.me/integration/web): choosing an adapter (WebFlux, MVC, Gateway), status codes, accessing the security context, app and space headers, client IP behind proxies, request attributes, CORS
-- [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens, login, refresh, logout and revocation, API keys for machine clients, tenants, social login, the gateway trust boundary
-- [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code (AuthorizationChecker), object-level rules, explaining a decision (cosecExplain)
+- [Web Integration](https://cosec.ahoo.me/integration/web): choosing an adapter (WebFlux, MVC, Gateway), outcomes and HTTP statuses, problem+json bodies, `CoSec-*` parameters, the security context, client IP behind proxies, CORS
+- [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and always-on revocation, API keys, authenticators, social login
+- [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code (AuthorizationChecker), explaining a decision through the control plane
 
 ## Policies
 
-- [Policy Language](https://cosec.ahoo.me/policies/language): reference for every policy field: statements, actions, templates, conditions, expressions, OpenAPI generation, JSON Schema
-- [Role Permissions](https://cosec.ahoo.me/policies/role-permissions): app permission catalogs, granting permissions to roles, role grant scope by app and space
-- [Rate Limiting](https://cosec.ahoo.me/policies/rate-limiting): rate limit rules and keys, Redis or in-memory counting, 429 and RateLimit headers, failure behavior
-- [Testing Policies](https://cosec.ahoo.me/policies/testing): validation, policy test cases, shadow mode, access reviews (AccessAnalyzer)
+- [Policy Language](https://cosec.ahoo.me/policies/language): reference for every document field: platform, app and tenant documents, policies, statements, actions, resources, condition ASTs, bindings, catalogs, rate limit rules, limits, external attributes, JSON Schema
+- [Role Permissions](https://cosec.ahoo.me/policies/role-permissions): app permission catalogs, permission policies, role bindings, space scoping
+- [Rate Limiting](https://cosec.ahoo.me/policies/rate-limiting): rate limit rules as document obligations, keys and buckets, Redis or per-instance counting, 429 and RateLimit headers, failure behavior
+- [Testing Policies](https://cosec.ahoo.me/policies/testing): changes through the control plane: validation, simulate, shadow windows, approval, access analysis, publishing
 
 ## Operations
 
 - [Configuration](https://cosec.ahoo.me/operations/configuration): every `cosec.*` property with its default
-- [Storage and Caching](https://cosec.ahoo.me/operations/storage): local policy files, Redis via CoCache, behavior when Redis is unavailable, publishing changes, policy history and rollback
-- [Upgrading](https://cosec.ahoo.me/operations/upgrading): breaking changes and migration steps per version (6.0 to 6.1, 6.1 to 7.0)
-- [Observability](https://cosec.ahoo.me/operations/observability): audit events, OpenTelemetry tracing, Micrometer metrics, logs
-- [Troubleshooting](https://cosec.ahoo.me/operations/troubleshooting): finding what decided, diagnosing 401/403/429/500, policies with no effect, unexpected allows, startup failures, rate limits
+- [Storage and Caching](https://cosec.ahoo.me/operations/storage): snapshot documents in Redis, the `noeviction` requirement, publishing (control plane, `cosec-migrate`), revisions and rollback, behavior when Redis is unavailable
+- [Upgrading](https://cosec.ahoo.me/operations/upgrading): breaking changes and migration steps per version, including 7.x to 8.0 with `cosec-migrate`
+- [Observability](https://cosec.ahoo.me/operations/observability): decision listeners, audit events, OpenTelemetry spans, Micrometer metrics, Kafka, logs
+- [Troubleshooting](https://cosec.ahoo.me/operations/troubleshooting): problem types, diagnosing 400/401/403/429/503, documents that do not compile, snapshot lag, startup failures, rate limits
 
 ## Architecture
 
-- [Overview](https://cosec.ahoo.me/architecture/overview): module layering, request path, authorization decorator chain, invariants and the tests that guard them, caching, startup schema check, performance
-- [Extending CoSec](https://cosec.ahoo.me/architecture/extending): custom matchers (SPI), repositories and their contract, authorization hooks, rate limiter backends, shadow providers, context and authentication hooks, audit sinks
+- [Overview](https://cosec.ahoo.me/architecture/overview): module layering, the request path through the pipeline, the engine and the snapshot, invariants and the tests that guard them, performance
+- [Extending CoSec](https://cosec.ahoo.me/architecture/extending): attribute providers, membership providers, decision listeners, rate limiters, authenticators
 
 ## Reference
 
-- [Policy JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-policy.schema.json), [app permission JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-app-permission.schema.json) and [rate limit rule JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/rate-limit-rule.schema.json)
-- [Agent skills](https://github.com/Ahoo-Wang/CoSec/tree/main/skills): policy authoring, integration, custom matchers, troubleshooting
+- [Snapshot document JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-snapshot-document.schema.json) (platform, app and tenant documents), [binding JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-binding.schema.json) and [catalog JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-catalog.schema.json)
+- [Agent skills](https://github.com/Ahoo-Wang/CoSec/tree/main/skills): policy documents, integration, extending CoSec, troubleshooting
 - [Releases](https://github.com/Ahoo-Wang/CoSec/releases): changes and migration notes
 
 ## Optional

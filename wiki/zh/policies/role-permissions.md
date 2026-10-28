@@ -1,134 +1,158 @@
 ---
 title: "角色权限"
-description: "定义应用的权限目录，并按应用和空间把权限授予角色。"
+description: "在应用文档中描述应用的权限，并按应用和空间把它们授予角色。"
 ---
 
 # 角色权限 {#role-permissions}
 
-面向通过角色而不是逐个用户策略来管理访问的产品团队。本页介绍如何一次性描述应用的权限、把权限授予角色，以及如何把授权限定在某个应用和某个空间。
+面向通过角色而不是逐个用户策略来管理访问的产品团队和管理员。本页介绍应用如何一次性描述它的权限、如何把权限授予角色，以及如何把授权限定在某个应用和某个空间。每个字段的定义见[策略语言](./language.md)。
 
-策略把规则直接挂在主体上。角色权限把同样的规则拆成两部分：应用发布一份可做之事的**目录**，管理员把目录中的权限 id **授予**角色。
-角色授权与策略如何组合在[安全模型](../guide/security-model.md#evaluation-order)中讲解。
+应用发布一份**应用文档**：一份可做之事的目录、每个权限一个权限策略，以及授予这些权限的角色绑定。主体的令牌（或 `MembershipProvider`）说明它在哪个空间拥有哪些角色；请求获得的，是角色绑定授予它在请求空间中所拥有角色的权限。租户还可以在自己的租户文档中添加授权。
 
-## 权限目录 {#permission-catalogs}
+## 应用文档 {#app-documents}
 
-目录就是一个 `AppPermission`：一个应用的全部权限，按名称分组。
+应用 `order` 的应用文档的键是 `app:order`。它包含[目录](#permission-catalogs)、[权限策略](#permission-policies)和[角色绑定](#granting-permissions-to-roles)，还可以包含[限流规则](./rate-limiting.md)；它不定义其他策略，除角色外不绑定任何主体。
 
 ```json
 {
-  "id": "order-app",
-  "condition": { "authenticated": {} },
-  "groups": [
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "order",
+        "description": "Orders",
+        "spaced": true,
+        "permissions": [
+          { "id": "read", "name": "Read orders" },
+          { "id": "ship", "name": "Ship orders" }
+        ]
+      }
+    ]
+  },
+  "policies": [
     {
-      "name": "orders",
-      "description": "Order management",
-      "permissions": [
-        { "id": "order.read", "name": "Read orders", "action": { "path": { "pattern": "/orders/**", "method": "GET" } } },
-        { "id": "order.manage", "name": "Manage orders", "action": "/orders/**" },
-        { "id": "order.export.block", "name": "No exports", "effect": "deny", "action": "/orders/export" }
-      ]
+      "id": "perm:order/read",
+      "statements": [{ "name": "read", "effect": "allow", "action": "order:read" }]
+    },
+    {
+      "id": "perm:order/ship",
+      "statements": [{ "name": "ship", "effect": "allow", "action": "order:ship", "resource": "order/{orderId}" }]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "viewer-read",
+      "subject": { "role": "viewer" },
+      "app": "order",
+      "space": "*",
+      "policy": "perm:order/read"
+    },
+    {
+      "id": "clerk-ship",
+      "subject": { "role": "clerk" },
+      "app": "order",
+      "space": "*",
+      "policy": "perm:order/ship"
     }
   ]
 }
 ```
 
-| 字段 | 必填 | 含义 |
-|---|---|---|
-| `id` | 是 | 应用 id，与请求的 `CoSec-App-Id` 比较。不能为空，也不能包含 `:`；id 含 `:` 的应用无法持有任何授权。 |
-| `condition` | 否 | 在该应用的任何权限之前求值；不匹配时，该应用的授权不起作用。默认总是匹配。 |
-| `groups` | 否 | 命名的权限分组。默认 `[]`。 |
-| `groups[].name` | 是 | 分组名称，用于展示。 |
-| `groups[].description` | 否 | 用于展示。 |
-| `groups[].permissions` | 否 | 分组中的权限。 |
+只有当主体在请求空间中至少拥有一个角色时，请求才会读取其应用的应用文档。应用是宿主配置的应用（`cosec.authorization.scope.app-id`），否则是请求在 `CoSec-App-Id` 中声明的应用；谁能控制这些输入，见[安全模型](../guide/security-model.md#trust-boundaries)。没有应用的请求不读取任何应用文档，因此不会有应用的角色绑定适用于它。
 
-权限就是带 id 的[语句](./language.md#statements)：
+## 权限目录 {#permission-catalogs}
 
-| 字段 | 必填 | 含义 |
-|---|---|---|
-| `id` | 是 | 权限 id，授权引用的就是它。在应用内保持唯一：后出现的同 id 权限会替换先出现的。 |
-| `name`、`description` | 否 | 用于展示。 |
-| `effect`、`action`、`condition` | | 与[策略语句](./language.md#statements)相同。 |
+`catalog` 把应用的权限按命名分组列出，供让管理员选择授予内容的控制台使用（[字段](./language.md#catalogs)）。它不参与求值：删除目录条目不会撤销任何权限，也没有检查确保每个条目都有对应策略。`spaced` 只表示该组权限打算按空间授予。
 
-分组只是给人看的目录结构，授权只看权限。`deny` 权限与拒绝语句一样：被授予它的角色，即使另一条授权允许，匹配的请求也会被拒绝。
+## 权限策略 {#permission-policies}
+
+每个权限是一个名为 `perm:<appId>/<permission>` 的策略，例如 `perm:order/read`。它的语句说明该权限允许什么，与其他策略相同。
+
+- 只有应用自己的文档能定义它的权限策略，应用文档中的每个策略都是权限策略。
+- 权限策略不能被附加：只能通过角色绑定到达。
+- 平台文档和租户文档不定义权限策略。
 
 ## 把权限授予角色 {#granting-permissions-to-roles}
 
-一条授权把一组权限 id 授予一个角色，作用于一个应用和一个空间：
+应用文档中的角色绑定把策略授予角色：
 
-| 授权 | 含义 |
+| 字段 | 在应用文档中 |
 |---|---|
-| 在 `order-app` 中 `clerk` → `["order.read"]` | `clerk` 的成员可以在 `order-app` 中读取订单 |
-| 在 `order-app` 中 `manager` → `["*"]` | `*` 授予 `order-app` 目录中定义的所有权限，目录以后变化时也随之变化 |
+| `subject` | `{"role": "<roleId>"}` 表示任意租户中的该角色，`{"role": "<roleId>", "tenant": "<tenantId>"}` 表示某一个租户中的该角色。 |
+| `app` | 应用自己的 id，或 `*`。限定到其他应用的绑定无法编译。 |
+| `space` | 空间 id，`""` 表示默认空间，`*` 表示任意空间。 |
+| `policy` | 应用的某个权限策略，或平台策略。其他应用的权限策略无法编译。 |
 
-授权中除 `*` 以外的每个 id 都必须在应用的权限目录中有定义。目录中没有定义的 id（已从目录中删除，或写错）不会被跳过，因为它可能是一条拒绝：
-对持有该角色的主体，只要角色层被评估、且在此之前没有拒绝匹配，请求就会以 `MissingPermissionException` 失败，映射为 `500`。
-不满足应用 `condition` 或已被拒绝的请求不受影响。`AccessAnalyzer` 和 `PolicyTestKit` 在构建或运行时拒绝这样的授权
-（[故障排查](../operations/troubleshooting.md#every-request-of-one-role-fails-with-500)）。
+角色 id 与主体拥有的角色精确比较，区分大小写。
 
-请求用 `CoSec-App-Id` 选择应用、用 `CoSec-Space-Id` 选择空间（[应用与空间](../integration/web.md#app-and-space)）；
-没有应用 id 的请求，或应用没有目录的请求，从角色授权中什么也得不到。
+## 角色授权的作用域 {#role-grant-scope}
 
-## 角色授权范围 {#role-grant-scope}
+角色绑定在以下条件全部成立时适用于请求：
 
-一条授权属于一个 **（应用，角色，空间）** 三元组，即 `AppSpacedRoleId`，在别处都不生效：
+1. 主体在请求空间中拥有该角色（[空间](#spaces)）。
+2. 绑定的 `app` 为 `*` 或请求的应用。
+3. 绑定的 `space` 为 `*` 或请求的空间（`""` 为默认空间）。
+4. 绑定没有指定 `tenant`，或指定的是主体的租户。
+5. 绑定没有过期（`expiresAt`）。
 
-- **应用。** 在一个应用中的授权永远不会在另一个应用中生效，即使两个应用定义了同一个权限 id，或者授权是 `*`。要在两个应用中授权一个角色，需要两条授权。
-- **空间。** 主体的角色说明了每个角色属于哪个空间：`editor` 是默认空间中的角色，`editor@team-a` 只是 `team-a` 中的角色
-  （[令牌中的角色](../integration/authentication.md#roles-and-spaces)）。某个空间中的请求只用主体在该空间中的角色求值（`RoleScope`），并去掉后缀，
-  也只读取在该空间中做出的授权：
+| 绑定的 `space` | 适用于 |
+|---|---|
+| `""` | 仅默认空间 |
+| `"team-a"` | 仅空间 `team-a` |
+| `"*"` | 主体拥有该角色的每个空间 |
 
-| 主体的角色 | 请求的 `CoSec-Space-Id` | 参与求值的角色 | 读取的授权 |
-|---|---|---|---|
-| `editor` | 无（默认空间） | `editor` | 默认空间中的 `editor` |
-| `editor` | `team-a` | 无 | 无 |
-| `editor@team-a` | `team-a` | `editor` | `team-a` 中的 `editor` |
-| `editor@team-a` | `team-b` | 无 | 无 |
-| `editor`、`editor@team-a` | `team-a` | `editor` | `team-a` 中的 `editor` |
-
-角色或空间为空、或含有多个 `@` 的角色在任何地方都不生效。`CoSec-Space-Id` 由客户端选择，所以客户端只能在其凭证列出的空间中选择；改变请求头永远拿不到另一个空间的授权。
-
-这比策略中的 [`inRole` 条件](./language.md#matching-roles)更严格：在那里，不带后缀的角色在所有空间都匹配，这样换一个空间也逃不出拒绝。
+`*` 只扩大绑定适用的范围，不改变哪些角色计数：在默认空间拥有的角色不会在空间 `team-a` 中生效，即使通过 `space: "*"` 的绑定也一样。应用文档只为它自己的应用读取，所以在应用文档中 `app: "*"` 与应用自己的 id 含义相同。
 
 ## 空间 {#spaces}
 
-空间是应用内部的分区，例如团队、工作区或项目，同一个角色在不同空间可以带有不同的权限。当一个用户在一个工作区是 `editor`、在另一个工作区是 `viewer` 时，使用空间：
+请求的空间是 `CoSec-Space-Id` 参数；没有时为默认空间 `""`。主体的角色来自令牌的 `roles` 声明（或其 `MembershipProvider`）：`viewer` 是默认空间中的角色，`clerk@team-a` 是空间 `team-a` 中的角色（[认证](../integration/authentication.md)）。
 
-1. 签发的令牌中角色带上空间：`editor@ws-1`、`viewer@ws-2`。
-2. 按空间授权：在 `ws-1` 中授权 `editor`，在 `ws-2` 中授权 `viewer`。
-3. 客户端把工作区作为 `CoSec-Space-Id` 发送。
+| 令牌 `roles` | 请求空间 | 计数的角色 |
+|---|---|---|
+| `["viewer", "clerk@team-a"]` | 默认 | `viewer` |
+| `["viewer", "clerk@team-a"]` | `team-a` | `clerk` |
+| `["viewer", "clerk@team-a"]` | `team-b` | 无：请求被拒绝 |
 
-不使用空间时，用不带后缀的角色，并在默认空间中授权。
+请求声明了主体没有任何角色的空间时，以 `403`（`scope-rejected`）拒绝，绝不会退回默认空间求值；匿名请求声明空间时返回 `401`。`*` 永远不是空间 id。为什么可以从客户端获取空间，见[安全模型](../guide/security-model.md#trust-boundaries)。
+
+## 租户的角色绑定 {#tenant-role-bindings}
+
+租户在自己的租户文档中为角色授权，无需改动应用文档：
+
+```json
+{
+  "schema": 2,
+  "revision": 4,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "bindings": [
+    {
+      "id": "auditor-reads-orders",
+      "subject": { "role": "auditor" },
+      "app": "order",
+      "space": "",
+      "policy": "perm:order/read"
+    }
+  ]
+}
+```
+
+- 没有 `tenant` 的角色主体是本租户的角色；指定其他租户无法编译。
+- 策略可以是租户自己的策略、平台策略或应用的权限策略。应用的权限策略要求 `app` 恰好设为该应用：此时从该应用的文档中取得，并在同一请求中读取。权限策略的其他绑定方式都无法编译。
+- 租户的角色绑定遵循相同的[作用域规则](#role-grant-scope)。
 
 ## 存储目录和授权 {#storing-catalogs-and-grants}
 
-启用 `cache-support` 时，目录和授权通过两个缓存从 Redis 读取：`AppPermissionCache`（按应用 id）和 `RolePermissionCache`（按 `AppSpacedRoleId`）。
-CoSec 只读取它们；由你的管理服务通过这两个 Bean 写入，这样每个实例都会丢弃自己的本地副本：
+应用文档属于平台：只有 `(platform)` 租户的主体能修改它们，租户的主体只能修改自己的租户文档。通过控制面发布文档，可以整份提交（`POST /documents/app:order:apply`），也可以用条目操作（`putCatalog`、`putPolicy`、`putBinding`）；首个修订也可以用 `cosec-migrate publish` 写入。变更在发布前会被检查、编译，并可以先影子运行：见[测试策略](./testing.md)和[存储](../operations/storage.md)。
 
-```kotlin
-val catalog = CoSecJsonSerializer.readValue(json, AppPermission::class.java)
-appPermissionCache.put(catalog.id, catalog)
-rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk"), setOf("order.read"))
-rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a"), setOf("*"))
-```
+## 从 OpenAPI 生成目录 {#generating-a-catalog-from-openapi}
 
-`AppSpacedRoleId` 拒绝含 `:` 的应用 id 和含 `@` 的角色 id，所以任何写入都不会产生一个读回来像是另一个应用或空间授权的键。
-值带有 CoCache 的二进制头，直接用 Redis 命令写入是不行的。键的布局，以及如何迁移 6.x 中没有按应用区分的授权，见[存储](../operations/storage.md#redis)和[升级](../operations/upgrading.md#migrating-role-grants)。
+启用 `openapiSupport` 后，`cosecServiceGenerator` actuator 端点从服务的 OpenAPI 文档生成两部分配置：
 
-要在授权写入 Redis 之前检查它们，把它们写进[策略测试套件](./testing.md#policy-test-cases)。要弄清某条角色授权为什么对某个请求生效或不生效，
-[解释这个决策](./testing.md#debugging-a-decision-with-explain)；它的 `NO_APP_PERMISSION` 和 `NO_ROLE_IN_SPACE` 警告指出了最常见的两种原因。
+- `cosecServiceGenerator/routes`：[路由映射](./language.md#route-maps)。
+- `cosecServiceGenerator/app`：应用文档。
 
-## 从 OpenAPI 生成权限目录 {#generating-a-catalog-from-openapi}
-
-有 `cosec-openapi` 和 Spring Boot Actuator 时，`GET /actuator/cosecAppPermissionGenerator` 把应用的 OpenAPI 描述转成目录草稿：
-
-| 目录 | 来源 |
-|---|---|
-| `id` | `info.title`，其中每个 `:` 都替换为 `-`（含 `:` 的应用 id 无法持有授权）；没有标题时为 `AppId` |
-| 每个标签一个分组 | 操作的标签；有多个标签的操作出现在每个分组中，没有标签的操作被忽略 |
-| 权限 `id` | `operationId`（缺失时为 `""`） |
-| 权限 `name`、`description` | `summary`、`description` |
-| 权限 `action` | 包含该操作路径和方法的 `path` 动作 |
-
-所有权限都是 `allow`。生成之前给每个操作加上 `operationId` 和标签，评审结果，然后按上文的方式存储。
+服务名取 `info.x-cosec-service`，否则取 `info.title`。每个操作的动作是 `<service>:<operationId>`，或它的 `x-cosec-action`。应用文档中每个动作一个权限策略 `perm:<service>/<verb>`，允许该动作作用于任意资源；目录按操作的第一个标签分组（没有标签时为 `default`）。生成的文档没有角色绑定：添加绑定、评审文档，然后按上文发布。操作缺少动作、`operationId` 重复，或两个操作可能匹配同一请求时，生成失败。
 
 **下一步：** 限制已允许的请求能以多高的频率执行，见[限流](./rate-limiting.md)。

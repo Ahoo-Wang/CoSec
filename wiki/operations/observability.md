@@ -1,134 +1,222 @@
 ---
 title: "Observability"
-description: "See every decision CoSec makes: audit events, traces, metrics and logs."
+description: "See every decision CoSec makes and every change to the documents: decision listeners, audit events, traces, metrics and logs."
 ---
 
 # Observability
 
-For operators and security teams who need to know what CoSec decided and why. This page covers the audit event
-emitted for every decision, the tracing span, the metrics and the logs, what each one tells you, and how to turn
-them on. To see every rule a decision checked, not only the one that decided, use the
-[explainer](#explaining-a-decision).
+For operators and security teams who need to know what CoSec decided, why, and who changed the rules. This page
+covers the decision listeners that observe every request, the audit events, spans and metrics they produce, how to see
+whether instances are current with the documents, the control plane's change log, and the logs. To see every
+statement a decision checked, not only the one that decided, explain it through the control plane
+([Explaining a decision](../integration/checks.md)).
 
-## The decision chain
+## Decision listeners
 
-The `Authorization` bean is a chain of decorators around `SimpleAuthorization`, from the outside in: tracing,
-auditing, metrics, rate limiting, shadow mode. Each decorator sees the decision of the one inside it, so audit
-events, metrics and spans all report the final decision, rate limiting included. Why the chain is ordered this way
-is in [Authorization chain](../architecture/overview.md#authorization-chain).
+Every request through the pipeline ends in one decision event, whatever its outcome: a permit, a deny, a `429`, a
+`400`, a `503`, a defect (`500`), or a caller that went away. Decision listeners receive these events; the audit log,
+Kafka, metrics, tracing and shadow windows are all listeners. A listener observes only: it cannot change a decision,
+except that a `REQUIRED` one that fails turns a permit into `503`.
 
-| Decorator | Present when |
-|---|---|
-| `TracingAuthorization` | `opentelemetry-support` is on the classpath |
-| `AuditingAuthorization` | `cosec.audit.enabled` (default `true`) |
-| `MeteredAuthorization` | `micrometer-support`, a `MeterRegistry` bean, and `cosec.metrics.enabled` (default `true`) |
-| `RateLimitingAuthorization` | `cosec.limiter.enabled` (default `true`), even when no rule file exists |
-| `ShadowAuthorization` | `cosec.shadow.enabled=true` ([Shadow mode](../policies/testing.md#trying-changes-in-shadow-mode)) |
+| Delivery | When the listener runs | What a failure does |
+|---|---|---|
+| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.audit.required.timeout`](./configuration.md#audit) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
+| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
 
-The layer of `SimpleAuthorization` that decided ([Evaluation order](../guide/security-model.md#evaluation-order)) is
-reported as the decision's **source**.
+The listeners the starter registers:
 
-None of the observing decorators changes the decision: an audit sink that fails is logged and ignored.
+| Listener (`name`) | Delivery | Present when |
+|---|---|---|
+| `LoggingAuditListener` (`logging-audit`) | `BEST_EFFORT` | `cosec.audit.enabled` (default `true`) |
+| `KafkaAuditListener` (`kafka-audit`) | [`cosec.audit.kafka.delivery`](./configuration.md#audit), `BEST_EFFORT` by default | `kafka-support`, a `KafkaOperations` bean, `cosec.audit.enabled` and `cosec.audit.kafka.enabled` (both default `true`) |
+| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `micrometer-support`, a `MeterRegistry` bean and `cosec.metrics.enabled` (default `true`) |
+| `TracingListener` (`tracing`) | `BEST_EFFORT` | `opentelemetry-support` |
+| `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cache-support` and `cosec.authorization.shadow.enabled` (default `true`) |
+
+Any `DecisionListener` bean of yours joins them; names must be unique, or startup fails
+([Extending](../architecture/extending.md)). An `AuditEventSink` bean, such as one written for 7.x, joins them too: the
+starter wraps it as a `BEST_EFFORT` listener named after the bean (`AuditListener.of(sink, beanName)`), in its
+`@Order` among the listeners. It is always `BEST_EFFORT`, because `AuditEventSink.publish` cannot acknowledge a write.
+A bean that is both is registered once, as the `DecisionListener` it is.
+
+- **Break-glass needs a `REQUIRED` listener.** A request permitted through a break-glass binding is `503` unless at
+  least one `REQUIRED` listener is registered and every one of them records it. Out of the box no listener is
+  `REQUIRED`, so the starter logs at startup
+  `No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3).` Set
+  `cosec.audit.kafka.delivery=required`, or register a `REQUIRED` listener of your own, before you rely on break-glass.
+- **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
+- **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
+  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). What is left then is dropped, with
+  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`.
+- **The evaluation trace.** A `DecisionEvent` carries `evaluationTrace`, what the engine looked at, to the depth of
+  [`cosec.pipeline.trace-level`](./configuration.md#pipeline): `off` (the default, no trace and no cost), `full`
+  (every rule of each layer the decision reaches, including those after the deciding one) or `exhaustive` (also the
+  layers it does not reach). It is null at `off` and when the request did not reach the engine. Only your own
+  listeners read it: the audit events, spans and metrics below do not include it.
+- **Services in gateway mode** (`cosec.pipeline.mode=gateway`) emit no decision events: they decide nothing and
+  register no listeners. The gateway in front records the decision
+  ([Deploying the gateway server](./deployment.md#services-behind-the-gateway)).
 
 ## Audit events
 
-With `cosec.audit.enabled` (the default), every decision produces an `AuditEvent`, also when authorization fails
-with an error.
+The audit listeners map each decision event to an `AuditEvent`. It keeps what the response body leaves out: explicit
+and implicit denies apart, why a credential was rejected, and why a request was `503`.
 
 | Field | Contents |
 |---|---|
-| `eventId`, `timestamp`, `tenantId` | the event |
-| `principal` | `id`, `authenticated`, `roles`, `policies` |
-| `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path`, `routeId` (Spring Cloud Gateway), `device.id`, `device.userAgent` |
-| `authorization.decision` | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOO_MANY_REQUESTS` or `ERROR` |
-| `authorization.reasonCode` | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `TOO_MANY_REQUESTS`, `REGEX_TIMEOUT` or `ERROR` |
-| `authorization.reason`, `authorization.elapsedNanos` | the reason text and the evaluation time |
-| `authorization.source` | `type`: `BLACKLIST`, `ROOT`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, `NONE` (nothing matched) or `UNKNOWN`; with the matched `policy` (`id`, `type`, `statement.index`, `statement.name`) or `role` (`id`, `permission.id`, `permission.name`) |
-| `trace` | `traceId` and `spanId`, when tracing is active |
+| `eventId`, `timestamp`, `tenantId` | the event; `tenantId` is the principal's tenant |
+| `kind` | `DECIDED`, `BAD_REQUEST` (`400`), `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR` (`500`) |
+| `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope); `policies` is always empty |
+| `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `device.id` |
+| `authorization.decision`, `authorization.reasonCode` | see the table below |
+| `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
+| `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
+| `authorization.source` | `type`, and the deciding `policy` (`id`, `type`, `statement.index`, `statement.name`) |
+| `binding` | how the deciding statement applied: a binding id, `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
+| `snapshotVersion` | the revisions the decision read: `platform`, and `app` and `tenant` when it read them |
+| `breakGlass` | whether the permit came through a break-glass binding |
+| `trace` | `traceId` and `spanId` of the request's span, when tracing is active |
 
-A request denied because its token was rejected carries `TOKEN_EXPIRED` or `TOKEN_INVALID`, so a burst of expired
-tokens is told apart from a broken policy.
-
-### Sinks
-
-Events go to exactly one `AuditEventSink`:
-
-| Sink | Used when | Where events go |
+| Outcome | `decision` | `reasonCode` |
 |---|---|---|
-| your `AuditEventSink` bean | you declare one | anywhere you send them |
-| `KafkaAuditEventSink` | `kafka-support`, a `KafkaTemplate` bean, `cosec.audit.kafka.enabled` (default `true`), and no sink of yours | the topic [`cosec.audit.kafka.topic`](./configuration.md#audit) (`cosec-audit`) |
-| `LoggingAuditEventSink` | otherwise | the logger `me.ahoo.cosec.audit`, one JSON line per event |
+| permit | `ALLOW` | `ALLOW` |
+| `429` | `TOO_MANY_REQUESTS` | `TOO_MANY_REQUESTS` |
+| a DENY matched | `EXPLICIT_DENY` | `EXPLICIT_DENY` |
+| scope rejected | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
+| a permit outside the tenant's boundary | `EXPLICIT_DENY` | `BOUNDARY` |
+| nothing allowed | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
+| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key) |
+| `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY` (with `kind` `BAD_REQUEST`) |
+| `503`, a strict rate-limit rule that could not be counted | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
+| any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |
+| `500` | `ERROR` | `ERROR` |
 
-The logging sink writes `ALLOW` at `DEBUG`, denials and `TOO_MANY_REQUESTS` at `WARN`, and `ERROR` at `ERROR`, so at
-the default `INFO` level only denials and errors appear.
+`authorization.source.type` says where the deciding statement came from: `BLACKLIST` (the built-in blacklist),
+`ROOT` (a break-glass binding of `cosec:root`), `ROLE_PERMISSION` (a binding of an app document),
+`PRINCIPAL_POLICY` (an attached policy), `GLOBAL_POLICY` (a binding of the platform or a tenant document, or a
+boundary), or `NONE` when no statement decided.
 
-The Kafka sink keys each record by tenant and principal id (a JSON array `[tenantId, principalId]`) and the value is
-the event as JSON. It sends from one background thread with a queue of 1,024 events, which keeps events in order and
-never blocks a request. When the queue is full, events are dropped and a warning is logged once
-(`Dropping audit events because the Kafka audit queue is full or shutting down.`); a failed send is logged too. On
-shutdown it drains the queue for up to 10 seconds.
+### Audit log and Kafka
 
-A custom sink must not block: it runs inline, on the thread that completes the decision. Its exceptions are logged
-(`Failed to publish audit event.`) and never affect the decision.
+The audit log listener writes each event as one JSON line to the logger `me.ahoo.cosec.audit`: `ALLOW` at `DEBUG`,
+denials, `TOO_MANY_REQUESTS` and `INDETERMINATE` at `WARN`, `ERROR` at `ERROR`. At the default `INFO` level, only
+denials, `503`s and errors appear.
+
+The Kafka audit listener writes the same JSON to [`cosec.audit.kafka.topic`](./configuration.md#audit)
+(`cosec-audit`), keyed by `[tenantId, principalId]` as a JSON array. It runs alongside the audit log, not instead of
+it; set `cosec.audit.enabled=false` and register only what you want to change that. It sends from a thread of its own
+with at most 1,024 sends waiting:
+
+- `best-effort`: a failed send is logged as `Failed to publish audit event to Kafka topic [<topic>].`
+- `required`: the request waits for the broker's acknowledgement. A failed or late send, or a full send queue
+  (`The Kafka audit queue of [<topic>] is full.`), makes a permit `503`. Configure the producer with `acks=all`.
 
 ## Tracing
 
-With `opentelemetry-support`, each authorization is a span named `cosec.authorize` (instrumentation
-`me.ahoo.cosec`), a child of the current request span:
+With `opentelemetry-support`, each decision event becomes a span named `cosec.authorize` (instrumentation
+`me.ahoo.cosec`, kind `INTERNAL`). The span is made after the decision, from the request's start time and the
+pipeline's duration, under the span that was current when the adapter received the request; without one, it is a root
+span. Tracing therefore never delays or fails a request. Calls the pipeline makes for the request (Redis, a membership
+provider) are siblings of `cosec.authorize`, under the same parent. The tracer comes from `GlobalOpenTelemetry`.
 
 | Attribute | Value |
 |---|---|
-| `user.id`, `user.roles` | principal id and roles |
-| `cosec.tenant_id`, `cosec.app_id`, `cosec.space_id`, `device.id`, `cosec.request_id` | request context (empty values are left out) |
-| `cosec.policies` | the principal's policies |
-| `cosec.authorize.result` | `ALLOW`, `EXPLICIT_DENY` or `IMPLICIT_DENY` |
-| `cosec.authorize.policy.id`, `cosec.authorize.statement.index`, `cosec.authorize.statement.name` | the matched policy statement |
-| `cosec.authorize.role.id`, `cosec.authorize.permission.id` | the matched role permission |
+| `cosec.tenant_id`, `user.id`, `cosec.request_id` | the principal's tenant and id, and the request id |
+| `cosec.app_id`, `cosec.space_id`, `device.id` | the resolved scope and the device, when not empty |
+| `cosec.authorize.result` | `PERMIT`, `TOO_MANY_REQUESTS`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `SCOPE_REJECTED`, `BOUNDARY`, `INDETERMINATE`, `AUTHENTICATOR_UNAVAILABLE`, `DEADLINE_EXCEEDED`, `INVALID_REQUEST`, `CANCELLED` or `ERROR` |
+| `cosec.authorize.policy.id`, `cosec.authorize.statement.index`, `cosec.authorize.statement.name` | the deciding statement |
+| `cosec.binding.id` | the binding it applied through, when it was a binding |
+| `cosec.snapshot.version` | the revisions read, as `<platform>/<app>/<tenant>`, `-` for a document not read |
 
-With auditing on as well, audit events carry the span's `traceId` and `spanId`, which ties an event to its trace.
+A `500` sets the span's status to `ERROR`. Audit events and problem bodies carry the trace id of the request's span,
+which ties a response to its trace.
 
 ## Metrics
 
-With `micrometer-support` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision is recorded by
-the timer `cosec.authorization` (`cosec.metrics.enabled`, default `true`). It has two tags, each with a small fixed
-set of values, so the number of time series stays bounded however many policies and principals there are:
+With `micrometer-support` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
+recorded by the timer `cosec.authorization`, over the whole pipeline. Every tag has a small fixed set of values, so the
+number of time series stays bounded however many policies, apps and tenants there are:
 
 | Tag | Values |
 |---|---|
-| `result` | `allow`, `explicit_deny`, `implicit_deny`, `too_many_requests`, `error` |
-| `source` | `global_policy`, `principal_policy`, `role_permission`, `root`, `blacklist`, `none`, `unknown` |
+| `result` | `allow`, `too_many_requests`, `explicit_deny` (scope rejections and boundary denies included), `implicit_deny`, `indeterminate` (every `503`), `bad_request`, `cancelled`, `error` |
+| `source` | `binding`, `attachment`, `builtin`, `boundary`, `scope` (a scope rejection), `none` |
+| `cause` | on `indeterminate` only: `source_unavailable`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
 
-`error` always comes with `source=unknown`. The timer measures authorization only, not token parsing.
+The listeners themselves are counted:
 
-Alert on the rate of `explicit_deny` and `error`. A sudden rise usually means an attack, a broken policy, or a policy
-store that cannot be read ([Troubleshooting](./troubleshooting.md#every-request-fails-with-500)).
+| Meter | Tag | Counts |
+|---|---|---|
+| `cosec.listener.dropped` | `listener` | events a full queue dropped |
+| `cosec.listener.failures` | `listener` | listener calls that threw or, for `REQUIRED` ones, timed out |
+| `cosec.audit.required.failures` | none | `REQUIRED` failures on decisions they could not change (not permits) |
 
-CoCache records its own meters for CoSec's caches (for example `cocache.hits`) in the same registry; see
-[CoCache's documentation](https://cocache.ahoo.me).
+Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny`, and on `cosec.listener.dropped`. A rise of
+`indeterminate` with `cause=source_unavailable` means documents cannot be read
+([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
+registry ([CoCache's documentation](https://cocache.ahoo.me)).
+
+## Snapshot health
+
+CoSec registers no meters for the documents an instance holds. To see whether instances are current:
+
+- **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
+  every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `failed`, `absent`
+  or `loading`) and `prewarmed`. Readiness follows the same condition
+  ([Readiness](./deployment.md#readiness)).
+- **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
+  than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
+  lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
+  `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`, and
+  `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
+- **Propagation.** The control plane's
+  `GET /documents/<doc>/revisions/<n>/propagation` answers how many of the instances that reported in the last minute
+  have revision `<n>` or later installed. Instances report only with shadow windows on
+  ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)).
+- **Per decision.** `snapshotVersion` in the audit event and `cosec.snapshot.version` on the span name the revisions a
+  decision read.
+
+## Control-plane change log
+
+The control plane emits a change event for every step of a change: `PROPOSED`, `CHECKED`, `SHADOW_STARTED`,
+`SHADOWED`, `APPROVED`, `REJECTED`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `BREAK_GLASS_REQUESTED`,
+`BREAK_GLASS_APPROVED`, `REVOKED`. An event names the change, the document, the operator, the base and candidate
+revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
+content. Change listeners receive them.
+
+- **The default listener** logs each event at `INFO`, as
+  `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.
+  Change listeners add up: every `ChangeListener` bean is registered, and the log listener is left out only when the
+  application declares a `LoggingChangeListener` bean of its own.
+- **`PUBLISHING`, `BREAK_GLASS_REQUESTED` and `BREAK_GLASS_APPROVED` are gated:** every `REQUIRED` change listener must
+  record the event within [`cosec.control.audit.required-timeout`](./configuration.md#control-plane) (5 seconds, for
+  all of them together) before the step takes effect, or the step does not happen and the control API
+  answers `503`. Every other event, and every event to a `BEST_EFFORT` listener, is delivered afterwards; a failure is
+  logged as `Change listener [<name>] could not record <event>.` The revision record is the durable record of what was
+  published.
+- **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
+  `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
+
+With `kafka-support` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
+[`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) is `false`. It writes each event to
+`cosec.control.audit.kafka.topic` (`cosec-control-audit`), keyed by the document (`platform`, `app:order`,
+`tenant:acme`), so a document's events stay in order. Its delivery is `cosec.control.audit.kafka.delivery`:
+`best-effort` by default, `required` to gate publishing and break-glass on the broker's acknowledgement (configure the
+producer with `acks=all`). With `delivery=required`, startup fails when the Kafka change listener cannot be created
+(no `kafka-support`, no `KafkaOperations` bean, or `enabled=false`), rather than publishing without the record:
+`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`.
 
 ## Logs
 
-```yaml
-logging:
-  level:
-    me.ahoo.cosec.authorization.SimpleAuthorization: DEBUG   # the matched policy statement or role permission
-    me.ahoo.cosec.audit: DEBUG                               # every audit event, allows included
-```
+| Logger | What it logs |
+|---|---|
+| `me.ahoo.cosec.audit` | the audit log ([Audit log and Kafka](#audit-log-and-kafka)) |
+| `me.ahoo.cosec.runtime` | `Request [<requestId>] failed with an unmodelled exception.` at `ERROR` with the stack trace, for every `500`; `REQUIRED` listener failures; dropped events; attribute providers that fail; rate limiters that cannot count |
+| `me.ahoo.cosec.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
+| `me.ahoo.cosec.spring.boot.starter` | the startup checks, such as the `!!!` eviction warning; `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO` when the application declares no `BlacklistSource` ([Blacklist](../guide/security-model.md#blacklist)); the `WARN` of a service in gateway mode ([Services behind the gateway](./deployment.md#services-behind-the-gateway)) |
+| `me.ahoo.cosec.control` | the change log, and `Control API <method> <path> failed (request <requestId>).` for every control-plane `500` |
 
-Errors need no debug level: `me.ahoo.cosec.pipeline.SecurityPipeline` logs every error that turns a request into a
-`500` at `ERROR`, with the stack trace (`Unexpected error during authorization of request [...] [...].`). Correlate
-a response with its log lines and audit event through the `CoSec-Request-Id` header.
-
-## Explaining a decision
-
-Audit events, metrics and spans name the one rule that decided. The explainer goes further: it runs the real
-authorization for a described principal, or for a real token or API key, and reports every statement and role
-permission it checked, which matched, which missed on the action and which on the condition. Nothing is spent or
-changed.
-
-It is off by default (`cosec.explain.enabled`), because an explanation reveals your policy structure. With Spring
-Boot Actuator it is also the `cosecExplain` endpoint, which goes through CoSec like any other request: expose it only
-to administrators, and allow `POST /actuator/cosecExplain` only for them. The request, the response and how to call
-it from code are in [Explaining a decision](../integration/checks.md#explaining-a-decision).
+Correlate a response with its log lines, audit event and span through the `CoSec-Request-Id` response header, which is
+also the `requestId` of every problem body.
 
 **Next:** go from a symptom to its cause, in [Troubleshooting](./troubleshooting.md).

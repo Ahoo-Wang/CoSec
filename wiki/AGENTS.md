@@ -54,28 +54,26 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 
 | Fact | Home |
 |---|---|
-| Evaluation order; deny-first, default-deny and fail-closed guarantees and their exceptions | `guide/security-model.md` |
-| Who is root and what root bypasses | `guide/security-model.md#root-principal` |
-| Which inputs the client controls (app, space, IP, inject mode) | `guide/security-model.md#trust-boundaries` |
-| Terms (principal, tenant, policy, statement, permission, decision) | `guide/concepts.md` |
-| Module list and starter capabilities | `guide/introduction.md#modules` |
+| Decision algorithm and candidate order; deny-first, default-deny and fail-closed guarantees and their exceptions; boundary, blacklist and break-glass | `guide/security-model.md` |
+| Which inputs the client controls (tenant, app, space, remote IP) | `guide/security-model.md#trust-boundaries` |
+| Terms (principal, tenant, document, policy, statement, binding, membership, decision) | `guide/concepts.md` |
+| Module list and starter feature variants | `guide/introduction.md#modules` |
 | Reader paths (which page follows which) | `guide/introduction.md#where-to-go-next` |
-| Decision to HTTP status mapping; `CoSec-*` headers | `integration/web.md` |
-| Token claims, revocation, API keys | `integration/authentication.md` |
-| The explain API, its configuration and fields | `integration/checks.md#explaining-a-decision` |
-| Every policy field, action and condition type | `policies/language.md` |
-| `inRole` matching rules | `policies/language.md#matching-roles` |
-| Where path variables may be read | `policies/language.md#path-variables` |
-| Strict loading of policy files | `policies/language.md#loading-policy-files` |
-| How role grants are scoped to an app and a space | `policies/role-permissions.md#role-grant-scope` |
-| `RateLimit-*` and `Retry-After` headers | `policies/rate-limiting.md#responses-and-headers` |
+| Outcome to HTTP status mapping; problem+json bodies; `CoSec-*` parameters | `integration/web.md` |
+| Credentials, membership claims, revocation, API keys | `integration/authentication.md` |
+| `AuthorizationChecker`; explaining a decision | `integration/checks.md` |
+| Every document field, action and resource pattern, condition operator and attribute | `policies/language.md` |
+| App catalogs, role bindings and how they are scoped to an app and a space | `policies/role-permissions.md` |
+| Rate-limit obligations; `RateLimit-*` and `Retry-After` headers | `policies/rate-limiting.md` |
+| Control-plane changes: validation, simulate, shadow windows, approval, analysis | `policies/testing.md` |
 | Every `cosec.*` property and default | `operations/configuration.md` |
-| Every Redis key; the schema marker | `operations/storage.md#redis-keys`, `operations/storage.md#schema-marker` |
+| Every Redis key; publishing, revisions and rollback | `operations/storage.md` |
 | Behavior when Redis is unavailable | `operations/storage.md#when-redis-is-unavailable` |
-| Which authorization decorators are present, and their switches | `operations/observability.md#the-decision-chain` |
+| Decision listeners, audit events, metrics, spans | `operations/observability.md` |
 | Migration steps | `operations/upgrading.md` |
-| Order of the decorator chain and why | `architecture/overview.md#authorization-chain` |
+| The request path through the pipeline and why | `architecture/overview.md` |
 | Invariants and the tests that guard them; performance numbers | `architecture/overview.md` |
+| Extension points (SPIs) | `architecture/extending.md` |
 
 Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent build rules in the root
 `AGENTS.md`, API details in KDoc, JSON formats in the format descriptors that generate `schema/*.schema.json`.
@@ -108,35 +106,42 @@ they are in the code.
 | principal | 主体 | Who makes the request. Not 用户 or 委托人. |
 | anonymous principal / caller | 匿名主体 / 匿名调用方 | Principal id `(0)`. |
 | tenant; default tenant; platform tenant; user tenant | 租户；默认租户；平台租户；用户租户 | `(0)`, `(platform)`, any other id. |
-| root principal | 根主体 | `root` stays in property names (`root-enabled`). |
 | credential | 凭证 | A JWT access token or an API key. Not 凭据. |
 | token; access token; refresh token | 令牌；访问令牌；刷新令牌 | Not "Token" in Chinese prose. |
 | API key | API key | Not API Key or API 密钥. |
 | revocation, revoke | 吊销 | Not 撤销 or 注销. |
-| app; app permission; permission catalog | 应用；应用权限；权限目录 | |
-| space; default space | 空间；默认空间 | |
-| role; role grant | 角色；角色授权 | |
-| policy; global policy; principal policy | 策略；全局策略；主体策略 | |
-| statement; action; condition; part | 语句；动作；条件；part | Keep "part" in English: it names a path such as `request.path`. |
-| effect: allow / deny | 效果：允许 / 拒绝 | `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY` stay in English. |
-| decision | 决策 | |
-| evaluation order | 求值顺序 | |
+| membership; membership claims | 成员关系；成员关系声明 | |
+| app; space; default space | 应用；空间；默认空间 | |
+| scope | 作用域 | A resolved tenant, app and space, with the roles there. |
+| document; platform / app / tenant document | 文档；平台文档 / 应用文档 / 租户文档 | |
+| snapshot; revision | 快照；修订 | |
+| policy; statement; action; resource; condition | 策略；语句；动作；资源；条件 | |
+| binding; attachment (attached policy) | 绑定；附加策略 | |
+| role; role binding | 角色；角色绑定 | |
+| catalog; permission | 目录；权限 | Permission catalog: 权限目录. |
+| boundary | 边界 | The platform boundary of a tenant. |
+| break-glass | break-glass | Keep the English term. |
+| effect: allow / deny | 效果：允许 / 拒绝 | `ALLOW`, `DENY` stay in English. |
+| decision: Permit / Deny / Indeterminate | 决策：Permit / Deny / Indeterminate | Keep the three names in English. |
+| obligation | 义务 | Rate limits run as obligations after a Permit. |
+| evaluation order; candidate order | 求值顺序；候选顺序 | |
 | deny first | 拒绝优先 | |
 | default deny | 默认拒绝 | |
 | fail closed; fail open | 失败即拒绝；失败即放行 | Not the English phrase in Chinese prose. |
 | trust boundary | 信任边界 | |
-| store of record | 权威存储 | Redis for policies and permissions. |
+| store of record | 权威存储 | Redis for snapshot documents. |
 | local copy | 本地副本 | CoCache's in-process copy of a Redis value. |
-| global policy index | 全局策略索引 | |
-| schema marker | schema 标记 | |
+| control plane; data plane | 控制面；数据面 | |
+| change; change request | 变更；变更请求 | |
+| candidate; shadow window | 候选；影子窗口 | |
+| publish; rollback | 发布；回滚 | |
 | security context | 安全上下文 | |
-| request attribute | 请求属性 | |
-| path variable; template | 路径变量；模板 | |
+| route map | 路由映射 | |
+| attribute; external attribute; attribute provider | 属性；外部属性；属性提供者 | |
 | rate limit rule; permit | 限流规则；许可 | |
-| shadow mode; candidate | 影子模式；候选 | |
-| explainer, explanation | explain、解释 | The API is named `explain`. |
-| audit event; decision chain; authorization chain | 审计事件；决策链；授权链 | |
-| inject mode | 注入模式 | `cosec.inject.enabled` with authorization off. |
+| decision listener; audit event | 决策监听器；审计事件 | |
+| problem (problem+json) | problem | Keep the English term. |
+| explain | explain、解释 | The API is named `explain`. |
 
 ## Mermaid
 
