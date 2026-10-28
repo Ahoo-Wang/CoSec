@@ -112,14 +112,15 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.sha }}
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v6
+      # The tested ref may predate the shared setup action: take it from this workflow's own commit.
+      - name: Checkout the setup action
+        uses: actions/checkout@v7
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          path: .ci-actions
+          sparse-checkout: .github/actions
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+      - name: Set up Java and Gradle
+        uses: ./.ci-actions/.github/actions/setup-java-gradle
 
       - name: Run property stress
         run: |
