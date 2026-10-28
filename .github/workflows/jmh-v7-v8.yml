@@ -143,7 +143,7 @@ jobs:
       # `cosec-core` on 8.0 still carries the 7.x authorization path; it is not measured, the engine's is.
       - name: Build the 8.0 benchmark jars
         working-directory: ${{ runner.temp }}/v8
-        run: ./gradlew :e2e:jmhJar :engine:jmhJar --no-daemon
+        run: ./gradlew :e2e:jmhJar :cosec-engine:jmhJar --no-daemon
 
       - name: Run settings
         run: |
