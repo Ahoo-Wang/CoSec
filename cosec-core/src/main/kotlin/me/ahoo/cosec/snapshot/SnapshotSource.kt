@@ -24,6 +24,7 @@ import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
@@ -129,11 +130,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     )
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
+
+    /** How long [close] waits for this source's threads; shorter only in tests of the timeout. */
+    internal var closeTimeout: Duration = CLOSE_TIMEOUT
+
+    /** Set on the threads this source starts: [close] does not wait for the thread it runs on. */
+    private val onOwnThread = ThreadLocal<Boolean>()
     private val ownsCompileExecutor = compileExecutor == null
-    private val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options)
+    private val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options, onOwnThread)
     private val ownsScheduler = scheduler == null
-    private val scheduler: ScheduledExecutorService = scheduler ?: newScheduler()
-    private val housekeeping: ThreadPoolExecutor = newHousekeeping()
+    private val scheduler: ScheduledExecutorService = scheduler ?: newScheduler(onOwnThread)
+    private val housekeeping: ThreadPoolExecutor = newHousekeeping(onOwnThread)
 
     private val shared = Slot(sharedKey, sharedCompiler)
     private val families: List<Family> = families.map { Family(it) }
@@ -335,7 +342,42 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (ownsCompileExecutor) {
             (compileExecutor as ThreadPoolExecutor).shutdown()
         }
+        awaitOwnedThreads()
     }
+
+    /**
+     * Waits, at most [closeTimeout], until the threads this source started have finished what was already queued on
+     * them: once [close] returns, a closed source does no more work and leaves no thread behind. Without the wait, a
+     * host that closes and replaces sources faster than queued work drains piles their threads up (RFC 0008 §3.5's
+     * property stress reached the per-process thread limit). Not on one of those threads, which would wait for itself.
+     */
+    private fun awaitOwnedThreads() {
+        if (onOwnThread.get() == true) {
+            return
+        }
+        val owned = buildList {
+            if (ownsScheduler) add(scheduler)
+            add(housekeeping)
+            if (ownsCompileExecutor) add(compileExecutor as ExecutorService)
+        }
+        val deadline = System.nanoTime() + closeTimeout.toNanos()
+        try {
+            for (executor in owned) {
+                val remaining = (deadline - System.nanoTime()).coerceAtLeast(0)
+                if (!executor.awaitTermination(remaining, TimeUnit.NANOSECONDS)) {
+                    log.warn { "The snapshot source's threads did not finish within $closeTimeout of closing." }
+                    return
+                }
+            }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    /** Whether every thread this source started has finished: true once [close] has returned. */
+    internal val threadsTerminated: Boolean
+        get() = (!ownsScheduler || scheduler.isTerminated) && housekeeping.isTerminated &&
+            (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
 
     /** One periodic pass: report lag, then revalidate. */
     internal fun tick(): CompletableFuture<Void> {
@@ -1117,7 +1159,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
     }
 
-    private companion object {
+    internal companion object {
         private val log = KotlinLogging.logger {}
 
         /** Queued housekeeping beyond this runs in place rather than piling up without bound. */
@@ -1134,35 +1176,43 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         fun Throwable.isFormatFailure(): Boolean =
             generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }
 
-        fun newCompileExecutor(options: SnapshotOptions): ThreadPoolExecutor = ThreadPoolExecutor(
+        /** How long [close] waits for this source's threads to finish what was queued. */
+        val CLOSE_TIMEOUT: Duration = Duration.ofSeconds(5)
+
+        fun newCompileExecutor(options: SnapshotOptions, marker: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
             options.compileThreads,
             options.compileThreads,
             1,
             TimeUnit.MINUTES,
             ArrayBlockingQueue(options.compileQueueCapacity),
-            daemonThreads("cosec-snapshot-compile"),
+            daemonThreads("cosec-snapshot-compile", marker),
             ThreadPoolExecutor.AbortPolicy(),
         ).apply { allowCoreThreadTimeOut(true) }
 
-        fun newScheduler(): ScheduledThreadPoolExecutor =
-            ScheduledThreadPoolExecutor(1, daemonThreads("cosec-snapshot-scheduler")).apply {
+        fun newScheduler(marker: ThreadLocal<Boolean>): ScheduledThreadPoolExecutor =
+            ScheduledThreadPoolExecutor(1, daemonThreads("cosec-snapshot-scheduler", marker)).apply {
                 removeOnCancelPolicy = true
             }
 
-        fun newHousekeeping(): ThreadPoolExecutor = ThreadPoolExecutor(
+        fun newHousekeeping(marker: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
             1,
             1,
             1,
             TimeUnit.MINUTES,
             LinkedBlockingQueue(HOUSEKEEPING_QUEUE),
-            daemonThreads("cosec-snapshot-housekeeping"),
+            daemonThreads("cosec-snapshot-housekeeping", marker),
             ThreadPoolExecutor.AbortPolicy(),
         ).apply { allowCoreThreadTimeOut(true) }
 
-        fun daemonThreads(prefix: String): ThreadFactory {
+        /** Daemon threads named [prefix]-n, each marked through [marker] as the source's own. */
+        fun daemonThreads(prefix: String, marker: ThreadLocal<Boolean>): ThreadFactory {
             val counter = AtomicInteger()
             return ThreadFactory { runnable ->
-                Thread(runnable, "$prefix-${counter.incrementAndGet()}").apply { isDaemon = true }
+                val marked = Runnable {
+                    marker.set(true)
+                    runnable.run()
+                }
+                Thread(marked, "$prefix-${counter.incrementAndGet()}").apply { isDaemon = true }
             }
         }
     }

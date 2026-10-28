@@ -17,6 +17,9 @@ import me.ahoo.cosec.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
@@ -88,5 +91,100 @@ class SnapshotRealPoolTest {
             store.reset()
             await { source.revisionOf() == 2L && source.revisionOf("app-a") == 2L }
         }
+    }
+
+    /**
+     * A closed source does no more work: close returns only after what was running on its own pools has finished. The
+     * compilation is held until close starts; then it waits, at most [CLOSE_SIGNAL_MILLIS], for close to return. Were
+     * close not to wait for it, close would return first, every time.
+     */
+    @Test
+    fun closeWaitsForTheSourcesOwnThreads() {
+        val events = CopyOnWriteArrayList<String>()
+        val closeReturned = CountDownLatch(1)
+        val compiler = FakeCompiler().apply { gate = CountDownLatch(1) }
+        store.onUnsubscribe = { compiler.gate!!.countDown() }
+        val metrics = object : SnapshotMetrics {
+            override fun onCompile(kind: SnapshotKind, duration: Duration, succeeded: Boolean) {
+                closeReturned.await(CLOSE_SIGNAL_MILLIS, TimeUnit.MILLISECONDS)
+                events += "work done"
+            }
+        }
+        val source = testSource(store, compiler, metrics = metrics, compileExecutor = null)
+        source.load()
+        await { compiler.threads.isNotEmpty() }
+        source.close()
+        events += "close returned"
+        closeReturned.countDown()
+        await { events.size == 2 }
+        events.assert().containsExactly("work done", "close returned")
+        source.threadsTerminated.assert().isTrue()
+    }
+
+    /** Closing from one of the source's own threads (here, an install callback) does not wait for itself. */
+    @Test
+    fun closeOnTheSourcesOwnThreadDoesNotWaitForItself() {
+        val closed = CompletableFuture<Duration>()
+        lateinit var source: SnapshotSource<Compiled, Compiled>
+        val metrics = object : SnapshotMetrics {
+            override fun onInstall(entry: SnapshotEntry<*>) {
+                val start = System.nanoTime()
+                source.close()
+                closed.complete(Duration.ofNanos(System.nanoTime() - start))
+            }
+        }
+        source = testSource(store, metrics = metrics, compileExecutor = null)
+        // The load it closes during fails as closed; what matters is that close returned without waiting for itself.
+        source.load()
+        closed.get(10, TimeUnit.SECONDS).assert().isLessThan(SnapshotSource.CLOSE_TIMEOUT)
+    }
+
+    /** Work that outlives the close timeout: close logs it and returns, leaving the source's threads to finish. */
+    @Test
+    fun closeGivesUpAfterItsTimeout() {
+        val compiler = FakeCompiler().apply { gate = CountDownLatch(1) }
+        val source = testSource(store, compiler, compileExecutor = null)
+        source.closeTimeout = Duration.ofMillis(SHORT_TIMEOUT_MILLIS)
+        source.load()
+        await { compiler.threads.isNotEmpty() }
+        source.close()
+        source.threadsTerminated.assert().isFalse()
+        compiler.gate!!.countDown()
+        await { source.threadsTerminated }
+    }
+
+    /** An interrupted closer stops waiting at once and keeps its interrupt flag. */
+    @Test
+    fun anInterruptedCloseKeepsTheInterrupt() {
+        val compiler = FakeCompiler().apply { gate = CountDownLatch(1) }
+        val source = testSource(store, compiler, compileExecutor = null)
+        source.load()
+        await { compiler.threads.isNotEmpty() }
+        Thread.currentThread().interrupt()
+        source.close()
+        Thread.interrupted().assert().isTrue()
+        source.threadsTerminated.assert().isFalse()
+        compiler.gate!!.countDown()
+        await { source.threadsTerminated }
+    }
+
+    /** With the compile pool and scheduler given to it, close waits only for the housekeeping it owns. */
+    @Test
+    fun closeWaitsOnlyForThePoolsItOwns() {
+        val scheduler = java.util.concurrent.ScheduledThreadPoolExecutor(1)
+        try {
+            val source = testSource(store, scheduler = scheduler)
+            source.load().get(10, TimeUnit.SECONDS)
+            source.close()
+            source.threadsTerminated.assert().isTrue()
+            scheduler.isShutdown.assert().isFalse()
+        } finally {
+            scheduler.shutdownNow()
+        }
+    }
+
+    private companion object {
+        const val CLOSE_SIGNAL_MILLIS = 300L
+        const val SHORT_TIMEOUT_MILLIS = 50L
     }
 }

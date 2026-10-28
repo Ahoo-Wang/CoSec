@@ -154,7 +154,7 @@ PR-3（#1075，`feat(engine,core): enforce platform boundaries`，已合入）�
 
 PR-9（#1091，`feat(control): expose the control plane as a library and over HTTP`，已合入）：`ControlPlane`/`DefaultControlPlane`（`read`、`history`、`diff`、`propose`、`apply`、`rollback`、`rebase`、`startShadow`、`skipShadow`、`approve`、`reject`、`abandon`、`publish`、`get`、`breakGlass`、`simulate`、`explain`、`analyze`、`propagation`），每次调用都经 `ChangeAuthority`，硬性规则在先；`Simulator` 用执法流程自己的部件（`ScopeResolver`、数据面的 `PolicyDocumentCompiler`、`CoSecFlatEngine.evaluate` 的完整 trace），没有第二个求值器（`CTL-3` 改为已实现）；`explain` 按 `SnapshotVersion` 决策，已不保留的修订为 410；决策与 trace 只在调用者能读该文档时点名语句，否则为 `redacted`，`analyze` 只列可读文档并统计隐藏与不透明的数量；`ControlHttp`（不依赖 Web 框架，`ControlBoundaryTest`）实现 RFC 0007 §10.2 的路由，每个路由要求管道放行的 `RequestSecurity`，否则 401；问题类型沿用 RFC 0006 的词汇，加上 `not-found`、`conflict`、`gone`、`precondition-failed`、`unprocessable`、`precondition-required`，401/403/404/500/503 不带 `detail`；AOT：控制面不需要提示，`ControlBoundaryTest` 新增规则，禁止反射式 Jackson 绑定、`Class.forName`、`ServiceLoader` 与 `kotlin.reflect.full`。§14.2 的延迟记在 `docs/perf/rfc-0007-control/README.md`，都在预算内（Redis、0.95 MB 租户文档：`propose` p99 125 ms，`publish` 端到端 p99 313 ms；8 MB 文档未测）。starter 的路由注册与 `controlSupport` 在 S1。`cosec:shadow-read` 已定义，暂无路由使用。
 
-#1095（`fix(control): round-1 review fixes for the control plane`，已合入）：**K1（高）**：变更的 `kind` 由入口决定，不再由请求体决定：`Changes.propose` 只接受 `PUBLISH` 与 `BREAK_GLASS`，`POST /changes` 带 `kind` 字段为 400，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`/`BOOTSTRAP` 只存在于 `cosec-migrate` 直接走 `Revisions` 的路径；此前持有写、授权、发布三个权限的操作员可以用 `MIGRATE`/`BOOTSTRAP` 创建可用的 `cosec:root` break-glass 绑定，绕过 `cosec:breakglass`、REQUIRED 变更审计与影子窗口，租户管理员也能借此绕过保留名检查。现在所有 break-glass 规则都按内容判定（`BreakGlassRules.touches`：变更放入 break-glass 绑定，或在其上放入另一个绑定），V5、期限上限、保留名检查对任何 kind 都不豁免，把 break-glass 绑定改成普通绑定也算 break-glass 变更；移除 break-glass 绑定仍只缩小范围、只需 `cosec:write`。**K2（中）**：所有以变更 id 为参数的步骤先过 `Changes.visible`，对不可读的变更与不存在的变更给出同一个 `404 "no change <id>"`（可读 = 租户隔离加该文档的 `cosec:read`，或是变更的作者）；隔离拒绝不再点名文档；没有 `cosec:read` 的人现在得到 404 而不是 403。**K3**：`Approval` 记录批准人的成员关系与属性，发布时重新对当前文档检查批准人的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL`；已知限制：成员关系取批准时的快照，IdP 中撤销的角色要等批准过期（`approvalExpireAfter`）才被发现；runtime 新增 `RequestSecurity.asPrincipal(principal, memberships)`。**K4**：`nomatch` 确认的语句摘要包含策略的条件（`StatementDigest.of(statement, policyCondition)`），改变条件即丢弃确认，没有策略条件时摘要不变。新规则 `BRK-5`、`CTL-15`；`ControlReviewFixesTest`。运维要求：影子报告命名空间（`cosec:…:shadow-report`）里的数据按原样被信任（`ShadowWindows` 直接求和），只有数据面实例可以写这些 key，用 Redis ACL 强制；能写的人可以用零差异提前关闭窗口。
+#1095（`fix(control): round-1 review fixes for the control plane`，已合入）：**K1（高）**：变更的 `kind` 由入口决定，不再由请求体决定：`Changes.propose` 只接受 `PUBLISH` 与 `BREAK_GLASS`，`POST /changes` 带 `kind` 字段为 400，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`/`BOOTSTRAP` 只存在于 `cosec-migrate` 直接走 `Revisions` 的路径；此前持有写、授权、发布三个权限的操作员可以用 `MIGRATE`/`BOOTSTRAP` 创建可用的 `cosec:root` break-glass 绑定，绕过 `cosec:breakglass`、REQUIRED 变更审计与影子窗口，租户管理员也能借此绕过保留名检查。现在所有 break-glass 规则都按内容判定（`BreakGlassRules.touches`：变更放入 break-glass 绑定，或在其上放入另一个绑定），V5、期限上限、保留名检查对任何 kind 都不豁免，把 break-glass 绑定改成普通绑定也算 break-glass 变更；移除 break-glass 绑定仍只缩小范围、只需 `cosec:write`。**K2（中）**：所有以变更 id 为参数的步骤先过 `Changes.visible`，对不可读的变更与不存在的变更给出同一个 `404 "no change <id>"`（可读 = 租户隔离加该文档的 `cosec:read`，或是变更的作者）；隔离拒绝不再点名文档；没有 `cosec:read` 的人现在得到 404 而不是 403。**K3**：`Approval` 记录批准人的成员关系与属性，发布时重新对当前文档检查批准人的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL`；已知限制：成员关系取批准时的快照，IdP 中撤销的角色要等批准过期（`approvalExpireAfter`）才被发现；runtime 新增 `RequestSecurity.asPrincipal(principal, memberships)`。**K4**：`nomatch` 确认的语句摘要包含策略的条件（`StatementDigest.of(statement, policyCondition)`），改变条件即丢弃确认，没有策略条件时摘要不变。新规则 `BRK-5`、`CTL-15`；`ControlReviewFixesTest`。运维要求：影子报告的 key（`{prefix}:shadow:report:{changeId}@{ms}`、`{prefix}:shadow:status:instances`；第 2 轮审查更正了此前写错的 `cosec:…:shadow-report`）里的数据按原样被信任（`ShadowWindows` 直接求和），只有数据面实例可以写这些 key，用 Redis ACL 强制；数据面凭据对 `snapshot:*`、`candidate:*`、`control:*` 只读。同一窗口所有实例的报告共用一个 key，按实例分 key 的修复在第 2 轮审查的跟进 PR 中。
 
 ---
 
@@ -180,7 +180,7 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 
 **一致性登记表新增 `startup` 级别**（#1097）：与 `build` 一样，`startup` 规则由它们所列的测试守护，没有场景在该级别运行（`RuleCoverageTest` 有对应测试）。`SNP-3` 改为 `startup` 并不再 `pending`，守护为 `CacheTtlPolicyTest` ×2 与 `CoSecPipelineAutoConfigurationTest` 中"Redis 可能淘汰"的用例；`SCP-4` 增加守护 `WebAdapterParityTest#the three adapters answer byte for byte alike`。仍为 `pending` 的 4 条：`SNP-1`、`SNP-2`（快照时序，已有测试与性质守护，应归入一个时序级别）、`ACT-1`（写着 RFC 0005 PR-4）、`PIP-1`（写着 RFC 0006 PR-7），后两条指向已合入的 PR；#1097 的作者打算在 S1b 一并处理，除非维护者另有决定。
 
-**S1b 的阻塞项**（2026-10-27）：(1) 三个过时的变异体需要改写（修复 PR 待开）；(2) `cosec-core` 的百万例运行把原生线程耗尽（在本地观察到），正通过阅读代码修复；百万例运行只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml`（#1099）上进行，不在本机跑；(3) 空闲机器上的 JMH（含 `boundary = none`）待测；(4) S1b 合入后在 8.0 上跑 k6，对照 7.0 基线。§3.9 第 1–5 条的证据在 S1b 自己的 head 上重跑：百万例运行改为 `property-stress.yml` 的 CI 运行（运行链接附在 S1b 的 PR 上），其余是 `:conformance:mutationCheck`、空闲机器 JMH、k6。
+**S1b 的阻塞项**（2026-10-27）：(1) 三个过时的变异体（`atr-3`、`brk-4`、`pip-2`，#1075 改了它们打补丁的代码）已改写，都能重新应用（#1103，已转为可审查并开启自动合并）；(2) `cosec-core` 的百万例运行把原生线程耗尽（在本地观察到）。读代码找到的原因：`SnapshotSource.close()` 不等自己的线程，关闭后排队的工作仍在跑。#1103 的修复让 `close()` 最多等 5 秒，并有去掉修复就失败的确定性测试；百万例运行只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml`（#1099）上进行，不在本机跑；(3) 性能：在 CI 上对比 v7 与 v8（新的手动工作流 `jmh-v7-v8.yml`，同一台 runner 上交替运行 7.0.x 与 8.0），每个场景 v8 不低于 v7 即通过；空闲机器上的 JMH 与 k6 不再是门槛（2026-10-27 维护者决定）。§3.9 第 1–5 条的证据在 S1b 自己的 head 上重跑：`property-stress.yml` 的百万例运行、`:conformance:mutationCheck`、`jmh-v7-v8.yml` 的对比，运行链接附在 S1b 的 PR 上。S1b 的草稿 PR 是 #1104。
 
 取消的 PR：RFC 0002 PR-6、RFC 0003 PR-5、RFC 0004 PR-6、RFC 0005 PR-7、RFC 0006 PR-8、RFC 0007 PR-10，以及第 2、3 阶段的门槛与门槛 A–D。
 并入切换的 PR：RFC 0003 PR-6、RFC 0004 PR-7/PR-8、RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11（分到 S1–S5 的哪一个，见 RFC 0008 §4.4.2）。
@@ -193,12 +193,19 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 7. 进行中
 
-打开的 PR（2026-10-27）：没有实现 PR。#1075、#1085、#1086、#1088 以及 #1090 至 #1097 都已合入。
+打开的 PR（2026-10-27）：#1101（`test(control)`，补 #1098 的 detekt 换行；#1098 带着 detekt 失败合入，`main` 的 `CoSec Control Test` 在 #1101 合入前是红的，所以排在队首）。#1075、#1085、#1086、#1088、#1090 至 #1100 都已合入（#1099：手动触发的百万例 `property-stress.yml`；#1100：上一次文档同步）；#1098 修复了 `ChangeListenersTest` 的计时抖动（只有等超时的用例保留 100 ms 的 `requiredTimeout`）。
 
 没有 PR 的进行中的工作：
 
-- 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
-- 7.0 端到端基线（k6）：在空闲机器上测量，结果作为 #1065 的后续 PR；8.0 的 k6 在 S1b 之后。
+- 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）：草稿 PR #1103（分支 `claude/evidence-mutants-threads`，剩余事项见 PR 描述）。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
+- S1b 草稿 #1104：已登记 8.0 的自动配置并删除 starter 中 7.x 的自动配置，剩余事项见 PR 描述。
+- #1097（S1a）第 1 轮审查与 #1095 第 2 轮审查已完成（只读，2026-10-27），没有外部可利用的问题。必须在 S1b 合入前修复的三个中等问题：S1 控制面在重新加载失败时按旧版本文档做检查（`SourceConfirmation.confirm`）；S2 `CONFIG GET` 失败时 `SNP-3` 静默放过；S3 数据面没有装配影子记录器与上报器。这三项与 S5（`simulate`/`explain` 未完全走执法流程）、S7（WebMvc 控制路由先读整个请求体；网关宿主上没有 `PipelineWebFilter`）以及无条件开启吊销，都并入 S1b（#1104）。
+- 待派发（下一个会话）：control/conformance/wiki 的审查跟进 PR：R1 影子报告按实例分 key 与 `wiki/operations/storage.md` 的 ACL 说明；S4 N3 重新编译包括加载中的槽位；S6 `RuleCoverage` 的守护规则白名单；R2 K3 记录非字符串属性；R6 不确定时答 503 而不是 404；R3 `RequestSecurity.asPrincipal` 改为内部；R4/R5 回滚与 break-glass 绑定策略。不碰 starter。
+- `jmh-v7-v8.yml`：在 CI 上对比 v7 与 v8 性能的手动工作流（#1105，已开启自动合并）；场景是 7.x 与 8.0 都有的 pipeline（global、role、none、anonymous）与授权（global、role、none），每个场景 v8/v7 的中位数比例不低于 100 % 即通过。合入后才能第一次触发。
+- #1101 已合入（`main` 的 detekt 失败已修复）。#1103 在补 `codecov/patch`（`close()` 新分支的测试），自动合并已开启。
+- #1106（草稿）：7.0 基线会话留在本机的 k6 脚本修改，已推送保存；k6 不再是门槛，可能关闭。
+- #1107（草稿）：协调会话本机留下的 5 个 7.x 探查测试，已推送保存；不合入，可移植的用例改写成一致性场景后关闭。
+- 收尾状态（2026-10-27）：本机代码全部已推送；#1103（已补 `close()` 的覆盖测试）、#1105、本 PR 开着自动合并，CI 通过后合入；#1104（S1b）、#1106、#1107 保持草稿。下次继续：先派发 control/conformance/wiki 的审查跟进 PR，再在 `main` 上触发 `property-stress.yml` 与 `jmh-v7-v8.yml`，运行链接附到 #1104，请维护者确认 S1b。
 
 （#866、#1082 是 Renovate 的 pnpm 升级，不属于路线图。）
 
@@ -225,6 +232,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **S1 拆成 S1a 与 S1b**：S1a 加法、不登记、可 revert；S1b 注册并删除 7.x，是不可回退点，带 §3.9 的证据 | 2026-10-27 | [RFC 0008 §4.4.1](rfc/0008-conformance-and-direct-build.md) |
 | **`cosec.authorization.snapshot.eviction-check=fail\|warn` 两个值都保留，默认 `fail`**：`warn` 给禁用 `CONFIG GET` 的托管 Redis（如 ElastiCache），启动时打印以 `!!!` 开头的 WARN，说明被淘汰的应用或租户文档读起来是缺失，它的 DENY 会悄悄失效；平台文档缺失 fail closed 不受此影响。S1b 的文档要写进 configuration 与 troubleshooting | 2026-10-27 | #1097 |
 | **空的 `cosec.authorization.routes.location` 表示有意不用路由映射**；默认位置缺失仍使启动失败。**`cosec.authorization.snapshot.key-prefix`**（默认 `cosec`）是对 RFC 属性列表的补充 | 2026-10-27 | #1097 |
+| **性能门槛改为 CI 上的 v7/v8 对比**：S1b 的性能证据是 CI 工作流 `jmh-v7-v8.yml` 的运行（同一台 runner 上交替运行 7.0.x 与 8.0），每个场景 v8 不低于 v7 即通过；不再要求空闲机器上的 JMH 与 k6。百万例 `propertyStress` 是正确性证据，保留，在 CI 上跑 | 2026-10-27 | [RFC 0008 §3.8](rfc/0008-conformance-and-direct-build.md) |
 | **不在本机跑压力测试**：S1b 的百万例 `propertyStress` 只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上运行（`gh workflow run property-stress.yml -f ref=<branch>`，#1099），运行链接附在 S1b 的 PR 上，这是 §3.9 的证据 | 2026-10-27 | #1099、`AGENTS.md` 的 Feedback loop |
 | **迭代效率**：本地只跑改动模块的测试与 detekt，完整的多模块 `check` 由 CI 跑（合入仍要求 CI 全绿）；空闲机器只留给 JMH；常规的性能前后对比用 CI 的 JMH A/B 工作流（`jmh-ab.yml`，#1084），S1 的门槛仍在空闲机器上测；Gradle 构建缓存、配置缓存与并行构建（#1085）；机械性任务用较便宜的模型 | 2026-10-27 | 仅记在本文；`AGENTS.md` 的 Feedback loop |
 | **合并冲突逐块解决**，共享文档从不整文件取一边（#1076 曾因此回退 RFC 0008 与路线图，#1077 恢复） | 2026-10-27 | 仅记在本文 |
@@ -233,7 +241,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
-- S1b 的前置：改写三个过时的变异体；修复百万例运行的原生线程耗尽（通过阅读代码，不在本机复现）；空闲机器上的 JMH（含 `boundary = none`）；随后 S1b 本身（`refactor!`，注册 8.0 的自动配置、删除 7.x 的自动配置，带 §3.9 的证据）。S1b 同时处理 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`，并在 AGENTS.md 的 Mental model 开头加过渡说明。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
+- S1b 的前置：#1103 合入（变异体与线程修复）；在 CI 上跑 `property-stress.yml` 与 `jmh-v7-v8.yml`（v8 ≥ v7）；随后 S1b 本身（草稿 #1104）（`refactor!`，注册 8.0 的自动配置、删除 7.x 的自动配置，带 §3.9 的证据）。S1b 同时处理 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`，并在 AGENTS.md 的 Mental model 开头加过渡说明。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0005 PR-5（#1079）、RFC 0006 PR-5（#1078）的第 1 轮，RFC 0007 PR-3 至 PR-9 的第 1 轮（#1095 已修复 PR-4 至 PR-9 的第 1 轮发现，其中 K1 为高危），之前合入、只做过第 1 轮的 PR 的第 2 轮，#1097 的审查；各表中"—"表示尚无已合入的修复 PR。
