@@ -360,10 +360,11 @@ class ConditionChecker(
          * Headers that carry credentials (RFC 0005 §3.2, `CND-5`). A condition on one would let a document's author
          * learn another principal's token through decisions: a `prefix` DENY on `authorization`, and the statement the
          * audit names, tell one character at a time. `x-api-key` is the starter's default API key header; a host that
-         * reads keys from another header is not covered by this list.
+         * reads keys from another header is not covered by this list. `cosec-identity` is what a gateway forwards to
+         * the services behind it: at the gateway it is the client's claim, which a condition must never trust.
          */
         val CREDENTIAL_HEADERS: Set<String> =
-            setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key")
+            setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "cosec-identity")
 
         private const val ROOT = "$"
         private const val IPV4_BITS = 32

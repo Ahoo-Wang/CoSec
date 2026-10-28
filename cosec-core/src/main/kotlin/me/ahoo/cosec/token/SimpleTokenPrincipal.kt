@@ -26,16 +26,19 @@ import java.time.Instant
  * @param delegate The underlying principal
  * @param issuedAt When the token was issued, if it says so; revoking a principal's tokens
  * ([TokenRevoker.revokeSubject]) needs it
+ * @param expiresAt When the token expires, if it says so; a gateway forwards it with the identity it verified
  * @see TokenPrincipal
  * @see CoSecPrincipal
  */
 data class SimpleTokenPrincipal @JvmOverloads constructor(
     override val tokenId: String,
     override val delegate: CoSecPrincipal,
-    override val issuedAt: Instant? = null
+    override val issuedAt: Instant? = null,
+    override val expiresAt: Instant? = null,
 ) : TokenPrincipal,
     CoSecPrincipal by delegate,
     IssuedAtCapable,
+    ExpiresAtCapable,
     Delegated<CoSecPrincipal> {
     companion object {
         @JvmField
