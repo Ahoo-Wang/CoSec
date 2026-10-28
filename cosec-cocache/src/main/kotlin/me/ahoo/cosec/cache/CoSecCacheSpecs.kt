@@ -99,6 +99,9 @@ object CoSecCacheSpecs {
     const val SHADOW_REPORT_CACHE_NAME = "ShadowReportCache"
     const val INSTANCE_STATUS_CACHE_NAME = "InstanceStatusCache"
 
+    /** The instances that reported on each shadow window (RFC 0007 §6.4, round-2 review R1). */
+    const val SHADOW_REPORTER_CACHE_NAME = "ShadowReporterCache"
+
     /** Encoded key of the single global policy index entry, whatever key the caller passes. */
     const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
 
@@ -147,6 +150,7 @@ object CoSecCacheSpecs {
         STAGE_CACHE_NAME to "control:stage",
         CANDIDATE_CACHE_NAME to "candidate",
         SHADOW_REPORT_CACHE_NAME to "shadow:report",
+        SHADOW_REPORTER_CACHE_NAME to "shadow:reporters",
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
     )
 

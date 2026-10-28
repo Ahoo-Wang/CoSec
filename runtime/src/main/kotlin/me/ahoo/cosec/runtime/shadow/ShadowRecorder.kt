@@ -43,7 +43,9 @@ class ShadowRecorder(val instance: String, private val clock: Clock = Clock.syst
     private val windows = ConcurrentHashMap<String, Window>()
 
     init {
-        require(instance.isNotEmpty()) { "An instance has an id." }
+        require(ShadowReport.isInstanceId(instance)) {
+            "An instance id has only letters, digits, '.', '_' and '-': [$instance]."
+        }
     }
 
     fun record(window: String, outcome: ShadowOutcome, baseRevision: Long?, sample: ShadowSample?) {

@@ -1,0 +1,144 @@
+{
+  "rules": [
+    "CTL-17"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Round-2 review R6: once the documents can be confirmed again, gil is answered 404 for plato's change as for c9, which does not exist, and walt is refused approving it (403), never 503.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "gil": {
+      "tenant": "globex"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "outage": true
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "outage": false
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "gil"
+      }
+    },
+    {
+      "approve": {
+        "change": "c9",
+        "by": "gil"
+      }
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "walt"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "down",
+      "refused 503",
+      "up",
+      "refused 404",
+      "refused 404",
+      "refused 403"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 1
+    }
+  }
+}

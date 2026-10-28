@@ -1,0 +1,163 @@
+{
+  "rules": [
+    "BRK-6"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Round-2 review R4: while rita's break-glass binding to emergency lives, walt still changes another policy; once it has expired, he changes emergency too.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "emergency",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "glass",
+          "subject": {
+            "principal": "rita",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "emergency",
+          "breakGlass": true,
+          "expiresAt": "2026-11-01T01:00:00Z"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "walt",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "advance": "PT2H"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "walt",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "emergency",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "advanced",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_ANALYZED"
+      ],
+      "c2": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

@@ -73,7 +73,7 @@ class EngineAuthority(private val revisions: Revisions) {
         id: String,
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
-        attributes: Map<String, String> = emptyMap(),
+        attributes: Map<String, Any> = emptyMap(),
     ): Operator = Operator.of(security(tenant, id, roles, policies, attributes))!!
 
     /** The request the host pipeline permitted for that principal: what the control API's routes take. */
@@ -82,7 +82,7 @@ class EngineAuthority(private val revisions: Revisions) {
         id: String,
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
-        attributes: Map<String, String> = emptyMap(),
+        attributes: Map<String, Any> = emptyMap(),
     ): me.ahoo.cosec.runtime.RequestSecurity {
         val principal =
             AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies), attributes)

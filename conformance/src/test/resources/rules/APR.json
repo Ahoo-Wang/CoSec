@@ -39,6 +39,17 @@
         "control:BreakGlassControlTest#two people create it, each step recorded first"
       ],
       "pending": null
+    },
+    {
+      "id": "APR-5",
+      "source": "RFC 0007 §7.5; round-2 review R2",
+      "statement": "An approval records every token attribute of its approver, whatever its JSON type, and publishing checks the approver's cosec:approve again with exactly those attributes.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#an approval keeps every attribute of its approver, so that publishing checks what it was decided on",
+        "control:ControlRoundTwoFixesTest#an approval's other attribute types survive the store"
+      ]
     }
   ]
 }

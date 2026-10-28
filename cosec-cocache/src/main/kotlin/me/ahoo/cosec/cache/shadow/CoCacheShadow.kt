@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.cache.shadow
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
@@ -33,6 +36,7 @@ import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.runtime.shadow.ShadowReportSink
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
@@ -43,11 +47,13 @@ import java.time.Duration
  * | Cache | Redis key | Policy |
  * |---|---|---|
  * | candidates | `<p>:candidate:<docKey>` | store of record: the control plane's only copy while a change stages |
- * | reports | `<p>:shadow:report:<window>` | every instance's report of one window; expires [REPORT_TTL] after the last write |
+ * | reports | `<p>:shadow:report:<window>:<instance>` | one instance's report of one window; expires [REPORT_TTL] after its last write |
+ * | reporters | `<p>:shadow:reporters:<window>` | the instances that reported on one window, only ever added to; expires as the reports |
  * | statuses | `<p>:shadow:status:instances` | every instance's last status; expires [STATUS_TTL] after the last write |
  *
  * Reports and statuses are observations, so they expire; a failed read still throws, so that an outage is never read
- * as "no samples" or "no instance".
+ * as "no samples" or "no instance". Each instance writes only its own report key (round-2 review R1), so that one
+ * instance can never replace another's numbers, and an ACL can confine each instance to its own keys.
  */
 object ShadowCacheSpecs {
     /** Longer than the longest window (24 hours) and the week a change may stay unpublished. */
@@ -67,14 +73,26 @@ object ShadowCacheSpecs {
             .policy(policy.storeOfRecord())
             .build()
 
-    fun reports(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Map<String, ShadowReport>> =
-        CacheSpec.builder<String, Map<String, ShadowReport>>(CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME)
+    fun reports(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, ShadowReport> =
+        CacheSpec.builder<String, ShadowReport>(CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME)
             .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME))
             .keyPrefix("")
             .keyEncoder { it }
-            .codec(ShadowReportsCodec)
+            .codec(ShadowReportCodec)
             .policy(policy.toBuilder().ttl(REPORT_TTL).readFailure(ReadFailureMode.THROW).build())
             .build()
+
+    fun reporters(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Set<String>> =
+        CacheSpec.builder<String, Set<String>>(CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME)
+            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder { it }
+            .codec(ReportersCodec)
+            .policy(policy.toBuilder().ttl(REPORT_TTL).readFailure(ReadFailureMode.THROW).build())
+            .build()
+
+    /** The key of [instance]'s report of [window], under the reports' namespace. */
+    fun reportKey(window: String, instance: String): String = "$window:$instance"
 
     fun statuses(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Map<String, InstanceStatus>> =
         CacheSpec.builder<String, Map<String, InstanceStatus>>(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME)
@@ -92,10 +110,23 @@ object StoredCandidateCodec : Codec<StoredCandidate> {
     override fun decode(bytes: ByteArray): StoredCandidate = ShadowCodec.decodeCandidate(bytes)
 }
 
-object ShadowReportsCodec : Codec<Map<String, ShadowReport>> {
-    override fun encode(value: Map<String, ShadowReport>): ByteArray = ShadowCodec.encodeReports(value)
+object ShadowReportCodec : Codec<ShadowReport> {
+    override fun encode(value: ShadowReport): ByteArray = ShadowCodec.encodeReport(value)
 
-    override fun decode(bytes: ByteArray): Map<String, ShadowReport> = ShadowCodec.decodeReports(bytes)
+    override fun decode(bytes: ByteArray): ShadowReport = ShadowCodec.decodeReport(bytes)
+}
+
+/** The instances that reported on a window, as a sorted JSON array of their ids. */
+object ReportersCodec : Codec<Set<String>> {
+    override fun encode(value: Set<String>): ByteArray = CoSecJsonSerializer.writeValueAsBytes(value.sorted())
+
+    override fun decode(bytes: ByteArray): Set<String> {
+        val node = CoSecJsonSerializer.readTree(bytes)
+        require(
+            node.isArray && node.values().all { it.isString }
+        ) { "The reporters of a window are an array of instance ids" }
+        return node.values().mapTo(LinkedHashSet()) { it.asString() }
+    }
 }
 
 object InstanceStatusesCodec : Codec<Map<String, InstanceStatus>> {
@@ -122,18 +153,33 @@ class CoCacheCandidateStore(private val candidates: Cache<SnapshotKey, StoredCan
 }
 
 /**
- * Shadow reports and instance statuses on Redis (RFC 0007 §6.4, §6.5): one key per window holding every instance's
- * report, and one key holding every instance's status, each replaced with `putIfMatch` over the value it read, so that
- * instances writing at once never lose each other's entries. Statuses older than a minute are dropped as they are
- * written and ignored as they are read.
+ * Shadow reports and instance statuses on Redis (RFC 0007 §6.4, §6.5). Each instance's report of a window has a key
+ * of its own, `<window>:<instance>`, which only that instance writes, replacing its previous cumulative report; an
+ * instance id has no `:` ([ShadowReport.isInstanceId]) and a window id none either, so a key names one report only.
+ * The report is written first, then the instance is added to the window's reporters with `putIfMatch` over the value
+ * read; every write checks that it is still there. A window's total is the sum of one report per instance (review R1),
+ * and a listed instance without a report is an error, never left out.
+ *
+ * The reporters are a value every instance writes: an instance can remove another from them. The control plane keeps
+ * every instance it has seen with the change (`ShadowState.reporters`), so a removal after that is an error too; one
+ * before the control plane looks again is not detected. Statuses share one key, replaced with `putIfMatch` over the
+ * value read, so that instances writing at once never lose each other's entries; statuses older than a minute are
+ * dropped as they are written and ignored as they are read.
  */
 class CoCacheShadowReports(
-    private val reports: Cache<String, Map<String, ShadowReport>>,
+    private val reports: Cache<String, ShadowReport>,
+    private val reporters: Cache<String, Set<String>>,
     private val statuses: Cache<String, Map<String, InstanceStatus>>,
     private val clock: Clock = Clock.systemUTC(),
 ) : ShadowReportSink, ShadowReportReader {
     override suspend fun write(report: ShadowReport) {
-        update(reports, report.window) { it + (report.instance to report) }
+        require(ShadowReport.isInstanceId(report.instance)) { "[${report.instance}] is not an instance id" }
+        require(report.window.isNotEmpty() && ':' !in report.window) { "[${report.window}] is not a window id" }
+        require(report.counts.values.all { it >= 0 }) { "A report's counts are never negative" }
+        reports.async().put(ShadowCacheSpecs.reportKey(report.window, report.instance), report).await()
+        if (read(reporters, report.window)?.first?.contains(report.instance) != true) {
+            update(reporters, report.window, { it + report.instance }, emptySet())
+        }
     }
 
     override suspend fun write(status: InstanceStatus) {
@@ -143,10 +189,37 @@ class CoCacheShadowReports(
         }
     }
 
-    override suspend fun reports(window: String): List<ShadowReport> = read(
-        reports,
-        window
-    )?.first?.values?.toList().orEmpty()
+    /**
+     * One report per instance listed as having reported on [window]. A listed instance without a report (expired,
+     * removed), an id that is not an instance id, and a report stored under another instance's or window's key are
+     * errors, not samples: the window cannot close on them (fail closed).
+     */
+    override suspend fun reports(window: String): List<ShadowReport> {
+        val instances = read(reporters, window)?.first.orEmpty()
+        check(
+            instances.all(ShadowReport::isInstanceId)
+        ) { "The reporters of window $window name an invalid instance id" }
+        return coroutineScope {
+            instances.sorted().map { instance ->
+                async {
+                    val key = ShadowCacheSpecs.reportKey(window, instance)
+                    val report = checkNotNull(
+                        read(reports, key)?.first
+                    ) { "[$key] is listed as reported but has no report" }
+                    report.also { checkOwner(it, window, instance) }
+                }
+            }.awaitAll()
+        }
+    }
+
+    private fun checkOwner(report: ShadowReport, window: String, instance: String) {
+        check(report.window == window && report.instance == instance) {
+            "The report under [${ShadowCacheSpecs.reportKey(
+                window,
+                instance
+            )}] is ${report.instance}'s of ${report.window}"
+        }
+    }
 
     override suspend fun statuses(): List<InstanceStatus> {
         val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
@@ -164,10 +237,6 @@ class CoCacheShadowReports(
         error("[$key] kept changing while it was written")
     }
 
-    private suspend fun update(cache: Cache<String, Map<String, ShadowReport>>, key: String, next: (Map<String, ShadowReport>) -> Map<String, ShadowReport>) =
-        update(cache, key, next, emptyMap())
-
-    @JvmName("updateStatuses")
     private suspend fun update(
         cache: Cache<String, Map<String, InstanceStatus>>,
         key: String,
@@ -188,6 +257,7 @@ class CoCacheShadowReports(
         fun create(runtime: CacheRuntime, keyPrefix: String = CoSec.COSEC, clock: Clock = Clock.systemUTC()): CoCacheShadowReports =
             CoCacheShadowReports(
                 runtime.create(ShadowCacheSpecs.reports(keyPrefix)),
+                runtime.create(ShadowCacheSpecs.reporters(keyPrefix)),
                 runtime.create(ShadowCacheSpecs.statuses(keyPrefix)),
                 clock
             )

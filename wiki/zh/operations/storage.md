@@ -165,6 +165,47 @@ CoSec 数据指 `<prefix>:policy:`、`<prefix>:global:policy`、`<prefix>:app:pe
   策略和授权；`volatile-*` 策略可能删掉吊销记录，让对应令牌重新被接受。使用 `noeviction` 并按数据量规划实例容量。因为有
   全局策略索引，CoCache 会在启动时检查该策略（`cocache.redis.set-cache-eviction-check`，默认 `warn`）。
 
+### 控制面与影子窗口的 key {#control-plane-and-shadow-keys}
+
+8.0 中，控制面与数据面实例还共用一组 key。`<s>` 是 `cosec.pipeline.snapshot.key-prefix`（默认 `cosec`），去掉末尾的 `:`。
+
+| Key | 写入方 | 内容 |
+|---|---|---|
+| `<s>:snapshot:<document>` | 控制面、`cosec-migrate` | 已发布的策略文档，每个实例据此执法 |
+| `<s>:candidate:<document>` | 控制面 | 影子窗口打开期间，文档暂存的候选 |
+| `<s>:control:*` | 控制面 | 修订记录、修订索引、反向引用、租约、变更与暂存槽 |
+| `<s>:shadow:report:<window>:<instance>` | 只有数据面实例 `<instance>` | 该实例对影子窗口 `<window>`（`<changeId>@<epoch ms>`）的累计报告；每次写入替换它之前的报告；最后一次写入 8 天后过期 |
+| `<s>:shadow:reporters:<window>` | 每个数据面实例 | 报告过 `<window>` 的实例 id；实例写完报告后把自己加进去，之后任何一次写入发现自己的 id 不在时再加回去；过期时间同上 |
+| `<s>:shadow:status:instances` | 每个数据面实例 | 每个实例已安装的修订，供传播视图使用；超过一分钟的条目不计 |
+
+一个窗口的数字是每个实例一份报告之和，每份都是该实例最新的报告。控制面按原样读取这些报告：它们决定窗口何时关闭，以及发布者
+确认什么。以下情况一律不计入，而是让窗口保持打开（该步骤回答 `503`）：某个实例的 key 下的报告写着另一个实例或另一个窗口、计数为
+负、列出的实例没有报告、或者控制面之前见过在该窗口上报告的实例现在没有报告（控制面把见过的实例随变更保存在 `<s>:control:*`
+下）。任一实例的 `CANDIDATE_ERROR` 单独就会阻止窗口，不论其他实例报告什么。实例 id 只含字母、数字、`.`、`_` 和 `-`，因此一个
+key（以及一条 ACL 模式）只对应一个实例的报告。
+
+信任模型：每个数据面实例只就它自己的报告受信任，仅此而已。实例总能虚报自己的流量（例如报告没有错误），所以 ACL 的作用是把它限制在
+自己的 key 上：
+
+- 只有数据面实例可以写 `<s>:shadow:*`。数据面凭据对 `<s>:snapshot:*`、`<s>:candidate:*` 只读，对 `<s>:control:*` 完全不需要
+  访问权限：只有控制面读写它，而其中的变更记录含有批准人的令牌属性。
+- 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许写自己的报告 key（`<s>:shadow:report:*:<instance>`）。
+  每个实例仍然要写 `<s>:shadow:reporters:*` 和 `<s>:shadow:status:*`，CoCache 通过 Lua 脚本写它们，ACL 无法把它们限制为只增不删。
+- 剩下的缺口：对 `<s>:shadow:reporters:*` 有写权限的实例可以把另一个实例的 id 从窗口的报告者中删掉。控制面见过那个实例报告之后，
+  窗口会保持打开，直到它的报告回来。在控制面第一次见到之前就被删掉的 id 不会被发现，那个实例的报告要等它再次写入、发现自己的 id
+  不在并加回去之后才会被计入。
+
+实例 `pod-a`、默认前缀的示例（Redis 7 ACL 语法；`%R~` 表示只读）。第一行设定 key 并去掉所有命令（`-@all`）；第二行授予实例需要的命令与频道。
+
+```text
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+ACL SETUSER cosec-pod-a <CoCache 列出的命令与频道>
+```
+
+命令与频道见 [CoCache 为其 Redis 后端列出的权限](https://cocache.ahoo.me/operations/#acl)（它的脚本、失效频道
+`cocache:inv:<s>:*`）；再加上该实例其他功能用到的 key（上面的 [Redis key](#redis-keys)）。上线前用 `ACL DRYRUN` 检查这个用户：
+CoCache 通过 Lua 脚本写入，Redis 会逐个 key 检查。
+
 ## Redis 不可用时 {#when-redis-is-unavailable}
 
 | 数据 | 行为 |

@@ -20,12 +20,15 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
+import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -48,10 +51,13 @@ class AuthorizationCheckerTest {
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
                     """{"id":"order","statements":[{"effect":"allow","action":"order:read","resource":"order/{id}"}]},""" +
-                    """{"id":"control","statements":[{"effect":"allow","action":"cosec:read","resource":"doc/**"}]}],""" +
+                    """{"id":"control","statements":[{"effect":"allow","action":"cosec:read","resource":"doc/**"}]},""" +
+                    """{"id":"rank","statements":[{"effect":"allow","action":"cosec:approve","resource":"doc/**",""" +
+                    """"condition":{"eq":["subject.attributes.level","3"]}}]}],""" +
                     """"bindings":[{"id":"g:read","subject":"*","app":"*","space":"*","policy":"read"},""" +
                     """{"id":"g:order","subject":"*","app":"*","space":"*","policy":"order"},""" +
-                    """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"}]}"""
+                    """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"},""" +
+                    """{"id":"g:rank","subject":"*","app":"cosec-control","space":"","policy":"rank"}]}"""
                 ).encodeToByteArray(),
         ),
     )
@@ -121,6 +127,39 @@ class AuthorizationCheckerTest {
         checker.decide(security, control, Action("cosec", "write"), doc).assert().isEqualTo(Decision.Deny(null))
         views.fail = true
         checker.decide(security, control, read, doc).assert().isInstanceOf(Decision.Indeterminate::class.java)
+    }
+
+    /** RFC 0007 §7.5, round-2 review R3: a recorded principal is checked again without minting a permitted request. */
+    @Test
+    fun decidesAsARecordedPrincipalWithoutMintingARequest() = runBlocking<Unit> {
+        val security = permitted()
+        val control = AppId("cosec-control")
+        val approve = Action("cosec", "approve")
+        val doc = Resource("doc", "tenant/a", emptyMap())
+        fun ada(level: Any) =
+            AuthenticatedPrincipal(
+                PrincipalId("ada"),
+                PipelineFixtures.TENANT,
+                MembershipSource.Provider,
+                mapOf("level" to level)
+            )
+        checker.decide(security, control, approve, doc).assert().isEqualTo(Decision.Deny(null))
+        checker.decideAs(security, ada(3), security.memberships, control, approve, doc).assert()
+            .isInstanceOf(Decision.Permit::class.java)
+        checker.decideAs(
+            security,
+            ada(2),
+            security.memberships,
+            control,
+            approve,
+            doc
+        ).assert().isEqualTo(Decision.Deny(null))
+        views.fail = true
+        checker.decideAs(security, ada(3), security.memberships, control, approve, doc).assert()
+            .isInstanceOf(Decision.Indeterminate::class.java)
+        // Only the pipeline makes a RequestSecurity: what is public on it hands none out (internal names are mangled).
+        RequestSecurity::class.java.methods.filter { it.returnType == RequestSecurity::class.java && '$' !in it.name }
+            .map { it.name }.assert().isEmpty()
     }
 
     @Test

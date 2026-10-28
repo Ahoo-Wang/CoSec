@@ -15,7 +15,6 @@ package me.ahoo.cosec.conformance
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.authz.ControlAuthorizer
-import me.ahoo.cosec.control.authz.DocumentConfirmation
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.store.Revisions
@@ -68,16 +67,31 @@ class ControlEngine(private val revisions: Revisions) {
         ),
     )
 
-    val authorizer: ControlAuthorizer = PipelineControlAuthorizer(checker, DocumentConfirmation.CURRENT)
+    /** Whether the documents a check reads can be confirmed: an `outage` step makes every check indeterminate. */
+    var outage: Boolean = false
 
-    /** An operator of [tenant], with `role@space` [roles] (a bare role is the default space's) and attached [policies]. */
+    val authorizer: ControlAuthorizer = PipelineControlAuthorizer(
+        checker,
+        { if (outage) throw IllegalStateException("the snapshot source is down") },
+    )
+
+    /**
+     * An operator of [tenant], with `role@space` [roles] (a bare role is the default space's), attached [policies] and
+     * token [attributes].
+     */
     fun operator(
         tenant: TenantId,
         id: String,
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
+        attributes: Map<String, Any> = emptyMap(),
     ): Operator {
-        val principal = AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies))
+        val principal = AuthenticatedPrincipal(
+            PrincipalId(id),
+            tenant,
+            MembershipClaims.parse(roles, policies),
+            attributes
+        )
         val host = Pipeline(
             PipelineComponents(
                 authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },

@@ -81,6 +81,15 @@ data class ShadowReport(
 ) {
     companion object {
         const val MAX_SAMPLES: Int = 20
+
+        private val INSTANCE_ID = Regex("[A-Za-z0-9._-]+")
+
+        /**
+         * Whether [id] may name an instance: letters, digits, `.`, `_` and `-` only (round-2 review). An instance id
+         * ends its report's Redis key, so a `:` in it would let one instance's key, or an ACL pattern written for it,
+         * match another's.
+         */
+        fun isInstanceId(id: String): Boolean = INSTANCE_ID.matches(id)
     }
 }
 

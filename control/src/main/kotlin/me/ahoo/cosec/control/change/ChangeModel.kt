@@ -195,14 +195,27 @@ data class Approval(
     val candidate: String,
     val covers: List<String>,
     val memberships: Memberships? = null,
-    val attributes: Map<String, String> = emptyMap(),
+    /**
+     * The approver's token attributes as authenticated, of every JSON type (round-2 review R2): strings, numbers,
+     * booleans, lists and objects, so that the check at publish reads what the approval was decided on.
+     */
+    val attributes: Map<String, Any> = emptyMap(),
 )
 
 /**
  * A change's shadow window (RFC 0007 §6.4): [window] names it in the candidate and in every instance's report; [closed]
  * is what the reports summed to when it closed, and stays as the evidence the publisher acknowledges.
  */
-data class ShadowState(val window: String, val startedAt: Instant, val closed: ShadowSummary? = null)
+data class ShadowState(
+    val window: String,
+    val startedAt: Instant,
+    val closed: ShadowSummary? = null,
+    /**
+     * Every instance the control plane has seen report on the window, kept with the change where no data-plane
+     * credential writes: one that reported once must report until the window closes (round-2 review).
+     */
+    val reporters: Set<String> = emptySet(),
+)
 
 /**
  * The reports of a window summed over the instances (RFC 0007 §6.4): counts by outcome (`SAME`, `WIDENED`, ...), when

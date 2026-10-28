@@ -49,6 +49,26 @@
         "control:ControlReviewFixesTest#a change's kind is never its input's",
         "control:ControlReviewFixesTest#creating or altering break-glass needs cosec breakglass and a REQUIRED audit, whatever the kind"
       ]
+    },
+    {
+      "id": "BRK-6",
+      "source": "RFC 0007 §8; round-2 review R4",
+      "statement": "The policy a live break-glass binding grants does not change while the binding lives: a change that puts it needs cosec:breakglass and a REQUIRED audit, and never checks clean.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#the policy a live break-glass binding grants changes only once the binding has gone"
+      ]
+    },
+    {
+      "id": "BRK-7",
+      "source": "RFC 0007 §5.6, §8; round-2 review R4",
+      "statement": "A rollback is held to every break-glass rule: one that would create, alter or bring back a break-glass binding, or change the policy a live one grants, needs cosec:breakglass and a REQUIRED audit and never checks clean; one that only removes break-glass bindings needs neither and has no shadow window.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a rollback is held to every break-glass rule"
+      ]
     }
   ]
 }
