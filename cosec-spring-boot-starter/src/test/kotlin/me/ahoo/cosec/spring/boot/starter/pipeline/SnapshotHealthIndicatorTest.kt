@@ -57,20 +57,20 @@ class SnapshotHealthIndicatorTest {
         health(DocumentState.Present(Any()), true).status.assert().isEqualTo(Status.UP)
     }
 
-    private class Recording : ApplicationEventPublisher {
+    /** The readiness states published, through the publisher's one abstract method. */
+    private class Recording {
         val states = CopyOnWriteArrayList<ReadinessState>()
-
-        override fun publishEvent(event: Any) {
+        val publisher = ApplicationEventPublisher { event ->
             states += (event as AvailabilityChangeEvent<*>).state as ReadinessState
         }
     }
 
     @Test
     fun `a ready snapshot accepts at once, and refusals or its own events are ignored`() {
-        val publisher = Recording()
+        val recording = Recording()
         SnapshotReadiness(
             source(DocumentState.Present(Any()), true),
-            publisher,
+            recording.publisher,
             Duration.ofMillis(10)
         ).use { readiness ->
             readiness.isReady.assert().isTrue()
@@ -79,16 +79,16 @@ class SnapshotHealthIndicatorTest {
             readiness.onApplicationEvent(AvailabilityChangeEvent(this, ReadinessState.ACCEPTING_TRAFFIC))
             Thread.sleep(100)
             // Spring's own acceptance stands: nothing to refuse, nothing to announce.
-            publisher.states.assert().isEmpty()
+            recording.states.assert().isEmpty()
         }
     }
 
     @Test
     fun `nothing is announced before the application has started`() {
-        val publisher = Recording()
-        SnapshotReadiness(source(DocumentState.Present(Any()), true), publisher, Duration.ofMillis(10)).use {
+        val recording = Recording()
+        SnapshotReadiness(source(DocumentState.Present(Any()), true), recording.publisher, Duration.ofMillis(10)).use {
             Thread.sleep(100)
-            publisher.states.assert().isEmpty()
+            recording.states.assert().isEmpty()
         }
     }
 }
