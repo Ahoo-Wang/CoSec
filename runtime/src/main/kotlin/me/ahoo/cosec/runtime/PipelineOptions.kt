@@ -40,6 +40,7 @@ class PipelineOptions(
     val allowQueryToken: Boolean = false,
     /** The header an API key comes in. */
     val apiKeyHeader: String = "X-API-Key",
+    /** How much of the engine's trace decision events carry (`DecisionEvent.evaluationTrace`); `OFF` costs nothing. */
     val traceLevel: TraceLevel = TraceLevel.OFF,
 ) {
     init {

@@ -14,10 +14,8 @@
 package me.ahoo.cosec.runtime.authn
 
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.findInDelegationChain
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.token.IssuedAtCapable
 import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.RevocationReader
 import me.ahoo.cosec.token.SimpleAccessToken
@@ -52,7 +50,7 @@ class TokenAuthenticator(
      * How far ahead of the revoking clock a token issuer's clock may run (`cosec.authentication.revocation.skew`): a
      * subject revocation also revokes tokens issued up to this long after it ([SubjectRevocation.revokes]).
      */
-    private val revocationSkew: Duration = DEFAULT_REVOCATION_SKEW,
+    private val revocationSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
 ) : Authenticator {
     init {
         require(!revocationSkew.isNegative) { "The revocation skew must not be negative, not $revocationSkew." }
@@ -74,8 +72,7 @@ class TokenAuthenticator(
         }
         val tenant = MembershipClaims.tenantOf(principal)
         val id = PrincipalId(principal.id)
-        val issuedAt = principal.findInDelegationChain<IssuedAtCapable>()?.issuedAt
-        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt, revocationSkew)) {
+        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), principal, revocationSkew)) {
             return REVOKED
         }
         return AuthnResult.Authenticated(
@@ -86,12 +83,6 @@ class TokenAuthenticator(
 
     companion object {
         const val METHOD = "token"
-
-        /**
-         * Five seconds: clocks kept by NTP agree within milliseconds, so this covers an issuer drifting well beyond
-         * that, while a principal who signs in again just after a revocation waits at most five seconds.
-         */
-        val DEFAULT_REVOCATION_SKEW: Duration = Duration.ofSeconds(5)
 
         private val EXPIRED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED)
         private val REVOKED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)

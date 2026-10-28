@@ -60,7 +60,9 @@ class SubjectRevocationTest {
     }
 
     private val verifier = FixedVerifier(token(now))
-    private val revocableVerifier = RevocableTokenVerifier(verifier, tokenStore)
+
+    // No skew: these tests place tokens to the millisecond of the revocation; the skew has its own test.
+    private val revocableVerifier = RevocableTokenVerifier(verifier, tokenStore, Duration.ZERO)
     private val revoker = DefaultTokenRevoker(verifier, tokenStore, refreshValidity, Clock.fixed(now, ZoneOffset.UTC))
     private val accessToken = SimpleAccessToken("access")
     private val compositeToken = SimpleCompositeToken("access", "refresh")
@@ -88,6 +90,20 @@ class SubjectRevocationTest {
         assertRevoked(token(now.minusMillis(1)))
         assertAccepted(token(now))
         assertAccepted(token(now.plusSeconds(1)))
+    }
+
+    /** Review A7: refresh revokes within the skew exactly as the pipeline does, so a refused token is not renewed. */
+    @Test
+    fun theSkewRevokesTokensIssuedJustAfterTheRevocation() {
+        val skewed = RevocableTokenVerifier(verifier, tokenStore, SubjectRevocation.DEFAULT_SKEW)
+        revoker.revokeSubject(tenant, alice, now)
+
+        verifier.principal = token(now.plusSeconds(4))
+        assertThrows<TokenRevokedException> { skewed.verify<TokenPrincipal>(accessToken) }
+        assertThrows<TokenRevokedException> { skewed.refresh<TokenPrincipal>(compositeToken) }
+        verifier.principal = token(now.plus(SubjectRevocation.DEFAULT_SKEW))
+        assertDoesNotThrow { skewed.refresh<TokenPrincipal>(compositeToken) }
+        assertThrows<IllegalArgumentException> { RevocableTokenVerifier(verifier, tokenStore, Duration.ofSeconds(-1)) }
     }
 
     @Test
