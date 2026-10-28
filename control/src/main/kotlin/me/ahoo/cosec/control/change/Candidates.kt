@@ -132,7 +132,11 @@ object Operations {
                     catalog = operation.catalog
                 }
 
-                is Operation.SetLimits -> section(path, DocumentKind.PLATFORM, "only the platform document has limits") {
+                is Operation.SetLimits -> section(
+                    path,
+                    DocumentKind.PLATFORM,
+                    "only the platform document has limits"
+                ) {
                     limits = operation.limits
                 }
 
