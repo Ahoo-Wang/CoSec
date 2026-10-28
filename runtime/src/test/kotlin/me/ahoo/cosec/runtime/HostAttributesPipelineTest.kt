@@ -121,6 +121,21 @@ class HostAttributesPipelineTest {
         evaluate(facts(mapOf("Origin" to listOf("not a uri")))).status.assert().isEqualTo(403)
     }
 
+    /** A header sent twice with different values has none: the DENY reading it errs, so the request is 503. */
+    @Test
+    fun aHeaderWithDifferentValuesIsIndeterminate() {
+        val ambiguous = evaluate(facts(mapOf("X-Debug" to listOf("0", "1")), mapOf(ROUTE_ID to "orders")))
+        ambiguous.status.assert().isEqualTo(503)
+        ambiguous.decision.assert().isInstanceOf(Decision.Indeterminate::class.java)
+        evaluate(facts(mapOf("X-Debug" to listOf("0", "0")), mapOf(ROUTE_ID to "orders"))).status.assert().isEqualTo(200)
+    }
+
+    /** Hosts are case-insensitive: the origin's host is read in lower case. */
+    @Test
+    fun theOriginsHostIsLowerCase() {
+        evaluate(facts(mapOf("Origin" to listOf("https://App.Example.COM")))).status.assert().isEqualTo(200)
+    }
+
     /** A check of a permitted request reads that request's attributes, as its decision did. */
     @Test
     fun aCheckReadsTheRequestsAttributes() {
