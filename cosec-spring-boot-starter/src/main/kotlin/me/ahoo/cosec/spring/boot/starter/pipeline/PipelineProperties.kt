@@ -130,7 +130,10 @@ class RuntimeAuthorizationProperties {
         /** How often this instance writes its reports and its status. */
         var reportInterval: Duration = Duration.ofSeconds(10)
 
-        /** This instance's id in reports and statuses; a random one when empty. Unique per running instance. */
+        /**
+         * This instance's id in reports and statuses; a random one when empty. Unique per running instance, and only
+         * letters, digits, `.`, `_` and `-` (it ends a Redis key); any other id fails startup.
+         */
         var instanceId: String = ""
     }
 

@@ -145,7 +145,7 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 用暂存的候选再评估一次被采样的请求，并报告结果。关闭后，本实例的流量在影子窗口里不计数，本实例编译不了的候选也不会阻断窗口。 |
 | `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 同时用候选评估的请求比例。每个请求多花一次评估，不在请求路径上。 |
 | `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例向 Redis 写影子报告和实例状态的间隔。 |
-| `cosec.authorization.shadow.instance-id` | string | 随机 | 本实例在报告和状态中的 id。每个运行中的实例必须不同。 |
+| `cosec.authorization.shadow.instance-id` | string | 随机 | 本实例在报告和状态中的 id。每个运行中的实例必须不同，且只能包含字母、数字、`.`、`_` 和 `-`；其他 id 会让启动失败。 |
 
 ## 控制面 {#control-plane}
 

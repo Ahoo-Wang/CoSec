@@ -149,7 +149,7 @@ the control plane's shadow windows:
 | `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates and report the results. Off, this instance's traffic counts for nothing in a shadow window, and a candidate it cannot compile does not block the window. |
 | `cosec.authorization.shadow.sample-rate` | double, `0` to `1` | `0.1` | Share of requests also evaluated on the candidates. Each costs a second evaluation, off the request path. |
 | `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its shadow reports and its status to Redis. |
-| `cosec.authorization.shadow.instance-id` | string | random | This instance's id in reports and statuses. It must be unique per running instance. |
+| `cosec.authorization.shadow.instance-id` | string | random | This instance's id in reports and statuses. It must be unique per running instance and use only letters, digits, `.`, `_` and `-`; any other id fails startup. |
 
 ## Control plane
 

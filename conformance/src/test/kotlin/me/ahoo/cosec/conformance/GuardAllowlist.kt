@@ -45,6 +45,10 @@ object GuardAllowlist {
             "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from",
             "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
             "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
+            "cosec-core:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
+            "cosec-core:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
+            "cosec-core:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
+            "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again",
         ),
     )
 }

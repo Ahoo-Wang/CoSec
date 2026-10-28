@@ -28,6 +28,8 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -235,6 +237,18 @@ class PipelineStarterRedisTest {
                 val summary = runBlocking { windows.close(ShadowState(window, startedAt), Instant.now()) }
                 summary?.blocked.assert().isEqualTo(true)
             }
+        }
+    }
+
+    /** An instance id ends its report's Redis key, so one with a `:` could name another instance's report. */
+    @Test
+    fun `an instance id outside letters, digits, dot, underscore and dash fails startup`() {
+        runner.withPropertyValues("cosec.authorization.shadow.instance-id=a:b").run { context ->
+            context.startupFailure.assert().isNotNull()
+        }
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            ShadowReport.isInstanceId(context.getBean(ShadowRecorder::class.java).instance).assert().isTrue()
         }
     }
 

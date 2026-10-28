@@ -41,11 +41,11 @@
       "id": "SNP-4",
       "source": "RFC 0007 §3.1 N3; RFC 0008 §4.4 (review finding S4)",
       "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed.",
-      "level": "pipeline",
+      "level": "timing",
       "properties": [
         "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily"
       ],
-      "pending": "a scenario format for snapshot timing (RFC 0008 §3.3); guarded by the tests below",
+      "pending": null,
       "guards": [
         "cosec-core:SnapshotRecompileTest#a load that compiled with the old inputs while they changed is compiled again before anyone is served it",
         "cosec-core:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
