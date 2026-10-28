@@ -47,6 +47,9 @@ class ControlProperties {
         var maxCount: Int = 50
         var minAge: Duration = Duration.ofDays(7)
         var orphanAge: Duration = Duration.ofHours(1)
+
+        /** How often each instance tries to reclaim; one instance at a time does each document. */
+        var reclaimInterval: Duration = Duration.ofHours(1)
     }
 
     class Changes {
@@ -73,6 +76,9 @@ class ControlProperties {
         var minDuration: Duration = Duration.ofMinutes(15)
         var minSamples: Long = 1_000
         var maxDuration: Duration = Duration.ofHours(24)
+
+        /** How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. */
+        var checkInterval: Duration = Duration.ofMinutes(1)
     }
 
     class Audit {
