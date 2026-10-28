@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 
 /**
@@ -30,5 +33,5 @@ class RedisApiKeyReader(
 ) : ApiKeyReader {
     override suspend fun findByHash(hash: String): ApiKey? =
         redisTemplate.opsForValue().get(RedisApiKeyStore.redisKey(keyPrefix, hash)).toFuture().await()
-            ?.let { CoSecJsonSerializer.readValue(it, ApiKey::class.java) }
+            ?.let { CoSecJson.mapper.readValue(it, ApiKey::class.java) }
 }

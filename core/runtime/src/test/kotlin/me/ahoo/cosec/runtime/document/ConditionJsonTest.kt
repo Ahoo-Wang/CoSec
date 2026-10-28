@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.condition.Operand
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -28,12 +31,12 @@ import org.junit.jupiter.params.provider.ValueSource
 @Suppress("MaxLineLength")
 class ConditionJsonTest {
     private fun read(text: String): Condition = ConditionJson.read(
-        DocumentNode(CoSecJsonSerializer.readTree(text), "$")
+        DocumentNode(CoSecJson.mapper.readTree(text), "$")
     )
 
     private fun roundTrip(text: String) {
         val written = ConditionJson.write(read(text)).toString()
-        written.assert().isEqualTo(CoSecJsonSerializer.readTree(text).toString())
+        written.assert().isEqualTo(CoSecJson.mapper.readTree(text).toString())
         ConditionJson.write(read(written)).toString().assert().isEqualTo(written)
     }
 
@@ -93,7 +96,7 @@ class ConditionJsonTest {
 
     @Test
     fun `the reader names what it found`() {
-        val node = { text: String -> DocumentNode(CoSecJsonSerializer.readTree(text), "$.x") }
+        val node = { text: String -> DocumentNode(CoSecJson.mapper.readTree(text), "$.x") }
         assertThrownBy<SnapshotFormatException> {
             node("1.5").long()
         }.hasMessageContaining("$.x: expected an integer, found a number")

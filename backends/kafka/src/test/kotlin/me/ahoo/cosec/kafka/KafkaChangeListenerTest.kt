@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.kafka
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -29,7 +32,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.test.asserts.assert
@@ -73,7 +76,7 @@ class KafkaChangeListenerTest {
         val listener = KafkaChangeListener(kafka, delivery = Delivery.REQUIRED)
         ChangeListeners(listOf(listener)).publish(event)
         key.captured.assert().isEqualTo("tenant:acme")
-        val json = CoSecJsonSerializer.readTree(value.captured)
+        val json = CoSecJson.mapper.readTree(value.captured)
         json.get("kind").asString().assert().isEqualTo("PUBLISHING")
         json.get("operator").get("principal").asString().assert().isEqualTo("alice")
         json.get("escalations").get(0).get("reason").asString().assert().isEqualTo("NOT_COVERED")

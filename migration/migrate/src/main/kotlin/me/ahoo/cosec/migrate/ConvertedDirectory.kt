@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
@@ -50,7 +53,7 @@ object ConvertedDirectory {
     private const val JSON = ".json"
 
     private val factory = JsonNodeFactory.instance
-    private val pretty = CoSecJsonSerializer.writerWithDefaultPrettyPrinter()
+    private val pretty = CoSecJson.mapper.writerWithDefaultPrettyPrinter()
 
     /** Writes [conversion] into [directory], which must not exist or be empty: `convert` never overwrites. */
     fun write(conversion: Conversion, directory: Path) {
@@ -88,7 +91,7 @@ object ConvertedDirectory {
     fun read(directory: Path): Map<SnapshotKey, PolicyDocument> {
         val reportFile = directory.resolve(REPORT_FILE)
         require(Files.isRegularFile(reportFile)) { "$reportFile is missing: publish reads the output of convert." }
-        val report = CoSecJsonSerializer.readTree(Files.readAllBytes(reportFile))
+        val report = CoSecJson.mapper.readTree(Files.readAllBytes(reportFile))
         require(report.get("accepted")?.asBoolean() == true) {
             "The conversion in $directory was rejected (see $REPORT_FILE): there is nothing to publish."
         }

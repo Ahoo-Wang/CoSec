@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.OnMissingConfirmation
 import me.ahoo.cosec.engine.flat.RateLimitSource
@@ -35,7 +38,7 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.core.JacksonException
@@ -62,7 +65,7 @@ object PolicyDocumentCodec {
     const val SCHEMA: Int = SnapshotDocument.DOCUMENT_SCHEMA
     const val WILDCARD: String = Match.WILDCARD
 
-    private val reader: ObjectReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val factory = JsonNodeFactory.instance
 
     private val PLATFORM_FIELDS = arrayOf("limits", "attributes")
@@ -105,6 +108,7 @@ object PolicyDocumentCodec {
         return decode(kind, owner, tree ?: throw SnapshotFormatException("$ROOT: the document is empty"))
     }
 
+    @InternalCoSecApi
     fun decode(kind: DocumentKind, owner: String, tree: JsonNode): PolicyDocument {
         val root = DocumentNode(tree, ROOT)
         val fields = when (kind) {
@@ -386,26 +390,35 @@ object PolicyDocumentCodec {
      * policy, binding or catalog and compare its encoding (RFC 0007 §10.1). [path] is where errors say the entry is.
      */
 
+    @InternalCoSecApi
     fun policyTree(policy: PolicyDefinition): ObjectNode = policy(policy)
 
+    @InternalCoSecApi
     fun decodePolicy(tree: JsonNode, path: String = ROOT): PolicyDefinition = policy(DocumentNode(tree, path))
 
     /** A binding of a [kind] document of [owner], which decides the subjects' default tenants. */
+    @InternalCoSecApi
     fun bindingTree(binding: Binding, kind: DocumentKind, owner: String): ObjectNode = binding(binding, kind, owner)
 
+    @InternalCoSecApi
     fun decodeBinding(tree: JsonNode, kind: DocumentKind, owner: String, path: String = ROOT): Binding =
         binding(DocumentNode(tree, path), kind, owner)
 
+    @InternalCoSecApi
     fun catalogTree(catalog: Catalog): ObjectNode = catalog(catalog)
 
+    @InternalCoSecApi
     fun rateLimitTree(rule: RateLimitSource): ObjectNode = rateLimit(rule)
 
+    @InternalCoSecApi
     fun decodeRateLimit(tree: JsonNode, path: String = ROOT): RateLimitSource = rateLimit(DocumentNode(tree, path))
 
+    @InternalCoSecApi
     fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
 
-    fun encode(document: PolicyDocument): ByteArray = CoSecJsonSerializer.writeValueAsBytes(tree(document))
+    fun encode(document: PolicyDocument): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(document))
 
+    @InternalCoSecApi
     fun tree(document: PolicyDocument): ObjectNode {
         val root = factory.objectNode()
         root.put("schema", SCHEMA)

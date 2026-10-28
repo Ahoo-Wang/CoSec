@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document.format
 
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import tools.jackson.databind.JsonNode
 import java.io.File
 
@@ -63,7 +66,7 @@ object RepositoryDocuments {
                     RepositoryDocument(
                         where,
                         DocumentFormats.snapshotDocumentSchema,
-                        CoSecJsonSerializer.readTree(file)
+                        CoSecJson.mapper.readTree(file)
                     )
                 )
             else -> throw IllegalStateException(
@@ -82,7 +85,7 @@ object RepositoryDocuments {
         val where = file.relativeTo(root).invariantSeparatorsPath
         return JSON_BLOCK.findAll(file.readText()).mapIndexedNotNull { index, block ->
             val node = runCatching {
-                CoSecJsonSerializer.readTree(block.groupValues[1])
+                CoSecJson.mapper.readTree(block.groupValues[1])
             }.getOrNull() ?: return@mapIndexedNotNull null
             formatOf(node)?.let { RepositoryDocument("$where json block ${index + 1}", it, node) }
         }.toList()

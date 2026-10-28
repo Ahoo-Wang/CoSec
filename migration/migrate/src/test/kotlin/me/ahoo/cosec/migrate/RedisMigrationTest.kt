@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import kotlinx.coroutines.runBlocking
@@ -51,7 +54,7 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
@@ -184,7 +187,7 @@ class RedisMigrationTest {
         )
         converted.assert().describedAs(convertOutput).isEqualTo(MigrateMain.OK)
         convertOutput.assert().contains("Converted.")
-        val report = CoSecJsonSerializer.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
+        val report = CoSecJson.mapper.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
         report.get("counts").get("policies").asInt().assert().isEqualTo(2)
         report.get("counts").get("grants").asInt().assert().isEqualTo(2)
 

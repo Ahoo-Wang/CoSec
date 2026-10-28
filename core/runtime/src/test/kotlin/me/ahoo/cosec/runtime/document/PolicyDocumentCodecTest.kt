@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SpaceId
@@ -20,7 +23,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.Scope
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -79,7 +82,7 @@ class PolicyDocumentCodecTest {
         val written = PolicyDocumentCodec.encode(document)
         val again = PolicyDocumentCodec.decode(DocumentKind.APP, "order", written)
         PolicyDocumentCodec.encode(again).assert().isEqualTo(written)
-        CoSecJsonSerializer.readTree(written).get("bindings").get(0).get("space").asString().assert().isEqualTo("*")
+        CoSecJson.mapper.readTree(written).get("bindings").get(0).get("space").asString().assert().isEqualTo("*")
         // The written document compiles as the read one does.
         PolicyDocumentCompiler().compile(again).owner.assert().isEqualTo("order")
     }
@@ -98,7 +101,7 @@ class PolicyDocumentCodecTest {
         decode(""","boundaries":{}""").boundary.assert().isNull()
         val tenant = decode(""","boundary":"b"""", DocumentKind.TENANT, "acme")
         tenant.boundary!!.value.assert().isEqualTo("b")
-        CoSecJsonSerializer.readTree(
+        CoSecJson.mapper.readTree(
             PolicyDocumentCodec.encode(tenant)
         ).get("boundary").asString().assert().isEqualTo("b")
         error(""","boundary":"b"""").assert().contains("unknown field boundary")
@@ -144,7 +147,7 @@ class PolicyDocumentCodecTest {
             )
         first.provenance!!.parent.assert().isNull()
         first.provenance.approvedBy.assert().isEmpty()
-        CoSecJsonSerializer.readTree(
+        CoSecJson.mapper.readTree(
             PolicyDocumentCodec.encode(first)
         ).get("provenance").has("approvedBy").assert().isFalse()
         // The compiled snapshot does not depend on it.
@@ -214,7 +217,7 @@ class PolicyDocumentCodecTest {
     @Test
     fun `a scope is never decoded`() {
         assertThrownBy<Exception> {
-            CoSecJsonSerializer.readValue(
+            CoSecJson.mapper.readValue(
                 """{"tenant":"acme","app":"order","appSource":"HOST","space":"","roles":["admin"]}""",
                 Scope::class.java,
             )

@@ -13,16 +13,18 @@
 
 package me.ahoo.cosec.runtime.json
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.jsonMapper
 
 /**
- * JSON serializer for CoSec objects.
- *
- * This is a Jackson ObjectMapper configured with Kotlin support
- * and module registration for CoSec types.
+ * The one JSON mapper of CoSec: Kotlin support and the modules on the classpath, among them [CoSecModule]. Every stored
+ * format (snapshot documents, control records, shadow reports, memberships, API keys, audit records) is written with it,
+ * so one configuration decides their bytes. It builds the mapper and nothing else (RFC 0011 D3, §5).
  */
-
-val CoSecJsonSerializer =
-    jsonMapper {
+@InternalCoSecApi
+object CoSecJson {
+    val mapper: JsonMapper = jsonMapper {
         findAndAddModules()
     }
+}

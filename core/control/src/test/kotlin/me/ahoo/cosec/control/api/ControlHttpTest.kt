@@ -11,13 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
@@ -40,7 +43,7 @@ class ControlHttpTest {
         query: Map<String, String> = emptyMap(),
     ): Pair<Int, JsonNode> = runBlocking {
         val response = http.handle(ControlHttpRequest(method, path, query, body?.encodeToByteArray()), security)
-        response.status to CoSecJsonSerializer.readTree(response.body)
+        response.status to CoSecJson.mapper.readTree(response.body)
     }
 
     @Test

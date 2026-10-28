@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
@@ -95,7 +98,7 @@ class OperationsTest {
     fun `rate limit operations keep through the stored change`() {
         val node = ChangeRequestCodec.operation(
             ACME,
-            me.ahoo.cosec.runtime.json.CoSecJsonSerializer.readTree(
+            me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(
                 """{"op":"putRateLimit","rateLimit":{"id":"r","action":"order:read","permitsPerSecond":5},"ifMatch":"x"}"""
             ),
         ) as Operation.PutRateLimit
@@ -103,7 +106,7 @@ class OperationsTest {
         node.ifMatch.assert().isEqualTo("x")
         val removed = ChangeRequestCodec.operation(
             ACME,
-            me.ahoo.cosec.runtime.json.CoSecJsonSerializer.readTree("""{"op":"removeRateLimit","id":"r"}"""),
+            me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree("""{"op":"removeRateLimit","id":"r"}"""),
         ) as Operation.RemoveRateLimit
         removed.id.assert().isEqualTo("r")
 

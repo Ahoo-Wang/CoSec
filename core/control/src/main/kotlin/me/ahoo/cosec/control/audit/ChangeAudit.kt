@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.audit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -229,6 +232,6 @@ object ChangeEventJson {
                 "counts"
             ).apply { shadow.counts.toSortedMap().forEach { (outcome, count) -> put(outcome, count) } }
         }
-        return me.ahoo.cosec.runtime.json.CoSecJsonSerializer.writeValueAsString(root)
+        return me.ahoo.cosec.runtime.json.CoSecJson.mapper.writeValueAsString(root)
     }
 }

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -24,7 +27,7 @@ class MatcherTranslatorTest {
     private val translator =
         MatcherTranslator { kind, location, message -> rejections += Rejection(kind, location, message) }
 
-    private fun action(json: String) = translator.action(CoSecJsonSerializer.readTree(json), "a")
+    private fun action(json: String) = translator.action(CoSecJson.mapper.readTree(json), "a")
 
     @ParameterizedTest
     @CsvSource(

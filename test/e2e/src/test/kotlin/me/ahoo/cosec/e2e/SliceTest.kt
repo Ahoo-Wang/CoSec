@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.e2e
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemEncoder
@@ -21,7 +24,7 @@ import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.test.asserts.assert
@@ -169,7 +172,7 @@ class SliceTest {
     @Test
     fun `problems are written as problem+json with the request id`() {
         val outcome = evaluate("DELETE", "/orders/1", "alice@acme:clerk")
-        val body = CoSecJsonSerializer.readTree(ProblemEncoder.encode(outcome.problem!!))
+        val body = CoSecJson.mapper.readTree(ProblemEncoder.encode(outcome.problem!!))
         body.get("type").asString().assert().isEqualTo("https://cosec.ahoo.me/problems/forbidden")
         body.get("title").asString().assert().isEqualTo("Forbidden")
         body.get("status").asInt().assert().isEqualTo(403)

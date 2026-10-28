@@ -11,14 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.identity
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
 
 import me.ahoo.cosec.spi.identity.IdentityFormatException.Reason
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -61,14 +64,14 @@ object IdentityCodec {
     private val SCOPE_FIELDS = arrayOf("app", "space")
     private val AUTH_FIELDS = arrayOf("method", "jti", "exp")
 
-    private val reader: ObjectReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val factory = JsonNodeFactory.instance
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
 
     /** The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is. */
     fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
-        val header = encoder.encodeToString(CoSecJsonSerializer.writeValueAsBytes(tree(identity)))
+        val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
         if (header.length > maxBytes) {
             throw IdentityOverflowException(
                 "The identity of [${identity.subject}] is ${header.length} bytes encoded, over the limit of $maxBytes: " +

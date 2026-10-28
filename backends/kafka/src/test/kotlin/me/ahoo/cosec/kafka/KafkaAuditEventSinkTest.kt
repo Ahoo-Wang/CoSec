@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.kafka
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -29,7 +32,7 @@ import me.ahoo.cosec.runtime.audit.AuditRequestData
 import me.ahoo.cosec.runtime.audit.AuditSourceData
 import me.ahoo.cosec.runtime.audit.AuditStatementData
 import me.ahoo.cosec.runtime.audit.AuditTraceData
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -114,7 +117,7 @@ class KafkaAuditEventSinkTest {
             kafkaOperations.send(
                 "cosec-audit",
                 "[\"tenant-1\",\"principal-1\"]",
-                CoSecJsonSerializer.writeValueAsString(event),
+                CoSecJson.mapper.writeValueAsString(event),
             )
         }
         result.complete(mockk())
@@ -138,7 +141,7 @@ class KafkaAuditEventSinkTest {
 
     @Test
     fun serializesFieldsByOwner() {
-        val json = CoSecJsonSerializer.readTree(CoSecJsonSerializer.writeValueAsString(event))
+        val json = CoSecJson.mapper.readTree(CoSecJson.mapper.writeValueAsString(event))
 
         json.has("principalId").assert().isFalse()
         json.has("requestId").assert().isFalse()
@@ -148,6 +151,12 @@ class KafkaAuditEventSinkTest {
         json.get("authorization").get("source").get("policy").get("id").asString().assert()
             .isEqualTo("orders")
         json.get("trace").get("traceId").asString().assert().isEqualTo("trace-1")
+    }
+
+    /** The record value consumers read, pinned: a mapper or Jackson change that alters it fails here (RFC 0011 D3). */
+    @Test
+    fun recordValueIsPinned() {
+        CoSecJson.mapper.writeValueAsString(event).assert().isEqualTo(PINNED_AUDIT)
     }
 
     @Test
@@ -195,8 +204,8 @@ class KafkaAuditEventSinkTest {
         sink.publish(second)
 
         sent.await(5, TimeUnit.SECONDS).assert().isTrue()
-        values[0].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(first))
-        values[1].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(second))
+        values[0].assert().isEqualTo(CoSecJson.mapper.writeValueAsString(first))
+        values[1].assert().isEqualTo(CoSecJson.mapper.writeValueAsString(second))
     }
 
     @Test
@@ -273,5 +282,10 @@ class KafkaAuditEventSinkTest {
         started.await(5, TimeUnit.SECONDS).assert().isTrue()
         sink.destroy()
         release.countDown()
+    }
+
+    private companion object {
+        const val PINNED_AUDIT =
+            """{"eventId":"event-1","timestamp":"2026-08-18T00:00:00Z","tenantId":"tenant-1","principal":{"id":"principal-1","authenticated":true,"roles":["admin"],"policies":["orders"]},"request":{"id":"request-1","appId":"app-1","spaceId":"space-1","remoteIp":"127.0.0.1","method":"GET","path":"/orders/1","routeId":"orders","device":{"id":"device-1","userAgent":"test-agent"}},"authorization":{"decision":"ALLOW","reasonCode":"ALLOW","reason":"Allow","elapsedNanos":100,"source":{"type":"GLOBAL_POLICY","policy":{"id":"orders","type":"global","statement":{"index":0,"name":"read"}},"role":null}},"trace":{"traceId":"trace-1","spanId":"span-1"},"snapshotVersion":null,"binding":null,"breakGlass":false,"kind":"DECIDED"}"""
     }
 }

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
@@ -50,7 +53,7 @@ import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -417,7 +420,7 @@ object ChangeRunner : ScenarioRunner {
         val document = JsonNodeFactory.instance.objectNode()
             .put("schema", PolicyDocumentCodec.SCHEMA).put("revision", head + 1).put("publishedAt", NOW.toString())
         document.setAll(body as? ObjectNode ?: throw ScenarioFormatException("The $key document is not an object"))
-        return PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document))
+        return PolicyDocumentCodec.decode(kind, owner, CoSecJson.mapper.writeValueAsBytes(document))
     }
 
     /** An operator's token attributes: `{ "level": 3, "oncall": true, "teams": ["red"] }`, as a token's claims read. */

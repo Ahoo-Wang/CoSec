@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -85,7 +88,7 @@ import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -333,7 +336,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val headers = sent
         if (headers == null) {
             val body = exchange.response.bodyAsString.block(java.time.Duration.ofSeconds(5)).orEmpty()
-            val type = CoSecJsonSerializer.readTree(body).get("type")?.text()?.substringAfterLast('/')
+            val type = CoSecJson.mapper.readTree(body).get("type")?.text()?.substringAfterLast('/')
             return Outcome.Answered(exchange.response.statusCode?.value() ?: 0, false, type)
         }
         return Outcome.Answered(200, true, null, true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode))

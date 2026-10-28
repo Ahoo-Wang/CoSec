@@ -11,14 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -39,7 +42,7 @@ object EntryDigest {
 
     fun of(rule: RateLimitSource): String = sha256(PolicyDocumentCodec.rateLimitTree(rule))
 
-    internal fun sha256(tree: JsonNode): String = hex(CoSecJsonSerializer.writeValueAsBytes(tree))
+    internal fun sha256(tree: JsonNode): String = hex(CoSecJson.mapper.writeValueAsBytes(tree))
 
     internal fun hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

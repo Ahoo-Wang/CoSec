@@ -11,15 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.kafka
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.runtime.audit.AuditEvents
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
 import java.util.concurrent.ArrayBlockingQueue
@@ -62,8 +65,8 @@ class KafkaAuditListener(
 
     override suspend fun onDecision(event: DecisionEvent) {
         val audit = AuditEvents.from(event)
-        val key = CoSecJsonSerializer.writeValueAsString(arrayOf(audit.tenantId, audit.principal.id))
-        val value = CoSecJsonSerializer.writeValueAsString(audit)
+        val key = CoSecJson.mapper.writeValueAsString(arrayOf(audit.tenantId, audit.principal.id))
+        val value = CoSecJson.mapper.writeValueAsString(audit)
         val queued = try {
             CompletableFuture.supplyAsync({ kafkaOperations.send(topic, key, value) }, sender)
         } catch (e: RejectedExecutionException) {

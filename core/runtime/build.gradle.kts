@@ -18,6 +18,7 @@ dependencies {
     implementation("com.google.guava:guava")
     api(project(":engine"))
     api(project(":spi"))
+    api(project(":annotations"))
     api("me.ahoo.cosid:cosid-core")
     api("io.github.oshai:kotlin-logging-jvm")
     implementation("tools.jackson.core:jackson-databind")

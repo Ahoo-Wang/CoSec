@@ -11,15 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document.format
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import com.networknt.schema.Schema
 import com.networknt.schema.SchemaLocation
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
 import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -104,7 +107,7 @@ class SchemaConformanceTest {
 
             DocumentFormats.BINDING -> decodeDocument(document().also { it.putArray("bindings").add(node) })
             DocumentFormats.CATALOG -> decodeDocument(document().also { it.set("catalog", node) })
-            DocumentFormats.IDENTITY -> IdentityCodec.decodeJson(CoSecJsonSerializer.writeValueAsBytes(node))
+            DocumentFormats.IDENTITY -> IdentityCodec.decodeJson(CoSecJson.mapper.writeValueAsBytes(node))
             else -> error("No codec for ${file.fileName}.")
         }
     }
@@ -118,7 +121,7 @@ class SchemaConformanceTest {
      * the codec: whether it compiles (attribute types, references) is semantic, which a schema cannot say (RFC 0007 §10.4).
      */
     private fun decodeDocument(node: JsonNode) {
-        val bytes = CoSecJsonSerializer.writeValueAsBytes(node)
+        val bytes = CoSecJson.mapper.writeValueAsBytes(node)
         val kinds = listOf(
             DocumentKind.PLATFORM to "",
             DocumentKind.TENANT to "acme",
@@ -271,7 +274,7 @@ class SchemaConformanceTest {
     fun schemasAreValidDraft07() {
         val metaSchema = registry.getSchema(SchemaLocation.of(JsonSchemaWriter.DRAFT_07))
         DocumentFormats.files.forEach { file ->
-            metaSchema.validate(CoSecJsonSerializer.readTree(JsonSchemaWriter.write(file))).assert()
+            metaSchema.validate(CoSecJson.mapper.readTree(JsonSchemaWriter.write(file))).assert()
                 .describedAs(file.fileName).isEmpty()
         }
     }

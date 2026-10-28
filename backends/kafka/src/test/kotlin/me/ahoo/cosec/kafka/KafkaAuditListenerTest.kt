@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.kafka
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -44,7 +47,7 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -118,7 +121,7 @@ class KafkaAuditListenerTest {
         }
         evaluate(KafkaAuditListener(kafka, "audit", Delivery.REQUIRED)).status.assert().isEqualTo(200)
         key.captured.assert().isEqualTo("""["acme","alice"]""")
-        CoSecJsonSerializer.readTree(value.captured).get("principal").get("id").asString().assert().isEqualTo("alice")
+        CoSecJson.mapper.readTree(value.captured).get("principal").get("id").asString().assert().isEqualTo("alice")
     }
 
     @Test

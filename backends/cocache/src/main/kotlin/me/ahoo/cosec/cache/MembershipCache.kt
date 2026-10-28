@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.model.Memberships
@@ -21,7 +24,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import tools.jackson.databind.JsonNode
 import java.util.Collections
 
@@ -50,17 +53,17 @@ object MembershipsCodec : Codec<Memberships> {
         require(value.source == Memberships.Source.PROVIDER) {
             "Only memberships from a provider are cached, not ${value.source}."
         }
-        val node = CoSecJsonSerializer.createObjectNode()
+        val node = CoSecJson.mapper.createObjectNode()
         val roles = node.putObject(ROLES)
         value.roles.forEach { (space, spaceRoles) ->
             roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
         }
         node.putArray(ATTACHMENTS).apply { value.attachments.forEach { add(it.value) } }
-        return CoSecJsonSerializer.writeValueAsBytes(node)
+        return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
     override fun decode(data: ByteArray): Memberships {
-        val node = CoSecJsonSerializer.readTree(data)
+        val node = CoSecJson.mapper.readTree(data)
         require(node.isObject && node.propertyNames().toSet() == setOf(ROLES, ATTACHMENTS)) {
             "Not cached memberships: $node"
         }

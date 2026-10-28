@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
@@ -103,7 +106,7 @@ class UnknownProperties(
             val resolver = PathMatchingResourcePatternResolver(classLoader)
             for (pattern in METADATA) {
                 resolver.getResources(pattern).forEach { resource ->
-                    val properties = resource.inputStream.use { CoSecJsonSerializer.readTree(it) }.get("properties")
+                    val properties = resource.inputStream.use { CoSecJson.mapper.readTree(it) }.get("properties")
                     properties?.values()?.forEach { property ->
                         val name = property.get("name")?.asString() ?: return@forEach
                         known += name

@@ -11,13 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.json.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
@@ -107,7 +110,7 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
         }
         return guarded(
             name
-        ) { PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document)) }
+        ) { PolicyDocumentCodec.decode(kind, owner, CoSecJson.mapper.writeValueAsBytes(document)) }
     }
 
     private fun name(kind: DocumentKind, owner: String): String =

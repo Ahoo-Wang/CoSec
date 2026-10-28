@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.json
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.policy.PolicyType
 import tools.jackson.core.JsonGenerator
 import tools.jackson.core.JsonParser
@@ -21,12 +22,14 @@ import tools.jackson.databind.SerializationContext
 import tools.jackson.databind.deser.std.StdDeserializer
 import tools.jackson.databind.ser.std.StdSerializer
 
+@InternalCoSecApi
 object JsonPolicyTypeSerializer : StdSerializer<PolicyType>(PolicyType::class.java) {
     override fun serialize(value: PolicyType, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeString(value.name.lowercase())
     }
 }
 
+@InternalCoSecApi
 object JsonPolicyTypeDeserializer : StdDeserializer<PolicyType>(PolicyType::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): PolicyType {
         return PolicyType.valueOf(p.string.uppercase())
