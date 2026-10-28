@@ -34,11 +34,13 @@
     {
       "id": "MEM-4",
       "source": "RFC 0004 §4.5.3",
-      "statement": "After revokeSubject(tenant, principal, issuedBefore), every token of that principal issued before the instant is rejected.",
+      "statement": "After revokeSubject(tenant, principal, issuedBefore), every token of that principal issued before the instant, or up to cosec.authentication.revocation.skew after it, is rejected: by the pipeline and by refresh alike, with the same skew, so a token the pipeline refuses is never renewed.",
       "level": "pipeline",
       "guards": [
         "runtime:TokenAuthenticatorTest#aRevokedSubjectsOlderTokensAreRejected",
-        "cosec-core:RevocationReaderTest#subjectRevocation"
+        "cosec-core:RevocationReaderTest#subjectRevocation",
+        "cosec-core:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
+        "cosec-spring-boot-starter:CoSecJwtAutoConfigurationTest#theRefreshVerifierTakesTheRevocationSkew"
       ],
       "pending": null
     }

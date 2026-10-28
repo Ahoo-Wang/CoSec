@@ -18,6 +18,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.now
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.time.Duration
 import java.time.Instant
 
 class RevocationReaderTest {
@@ -31,14 +32,14 @@ class RevocationReaderTest {
     @Test
     fun subjectRevocation() {
         val revokedBefore = Instant.parse("2026-10-27T00:00:00Z")
-        SubjectRevocation.revokes(null, null).assert().isFalse()
-        SubjectRevocation.revokes(null, revokedBefore).assert().isFalse()
-        SubjectRevocation.revokes(revokedBefore, null).assert().isTrue()
-        SubjectRevocation.revokes(revokedBefore, revokedBefore.minusMillis(1)).assert().isTrue()
-        SubjectRevocation.revokes(revokedBefore, revokedBefore).assert().isFalse()
-        SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(1)).assert().isFalse()
+        SubjectRevocation.revokes(null, null, Duration.ZERO).assert().isFalse()
+        SubjectRevocation.revokes(null, revokedBefore, Duration.ZERO).assert().isFalse()
+        SubjectRevocation.revokes(revokedBefore, null, Duration.ZERO).assert().isTrue()
+        SubjectRevocation.revokes(revokedBefore, revokedBefore.minusMillis(1), Duration.ZERO).assert().isTrue()
+        SubjectRevocation.revokes(revokedBefore, revokedBefore, Duration.ZERO).assert().isFalse()
+        SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(1), Duration.ZERO).assert().isFalse()
         // Review: a token stamped by an issuer whose clock runs ahead is revoked within the skew.
-        val skew = java.time.Duration.ofSeconds(5)
+        val skew = Duration.ofSeconds(5)
         SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(4), skew).assert().isTrue()
         SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(5), skew).assert().isFalse()
         SubjectRevocation.revokes(null, revokedBefore, skew).assert().isFalse()
