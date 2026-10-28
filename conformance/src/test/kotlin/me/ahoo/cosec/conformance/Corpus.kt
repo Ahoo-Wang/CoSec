@@ -13,17 +13,21 @@
 
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.testkit.ScenarioFormatException
+import me.ahoo.cosec.testkit.ScenarioJson
+import me.ahoo.cosec.testkit.only
+import me.ahoo.cosec.testkit.required
+import me.ahoo.cosec.testkit.strings
+import me.ahoo.cosec.testkit.text
+import me.ahoo.cosec.testkit.textOrNull
 import tools.jackson.databind.JsonNode
-import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.Instant
 import kotlin.io.path.extension
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
-import kotlin.io.path.readText
 import kotlin.io.path.relativeTo
 
 /** A rule of the registry (RFC 0008 §3.2). */
@@ -60,11 +64,11 @@ class Corpus(private val resources: Path) {
     /** Every rule, family files in name order, each file's rules in its order. */
     fun rules(): List<RuleEntry> {
         val directory = resources.resolve(RULES)
-        Json.read(directory.resolve(META)).only("\$comment")
+        ScenarioJson.read(directory.resolve(META)).only("\$comment")
         val files = directory.listDirectoryEntries("*.json").filter { it.name != META }.sortedBy { it.name }
         return files.flatMap { file ->
             val family = file.name.removeSuffix(".json")
-            val root = Json.read(file)
+            val root = ScenarioJson.read(file)
             root.only("rules")
             root.required("rules").values().map { it.rule() }.onEach { rule ->
                 if (rule.id.substringBefore('-') != family) {
@@ -80,7 +84,7 @@ class Corpus(private val resources: Path) {
         val directory = resources.resolve(SCENARIOS)
         Files.walk(directory).use { paths ->
             return paths.filter { it.isRegularFile() && it.extension == "json" }
-                .map { Scenario(it.relativeTo(directory).invariantSeparatorsPathString, Json.read(it)) }
+                .map { Scenario(it.relativeTo(directory).invariantSeparatorsPathString, ScenarioJson.read(it)) }
                 .toList()
                 .sortedBy { it.name }
         }
@@ -109,45 +113,3 @@ class Corpus(private val resources: Path) {
         fun ofModule(): Corpus = Corpus(Path.of("src", "test", "resources"))
     }
 }
-
-/** A scenario that does not follow the format: a mistake in the scenario, never an outcome. */
-class ScenarioFormatException(message: String) : IllegalStateException(message)
-
-internal object Json {
-    private val mapper = JsonMapper.builder().build()
-
-    fun read(path: Path): JsonNode = parse(path.readText())
-
-    fun parse(text: String): JsonNode = mapper.readTree(text)
-}
-
-internal fun JsonNode.required(field: String): JsonNode =
-    get(field) ?: throw ScenarioFormatException("Missing field '$field' in $this")
-
-internal fun JsonNode.text(): String {
-    if (!isString) throw ScenarioFormatException("Expected a string, found $this")
-    return asString()
-}
-
-internal fun JsonNode.textOrNull(): String? = if (isNull) null else text()
-
-internal fun JsonNode.bool(): Boolean {
-    if (!isBoolean) throw ScenarioFormatException("Expected a boolean, found $this")
-    return asBoolean()
-}
-
-/** A string or an array of strings. */
-internal fun JsonNode.strings(): List<String> = if (isArray) values().map { it.text() } else listOf(text())
-
-internal fun JsonNode.fields(): Map<String, JsonNode> {
-    if (!isObject) throw ScenarioFormatException("Expected an object, found $this")
-    return properties().associate { it.key to it.value }
-}
-
-/** Fails on a field outside [allowed], so a misspelt field is an error rather than ignored. */
-internal fun JsonNode.only(vararg allowed: String) {
-    val unknown = fields().keys - allowed.toSet()
-    if (unknown.isNotEmpty()) throw ScenarioFormatException("Unknown fields $unknown in $this")
-}
-
-internal fun JsonNode.instant(): Long = Instant.parse(text()).toEpochMilli()

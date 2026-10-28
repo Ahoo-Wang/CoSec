@@ -1,0 +1,27 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-10-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "read-orders",
+      "statements": [
+        {
+          "effect": "allow",
+          "action": "order:read"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "r:reader",
+      "subject": {
+        "role": "reader"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "read-orders"
+    }
+  ]
+}

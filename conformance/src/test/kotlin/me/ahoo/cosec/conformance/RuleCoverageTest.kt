@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.testkit.ScenarioJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -52,7 +53,9 @@ class RuleCoverageTest {
 
     private fun scenario(name: String, polarity: String, vararg rules: String, level: String = "engine") = Scenario(
         name,
-        Json.parse("""{"rules": [${rules.joinToString { "\"$it\"" }}], "polarity": "$polarity", "level": "$level"}"""),
+        ScenarioJson.parse(
+            """{"rules": [${rules.joinToString { "\"$it\"" }}], "polarity": "$polarity", "level": "$level"}"""
+        ),
     )
 
     private val covered = listOf(scenario("pos", "positive", "ALG-1"), scenario("neg", "negative", "ALG-1"))
