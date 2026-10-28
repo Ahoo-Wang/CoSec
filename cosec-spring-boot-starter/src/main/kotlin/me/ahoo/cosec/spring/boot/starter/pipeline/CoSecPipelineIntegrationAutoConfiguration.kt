@@ -20,6 +20,8 @@ import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.micrometer.MetricsListener
 import me.ahoo.cosec.opentelemetry.OpenTelemetryContextContributor
 import me.ahoo.cosec.opentelemetry.TracingListener
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.audit.LoggingAuditListener
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -46,7 +48,8 @@ import org.springframework.kafka.core.KafkaOperations
 
 /**
  * What the starter's optional features add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
- * (audit log, Kafka audit, metrics, tracing), bridge context contributors and the ip2region attribute provider.
+ * (audit log, Kafka audit, metrics, tracing), bridge context contributors, the blacklist and the ip2region attribute
+ * providers.
  */
 @AutoConfiguration(
     before = [CoSecPipelineAutoConfiguration::class],
@@ -73,6 +76,16 @@ class CoSecPipelineIntegrationAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnProperty(value = ["cosec.audit.enabled"], havingValue = "true", matchIfMissing = true)
     fun cosecLoggingAuditListener(): LoggingAuditListener = LoggingAuditListener()
+
+    /**
+     * `ext.blacklist.*` (RFC 0006 §5.4.4) when the application declares where its blacklist comes from: a request it
+     * blocks meets the built-in DENY, and a source that fails makes the request a 503 unless a DENY matches.
+     */
+    @Bean
+    @ConditionalOnBean(BlacklistSource::class)
+    @ConditionalOnMissingBean
+    fun cosecBlacklistAttributeProvider(source: BlacklistSource): BlacklistAttributeProvider =
+        BlacklistAttributeProvider(source)
 
     /**
      * Rate limits across instances on Redis when a reactive Redis template is there, otherwise per instance. Without

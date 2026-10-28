@@ -38,12 +38,14 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.Authenticator
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
@@ -62,11 +64,15 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
+import kotlin.time.toKotlinDuration
 
 /**
  * The control plane (RFC 0007, the starter's `controlSupport` feature): the only writer of the policy documents, on
@@ -74,7 +80,10 @@ import java.util.UUID
  * through the host's engine on a snapshot source apart from the data plane's, confirmed current before each check
  * (RFC 0007 §7.2); `simulate` and `explain` evaluate with the same engine as enforcement (`CTL-3`).
  */
-@AutoConfiguration(after = [CoSecPipelineAutoConfiguration::class])
+@AutoConfiguration(
+    after = [CoSecPipelineAutoConfiguration::class],
+    afterName = ["org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration"],
+)
 @ConditionalOnCoSecEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
@@ -160,10 +169,51 @@ class CoSecControlAutoConfiguration {
         properties: ControlProperties,
     ): ChangeAuthority = ChangeAuthority(authorizer, options, controlApp = AppId(properties.appId))
 
-    /** The change log, unless an application registers its own listeners. */
+    /** The change log, beside any listener the application registers. */
     @Bean
-    @ConditionalOnMissingBean(ChangeListener::class)
+    @ConditionalOnMissingBean(LoggingChangeListener::class)
     fun cosecLoggingChangeListener(): LoggingChangeListener = LoggingChangeListener()
+
+    /**
+     * `cosec.control.audit.kafka.*`: change events to Kafka (RFC 0007 §10.5), best effort unless `delivery=required`,
+     * which break-glass needs (§8).
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = ["me.ahoo.cosec.kafka.KafkaChangeListener"])
+    @ConditionalOnBean(KafkaOperations::class)
+    @ConditionalOnProperty(
+        value = [ControlProperties.KAFKA_AUDIT_PREFIX + ".enabled"],
+        havingValue = "true",
+        matchIfMissing = true,
+    )
+    class Kafka {
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecKafkaChangeListener(
+            kafkaOperations: KafkaOperations<String, String>,
+            properties: ControlProperties,
+        ): KafkaChangeListener = with(properties.audit.kafka) { KafkaChangeListener(kafkaOperations, topic, delivery) }
+    }
+
+    /**
+     * Every change listener, delivering until shutdown. `cosec.control.audit.kafka.delivery=required` asks for a REQUIRED
+     * Kafka record of every gated step: startup fails when that listener could not be created, rather than publishing
+     * without it.
+     */
+    @Bean(destroyMethod = "cancel")
+    @ConditionalOnMissingBean
+    fun cosecChangeListeners(
+        listeners: ObjectProvider<ChangeListener>,
+        properties: ControlProperties
+    ): ChangeListeners {
+        val all = listeners.orderedStream().toList()
+        val kafka = properties.audit.kafka
+        check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {
+            "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
+                "needs kafka-support, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
+        }
+        return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -174,7 +224,7 @@ class CoSecControlAutoConfiguration {
         authority: ChangeAuthority,
         options: ChangeOptions,
         runtime: CacheRuntime,
-        listeners: ObjectProvider<ChangeListener>,
+        listeners: ChangeListeners,
         idGenerator: ObjectProvider<StringIdGenerator>,
         shadowReports: ObjectProvider<CoCacheShadowReports>,
         properties: RuntimeAuthorizationProperties,
@@ -189,7 +239,7 @@ class CoSecControlAutoConfiguration {
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
-            listeners = ChangeListeners(listeners.orderedStream().toList()),
+            listeners = listeners,
         )
     }
 
@@ -208,6 +258,9 @@ class CoSecControlAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
 }
+
+/** [KafkaChangeListener.NAME], as a literal: `cosec-kafka` is an optional (`kafkaSupport`) dependency. */
+private const val KAFKA_CHANGE_LISTENER = "kafka-change-audit"
 
 /** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */
 class ControlSnapshot(
