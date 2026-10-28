@@ -1,151 +1,191 @@
 ---
 title: "Role Permissions"
-description: "Define an application's permission catalog and grant permissions to roles, per app and per space."
+description: "Describe an app's permissions in its app document and grant them to roles, per app and per space."
 ---
 
 # Role Permissions
 
-For product teams that manage access through roles rather than per-user policies. This page shows how to describe
-an application's permissions once, grant them to roles, and scope those grants to an app and a space.
+For product teams and administrators who manage access through roles rather than per-user policies. This page shows
+how an app describes its permissions once, how they are granted to roles, and how a grant is limited to an app and a
+space. Every field is defined in the [policy language](./language.md).
 
-Policies attach rules to principals directly. Role permissions split the same rules in two: the application
-publishes a **catalog** of what can be done, and an administrator **grants** permission ids from it to roles.
-How role grants combine with policies is explained in the [security model](../guide/security-model.md#evaluation-order).
+An app publishes one **app document**: a catalog of what can be done in it, one permission policy per permission, and
+the role bindings that grant those permissions. A principal's token (or `MembershipProvider`) says which roles it holds
+in which space; a request is granted what the role bindings give the roles it holds in the request's space. Tenants
+can add grants of their own in their tenant documents.
 
-## Permission catalogs
+## App documents
 
-A catalog is an `AppPermission`: the permissions of one application, in named groups.
+The app document of app `order` has the key `app:order`. It holds a [catalog](#permission-catalogs),
+[permission policies](#permission-policies) and [role bindings](#granting-permissions-to-roles), and may hold
+[rate limit rules](./rate-limiting.md); it defines no other policies and binds nothing but roles.
 
 ```json
 {
-  "id": "order-app",
-  "condition": { "authenticated": {} },
-  "groups": [
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "order",
+        "description": "Orders",
+        "spaced": true,
+        "permissions": [
+          { "id": "read", "name": "Read orders" },
+          { "id": "ship", "name": "Ship orders" }
+        ]
+      }
+    ]
+  },
+  "policies": [
     {
-      "name": "orders",
-      "description": "Order management",
-      "permissions": [
-        { "id": "order.read", "name": "Read orders", "action": { "path": { "pattern": "/orders/**", "method": "GET" } } },
-        { "id": "order.manage", "name": "Manage orders", "action": "/orders/**" },
-        { "id": "order.export.block", "name": "No exports", "effect": "deny", "action": "/orders/export" }
-      ]
+      "id": "perm:order/read",
+      "statements": [{ "name": "read", "effect": "allow", "action": "order:read" }]
+    },
+    {
+      "id": "perm:order/ship",
+      "statements": [{ "name": "ship", "effect": "allow", "action": "order:ship", "resource": "order/{orderId}" }]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "viewer-read",
+      "subject": { "role": "viewer" },
+      "app": "order",
+      "space": "*",
+      "policy": "perm:order/read"
+    },
+    {
+      "id": "clerk-ship",
+      "subject": { "role": "clerk" },
+      "app": "order",
+      "space": "*",
+      "policy": "perm:order/ship"
     }
   ]
 }
 ```
 
-| Field | Required | Meaning |
-|---|---|---|
-| `id` | yes | The app id, matched against the request's `CoSec-App-Id`. It must not be empty or contain `:`; an app whose id contains `:` can hold no grants. |
-| `condition` | no | Evaluated before any permission of the app; when it does not match, the app's grants contribute nothing. Default: always. |
-| `groups` | no | Named groups of permissions. Default `[]`. |
-| `groups[].name` | yes | Group name, for display. |
-| `groups[].description` | no | For display. |
-| `groups[].permissions` | no | The permissions of the group. |
+A request reads the app document of its app only when the principal holds at least one role in the request's space.
+The app is the one the host is configured for (`cosec.authorization.scope.app-id`), or else the one the request
+declares in `CoSec-App-Id`; who controls these inputs is in the
+[security model](../guide/security-model.md#trust-boundaries). A request without an app reads no app document, so no
+app role binding applies to it.
 
-A permission is a [statement](./language.md#statements) with an id:
+## Permission catalogs
 
-| Field | Required | Meaning |
-|---|---|---|
-| `id` | yes | Permission id, the value grants refer to. Keep ids unique within the app: a later permission with the same id replaces the earlier one. |
-| `name`, `description` | no | For display. |
-| `effect`, `action`, `condition` | | As in a [policy statement](./language.md#statements). |
+The `catalog` lists the app's permissions in named groups, for consoles that let administrators pick what to grant
+([fields](./language.md#catalogs)). It takes no part in evaluation: removing a catalog entry revokes nothing, and
+nothing checks that each entry has a policy. `spaced` only says that a group's permissions are meant to be granted per
+space.
 
-Groups only organize the catalog for people; authorization looks at the permissions. A `deny` permission works like
-a deny statement: a role granted it is denied the matching requests even if another grant allows them.
+## Permission policies
+
+Each permission is a policy named `perm:<appId>/<permission>`, such as `perm:order/read`. Its statements say what the
+permission allows, like any other policy.
+
+- Only the app's own document defines its permission policies, and every policy of an app document is one.
+- A permission policy cannot be attachable: it is reached only through role bindings.
+- The platform and tenant documents define none.
 
 ## Granting permissions to roles
 
-A grant gives one role a set of permission ids, in one app and one space:
+A role binding in the app document grants a policy to a role:
 
-| Grant | Meaning |
+| Field | In an app document |
 |---|---|
-| `clerk` → `["order.read"]` in `order-app` | members of `clerk` may read orders in `order-app` |
-| `manager` → `["*"]` in `order-app` | `*` grants every permission the catalog of `order-app` defines, now and after it changes |
+| `subject` | `{"role": "<roleId>"}` for that role in any tenant, or `{"role": "<roleId>", "tenant": "<tenantId>"}` for one tenant. |
+| `app` | The app's own id, or `*`. A binding scoped to another app does not compile. |
+| `space` | A space id, `""` for the default space, or `*` for any space. |
+| `policy` | One of the app's permission policies, or a platform policy. Another app's permission policy does not compile. |
 
-Every id a grant names, other than `*`, must be defined by the app's catalog. An id it does not define (removed
-from the catalog, or mistyped) is not skipped, because it may be a deny: a request of a principal holding the role
-fails with `MissingPermissionException`, mapped to `500`, whenever the role layer is evaluated and no deny matched
-first. A request outside the app's `condition`, or already denied, is not affected. `AccessAnalyzer` and
-`PolicyTestKit` reject such grants when built or run ([Troubleshooting](../operations/troubleshooting.md#every-request-of-one-role-fails-with-500)).
-
-The request selects the app with `CoSec-App-Id` and the space with
-`CoSec-Space-Id` ([App and space](../integration/web.md#app-and-space)); a request without an app id, or for an app
-without a catalog, gets nothing from role grants.
+A role id is compared exactly, case included, with the roles the principal holds.
 
 ## Role grant scope
 
-A grant belongs to an **(app, role, space)** triple, `AppSpacedRoleId`, and applies nowhere else:
+A role binding applies to a request when all of these hold:
 
-- **App.** A grant in one app never applies in another, even when both define the same permission id or the grant
-  is `*`. Granting a role in two apps takes two grants.
-- **Space.** The principal's roles say which space each role belongs to: `editor` is a role in the default space,
-  `editor@team-a` a role in `team-a` only ([roles in tokens](../integration/authentication.md#roles-and-spaces)). A request in a space
-  is evaluated with only the principal's roles in that space (`RoleScope`), with the suffix removed, and only the
-  grants made in that space are read:
+1. The principal holds the role in the request's space ([Spaces](#spaces)).
+2. The binding's `app` is `*` or the request's app.
+3. The binding's `space` is `*` or the request's space (`""` is the default space).
+4. The binding names no `tenant`, or the principal's tenant.
+5. It has not expired (`expiresAt`).
 
-| Principal's roles | Request's `CoSec-Space-Id` | Roles evaluated | Grants read |
-|---|---|---|---|
-| `editor` | none (default space) | `editor` | `editor` in the default space |
-| `editor` | `team-a` | none | none |
-| `editor@team-a` | `team-a` | `editor` | `editor` in `team-a` |
-| `editor@team-a` | `team-b` | none | none |
-| `editor`, `editor@team-a` | `team-a` | `editor` | `editor` in `team-a` |
+| Binding `space` | Applies in |
+|---|---|
+| `""` | the default space only |
+| `"team-a"` | space `team-a` only |
+| `"*"` | every space in which the principal holds the role |
 
-A role with an empty role or space, or with more than one `@`, applies nowhere. Because the client chooses
-`CoSec-Space-Id`, it can only choose among the spaces its credential names; changing the header never picks up
-another space's grants.
-
-This is stricter than the [`inRole` condition](./language.md#matching-roles) in policies, where a bare role matches in
-every space so that a deny cannot be escaped by naming another space.
+`*` widens only where a binding applies, never which roles count: a role held in the default space does not apply in
+space `team-a`, even through a `space: "*"` binding. An app document is read only for its own app, so in it `app: "*"`
+and the app's own id mean the same.
 
 ## Spaces
 
-A space is a partition inside an app, such as a team, a workspace or a project, in which the same role can carry
-different permissions. Use spaces when a user is an `editor` in one workspace and a `viewer` in another:
+A request's space is the `CoSec-Space-Id` parameter; without one, the default space `""`. The principal's roles come
+from its token's `roles` claim (or its `MembershipProvider`): `viewer` is a role in the default space, `clerk@team-a`
+a role in space `team-a` ([Authentication](../integration/authentication.md)).
 
-1. Issue tokens whose roles carry the space: `editor@ws-1`, `viewer@ws-2`.
-2. Grant permissions per space: `editor` in `ws-1`, `viewer` in `ws-2`.
-3. Clients send the workspace as `CoSec-Space-Id`.
+| Token `roles` | Request space | Roles that count |
+|---|---|---|
+| `["viewer", "clerk@team-a"]` | default | `viewer` |
+| `["viewer", "clerk@team-a"]` | `team-a` | `clerk` |
+| `["viewer", "clerk@team-a"]` | `team-b` | none: the request is refused |
 
-Without spaces, use bare roles and grant them in the default space.
+A request that declares a space in which the principal holds no role is refused with `403` (`scope-rejected`), never
+evaluated in the default space; an anonymous request that declares a space is answered `401`. `*` is never a space
+id. Why the space is safe to take from the client is in the
+[security model](../guide/security-model.md#trust-boundaries).
+
+## Tenant role bindings
+
+A tenant grants roles in its own tenant document, without touching the app document:
+
+```json
+{
+  "schema": 2,
+  "revision": 4,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "bindings": [
+    {
+      "id": "auditor-reads-orders",
+      "subject": { "role": "auditor" },
+      "app": "order",
+      "space": "",
+      "policy": "perm:order/read"
+    }
+  ]
+}
+```
+
+- A role subject without `tenant` is a role of this tenant; naming another tenant does not compile.
+- The policy can be one of the tenant's own policies, a platform policy, or an app's permission policy. An app's
+  permission policy needs `app` set to exactly that app: it is then taken from that app's document, read in the same
+  request. Any other binding of a permission policy does not compile.
+- Tenant role bindings follow the same [scope rules](#role-grant-scope).
 
 ## Storing catalogs and grants
 
-With `cache-support`, catalogs and grants are read from Redis through two caches, `AppPermissionCache` (by app id)
-and `RolePermissionCache` (by `AppSpacedRoleId`). CoSec only reads them; your administration service writes them
-through these beans, so that every instance drops its local copy:
-
-```kotlin
-val catalog = CoSecJsonSerializer.readValue(json, AppPermission::class.java)
-appPermissionCache.put(catalog.id, catalog)
-rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk"), setOf("order.read"))
-rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a"), setOf("*"))
-```
-
-`AppSpacedRoleId` rejects an app id containing `:` and a role id containing `@`, so no write can produce a key that
-reads back as another app's or space's grant. Values carry CoCache's binary header, so writing them with plain Redis
-commands does not work. The key layout, and migrating 6.x grants that were not scoped to an app, are in
-[Storage](../operations/storage.md#redis) and [Upgrading](../operations/upgrading.md#migrating-role-grants).
-
-To check grants before they reach Redis, write them into a [policy test suite](./testing.md#policy-test-cases).
-To see why a role grant did or did not apply to a request, [explain the decision](./testing.md#debugging-a-decision-with-explain);
-its `NO_APP_PERMISSION` and `NO_ROLE_IN_SPACE` warnings name the two most common causes.
+App documents belong to the platform: only principals of the `(platform)` tenant may change them, while a tenant's
+principals change only their own tenant document. Publish a document through the control plane, either whole
+(`POST /documents/app:order:apply`) or as entry operations (`putCatalog`, `putPolicy`, `putBinding`), or with
+`cosec-migrate publish` for a first revision. Changes are checked, compiled and can be shadowed before they publish:
+see [Testing policies](./testing.md) and [Storage](../operations/storage.md).
 
 ## Generating a catalog from OpenAPI
 
-With `cosec-openapi` and Spring Boot Actuator, `GET /actuator/cosecAppPermissionGenerator` turns the application's
-OpenAPI description into a catalog draft:
+With `openapiSupport`, the `cosecServiceGenerator` actuator endpoint generates both halves of a service's setup from
+its OpenAPI document:
 
-| Catalog | From |
-|---|---|
-| `id` | `info.title`, with every `:` replaced by `-` (an app id with `:` could hold no grants); `AppId` when there is no title |
-| one group per tag | the operation's tags; an operation with several tags appears in each, an operation without tags is left out |
-| permission `id` | `operationId` (`""` when missing) |
-| permission `name`, `description` | `summary`, `description` |
-| permission `action` | a `path` action with the operation's path and method |
+- `cosecServiceGenerator/routes`: the [route map](./language.md#route-maps).
+- `cosecServiceGenerator/app`: the app document.
 
-Every permission is an `allow`. Give every operation an `operationId` and a tag before generating, review the
-result, then store it as above.
+The service is `info.x-cosec-service`, or else `info.title`. Each operation's action is `<service>:<operationId>`, or
+its `x-cosec-action`. The app document gets one permission policy `perm:<service>/<verb>` per action, allowing that
+action on any resource, and a catalog with one group per operation's first tag (`default` without one). It has no role
+bindings: add them, review the document, and publish it as above. Generation fails on an operation without an action,
+an `operationId` used twice, or two operations one request could match.
 
 **Next:** limit how often allowed requests may run, in [Rate limiting](./rate-limiting.md).
