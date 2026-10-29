@@ -221,6 +221,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
+- RC 前（Wow 的导入清单，2026-10-29）：Wow 用到的生产面（`SecurityContext`、`SecurityScope`、`CoSecPrincipal`、WebFlux 的上下文读取、`AuthorizationChecker`、`RouteMap` 与 `RouteMapCodec`、`CoSecParameters`、starter 的属性键）保持公开并有文档；测试面用到的内部类型（`PipelineComponents`、`SuspendingSnapshotSource`、`engine.flat.*`）在归类时多半转为 `@InternalCoSecApi`，在此之前 `cosec-testkit` 提供公开的夹具（从文档构建真实 Pipeline，给出 `evaluate` 与已放行的 `SecurityContext`，`@ExperimentalCoSecApi`）。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
@@ -273,6 +274,9 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **运行时依赖的 patch 升级**：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4（#1116），`ognl` 3.4.16 → 3.4.17（#1115，只剩 `migrate` 的 `compileOnly`） | 2026-10-29 | 维护者："升级" |
 | **先发布 `8.0.0-alpha.1` 预览版，不承诺兼容性**：RFC 0011 PR-3（ABI 校验）合入后发布；GitHub 上标为 prerelease，Docker 只推 `8.0.0-alpha.1` 标签（不推 `latest`）；发布后 `main` 回到 `8.0.0-SNAPSHOT`。RC/GA 的前提不变（取代 RFC 0001 §6 "RC 前不发布任何版本"） | 2026-10-29 | 维护者："完成后，保守一点，发布 -alpha.1 ，不承诺兼容性。" |
 | **RC 的两轮审查改为对 RC 候选提交做整体审查**：第 1 轮是 RC 安全审查，第 2 轮是按模块的正确性审查（每个模块一个只读审查者），不再逐个补做已合入 PR 的第二轮 | 2026-10-29 | [RFC 0008 §3.9](rfc/0008-conformance-and-direct-build.md) 修订；维护者："Go with that" |
+| **CoSec 不再依赖 CosId**：核心层只需要"生成唯一字符串"，改为 CoSec 自己的端口 `IdGenerator`（`cosec-spi`，`@CoSecSpi`）与默认实现；所有构建文件与 `cosec-dependencies` BOM 去掉 CosId，架构规则禁止 `me.ahoo.cosid`；不设 `cosec-cosid` 适配模块（一行 lambda）。起因：CosId 5 与 CosId 4 二进制不兼容，Wow 的服务在运行时 `NoClassDefFoundError` | 2026-10-29 | 维护者："核心层不再依赖 CosId" |
+| **`AuthorizationChecker` 返回决定**（RC 前）：与 `check` 同语义，`check` 即"决定为 Permit"；决定只到进程内的宿主代码，不进响应体 | 2026-10-29 | Wow 的请求 |
+| **网关身份转发改为按 scheme 选择加入**（RC1-49）：默认只转发给 `lb://` 路由，其他路由须写 `cosec-identity: true`；网关主机上暴露非 health 的 actuator 端点时启动失败（RC1-48） | 2026-10-29 | [RC 审查](security/8.0-rc-review.md) 的建议 |
 
 ## 10. 尚未派发的下一步
 
