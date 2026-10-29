@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
-index c46e355f..8f67c56b 100644
+index 9bf07764..c0449a50 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
-@@ -104,7 +104,7 @@ class MembershipResolver(
-                 "The membership provider answered memberships from [${answer.source}] for principal [${principal.value}]."
+@@ -112,7 +112,7 @@ class MembershipResolver(
+                     "[${principal.value}]."
              )
          }
--        return answer.takeIf { it.active }
-+        return answer
+-        return memberships.takeIf { it.active }
++        return memberships
      }
  
      /**
