@@ -118,6 +118,8 @@ CoSec follows [Semantic Versioning](https://semver.org/):
 
 To release, bump `version` in [gradle.properties](gradle.properties) via a pull request on the branch of that
 line (`main` for 8.0, `7.x` for 7.x patches), then publish a GitHub release tagged `vX.Y.Z` from that branch.
+On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](k8s/base/kustomization.yaml) to the
+new version: the gateway image is tagged with release versions, never with a `-SNAPSHOT` one.
 Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
 Release notes are generated from pull request labels ([.github/release.yml](.github/release.yml)).

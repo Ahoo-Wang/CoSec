@@ -262,11 +262,7 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
 ```
 
-镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；默认值见其 [`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)。Kubernetes 示例清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中。它们从名为 `cosec-jwt-secret` 的 Secret 读取 JWT 密钥；请先创建它，并把镜像标签设为你部署的版本：
-
-```bash
-kubectl create secret generic cosec-jwt-secret --from-literal=secret=<随机值>
-```
+镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；镜像读取 `config/application.yaml`，默认值见 [`src/dist/config/application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)。Kubernetes 的 Kustomize 清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中：用于试用 CoSec 的 `dev` overlay，和作为起点的 `production` overlay（[Kubernetes](../operations/deployment.md#kubernetes)）。
 
 ### 转发身份 {#forwarding-the-identity}
 
