@@ -77,7 +77,10 @@ object ApiKeyCodec {
                     it.asString()
                 }
             },
-            expiresAt = node.get("expiresAt").takeUnless { it.isNull }?.let { Instant.parse(it.textValue()) },
+            expiresAt = node.get("expiresAt").takeUnless { it.isNull }?.let {
+                require(it.isString) { "expiresAt is a string or null, not $it." }
+                Instant.parse(it.asString())
+            },
             enabled = node.get("enabled").also { require(it.isBoolean) { "enabled is a boolean." } }.booleanValue(),
         )
     }
