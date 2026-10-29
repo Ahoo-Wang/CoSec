@@ -17,6 +17,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64
+import java.util.HexFormat
 
 /**
  * A credential of a principal (RFC 0009 §4): whoever presents the key acts as [principalId] in [tenantId], with the
@@ -88,9 +89,11 @@ object ApiKeys {
     private const val PREFIX = "cosec_"
     private val random = SecureRandom()
 
+    /** Lower-case hex, as the hashes of stored keys are written; a `String.format` per byte cost every request. */
+    private val HEX: HexFormat = HexFormat.of()
+
     /** The SHA-256 of [key], hex-encoded: what a store keeps instead of the key. */
-    fun hash(key: String): String =
-        MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+    fun hash(key: String): String = HEX.formatHex(MessageDigest.getInstance("SHA-256").digest(key.toByteArray()))
 
     /** A new random key. Show it once and store only its [hash]. */
     fun generate(): String {

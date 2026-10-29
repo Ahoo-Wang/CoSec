@@ -39,6 +39,20 @@ class ApiKeyReaderTest {
         assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme", null) }
     }
 
+    /**
+     * Stored keys are looked up by this hash: it must never change. SHA-256 of the key's UTF-8 bytes, lower-case hex,
+     * pinned against vectors computed elsewhere (Python's hashlib).
+     */
+    @Test
+    fun theHashIsPinned() {
+        ApiKeys.hash("cosec_4fJx9QzR2mT7wLp0VbN6sY1cE8uK3aHd5gZiXoWrMnq")
+            .assert().isEqualTo("7da72e8ca9aaec182271e30eea65aae5273d2d8d8332b8c60c1c20b961cec4df")
+        ApiKeys.hash("").assert().isEqualTo("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        ApiKeys.hash("\u5bc6\u94a5-\u00e9")
+            .assert().isEqualTo("fdb61048550f995fcca222cfd2240fa07155d5c662e985a179357a3eb889777a")
+        ApiKeys.hash(ApiKeys.generate()).assert().matches("[0-9a-f]{64}")
+    }
+
     @Test
     fun theInMemoryStoreReadsWithoutBlocking() {
         val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null)
