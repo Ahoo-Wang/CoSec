@@ -169,8 +169,8 @@ class CoSecControlAutoConfiguration {
         breakGlassMaxDuration = properties.breakGlass.maxDuration,
     )
 
+    /** Not replaceable: the hard rules, grant analysis and approvals of every change (like [cosecControlAuthorizer]). */
     @Bean
-    @ConditionalOnMissingBean
     fun cosecChangeAuthority(
         authorizer: ControlAuthorizer,
         options: ChangeOptions,
@@ -223,8 +223,8 @@ class CoSecControlAutoConfiguration {
         return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
     }
 
+    /** Not replaceable: the change flow, authorized at every step. */
     @Bean
-    @ConditionalOnMissingBean
     fun cosecChanges(
         store: ControlStore,
         revisions: Revisions,
@@ -275,8 +275,8 @@ class CoSecControlAutoConfiguration {
         shadowInterval = properties.shadow.checkInterval,
     )
 
+    /** Not replaceable: every call goes through [ChangeAuthority]. */
     @Bean
-    @ConditionalOnMissingBean
     fun cosecControlPlane(
         changes: Changes,
         revisions: Revisions,
@@ -286,8 +286,8 @@ class CoSecControlAutoConfiguration {
         // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
         DefaultControlPlane(changes, revisions, authority, Simulator(attributes = attributes.catalog))
 
+    /** Not replaceable: every route needs a request the host pipeline permitted. */
     @Bean
-    @ConditionalOnMissingBean
     fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
 }
 

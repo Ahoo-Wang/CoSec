@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
@@ -172,6 +173,7 @@ interface ControlPlane {
 }
 
 /** The [ControlPlane] over [changes] and [revisions], authorizing with [authority]. */
+@InternalCoSecApi
 class DefaultControlPlane(
     private val changes: Changes,
     private val revisions: Revisions,

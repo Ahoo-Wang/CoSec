@@ -472,7 +472,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
 Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型，其中一些换了包（[模块、制品与包](#modules-artifacts-and-packages)）。
 
-8.0 预览版中，应用可以用自己的 bean 替换控制面的 `ControlAuthorizer`。现在不行了：控制面通过 Pipeline 授权自己的操作，第二个 `ControlAuthorizer` bean 会让启动失败。`ControlAuthorizer`、`DocumentConfirmation` 和 `PipelineControlAuthorizer` 是 `@InternalCoSecApi`。
+8.0 预览版中，应用可以用自己的 bean 替换执行控制面授权与审批的部分：`ControlAuthorizer`、`ChangeAuthority`、`Changes`、`ControlPlane` 和 `ControlHttp`。现在不行了：这些类型中任何一个出现第二个 bean，启动都会失败（`ControlHttp` 是在提供控制面路由时）。`ControlAuthorizer`、`DocumentConfirmation`、`PipelineControlAuthorizer`、`ChangeAuthority`、`Changes`、`DefaultControlPlane`、`ControlHttp`、`ControlHttpRequest` 和 `ControlHttpResponse` 是 `@InternalCoSecApi`：通过 `ControlPlane` bean 或它的 HTTP API 调用控制面。`ControlStore`、`ChangeOptions`、变更监听器、`Revisions`、`ControlSnapshot` 和维护相关的 bean 仍可替换。
 
 #### 策略测试套件 {#policy-test-suites}
 

@@ -59,32 +59,7 @@ public final class me/ahoo/cosec/control/api/AccessReport {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/control/api/ControlHttp {
-	public static final field Companion Lme/ahoo/cosec/control/api/ControlHttp$Companion;
-	public static final field JSON Ljava/lang/String;
-	public static final field PROBLEM_JSON Ljava/lang/String;
-	public fun <init> (Lme/ahoo/cosec/control/api/ControlPlane;)V
-	public final fun handle (Lme/ahoo/cosec/control/api/ControlHttpRequest;Lme/ahoo/cosec/runtime/RequestSecurity;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
 public final class me/ahoo/cosec/control/api/ControlHttp$Companion {
-}
-
-public final class me/ahoo/cosec/control/api/ControlHttpRequest {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;[B)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getBody ()[B
-	public final fun getMethod ()Ljava/lang/String;
-	public final fun getPath ()Ljava/lang/String;
-	public final fun getQuery ()Ljava/util/Map;
-}
-
-public final class me/ahoo/cosec/control/api/ControlHttpResponse {
-	public fun <init> (ILjava/lang/String;[B)V
-	public final fun getBody ()[B
-	public final fun getContentType ()Ljava/lang/String;
-	public final fun getStatus ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class me/ahoo/cosec/control/api/ControlPlane {
@@ -147,30 +122,6 @@ public final class me/ahoo/cosec/control/api/DecisionView {
 	public final fun getRedacted ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/control/api/DefaultControlPlane : me/ahoo/cosec/control/api/ControlPlane {
-	public fun <init> (Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/control/api/Simulator;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/control/api/Simulator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun abandon-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun analyze (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/control/api/AccessQuery;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun apply (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/change/ApplyMode;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun approve-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun diff (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun explain (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/control/api/SimulatedRequest;Lme/ahoo/cosec/control/api/SnapshotVersion;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun get-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun getBreakGlass ()Lme/ahoo/cosec/control/change/BreakGlass;
-	public fun history (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/Long;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun propagation (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun propose (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun publish-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lme/ahoo/cosec/control/change/ShadowAck;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun read (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/Long;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun rebase-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun reject-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun rollback (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun simulate-MvxKkFM (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/control/api/SimulatedRequest;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun skipShadow-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun startShadow-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/api/DocumentDiff {
@@ -603,20 +554,6 @@ public final class me/ahoo/cosec/control/change/CandidateDigest {
 	public final fun of (Lme/ahoo/cosec/runtime/document/PolicyDocument;)Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/control/change/ChangeAuthority {
-	public synthetic fun <init> (Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/control/grant/GrantAnalyzer;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/control/grant/GrantAnalyzer;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun approvalProblem (Lme/ahoo/cosec/control/change/ChangeRequest;Ljava/util/List;Lme/ahoo/cosec/control/authz/Operator;Ljava/time/Instant;)Ljava/lang/String;
-	public final fun approverProblem (Lme/ahoo/cosec/control/change/ChangeRequest;Ljava/util/List;Lme/ahoo/cosec/control/authz/Operator;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun authorize (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/List;Lme/ahoo/cosec/runtime/document/ProvenanceKind;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun authorize$default (Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/List;Lme/ahoo/cosec/runtime/document/ProvenanceKind;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public final fun decide (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/model/Action;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun escalations (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/List;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lkotlin/jvm/functions/Function2;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun holds (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/model/Action;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun isolate (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
-	public final fun require (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/model/Action;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
 public final class me/ahoo/cosec/control/change/ChangeChecks {
 	public fun <init> ()V
 	public fun <init> (Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;)V
@@ -741,28 +678,6 @@ public final class me/ahoo/cosec/control/change/ChangeState : java/lang/Enum {
 	public final fun getTerminal ()Z
 	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/control/change/ChangeState;
 	public static fun values ()[Lme/ahoo/cosec/control/change/ChangeState;
-}
-
-public final class me/ahoo/cosec/control/change/Changes {
-	public fun <init> (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/store/Revisions;Lkotlin/jvm/functions/Function0;Lme/ahoo/cosec/control/authz/ControlAuthorizer;Ljava/time/Clock;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;Lme/ahoo/cosec/control/change/ChangeChecks;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/runtime/shadow/ShadowReportReader;Lme/ahoo/cosec/control/audit/ChangeListeners;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/store/Revisions;Lkotlin/jvm/functions/Function0;Lme/ahoo/cosec/control/authz/ControlAuthorizer;Ljava/time/Clock;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;Lme/ahoo/cosec/control/change/ChangeChecks;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/runtime/shadow/ShadowReportReader;Lme/ahoo/cosec/control/audit/ChangeListeners;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun abandon-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun apply (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/change/ApplyMode;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun approve-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun candidateOf-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun get-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun propagation (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun propose (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLjava/util/List;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun propose$default (Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLjava/util/List;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Ljava/util/List;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public final fun publish-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lme/ahoo/cosec/control/change/ShadowAck;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun publish-mm4FcV0$default (Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lme/ahoo/cosec/control/change/ShadowAck;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public final fun rebase-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun reject-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun rollback (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun shadowed-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun skipShadow-mm4FcV0 (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun stage-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun visible-Gwy_fpQ (Lme/ahoo/cosec/control/authz/Operator;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/change/CheckResult {

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import io.mockk.every
@@ -22,6 +24,7 @@ import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
@@ -32,9 +35,13 @@ import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.login.token.TokenConverter
@@ -74,6 +81,7 @@ import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfig
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.NoUniqueBeanDefinitionException
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
@@ -447,6 +455,26 @@ class StarterWiringTest {
             listeners.requiredTimeout.assert().isEqualTo(7.seconds)
         }
         (ReflectionTestUtils.getField(listeners, "scope") as CoroutineScope).isActive.assert().isFalse()
+    }
+
+    /**
+     * The control plane's own authorization never comes from an application bean (RFC 0011 D4): a second authorizer,
+     * change authority or control plane fails startup instead of quietly replacing the starter's.
+     */
+    @Test
+    fun `a second control-plane authorization bean fails startup`() {
+        val authorizer = ControlAuthorizer { _, _, _ -> ControlDecision.DENY }
+        secondBeanFailsStartup(ControlAuthorizer::class.java) { authorizer }
+        secondBeanFailsStartup(ChangeAuthority::class.java) { ChangeAuthority(authorizer) }
+        secondBeanFailsStartup(ControlPlane::class.java) { mockk<ControlPlane>() }
+    }
+
+    private fun <T : Any> secondBeanFailsStartup(type: Class<T>, bean: () -> T) {
+        controlRunner.withBean("own${type.simpleName}", type, { bean() }).run { context ->
+            val cause = context.startupFailure!!.rootCause()
+            cause.assert().isInstanceOf(NoUniqueBeanDefinitionException::class.java)
+            cause.message.assert().contains(type.name)
+        }
     }
 
     private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()

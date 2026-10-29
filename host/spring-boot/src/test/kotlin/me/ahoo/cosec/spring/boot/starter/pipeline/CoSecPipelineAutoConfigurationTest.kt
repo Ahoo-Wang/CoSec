@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
@@ -26,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.redis.RedisBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.gateway.PipelineGatewayFilter

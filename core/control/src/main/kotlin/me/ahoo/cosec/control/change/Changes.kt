@@ -79,6 +79,7 @@ class ChangeRejectedException(
  *   against; [shadowed] closes the window from their reports, and [publish] needs the publisher to acknowledge the
  *   numbers whenever anything changed or the evidence was insufficient.
  */
+@InternalCoSecApi
 class Changes(
     private val store: ControlStore,
     private val revisions: Revisions,

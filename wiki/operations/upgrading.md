@@ -592,9 +592,13 @@ Still available: `SecurityContext` (now with `scope`, the validated app, space a
 `ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types, some of them
 in new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)).
 
-During the 8.0 previews an application could replace the control plane's `ControlAuthorizer` with a bean of its own. It
-no longer can: the control plane authorizes its own operations through the pipeline, and a second `ControlAuthorizer`
-bean fails startup. `ControlAuthorizer`, `DocumentConfirmation` and `PipelineControlAuthorizer` are `@InternalCoSecApi`.
+During the 8.0 previews an application could replace, with beans of its own, the parts that enforce the control plane's
+authorization and approvals: `ControlAuthorizer`, `ChangeAuthority`, `Changes`, `ControlPlane` and `ControlHttp`. It no
+longer can: a second bean of one of these types fails startup (for `ControlHttp`, where the control routes are served).
+`ControlAuthorizer`, `DocumentConfirmation`, `PipelineControlAuthorizer`, `ChangeAuthority`, `Changes`,
+`DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`: call the
+control plane through the `ControlPlane` bean or its HTTP API. `ControlStore`, `ChangeOptions`, the change listeners,
+`Revisions`, `ControlSnapshot` and the maintenance beans stay replaceable.
 
 #### Policy test suites
 

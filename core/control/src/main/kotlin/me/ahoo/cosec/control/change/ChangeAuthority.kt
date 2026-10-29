@@ -63,6 +63,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * An operator holding `cosec:approve` on the document is the trust root (§7.3): its changes are not analyzed, unless
  * [ChangeOptions.fourEyes] is on. A new or changed break-glass binding always needs a second person (§8).
  */
+@InternalCoSecApi
 class ChangeAuthority(
     private val authorizer: ControlAuthorizer,
     private val options: ChangeOptions = ChangeOptions(),
