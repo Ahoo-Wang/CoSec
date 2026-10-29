@@ -70,6 +70,9 @@ What is different, in short:
 - **Conditions are data.** A small condition language replaces the matcher factories, OGNL and SpEL. Nothing in a
   policy runs code.
 - **Errors are `application/problem+json`.** A response no longer tells a client whether a DENY exists.
+- **Java 21.** Every 8.0 module is compiled for Java 21, where 7.x was compiled for Java 17: an application builds
+  and runs on JDK 21 or later. The `cosec-gateway-server` image is the exception: it runs on JDK 25, with an AOT cache
+  ([Deployment](./deployment.md#the-image)).
 
 ### Upgrade checklist
 
@@ -82,9 +85,10 @@ What is different, in short:
    [Converting](#migrating-the-data) reports every policy that cannot be translated.
 3. **Convert the data** with `cosec-migrate convert` and fix every rejection until the conversion is accepted. Read
    the semantic changes in `report.json` against [What 8.0 decides differently](#what-8-0-decides-differently).
-4. **Update the dependencies and the code**: replace the starter's capabilities with the modules themselves and move
-   imports to the new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses
-   of [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
+4. **Update the dependencies and the code**: move the build and the runtime to JDK 21, replace the starter's
+   capabilities with the modules themselves and move imports to the new packages
+   ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses of
+   [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
 5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
    new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
    common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring

@@ -12,12 +12,12 @@
 #
 
 name: Set up Java and Gradle
-description: Temurin JDK (17 unless told otherwise) and Gradle with its cache, which only main writes.
+description: Temurin JDK (21 unless told otherwise) and Gradle with its cache, which only main writes.
 inputs:
   java-version:
     description: JDK versions, one per line; the last one becomes JAVA_HOME
     required: false
-    default: '17'
+    default: '21'
 runs:
   using: composite
   steps:

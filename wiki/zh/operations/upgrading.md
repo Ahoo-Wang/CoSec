@@ -36,6 +36,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **变更经过控制面。** 写入、校验、模拟、影子、审批、解释和回滚策略都是控制面（`cosec-control`）的操作，而不是应用代码或本地文件。
 - **条件是数据。** 一套小的条件语言取代了匹配器工厂、OGNL 和 SpEL。策略中的任何内容都不会执行代码。
 - **错误响应是 `application/problem+json`。** 响应不再告诉客户端是否存在 DENY。
+- **Java 21。** 8.0 的每个模块都按 Java 21 编译，而 7.x 按 Java 17 编译：应用要在 JDK 21 或更高版本上构建和运行。`cosec-gateway-server` 镜像例外：它运行在 JDK 25 上，并带有 AOT 缓存（[部署](./deployment.md#the-image)）。
 
 ### 升级检查清单 {#upgrade-checklist}
 
@@ -46,7 +47,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
    端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
-4. **更新依赖和代码**：用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
+4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
 5. **更新配置**：改名或删除每一个 [7.x key](#removed-and-renamed-properties)，并对新属性做出决定。8.0 不读取的 `cosec.*` key 会让启动
    失败，并给出替代它的配置。另外三种常见情况也会让启动失败：WebFlux 或
    Spring MVC 宿主上 `classpath:cosec-routes.json` 没有路由映射（把 `cosec.authorization.routes.location` 设为一份映射，或设为空）；
