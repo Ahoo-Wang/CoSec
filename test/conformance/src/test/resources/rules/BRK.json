@@ -73,10 +73,11 @@
     {
       "id": "BRK-8",
       "source": "RFC 0009 §4.2",
-      "statement": "Break-glass never applies to an API key, capped or not: a principal without break-glass matches no break-glass binding.",
+      "statement": "Break-glass applies only to CoSec's own token: never to an API key, capped or not, nor to a principal another authenticator accepted. A principal without break-glass matches no break-glass binding.",
       "level": "engine",
       "guards": [
-        "engine:FlatEngineTest#a subject without break-glass matches no break-glass binding"
+        "engine:FlatEngineTest#a subject without break-glass matches no break-glass binding",
+        "runtime:TokenAuthenticatorTest#onlyATokenMayUseBreakGlass"
       ],
       "pending": null
     }
