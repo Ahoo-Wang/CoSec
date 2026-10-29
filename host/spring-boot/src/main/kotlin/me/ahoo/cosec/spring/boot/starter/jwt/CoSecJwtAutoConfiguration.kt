@@ -52,12 +52,19 @@ import org.springframework.context.annotation.Configuration
 )
 class CoSecJwtAutoConfiguration {
 
+    /** Startup fails on a blank secret, or one shorter than [JwtProperties.Algorithm.minSecretBytes] (RC1-24). */
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenAlgorithm(jwtProperties: JwtProperties): Algorithm {
         require(jwtProperties.secret.isNotBlank()) {
             "Property [${JwtProperties.PREFIX}.secret] must not be blank when JWT is enabled. " +
                 "Set cosec.jwt.secret to a strong random value, or disable JWT via cosec.jwt.enabled=false."
+        }
+        val bytes = jwtProperties.secret.toByteArray(Charsets.UTF_8).size
+        val required = jwtProperties.algorithm.minSecretBytes
+        require(bytes >= required) {
+            "Property [${JwtProperties.PREFIX}.secret] has $bytes bytes, and ${jwtProperties.algorithm} needs at least " +
+                "$required (RFC 7518 §3.2). Set cosec.jwt.secret to a random value of at least $required bytes."
         }
         return when (jwtProperties.algorithm) {
             JwtProperties.Algorithm.HMAC256 -> Algorithm.HMAC256(

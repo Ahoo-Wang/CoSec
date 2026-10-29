@@ -1,0 +1,137 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-1: gina holds order:* through her role policy-editor, and a DENY of order:delete names her. Her key, capped to policy-editor, is subject to that DENY as she is, so granting order:delete in the space she holds the role in overlaps it.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*"
+              }
+            ]
+          },
+          {
+            "id": "no-delete",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "order:delete"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "editor",
+            "subject": {
+              "role": "policy-editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          },
+          {
+            "id": "nd",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "no-delete"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "policy-editor"
+    ],
+    "principalBindings": false
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete"
+            }
+          ]
+        },
+        {
+          "id": "delete",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:delete"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "editor",
+          "subject": {
+            "role": "policy-editor"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "nd",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        },
+        {
+          "id": "d",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "",
+          "policy": "delete"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "delete",
+        "statement": 0,
+        "action": "order:delete",
+        "resource": "*",
+        "verdict": "UNKNOWN",
+        "reason": "DENY_OVERLAP"
+      }
+    ]
+  }
+}

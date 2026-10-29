@@ -65,7 +65,7 @@ These have no switch:
 | `cosec.pipeline.timeout` | duration | `5s` | The whole evaluation of one request. Past it the request is answered `503` `unavailable`. |
 | `cosec.pipeline.authentication-timeout` | duration | `1s` | One call of the `Authenticator`. Past it, `503`. |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | Also read the access token from the `authorization` query parameter. Off because URLs end up in access logs, browser history and `Referer` headers. |
-| `cosec.pipeline.api-key-header` | string | `X-API-Key` | The request header an API key comes in. |
+| `cosec.pipeline.api-key-header` | string | `X-API-Key` | The request header an API key comes in. No document may read it: every compiler of the host refuses a reference to it, as to the other credential headers ([Headers](../policies/language.md#headers)). |
 | `cosec.pipeline.trace-level` | `off`, `full`, `exhaustive` | `off` | How much of each evaluation the engine traces. Decision events carry the trace as `evaluationTrace` (null at `off`, and when the request did not reach the engine); a higher level costs time on every request. |
 | `cosec.pipeline.mode` | `enforce`, `gateway` | `enforce` | `enforce`: the host decides with policies. `gateway`: a service behind a CoSec gateway reads the caller from the `CoSec-Identity` header the gateway forwards, and wires no authenticator, API keys, snapshot, policies, control plane or Redis of its own ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)). Any other value fails startup, and so does `gateway` on a Spring Cloud Gateway host. In `gateway` mode only the gateway may be able to reach the service: startup logs a `WARN` saying so. JWT is not limited to `enforce` mode: a service that issues no tokens sets `cosec.jwt.enabled=false`, or startup asks for a secret and a token store. |
 | `cosec.pipeline.gateway.max-age` | duration | `60s` | In `gateway` mode, an identity issued longer ago than this, plus `cosec.authentication.revocation.skew`, is refused: `401` `token-expired`. |
@@ -155,7 +155,7 @@ How windows work: [Testing changes](../policies/testing.md).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.jwt.secret` | string | none | **Required** while JWT is enabled; startup fails when it is blank. Use a long random value from a secret store. |
+| `cosec.jwt.secret` | string | none | **Required** while JWT is enabled; startup fails when it is blank or shorter than the algorithm needs: 32 bytes (UTF-8) for `hmac256`, 48 for `hmac384`, 64 for `hmac512` (RFC 7518 §3.2). Use a long random value from a secret store. |
 | `cosec.jwt.algorithm` | `hmac256`, `hmac384`, `hmac512` | `hmac256` | Signing algorithm. Issuers and verifiers must agree. |
 | `cosec.jwt.token-validity.access` | duration | `10m` | Access token lifetime. |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime; a revocation is kept in Redis this long, plus one second. |

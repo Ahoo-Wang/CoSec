@@ -10,6 +10,46 @@ the data migration, what 8.0 decides differently, responses, authentication, sto
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
+
+8.0.0-alpha.1 is a preview with no compatibility promise. These changes since then, from the
+[RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), break decisions,
+code or configuration written against it. A 7.x deployment reads them in the sections below.
+
+- **A role cap removes ALLOWs only** (RC1-1, `BND-9`, `IDN-2`). A capped credential (an API key with `roles`) still
+  gets no grant from its principal's attached policies and principal bindings, but their DENYs now apply to it: a
+  request its principal is denied is denied to every key of the principal, capped or not. In alpha.1 a cap dropped
+  those DENYs too, so a capped key could do what its principal could not. Nothing to migrate; to see which requests
+  change, `simulate` them with `principalBindings: false` ([Testing policies](../policies/testing.md)). The grant
+  analysis counts a capped author's DENYs the same way.
+- **Break-glass by provenance** (RC1-26, `BRK-8`). Only a token CoSec's own `JwtTokenVerifier` verified gets
+  break-glass. A `TokenAuthenticator` around another `TokenVerifier` authenticates its tokens without break-glass, and
+  names their credential after its `method` (`token` by default) rather than `jwt`. The method `jwt` is reserved:
+  `AuthenticatedPrincipal` refuses a credential of that method from your code (`IllegalArgumentException`, so a `503`),
+  and `TokenAuthenticator` refuses `method = "jwt"` for a verifier that is not CoSec's. Name your authenticator's
+  method after its credential ([Extending](../architecture/extending.md#authenticators)).
+- **A renamed API key header is a credential header** (RC1-21, `CND-5`). With `cosec.pipeline.api-key-header` set, a
+  document that reads that header (a condition or a rate limit `key`) no longer compiles, in the control plane or on
+  an instance, and the pipeline never reads it for a condition. Remove such references before upgrading. In code,
+  `ConditionChecker`, `PolicyDocumentCompiler.forPlatform` and `of`, `PlatformCompiler`, `ChangeChecks`, `Simulator`
+  and `HttpAttributes` take the header as a new parameter.
+- **A `tenantId` claim that is not a string makes the token invalid** (RC1-22), where alpha.1 read it as the default
+  tenant `(0)`. Issue the tenant as a string.
+- **The tenant switch re-derives memberships** (RC1-23). `AbstractSwitchTenantAuthentication.switchTenant` answers a
+  `TenantMembership`, the user's roles, policies and attributes in the target tenant (or
+  `TenantMembership.fromProvider()`), instead of a principal, and `authenticate` builds the new principal from it
+  alone. An implementation that wrapped `previousPrincipal` carried the previous tenant's roles into the new token
+  ([Tenants](../integration/authentication.md#tenants)).
+- **The JWT secret has a minimum length** (RC1-24): 32, 48 or 64 UTF-8 bytes for `hmac256`, `hmac384` or `hmac512`.
+  A shorter `cosec.jwt.secret` fails startup; set a longer one on the issuer and every verifier, which makes the
+  tokens issued with the old one invalid.
+- **Social login signs only what the provider owns** (RC1-25). `DirectSocialUserPrincipalConverter` gives the
+  principal two attributes, `cosec_oauth_provider` and `cosec_oauth_user_id`, instead of the provider's raw user info,
+  which the user edits, and no longer writes into the `SocialUser` it converts. A token whose `attributes` name
+  `apiKeyId`, which CoSec sets for API keys, is refused as `token-invalid`, and `JwtTokenConverter` does not issue
+  one. To keep profile fields, declare your own `SocialUserPrincipalConverter` and keep only fields the user cannot
+  change ([Social login](../integration/authentication.md#social-login)).
+
 ## 7.x to 8.0
 
 8.0 upgrades only from 7.x. To upgrade from 6.x, first follow
@@ -332,7 +372,17 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
   ([Authentication](../integration/authentication.md#tokens)). A deny is audited with the reason code
   `DELEGATION_UNSUPPORTED`; on a permit the audit records `ALLOW`, and the reason appears only in the decision event's
   `subject.rejected`. Refreshing or revoking such a token fails too.
-- `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`).
+- **A `tenantId` claim that is not a string**, or an `attributes` claim that names `apiKeyId` (set by CoSec for API
+  keys only), makes the token `token-invalid`; 7.x read such a tenant as none. **`cosec.jwt.secret`** must be at least
+  32, 48 or 64 UTF-8 bytes for `hmac256`, `hmac384` or `hmac512`, or startup fails.
+- **Break-glass, 7.x's root,** applies only to a token CoSec's own `JwtTokenVerifier` verified, never to a token of a
+  custom `TokenVerifier` or to a principal another authenticator accepted (`BRK-8`).
+- **Tenant switch and social login.** `AbstractSwitchTenantAuthentication.switchTenant` answers the user's
+  `TenantMembership` in the target tenant instead of a principal, so the new token never carries the previous
+  tenant's roles. `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
+  not the provider's user info ([Authentication](../integration/authentication.md#tenants)).
+- `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`), and no document may read the
+  header it names (`CND-5`).
   `cosec.api-key.store-blocking` is gone: the Redis key reader never blocks. A request that carries an API key is
   judged by the key alone, even if it also carries a token (`PIP-8`).
 - `cosec.authorization.allow-query-token` is now `cosec.pipeline.allow-query-token` (default `false`).
@@ -360,8 +410,9 @@ principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0
   `503` and the log names `cosec-migrate api-keys`. Convert the keys before switching (below).
 - **A provider is required.** `cosec.api-key.enabled=true` without a `MembershipProvider` bean fails startup
   (`IDN-6`). `cosec.api-key.enabled` is `true` or `false`; `on`, `yes` or `1` fail startup.
-- **A cap narrows principal bindings and break-glass too.** A key with `roles` gets none of its principal's principal
-  bindings, `roles: []` only what `Anyone` bindings give, and no API key ever gets break-glass (`BND-9`, `BRK-8`).
+- **A cap narrows principal bindings and break-glass too.** A key with `roles` gets no grant from its principal's
+  principal bindings and attached policies, though their DENYs still apply to it, `roles: []` only what `Anyone`
+  bindings give, and no API key ever gets break-glass (`BND-9`, `BRK-8`).
 - **Configured keys** (`cosec.api-key.keys[]`): `tenant-id` is required, and each key sets exactly one of `roles`
   (its cap; `[]` for no roles) and `uncapped: true`. `policies` and `attributes` are gone; a key that still sets them
   stops startup, and so does one that sets neither or both of `roles` and `uncapped`. A 7.x key held only the roles

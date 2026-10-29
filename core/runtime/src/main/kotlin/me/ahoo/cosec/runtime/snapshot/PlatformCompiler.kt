@@ -27,7 +27,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 /**
  * The data plane's compiler (RFC 0007 §3.1 N3): every document compiles against the condition limits and external
  * attributes of the platform document this instance last compiled, as the control plane checks candidates
- * (`PolicyDocumentCompiler.forPlatform`), plus the attributes the registered providers declare ([providers]).
+ * (`PolicyDocumentCompiler.forPlatform`), plus the attributes the registered providers declare ([providers]). No
+ * attribute reference may read [credentialHeaders], the headers this host reads credentials from besides the fixed ones
+ * (`CND-5`): a renamed API key header (RC1-21).
  *
  * When a platform revision changes its limits or attributes, the app and tenant documents of the bound source, installed
  * or loading, may have compiled against the previous ones, so they are read and compiled again ([bind],
@@ -37,6 +39,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 class PlatformCompiler(
     private val providers: AttributeCatalog = AttributeCatalog.NONE,
     private val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,
+    private val credentialHeaders: Set<String> = emptySet(),
 ) : SnapshotCompiler<CompiledDocument> {
     private class Inputs(val signature: List<Any>, val compiler: PolicyDocumentCompiler)
 
@@ -99,6 +102,9 @@ class PlatformCompiler(
             limits.maxCost,
             declared.map { "${it.path}:${it.type}" }.sorted(),
         )
-        return Inputs(signature, PolicyDocumentCompiler.forPlatform(platform, providers, principalBindingLimit))
+        return Inputs(
+            signature,
+            PolicyDocumentCompiler.forPlatform(platform, providers, principalBindingLimit, credentialHeaders),
+        )
     }
 }

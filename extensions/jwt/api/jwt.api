@@ -10,7 +10,7 @@ public final class me/ahoo/cosec/jwt/JwtTokenConverter : me/ahoo/cosec/login/tok
 public final class me/ahoo/cosec/jwt/JwtTokenConverter$Companion {
 }
 
-public final class me/ahoo/cosec/jwt/JwtTokenVerifier : me/ahoo/cosec/spi/token/TokenVerifier {
+public final class me/ahoo/cosec/jwt/JwtTokenVerifier : me/ahoo/cosec/runtime/token/CoSecTokenVerifier {
 	public fun <init> (Lcom/auth0/jwt/algorithms/Algorithm;)V
 	public fun refresh (Lme/ahoo/cosec/api/token/CompositeToken;)Lme/ahoo/cosec/api/token/TokenPrincipal;
 	public fun verify (Lme/ahoo/cosec/api/token/AccessToken;)Lme/ahoo/cosec/api/token/TokenPrincipal;

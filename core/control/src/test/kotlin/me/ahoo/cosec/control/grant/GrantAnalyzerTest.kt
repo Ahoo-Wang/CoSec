@@ -190,6 +190,41 @@ class GrantAnalyzerTest {
         analysis.needsApproval.assert().isTrue()
     }
 
+    /**
+     * RC1-1: a cap removes ALLOWs only. A capped grantor is still subject to the DENYs bound to its principal by name
+     * or attached, so it cannot grant past them through a role it holds, as its credential cannot use them either.
+     */
+    @Test
+    fun `a capped grantor is still bound by its principal's denies`() {
+        val published = GrantDocument(
+            policies = listOf(
+                policy("orders", allow("order:*")),
+                policy("no-delete", deny("order:delete")),
+                policy("no-export", deny("order:export"), attachable = true),
+            ),
+            bindings = listOf(
+                bind("editor", role("policy-editor"), "orders"),
+                bind("nd", principal("gina"), "no-delete")
+            ),
+        )
+        val grant = { action: String ->
+            GrantDocument(
+                policies = published.policies + policy("granted", allow(action)),
+                // In the default space, where the key holds policy-editor.
+                bindings = published.bindings + bind("g", role("viewer"), "granted", space = ""),
+            )
+        }
+        val key =
+            grantor(
+                roles = mapOf("" to listOf("policy-editor")),
+                attachments = listOf("no-export"),
+                principalBindings = false
+            )
+        verdicts(key, snapshot(tenant = published), grant("order:read")).assertContained()
+        verdicts(key, snapshot(tenant = published), grant("order:delete")).assertUnknown(UnknownReason.DENY_OVERLAP)
+        verdicts(key, snapshot(tenant = published), grant("order:export")).assertUnknown(UnknownReason.DENY_OVERLAP)
+    }
+
     @Test
     fun `row 8 - an anyone deny binds the grantee just as the grantor and does not count`() {
         val platform = GrantDocument(

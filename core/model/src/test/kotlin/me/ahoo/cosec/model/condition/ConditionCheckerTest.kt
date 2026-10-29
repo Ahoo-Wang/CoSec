@@ -69,6 +69,20 @@ class ConditionCheckerTest {
         checker.unresolved("ext.geo.country").assert().contains("not declared")
     }
 
+    /** RC1-21: a host that reads API keys from another header names it, and it is refused as `x-api-key` is. */
+    @Test
+    fun `a renamed api key header is a credential header`() {
+        ConditionChecker().attribute("http.header.x-acme-key").assert().isNotNull()
+        val checker = ConditionChecker(credentialHeaders = setOf("X-Acme-Key"))
+        for (path in listOf("http.header.x-acme-key", "http.header.X-ACME-KEY", "http.header.x-api-key")) {
+            checker.attribute(path).assert().describedAs(path).isNull()
+            checker.unresolved(path).assert().contains("credential header")
+        }
+        checker.attribute("http.header.x-debug").assert().isNotNull()
+        single(Condition.Prefix("http.header.x-acme-key", str("ak_")), checker).message.assert()
+            .contains("credential header")
+    }
+
     @Test
     fun `eq needs operands of one type`() {
         single(Condition.Eq("subject.authenticated", str("true"))).assert()

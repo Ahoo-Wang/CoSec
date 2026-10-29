@@ -120,7 +120,10 @@ class MembershipResolverTest {
             MembershipProvider { _, _ -> MembershipAnswer.Known(wide) }
         ).resolve(tenant, PrincipalId("svc"), source)!!
 
-    /** `IDN-2`: a cap keeps only the roles it names, in the same space, and never an attached policy. */
+    /**
+     * `IDN-2`: a cap keeps only the roles it names, in the same space. The attached policies stay, for their DENYs: the
+     * engine gives a capped credential none of their ALLOWs (RC1-1).
+     */
     @Test
     fun aCapNarrowsByExactSpaceAndRole() = runTest {
         val memberships =
@@ -130,7 +133,7 @@ class MembershipResolverTest {
         memberships.roles.assert().isEqualTo(
             mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer")), SpaceId("team-a") to setOf(RoleId("editor"))),
         )
-        memberships.attachments.assert().isEmpty()
+        memberships.attachments.assert().containsExactly(PolicyId("p1"))
         memberships.source.assert().isEqualTo(Memberships.Source.PROVIDER)
     }
 
@@ -138,7 +141,7 @@ class MembershipResolverTest {
     fun anEmptyCapLeavesNothing() = runTest {
         val memberships = capped(MembershipSource.Provider.capped(emptyList()))
         memberships.roles.assert().isEmpty()
-        memberships.attachments.assert().isEmpty()
+        memberships.attachments.assert().containsExactly(PolicyId("p1"))
     }
 
     /** `IDN-1`: without a cap, the key is its principal: never more. */

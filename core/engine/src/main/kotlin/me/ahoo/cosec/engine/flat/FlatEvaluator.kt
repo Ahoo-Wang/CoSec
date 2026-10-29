@@ -40,7 +40,8 @@ import me.ahoo.cosec.model.decision.StatementRef
  * 2. Without a match, an erroring DENY (statement or the policy condition reached through it) makes the decision
  *    indeterminate, and so does anything unresolved: there could be a DENY nobody could check.
  * 3. Only then the ALLOW pass: the first match permits; an erroring ALLOW counts as no match (C1a); nothing matched is
- *    an implicit deny.
+ *    an implicit deny. Its candidates are the DENY pass's, less a capped credential's attachments and principal
+ *    bindings ([CandidateOrder]): a cap removes ALLOWs only.
  * 4. A Permit is held to the tenant's platform boundary, if any (RFC 0007 §7.6, [withinBoundary]): it stays a Permit
  *    only if a boundary statement matches. The boundary can only turn a Permit into a Deny or an Indeterminate (P-B2).
  *
@@ -246,7 +247,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     }
 
     /** Visits the candidates. Open for the property test that shuffles them (P8). */
-    protected open fun enumerate(): Boolean = CandidateOrder.forEach(request, view, this)
+    protected open fun enumerate(): Boolean = CandidateOrder.forEach(request, view, pass, this)
 
     /** The first of what the request could not resolve, in a fixed order: the caller's, then the engine's. */
     private fun unresolved(): Cause? =

@@ -61,17 +61,29 @@ class ConditionChecker(
     val zones: ZoneResolver = ZoneResolver.FIXED,
     /** The external attributes the registered providers declare (RFC 0006 §5.4.1). */
     val catalog: AttributeCatalog = AttributeCatalog.NONE,
+    /**
+     * The headers this host reads credentials from besides [CREDENTIAL_HEADERS], such as an API key header renamed with
+     * `cosec.pipeline.api-key-header` (RC1-21): refused the same way. Matched with the ASCII fold, as header names are.
+     */
+    credentialHeaders: Set<String> = emptySet(),
 ) {
+    private val credentialHeaders: Set<String> =
+        if (credentialHeaders.isEmpty()) CREDENTIAL_HEADERS else CREDENTIAL_HEADERS + credentialHeaders.map(HttpNames::fold)
+
     /**
      * The attribute [path] names, a declared external one included; null when there is none. Every attribute reference
      * of a document resolves here (conditions, rate limit keys), so this is where a credential header is refused: it
-     * is null for one, whoever asks (`CND-5`, [isCredentialHeader]).
+     * is null for one, whoever asks (`CND-5`, [isCredential]).
      */
     fun attribute(path: String): Attribute? {
         val attribute = Attribute.parse(path)
             ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
-        return attribute.takeUnless { isCredentialHeader(it) }
+        return attribute.takeUnless { isCredential(it) }
     }
+
+    /** Whether [attribute] is a credential header of this host: [CREDENTIAL_HEADERS] or one it was given (`CND-5`). */
+    fun isCredential(attribute: Attribute): Boolean =
+        attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in credentialHeaders
 
     /** Why [attribute] has no attribute for [path], as an error a caller reports. */
     fun unresolved(path: String): String {
@@ -80,7 +92,7 @@ class ConditionChecker(
         return when {
             parsed == null && path.startsWith(header) && path.length > header.length ->
                 "`$path` is not a header name: a header name is an ASCII token (RFC 9110)"
-            parsed != null && isCredentialHeader(parsed) ->
+            parsed != null && isCredential(parsed) ->
                 "`$path` is a credential header, which no attribute reference may read"
             parsed == null && Attribute.isExternalPath(path) ->
                 "external attribute `$path` is not declared by any registered AttributeProvider"
@@ -373,8 +385,9 @@ class ConditionChecker(
          * Headers that carry credentials (RFC 0005 §3.2, `CND-5`). A condition on one would let a document's author
          * learn another principal's token through decisions: a `prefix` DENY on `authorization`, and the statement the
          * audit names, tell one character at a time. `x-api-key` is the starter's default API key header; a host that
-         * reads keys from another header is not covered by this list. `cosec-identity` is what a gateway forwards to
-         * the services behind it: at the gateway it is the client's claim, which a condition must never trust.
+         * reads keys from another header names it to the checker (`credentialHeaders`). `cosec-identity` is what a
+         * gateway forwards to the services behind it: at the gateway it is the client's claim, which a condition must
+         * never trust.
          */
         val CREDENTIAL_HEADERS: Set<String> =
             setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "cosec-identity")

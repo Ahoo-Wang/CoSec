@@ -11,13 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.findInDelegationChain
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
 import me.ahoo.cosec.runtime.token.SimpleAccessToken
+import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -43,8 +48,11 @@ import java.time.Duration
  * - An expired token: [AuthnResult.RejectReason.TOKEN_EXPIRED]; a revoked one: `TOKEN_REVOKED`; a delegation token
  *   ([DelegationUnsupportedException], `IDN-4`): `DELEGATION_UNSUPPORTED`; any other [TokenVerificationException]:
  *   `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with the matching `token-*` problem
- *   (RFC 0006 K2); a delegation token answers `token-invalid`.
+ *   (RFC 0006 K2); a delegation token answers `token-invalid`. So does a token whose `attributes` claim names one of
+ *   [RESERVED_ATTRIBUTES], which CoSec sets for another kind of credential (RC1-25).
  * - The memberships come from the token as [MembershipSource.of] reads them.
+ * - Break-glass (RFC 0009 §4.2, `BRK-8`): only when [verifier] is CoSec's own ([CoSecTokenVerifier]), whose credential
+ *   is then [Identity.Method.JWT]. Any other verifier's credential is named [method], and never gets break-glass.
  *
  * Give it the plain verifier (such as `JwtTokenVerifier`), not a [RevocableTokenVerifier]: that one reads the
  * [me.ahoo.cosec.spi.token.TokenStore] synchronously, which may block. A [RevocationReader] that cannot be read answers
@@ -54,7 +62,7 @@ import java.time.Duration
 class TokenAuthenticator(
     private val verifier: TokenVerifier,
     private val revocations: RevocationReader = RevocationReader.NONE,
-    /** How audit names this way of authenticating. */
+    /** How audit names this way of authenticating, and the credential of a verifier other than CoSec's. */
     private val method: String = METHOD,
     /**
      * How far ahead of the revoking clock a token issuer's clock may run (`cosec.authentication.revocation.skew`): a
@@ -62,8 +70,16 @@ class TokenAuthenticator(
      */
     private val revocationSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
 ) : Authenticator {
+    /** Whether [verifier] verifies CoSec's own tokens, which alone may use break-glass (RC1-26). */
+    private val ownTokens = verifier is CoSecTokenVerifier
+
+    private val credentialMethod = if (ownTokens) Identity.Method.JWT else Identity.Method(method)
+
     init {
         require(!revocationSkew.isNegative) { "The revocation skew must not be negative, not $revocationSkew." }
+        require(ownTokens || credentialMethod != Identity.Method.JWT) {
+            "The method [$method] names CoSec's own token; name the tokens of this verifier another way."
+        }
     }
 
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
@@ -77,6 +93,9 @@ class TokenAuthenticator(
         } catch (_: DelegationUnsupportedException) {
             return DELEGATION_UNSUPPORTED
         } catch (_: TokenVerificationException) {
+            return INVALID
+        }
+        if (principal.attributes.keys.any { it in RESERVED_ATTRIBUTES }) {
             return INVALID
         }
         if (revocations.isRevoked(principal.tokenId)) {
@@ -94,7 +113,8 @@ class TokenAuthenticator(
                 tenant,
                 MembershipSource.of(principal),
                 principal.attributes,
-                Identity.Credential(Identity.Method.JWT, principal.tokenId, expiresAt),
+                Identity.Credential(credentialMethod, principal.tokenId, expiresAt),
+                breakGlass = ownTokens,
             ),
             method,
         )
@@ -102,6 +122,12 @@ class TokenAuthenticator(
 
     companion object {
         const val METHOD = "token"
+
+        /**
+         * Principal attributes CoSec sets itself, for another kind of credential: a token naming one would pass for it
+         * in a condition that targets it, such as an ALLOW for one API key ([ApiKey.API_KEY_ID_ATTRIBUTE]).
+         */
+        val RESERVED_ATTRIBUTES: Set<String> = setOf(ApiKey.API_KEY_ID_ATTRIBUTE)
 
         private val EXPIRED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED)
         private val REVOKED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)

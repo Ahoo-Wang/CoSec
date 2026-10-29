@@ -1,0 +1,19 @@
+# Rule: GRT-1
+# Mutant: the grant analysis drops the bindings that name a capped grantor, DENYs included, so its key grants past a DENY that binds its principal
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+index 7e012378..5c7a844e 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+@@ -142,7 +142,9 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
+             val scope = ScopeSet.of(binding.scope.app, binding.scope.space)
+             return when (val subject = binding.subject) {
+                 SubjectRef.Anyone -> scope
+-                is SubjectRef.Principal -> scope.takeIf { subject.tenant == grantor.tenant && subject.id == grantor.id }
++                is SubjectRef.Principal -> scope.takeIf {
++                    grantor.principalBindings && subject.tenant == grantor.tenant && subject.id == grantor.id
++                }
+ 
+                 is SubjectRef.Role -> {
+                     if (subject.tenant != null && subject.tenant != grantor.tenant) {
