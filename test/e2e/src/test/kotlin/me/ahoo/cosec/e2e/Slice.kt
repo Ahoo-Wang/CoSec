@@ -14,6 +14,7 @@
 package me.ahoo.cosec.e2e
 
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.cache.MembershipLoader
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -39,6 +40,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecMembershipAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineIntegrationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
@@ -69,6 +71,10 @@ class Slice(
     attributes: AttributeProviders = AttributeProviders.NONE,
     /** The decision listeners; the slice closes them. */
     private val listeners: DecisionListeners = DecisionListeners.NONE,
+    /** Who the caller is; [TokenAuthenticator] reads the slice's test tokens. */
+    authenticator: Authenticator = TokenAuthenticator,
+    /** Where memberships come from: the starter wires `CoCacheMembershipProvider` over it, as it would an application's. */
+    membershipLoader: MembershipLoader? = null,
 ) : AutoCloseable {
     private val context: ConfigurableApplicationContext = SpringApplicationBuilder(SliceConfiguration::class.java)
         .web(WebApplicationType.NONE)
@@ -76,7 +82,8 @@ class Slice(
         .logStartupInfo(false)
         .initializers(
             ApplicationContextInitializer<ConfigurableApplicationContext> {
-                it.beanFactory.registerSingleton("cosecAuthenticator", TokenAuthenticator)
+                it.beanFactory.registerSingleton("cosecAuthenticator", authenticator)
+                membershipLoader?.let { loader -> it.beanFactory.registerSingleton("membershipLoader", loader) }
                 it.beanFactory.registerSingleton("cosecAttributeProviders", attributes)
                 it.beanFactory.registerSingleton("cosecDecisionListeners", listeners)
             },
@@ -127,6 +134,7 @@ class Slice(
         CoCacheAutoConfiguration::class,
         CoSecPipelineIntegrationAutoConfiguration::class,
         CoSecSnapshotAutoConfiguration::class,
+        CoSecMembershipAutoConfiguration::class,
         CoSecPipelineAutoConfiguration::class,
     )
     class SliceConfiguration
@@ -177,4 +185,13 @@ fun request(
         space?.let { put(CoSecParameters.SPACE_ID, listOf(it)) }
     }
     return HttpFacts(method, path, query, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", HostScope(null))
+}
+
+/** A request carrying API [key] in `X-API-Key`, the starter's default header. */
+fun apiKeyRequest(method: String, path: String, key: String, app: String? = null): HttpFacts {
+    val headers = buildMap<String, List<String>> {
+        put("X-API-Key", listOf(key))
+        app?.let { put(CoSecParameters.APP_ID, listOf(it)) }
+    }
+    return HttpFacts(method, path, null, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", HostScope(null))
 }

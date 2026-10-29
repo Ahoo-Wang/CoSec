@@ -14,14 +14,23 @@
 package me.ahoo.cosec.e2e
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.cache.MembershipLoader
+import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest
@@ -101,11 +110,36 @@ class SliceBlockHoundTest {
         }
     }
 
-    private fun assertWarmRequestNeitherBlocksNorSuspends(slice: Slice) {
+    /**
+     * RFC 0009 §4.2: an API key asks the membership provider on every request; `CoCacheMembershipProvider` answers a
+     * local hit on the caller's thread, so a warm key request neither blocks nor suspends either. The provider is asked
+     * whatever the binding: an unknown principal would refuse the key.
+     */
+    @Test
+    fun `a warm API key request neither blocks nor suspends`() {
+        val key = ApiKeys.generate()
+        val keys = InMemoryApiKeyStore(mapOf(ApiKeys.hash(key) to ApiKey("k1", "svc", "acme", setOf("reader")))).reader
+        val loader = MembershipLoader { _, _ ->
+            Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))), emptyList())
+        }
+        Slice(authenticator = ApiKeyAuthenticator(keys), membershipLoader = loader).use { slice ->
+            slice.publish(
+                SnapshotKey.Platform,
+                ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*"}]}],""" +
+                    """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
+            )
+            assertWarmRequestNeitherBlocksNorSuspends(slice, apiKeyRequest("GET", "/orders/1", key))
+        }
+    }
+
+    private fun assertWarmRequestNeitherBlocksNorSuspends(
+        slice: Slice,
+        request: HttpFacts = request("GET", "/orders/1", "alice@acme"),
+    ) {
         slice.publish(SnapshotKey.Tenant("acme"), "")
-        val request = request("GET", "/orders/1", "alice@acme")
         // Warm the source: the documents are compiled and installed before the measured call.
-        runBlocking { slice.evaluate(request) }.proceed.assert().isTrue()
+        val warm = runBlocking { slice.evaluate(request) }
+        warm.proceed.assert().describedAs(warm.toString()).isTrue()
         BlockHoundWatch.clear()
         val outcome = BlockHoundWatch.onNonBlockingThread {
             val result = CompletableFuture<Outcome>()
