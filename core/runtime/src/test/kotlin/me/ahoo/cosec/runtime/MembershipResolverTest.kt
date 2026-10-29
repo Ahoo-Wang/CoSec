@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -61,7 +62,7 @@ class MembershipResolverTest {
     private suspend fun MembershipResolver.resolve(
         principal: CoSecPrincipal,
         tenant: TenantId = this@MembershipResolverTest.tenant,
-    ): Memberships = resolve(tenant, PrincipalId(principal.id), MembershipSource.of(principal))
+    ): Memberships? = resolve(tenant, PrincipalId(principal.id), MembershipSource.of(principal))
 
     private suspend fun MembershipResolver.failure(principal: CoSecPrincipal = marked()): MembershipUnavailableException =
         try {
@@ -74,7 +75,7 @@ class MembershipResolverTest {
     @Test
     fun claimsWithoutMarker() = runTest {
         val memberships = MembershipResolver(null)
-            .resolve(SimplePrincipal("alice", policies = setOf("p1"), roles = setOf("admin")))
+            .resolve(SimplePrincipal("alice", policies = setOf("p1"), roles = setOf("admin")))!!
 
         memberships.source.assert().isEqualTo(Memberships.Source.CLAIMS)
         memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("admin"))
@@ -86,17 +87,64 @@ class MembershipResolverTest {
         MembershipResolver(provider).resolve(marked()).assert().isSameAs(providerMemberships)
     }
 
+    /** `IDN-3`: a principal the provider does not know has no memberships to resolve, so its credential is refused. */
     @Test
-    fun providerAnswersNoneForAnUnknownPrincipal() = runTest {
-        val memberships = MembershipResolver(provider).resolve(marked(principal = SimplePrincipal("bob")))
+    fun anUnknownPrincipalIsRefused() = runTest {
+        MembershipResolver(provider).resolve(marked(principal = SimplePrincipal("bob"))).assert().isNull()
+    }
 
-        memberships.source.assert().isEqualTo(Memberships.Source.PROVIDER)
-        memberships.roles.assert().isEmpty()
+    @Test
+    fun anInactivePrincipalIsRefused() = runTest {
+        val inactive = Memberships(Memberships.Source.PROVIDER, providerMemberships.roles, emptyList(), active = false)
+        MembershipResolver(
+            MembershipProvider { _, _ -> MembershipAnswer.Known(inactive) }
+        ).resolve(marked()).assert().isNull()
     }
 
     @Test
     fun providerIsAskedForTheTokenTenant() = runTest {
-        MembershipResolver(provider).resolve(marked(), TenantId("other")).roles.assert().isEmpty()
+        MembershipResolver(provider).resolve(marked(), TenantId("other")).assert().isNull()
+    }
+
+    private val wide = Memberships(
+        Memberships.Source.PROVIDER,
+        mapOf(
+            SpaceId.DEFAULT to setOf(RoleId("admin"), RoleId("viewer")),
+            SpaceId("team-a") to setOf(RoleId("editor")),
+        ),
+        listOf(PolicyId("p1")),
+    )
+
+    private suspend fun capped(source: MembershipSource): Memberships =
+        MembershipResolver(
+            MembershipProvider { _, _ -> MembershipAnswer.Known(wide) }
+        ).resolve(tenant, PrincipalId("svc"), source)!!
+
+    /** `IDN-2`: a cap keeps only the roles it names, in the same space, and never an attached policy. */
+    @Test
+    fun aCapNarrowsByExactSpaceAndRole() = runTest {
+        val memberships =
+            capped(
+                MembershipSource.Provider.capped(listOf("viewer", "editor@team-a", "editor", "admin@team-a", "ghost"))
+            )
+        memberships.roles.assert().isEqualTo(
+            mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer")), SpaceId("team-a") to setOf(RoleId("editor"))),
+        )
+        memberships.attachments.assert().isEmpty()
+        memberships.source.assert().isEqualTo(Memberships.Source.PROVIDER)
+    }
+
+    @Test
+    fun anEmptyCapLeavesNothing() = runTest {
+        val memberships = capped(MembershipSource.Provider.capped(emptyList()))
+        memberships.roles.assert().isEmpty()
+        memberships.attachments.assert().isEmpty()
+    }
+
+    /** `IDN-1`: without a cap, the key is its principal: never more. */
+    @Test
+    fun noCapIsThePrincipalsMemberships() = runTest {
+        capped(MembershipSource.Provider.UNCAPPED).assert().isSameAs(wide)
     }
 
     @Test
@@ -140,12 +188,14 @@ class MembershipResolverTest {
     @Test
     fun providerAnswersClaimsSourcedMemberships() = runTest {
         val claims = MembershipClaims.parse(listOf("admin"), emptyList())
-        MembershipResolver(MembershipProvider { _, _ -> claims }).failure().message.assert().contains("[CLAIMS]")
+        MembershipResolver(
+            MembershipProvider { _, _ -> MembershipAnswer.Known(claims) }
+        ).failure().message.assert().contains("[CLAIMS]")
     }
 
+    /** A provider written in Java can answer null: that is no answer, so it fails, as before RFC 0009. */
     @Test
     fun providerReturnsNull() = runTest {
-        // what a provider written in Java can do
         MembershipResolver(MembershipProvider { _, _ -> uncheckedNull() }).failure()
             .message.assert().contains("answered nothing")
     }

@@ -35,16 +35,15 @@ class RedisApiKeyStoreTest {
             principalId = "svc-billing",
             tenantId = "t1",
             roles = setOf("billing"),
-            attributes = mapOf("team" to "finance"),
             expiresAt = Instant.parse("2999-01-01T00:00:00Z"),
         )
         val key = store.issue(apiKey)
         val hash = ApiKeys.hash(key)
-        store.findByHash(hash).assert().isEqualTo(apiKey)
+        store.findByHash(hash).toString().assert().isEqualTo(apiKey.toString())
         // Only the hash is stored: the key itself is not a Redis key or value.
         stringRedisTemplate.keys("*$key*").assert().isEmpty()
 
-        store.save(hash, apiKey.copy(enabled = false))
+        store.save(hash, ApiKey("billing", "svc-billing", "t1", setOf("billing"), apiKey.expiresAt, enabled = false))
         store.findByHash(hash)?.enabled.assert().isEqualTo(false)
 
         store.revoke(hash).assert().isTrue()

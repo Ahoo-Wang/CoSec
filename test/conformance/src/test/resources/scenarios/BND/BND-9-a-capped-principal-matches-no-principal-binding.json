@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "BND-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A principal binding names alice in her tenant; without principal bindings (a capped credential) it does not apply.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:alice",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "principalBindings": false
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

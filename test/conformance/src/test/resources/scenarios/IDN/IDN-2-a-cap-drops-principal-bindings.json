@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "IDN-2",
+    "BND-9"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The service account is granted the admin pages by a principal binding; its key's empty cap holds no such grant.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:svc:admin",
+            "subject": {
+              "principal": "svc",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/admin/users",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": []
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc"
+      }
+    ]
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

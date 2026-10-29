@@ -291,6 +291,43 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
   无论它如何设置，请求都由管道认证。
 - 刷新令牌时应用与请求相同的 `cosec.authentication.revocation.skew`（默认 `5s`）：签发时间在主体吊销之后不超过该偏差的令牌不能再被刷新。
 
+#### API key 只收窄，成员关系决定 {#api-keys-narrow-and-memberships-decide}
+
+7.x 中 API key 自带角色、策略和属性的授予。8.0 中 key 不授予任何东西：它的成员关系就是它的主体的，来自 `MembershipProvider`，再按 key 的 `roles` 收窄（RFC 0009 §4，[API key](../integration/authentication.md#api-keys)）。会破坏的地方：
+
+- **`MembershipProvider` 返回 `MembershipAnswer`**（`Known(memberships)` 或 `Unknown`），`MembershipLoader.load` 也一样。为 8.0 里程碑版本编写、返回 `Memberships` 的提供者不再能编译：为每个它不认识的主体决定答案 `Unknown`，不要再对它返回空的成员关系，否则该主体的 API key 会继续有效。`Memberships` 增加了 `active`，已停用的主体为 false。未知或已停用主体的 API key，以及它带 `cosec.membership: provider` 标记的令牌，都按 `token-invalid` 拒绝（`IDN-3`）。约定见[扩展](../architecture/extending.md#memberships)。
+- **已存储的 key。** Redis 格式改变。8.0 之前存储的 key 在读取时被拒绝：带它的请求返回 `503`，日志会提到 `cosec-migrate api-keys`。切换前先转换 key（见下文）。
+- **必须有提供者。** `cosec.api-key.enabled=true` 而没有 `MembershipProvider` Bean 时启动失败（`IDN-6`）。`cosec.api-key.enabled` 只能是 `true` 或 `false`；`on`、`yes` 或 `1` 会导致启动失败。
+- **上限同样收窄主体绑定和 break-glass。** 带 `roles` 的 key 得不到其主体的任何主体绑定，`roles: []` 只有 `Anyone` 绑定给予的，任何 API key 都得不到 break-glass（`BND-9`、`BRK-8`）。
+- **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
+- **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
+
+**转换已存储的 key。** `cosec-migrate api-keys` 读取 `--api-key-prefix`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
+
+```bash
+cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
+```
+
+每个 key 走三条路之一（`keys[].mode`）：
+
+| 模式 | 条件 | 之后的 key |
+|---|---|---|
+| `in-place` | `--memberships` 表明其主体拥有该 key 列出的每个角色，且该 key 没有附加策略 | 留在其主体上，上限为这些角色 |
+| `own-principal` | 其他情况，默认 | 迁到其租户中的工作负载主体 `apikey:<key id>`，没有上限；`memberships` 列出该主体需要拥有的 key 的角色，`principalBindings` 把它附加的策略按名绑定给该主体 |
+| `granted` | 只针对 `--grant-to-principal <ids>`（或 `all`）列出的主体 | 留在其主体上，上限为它的角色加上它自己的一个角色（`--role-prefix`，默认 `api-key.`，加上 key id），`roleBindings` 把这个角色绑定到它附加的策略；主体被授予其各个可用 key 的上限之并，`memberships[].newlyGained` 指出它原来没有的 |
+
+没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。key 失去的东西按 key 列出：`lost` 是 key 不再能用到的其主体的主体绑定和 break-glass 绑定；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、`subject.id` 上的条件、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
+
+以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
+
+没有角色的 `own-principal` key 也会列在 `memberships` 中，`roles: []`。它的主体同样必须在你的 `MembershipProvider` 中存在，只是没有角色：提供者不认识的主体会被拒绝，带该 key 的每个请求都会得到 `401`。
+
+1. 带 `--dry-run` 运行并阅读报告。
+2. 在你的 `MembershipProvider` 的数据源中授予 `memberships`，并通过控制面（变更请求）添加 `principalBindings` 和 `roleBindings`。
+3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。
+
+在第 2 步完成之前被转换的 key 会被拒绝或权限更窄，绝不会更宽。
+
 #### 注入模式变为身份传递 {#inject-mode-becomes-identity-propagation}
 
 7.x 的注入模式（`cosec.inject.enabled=true`）让网关之后的服务不经校验地解析转发来的 JWT。8.0 没有不校验就读取令牌的模式。取而代之的是：

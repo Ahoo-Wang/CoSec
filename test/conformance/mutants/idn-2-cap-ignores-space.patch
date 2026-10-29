@@ -1,0 +1,17 @@
+# Rule: IDN-2
+# Mutant: the cap matches a role by name in any space, so a role the cap names in one space is kept in every other
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+index 9bf07764..095ddcd9 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+@@ -123,7 +123,7 @@ class MembershipResolver(
+         cap ?: return memberships
+         val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
+         memberships.roles.forEach { (space, spaceRoles) ->
+-            val allowed = cap[space] ?: return@forEach
++            val allowed = cap.values.flatten().toSet()
+             val kept = spaceRoles.filterTo(LinkedHashSet()) { it in allowed }
+             if (kept.isNotEmpty()) {
+                 roles[space] = Collections.unmodifiableSet(kept)

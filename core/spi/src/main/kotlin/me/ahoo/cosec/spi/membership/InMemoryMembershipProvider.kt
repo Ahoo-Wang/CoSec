@@ -25,8 +25,9 @@ import java.util.concurrent.ConcurrentHashMap
 class InMemoryMembershipProvider : MembershipProvider {
     private val memberships = ConcurrentHashMap<Key, Memberships>()
 
-    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships =
-        memberships[Key(tenant.value, principal.value)] ?: NONE
+    /** The memberships put for [principal]; [MembershipAnswer.Unknown] when none were. */
+    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer =
+        memberships[Key(tenant.value, principal.value)]?.let(MembershipAnswer::Known) ?: MembershipAnswer.Unknown
 
     /** Sets the memberships of [principal] in [tenant]; their source must be [Memberships.Source.PROVIDER]. */
     fun put(tenant: TenantId, principal: PrincipalId, memberships: Memberships) {
@@ -36,14 +37,10 @@ class InMemoryMembershipProvider : MembershipProvider {
         this.memberships[Key(tenant.value, principal.value)] = memberships
     }
 
-    /** Removes the memberships of [principal] in [tenant]: it then has none. */
+    /** Removes the memberships of [principal] in [tenant]: it is then unknown. */
     fun remove(tenant: TenantId, principal: PrincipalId) {
         memberships.remove(Key(tenant.value, principal.value))
     }
 
     private data class Key(val tenant: String, val principal: String)
-
-    private companion object {
-        val NONE = Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
-    }
 }

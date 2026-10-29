@@ -25,6 +25,8 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -111,6 +113,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * **Server side only.** [principal] and [memberships] are taken as given, unchecked: pass only what the server
      * itself recorded from an authenticated request (an approval in the control store), never a principal, attribute
      * or membership a caller supplies. Otherwise a caller chooses whom it is checked as.
+     *
+     * Whether the principal still stands is asked again, though: a principal whose memberships come from the
+     * membership provider and which it no longer knows, or knows as deactivated, is denied (RFC 0009 §4.2), and one it
+     * cannot answer for is indeterminate. A principal of claimed memberships stands until its token expires.
      */
     suspend fun decideAs(
         security: RequestSecurity,
@@ -120,6 +126,19 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         action: Action,
         resource: Resource,
     ): Decision {
+        if (!memberships.active) {
+            return Decision.Deny(null)
+        }
+        if (principal.membershipSource is MembershipSource.Provider) {
+            val stands = try {
+                pipeline.standing(principal)
+            } catch (e: MembershipUnavailableException) {
+                return Decision.Indeterminate(Cause.MembershipUnavailable(e))
+            }
+            if (!stands) {
+                return Decision.Deny(null)
+            }
+        }
         val recorded = security.asPrincipal(principal, memberships) ?: return Decision.Deny(null)
         return decide(recorded, app, action, resource)
     }

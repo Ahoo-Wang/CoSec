@@ -39,6 +39,9 @@ import java.util.Base64
  *  "claims":{"name":"Alice"}}
  * ```
  *
+ * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
+ * otherwise: the service behind then applies no principal binding either.
+ *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
  * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
  * the wrong type, a duplicate, an empty id or a header over the size limit is refused, never read as anonymous. The
@@ -61,7 +64,7 @@ object IdentityCodec {
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
-    private val AUTH_FIELDS = arrayOf("method", "jti", "exp")
+    private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "capped")
 
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val factory = JsonNodeFactory.instance
@@ -131,6 +134,10 @@ object IdentityCodec {
                 expiresAt = (
                     auth.get("exp") ?: throw IdentityFormatException(Reason.UNBOUNDED, "The identity has no auth.exp.")
                     ).seconds("$.auth.exp"),
+                capped = auth.get("capped")?.let {
+                    if (!it.isBoolean || !it.booleanValue()) throw malformed("$.auth.capped is true when present")
+                    true
+                } ?: false,
             ),
             issuedAt = root.need("iat").seconds("$.iat"),
             requestId = root.need("rid").id("$.rid"),
@@ -150,6 +157,9 @@ object IdentityCodec {
                 "The credential of [${identity.subject}] never expires: a service could not bound the identity."
             )
             put("exp", expiresAt.epochSecond)
+            if (identity.credential.capped) {
+                put("capped", true)
+            }
         }
         root.put("iat", identity.issuedAt.epochSecond).put("rid", identity.requestId)
         if (identity.claims.isNotEmpty()) {

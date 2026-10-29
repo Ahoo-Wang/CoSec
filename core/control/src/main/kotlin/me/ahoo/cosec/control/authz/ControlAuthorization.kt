@@ -44,6 +44,15 @@ class Operator(
 
     val platform: Boolean get() = actor.tenant == TenantId.PLATFORM
 
+    /**
+     * Whether the operator's principal bindings reach it in this request: not with a credential that has a role cap
+     * (RFC 0009 §4.2). Without a request, which permits nothing anyway, as a token would.
+     */
+    val principalBindings: Boolean get() = security?.principal?.principalBindings ?: true
+
+    /** Whether break-glass could reach the operator in this request: only with CoSec's own token. */
+    val breakGlass: Boolean get() = security?.principal?.breakGlass ?: true
+
     override fun toString(): String = "Operator(${actor.principal.value}@${actor.tenant.value})"
 
     companion object {

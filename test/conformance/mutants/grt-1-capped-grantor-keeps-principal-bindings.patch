@@ -1,0 +1,17 @@
+# Rule: GRT-1
+# Mutant: the grant analysis credits a capped grantor with its principal bindings, so a capped key lends what its cap withholds
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+index 2f2aebd4..6923fb4b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+@@ -126,7 +126,7 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
+                 SubjectRef.Anyone -> scope
+                 // A capped credential holds nothing bound to its principal by name (RFC 0009 §4.2): it cannot lend it.
+                 is SubjectRef.Principal -> scope.takeIf {
+-                    grantor.principalBindings && subject.tenant == grantor.tenant && subject.id == grantor.id
++                    subject.tenant == grantor.tenant && subject.id == grantor.id
+                 }
+ 
+                 is SubjectRef.Role -> {

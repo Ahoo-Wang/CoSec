@@ -75,12 +75,14 @@ CoSec 把 `roles` 和 `policies` 声明读作主体的**成员关系**：它在�
 
 **数量大或变化快的成员关系。** 声明了很多角色或策略的令牌会让每个请求都变大，而从用户身上移除的角色在令牌过期之前一直留在令牌里。这样的令牌可以携带 `cosec.membership: "provider"` 来代替 `roles` 和 `policies`：此时它的成员关系来自应用的 `MembershipProvider` Bean，每个请求都会以主体的租户和 id 询问它。当两个声明合计超过 `membershipClaimLimit` 字节时，`JwtTokenConverter` 会自己写入这个标记；starter 的转换器没有设置上限，因此请用你自己的转换器或签发方签发这类令牌。从带标记的令牌刷新得到的令牌保留该标记。
 
-**提供者。** `MembershipProvider` 是一个 `suspend` 函数，不能阻塞调用线程。它返回来源为 `PROVIDER` 的 `Memberships`（未知主体返回空的成员关系），查找失败时抛出异常。`InMemoryMembershipProvider` 用于测试和本地开发。`cosec-cocache` 提供 `CoCacheMembershipProvider`，它把你的 `MembershipLoader` 的结果缓存在 Redis 中供所有实例共享，并在主体的成员关系变化时通过 `invalidate(tenant, principal)` 丢弃缓存；starter 不会装配它，请把它声明为你的 `MembershipProvider` Bean。一个主体只有一个来源：声明或提供者，绝不会两者兼有。
+**提供者。** `MembershipProvider` 是一个 `suspend` 函数，不能阻塞调用线程。它返回 `MembershipAnswer.Known`，携带来源为 `PROVIDER` 的 `Memberships`，主体已停用时其中 `active = false`；不认识该主体时返回 `MembershipAnswer.Unknown`，这与认识它但它没有任何成员关系不同。查找失败时抛出异常。`InMemoryMembershipProvider` 用于测试和本地开发，对没有放入的主体返回 `Unknown`。`cosec-cocache` 提供 `CoCacheMembershipProvider`，它把你的 `MembershipLoader` 的结果缓存在 Redis 中供所有实例共享，并在主体的成员关系变化时通过 `invalidate(tenant, principal)` 丢弃缓存；缓存项也会在缓存的 TTL 之后过期。应用有 `MembershipLoader` Bean、且没有自己的 `MembershipProvider` 时，starter 把它声明为 `MembershipProvider`，并以 `cosec.authorization.membership.timeout` 限定每次加载：卡住的加载会失败，下一个请求重新加载。未知主体不会被缓存：每个针对它的请求都会再次询问 loader。一个主体只有一个来源：声明或提供者，绝不会两者兼有。
+
+**未知或已停用即拒绝。** 提供者返回 `Unknown` 或 `active = false` 时，请求它的凭证（带标记的令牌，或 [API key](#api-keys)）被拒绝：请求按匿名求值，被拒绝时返回 `401` `token-invalid`。决策事件的 `subject.rejected` 对 key 是 `API_KEY_INVALID`，对令牌是 `TOKEN_INVALID`，`subject.refused` 指明主体和凭证（`IDN-3`）。因此停用一个主体，会在提供者如此应答之后停用它的全部 key：使用 `CoCacheMembershipProvider` 时，调用 `invalidate`，或等待缓存的 TTL 过去。以声明携带成员关系的令牌不询问提供者：它在过期或被[吊销](#revoking-every-token-of-a-principal)之前一直有效。
 
 **失败即 `503`。** 以下情况请求不可用，绝不会以“没有成员关系”来决策：
 
-- 令牌带有标记，但没有提供者；
-- 提供者抛出异常、返回 `null` 或来源不是 `PROVIDER` 的成员关系，或未在 `cosec.authorization.membership.timeout`（500 毫秒）内应答；
+- 凭证要求询问提供者，但没有提供者；
+- 提供者抛出异常、返回来源不是 `PROVIDER` 的成员关系，或未在 `cosec.authorization.membership.timeout`（500 毫秒）内应答；
 - 标记不是 `"provider"`，或令牌同时携带标记和 `roles` 或 `policies`。
 
 没有成员关系就意味着没有角色，绑定到角色的 DENY 将不再生效。
@@ -168,9 +170,21 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 
 ## API key {#api-keys}
 
-机器客户端（任务、合作方集成、内部服务）通常无法登录。给它们一个 API key：在 `cosec.pipeline.api-key-header` 请求头（`X-API-Key`）中发送它的一方，就以该 key 的主体身份行事，带着它的租户，以及作为声明的成员关系的角色、策略和属性，像其他人一样接受授权。API key 默认关闭；用 `cosec.api-key.enabled=true` 开启。
+机器客户端（任务、合作方集成、内部服务）通常无法登录。给它们一个 API key：在 `cosec.pipeline.api-key-header` 请求头（`X-API-Key`）中发送它的一方，就以该 key 的主体身份在该 key 的租户中行事，像其他人一样接受授权。API key 默认关闭；用 `cosec.api-key.enabled=true` 开启。
 
-携带 key 的请求只依据该 key 判定（[认证器](#authenticators)）。未知、已停用或已过期的 key 让请求成为匿名请求；随后被拒绝时返回 `401` `token-invalid`。没有租户的 key 位于默认租户 `(0)`。主体会得到属性 `apiKeyId`，指明所用的 key。CoSec 从不存储或记录 key 本身，只保存它的 SHA-256 哈希（`ApiKeys.hash`）。
+**key 本身不授予任何东西**（`IDN-1`）。它的成员关系就是它的主体的，来自 [`MembershipProvider`](#memberships)，因此 key 永远不会超过它的主体。主体是什么决定了 key 是什么：用户的 key 是个人访问令牌（PAT），工作负载主体（服务账号）的 key 是该服务的凭证。角色和绑定写给主体，写在文档或提供者里，从不写在 key 上。key 只能用 `roles` 收窄它们，也就是它的**上限**（`IDN-2`），或者用 `uncapped` 声明不收窄：
+
+| key 声明 | key 拥有的 |
+|---|---|
+| `uncapped: true` | 主体拥有的一切：它的角色、附加的策略和主体绑定 |
+| `roles: [billing, auditor@team-a]` | 只有主体角色中的这些，按空间精确匹配（`role` 是默认空间，`role@space` 是该空间）。附加的策略和主体绑定都不作用于它：上限用角色表达。上限中有、主体却没有的角色不带来任何东西。 |
+| `roles: []` | 只有 `Anyone` 绑定给予的：没有角色、附加的策略或主体绑定 |
+
+`Anyone` 绑定对每个 key 都适用。**API key 永远得不到 break-glass**，无论是否有上限：break-glass 是给人的、有时限的紧急授予，而不是给长期凭证的，只有 CoSec 自己的令牌才能得到它（`BRK-8`；[break-glass](../guide/security-model.md#break-glass)）。key 也不携带其主体令牌的属性，只有 `apiKeyId`：条件读取 `subject.attributes.<name>` 且 `onMissing: nomatch` 的 DENY 不作用于 key，因此要为 key 写这类 DENY，请用角色或 `apiKeyId`。
+
+携带 key 的请求只依据该 key 判定（[认证器](#authenticators)）。未知、已停用或已过期的 key 让请求成为匿名请求；随后被拒绝时返回 `401` `token-invalid`。提供者不认识或认为已停用其主体的 key 也是如此（`IDN-3`）：停用一个服务账号，就停用了它的每一个 key。主体会得到属性 `apiKeyId`，指明所用的 key，key 不再带来其他属性。CoSec 从不存储或记录 key 本身，只保存它的 SHA-256 哈希（`ApiKeys.hash`）。key 不能代表他人行事：任何凭证的委托都会被[拒绝](#tokens)。
+
+**必须有提供者。** `cosec.api-key.enabled=true` 而没有 `MembershipProvider` Bean 时，应用无法启动（`IDN-6`）；该配置项只能是 `true` 或 `false`，其他值（`on`、`yes`、`1`）同样导致启动失败：添加 `cosec-cocache` 和一个 `MembershipLoader` Bean，它会配置 `CoCacheMembershipProvider`，或者声明你自己的 `MembershipProvider`。这项检查在认证 key 的地方运行，即 `cosec.pipeline.mode=enforce`；网关之后的服务（`gateway` 模式）不读取 key，只读取网关验证过的身份，因此不需要为它们提供提供者。
 
 **内存存储**，来自配置。用 `ApiKeys.generate()` 创建一个 key，只交给客户端一次，配置中只写 `ApiKeys.hash(key)`：
 
@@ -183,11 +197,16 @@ cosec:
         hash: <key 的 SHA-256 十六进制值，来自 ApiKeys.hash(key)>
         principal-id: svc-billing
         tenant-id: acme
-        roles: [billing]
+        roles: [billing, billing-admin@eu]
         expires-at: 2027-01-01T00:00:00Z
+      - id: billing-admin
+        hash: <另一个 key 的 SHA-256 十六进制值>
+        principal-id: svc-billing
+        tenant-id: acme
+        uncapped: true # 该 key 拥有 svc-billing 拥有的一切
 ```
 
-每个 key 都需要 `id`、64 个字符的小写十六进制 `hash` 和 `principal-id`，且 id 必须唯一；否则应用无法启动。经网关使用的 key 请设置 `expires-at`：网关拒绝转发永不过期的凭证的身份（[转发身份](./web.md#forwarding-the-identity)）。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
+每个 key 都需要 `id`、64 个字符的小写十六进制 `hash`、`principal-id`、`tenant-id`，以及 `roles` 与 `uncapped: true` 二者恰好其一，且 id 必须唯一；否则应用无法启动，因此不会有 key 因遗漏而没有上限。配置了 key 不再携带的 `policies` 或 `attributes` 的 key 同样无法启动：未知字段在绑定时失败，而不是被丢弃。在代码中，`ApiKey` 的 `roles` 也没有默认值：创建 key 的一方（包括 `RedisApiKeyStore.issue`）都要传入上限或 `null`。经网关使用的 key 请设置 `expires-at`：网关拒绝转发永不过期的凭证的身份（[转发身份](./web.md#forwarding-the-identity)）。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
 
 **Redis 存储**，由所有实例共享，可在运行时修改：设置 `cosec.api-key.store: redis`（需要 `cosec-cocache`；key 位于 `cosec.api-key.key-prefix` 之下，默认 `cosec:api-key`）。管道用非阻塞的 `RedisApiKeyReader` 读取它们。通过 `RedisApiKeyStore` Bean 管理 key：
 
@@ -197,7 +216,7 @@ cosec:
 | `save(hash, apiKey)` | 替换具有该哈希的 key，例如设置 `enabled = false` 或修改其角色。 |
 | `revoke(hash)` | 删除该 key。它在下一个请求时即失效。 |
 
-此后每个带 key 的请求都会读取 Redis。Redis 无法读取时，请求返回 `503`：与令牌吊销不同，API key 查找失败即拒绝。
+此后每个带 key 的请求都会读取 Redis。Redis 无法读取时，请求返回 `503`：与令牌吊销不同，API key 查找失败即拒绝。key 存储为 `{"format":2,"id":…,"principalId":…,"tenantId":…,"roles":[…]|null,"expiresAt":…|null,"enabled":…}`，每个字段都总是写入。以 8.0 之前的格式存储的 key 自带角色和策略的授予，读取时被拒绝，绝不会被当作没有上限的 key：请求返回 `503`，日志会提到 `cosec-migrate api-keys`，用它转换这类 key（[升级](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)）。
 
 **其他存储**：声明你自己的 `ApiKeyReader` Bean，它按哈希做非阻塞查找，无法读取时抛出异常。开启了 API key，却既没有内存存储也没有 `ApiKeyReader` 时，启动失败。
 

@@ -1,0 +1,17 @@
+# Rule: BRK-8
+# Mutant: break-glass reaches an API key, so a long-lived key of a platform administrator gets root during break-glass
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEngineTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+index db1e826d..7f267745 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+@@ -74,7 +74,7 @@ internal object CandidateOrder {
+         if (tenantDocument != null && roles(tenantDocument, request, platform, visitor, app)) {
+             return true
+         }
+-        return principal != null && subject.breakGlass &&
++        return principal != null &&
+             visit(platform.breakGlass(tenant, principal), request, platform, visitor)
+     }
+ 

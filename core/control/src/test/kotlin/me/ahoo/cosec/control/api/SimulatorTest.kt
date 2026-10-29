@@ -82,9 +82,32 @@ class SimulatorTest {
         ((decision as? Decision.Indeterminate)?.cause is Cause.SourceUnavailable).assert().isFalse()
     }
 
+    /** RFC 0009 §4.2: a simulated request is decided as its credential would be, never wider. */
+    @Test
+    fun `a simulated credential drops principal and break-glass bindings as the real one would`() {
+        val platform = document(DocumentKind.PLATFORM, "", ROOT)
+        val tenant = document(DocumentKind.TENANT, "acme", ALICE)
+        val token = request.copy(tenant = TenantId.PLATFORM, principal = "cosec")
+        val documents = Documents(platform, null, null)
+        fun decide(request: SimulatedRequest, documents: Documents): Decision {
+            val simulator = Simulator()
+            val scope = (simulator.scope(request) as ScopeResolution.Resolved).scope
+            return simulator.evaluate(request, scope, documents).decision
+        }
+        decide(token, documents).assert().isInstanceOf(Decision.Permit::class.java)
+        decide(token.copy(breakGlass = false), documents).assert().isInstanceOf(Decision.Deny::class.java)
+        val alice = Documents(document(DocumentKind.PLATFORM, "", ""), null, tenant)
+        decide(request, alice).assert().isInstanceOf(Decision.Permit::class.java)
+        decide(request.copy(principalBindings = false), alice).assert().isInstanceOf(Decision.Deny::class.java)
+    }
+
     private companion object {
         const val ALLOW_ALL = ""","policies":[{"id":"all","statements":[{"effect":"allow","action":"*"}]}],""" +
             """"bindings":[{"id":"all","subject":"*","app":"*","space":"*","policy":"all"}]"""
+        const val ROOT = ""","bindings":[{"id":"root","subject":{"principal":"cosec","tenant":"(platform)"},""" +
+            """"app":"*","space":"*","policy":"cosec:root","breakGlass":true,"expiresAt":"2099-12-31T00:00:00Z"}]"""
+        const val ALICE = ""","policies":[{"id":"all","statements":[{"effect":"allow","action":"*"}]}],""" +
+            """"bindings":[{"id":"alice","subject":{"principal":"alice"},"app":"*","space":"*","policy":"all"}]"""
         const val IN_FENCE = ""","policies":[{"id":"fence","statements":[{"effect":"allow","action":"*",""" +
             """"condition":{"eq":["ext.geo.inFence",true]}}]}],""" +
             """"bindings":[{"id":"fence","subject":"*","app":"*","space":"*","policy":"fence"}]"""

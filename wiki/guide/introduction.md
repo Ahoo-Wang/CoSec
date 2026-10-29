@@ -17,7 +17,7 @@ decide(principal, scope, action, resource, environment) -> decision
 
 | Input | In CoSec | Comes from |
 |---|---|---|
-| principal | who is calling: id, tenant, roles in each space, attached policies | the verified token or API key, or your membership provider |
+| principal | who is calling: id, tenant, roles in each space, attached policies | the verified token or API key; the roles from the token, or from your membership provider (always for an API key, which only narrows them) |
 | scope | the tenant, app and space the request acts in, and the principal's roles there | the principal's tenant, the service's app or the request, checked against the principal's roles |
 | action and resource | `http:GET` on `http:path:/orders/42`, or, with a route map, `order:read` on `order/42` | the request |
 | environment | client IP, time, device and external attributes such as a region or a blacklist entry | the request, the clock and your attribute providers |

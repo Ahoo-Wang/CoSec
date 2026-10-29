@@ -1,0 +1,17 @@
+# Rule: BRK-8
+# Mutant: break-glass is a deny-list of API keys, so a principal another authenticator accepted, with no credential or one of its own method, gets root during break-glass
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+index bde2b0cd..78fb16aa 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+@@ -120,7 +120,7 @@ class AuthenticatedPrincipal(
+      * API key, a credential of another authenticator, whatever it is called, and a principal without a credential never
+      * get it (RFC 0009 §4.2).
+      */
+-    val breakGlass: Boolean get() = credential?.method == Identity.Method.JWT
++    val breakGlass: Boolean get() = credential?.method != Identity.Method.API_KEY
+ }
+ 
+ /** Where a principal's memberships come from (RFC 0004 §4.5). */

@@ -1,6 +1,52 @@
 {
   "rules": [
     {
+      "id": "IDN-1",
+      "source": "RFC 0009 §4, I2",
+      "statement": "An API key grants nothing of its own: its memberships are its principal's, from the MembershipProvider, narrowed to the key's roles, so a key is never more than its principal.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:ApiKeyAuthenticatorTest#aValidKeyIsItsPrincipal",
+        "runtime:MembershipResolverTest#noCapIsThePrincipalsMemberships"
+      ]
+    },
+    {
+      "id": "IDN-2",
+      "source": "RFC 0009 §4.2, I3",
+      "statement": "A key's roles only narrow: with a cap, no role outside it (matched by space and role), no directly attached policy and no Principal binding reaches the key; an empty cap leaves only what Anyone may do.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:MembershipResolverTest#aCapNarrowsByExactSpaceAndRole",
+        "runtime:MembershipResolverTest#anEmptyCapLeavesNothing",
+        "runtime:PipelineTest#aKeysCapReachesTheEngine"
+      ]
+    },
+    {
+      "id": "IDN-3",
+      "source": "RFC 0009 §4.2",
+      "statement": "A credential whose memberships come from the MembershipProvider (an API key, or a token marked cosec.membership: provider) is invalid when the provider does not know its principal or knows it as not active: the request is evaluated as anonymous and a deny is 401 token-invalid. A provider that fails is 503, never an unknown principal.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:PipelineTest#aKeyOfAnUnknownOrInactivePrincipalIsRefused",
+        "runtime:PipelineTest#aKeyWhoseProviderFailsIs503",
+        "runtime:MembershipResolverTest#anInactivePrincipalIsRefused",
+        "runtime:PipelineTest#aTokenOfAnUnknownPrincipalIsRefused"
+      ]
+    },
+    {
+      "id": "IDN-6",
+      "source": "RFC 0009 §4.2",
+      "statement": "API keys turned on without a MembershipProvider bean fail startup, naming CoCacheMembershipProvider: a key's memberships are its principal's, and every key would otherwise be a 503.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:CoSecApiKeyAutoConfigurationTest#apiKeysNeedAMembershipProvider"
+      ]
+    },
+    {
       "id": "IDN-4",
       "source": "RFC 0009 §6",
       "statement": "A token that delegates (it carries an `act` claim, RFC 8693) never becomes a principal, however valid it is otherwise: the token is rejected as invalid, so the request is evaluated as anonymous and a deny answers 401 `token-invalid`. `may_act` does not delegate.",

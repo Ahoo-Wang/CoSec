@@ -95,7 +95,7 @@ class PolicyDocumentCompilerTest {
             HostScope(null)
         )
         val authz = AuthzRequest(
-            Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false),
+            Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false, true, true),
             Scope.declared("acme", "order", ""),
             action,
             resource,
@@ -170,7 +170,7 @@ class PolicyDocumentCompilerTest {
                 ) as ScopeResolution.Resolved
                 ).scope
             val authz = AuthzRequest(
-                Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false),
+                Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false, true, true),
                 Scope.declared("acme", "", ""),
                 action,
                 Resource("order", "1", emptyMap()),

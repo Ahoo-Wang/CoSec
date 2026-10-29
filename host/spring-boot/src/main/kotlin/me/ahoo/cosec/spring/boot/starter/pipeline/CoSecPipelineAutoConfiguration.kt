@@ -45,7 +45,7 @@ import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
+import me.ahoo.cosec.spring.boot.starter.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -157,7 +157,7 @@ class CoSecPipelineAutoConfiguration {
                 revocationSkew = revocationProperties.skew,
             )
         } ?: NO_TOKEN
-        val apiKeys = if (environment.getProperty(ApiKeyProperties.ENABLED_KEY, Boolean::class.java, false)) {
+        val apiKeys = if (apiKeysEnabled(environment)) {
             ApiKeyAuthenticator(apiKeyReader(apiKeyReader, apiKeyStore))
         } else {
             null

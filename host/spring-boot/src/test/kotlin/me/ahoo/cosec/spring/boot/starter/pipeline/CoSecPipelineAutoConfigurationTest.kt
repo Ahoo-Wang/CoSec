@@ -45,6 +45,8 @@ import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
@@ -197,14 +199,15 @@ class CoSecPipelineAutoConfigurationTest {
 
     @Test
     fun `api keys come from the in-memory store, or startup fails`() {
-        runner.withPropertyValues("cosec.api-key.enabled=true").run { context ->
+        val keys = runner.withPropertyValues("cosec.api-key.enabled=true")
+            .withBean(MembershipProvider::class.java, { InMemoryMembershipProvider() })
+        keys.run { context ->
             context.startupFailure.assert().isNull()
             runBlocking {
                 context.getBean(Authenticator::class.java).authenticate(Credentials(null, "unknown"))
             }.assert().isInstanceOf(AuthnResult.Rejected::class.java)
         }
-        runner.withPropertyValues("cosec.api-key.enabled=true")
-            .withBean(ApiKeyStore::class.java, { ApiKeyStore { null } })
+        keys.withBean(ApiKeyStore::class.java, { ApiKeyStore { null } })
             .run { context -> context.startupFailure!!.stackTraceToString().assert().contains("no ApiKeyReader") }
     }
 

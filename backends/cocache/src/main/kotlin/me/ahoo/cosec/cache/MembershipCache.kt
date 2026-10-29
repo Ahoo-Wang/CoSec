@@ -42,12 +42,14 @@ interface MembershipCache : Cache<String, Memberships> {
 
 /**
  * Encodes provider memberships as JSON: `{"roles": {"<space>": ["<role>", ...]}, "attachments": ["<policy>", ...]}`,
- * the default space as `""`, everything in order. Only [Memberships.Source.PROVIDER] memberships are cached; anything
- * else fails, on encoding and on decoding.
+ * the default space as `""`, everything in order, and `"active": false` for a deactivated principal only, so entries
+ * cached before `active` existed read as active, as they were. Only [Memberships.Source.PROVIDER] memberships are
+ * cached; anything else fails, on encoding and on decoding.
  */
 object MembershipsCodec : Codec<Memberships> {
     private const val ROLES = "roles"
     private const val ATTACHMENTS = "attachments"
+    private const val ACTIVE = "active"
 
     override fun encode(value: Memberships): ByteArray {
         require(value.source == Memberships.Source.PROVIDER) {
@@ -59,14 +61,20 @@ object MembershipsCodec : Codec<Memberships> {
             roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
         }
         node.putArray(ATTACHMENTS).apply { value.attachments.forEach { add(it.value) } }
+        if (!value.active) {
+            node.put(ACTIVE, false)
+        }
         return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
     override fun decode(data: ByteArray): Memberships {
         val node = CoSecJson.mapper.readTree(data)
-        require(node.isObject && node.propertyNames().toSet() == setOf(ROLES, ATTACHMENTS)) {
+        val fields = if (node.isObject) node.propertyNames().toSet() else emptySet()
+        require(fields == setOf(ROLES, ATTACHMENTS) || fields == setOf(ROLES, ATTACHMENTS, ACTIVE)) {
             "Not cached memberships: $node"
         }
+        val active = node.get(ACTIVE)
+        require(active == null || active.isBoolean && !active.booleanValue()) { "Not cached memberships: $node" }
         val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
         node.required(ROLES).properties().forEach { (space, spaceRoles) ->
             roles[SpaceId(space)] = Collections.unmodifiableSet(spaceRoles.strings().mapTo(LinkedHashSet(), ::RoleId))
@@ -76,6 +84,7 @@ object MembershipsCodec : Codec<Memberships> {
             Memberships.Source.PROVIDER,
             Collections.unmodifiableMap(roles),
             Collections.unmodifiableList(attachments),
+            active = active == null,
         )
     }
 

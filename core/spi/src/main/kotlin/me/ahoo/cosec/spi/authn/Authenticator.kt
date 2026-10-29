@@ -16,6 +16,8 @@ package me.ahoo.cosec.spi.authn
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
@@ -51,9 +53,15 @@ sealed interface AuthnResult {
 
     /**
      * The credentials are not valid. The request is evaluated as anonymous; a deny then answers 401 with [reason]
-     * (RFC 0006 K2, Q2).
+     * (RFC 0006 K2, Q2). [refused] names whose credential it was, when that is known (a disabled key, a principal the
+     * membership provider no longer knows): for audit, never as the subject.
      */
-    class Rejected(val reason: RejectReason) : AuthnResult
+    class Rejected(val reason: RejectReason, val refused: RefusedCredential? = null) : AuthnResult
+
+    /** Whose credential was refused, and which one (a token's `jti`, an API key's id), for audit only. */
+    class RefusedCredential(val tenant: TenantId, val principal: PrincipalId, val credentialId: String?) {
+        override fun toString(): String = "${principal.value}@${tenant.value}" + (credentialId?.let { " ($it)" } ?: "")
+    }
 
     /** A dependency the authenticator needs failed, such as the API key store: 503. */
     class Unavailable(val cause: Throwable) : AuthnResult
@@ -92,13 +100,27 @@ class AuthenticatedPrincipal(
     ) : this(
         id,
         tenant,
-        memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider,
+        memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider.UNCAPPED,
         attributes,
         credential,
     )
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships
+
+    /**
+     * Whether the principal's own bindings apply: not for a credential with a role cap (RFC 0009 §4.2), whose cap is in
+     * [membershipSource] or, behind a gateway, in [credential].
+     */
+    val principalBindings: Boolean
+        get() = (membershipSource as? MembershipSource.Provider)?.cap == null && credential?.capped != true
+
+    /**
+     * Whether the principal's break-glass bindings may apply: only for CoSec's own tokens ([Identity.Method.JWT]), so an
+     * API key, a credential of another authenticator, whatever it is called, and a principal without a credential never
+     * get it (RFC 0009 §4.2).
+     */
+    val breakGlass: Boolean get() = credential?.method == Identity.Method.JWT
 }
 
 /** Where a principal's memberships come from (RFC 0004 §4.5). */
@@ -112,8 +134,23 @@ sealed interface MembershipSource {
         }
     }
 
-    /** The token carries the provider marker: ask the `MembershipProvider` (§4.5.2). */
-    data object Provider : MembershipSource
+    /**
+     * Ask the `MembershipProvider` (§4.5.2): a token that carries the provider marker, or an API key (RFC 0009 §4.2).
+     * The credential is refused when the provider does not know the principal or says it is not active (`IDN-3`).
+     *
+     * [cap], when not null, only narrows what the provider answers: the roles outside it are dropped, matched exactly
+     * by space and role, and so are the directly attached policies, since a cap is expressed in roles only (`IDN-2`).
+     * An empty cap leaves no roles; null leaves the memberships as they are.
+     */
+    class Provider(val cap: Map<SpaceId, Set<RoleId>>? = null) : MembershipSource {
+        companion object {
+            /** The provider's memberships as they are. */
+            val UNCAPPED: Provider = Provider()
+
+            /** A cap of [roles], written as in claims and in documents: `role`, or `role@space`. */
+            fun capped(roles: Collection<String>): Provider = Provider(MembershipClaims.parse(roles, emptyList()).roles)
+        }
+    }
 
     /**
      * The token's membership claims cannot be used, such as an unknown marker or a marker together with claims
@@ -137,7 +174,7 @@ sealed interface MembershipSource {
                     "The token of principal [${principal.id}] asks for a membership provider but also claims roles or policies."
                 )
 
-                else -> Provider
+                else -> Provider.UNCAPPED
             }
         }
     }

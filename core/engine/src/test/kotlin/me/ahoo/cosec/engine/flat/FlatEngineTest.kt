@@ -343,6 +343,47 @@ class FlatEngineTest {
         }
     }
 
+    /**
+     * `BND-9` (RFC 0009 §4.2): a subject without principal bindings, a capped credential, is reached by no principal
+     * binding of the platform or the tenant; `Anyone` bindings and its roles still apply.
+     */
+    @Test
+    fun `a subject without principal bindings matches none, and anyone bindings still apply`() {
+        val platform = platform(
+            fixture.policy("p", allow()),
+            fixture.policy("a", allow()),
+            bindings = listOf(principal("platform-alice", "p")),
+        )
+        val tenant = tenant(fixture.policy("t", allow()), bindings = listOf(principal("tenant-alice", "t")))
+        decide(flatRequest(), platform, tenant).assert()
+            .isEqualTo(Decision.Permit(ref("p", 0, bound("platform-alice"))))
+        decide(flatRequest(principalBindings = false), platform, tenant).assert().isEqualTo(Decision.Deny(null))
+        val anyone = platform(
+            fixture.policy("p", allow()),
+            fixture.policy("a", allow()),
+            bindings = listOf(principal("platform-alice", "p"), anyone("everyone", "a")),
+        )
+        decide(flatRequest(principalBindings = false), anyone, tenant).assert()
+            .isEqualTo(Decision.Permit(ref("a", 0, bound("everyone"))))
+    }
+
+    /** `BRK-8` (RFC 0009 §4.2): a subject without break-glass, an API key, is reached by no break-glass binding. */
+    @Test
+    fun `a subject without break-glass matches no break-glass binding`() {
+        val rootRequest = { breakGlass: Boolean ->
+            flatRequest(
+                tenant = "(platform)",
+                principal = "cosec",
+                breakGlass = breakGlass
+            )
+        }
+        val rootRef = StatementRef.Policy(BuiltinPolicies.ROOT, 0, "root", bound("root"))
+        decide(rootRequest(true), platform(bindings = listOf(root())), tenant(tenant = "(platform)")).assert()
+            .isEqualTo(Decision.Permit(rootRef))
+        decide(rootRequest(false), platform(bindings = listOf(root())), tenant(tenant = "(platform)")).assert()
+            .isEqualTo(Decision.Deny(null))
+    }
+
     @Test
     fun `root is a break-glass binding that permits everything but every deny`() {
         val rootRequest = flatRequest(tenant = "(platform)", principal = "cosec")

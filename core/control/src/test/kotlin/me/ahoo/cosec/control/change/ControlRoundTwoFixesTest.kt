@@ -38,6 +38,7 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SpaceId
@@ -53,6 +54,7 @@ import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -374,7 +376,7 @@ class ControlRoundTwoFixesTest {
         val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
             pia.actor.tenant,
-            me.ahoo.cosec.spi.authn.MembershipSource.Provider,
+            me.ahoo.cosec.spi.authn.MembershipSource.Provider.UNCAPPED,
         )
         val approve = me.ahoo.cosec.control.authz.ControlActions.APPROVE
         val document = me.ahoo.cosec.control.authz.ControlResources.document(SnapshotKey.Platform)
@@ -389,6 +391,77 @@ class ControlRoundTwoFixesTest {
         engine.confirmation = DocumentConfirmation { error("the snapshot source is down") }
         engine.authorizer.decideAs(walt, principal, pia.memberships, approve, document)
             .assert().isEqualTo(me.ahoo.cosec.control.authz.ControlDecision.INDETERMINATE)
+    }
+
+    /**
+     * RFC 0009 §4.2: an approver whose memberships come from the provider is asked about again when the change
+     * publishes. Deactivated, or no longer known, the approval does not count; nor does one recorded as inactive.
+     */
+    @Test
+    fun `a deactivated or unknown approver does not count`() = runBlocking<Unit> {
+        val directory = InMemoryMembershipProvider()
+        val authority = ChangeAuthority(EngineAuthority(revisions, directory).authorizer)
+        val change = changes.propose(
+            walt,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("y"))),
+            "y"
+        )
+        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val provided = Memberships(Memberships.Source.PROVIDER, pia.memberships.roles, pia.memberships.attachments)
+        val approved = change.copy(
+            approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, provided)
+        )
+        val noLonger = "the approver no longer holds cosec:approve on the document"
+        directory.put(pia.actor.tenant, pia.actor.principal, provided)
+        authority.approverProblem(approved, needed, walt).assert().isNull()
+        directory.put(
+            pia.actor.tenant,
+            pia.actor.principal,
+            Memberships(Memberships.Source.PROVIDER, provided.roles, provided.attachments, active = false),
+        )
+        authority.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        directory.remove(pia.actor.tenant, pia.actor.principal)
+        authority.approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        val recordedInactive = approved.copy(
+            approval = approved.approval!!.copy(
+                memberships = Memberships(
+                    Memberships.Source.PROVIDER,
+                    provided.roles,
+                    provided.attachments,
+                    active = false
+                )
+            )
+        )
+        authority.approverProblem(recordedInactive, needed, walt).assert().isEqualTo("the approver is deactivated")
+    }
+
+    /**
+     * Review N3: an approval records whether the approver's principal bindings reached it. pia may approve only through a
+     * binding that names her: approved with a capped key, that never counted, and does not at publish either.
+     */
+    @Test
+    fun `an approver is checked again under the credential it approved with`() = runBlocking<Unit> {
+        val change = changes.propose(
+            walt,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("z"))),
+            "z"
+        )
+        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, pia.memberships)
+        val authority = ChangeAuthority(engine.authorizer)
+        authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
+        val capped = approval.copy(principalBindings = false)
+        authority.approverProblem(change.copy(approval = capped), needed, walt)
+            .assert().isEqualTo("the approver no longer holds cosec:approve on the document")
+        // Stored only when false, so an approval made with a token keeps its bytes.
+        val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = capped))).approval!!
+        stored.principalBindings.assert().isFalse()
+        stored.breakGlass.assert().isTrue()
+        String(ChangeRequestCodec.encode(change.copy(approval = approval))).assert().doesNotContain("principalBindings")
     }
 
     @Test

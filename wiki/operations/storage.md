@@ -68,7 +68,7 @@ contain `:`, so a key names one document only.
 | `<c>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
 | `<c>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<m>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
-| `<k>:<sha256>` | `RedisApiKeyStore` | one API key as JSON, by the SHA-256 of the key |
+| `<k>:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
 | `cosec:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
 
 - `<c>` is [`cosec.authorization.cache.key-prefix`](./configuration.md#cache), `<k>` is

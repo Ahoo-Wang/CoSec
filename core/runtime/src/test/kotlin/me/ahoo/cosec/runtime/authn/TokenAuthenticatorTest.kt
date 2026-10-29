@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
@@ -125,6 +126,19 @@ class TokenAuthenticatorTest {
         memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("editor"))
     }
 
+    /** RFC 0009 §4.2: break-glass reaches CoSec's own tokens only, never a principal some other way. */
+    @Test
+    fun onlyATokenMayUseBreakGlass() = runTest {
+        authenticate({ token() }).principal().breakGlass.assert().isTrue()
+        AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), null).breakGlass.assert().isFalse()
+        AuthenticatedPrincipal(
+            PrincipalId("alice"),
+            TenantId("acme"),
+            null,
+            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+        ).breakGlass.assert().isFalse()
+    }
+
     @Test
     fun aTokenWithoutTenantIsInTheDefaultTenant() = runTest {
         authenticate({ token() }).principal().tenant.assert().isEqualTo(TenantId.DEFAULT)
@@ -133,7 +147,9 @@ class TokenAuthenticatorTest {
     @Test
     fun theProviderMarkerAsksTheProvider() = runTest {
         val marked = MembershipMarkedPrincipal(SimplePrincipal("alice"), MembershipClaims.PROVIDER)
-        authenticate({ token(marked) }).principal().membershipSource.assert().isSameAs(MembershipSource.Provider)
+        authenticate(
+            { token(marked) }
+        ).principal().membershipSource.assert().isSameAs(MembershipSource.Provider.UNCAPPED)
     }
 
     /** `MEM-1`: the marker together with claims is unusable, never a choice between them. */

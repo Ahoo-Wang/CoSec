@@ -114,25 +114,29 @@ object ChangeRequestCodec {
                 escalations.addObject().put("subject", it.subject).put("reason", it.reason).put("detail", it.detail)
             }
         }
-        change.approval?.let { approval ->
-            val node = root.putObject("approval")
-            node.set("approver", actorTree(approval.approver))
-            node.put("at", approval.at.toString()).put("candidate", approval.candidate)
-            node.putArray("covers").apply { approval.covers.forEach { add(it) } }
-            approval.memberships?.let { memberships ->
-                val written = node.putObject("memberships")
-                val roles = written.putObject("roles")
-                memberships.roles.forEach { (space, spaceRoles) ->
-                    roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
-                }
-                written.putArray("attachments").apply { memberships.attachments.forEach { add(it.value) } }
-                written.put("source", memberships.source.name)
+        change.approval?.let { approvalTree(root.putObject("approval"), it) }
+    }
+
+    private fun approvalTree(node: ObjectNode, approval: Approval) {
+        node.set("approver", actorTree(approval.approver))
+        node.put("at", approval.at.toString()).put("candidate", approval.candidate)
+        node.putArray("covers").apply { approval.covers.forEach { add(it) } }
+        approval.memberships?.let { memberships ->
+            val written = node.putObject("memberships")
+            val roles = written.putObject("roles")
+            memberships.roles.forEach { (space, spaceRoles) ->
+                roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
             }
-            if (approval.attributes.isNotEmpty()) {
-                val attributes = node.putObject("attributes")
-                approval.attributes.forEach { (name, value) -> attributes.set(name, attributeTree(value)) }
-            }
+            written.putArray("attachments").apply { memberships.attachments.forEach { add(it.value) } }
+            written.put("source", memberships.source.name)
         }
+        if (approval.attributes.isNotEmpty()) {
+            val attributes = node.putObject("attributes")
+            approval.attributes.forEach { (name, value) -> attributes.set(name, attributeTree(value)) }
+        }
+        // Written only when false, so an approval made with a token keeps the bytes it had (RFC 0009 §4.2).
+        if (!approval.principalBindings) node.put("principalBindings", false)
+        if (!approval.breakGlass) node.put("breakGlass", false)
     }
 
     /**
@@ -343,20 +347,40 @@ object ChangeRequestCodec {
             }.orEmpty(),
             shadow = node.get("shadow")?.let(::shadow),
             confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),
-            approval = node.get("approval")?.let {
-                it.only("approver", "at", "candidate", "covers", "memberships", "attributes")
-                Approval(
-                    actor(it.need("approver")),
-                    Instant.parse(it.need("at").text()),
-                    it.need("candidate").text(),
-                    it.need("covers").values().map { covered -> covered.text() },
-                    it.get("memberships")?.let(::memberships),
-                    it.get("attributes")?.properties()?.mapNotNull { (name, value) ->
-                        attribute(value)?.let { read -> name to read }
-                    }?.toMap().orEmpty(),
-                )
-            },
+            approval = node.get("approval")?.let(::approval),
         )
+    }
+
+    private fun approval(node: JsonNode): Approval {
+        node.only(
+            "approver",
+            "at",
+            "candidate",
+            "covers",
+            "memberships",
+            "attributes",
+            "principalBindings",
+            "breakGlass"
+        )
+        return Approval(
+            actor(node.need("approver")),
+            Instant.parse(node.need("at").text()),
+            node.need("candidate").text(),
+            node.need("covers").values().map { covered -> covered.text() },
+            node.get("memberships")?.let(::memberships),
+            node.get("attributes")?.properties()?.mapNotNull { (name, value) ->
+                attribute(value)?.let { read -> name to read }
+            }?.toMap().orEmpty(),
+            principalBindings = onlyFalse(node, "principalBindings"),
+            breakGlass = onlyFalse(node, "breakGlass"),
+        )
+    }
+
+    /** A flag written only when false: absent is true, and anything but `false` is not a stored approval. */
+    private fun onlyFalse(node: JsonNode, field: String): Boolean {
+        val value = node.get(field) ?: return true
+        require(value.isBoolean && !value.booleanValue()) { "approval.$field is false when present, not $value." }
+        return false
     }
 
     /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */

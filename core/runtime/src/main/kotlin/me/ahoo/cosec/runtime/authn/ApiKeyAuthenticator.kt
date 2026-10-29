@@ -24,7 +24,6 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.spi.membership.MembershipClaims
 import java.time.Clock
 
 /**
@@ -34,8 +33,10 @@ import java.time.Clock
  * - No key: [AuthnResult.Anonymous].
  * - An unknown, disabled or expired key: [AuthnResult.RejectReason.API_KEY_INVALID]. The request is evaluated as
  *   anonymous, and a deny answers 401 `token-invalid`.
- * - A key that works: its principal, tenant (the default tenant when it has none) and roles and policies as claimed
- *   memberships; its id is the principal attribute [ApiKey.API_KEY_ID_ATTRIBUTE].
+ * - A key that works: its principal in its tenant, whose memberships the `MembershipProvider` gives, narrowed to the
+ *   key's cap (RFC 0009 §4.2, `IDN-1`, `IDN-2`); its id is the principal attribute [ApiKey.API_KEY_ID_ATTRIBUTE]. A
+ *   principal the provider does not know, or knows as not active, makes the key invalid too, which the pipeline
+ *   decides when it resolves the memberships (`IDN-3`).
  *
  * A lookup that fails throws, and the pipeline answers 503: an unreadable store never makes a key valid or invalid.
  */
@@ -48,15 +49,26 @@ class ApiKeyAuthenticator(
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         val key = credentials.apiKey ?: return AuthnResult.Anonymous
         val apiKey = keys.findByHash(ApiKeys.hash(key))
-        if (apiKey == null || !apiKey.usableAt(clock.instant())) {
-            return INVALID
+        apiKey ?: return INVALID
+        if (!apiKey.usableAt(clock.instant())) {
+            val refused = AuthnResult.RefusedCredential(
+                TenantId(apiKey.tenantId),
+                PrincipalId(apiKey.principalId),
+                apiKey.id
+            )
+            return AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID, refused)
         }
         val principal = AuthenticatedPrincipal(
             id = PrincipalId(apiKey.principalId),
-            tenant = apiKey.tenantId?.takeIf { it.isNotEmpty() }?.let(::TenantId) ?: TenantId.DEFAULT,
-            membershipSource = MembershipSource.Claims(MembershipClaims.parse(apiKey.roles, apiKey.policies)),
-            attributes = apiKey.attributes + (ApiKey.API_KEY_ID_ATTRIBUTE to apiKey.id),
-            credential = Identity.Credential(Identity.Method.API_KEY, apiKey.id, apiKey.expiresAt),
+            tenant = TenantId(apiKey.tenantId),
+            membershipSource = apiKey.roles?.let(MembershipSource.Provider::capped) ?: MembershipSource.Provider.UNCAPPED,
+            attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to apiKey.id),
+            credential = Identity.Credential(
+                Identity.Method.API_KEY,
+                apiKey.id,
+                apiKey.expiresAt,
+                apiKey.roles != null
+            ),
         )
         return AuthnResult.Authenticated(principal, method)
     }

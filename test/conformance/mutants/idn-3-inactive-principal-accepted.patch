@@ -1,0 +1,17 @@
+# Rule: IDN-3
+# Mutant: a deactivated principal's memberships are used, so its keys keep working
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+index 9bf07764..c0449a50 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+@@ -112,7 +112,7 @@ class MembershipResolver(
+                     "[${principal.value}]."
+             )
+         }
+-        return memberships.takeIf { it.active }
++        return memberships
+     }
+ 
+     /**

@@ -1,0 +1,106 @@
+{
+  "rules": [
+    "IDN-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The principal is an admin, but the key's cap names billing only: the key may not reach the admin pages.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/**"
+              }
+            ]
+          },
+          {
+            "id": "attached",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/reports/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/admin/users",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": [
+          "billing"
+        ]
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc",
+        "roles": {
+          "": [
+            "billing",
+            "admin"
+          ]
+        }
+      }
+    ]
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

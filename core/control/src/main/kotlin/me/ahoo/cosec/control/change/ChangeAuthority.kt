@@ -39,6 +39,7 @@ import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
@@ -200,7 +201,13 @@ class ChangeAuthority(
                 tenants = mapOf(tenant to base),
                 now = now.toEpochMilli(),
             )
-            val grantor = Grantor(operator.tenant, operator.actor.principal, operator.memberships, operator.attributes)
+            val grantor = Grantor(
+                operator.tenant,
+                operator.actor.principal,
+                operator.memberships,
+                operator.attributes,
+                operator.principalBindings,
+            )
             analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
         } catch (e: CancellationException) {
             throw e
@@ -257,11 +264,29 @@ class ChangeAuthority(
         if (publisher.security == null) {
             return "the approver's right to approve cannot be checked again"
         }
+        if (!memberships.active) {
+            return "the approver is deactivated"
+        }
+        // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
+        // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
+        val source = if (memberships.source == Memberships.Source.PROVIDER) {
+            MembershipSource.Provider.UNCAPPED
+        } else {
+            MembershipSource.Claims(memberships)
+        }
+        // Under the terms it approved with (review N3): a capped credential's principal bindings, and break-glass for
+        // anything but CoSec's own token, do not count now either. The credential is rebuilt only for those two facts.
         val principal = AuthenticatedPrincipal(
             approval.approver.principal,
             approval.approver.tenant,
-            MembershipSource.Provider,
+            source,
             approval.attributes,
+            Identity.Credential(
+                if (approval.breakGlass) Identity.Method.JWT else Identity.Method.API_KEY,
+                RECORDED_APPROVAL,
+                null,
+                capped = !approval.principalBindings,
+            ),
         )
         val approver = Operator(approval.approver, memberships, strings(approval.attributes))
         val permitted = TenantIsolation.allows(approver, change.key) &&
@@ -359,6 +384,9 @@ class ChangeAuthority(
 
     private companion object {
         private val log = KotlinLogging.logger {}
+
+        /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
+        const val RECORDED_APPROVAL = "recorded-approval"
         const val FORBIDDEN = 403
         const val UNAVAILABLE = 503
         const val POLICY = "policy"

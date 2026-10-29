@@ -101,7 +101,7 @@ class SnapshotConsistencyPropertyTest {
 
     private val request = FlatRequest(
         AuthzRequest(
-            subject = Subject("user", TENANT.value, true, emptySet(), emptySet(), emptyMap(), false),
+            subject = Subject("user", TENANT.value, true, emptySet(), emptySet(), emptyMap(), false, true, true),
             scope = DeclaredRequestScope.declared(TENANT.value, "", ""),
             action = Action("http", "GET"),
             resource = Resource("http", "/x", emptyMap()),

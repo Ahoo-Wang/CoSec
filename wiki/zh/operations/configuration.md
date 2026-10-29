@@ -32,7 +32,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.authentication.login.enabled` | boolean | `true` | 把凭证换成令牌的登录 bean：基于你的 `Authentication` bean 的 `CompositeAuthentication`、启用 JWT 时的 `TokenCompositeAuthentication`，以及社交登录。管道中对请求的认证不依赖它 |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`cosec-social`；需要 `cosec.authentication.login.enabled`） |
 | `cosec.jwt.enabled` | boolean | `true` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
-| `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md) |
+| `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
 | `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean） |
@@ -166,17 +166,16 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.api-key.key-prefix` | string | `cosec:api-key` | `redis` 存储的 Redis key 前缀，去掉末尾的 `:`。与其他前缀都无关（[Redis key](./storage.md#redis-keys)）。 |
 | `cosec.api-key.keys[n].*` | list | 空 | `memory` 存储的 key；使用 `redis` 时忽略。 |
 
-请求头由 [`cosec.pipeline.api-key-header`](#pipeline) 决定。`cosec.api-key.keys` 的每一项：
+请求头由 [`cosec.pipeline.api-key-header`](#pipeline) 决定。API key 需要一个 `MembershipProvider` Bean，否则应用无法启动（`IDN-6`，[API key](../integration/authentication.md#api-keys)）。`cosec.api-key.keys` 的每一项如下，任何其他字段都会导致启动失败：
 
 | 字段 | 类型 | 默认值 | 含义 |
 |---|---|---|---|
 | `id` | string | 无 | **必填。** key 的 id；id 必须唯一。 |
 | `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。 |
 | `principal-id` | string | 无 | **必填。** key 认证成的主体。 |
-| `tenant-id` | string | 默认租户 | 主体所在的租户。 |
-| `roles` | set | 空 | 角色，作为成员关系声明。 |
-| `policies` | set | 空 | 附加到主体的策略，作为成员关系声明。 |
-| `attributes` | map | 空 | 主体属性。 |
+| `tenant-id` | string | 无 | **必填。** 主体所在的租户。 |
+| `roles` | set | 无 | 上限：key 只拥有其主体角色中的这些（`role`、`role@space`），没有附加的策略或主体绑定；`[]` 只留下 `Anyone` 绑定给予的。设置它或 `uncapped`。 |
+| `uncapped` | boolean | `false` | `true` 表示 key 拥有其主体拥有的一切。`roles` 与 `uncapped: true` 必须恰好设置其一，否则应用无法启动。 |
 | `expires-at` | instant | 无 | 过了这个时刻 key 被拒绝。 |
 | `enabled` | boolean | `true` | 停用的 key 被拒绝。 |
 

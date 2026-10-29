@@ -34,6 +34,7 @@ import me.ahoo.cosec.runtime.ThreadingFixtures.singleThread
 import me.ahoo.cosec.runtime.ThreadingFixtures.startOn
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -75,7 +76,9 @@ class PipelineResumeTest {
     fun membershipProviderCompletingOnAClientThreadResumesOnTheResumeDispatcher() {
         val engine = StubEngine(PERMIT)
         val provider = MembershipProvider { _, _ ->
-            completedOn(clientIo, Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())).await()
+            MembershipAnswer.Known(
+                completedOn(clientIo, Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())).await()
+            )
         }
         assertResumedOn(
             RESUME,

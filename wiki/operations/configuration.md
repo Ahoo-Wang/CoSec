@@ -36,7 +36,7 @@ property. The message lists every unknown key and, for a 7.x key, what replaced 
 | `cosec.authentication.login.enabled` | boolean | `true` | the login beans, which turn credentials into a token: `CompositeAuthentication` over your `Authentication` beans, `TokenCompositeAuthentication` with JWT, and social login. Authenticating requests in the pipeline does not depend on it |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | social login (`cosec-social`; needs `cosec.authentication.login.enabled`) |
 | `cosec.jwt.enabled` | boolean | `true` | issuing, verifying and revoking JWTs. Off, the pipeline rejects every token (`token-invalid`) and treats a request without one as anonymous |
-| `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients |
+| `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients. `true` or `false` only: any other value fails startup. |
 | `cosec.audit.enabled` | boolean | `true` | the audit log listener, and the Kafka audit listener with `cosec.audit.kafka.enabled` |
 | `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`cosec-kafka` and a `KafkaOperations` bean) |
 | `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean) |
@@ -171,17 +171,18 @@ With JWT enabled, startup fails unless revocations can be recorded and read: `co
 | `cosec.api-key.key-prefix` | string | `cosec:api-key` | Redis key prefix of the `redis` store, with a trailing `:` removed. Independent of every other prefix ([Redis keys](./storage.md#redis-keys)). |
 | `cosec.api-key.keys[n].*` | list | empty | Keys of the `memory` store; ignored with `redis`. |
 
-The header is [`cosec.pipeline.api-key-header`](#pipeline). Each entry of `cosec.api-key.keys`:
+The header is [`cosec.pipeline.api-key-header`](#pipeline). API keys need a `MembershipProvider` bean, or the
+application does not start (`IDN-6`, [API keys](../integration/authentication.md#api-keys)). Each entry of
+`cosec.api-key.keys`, where any other field fails startup:
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `id` | string | none | **Required.** The key's id; ids must be unique. |
 | `hash` | string | none | **Required.** SHA-256 of the key, 64 lowercase hex characters. Never configure the key itself. |
 | `principal-id` | string | none | **Required.** The principal the key authenticates as. |
-| `tenant-id` | string | the default tenant | Tenant of the principal. |
-| `roles` | set | empty | Roles, claimed as memberships. |
-| `policies` | set | empty | Policies attached to the principal, claimed as memberships. |
-| `attributes` | map | empty | Principal attributes. |
+| `tenant-id` | string | none | **Required.** Tenant of the principal. |
+| `roles` | set | none | The cap: the key holds only these of its principal's roles (`role`, `role@space`), and no attached policy or principal binding; `[]` leaves only what `Anyone` bindings give. Set this or `uncapped`. |
+| `uncapped` | boolean | `false` | `true` for a key that holds everything its principal holds. Exactly one of `roles` and `uncapped: true` is set, or the application does not start. |
 | `expires-at` | instant | none | After this instant the key is rejected. |
 | `enabled` | boolean | `true` | A disabled key is rejected. |
 

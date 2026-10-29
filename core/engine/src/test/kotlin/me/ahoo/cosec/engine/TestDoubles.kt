@@ -44,6 +44,8 @@ fun request(blocked: Boolean = false, root: Boolean = false): AuthzRequest =
             policies = setOf("p"),
             attributes = emptyMap(),
             root = root,
+            principalBindings = true,
+            breakGlass = true,
         ),
         scope = Scope.declared("tenant", "app", "default"),
         action = Action("http", "GET"),

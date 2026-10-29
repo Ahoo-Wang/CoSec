@@ -154,6 +154,8 @@ class SubjectSummary internal constructor(
     val method: String?,
     /** Why the credentials were rejected; null when they were not. */
     val rejected: AuthnResult.RejectReason?,
+    /** Whose credentials were rejected, when that is known; the subject is then still the anonymous one. */
+    val refused: AuthnResult.RefusedCredential? = null,
 ) {
     override fun toString(): String = "Subject($tenant/$id, authenticated=$authenticated)"
 }

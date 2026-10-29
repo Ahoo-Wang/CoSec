@@ -33,7 +33,7 @@ class Ip2RegionAttributeProviderTest {
     )
 
     private fun request(remoteIp: String) = AttributeRequest(
-        Subject("anonymous", "", false, emptySet(), emptySet(), emptyMap(), false),
+        Subject("anonymous", "", false, emptySet(), emptySet(), emptyMap(), false, false, false),
         null,
         Action("http", "GET"),
         Resource("http", "/", emptyMap()),

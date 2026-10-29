@@ -341,6 +341,8 @@ class ControlHttp(private val plane: ControlPlane) {
             "time",
             "headers",
             "requestAttributes",
+            "principalBindings",
+            "breakGlass",
         )
         val action = node.need("action").text().split(':', limit = 2).takeIf { it.size == 2 }
             ?: throw IllegalArgumentException("An action is service:verb.")
@@ -361,6 +363,8 @@ class ControlHttp(private val plane: ControlPlane) {
             requestAttributes = node.get("requestAttributes")?.properties()?.associate { (name, value) ->
                 name to value.text()
             }.orEmpty(),
+            principalBindings = node.get("principalBindings")?.bool() ?: true,
+            breakGlass = node.get("breakGlass")?.bool() ?: true,
         )
     }
 
@@ -526,6 +530,11 @@ class ControlHttp(private val plane: ControlPlane) {
     private fun JsonNode.text(): String {
         require(isString) { "$this is not a string." }
         return asString()
+    }
+
+    private fun JsonNode.bool(): Boolean {
+        require(isBoolean) { "$this is not a boolean." }
+        return asBoolean()
     }
 
     private fun JsonNode.long(): Long {

@@ -57,6 +57,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.audit.AuditEventSink
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -274,7 +275,7 @@ class StarterWiringTest {
         val loads = AtomicInteger()
         val loader = MembershipLoader { _, _ ->
             loads.incrementAndGet()
-            Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
+            MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
         }
         membershipRunner.withBean(MembershipLoader::class.java, { loader }).run { context ->
             context.startupFailure.assert().isNull()
@@ -316,7 +317,9 @@ class StarterWiringTest {
         .withBean(MembershipLoader::class.java, {
             MembershipLoader { _, principal ->
                 val roles = if (principal.value == "alice") setOf(RoleId("clerk")) else emptySet()
-                Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId("") to roles), emptyList())
+                MembershipAnswer.Known(
+                    Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId("") to roles), emptyList())
+                )
             }
         })
 

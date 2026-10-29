@@ -124,7 +124,17 @@ open class CompiledEngineBenchmark {
         val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
         val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), HostScope(null))
         val authz = AuthzRequest(
-            subject = Subject("user", "acme", true, emptySet(), emptySet(), emptyMap(), root = false),
+            subject = Subject(
+                "user",
+                "acme",
+                true,
+                emptySet(),
+                emptySet(),
+                emptyMap(),
+                root = false,
+                principalBindings = true,
+                breakGlass = true,
+            ),
             scope = Scope.declared("acme", "", ""),
             action = action,
             resource = resource,

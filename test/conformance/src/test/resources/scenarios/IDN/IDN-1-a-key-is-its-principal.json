@@ -1,0 +1,105 @@
+{
+  "rules": [
+    "IDN-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The principal holds billing, which the key's cap keeps: the key reads orders as its principal.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/**"
+              }
+            ]
+          },
+          {
+            "id": "attached",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/reports/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": [
+          "billing"
+        ]
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc",
+        "roles": {
+          "": [
+            "billing"
+          ]
+        }
+      }
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

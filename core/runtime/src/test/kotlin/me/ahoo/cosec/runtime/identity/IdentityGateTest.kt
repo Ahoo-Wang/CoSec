@@ -80,6 +80,34 @@ class IdentityGateTest {
         outcome.security!!.identity.assert().isEqualTo(identity)
     }
 
+    /**
+     * RFC 0009 §4.2: behind the gateway too, a capped credential has no principal bindings and an API key no
+     * break-glass, so a check in the service is never wider than the gateway's decision.
+     */
+    @Test
+    fun `the gateway's credential decides principal and break-glass bindings behind it`() {
+        fun subject(credential: Identity.Credential) =
+            evaluate(IdentityCodec.encode(identity.copy(credential = credential))).security!!.request.subject
+        subject(identity.credential).let {
+            it.principalBindings.assert().isTrue()
+            it.breakGlass.assert().isTrue()
+        }
+        val key = Identity.Credential(Identity.Method.API_KEY, "k1", now.plusSeconds(3600))
+        subject(key).let {
+            it.principalBindings.assert().isTrue()
+            it.breakGlass.assert().isFalse()
+        }
+        subject(key.copy(capped = true)).let {
+            it.principalBindings.assert().isFalse()
+            it.breakGlass.assert().isFalse()
+        }
+        // Break-glass is allowed for CoSec's own tokens only: a method of another authenticator never reaches it.
+        subject(Identity.Credential(Identity.Method("ldap"), "s1", now.plusSeconds(3600))).let {
+            it.principalBindings.assert().isTrue()
+            it.breakGlass.assert().isFalse()
+        }
+    }
+
     @Test
     fun `no header is anonymous, and the service decides`() {
         val outcome = evaluate()

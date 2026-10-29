@@ -14,15 +14,25 @@
 package me.ahoo.cosec.e2e
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.cache.MembershipLoader
+import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import org.openjdk.jmh.annotations.Benchmark
@@ -48,15 +58,16 @@ import kotlin.coroutines.startCoroutine
  * `role`, the `*` grant permits; `none`, nothing does (403); `anonymous`, no token, a global ALLOW permits. With the
  * in-memory blacklist in stage A (RFC 0006 §5.4.4): `blacklist`, the `global` request, which it does not name;
  * `blocked`, the same request from a blocked address (403). With one BEST_EFFORT decision listener that does nothing
- * (RFC 0006 §9.3): `listener`, the `global` request, so the cost is the event and its queue. `rate-limited` joins with
- * PR-5.
+ * (RFC 0006 §9.3): `listener`, the `global` request, so the cost is the event and its queue. `apikey`: the `role`
+ * request with an API key instead of a token (RFC 0009 §4.2), whose memberships the starter's `CoCacheMembershipProvider`
+ * answers from its local cache, narrowed to the key's cap; compare it with `role`. `rate-limited` joins with PR-5.
  *
  * Each operation starts the request as an adapter would and finishes it on the calling thread: a warm request never
  * suspends (`SliceBlockHoundTest`); one that did would be waited for, and counted.
  */
 @State(Scope.Benchmark)
 open class PipelineBenchmark {
-    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener")
+    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener", "apikey")
     lateinit var scenario: String
 
     private lateinit var slice: Slice
@@ -75,18 +86,36 @@ open class PipelineBenchmark {
             AttributeProviders.NONE
         }
         val listeners = if (scenario == "listener") DecisionListeners(listOf(NoOpListener)) else DecisionListeners.NONE
-        slice = Slice(options = SnapshotOptions(), attributes = attributes, listeners = listeners)
+        val key = ApiKeys.generate()
+        slice = if (scenario == "apikey") {
+            val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", setOf("viewer", "admin")))
+            // The token's memberships, now the principal's: the cap keeps both roles and drops the attachments.
+            val loader = MembershipLoader { _, _ ->
+                MembershipAnswer.Known(Memberships(
+                    Memberships.Source.PROVIDER,
+                    mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"), RoleId("admin"))),
+                    listOf(PolicyId("principal-a"), PolicyId("principal-b")),
+                ))
+            }
+            Slice(
+                options = SnapshotOptions(),
+                authenticator = ApiKeyAuthenticator(InMemoryApiKeyStore(keys).reader),
+                membershipLoader = loader,
+            )
+        } else {
+            Slice(options = SnapshotOptions(), attributes = attributes, listeners = listeners)
+        }
         slice.publish(SnapshotKey.Platform, platform())
         slice.publish(SnapshotKey.App("app"), app())
         slice.publish(SnapshotKey.Tenant("acme"), "")
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
             "global", "anonymous", "blacklist", "blocked", "listener" -> "/public/resource3/page"
-            "role" -> "/orders/op49/detail"
+            "role", "apikey" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
             else -> error("Unknown scenario $scenario")
         }
-        facts = request("GET", path, token, app = "app")
+        facts = if (scenario == "apikey") apiKeyRequest("GET", path, key, app = "app") else request("GET", path, token, app = "app")
         val outcome = runBlocking { slice.evaluate(facts) }
         check(outcome.proceed == (scenario != "none" && scenario != "blocked")) { "Scenario $scenario: $outcome" }
         check(evaluate().status == outcome.status)

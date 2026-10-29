@@ -61,7 +61,7 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<c>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
 | `<c>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
 | `<m>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
-| `<k>:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON，按 key 的 SHA-256 存放 |
+| `<k>:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
 | `cosec:rate-limiter:<ruleId>:<bucket>:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期 |
 
 - `<c>` 是 [`cosec.authorization.cache.key-prefix`](./configuration.md#cache)，`<k>` 是

@@ -299,10 +299,10 @@ spring:
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
 | `roles` | 主体在该空间中的角色：决策所用的角色。 |
-| `auth` | `{method, jti, exp}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id，以及凭证的过期时间。绝不包含凭证本身。 |
+| `auth` | `{method, jti, exp, capped}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id，以及凭证的过期时间；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后它同样不匹配主体绑定。`api-key` 永远得不到 break-glass。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
-| `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明，或 API key 的属性）：字符串、数字和布尔值。 |
+| `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明；API key 只提供 `apiKeyId`）：字符串、数字和布尔值。 |
 
 它绝不携带令牌、API key、cookie 或其他请求头、策略、匹配的语句、外部属性值或客户端 IP。
 

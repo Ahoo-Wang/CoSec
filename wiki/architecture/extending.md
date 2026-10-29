@@ -21,7 +21,7 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `Authenticator` | `cosec-spi`, `spi.authn` | Accept another kind of credential, or replace token and API key authentication. | one bean, replacing the built-in one |
 | `TokenStore`, `RevocationReader` | `cosec-spi`, `spi.token` | Keep revoked tokens somewhere other than Redis. | one bean of each |
 | `ApiKeyReader` | `cosec-spi`, `spi.apikey` | Look API keys up somewhere other than memory or Redis. | one bean |
-| `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose token does not carry them. | one bean |
+| `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
 | `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
@@ -84,6 +84,10 @@ its expiry, never its value) is what a gateway forwards with the identity: on a 
 permitted but forwarded to no backend as authenticated, and one whose credential has no expiry fails the request with
 `500`.
 
+The credential's method also decides whether [break-glass](../guide/security-model.md#break-glass) bindings apply: only
+`JWT` gets them. A principal your authenticator returns without a credential, or with a method of its own (such as
+`Identity.Method("ldap")`), never gets break-glass. Use `JWT` only for a CoSec token you verified as one.
+
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
 parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
 (`cosec.pipeline.api-key-header`).
@@ -136,23 +140,35 @@ reports "not revoked" itself. Anything a `RevocationReader` throws still answers
 ## Memberships
 
 A token carries a principal's roles and attached policies as claims, or, when they change often or do not fit, the
-provider marker instead. For those principals the pipeline asks the `MembershipProvider`:
+provider marker instead. An API key never carries them (RFC 0009 §4). For those principals the pipeline asks the
+`MembershipProvider`:
 
 ```kotlin
 fun interface MembershipProvider {
-    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }
 ```
 
-- Answer `Memberships(Memberships.Source.PROVIDER, roles, attachments)`: roles by space (`SpaceId.DEFAULT` for the
-  default space) and attached policy ids, in order. Any other source is rejected.
-- Answer `Memberships(PROVIDER, emptyMap(), emptyList())` for an unknown principal. Throw when the lookup fails.
-- A failure, a timeout (`cosec.authorization.membership.timeout`) or a missing provider makes the request `503`, never
-  "no roles": no roles would also mean that no DENY bound to a role applies.
+- Answer `MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, roles, attachments))`: roles by space
+  (`SpaceId.DEFAULT` for the default space) and attached policy ids, in order. Any other source is rejected.
+- Answer `MembershipAnswer.Unknown` for a principal you do not know, and memberships with `active = false` for one that
+  is deactivated: the credential is then refused (`token-invalid`), as if its authenticator had rejected it (`IDN-3`).
+  Do not answer empty memberships for an unknown principal: that is a known principal with no roles, and its API keys
+  would keep working. A sealed answer, so that a provider has to say which it means.
+- Throw when the lookup fails. A failure, a timeout (`cosec.authorization.membership.timeout`) or a missing provider
+  makes the request `503`, never "unknown" and never "no roles": no roles would also mean that no DENY bound to a role
+  applies.
+- An API key's cap (`MembershipSource.Provider.cap`) is applied by the pipeline's `MembershipResolver`, after your
+  answer: answer the principal's memberships, never a key's.
 
-`InMemoryMembershipProvider` (`cosec-spi`) is for tests. `CoCacheMembershipProvider` (`cosec-cocache`) caches what your
-`MembershipLoader` answers in Redis, shared by every instance; call its `invalidate` when a principal's memberships
-change. The starter registers neither: declare the one you want as a bean.
+`InMemoryMembershipProvider` (`cosec-spi`) is for tests; it answers `Unknown` for a principal it was not given.
+`CoCacheMembershipProvider` (`cosec-cocache`) caches what your `MembershipLoader` answers in Redis, shared by every
+instance; `MembershipLoader.load` follows the same contract, `Unknown` is not cached, and a load that takes longer
+than its fill timeout (`cosec.authorization.membership.timeout` in the starter) fails, so that the next request
+retries. Call its `invalidate`
+when a principal's memberships change. The starter registers `CoCacheMembershipProvider` when you declare a
+`MembershipLoader` bean and no `MembershipProvider`; otherwise declare the one you want as a bean. With API keys on,
+one is required (`IDN-6`).
 
 ## External attributes
 

@@ -14,7 +14,6 @@
 package me.ahoo.cosec.runtime.authn
 
 import kotlinx.coroutines.test.runTest
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -25,30 +24,30 @@ import me.ahoo.cosec.spi.apikey.ApiKeys
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
-/** RFC 0006 §5.3.2: an API key is judged as the 7.x `ApiKeySecurityContextParser` judges it. */
+/** RFC 0006 §5.3.2, RFC 0009 §4.2: an API key proves its principal; the membership provider says what it may do. */
 class ApiKeyAuthenticatorTest {
     private val now: Instant = Instant.parse("2026-11-01T00:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
-    private val billing = ApiKey(
-        id = "billing",
-        principalId = "svc-billing",
-        tenantId = "acme",
-        roles = setOf("billing", "auditor@team-a"),
-        policies = setOf("p1"),
-        attributes = mapOf("team" to "finance"),
-        expiresAt = now.plusSeconds(60),
-    )
+    private fun key(
+        id: String,
+        roles: Set<String>? = setOf("billing", "auditor@team-a"),
+        expiresAt: Instant? = now.plusSeconds(60),
+        enabled: Boolean = true,
+    ) = ApiKey(id, "svc-billing", "acme", roles, expiresAt, enabled)
+
     private val keys = mapOf(
-        "valid" to billing,
-        "disabled" to billing.copy(id = "disabled", enabled = false),
-        "expired" to billing.copy(id = "expired", expiresAt = now),
-        "no-tenant" to billing.copy(id = "no-tenant", tenantId = null),
+        "valid" to key("billing"),
+        "uncapped" to key("uncapped", roles = null),
+        "empty" to key("empty", roles = emptySet()),
+        "disabled" to key("disabled", enabled = false),
+        "expired" to key("expired", expiresAt = now),
     )
     private val authenticator = ApiKeyAuthenticator(
         InMemoryApiKeyStore(keys.mapKeys { (key, _) -> ApiKeys.hash(key) }).reader,
@@ -69,17 +68,37 @@ class ApiKeyAuthenticatorTest {
         val principal = result.principal
         principal.id.assert().isEqualTo(PrincipalId("svc-billing"))
         principal.tenant.assert().isEqualTo(TenantId("acme"))
-        principal.attributes.assert().containsEntry("team", "finance")
-        principal.attributes.assert().containsEntry(ApiKey.API_KEY_ID_ATTRIBUTE, "billing")
-        val memberships = principal.memberships!!
-        memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("billing"))
-        memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("auditor"))
-        memberships.attachments.assert().containsExactly(PolicyId("p1"))
+        principal.attributes.assert().isEqualTo(mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "billing"))
+        // IDN-1: the key claims nothing; the provider answers, narrowed to the key's roles.
+        principal.memberships.assert().isNull()
+        val source = principal.membershipSource as MembershipSource.Provider
+        source.cap.assert().isEqualTo(
+            mapOf(SpaceId.DEFAULT to setOf(RoleId("billing")), SpaceId("team-a") to setOf(RoleId("auditor"))),
+        )
+    }
+
+    /** `IDN-2`: an empty cap is a cap that leaves nothing, never no cap. */
+    @Test
+    fun anEmptyCapIsNotUncapped() = runTest {
+        val principal = (authenticate("empty") as AuthnResult.Authenticated).principal
+        (principal.membershipSource as MembershipSource.Provider).cap.assert().isNotNull().isEmpty()
     }
 
     @Test
-    fun aKeyWithoutTenantIsInTheDefaultTenant() = runTest {
-        (authenticate("no-tenant") as AuthnResult.Authenticated).principal.tenant.assert().isEqualTo(TenantId.DEFAULT)
+    fun aKeyWithoutRolesIsNotCapped() = runTest {
+        val principal = (authenticate("uncapped") as AuthnResult.Authenticated).principal
+        (principal.membershipSource as MembershipSource.Provider).cap.assert().isNull()
+    }
+
+    /** Review L3: a known key that does not work names its principal and itself, for audit. */
+    @Test
+    fun aKnownKeyThatDoesNotWorkNamesWhoseItIs() = runTest {
+        (authenticate("unknown") as AuthnResult.Rejected).refused.assert().isNull()
+        (authenticate("disabled") as AuthnResult.Rejected).refused!!.let {
+            it.principal.assert().isEqualTo(PrincipalId("svc-billing"))
+            it.tenant.assert().isEqualTo(TenantId("acme"))
+            it.credentialId.assert().isEqualTo("disabled")
+        }
     }
 
     @Test

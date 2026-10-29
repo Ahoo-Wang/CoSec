@@ -90,7 +90,12 @@ class Grantor(
     val tenant: TenantId,
     val id: PrincipalId,
     val memberships: Memberships,
-    val attributes: Map<String, String> = emptyMap(),
+    val attributes: Map<String, String>,
+    /**
+     * Whether the grantor's principal bindings are its own here: false for a credential with a role cap (RFC 0009
+     * §4.2), which does not hold what is bound to the principal by name, and so cannot grant it either.
+     */
+    val principalBindings: Boolean,
 )
 
 /** A change to the document of [tenant]: [candidate] replaces the document the snapshot has (RFC 0007 §7.4.1). */

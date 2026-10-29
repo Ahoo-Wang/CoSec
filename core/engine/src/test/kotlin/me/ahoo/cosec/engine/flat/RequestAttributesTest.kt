@@ -77,7 +77,17 @@ class RequestAttributesTest {
             HostScope(null)
         )
         val authz = AuthzRequest(
-            Subject("alice", tenant.value, authenticated, emptySet(), emptySet(), mapOf("level" to 3), false),
+            Subject(
+                "alice",
+                tenant.value,
+                authenticated,
+                emptySet(),
+                emptySet(),
+                mapOf("level" to 3),
+                root = false,
+                principalBindings = true,
+                breakGlass = true,
+            ),
             me.ahoo.cosec.model.Scope.declared(tenant.value, app, ""),
             Action("http", "GET"),
             Resource("http", path, mapOf("owner" to "alice")),

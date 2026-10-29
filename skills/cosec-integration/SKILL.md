@@ -168,8 +168,15 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 - Logout: `TokenRevoker.revoke(accessToken)`. Emergency: `TokenRevoker.revokeSubject(tenant, principal)` revokes every
   token of a principal issued until now (needs the Redis token store).
 - API keys: `cosec.api-key.enabled=true`, keys in `cosec.api-key.keys[n]` (`id`, `hash` = SHA-256 hex of the key,
-  `principal-id`, `tenant-id`, `roles`, `policies`, `attributes`, `expires-at`) or `cosec.api-key.store=redis`. They
-  arrive in `X-API-Key` (`cosec.pipeline.api-key-header`).
+  `principal-id`, `tenant-id` (required), exactly one of `roles` and `uncapped: true`, `expires-at`, `enabled`; any
+  other field fails startup) or `cosec.api-key.store=redis`. They arrive in `X-API-Key` (`cosec.pipeline.api-key-header`). A key grants nothing of
+  its own: it acts as its principal with the memberships the `MembershipProvider` gives that principal, narrowed to
+  `roles` (`uncapped: true`: no narrowing; `[]`: only what `Anyone` bindings give; under a cap, attached policies and
+  principal bindings are dropped). No API key gets break-glass. So API keys need a
+  `MembershipProvider` bean, or startup fails (IDN-6): with `cosec-cocache`, declare a `MembershipLoader` and the
+  starter wires `CoCacheMembershipProvider`. A key whose principal the provider does not know or knows as deactivated is
+  `token-invalid`. A user's key is a personal access token; a workload principal's key is a service account's.
+  Keys stored before 8.0 are converted with `cosec-migrate api-keys`.
 - Clients send `CoSec-App-Id` (unless the host sets `scope.app-id`) and `CoSec-Space-Id` for a non-default space; a
   space needs a role there, or the request is denied (403 `scope-rejected`; 401 for an anonymous caller). Details:
   https://cosec.ahoo.me/integration/authentication.

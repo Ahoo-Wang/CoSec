@@ -77,8 +77,14 @@ is not an error by itself: if a statement allows anonymous callers, the request 
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
 - **API key:** the key's SHA-256 is not stored, or the key is disabled or expired
-  ([API keys](../integration/authentication.md)). A request that carries an API key is judged by the key alone; its
-  token is not read.
+  ([API keys](../integration/authentication.md#api-keys)). A request that carries an API key is judged by the key
+  alone; its token is not read.
+- **Unknown or deactivated principal:** the `MembershipProvider` answered `Unknown` for the principal of the key, or of
+  a token marked `cosec.membership: provider`, or answered `active = false` (`IDN-3`). The decision event's
+  `subject.rejected` is `API_KEY_INVALID` or `TOKEN_INVALID`, and `subject.refused` names the principal and the
+  credential. Make the provider know the principal in the key's tenant, or reactivate it; with
+  `CoCacheMembershipProvider`, call `invalidate` so the change applies before the cache's TTL. A provider that answers empty memberships for a principal it knows keeps the key valid
+  with no roles: that is `forbidden`, not this.
 - **Behind a gateway:** a `CoSec-Identity` of another version, without `auth.exp`, or issued in the future
   ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
@@ -148,13 +154,14 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, for some tenants only | The tenant is in [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot), and the oldest document its requests read was last confirmed longer ago than `fail-closed.max-lag` (`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`). | Restore Redis; see [Decisions use an old revision](#decisions-use-an-old-revision). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | A document the request needs could not be read in time (Redis down or slow on a cold load), cannot be decoded or compiled, or disappeared from Redis after it was seen. A failed load and a lost document are logged with the document's name: `Loading snapshot document [<doc>] failed.`, `Snapshot document [<doc>] disappeared from the store; failing closed.` | Restore Redis, or publish a readable revision of the document ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `INDETERMINATE: MissingPolicies`, `AmbiguousPolicy` / `missing_policies` | A binding or an attachment names a policy the documents do not define, or a policy id both the tenant and the platform define. | Fix the document through the control plane. |
-| `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). | Fix the provider or its store. |
+| `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). With `CoCacheMembershipProvider`, a `MembershipLoader` that does not answer within that time fails its load (`The membership loader did not answer within ...`), and the next request tries again. | Fix the provider or its store. |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | A statement needs an external attribute whose provider failed or timed out (`<provider> failed to fetch [...]` at `WARN`). | Fix the provider, or raise [`cosec.authorization.attributes.timeout`](./configuration.md#authorization). |
 | `INDETERMINATE: MatcherFailed` / `matcher` | A DENY statement's condition, or the condition of its policy, could not be evaluated. That includes a DENY on `http.header.<name>` when the request sent that header more than once with different values (`Header [<name>] arrived with different values; a condition on it cannot decide.`); the same header repeated with one value reads as that value. A failing ALLOW never makes a request `503`: an ALLOW on such a header does not match. | Fix the condition, or the client that sends the header twice. |
 | `INDETERMINATE: BoundaryUnavailable` / `boundary` | A statement of the tenant's boundary could not be evaluated for a permitted request. | Fix the boundary. |
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). | Restore Redis, or drop `strictFailure`. |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in the format before 8.0, which is refused when read (`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
 A DENY still decides: if a DENY matches, the request is `401` or `403` even when a document is unavailable.
@@ -349,8 +356,18 @@ random one.
 
 - `API keys are enabled, but no ApiKeyReader is available for the store <class>: with cosec.api-key.store=redis, a ReactiveStringRedisTemplate is needed.`
   Add `cosec-cocache` with Spring Data Redis, or register an `ApiKeyReader`.
-- `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `Duplicate API key ids: [...].`
-  Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
+- `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
+  (IDN-6).` A key's memberships come from its principal's provider. Add `cosec-cocache` and a `MembershipLoader`
+  bean, which configures `CoCacheMembershipProvider`, or declare a `MembershipProvider`. The check runs only in
+  `cosec.pipeline.mode=enforce`, where keys are read; a service in `gateway` mode reads none.
+- `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `... needs a tenant-id.`,
+  `Duplicate API key ids: [...].` Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
+- `API key [<id>] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, not neither` (or `not
+  both`): say what the key holds, its cap or `uncapped: true`; a key never becomes uncapped by omission.
+- `cosec.api-key.enabled=[<value>] is neither true nor false.`: write `true` or `false`.
+- A binding error naming `cosec.api-key.keys[n].policies` or `.attributes`: keys no longer carry them. Grant the
+  principal its roles through the provider and narrow the key with `roles`
+  ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)).
 
 ### Other startup failures
 

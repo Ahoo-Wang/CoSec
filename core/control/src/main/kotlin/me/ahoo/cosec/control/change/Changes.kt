@@ -398,6 +398,8 @@ class Changes(
                 operator.memberships,
                 // Every attribute, not only the strings the grant analysis reads (round-2 review R2).
                 operator.security?.principal?.attributes ?: operator.attributes,
+                principalBindings = operator.principalBindings,
+                breakGlass = operator.breakGlass,
             )
             current.copy(
                 state = ChangeState.READY,

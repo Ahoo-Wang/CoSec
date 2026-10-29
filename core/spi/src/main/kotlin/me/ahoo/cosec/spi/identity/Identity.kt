@@ -47,6 +47,11 @@ data class Identity(
         val id: String,
         /** When the credential expires; null when it never does. A downstream service refuses an identity past it. */
         val expiresAt: Instant?,
+        /**
+         * Whether the credential has a role cap (an API key with `roles`, RFC 0009 §4.2): the principal's own bindings
+         * do not apply to it, here or in a service behind the gateway.
+         */
+        val capped: Boolean = false,
     )
 
     /**

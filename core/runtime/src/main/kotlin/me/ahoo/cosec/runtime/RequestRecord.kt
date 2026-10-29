@@ -114,12 +114,12 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
     private fun subject(): SubjectSummary = when (val authn = authn) {
         is AuthnResult.Authenticated ->
             SubjectSummary(authn.principal.tenant.value, authn.principal.id.value, true, authn.method, null)
-        is AuthnResult.Rejected -> anonymous(authn.reason)
-        AuthnResult.Anonymous, is AuthnResult.Unavailable, null -> anonymous(null)
+        is AuthnResult.Rejected -> anonymous(authn.reason, authn.refused)
+        AuthnResult.Anonymous, is AuthnResult.Unavailable, null -> anonymous(null, null)
     }
 
-    private fun anonymous(rejected: AuthnResult.RejectReason?) =
-        SubjectSummary(TenantId.DEFAULT.value, CoSecPrincipal.ANONYMOUS_ID, false, null, rejected)
+    private fun anonymous(rejected: AuthnResult.RejectReason?, refused: AuthnResult.RefusedCredential?) =
+        SubjectSummary(TenantId.DEFAULT.value, CoSecPrincipal.ANONYMOUS_ID, false, null, rejected, refused)
 
     private fun kind(basis: Basis?): DecisionEvent.Kind = when (basis) {
         null -> DecisionEvent.Kind.CANCELLED

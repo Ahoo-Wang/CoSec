@@ -90,7 +90,7 @@ class GrantGenerator(private val random: Random) {
     )
 
     fun grantor(subject: OracleSubject): Grantor =
-        Grantor(subject.tenant, PrincipalId(subject.id), subject.memberships, subject.attributes)
+        Grantor(subject.tenant, PrincipalId(subject.id), subject.memberships, subject.attributes, true)
 
     fun atom(): Condition = when (random.nextInt(11)) {
         0 -> Condition.Eq("scope.space", Literal.Str(pick(spaces).value))
