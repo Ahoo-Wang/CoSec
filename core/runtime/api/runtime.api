@@ -2,6 +2,8 @@ public final class me/ahoo/cosec/runtime/AuthorizationChecker {
 	public fun <init> (Lme/ahoo/cosec/runtime/Pipeline;)V
 	public final fun check (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun check (Lme/ahoo/cosec/runtime/RequestSecurity;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun decide (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun decide (Lme/ahoo/cosec/runtime/RequestSecurity;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun decide-VgDvTp4 (Lme/ahoo/cosec/runtime/RequestSecurity;Ljava/lang/String;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun decideAs-lN1Rf3I (Lme/ahoo/cosec/runtime/RequestSecurity;Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;Lme/ahoo/cosec/model/Memberships;Ljava/lang/String;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
