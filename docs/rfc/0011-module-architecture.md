@@ -86,6 +86,7 @@ flowchart BT
 | `edge/openapi/` | `:openapi` | `cosec-openapi` | 由 OpenAPI 生成路由映射 |
 | `extensions/jwt/`、`social/`、`login/` | `:jwt` 等 | `cosec-jwt` 等 | 凭据；`login` 是登录与 token 签发（从 `core/authentication`、`core/token` 的签发部分、`api/authentication` 移来，保留 Reactor） |
 | `extensions/ip2region/`、`micrometer/`、`opentelemetry/` | | | 属性提供者、指标、追踪 |
+| `extensions/cosid/` | `:cosid` | `cosec-cosid` | 基于 CosId 5 的 `IdGenerator`（Java 21），自带自动配置（见 §5 例外） |
 | `host/spring-boot/` | `:spring-boot` | `cosec-spring-boot` | 自动配置，只做装配（D2） |
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
 | `test/testkit/` | `:testkit` | `cosec-testkit` | 用户的策略测试工具 |
@@ -143,6 +144,13 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 | `social` → `login` | 社交登录是 `login` 的一个认证提供者 |
 | `cocache` 内部使用 Reactor | 非阻塞的 Redis 读取用 Spring Data Redis 的响应式 API；公共签名中不得出现 Reactor 类型 |
 | `backends`、`extensions` 使用各自技术的 Spring 部分（`cocache`：`data.redis`、`aot.hint`；`kafka`：`spring-kafka`；`social`：`data.redis`） | 只限它所适配的技术 |
+| `cosid` 使用 Spring Boot 的自动配置（`autoconfigure`、`context.properties`、`context.annotation`）；它是唯一可以引用 `me.ahoo.cosid` 或解析 CosId 构件的项目 | 见下文 D2 的例外 |
+
+> **2026-10-29 补充（D2 的例外，维护者："cosid 作为扩展，依赖升级到 5.0.0-alpha.2"）**：`cosec-cosid`（`extensions/cosid`）适配 CosId 5，而 CosId 5 只支持 Java 21。
+> 它是唯一按 Java 21 编译的模块（根构建的 `java21Projects`），其余模块仍是 Java 17。Java 17 的项目解析不了 Java 21 的项目，所以 starter 的类路径上不能有它：
+> `cosec-cosid` 自带自动配置（`CoSecCosIdAutoConfiguration`，排在 CosId 的之后；`@ConditionalOnBean(CosIdRuntime)`、`@ConditionalOnMissingBean(IdGenerator)`、
+> `cosec.cosid.generator`）。任何 CoSec 的 BOM 都不导入 CosId、不约束它的版本。Java 17 的汇总（`code-coverage-report`、`test/architecture` 的类路径）按
+> `java21Projects` 把它排除；架构规则改读它的源码与依赖事实，不读它的类。CI 中跑它的作业同时安装 JDK 21 与 17（`scripts/ci/plan.py` 的 `JAVA21`）。
 
 `EnginePurityTest`、`RuntimeBoundaryTest`、`ControlBoundaryTest` 与 `verifyPureClasspath` 的规则并入这里，原测试删除；`RuntimeBoundaryTest` 中
 不属于依赖方向的规则（`runBlocking`、`GlobalScope`、`Dispatchers.IO`、`runCatching`）作为源码规则一并迁入。
