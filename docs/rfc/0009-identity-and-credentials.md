@@ -10,6 +10,19 @@
 > 存储格式的破坏与"策略即数据"）；PR-3 带上 `Memberships.active`（IDN-3 需要）。PR-2 的 `principal.type`、`auth.method` 属性与 `sub_type` 都可以以后新增，
 > 移到 8.1，IDN-5 随之移走。下文保留原样以便追溯。
 
+> **2026-10-29 再修订（RC 安全审查第 1 轮与 PR-3 第 2 轮审查，#1149、#1164）**：取代下一段中关于上限与 break-glass 的两句，以此为准。
+>
+> - **上限只去掉 ALLOW**（RC1-1）：有上限的凭据得不到主体绑定（平台与租户文档中的 `SubjectRef.Principal`）与直接附加策略的 ALLOW，
+>   但它们的 DENY 照常适用，与对主体本身一样：上限只收窄授予，从不解除对主体的限制。`roles: []` 的含义是"只有 `Anyone` 可做的事，再减去主体被拒绝的"。
+>   授出分析同样处理：有上限的授出者不持有按名绑定给它的 ALLOW，但受其 DENY 约束（`BND-9`、`IDN-2`、`GRT`）。
+> - **break-glass 按来源判断**（RC1-26）：只有经 CoSec 自己的验证器（`JwtTokenVerifier`）验证的 token 的主体能得到 break-glass；
+>   API Key（不论有无上限）、其他 `TokenVerifier` 接受的 token、其他认证器接受的主体都不能，不看凭据叫什么名字；方法名 `jwt` 保留给 CoSec 的 token（`BRK-8`）。
+> - `Subject` 的 `principalBindings` 与 `breakGlass` 没有默认值，每处构造都要写明；模拟（simulate、explain）带上凭据的这两个标志；
+>   审批在发布时按审批时记录的标志复核。
+> - `MembershipProvider` 返回封闭类型 `MembershipAnswer`，"未知主体"是显式分支；按旧约定返回空成员关系的实现编译失败。
+> - 迁移（`migrate api-keys`）：同一租户内 id 重复的 key 拒绝迁移；专用主体 `apikey:<keyId>` 已在文档或 `--memberships` 中出现时拒绝；
+>   附加策略只有能精确解析时才转换；写回用比较并交换。
+
 > **2026-10-29 修订（PR-3 安全审查，#1149）**：下面几处以本段为准。
 >
 > - **上限只留角色**（§3、§4.2）：有上限的凭据不取主体绑定（平台与租户文档中的 `SubjectRef.Principal`），也没有直接附加的策略；`Anyone` 绑定照常适用，
@@ -172,7 +185,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | 规则 | 级别 | 内容 |
 |---|---|---|
 | IDN-1 | pipeline | API Key 的生效成员关系是主体成员关系的子集；key 没有任何授予 |
-| IDN-2 | pipeline | 上限只收窄：有上限时不出现上限之外的角色，也没有直接附加的策略 |
+| IDN-2 | pipeline | 上限只收窄：有上限时不出现上限之外的角色（按空间与角色精确匹配），直接附加策略与主体绑定的 ALLOW 不到达 key；它们的 DENY 照常适用（RC1-1） |
 | IDN-3 | pipeline | 主体未知或停用时，它的 key 判为无效 |
 | IDN-4 | pipeline | 带 `act` 的 token 判为无效 |
 | IDN-5 | engine | `principal.type`、`auth.method` 只来自注册表与认证器；token 声明、key 与宿主属性不能写入 |
