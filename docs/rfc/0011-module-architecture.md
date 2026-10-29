@@ -86,6 +86,7 @@ flowchart BT
 | `edge/openapi/` | `:openapi` | `cosec-openapi` | 由 OpenAPI 生成路由映射 |
 | `extensions/jwt/`、`social/`、`login/` | `:jwt` 等 | `cosec-jwt` 等 | 凭据；`login` 是登录与 token 签发（从 `core/authentication`、`core/token` 的签发部分、`api/authentication` 移来，保留 Reactor） |
 | `extensions/ip2region/`、`micrometer/`、`opentelemetry/` | | | 属性提供者、指标、追踪 |
+| `extensions/cosid/` | `:cosid` | `cosec-cosid` | 基于 CosId 5 的 `IdGenerator`，由 starter 按类路径装配；只有它与 `host/spring-boot` 可以引用 `me.ahoo.cosid`（2026-10-29，#1170） |
 | `host/spring-boot/` | `:spring-boot` | `cosec-spring-boot` | 自动配置，只做装配（D2） |
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
 | `test/testkit/` | `:testkit` | `cosec-testkit` | 用户的策略测试工具 |
