@@ -92,6 +92,8 @@ class RequestSecurity internal constructor(
             policies = emptySet(),
             attributes = principal.attributes,
             root = false,
+            principalBindings = principal.principalBindings,
+            breakGlass = principal.breakGlass,
         )
         val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
         val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }

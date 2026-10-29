@@ -44,7 +44,9 @@ internal interface CandidateVisitor {
  * statement 7.x reports, as the 7.x layers are in this order. Break-glass comes last (review A2 of #1070): it bypasses a
  * *missing* ALLOW (RFC 0004 §4.8), so it reports a permit only when nothing else permits, and a request another binding
  * permits is never a use of break-glass, which would need a REQUIRED audit (RFC 0006 §9.4.3). Visits allocate nothing: the arrays are the index's own.
- * An anonymous principal has no principal bindings, break-glass bindings or attachments.
+ * An anonymous principal has no principal bindings, break-glass bindings or attachments. A subject without
+ * [me.ahoo.cosec.model.Subject.principalBindings] has no principal bindings either, and one without
+ * [me.ahoo.cosec.model.Subject.breakGlass] no break-glass bindings (RFC 0009 §4.2): a capped credential, an API key.
  */
 internal object CandidateOrder {
     fun forEach(request: FlatRequest, view: SnapshotView, visitor: CandidateVisitor): Boolean {
@@ -72,7 +74,8 @@ internal object CandidateOrder {
         if (tenantDocument != null && roles(tenantDocument, request, platform, visitor, app)) {
             return true
         }
-        return principal != null && visit(platform.breakGlass(tenant, principal), request, platform, visitor)
+        return principal != null && subject.breakGlass &&
+            visit(platform.breakGlass(tenant, principal), request, platform, visitor)
     }
 
     /** Attachments, then the principal bindings of the platform and the tenant. */
@@ -86,6 +89,9 @@ internal object CandidateOrder {
     ): Boolean {
         if (attachments(request, platform, tenant, visitor)) {
             return true
+        }
+        if (!request.request.subject.principalBindings) {
+            return false
         }
         val tenantId = request.scope.tenant.value
         if (visit(platform.principal(tenantId, principal), request, platform, visitor)) {

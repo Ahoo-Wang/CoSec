@@ -490,7 +490,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * The request's subject in the engine's request (`AuthzRequest`): the engine takes the tenant from the scope and
-     * reads only the subject's id and whether it is authenticated.
+     * reads the subject's id, whether it is authenticated, and whether its principal and break-glass bindings apply.
      */
     private fun subject(principal: AuthenticatedPrincipal?, tenant: TenantId): Subject = Subject(
         id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
@@ -500,6 +500,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         policies = emptySet(),
         attributes = principal?.attributes.orEmpty(),
         root = false,
+        principalBindings = principal?.principalBindings ?: true,
+        breakGlass = principal?.breakGlass ?: true,
     )
 
     /**

@@ -166,7 +166,18 @@ class IdentityGate(
             facts.host,
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return null
-        val subject = Subject(identity.subject, identity.tenant, true, emptySet(), emptySet(), identity.claims, false)
+        // The gateway's credential decides here too: a capped one has no principal bindings, an API key no break-glass.
+        val subject = Subject(
+            identity.subject,
+            identity.tenant,
+            true,
+            emptySet(),
+            emptySet(),
+            identity.claims,
+            false,
+            principal.principalBindings,
+            principal.breakGlass,
+        )
         val request = request(subject, scope, requestId, facts)
         return RequestSecurity(requestId, principal, scope, memberships, request, identity = identity)
     }

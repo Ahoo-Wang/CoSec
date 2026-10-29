@@ -36,6 +36,17 @@ class Subject(
     val attributes: Map<String, Any>,
     /** Decided beforehand by `RootPrincipalMatcher` (RFC 0002 stages 2–3); a break-glass binding replaces it later. */
     val root: Boolean,
+    /**
+     * Whether the principal's own bindings (platform and tenant principal bindings) apply. False for a credential with a
+     * role cap (RFC 0009 §4.2): a cap means "only these roles", so nothing bound to the principal by name reaches it.
+     * `Anyone` bindings still apply.
+     */
+    val principalBindings: Boolean = true,
+    /**
+     * Whether the principal's break-glass bindings may apply. False for an API key, capped or not (RFC 0009 §4.2):
+     * break-glass is a time-limited emergency grant to a person, never to a long-lived credential.
+     */
+    val breakGlass: Boolean = true,
 )
 
 /**

@@ -86,7 +86,9 @@ sealed interface EngineOutcome {
  * "documents":  { "platform": {...}, "apps": { "<app>": {...} }, "tenants": { "<tenant>": {...} },
  *                 "notLoaded": ["tenant" | "app"], "unavailable": ["platform" | "app" | "tenant"] },
  * "credential": { "anonymous": false, "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
- *                 "membership": "provider", "attributes": { ... } },
+ *                 "membership": "provider", "attributes": { ... },
+ *                 // false as for a capped credential / an API key (RFC 0009 §4.2); both true by default
+ *                 "principalBindings": true, "breakGlass": true },
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" },
  * "request":    { "app": "", "space": "", "hostApp": null, "action": "order:read",
  *                 "resource": { "type": "order", "id": "1", "attributes": {} }, "time": "...", "ip": "...",
@@ -221,6 +223,8 @@ class EngineScenarios(
                 policies = emptySet(),
                 attributes = credential.attributes,
                 root = false,
+                principalBindings = credential.principalBindings,
+                breakGlass = credential.breakGlass,
             ),
             scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = action,
@@ -259,7 +263,9 @@ class EngineScenarios(
 
     private class Credential(node: JsonNode) {
         init {
-            node.only("anonymous", "tenant", "id", "roles", "policies", "membership", "attributes")
+            node.only(
+                "anonymous", "tenant", "id", "roles", "policies", "membership", "attributes", "principalBindings", "breakGlass",
+            )
         }
 
         val authenticated: Boolean = !(node.get("anonymous")?.bool() ?: false)
@@ -271,6 +277,12 @@ class EngineScenarios(
         val policies: Set<String> = node.get("policies")?.strings().orEmpty().toCollection(LinkedHashSet())
         val marker: String? = node.get("membership")?.text()
         val attributes: Map<String, String> = node.get("attributes")?.fields().orEmpty().mapValues { it.value.text() }
+
+        /** False for a credential with a role cap, such as a capped API key (RFC 0009 §4.2). */
+        val principalBindings: Boolean = node.get("principalBindings")?.bool() ?: true
+
+        /** False for an API key (RFC 0009 §4.2). */
+        val breakGlass: Boolean = node.get("breakGlass")?.bool() ?: true
 
         fun principal(): CoSecPrincipal {
             val principal = SimplePrincipal(id, policies, roles, attributes)

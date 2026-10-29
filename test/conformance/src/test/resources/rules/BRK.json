@@ -69,6 +69,16 @@
       "guards": [
         "control:ControlRoundTwoFixesTest#a rollback is held to every break-glass rule"
       ]
+    },
+    {
+      "id": "BRK-8",
+      "source": "RFC 0009 §4.2",
+      "statement": "Break-glass never applies to an API key, capped or not: a principal without break-glass matches no break-glass binding.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#a subject without break-glass matches no break-glass binding"
+      ],
+      "pending": null
     }
   ]
 }

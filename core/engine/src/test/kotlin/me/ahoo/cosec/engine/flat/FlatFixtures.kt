@@ -262,6 +262,8 @@ fun flatRequest(
     time: Long = NOW,
     blocked: Boolean = false,
     path: String = "/orders/1",
+    principalBindings: Boolean = true,
+    breakGlass: Boolean = true,
 ): FlatRequest {
     val memberships = Memberships(
         Memberships.Source.CLAIMS,
@@ -275,7 +277,8 @@ fun flatRequest(
     )
     val scope = (resolution as ScopeResolution.Resolved).scope
     val base = request(blocked = blocked)
-    val subject = Subject(principal, tenant, authenticated, emptySet(), emptySet(), emptyMap(), false)
+    val subject =
+        Subject(principal, tenant, authenticated, emptySet(), emptySet(), emptyMap(), false, principalBindings, breakGlass)
     val resource = Resource("http", path, emptyMap())
     val authz = AuthzRequest(subject, base.scope, base.action, resource, base.environment)
     return FlatRequest(authz, scope, memberships, time, Probes)

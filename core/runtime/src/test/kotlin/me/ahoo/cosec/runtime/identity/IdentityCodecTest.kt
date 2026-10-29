@@ -51,6 +51,31 @@ class IdentityCodecTest {
         IdentityCodec.decode(IdentityCodec.encode(apiKey)).assert().isEqualTo(apiKey)
     }
 
+    /** RFC 0009 §4.2: `auth.capped` travels only for a capped credential, so other identities keep their bytes. */
+    @Test
+    fun `a capped credential says so, and only it`() {
+        val capped = identity.copy(
+            credential = identity.credential.copy(method = Identity.Method.API_KEY, capped = true)
+        )
+        IdentityCodec.decode(IdentityCodec.encode(capped)).credential.capped.assert().isTrue()
+        String(
+            java.util.Base64.getUrlDecoder().decode(IdentityCodec.encode(capped))
+        ).assert().contains("\"capped\":true")
+        String(
+            java.util.Base64.getUrlDecoder().decode(IdentityCodec.encode(identity))
+        ).assert().doesNotContain("capped")
+        val valid = """"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],"""
+        listOf("false", "1", "\"true\"").forEach { value ->
+            assertThrows<IdentityFormatException> {
+                IdentityCodec.decode(
+                    header(
+                        "{\"v\":1,$valid\"auth\":{\"method\":\"api-key\",\"jti\":\"k\",\"exp\":2,\"capped\":$value},\"iat\":1,\"rid\":\"r\"}"
+                    )
+                )
+            }
+        }
+    }
+
     @Test
     fun `the encoding is compact JSON in base64url without padding`() {
         val encoded = IdentityCodec.encode(identity)

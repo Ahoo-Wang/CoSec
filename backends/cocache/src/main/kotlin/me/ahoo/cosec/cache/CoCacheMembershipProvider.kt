@@ -23,11 +23,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.MembershipResolver
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Where the application's memberships come from: CoSec does not say where they are stored (RFC 0006 §5.5.2).
@@ -67,7 +67,7 @@ class CoCacheMembershipProvider(
      * here until a restart. When it passes, the fill fails, and the next request starts a new one. No longer than
      * `cosec.authorization.membership.timeout`, which each request still waits at most.
      */
-    private val fillTimeout: Duration = MembershipResolver.DEFAULT_TIMEOUT,
+    private val fillTimeout: Duration = DEFAULT_FILL_TIMEOUT,
     private val loader: MembershipLoader,
 ) : MembershipProvider {
     init {
@@ -124,5 +124,10 @@ class CoCacheMembershipProvider(
     /** Drops the cached memberships of [principal] in [tenant] on every instance; the next request loads them. */
     fun invalidate(tenant: TenantId, principal: PrincipalId) {
         cache.invalidate(MembershipCache.key(tenant, principal))
+    }
+
+    companion object {
+        /** The default of `cosec.authorization.membership.timeout`, which a request waits at most. */
+        val DEFAULT_FILL_TIMEOUT: Duration = 500.milliseconds
     }
 }

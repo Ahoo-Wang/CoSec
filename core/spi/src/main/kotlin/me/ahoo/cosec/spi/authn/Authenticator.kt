@@ -101,6 +101,16 @@ class AuthenticatedPrincipal(
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships
+
+    /**
+     * Whether the principal's own bindings apply: not for a credential with a role cap (RFC 0009 §4.2), whose cap is in
+     * [membershipSource] or, behind a gateway, in [credential].
+     */
+    val principalBindings: Boolean
+        get() = (membershipSource as? MembershipSource.Provider)?.cap == null && credential?.capped != true
+
+    /** Whether the principal's break-glass bindings may apply: never for an API key (RFC 0009 §4.2). */
+    val breakGlass: Boolean get() = credential?.method != Identity.Method.API_KEY
 }
 
 /** Where a principal's memberships come from (RFC 0004 §4.5). */

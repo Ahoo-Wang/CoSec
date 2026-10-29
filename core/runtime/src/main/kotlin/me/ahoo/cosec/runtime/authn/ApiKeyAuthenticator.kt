@@ -57,7 +57,12 @@ class ApiKeyAuthenticator(
             tenant = TenantId(apiKey.tenantId),
             membershipSource = apiKey.roles?.let(MembershipSource.Provider::capped) ?: MembershipSource.Provider.UNCAPPED,
             attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to apiKey.id),
-            credential = Identity.Credential(Identity.Method.API_KEY, apiKey.id, apiKey.expiresAt),
+            credential = Identity.Credential(
+                Identity.Method.API_KEY,
+                apiKey.id,
+                apiKey.expiresAt,
+                apiKey.roles != null
+            ),
         )
         return AuthnResult.Authenticated(principal, method)
     }
