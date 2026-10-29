@@ -204,7 +204,11 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | ✅ 已合入 |
 | #1149 | RFC 0009 PR-3（`feat!`）：API Key 只有角色上限、成员关系决定权限（有上限时不取主体绑定，break-glass 只给 CoSec 自己的 token）、`migrate api-keys`（默认原地转换或每把 key 一个专用主体）；顺带修复成员关系缓存用写入填充、下一次请求不是本地命中；`ApiKeys.hash` 改用 `HexFormat`（API Key 吞吐 +84 %） | ✅ 已合入（两轮独立审查） |
 
-接下来：RFC 0008 PR-6（文档守卫 G4，进行中）→ RFC 0011 PR-3（RC 前）→ RC 前提。
+| #1151 | RFC 0008 PR-6：文档守卫 G4（`pnpm check:docs` 拒绝已删除的 API），文档检查进入 `CI` 门禁 | ✅ 已合入 |
+| #1155 | RFC 0011 PR-3：ABI 校验（KGP 内置 `abiValidation`，22 个库模块的转储），`@ExperimentalCoSecApi`、`@CoSecSpi`、`SpiMarkerTest`；收窄公共面（cocache 编解码器、快照内部、`RequestGate` 只能由 CoSec 实现、控制面的执法 bean 不可替换） | ✅ 已合入 |
+| v8.0.0-alpha.1 | 预览版，不承诺兼容性：GitHub prerelease、Maven Central、GitHub Packages、Docker 只推 `8.0.0-alpha.1`；`main` 回到 `8.0.0-SNAPSHOT`（#1156、#1157） | ✅ 2026-10-29 发布 |
+
+接下来：RC 审查第 1 轮（RC 安全审查，进行中，发现公开修复：维护者 2026-10-29 "Fix in public"）→ 修复 → 第 2 轮（按模块）→ 修复 → `cosec-engine`/`cosec-runtime` 公共 API 归类 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
