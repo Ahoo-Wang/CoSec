@@ -136,11 +136,11 @@ class AuthorizationCheckerTest {
         val control = AppId("cosec-control")
         val approve = Action("cosec", "approve")
         val doc = Resource("doc", "tenant/a", emptyMap())
-        fun ada(level: Any) =
+        fun ada(level: Any, source: MembershipSource = MembershipSource.Claims(security.memberships)) =
             AuthenticatedPrincipal(
                 PrincipalId("ada"),
                 PipelineFixtures.TENANT,
-                MembershipSource.Provider.UNCAPPED,
+                source,
                 mapOf("level" to level)
             )
         checker.decide(security, control, approve, doc).assert().isEqualTo(Decision.Deny(null))
@@ -154,6 +154,16 @@ class AuthorizationCheckerTest {
             approve,
             doc
         ).assert().isEqualTo(Decision.Deny(null))
+        // RFC 0009 §4.2: memberships from a provider are asked about again; a pipeline without one cannot say.
+        checker.decideAs(
+            security,
+            ada(3, MembershipSource.Provider.UNCAPPED),
+            security.memberships,
+            control,
+            approve,
+            doc
+        )
+            .assert().isInstanceOf(Decision.Indeterminate::class.java)
         views.fail = true
         checker.decideAs(security, ada(3), security.memberships, control, approve, doc).assert()
             .isInstanceOf(Decision.Indeterminate::class.java)

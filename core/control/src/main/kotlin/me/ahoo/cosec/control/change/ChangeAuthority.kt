@@ -257,10 +257,20 @@ class ChangeAuthority(
         if (publisher.security == null) {
             return "the approver's right to approve cannot be checked again"
         }
+        if (!memberships.active) {
+            return "the approver is deactivated"
+        }
+        // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
+        // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
+        val source = if (memberships.source == Memberships.Source.PROVIDER) {
+            MembershipSource.Provider.UNCAPPED
+        } else {
+            MembershipSource.Claims(memberships)
+        }
         val principal = AuthenticatedPrincipal(
             approval.approver.principal,
             approval.approver.tenant,
-            MembershipSource.Provider.UNCAPPED,
+            source,
             approval.attributes,
         )
         val approver = Operator(approval.approver, memberships, strings(approval.attributes))

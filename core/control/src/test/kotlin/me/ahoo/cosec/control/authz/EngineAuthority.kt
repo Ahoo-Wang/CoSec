@@ -42,6 +42,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.CompletableFuture
 
@@ -50,14 +51,19 @@ import java.util.concurrent.CompletableFuture
  * pipeline authenticates the operator and permits the control API's path, and a second pipeline, over the current
  * heads of [revisions] (always current, so nothing to confirm), answers the [PipelineControlAuthorizer]'s checks.
  */
-class EngineAuthority(private val revisions: Revisions) {
+class EngineAuthority(
+    private val revisions: Revisions,
+    /** Who a recorded principal whose memberships come from a provider is asked about again; none by default. */
+    membershipProvider: MembershipProvider? = null,
+) {
     private val checker = AuthorizationChecker(
         Pipeline(
             PipelineComponents(
                 authenticator = Authenticator {
                     AuthnResult.Anonymous
                 },
-                snapshots = SuspendingSnapshotSource(HeadViews(revisions))
+                snapshots = SuspendingSnapshotSource(HeadViews(revisions)),
+                membershipProvider = membershipProvider,
             )
         ),
     )

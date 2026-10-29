@@ -200,6 +200,14 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      * break-glass gives is not a permit.
      */
     @Suppress("TooGenericExceptionCaught")
+    /**
+     * Whether [principal]'s credential would still be accepted as far as its memberships go: false when the membership
+     * provider no longer knows it, or knows it as not active (RFC 0009 §4.2); true for claimed memberships, which only
+     * the token's expiry or revocation ends. Throws [MembershipUnavailableException] when that cannot be established.
+     */
+    internal suspend fun standing(principal: AuthenticatedPrincipal): Boolean =
+        memberships.resolve(principal.tenant, principal.id, principal.membershipSource) != null
+
     internal suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Decision {
         val view = when (val loaded = call(null) { snapshots.view(security.scope, false) }) {
             is Fetched.Value -> loaded.value
