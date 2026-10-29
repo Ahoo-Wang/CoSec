@@ -39,10 +39,10 @@ class RedisApiKeyReaderTest {
     fun readsWhatTheStoreWrites() = runBlocking<Unit> {
         val apiKey = ApiKey(id = "billing", principalId = "svc-billing", tenantId = "t1", roles = setOf("billing"))
         val hash = ApiKeys.hash(store.issue(apiKey))
-        reader.findByHash(hash).assert().isEqualTo(apiKey)
+        reader.findByHash(hash).toString().assert().isEqualTo(apiKey.toString())
         reader.findByHash(ApiKeys.hash("unknown")).assert().isNull()
 
-        store.save(hash, apiKey.copy(enabled = false))
+        store.save(hash, ApiKey("billing", "svc-billing", "t1", setOf("billing"), enabled = false))
         reader.findByHash(hash)?.enabled.assert().isEqualTo(false)
         store.revoke(hash)
         reader.findByHash(hash).assert().isNull()

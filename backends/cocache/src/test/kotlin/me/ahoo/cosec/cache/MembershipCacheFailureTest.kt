@@ -74,11 +74,11 @@ class MembershipCacheFailureTest {
 
     @Test
     fun aMissLoadsOnceAndEveryInstanceReadsTheCachedAnswer() = runBlocking<Unit> {
-        providerA.memberships(tenant, alice).assertSameAs(stored)
-        providerA.memberships(tenant, alice).assertSameAs(stored)
+        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
         instanceA.clearLocal(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
-        providerA.memberships(tenant, alice).assertSameAs(stored)
-        providerB.memberships(tenant, alice).assertSameAs(stored)
+        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerB.memberships(tenant, alice)!!.assertSameAs(stored)
         loads.get().assert().isEqualTo(1)
     }
 
@@ -128,11 +128,34 @@ class MembershipCacheFailureTest {
         assertThrows<Exception> { runBlocking { providerA.memberships(tenant, alice) } }
     }
 
+    /** RFC 0009 §4.2: an unknown principal is null, never "no memberships", and is asked again rather than cached. */
+    @Test
+    fun anUnknownPrincipalIsNullAndNotCached() = runBlocking<Unit> {
+        val asked = AtomicInteger()
+        val unknown = CoCacheMembershipProvider(instanceA.membershipCache) { _, _ ->
+            asked.incrementAndGet()
+            null
+        }
+        unknown.memberships(tenant, alice).assert().isNull()
+        unknown.memberships(tenant, alice).assert().isNull()
+        asked.get().assert().isEqualTo(2)
+    }
+
+    /** A deactivated principal is cached like any other answer, and every instance reads it as inactive. */
+    @Test
+    fun anInactivePrincipalIsCachedAsInactive() = runBlocking<Unit> {
+        val inactive = Memberships(Memberships.Source.PROVIDER, stored.roles, stored.attachments, active = false)
+        CoCacheMembershipProvider(instanceA.membershipCache) { _, _ -> inactive }.memberships(tenant, alice)!!
+            .active.assert().isFalse()
+        CoCacheMembershipProvider(instanceB.membershipCache) { _, _ -> error("not asked") }.memberships(tenant, alice)!!
+            .active.assert().isFalse()
+    }
+
     @Test
     fun aFailingLoaderThrowsAndCachesNothing() = runBlocking<Unit> {
         val failing = CoCacheMembershipProvider(instanceA.membershipCache) { _, _ -> error("directory down") }
         assertThrows<IllegalStateException> { runBlocking { failing.memberships(tenant, alice) } }
-        providerA.memberships(tenant, alice).assertSameAs(stored)
+        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
         loads.get().assert().isEqualTo(1)
     }
 

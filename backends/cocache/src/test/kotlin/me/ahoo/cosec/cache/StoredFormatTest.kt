@@ -52,6 +52,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
 /**
@@ -70,7 +71,8 @@ class StoredFormatTest {
     )
 
     /**
-     * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline: each was
+     * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline (except
+     * `apiKey`, `apiKey-uncapped` and `memberships-inactive`, the formats of RFC 0009 PR-3): each was
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
      * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780.
      */
@@ -83,16 +85,47 @@ class StoredFormatTest {
         encode(decode(expected.encodeToByteArray())).decodeToString().assert().describedAs(name).isEqualTo(expected)
     }
 
+    /** RFC 0009 §4.1: written by this format's [ApiKeyCodec], not by `main` before it. */
     @Test
     fun `api keys`() {
-        val key = ApiKey("k1", "alice", "acme", setOf("admin"), setOf("p1"), mapOf("team" to "a"), at, true)
+        val capped = ApiKey("k1", "alice", "acme", linkedSetOf("admin", "viewer@sales"), at, true)
         pinned(
             "apiKey",
-            key,
-            { CoSecJson.mapper.writeValueAsBytes(it) },
-            { CoSecJson.mapper.readValue(it, ApiKey::class.java) },
-            fixture("apiKey"),
+            capped,
+            { ApiKeyCodec.encode(it).encodeToByteArray() },
+            { ApiKeyCodec.decode(it.decodeToString()) },
+            fixture("apiKey")
         )
+        val uncapped = ApiKey("k2", "svc", "acme", null, null, false)
+        pinned(
+            "apiKey-uncapped",
+            uncapped,
+            { ApiKeyCodec.encode(it).encodeToByteArray() },
+            { ApiKeyCodec.decode(it.decodeToString()) },
+            fixture("apiKey-uncapped"),
+        )
+        ApiKeyCodec.decode(fixture("apiKey-uncapped")).roles.assert().isNull()
+    }
+
+    /**
+     * A key `main` wrote before RFC 0009 (the bytes of da58e780) is refused, never read as a key without a cap, which
+     * would give it everything its principal holds; the message names the migration.
+     */
+    @Test
+    fun `api keys before 8 are refused`() {
+        val refused = assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(fixture("apiKey-before-8")) }
+        refused.message.assert().contains("cosec-migrate api-keys")
+    }
+
+    @Test
+    fun `a stored api key has exactly its fields`() {
+        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme"))
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":2", "\"format\":3")) }
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
+        assertThrows<IllegalArgumentException> {
+            ApiKeyCodec.decode(written.replace("\"enabled\":true", "\"enabled\":true,\"policies\":[\"p1\"]"))
+        }
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"acme\"", "\"\"")) }
     }
 
     @Test
@@ -109,6 +142,24 @@ class StoredFormatTest {
             MembershipsCodec::decode,
             fixture("memberships")
         )
+        MembershipsCodec.decode(fixture("memberships").encodeToByteArray()).active.assert().isTrue()
+    }
+
+    /** RFC 0009 §4.2: only a deactivated principal writes `active`, so every entry cached before it reads as active. */
+    @Test
+    fun `inactive memberships`() {
+        val inactive = Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList(), active = false)
+        pinned(
+            "memberships-inactive",
+            inactive,
+            MembershipsCodec::encode,
+            MembershipsCodec::decode,
+            fixture("memberships-inactive")
+        )
+        MembershipsCodec.decode(fixture("memberships-inactive").encodeToByteArray()).active.assert().isFalse()
+        assertThrows<IllegalArgumentException> {
+            MembershipsCodec.decode("""{"roles":{},"attachments":[],"active":true}""".encodeToByteArray())
+        }
     }
 
     @Test

@@ -23,11 +23,12 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
  * Where the application's memberships come from: CoSec does not say where they are stored (RFC 0006 §5.5.2).
  *
  * Like every SPI of the pipeline, it must not block the calling thread: an implementation over a blocking client (JDBC,
- * say) moves the call to its own bounded executor (RFC 0006 §7.7). Answer `Memberships(PROVIDER, emptyMap(), emptyList())`
- * for an unknown principal; report a failed lookup by throwing.
+ * say) moves the call to its own bounded executor (RFC 0006 §7.7). Answer null for a principal you do not know, which
+ * refuses its credentials, and [Memberships.active] false for one that is deactivated (RFC 0009 §4.2); report a failed
+ * lookup by throwing.
  */
 fun interface MembershipLoader {
-    suspend fun load(tenant: TenantId, principal: PrincipalId): Memberships
+    suspend fun load(tenant: TenantId, principal: PrincipalId): Memberships?
 }
 
 /**
@@ -37,7 +38,8 @@ fun interface MembershipLoader {
  * - a hit, local or in Redis, answers without asking [loader]; a local hit answers on the caller's thread without
  *   suspending, and a Redis read does not block (CoCache's async view);
  * - a miss asks [loader] and writes its answer to [cache], where it expires after the cache's TTL
- *   ([CoSecCacheSpecs.membership]): the TTL bounds how long a change takes to apply when its invalidation is lost;
+ *   ([CoSecCacheSpecs.membership]): the TTL bounds how long a change takes to apply when its invalidation is lost. An
+ *   unknown principal (null) is not cached: each request for it asks [loader] again;
  * - a failed cache read or write throws, as does [loader], so the pipeline fails closed with 503 and never treats the
  *   principal as having no memberships (`MembershipCacheFailureTest`).
  *
@@ -48,10 +50,10 @@ class CoCacheMembershipProvider(
     private val cache: MembershipCache,
     private val loader: MembershipLoader,
 ) : MembershipProvider {
-    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships {
+    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships? {
         val key = MembershipCache.key(tenant, principal)
         cache.async().get(key).await()?.let { return it }
-        val loaded = loader.load(tenant, principal)
+        val loaded = loader.load(tenant, principal) ?: return null
         check(loaded.source == Memberships.Source.PROVIDER) {
             "The membership loader answered memberships from [${loaded.source}] for principal [${principal.value}]."
         }
