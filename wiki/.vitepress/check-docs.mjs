@@ -8,6 +8,7 @@
 // Usage: node .vitepress/check-docs.mjs   (from the wiki directory or via its path)
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join, dirname, normalize, relative } from 'path'
+import { headingAnchor } from '../scripts/headings.mjs'
 
 const wikiDir = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 
@@ -20,19 +21,6 @@ function walk(dir) {
   })
 }
 
-// Mirrors VitePress' default slugify (@mdit-vue/shared).
-const rSpecial = /[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'“”‘’<>,.?/]+/g
-function slugify(str) {
-  return str
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(rSpecial, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/^(\d)/, '_$1')
-    .toLowerCase()
-}
-
 const stripCode = (text) => text.replace(/```[\s\S]*?```/g, '')
 
 const anchorCache = new Map()
@@ -42,8 +30,7 @@ function anchors(file) {
   for (const line of stripCode(readFileSync(file, 'utf-8')).split('\n')) {
     const heading = /^#{1,6}\s+(.*?)\s*$/.exec(line)
     if (!heading) continue
-    const explicit = /\{#([^}]+)\}\s*$/.exec(heading[1])
-    result.add(explicit ? explicit[1] : slugify(heading[1].replace(/`([^`]*)`/g, '$1')))
+    result.add(headingAnchor(heading[1]))
   }
   anchorCache.set(file, result)
   return result

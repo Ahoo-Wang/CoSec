@@ -6,9 +6,15 @@ on:
     paths:
       - 'wiki/**'
   # Build and check the docs on pull requests too, so broken links or diagrams are caught before merge.
+  # The legacy-API guard (check:docs) also reads the files below, so a change to them runs it.
   pull_request:
     paths:
       - 'wiki/**'
+      - 'skills/**'
+      - 'k8s/**'
+      - 'README*.md'
+      - 'llms.txt'
+      - 'SECURITY.md'
   workflow_dispatch:
 
 permissions:
