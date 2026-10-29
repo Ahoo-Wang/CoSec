@@ -325,6 +325,12 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 
 - Tokens issued by 7.x keep working: 8.0 reads the same claims (`roles`, `policies`, `attributes`, `tenantId`), and
   role claims as 7.x did (`role` in the default space, `role@space` in that space only, rule `MEM-3`).
+- **A token with an `act` claim is now refused** as `token-invalid` (`IDN-4`). 7.x ignored the claim, so an RFC 8693
+  delegation token was read as its `sub` and the actor got the subject's permissions. CoSec never issues such
+  tokens; a verifier that accepts tokens from another issuer must not pass them on until delegation is supported
+  ([Authentication](../integration/authentication.md#tokens)). A deny is audited with the reason code
+  `DELEGATION_UNSUPPORTED`; on a permit the audit records `ALLOW`, and the reason appears only in the decision event's
+  `subject.rejected`. Refreshing or revoking such a token fails too.
 - `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`).
   `cosec.api-key.store-blocking` is gone: the Redis key reader never blocks. A request that carries an API key is
   judged by the key alone, even if it also carries a token (`PIP-8`).

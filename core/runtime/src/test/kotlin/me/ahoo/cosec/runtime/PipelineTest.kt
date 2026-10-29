@@ -115,7 +115,10 @@ class PipelineTest {
         val expected = when (reason) {
             AuthnResult.RejectReason.TOKEN_EXPIRED -> ProblemType.TOKEN_EXPIRED
             AuthnResult.RejectReason.TOKEN_REVOKED -> ProblemType.TOKEN_REVOKED
-            AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> ProblemType.TOKEN_INVALID
+            AuthnResult.RejectReason.TOKEN_INVALID,
+            AuthnResult.RejectReason.API_KEY_INVALID,
+            AuthnResult.RejectReason.DELEGATION_UNSUPPORTED,
+            -> ProblemType.TOKEN_INVALID
         }
         outcome.assertProblem(expected)
     }

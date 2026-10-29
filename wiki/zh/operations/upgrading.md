@@ -278,6 +278,10 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 
 - 7.x 签发的令牌继续可用：8.0 读取同样的声明（`roles`、`policies`、`attributes`、`tenantId`），并按 7.x 的方式读取角色声明（`role` 在默认空间，
   `role@space` 只在该空间，规则 `MEM-3`）。
+- **带 `act` 声明的令牌现在会被拒绝**，结果为 `token-invalid`（`IDN-4`）。7.x 忽略这个声明，因此 RFC 8693 委托令牌被当作它的 `sub`
+  读取，执行方得到主体的权限。CoSec 自己从不签发这种令牌；接受其他签发方令牌的校验器在支持委托之前不得放行它们
+  （[认证](../integration/authentication.md#tokens)）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时审计记录 `ALLOW`，
+  原因只出现在决策事件的 `subject.rejected` 中。刷新或吊销这种令牌同样失败。
 - `cosec.api-key.header` 改为 `cosec.pipeline.api-key-header`（默认 `X-API-Key`）。`cosec.api-key.store-blocking` 已删除：Redis 的 key
   读取器从不阻塞。携带 API key 的请求只按 key 判定，即使它同时携带令牌（`PIP-8`）。
 - `cosec.authorization.allow-query-token` 改为 `cosec.pipeline.allow-query-token`（默认 `false`）。

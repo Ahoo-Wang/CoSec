@@ -45,6 +45,9 @@ enum class AuditReasonCode {
 
     /** A Permit outside the tenant's platform boundary (RFC 0007 §7.6); the response says only `forbidden`. */
     BOUNDARY,
+
+    /** A token that delegates (an `act` claim), which 8.0 refuses (RFC 0009 §6); the response says `token-invalid`. */
+    DELEGATION_UNSUPPORTED,
 }
 
 enum class AuditSourceType {

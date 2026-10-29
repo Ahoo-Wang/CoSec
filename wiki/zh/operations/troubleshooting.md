@@ -67,6 +67,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 - **令牌：** 签发方和本服务必须使用相同的 [`cosec.jwt.secret` 和 `cosec.jwt.algorithm`](./configuration.md#jwt)。
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
+- **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
+  `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md)）。携带
   API key 的请求只按 key 判断；不读取它的令牌。
 - **网关之后：** `CoSec-Identity` 是其他版本、没有 `auth.exp`，或签发时间在未来（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。

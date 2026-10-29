@@ -32,6 +32,7 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -158,6 +159,8 @@ class TokenAuthenticatorTest {
             .assert().isEqualTo(AuthnResult.RejectReason.TOKEN_REVOKED)
         authenticate({ throw TokenVerificationException("bad signature") }).reason()
             .assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
+        authenticate({ throw DelegationUnsupportedException("act") }).reason()
+            .assert().isEqualTo(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED)
         authenticate({ token() }, token = "unknown").reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
     }
 

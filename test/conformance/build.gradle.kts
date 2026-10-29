@@ -25,6 +25,8 @@ dependencies {
     testImplementation("tools.jackson.core:jackson-databind")
     // The engine level of the scenario format, and its reading, shared with users.
     testImplementation(project(":testkit"))
+    // IDN-4 through the real JWT verifier.
+    testImplementation(project(":jwt"))
     // PIP-10 through a gateway host's own filters: the identity strip, the pipeline's filter and the last hop.
     testImplementation(project(":gateway"))
     testImplementation(project(":webflux"))

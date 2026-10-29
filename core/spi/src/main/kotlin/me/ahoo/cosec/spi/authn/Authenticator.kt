@@ -60,7 +60,15 @@ sealed interface AuthnResult {
     /** A dependency the authenticator needs failed, such as the API key store: 503. */
     class Unavailable(val cause: Throwable) : AuthnResult
 
-    enum class RejectReason { TOKEN_INVALID, TOKEN_EXPIRED, TOKEN_REVOKED, API_KEY_INVALID }
+    enum class RejectReason {
+        TOKEN_INVALID,
+        TOKEN_EXPIRED,
+        TOKEN_REVOKED,
+        API_KEY_INVALID,
+
+        /** A token that delegates (an `act` claim, RFC 0009 §6): invalid to the client, named in audit (`IDN-4`). */
+        DELEGATION_UNSUPPORTED,
+    }
 }
 
 /** Who the credentials prove the caller is. */

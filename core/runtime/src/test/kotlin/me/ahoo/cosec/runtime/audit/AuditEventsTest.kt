@@ -136,6 +136,10 @@ class AuditEventsTest {
         audit(Decision.Deny(null), expired).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_EXPIRED)
         val invalid = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID))
         audit(Decision.Deny(null), invalid).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_INVALID)
+        // RFC 0009 §6: the client reads token-invalid, audit names the delegation.
+        val delegated = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED))
+        audit(Decision.Deny(null), delegated).authorization.reasonCode
+            .assert().isEqualTo(AuditReasonCode.DELEGATION_UNSUPPORTED)
     }
 
     @Test

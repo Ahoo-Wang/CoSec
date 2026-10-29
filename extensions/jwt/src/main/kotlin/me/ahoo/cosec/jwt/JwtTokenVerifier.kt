@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
+import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 
 /**
@@ -46,12 +47,11 @@ class JwtTokenVerifier(
     private fun verify(accessToken: String): DecodedJWT {
         try {
             return jwtVerifier.verify(accessToken)
-        } catch (tokenExpiredException: TokenExpiredException) {
+        } catch (expired: TokenExpiredException) {
             throw me.ahoo.cosec.spi.token
-                .TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
+                .TokenExpiredException(expired.message ?: "The token has expired.", expired)
         } catch (exception: Exception) {
-            throw me.ahoo.cosec.spi.token
-                .TokenVerificationException(exception.message!!, exception)
+            throw TokenVerificationException(exception.message ?: "The token is invalid.", exception)
         }
     }
 
@@ -61,9 +61,16 @@ class JwtTokenVerifier(
         return Jwts.toPrincipal(decodedAccessToken)
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
-        val decodedAccessToken = Jwts.decode(token.accessToken)
+        // The access token may have expired, so it is decoded here and only its signature checked. Decoding stays in
+        // this method: only the verifying methods may decode (PIP-11).
+        val decodedAccessToken = try {
+            Jwts.decode(token.accessToken)
+        } catch (exception: Exception) {
+            throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
+        }
         verifyAccessTokenSignature(decodedAccessToken)
         if (decodedRefreshToken.subject != decodedAccessToken.id) {
             throw RefreshTokenMismatchException()
@@ -76,8 +83,7 @@ class JwtTokenVerifier(
         try {
             algorithm.verify(decodedAccessToken)
         } catch (exception: Exception) {
-            throw me.ahoo.cosec.spi.token
-                .TokenVerificationException(exception.message!!, exception)
+            throw TokenVerificationException(exception.message ?: "The access token's signature is invalid.", exception)
         }
     }
 }

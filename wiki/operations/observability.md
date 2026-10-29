@@ -85,7 +85,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | scope rejected | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
 | a permit outside the tenant's boundary | `EXPLICIT_DENY` | `BOUNDARY` |
 | nothing allowed | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key) |
+| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid` |
 | `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY` (with `kind` `BAD_REQUEST`) |
 | `503`, a strict rate-limit rule that could not be counted | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |
