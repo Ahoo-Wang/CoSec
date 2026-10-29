@@ -194,13 +194,6 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     /**
-     * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the second half of [decide] (snapshot
-     * view, attribute plan, engine) for the principal and scope of a permitted request. A query, not a request: no
-     * obligation runs, no listener hears of it, and nothing fails open: an unreadable view, an error or a permit only
-     * break-glass gives is not a permit.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    /**
      * Whether [principal]'s credential would still be accepted as far as its memberships go: false when the membership
      * provider no longer knows it, or knows it as not active (RFC 0009 §4.2); true for claimed memberships, which only
      * the token's expiry or revocation ends. Throws [MembershipUnavailableException] when that cannot be established.
@@ -208,6 +201,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     internal suspend fun standing(principal: AuthenticatedPrincipal): Boolean =
         memberships.resolve(principal.tenant, principal.id, principal.membershipSource) != null
 
+    /**
+     * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the second half of [decide] (snapshot
+     * view, attribute plan, engine) for the principal and scope of a permitted request. A query, not a request: no
+     * obligation runs, no listener hears of it, and nothing fails open: an unreadable view, an error or a permit only
+     * break-glass gives is not a permit.
+     */
+    @Suppress("TooGenericExceptionCaught")
     internal suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Decision {
         val view = when (val loaded = call(null) { snapshots.view(security.scope, false) }) {
             is Fetched.Value -> loaded.value
