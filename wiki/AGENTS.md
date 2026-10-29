@@ -17,8 +17,10 @@ pnpm check:legacy        # no mention of an API or property that 8.0 removed (RF
 pnpm build               # production build; fails on dead links
 ```
 
-CI (`.github/workflows/deploy-wiki.yml`) runs `check:mermaid`, `check:docs` and `build` on every pull request
-that touches `wiki/`. `check:mermaid` needs Chrome; set `CHROME_BIN` if it is not on `PATH`.
+The `docs` job of `.github/workflows/ci.yml` runs `check:docs` and `build` on every pull request, and the required
+`CI` check needs it. `.github/workflows/deploy-wiki.yml` runs `check:mermaid`, `check:docs` and `build` again before
+it deploys from `main`; `check:mermaid` is not run on pull requests, so run it before pushing a change to a diagram.
+It needs Chrome; set `CHROME_BIN` if it is not on `PATH`.
 
 ## Structure
 

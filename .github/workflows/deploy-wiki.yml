@@ -5,16 +5,6 @@ on:
     branches: [main]
     paths:
       - 'wiki/**'
-  # Build and check the docs on pull requests too, so broken links or diagrams are caught before merge.
-  # The legacy-API guard (check:docs) also reads the files below, so a change to them runs it.
-  pull_request:
-    paths:
-      - 'wiki/**'
-      - 'skills/**'
-      - 'k8s/**'
-      - 'README*.md'
-      - 'llms.txt'
-      - 'SECURITY.md'
   workflow_dispatch:
 
 permissions:
@@ -23,8 +13,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('wiki-pr-{0}', github.event.pull_request.number) || 'pages' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -49,7 +39,6 @@ jobs:
           node-version: 24.21.0
 
       - name: Setup Pages
-        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
 
       - name: Install dependencies
@@ -69,13 +58,11 @@ jobs:
         working-directory: wiki
 
       - name: Upload artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: wiki/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
