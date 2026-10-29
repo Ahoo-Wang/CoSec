@@ -9,7 +9,7 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
 
 ## 前提条件 {#prerequisites}
 
-- JDK 17 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4 项目。
+- JDK 21 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4 项目。
 - 一个位于 `localhost:6379`、`maxmemory-policy` 为 `noeviction`（Redis 的默认值）的 Redis。CoSec 把策略文档保存在 Redis 中，Redis 可能淘汰它们时拒绝启动。例如：
 
   ```bash

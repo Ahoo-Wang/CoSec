@@ -1,0 +1,17 @@
+# Rule: BND-9, IDN-1
+# Mutant: a cap skips what is bound to the principal by name in both passes (RC1-1), so a capped key escapes the DENYs bound to or attached by its principal
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEngineTest --tests me.ahoo.cosec.engine.flat.FlatEnginePropertyTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+index be1cd013..a3550018 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+@@ -96,7 +96,7 @@ internal object CandidateOrder {
+         visitor: CandidateVisitor,
+         app: CompiledDocument?,
+     ): Boolean {
+-        if (effect === Effect.ALLOW && !request.request.subject.principalBindings) {
++        if (!request.request.subject.principalBindings) {
+             return false
+         }
+         if (attachments(request, platform, tenant, visitor)) {

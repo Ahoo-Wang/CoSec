@@ -73,11 +73,12 @@
     {
       "id": "BRK-8",
       "source": "RFC 0009 §4.2",
-      "statement": "Break-glass applies only to CoSec's own token: never to an API key, capped or not, nor to a principal another authenticator accepted. A principal without break-glass matches no break-glass binding.",
+      "statement": "Break-glass applies only to CoSec's own token, decided by provenance, never by a name: only a principal whose token CoSec's own verifier (`JwtTokenVerifier`) verified gets it. Never an API key, capped or not, a token another TokenVerifier accepted, nor a principal another authenticator accepted, whatever its credential is called; the method `jwt` is reserved for CoSec's token (RC1-26). A principal without break-glass matches no break-glass binding.",
       "level": "engine",
       "guards": [
         "engine:FlatEngineTest#a subject without break-glass matches no break-glass binding",
-        "runtime:TokenAuthenticatorTest#onlyATokenMayUseBreakGlass"
+        "runtime:TokenAuthenticatorTest#onlyCoSecsOwnVerifierMayUseBreakGlass",
+        "jwt:JwtTokenVerifierTest#onlyThisVerifiersTokensMayUseBreakGlass"
       ],
       "pending": null
     }

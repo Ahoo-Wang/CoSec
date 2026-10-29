@@ -89,7 +89,9 @@ class Changes(
     private val options: ChangeOptions = ChangeOptions(),
     /** The host's `AttributeProvider` catalog, which candidates compile against with the platform's own declarations. */
     attributes: AttributeCatalog = AttributeCatalog.NONE,
-    private val checks: ChangeChecks = ChangeChecks(options, attributes),
+    /** The headers the host reads credentials from besides the fixed ones (`CND-5`), as enforcement compiles with them. */
+    credentialHeaders: Set<String> = emptySet(),
+    private val checks: ChangeChecks = ChangeChecks(options, attributes, credentialHeaders),
     private val authority: ChangeAuthority = ChangeAuthority(authorizer, options),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),

@@ -320,8 +320,10 @@ and a rate limit rule's `key` alike. A document with such a reference does not c
 `cosec-migrate` alike. A DENY with `prefix` on `authorization` would let a document's author learn another principal's
 token one character at a time, and a key on it would count requests per token. `cosec-identity` is what a gateway forwards to the services behind it; at the
 gateway it is only the client's claim. The list is fixed
-([`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt));
-a host that reads API keys from another header is not covered by it.
+([`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)),
+plus the header the host reads API keys from, when `cosec.pipeline.api-key-header` renames it: the starter compiles
+every document, on the data plane and in the control plane, with that header refused too, and the pipeline never reads
+it for a condition.
 
 A header sent more than once reads as its value when every copy is the same. When the copies differ, the header has no
 single value, and a statement that reads it errs: a DENY on it makes the request Indeterminate (`503`) unless another

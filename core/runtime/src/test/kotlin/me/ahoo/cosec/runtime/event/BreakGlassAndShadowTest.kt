@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.event
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -40,6 +43,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -104,8 +108,10 @@ class BreakGlassAndShadowTest {
             AuthenticatedPrincipal(
                 PrincipalId("cosec"),
                 TenantId.PLATFORM,
-                PipelineFixtures.claims(),
-                credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+                MembershipSource.Claims(PipelineFixtures.claims()),
+                emptyMap(),
+                Identity.Credential(Identity.Method.JWT, "t1", null),
+                breakGlass = true,
             ),
             "token"
         )

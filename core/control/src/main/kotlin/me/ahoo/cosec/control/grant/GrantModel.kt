@@ -92,8 +92,9 @@ class Grantor(
     val memberships: Memberships,
     val attributes: Map<String, String>,
     /**
-     * Whether the grantor's principal bindings are its own here: false for a credential with a role cap (RFC 0009
-     * §4.2), which does not hold what is bound to the principal by name, and so cannot grant it either.
+     * Whether what is bound to the grantor by name (attachments, principal bindings) grants it anything here: false for
+     * a credential with a role cap (RFC 0009 §4.2), which does not hold those ALLOWs, and so cannot grant them either.
+     * Their DENYs bind it all the same (RC1-1).
      */
     val principalBindings: Boolean,
 )

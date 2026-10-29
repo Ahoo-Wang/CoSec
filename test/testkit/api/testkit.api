@@ -14,7 +14,8 @@ public final class me/ahoo/cosec/testkit/DocumentSnapshotCompiler : me/ahoo/cose
 	public static final field INSTANCE Lme/ahoo/cosec/testkit/DocumentSnapshotCompiler;
 	public fun compile (Lme/ahoo/cosec/testkit/ScenarioDocuments;)Lme/ahoo/cosec/testkit/CompiledSnapshot;
 	public final fun getStored ()Lme/ahoo/cosec/testkit/SnapshotCompiler;
-	public final fun with (Lme/ahoo/cosec/model/condition/AttributeCatalog;)Lme/ahoo/cosec/testkit/SnapshotCompiler;
+	public final fun with (Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;)Lme/ahoo/cosec/testkit/SnapshotCompiler;
+	public static synthetic fun with$default (Lme/ahoo/cosec/testkit/DocumentSnapshotCompiler;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/SnapshotCompiler;
 }
 
 public final class me/ahoo/cosec/testkit/EngineExpectations {

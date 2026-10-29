@@ -74,10 +74,14 @@
     {
       "id": "BND-9",
       "source": "RFC 0009 §4.2",
-      "statement": "A principal without principal bindings, a credential with a role cap, matches no Principal binding of the platform or the tenant; Anyone bindings and its roles still apply.",
+      "statement": "A principal without principal bindings, a credential with a role cap, is granted nothing by what is bound to it by name: no ALLOW of a Principal binding of the platform or the tenant, or of an attached policy, reaches it. Their DENYs still apply to it, as to its principal: a cap removes ALLOW candidates only, so it never lifts a restriction of the principal (RC1-1). Anyone bindings and its roles still apply.",
       "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P-cap a cap removes allows only"
+      ],
       "guards": [
-        "engine:FlatEngineTest#a subject without principal bindings matches none, and anyone bindings still apply"
+        "engine:FlatEngineTest#a subject without principal bindings matches none, and anyone bindings still apply",
+        "engine:FlatEngineTest#a subject without principal bindings is still denied by its own denies"
       ],
       "pending": null
     }

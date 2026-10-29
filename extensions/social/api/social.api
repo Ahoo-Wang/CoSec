@@ -77,11 +77,13 @@ public final class me/ahoo/cosec/social/SocialUser$Gender : java/lang/Enum {
 public abstract interface class me/ahoo/cosec/social/SocialUserPrincipalConverter {
 	public static final field Companion Lme/ahoo/cosec/social/SocialUserPrincipalConverter$Companion;
 	public static final field OAUTH_PROVIDER Ljava/lang/String;
+	public static final field OAUTH_USER_ID Ljava/lang/String;
 	public abstract fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;)Lreactor/core/publisher/Mono;
 }
 
 public final class me/ahoo/cosec/social/SocialUserPrincipalConverter$Companion {
 	public static final field OAUTH_PROVIDER Ljava/lang/String;
+	public static final field OAUTH_USER_ID Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/oauth/model/AuthCallback, me/ahoo/cosec/social/SocialCredentials {
@@ -90,7 +92,7 @@ public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/o
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosid/StringIdGenerator;)V
+	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;)V
 	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
 	public fun authorizeUrl ()Ljava/lang/String;
 	public fun getName ()Ljava/lang/String;

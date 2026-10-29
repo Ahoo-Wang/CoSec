@@ -16,8 +16,8 @@ package me.ahoo.cosec.social.justauth
 import com.alibaba.fastjson.JSONObject
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import me.ahoo.cosec.social.SocialAuthenticationException
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.enums.AuthUserGender
 import me.zhyd.oauth.model.AuthResponse
@@ -26,6 +26,7 @@ import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
+import java.util.Base64
 
 internal class JustAuthProviderTest {
 
@@ -34,10 +35,27 @@ internal class JustAuthProviderTest {
         val authRequest = mockk<AuthRequest> {
             every { authorize(any()) } returns "authorizeUrl"
         }
-        val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
-        authClient.name.assert().isEqualTo("clientId")
+        val authClient = JustAuthProvider("clientId", authRequest)
         authClient.name.assert().isEqualTo("clientId")
         authClient.authorizeUrl().assert().isEqualTo("authorizeUrl")
+    }
+
+    /** The state guards the callback against CSRF: 128 secure random bits each time, never an application id. */
+    @Test
+    fun `every state is 128 fresh random bits`() {
+        val states = mutableListOf<String>()
+        val state = slot<String>()
+        val authRequest = mockk<AuthRequest> {
+            every { authorize(capture(state)) } answers {
+                states += state.captured
+                "authorizeUrl"
+            }
+        }
+        val authClient = JustAuthProvider("clientId", authRequest)
+        repeat(1_000) { authClient.authorizeUrl() }
+        states.toSet().assert().hasSize(1_000)
+        states.map { Base64.getUrlDecoder().decode(it).size }.toSet().assert().containsExactly(16)
+        states.filterNot { Regex("[A-Za-z0-9_-]{22}").matches(it) }.assert().isEmpty()
     }
 
     @Test
@@ -50,7 +68,7 @@ internal class JustAuthProviderTest {
                 every { code } returns -1
             }
         }
-        val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
+        val authClient = JustAuthProvider("clientId", authRequest)
 
         authClient.authenticate(oAuthCredentials)
             .test()
@@ -73,7 +91,7 @@ internal class JustAuthProviderTest {
                 every { data } returns authUser
             }
         }
-        val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
+        val authClient = JustAuthProvider("clientId", authRequest)
         authClient.authenticate(oAuthCredentials)
             .test()
             .consumeNextWith {

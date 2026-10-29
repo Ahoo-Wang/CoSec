@@ -57,6 +57,8 @@ data class Identity(
     /**
      * How the principal authenticated, by name: any non-empty one. [JWT] and [API_KEY] are CoSec's own; an authenticator
      * for another kind of credential names its own (RFC 0010 C3), and a service behind the gateway reads it as it is.
+     * [JWT] is reserved: only CoSec's own token verifier yields it (`AuthenticatedPrincipal`), so behind a gateway it
+     * says that the gateway verified CoSec's token, which alone may use break-glass (RC1-26).
      */
     class Method(val value: String) {
         init {

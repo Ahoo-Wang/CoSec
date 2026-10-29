@@ -63,7 +63,7 @@ not apply yet. Nothing checks the title against the dumps: the author and the re
 
 ## 4. Coding conventions
 
-- Kotlin 2.x targeting Java 17; formatting follows [.editorconfig](.editorconfig).
+- Kotlin 2.x targeting Java 21; formatting follows [.editorconfig](.editorconfig).
 - [Detekt](config/detekt/detekt.yml) with `detekt-formatting` runs as part of `check`. It auto-corrects
   formatting locally, so commit the corrected files.
 - Every source file starts with the Apache-2.0 license header in
@@ -118,6 +118,8 @@ CoSec follows [Semantic Versioning](https://semver.org/):
 
 To release, bump `version` in [gradle.properties](gradle.properties) via a pull request on the branch of that
 line (`main` for 8.0, `7.x` for 7.x patches), then publish a GitHub release tagged `vX.Y.Z` from that branch.
+On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](k8s/base/kustomization.yaml) to the
+new version: the gateway image is tagged with release versions, never with a `-SNAPSHOT` one.
 Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
 Release notes are generated from pull request labels ([.github/release.yml](.github/release.yml)).

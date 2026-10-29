@@ -69,7 +69,10 @@ data class SimulatedRequest(
     val headers: Map<String, List<String>> = emptyMap(),
     /** What the host knows besides HTTP, such as a gateway's route id: what `request.attributes.*` conditions read. */
     val requestAttributes: Map<String, String> = emptyMap(),
-    /** False for a credential with a role cap: its principal bindings do not apply (RFC 0009 §4.2). A token by default. */
+    /**
+     * False for a credential with a role cap: what is bound to its principal by name grants it nothing, and its DENYs
+     * still apply (RFC 0009 §4.2, RC1-1). A token by default.
+     */
     val principalBindings: Boolean = true,
     /** False for an API key or any credential but CoSec's own token: break-glass does not apply. A token by default. */
     val breakGlass: Boolean = true,
@@ -91,6 +94,8 @@ class Simulator(
     private val engine: FlatEngine = CoSecFlatEngine,
     /** The host's `AttributeProvider` catalog, which enforcement compiles against. */
     private val attributes: AttributeCatalog = AttributeCatalog.NONE,
+    /** The headers the host reads credentials from besides the fixed ones, as enforcement compiles with them. */
+    private val credentialHeaders: Set<String> = emptySet(),
 ) {
     /** The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a host request. */
     fun scope(request: SimulatedRequest): ScopeResolution {
@@ -183,7 +188,7 @@ class Simulator(
      * declares ahead of the host's providers ([attributes]).
      */
     private fun compiler(platform: PolicyDocument?): PolicyDocumentCompiler =
-        PolicyDocumentCompiler.forPlatform(platform, attributes)
+        PolicyDocumentCompiler.forPlatform(platform, attributes, credentialHeaders = credentialHeaders)
 
     /** [document] compiled, [empty] when none is published, or null (unresolved) when it does not compile. */
     private fun documentOf(

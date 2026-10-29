@@ -13,7 +13,8 @@
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
 # new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
-# the `docs` job. The `CI` job is the one required check: it passes only when every other job here passed.
+# the `docs` job, the Kubernetes overlays in the `k8s` job. The `CI` job is the one required check: it passes only
+# when every other job here passed.
 name: CI
 on:
   push:
@@ -152,10 +153,34 @@ jobs:
       - name: Build with VitePress
         run: pnpm build
 
+  # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported
+  # upstream and for the newest; -strict refuses fields the schema does not have. No path filter, like `docs`.
+  k8s:
+    name: Kubernetes manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build and validate every overlay
+        run: |
+          set -euo pipefail
+          manifests="$RUNNER_TEMP/manifests.yaml"
+          for overlay in k8s/overlays/*/; do
+            docker run --rm --volume "$PWD:/repo:ro" --workdir /repo \
+              registry.k8s.io/kustomize/kustomize:v5.8.3 build "$overlay" > "$manifests"
+            for version in 1.35.0 1.37.0; do
+              echo "$overlay on Kubernetes $version"
+              docker run --rm --interactive ghcr.io/yannh/kubeconform:v0.8.0 \
+                -strict -summary -kubernetes-version "$version" - < "$manifests"
+            done
+          done
+
   ci:
     name: CI
     if: always()
-    needs: [ plan, test, actionlint, docs ]
+    needs: [ plan, test, actionlint, docs, k8s ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

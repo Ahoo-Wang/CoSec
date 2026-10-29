@@ -30,6 +30,8 @@ private val log = KotlinLogging.logger {}
  * stop doing what it says (`cosec.authentication.enabled: false` turning nothing off, say). Every `cosec.*` key in the
  * environment must be one of CoSec's configuration metadata (`META-INF/spring-configuration-metadata.json`), or lie
  * under a map- or list-valued one; the 7.x keys 8.0 renamed or removed are named with what replaces them ([RENAMED]).
+ * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
+ * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
 class UnknownProperties(
     private val known: Set<String>,
@@ -38,7 +40,7 @@ class UnknownProperties(
 ) {
     /** The `cosec.*` keys of [environment] that CoSec does not read, sorted. */
     fun of(environment: ConfigurableEnvironment): List<String> =
-        ConfigurationPropertySources.get(environment)
+        ConfigurationPropertySources.from(environment.propertySources.map(KubernetesServiceLinks::withoutServiceLinks))
             .filterIsInstance<IterableConfigurationPropertySource>()
             .flatMap { source -> source.map { it.toString() } }
             .filter { it.startsWith(PREFIX) }

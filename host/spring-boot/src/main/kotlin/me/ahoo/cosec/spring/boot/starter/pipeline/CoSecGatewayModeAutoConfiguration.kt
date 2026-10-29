@@ -15,8 +15,9 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.runtime.identity.IdentityGate
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosid.StringIdGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -47,7 +48,7 @@ class CoSecGatewayModeAutoConfiguration {
     fun cosecIdentityGate(
         pipeline: PipelineProperties,
         revocation: RevocationProperties,
-        idGenerator: ObjectProvider<StringIdGenerator>,
+        idGenerator: ObjectProvider<IdGenerator>,
     ): IdentityGate {
         log.warn {
             "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives. Only the CoSec " +
@@ -57,7 +58,7 @@ class CoSecGatewayModeAutoConfiguration {
             maxBytes = pipeline.gateway.maxSize.toBytes().toInt(),
             maxAge = pipeline.gateway.maxAge,
             skew = revocation.skew,
-            idGenerator = idGenerator.ifAvailable,
+            idGenerator = idGenerator.getIfAvailable { RandomIdGenerator },
         )
     }
 }

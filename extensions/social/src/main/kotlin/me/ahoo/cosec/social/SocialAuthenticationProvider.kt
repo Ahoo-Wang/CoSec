@@ -18,6 +18,10 @@ import reactor.core.publisher.Mono
 /**
  * Social Provider .
  *
+ * Both calls block the calling thread: [authorizeUrl] draws the OAuth `state` from a `SecureRandom` and writes it to
+ * the state cache, and [authenticate] calls the provider over blocking HTTP (JustAuth). Call them off an event loop,
+ * on `Schedulers.boundedElastic()` in WebFlux.
+ *
  * @author ahoo wang
  */
 interface SocialAuthenticationProvider : Named {

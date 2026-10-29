@@ -10,6 +10,46 @@ the data migration, what 8.0 decides differently, responses, authentication, sto
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
+
+8.0.0-alpha.1 is a preview with no compatibility promise. These changes since then, from the
+[RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), break decisions,
+code or configuration written against it. A 7.x deployment reads them in the sections below.
+
+- **A role cap removes ALLOWs only** (RC1-1, `BND-9`, `IDN-2`). A capped credential (an API key with `roles`) still
+  gets no grant from its principal's attached policies and principal bindings, but their DENYs now apply to it: a
+  request its principal is denied is denied to every key of the principal, capped or not. In alpha.1 a cap dropped
+  those DENYs too, so a capped key could do what its principal could not. Nothing to migrate; to see which requests
+  change, `simulate` them with `principalBindings: false` ([Testing policies](../policies/testing.md)). The grant
+  analysis counts a capped author's DENYs the same way.
+- **Break-glass by provenance** (RC1-26, `BRK-8`). Only a token CoSec's own `JwtTokenVerifier` verified gets
+  break-glass. A `TokenAuthenticator` around another `TokenVerifier` authenticates its tokens without break-glass, and
+  names their credential after its `method` (`token` by default) rather than `jwt`. The method `jwt` is reserved:
+  `AuthenticatedPrincipal` refuses a credential of that method from your code (`IllegalArgumentException`, so a `503`),
+  and `TokenAuthenticator` refuses `method = "jwt"` for a verifier that is not CoSec's. Name your authenticator's
+  method after its credential ([Extending](../architecture/extending.md#authenticators)).
+- **A renamed API key header is a credential header** (RC1-21, `CND-5`). With `cosec.pipeline.api-key-header` set, a
+  document that reads that header (a condition or a rate limit `key`) no longer compiles, in the control plane or on
+  an instance, and the pipeline never reads it for a condition. Remove such references before upgrading. In code,
+  `ConditionChecker`, `PolicyDocumentCompiler.forPlatform` and `of`, `PlatformCompiler`, `ChangeChecks`, `Simulator`
+  and `HttpAttributes` take the header as a new parameter.
+- **A `tenantId` claim that is not a string makes the token invalid** (RC1-22), where alpha.1 read it as the default
+  tenant `(0)`. Issue the tenant as a string.
+- **The tenant switch re-derives memberships** (RC1-23). `AbstractSwitchTenantAuthentication.switchTenant` answers a
+  `TenantMembership`, the user's roles, policies and attributes in the target tenant (or
+  `TenantMembership.fromProvider()`), instead of a principal, and `authenticate` builds the new principal from it
+  alone. An implementation that wrapped `previousPrincipal` carried the previous tenant's roles into the new token
+  ([Tenants](../integration/authentication.md#tenants)).
+- **The JWT secret has a minimum length** (RC1-24): 32, 48 or 64 UTF-8 bytes for `hmac256`, `hmac384` or `hmac512`.
+  A shorter `cosec.jwt.secret` fails startup; set a longer one on the issuer and every verifier, which makes the
+  tokens issued with the old one invalid.
+- **Social login signs only what the provider owns** (RC1-25). `DirectSocialUserPrincipalConverter` gives the
+  principal two attributes, `cosec_oauth_provider` and `cosec_oauth_user_id`, instead of the provider's raw user info,
+  which the user edits, and no longer writes into the `SocialUser` it converts. A token whose `attributes` name
+  `apiKeyId`, which CoSec sets for API keys, is refused as `token-invalid`, and `JwtTokenConverter` does not issue
+  one. To keep profile fields, declare your own `SocialUserPrincipalConverter` and keep only fields the user cannot
+  change ([Social login](../integration/authentication.md#social-login)).
+
 ## 7.x to 8.0
 
 8.0 upgrades only from 7.x. To upgrade from 6.x, first follow
@@ -30,6 +70,9 @@ What is different, in short:
 - **Conditions are data.** A small condition language replaces the matcher factories, OGNL and SpEL. Nothing in a
   policy runs code.
 - **Errors are `application/problem+json`.** A response no longer tells a client whether a DENY exists.
+- **Java 21.** Every 8.0 module is compiled for Java 21, where 7.x was compiled for Java 17: an application builds
+  and runs on JDK 21 or later. The `cosec-gateway-server` image is the exception: it runs on JDK 25, with an AOT cache
+  ([Deployment](./deployment.md#the-image)).
 
 ### Upgrade checklist
 
@@ -42,9 +85,10 @@ What is different, in short:
    [Converting](#migrating-the-data) reports every policy that cannot be translated.
 3. **Convert the data** with `cosec-migrate convert` and fix every rejection until the conversion is accepted. Read
    the semantic changes in `report.json` against [What 8.0 decides differently](#what-8-0-decides-differently).
-4. **Update the dependencies and the code**: replace the starter's capabilities with the modules themselves and move
-   imports to the new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses
-   of [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
+4. **Update the dependencies and the code**: move the build and the runtime to JDK 21, replace the starter's
+   capabilities with the modules themselves and move imports to the new packages
+   ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses of
+   [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
 5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
    new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
    common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring
@@ -332,7 +376,17 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
   ([Authentication](../integration/authentication.md#tokens)). A deny is audited with the reason code
   `DELEGATION_UNSUPPORTED`; on a permit the audit records `ALLOW`, and the reason appears only in the decision event's
   `subject.rejected`. Refreshing or revoking such a token fails too.
-- `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`).
+- **A `tenantId` claim that is not a string**, or an `attributes` claim that names `apiKeyId` (set by CoSec for API
+  keys only), makes the token `token-invalid`; 7.x read such a tenant as none. **`cosec.jwt.secret`** must be at least
+  32, 48 or 64 UTF-8 bytes for `hmac256`, `hmac384` or `hmac512`, or startup fails.
+- **Break-glass, 7.x's root,** applies only to a token CoSec's own `JwtTokenVerifier` verified, never to a token of a
+  custom `TokenVerifier` or to a principal another authenticator accepted (`BRK-8`).
+- **Tenant switch and social login.** `AbstractSwitchTenantAuthentication.switchTenant` answers the user's
+  `TenantMembership` in the target tenant instead of a principal, so the new token never carries the previous
+  tenant's roles. `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
+  not the provider's user info ([Authentication](../integration/authentication.md#tenants)).
+- `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`), and no document may read the
+  header it names (`CND-5`).
   `cosec.api-key.store-blocking` is gone: the Redis key reader never blocks. A request that carries an API key is
   judged by the key alone, even if it also carries a token (`PIP-8`).
 - `cosec.authorization.allow-query-token` is now `cosec.pipeline.allow-query-token` (default `false`).
@@ -360,8 +414,9 @@ principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0
   `503` and the log names `cosec-migrate api-keys`. Convert the keys before switching (below).
 - **A provider is required.** `cosec.api-key.enabled=true` without a `MembershipProvider` bean fails startup
   (`IDN-6`). `cosec.api-key.enabled` is `true` or `false`; `on`, `yes` or `1` fail startup.
-- **A cap narrows principal bindings and break-glass too.** A key with `roles` gets none of its principal's principal
-  bindings, `roles: []` only what `Anyone` bindings give, and no API key ever gets break-glass (`BND-9`, `BRK-8`).
+- **A cap narrows principal bindings and break-glass too.** A key with `roles` gets no grant from its principal's
+  principal bindings and attached policies, though their DENYs still apply to it, `roles: []` only what `Anyone`
+  bindings give, and no API key ever gets break-glass (`BND-9`, `BRK-8`).
 - **Configured keys** (`cosec.api-key.keys[]`): `tenant-id` is required, and each key sets exactly one of `roles`
   (its cap; `[]` for no roles) and `uncapped: true`. `policies` and `attributes` are gone; a key that still sets them
   stops startup, and so does one that sets neither or both of `roles` and `uncapped`. A 7.x key held only the roles
@@ -508,6 +563,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `openapi-support` | `cosec-openapi`, with `spring-boot-starter-actuator` and `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`, with `spring-boot-starter-kafka` |
 | (new in 8.0) | `cosec-control`, the control plane, with `cosec-cocache` |
+| (new in 8.0) | `cosec-cosid`, CoSec's ids from CosId 5 (see below) |
 
 The full list is in [Modules](../guide/introduction.md#modules). A module a turned-on feature needs is checked at
 startup: a web host without its adapter module, a gateway without `cosec-gateway`, `cosec.api-key.store=redis` without
@@ -554,6 +610,26 @@ without an explicit opt-in. Do not opt in from an application.
 **`KafkaAuditEventSink` takes an `Executor`.** Its third parameter was a Reactor `Scheduler`; it is now a
 `java.util.concurrent.Executor` (by default its own single thread with a bounded queue).
 
+**CoSec no longer brings CosId.** In 7.x, `cosec-core`, `cosec-jwt` and `cosec-social` had `cosid-core` in their API,
+and CoSec's platform, `cosec-dependencies`, imported `cosid-bom`. In 8.0 only `cosec-cosid` depends on CosId, and no
+CoSec BOM imports it or sets its version, so an application can use any CosId version, or none, and declares it, and
+its version, itself. CoSec makes its
+ids through its own port, `IdGenerator` (`me.ahoo.cosec.spi.id`, in `cosec-spi`). Without a bean of yours they come
+from `RandomIdGenerator`, random version 4 UUIDs. To keep CosId's ids ([Ids](../architecture/extending.md#ids)):
+
+- **On CosId 5**, add `cosec-cosid`: the starter gives CoSec the ids of the generator `cosec.cosid.generator` names
+  (CosId's `default` unless set). CosId 5 itself is a migration of its own: its [4.x to 5.0 guide](https://github.com/Ahoo-Wang/CosId/blob/main/documentation/docs/en/guide/migration/from-4x.md).
+- **On CosId 4**, declare one bean:
+
+```kotlin
+// CosId 4: the StringIdGenerator the 7.x starter took
+@Bean
+fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.generateAsString() }
+```
+
+The OAuth `state` of social login no longer comes from that bean: it is always 128 random bits from a `SecureRandom`,
+because the callback relies on it being unpredictable.
+
 ### Removed and replaced APIs
 
 Code that uses any of these no longer compiles or is no longer called.
@@ -585,6 +661,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |
 | Path variables left in the caller's security context after authorization | None. Read path variables from your web framework. |
 | `cosecPolicyGenerator`, `cosecAppPermissionGenerator` actuator endpoints | `cosecServiceGenerator/routes` (a route map) and `cosecServiceGenerator/app` (an app document). |
+| `StringIdGenerator`, `UuidGenerator` (CosId) in `JwtTokenConverter`, `JustAuthProvider` and the starter's beans; in the 8.0 previews also `PipelineComponents.idGenerator` and `IdentityGate` | `IdGenerator` (`cosec-spi`, [Ids](../architecture/extending.md#ids)), `RandomIdGenerator` by default. `JustAuthProvider` takes no id generator: it draws its OAuth `state` from `SecureRandom`. |
 | `SocialUserConverter` (`cosec-social`) | None: it is internal to `cosec-social`. Turn a provider's user into your principal with a `SocialUserPrincipalConverter` bean ([Social login](../integration/authentication.md#social-login)). |
 
 Still available: `SecurityContext` (now with `scope`, the validated app, space and roles; read it rather than the

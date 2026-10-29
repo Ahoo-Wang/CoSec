@@ -14,7 +14,6 @@
 dependencies {
     api(platform(libs.spring.boot.dependencies))
     api(platform(libs.spring.cloud.dependencies))
-    api(platform(libs.cosid.bom))
     api(platform(libs.cocache.bom))
     api(platform(libs.opentelemetry.instrumentation.bom))
     api(platform(libs.springdoc.bom))

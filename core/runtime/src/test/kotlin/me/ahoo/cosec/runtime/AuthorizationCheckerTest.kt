@@ -13,15 +13,27 @@
 
 package me.ahoo.cosec.runtime
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.flat.FlatEngine
+import me.ahoo.cosec.engine.flat.FlatEvaluation
+import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
@@ -38,6 +50,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.cancellation.CancellationException
 
 /** RFC 0006 §7.6: checks evaluate as the permitted request's principal and scope, and fail closed. */
 class AuthorizationCheckerTest {
@@ -104,6 +117,90 @@ class AuthorizationCheckerTest {
         checker.check(security.securityContext, "order:read", "order/42").assert().isTrue()
         checker.check(security.securityContext, "order:write", "order/42").assert().isFalse()
         checker.check(security, Action("http", "GET"), Resource("http", "/other", emptyMap())).assert().isFalse()
+    }
+
+    /** What Wow records: which statement permitted the check, and through which binding of which document. */
+    @Test
+    fun decidesWithTheStatementAndBindingThatPermitted() = runBlocking<Unit> {
+        val context = permitted().securityContext
+        val permit = checker.decide(context, "order:read", "order/42")
+        permit.assert().isInstanceOf(Decision.Permit::class.java)
+        val by = (permit as Decision.Permit).by
+        by.policy.assert().isEqualTo(PolicyId("order"))
+        by.index.assert().isEqualTo(0)
+        by.via.assert().isEqualTo(BindingRef.Bound(BindingId("g:order"), DocumentKind.PLATFORM))
+        checker.decide(context, "order:write", "order/42").assert().isEqualTo(Decision.Deny(null))
+    }
+
+    @Test
+    fun checkIsWhetherDecidePermits() = runBlocking<Unit> {
+        val context = permitted().securityContext
+        val cases = listOf(
+            "http:GET" to "/orders/2",
+            "http:DELETE" to "/orders/2",
+            "order:read" to "order/42",
+            "order:write" to "order/42",
+            "GET" to "/orders/2",
+        )
+        for (failing in listOf(false, true)) {
+            views.fail = failing
+            for ((action, resource) in cases) {
+                val decision = checker.decide(context, action, resource)
+                checker.check(context, action, resource).assert().isEqualTo(decision is Decision.Permit)
+            }
+        }
+    }
+
+    /** Fails on the `fail:*` actions, as a defect or a cancellation from inside the check would; decides the rest. */
+    private object FailingEngine : FlatEngine by CoSecFlatEngine {
+        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
+            when (request.request.action.verb.takeIf { request.request.action.namespace == "fail" }) {
+                "throw" -> throw IllegalStateException("broken")
+                "cancel" -> throw CancellationException("cancelled inside the check")
+                else -> CoSecFlatEngine.evaluate(request, snapshot, trace)
+            }
+    }
+
+    private fun failingChecker(): Pair<AuthorizationChecker, RequestSecurity> {
+        val pipeline = PipelineFixtures.pipeline(
+            authenticator = authenticator(authenticated(claims())),
+            engine = FailingEngine,
+            views = views,
+        )
+        val security = runBlocking { pipeline.evaluate(facts("/orders/1")) }.security!!
+        return AuthorizationChecker(pipeline) to security
+    }
+
+    @Test
+    fun aFailingCheckIsIndeterminateNeverAPermit() = runBlocking<Unit> {
+        val (checker, security) = failingChecker()
+        val failed = checker.decide(security.securityContext, "fail:throw", "fail/1")
+        failed.assert().isInstanceOf(Decision.Indeterminate::class.java)
+        ((failed as Decision.Indeterminate).cause as Cause.SourceUnavailable).error
+            .assert().isInstanceOf(IllegalStateException::class.java)
+        checker.check(security.securityContext, "fail:throw", "fail/1").assert().isFalse()
+        // A cancellation from inside the check, while the caller still runs, is a failure of the check.
+        checker.decide(security.securityContext, "fail:cancel", "fail/1")
+            .assert().isInstanceOf(Decision.Indeterminate::class.java)
+        checker.check(security.securityContext, "fail:cancel", "fail/1").assert().isFalse()
+    }
+
+    @Test
+    fun theCallersOwnCancellationPropagates() = runBlocking<Unit> {
+        val (checker, security) = failingChecker()
+        var propagated = false
+        val job = launch {
+            try {
+                currentCoroutineContext().cancel()
+                checker.decide(security.securityContext, "fail:cancel", "fail/1")
+            } catch (e: CancellationException) {
+                propagated = true
+                throw e
+            }
+        }
+        job.join()
+        job.isCancelled.assert().isTrue()
+        propagated.assert().isTrue()
     }
 
     @Test
@@ -178,8 +275,16 @@ class AuthorizationCheckerTest {
         // A context the pipeline did not make, and an action without a namespace.
         checker.check(SimpleSecurityContext.anonymous(), "http:GET", "/orders/2").assert().isFalse()
         checker.check(security.securityContext, "GET", "/orders/2").assert().isFalse()
+        checker.decide(
+            SimpleSecurityContext.anonymous(),
+            "http:GET",
+            "/orders/2"
+        ).assert().isEqualTo(Decision.Deny(null))
+        checker.decide(security.securityContext, "GET", "/orders/2").assert().isEqualTo(Decision.Deny(null))
         // An unreadable snapshot is not a permit.
         views.fail = true
         checker.check(security.securityContext, "http:GET", "/orders/2").assert().isFalse()
+        checker.decide(security.securityContext, "http:GET", "/orders/2").assert()
+            .isInstanceOf(Decision.Indeterminate::class.java)
     }
 }

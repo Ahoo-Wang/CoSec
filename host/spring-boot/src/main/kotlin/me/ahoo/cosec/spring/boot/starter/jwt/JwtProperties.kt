@@ -40,7 +40,11 @@ class JwtProperties(
         var refresh: Duration = Duration.ofDays(7)
     )
 
-    enum class Algorithm {
-        HMAC256, HMAC384, HMAC512
+    /**
+     * [minSecretBytes]: the shortest `secret` each algorithm accepts, in UTF-8 bytes, its hash's output size (RFC 7518
+     * §3.2). A shorter one can be guessed offline from any token issued with it (RC1-24).
+     */
+    enum class Algorithm(val minSecretBytes: Int) {
+        HMAC256(32), HMAC384(48), HMAC512(64)
     }
 }

@@ -17,13 +17,14 @@ on every push and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/c
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
 
-- **JDK.** The image runs on Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`). The code is compiled for Java 17 like
-  every other CoSec module, so the JDK 17 baseline is unchanged.
+- **JDK.** The CoSec libraries target Java 21, which is what an application on them needs. The image is an
+  application of its own and runs on JDK 25, Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`), with a JDK 25
+  [AOT cache](#aot-cache): its runtime is 25, not 21.
 - **Required settings.** `COSEC_JWT_SECRET` (there is no default, see
   [Authentication](../integration/authentication.md)) and the Redis address, for example `SPRING_DATA_REDIS_URL`.
 - **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`. The
   configuration is `config/application.yaml`; the JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap).
-  Add options through `JAVA_OPTS`.
+  Add options through `JAVA_OPTS`, which follows them and so overrides them ([Memory](#memory)).
 - **What is in it.** The gateway filter, the Redis snapshot store (`cosec-cocache`), tracing and the Kafka module. Its
   configuration turns Kafka audit (`cosec.audit.kafka.enabled: false`), login
   (`cosec.authentication.login.enabled: false`) and ip2region (`cosec.ip2region.enabled: false`) off. It has no control plane: documents are published by
@@ -144,26 +145,104 @@ rest. Keep the pod's termination grace period long enough for Spring's own grace
 
 ## Kubernetes
 
-[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) holds example manifests:
+[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) holds [Kustomize](https://kustomize.io/) manifests: a base
+and an overlay for each kind of cluster. Deploy an overlay, never the base on its own.
 
-| File | Contents |
-|---|---|
-| `cosec-gateway-config.yaml` | A ConfigMap with `application.yaml`, mounted over `/opt/cosec-gateway-server/config/`: the routes and the `cosec.*` settings above. |
-| `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), startup and liveness probes on `/actuator/health/liveness`, a readiness probe on `/actuator/health/readiness`, and the OpenTelemetry Java agent injection annotation. |
-| `cosec-gateway-redis.yaml` | The Secret `redis-secret`, with placeholder values. |
-| `cosec-gateway-service.yaml` | A Service, port 80 to the container's 8080. |
-| `cosec-gateway-hpa.yaml` | A HorizontalPodAutoscaler, 2 to 10 replicas on CPU. |
+| Directory | For | Contents |
+|---|---|---|
+| `base/` | the overlays to build on | The Deployment and a Service (port 80 to the container's 8080). `application.yaml` (the routes and the `cosec.*` settings above) becomes a ConfigMap mounted over `/opt/cosec-gateway-server/config/`; its name carries a hash of the file, so a change to it rolls the pods. The image is `ghcr.io/ahoo-wang/cosec-gateway`, with its tag set under `images:`. One gateway gets 768Mi and a 256 MiB heap. |
+| `overlays/dev/` | trying CoSec out on any cluster, kind and minikube included | The namespace `cosec-dev`, one gateway with the base's resources, and a single Redis 7.4 with `maxmemory-policy noeviction` and no password. Redis keeps its data in an `emptyDir`, which outlives a container restart but not the pod: deleting the Redis pod deletes the documents. |
+| `overlays/production/` | a starting point for your own overlay | The namespace `cosec`; your Redis, from the ConfigMap `cosec-gateway-redis` (host and port; or `SPRING_DATA_REDIS_CLUSTER_NODES` for a cluster) and the Secret `cosec-redis-secret` (`password`, and `username` for an ACL user); 2 to 10 gateways behind a HorizontalPodAutoscaler on CPU (70 % of the 1 CPU each requests; it needs the metrics server); a PodDisruptionBudget that evicts one gateway at a time and always lets an unready one go, so a drain never waits for a platform document; a NetworkPolicy that admits port 8080 only; 2Gi and a 1 GiB heap per gateway, spread across nodes. |
 
-The Deployment names the image `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`: set the tag to the version you deploy. Create
-`cosec-jwt-secret` yourself (`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`),
-and fill `redis-secret` with your nodes and password. `cosec-migrate` connects to one Redis server through
-`--to-redis`.
+### Deploying
 
-The startup and liveness probes read `/actuator/health/liveness`, and the readiness probe
-`/actuator/health/readiness`; the gateway server enables these groups (`management.endpoint.health.probes.enabled`).
-So a pod starts while Redis holds no platform document, and stays out of the Service until it is installed
-([Readiness](#readiness)). Don't point a probe at `/actuator/health`: it stays DOWN until then, and a startup probe
-on it restarts the pod.
+1. **Create the namespace and the JWT secret.** The repository holds no secret, and the gateway does not start
+   without this one (`COSEC_JWT_SECRET`, see [Authentication](../integration/authentication.md)):
+
+   ```bash
+   kubectl create namespace cosec-dev
+   kubectl -n cosec-dev create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
+   ```
+
+   For the production overlay, use the namespace `cosec`, and also create the Redis credentials:
+   `kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<password>`.
+2. **Production: point it at your Redis.** Set the address in the `cosec-gateway-redis` ConfigMap of the overlay's
+   `kustomization.yaml`. Redis must run with `maxmemory-policy noeviction`
+   ([Redis requirements](./storage.md#redis-requirements)). Keep your routes, namespace and image tag in an overlay of
+   your own on top of this one: replace the configuration with
+   `configMapGenerator: [{name: cosec-gateway-config, behavior: replace, files: [application.yaml]}]` and set the tag
+   under `images:`.
+3. **Apply the overlay:**
+
+   ```bash
+   kubectl apply -k k8s/overlays/dev
+   ```
+
+4. **Publish the platform document.** Until it is installed, every gateway runs but reports itself not ready and stays
+   out of the Service ([Readiness](#readiness)), and `kubectl rollout status` waits. That is by design: it would answer
+   every routed request `503`. With the dev overlay, reach its Redis with
+   `kubectl -n cosec-dev port-forward svc/redis 6379` and publish with
+   `cosec-migrate publish --to-redis redis://localhost:6379 --in <dir>` ([The first documents](./storage.md#the-first-documents)).
+5. **Try a request** through `kubectl -n cosec-dev port-forward svc/cosec-gateway 8080:80`.
+
+### What the manifests set
+
+- **No service links** (`enableServiceLinks: false`). Kubernetes would otherwise put variables such as
+  `COSEC_GATEWAY_SERVICE_HOST` and `COSEC_GATEWAY_PORT_80_TCP_ADDR`, derived from the Service `cosec-gateway`, into the
+  gateway's environment. Spring reads them as `cosec.gateway.*` properties, which 8.0.0-alpha.1 refused at startup as
+  `cosec.*` keys CoSec does not read; since alpha.2 the check skips exactly these variables
+  ([Unknown properties](./configuration.md#unknown-properties)). The gateway finds services by DNS, so nothing needs
+  them in its environment.
+- **Pod security.** The gateway runs as the image's `appuser` (uid 999; the image names its user rather than its uid,
+  so the manifests give the uid for `runAsNonRoot` to check), with a read-only root filesystem, no privilege
+  escalation, every capability dropped, the runtime's default seccomp profile, and no service account token: it never
+  calls the Kubernetes API. Both overlays meet the `restricted` Pod Security Standard. It writes only to three
+  `emptyDir` volumes: `logs/` (the GC log), `data/` (a heap dump on `OutOfMemoryError`) and `/tmp` (Netty's native
+  transport, the JVM's performance data). The AOT cache is only read.
+- **Probes.** The startup and liveness probes read `/actuator/health/liveness`, the readiness probe
+  `/actuator/health/readiness`, both groups that `application.yaml` enables (`management.endpoint.health.probes.enabled`).
+  So a pod starts while Redis holds no platform document, and stays out of the Service until it is installed. Don't
+  point a probe at `/actuator/health`: it stays DOWN until then, and a startup probe on it restarts the pod.
+- **Actuator.** Only `health` is exposed over HTTP, and the `gateway` endpoint, which reads and changes routes, is off
+  (`management.endpoint.gateway.access: none`). CoSec authorizes the gateway's routes, not its actuator endpoints.
+- **Shutdown.** A `preStop` pause of 5 seconds lets the Service drop the pod first; `terminationGracePeriodSeconds: 45`
+  covers it, Spring's graceful shutdown (30 seconds at most) and the decision listeners' drain ([Shutdown](#shutdown)).
+- **JVM options**, through `JAVA_OPTS`: the memory sizes below, `-XX:+ExitOnOutOfMemoryError` so that a JVM that ran
+  out of memory is restarted, and `-Dcom.sun.management.jmxremote.host=127.0.0.1`. The image's start script starts a
+  JMX agent on port 5555 with no authentication; this keeps it inside the pod, and the production NetworkPolicy closes
+  every port but 8080.
+
+### Memory
+
+A gateway's memory is its heap, its direct memory, and the JVM's own native memory. The base and the production
+overlay size them for their limits:
+
+| | `dev` (base) | `production` |
+|---|---|---|
+| Memory request and limit | 768Mi | 2Gi |
+| Heap (`-Xms` = `-Xmx`) | 256 MiB | 1 GiB |
+| Direct memory, Netty's buffers (`-XX:MaxDirectMemorySize`) | up to 64 MiB | up to 256 MiB |
+| Native: the AOT cache's class data (about 105 MiB), JIT code, metaspace, GC structures, threads | about 220 MiB | about 250 MiB |
+| Left for the page cache and peaks | about 230 MiB | about 500 MiB |
+| CPU request and limit | 250m, 1 | 1, 2 |
+
+- **ZGC commits the whole heap at startup**, as shared memory the container is charged for at once. A limit too small
+  for the heap fails the pod within seconds, not after hours of traffic.
+- **The heap needs free space.** ZGC collects while the gateway allocates; a heap that is mostly live data makes
+  request threads wait for it. The compiled documents live on the heap: size it for your documents and traffic, then
+  set the limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter.
+- **The image's own defaults do not fit a small cluster.** Its start script sets `-Xms2048M -Xmx2048M
+  -XX:MaxDirectMemorySize=512M`, about 2.8 GiB with the native part. `JAVA_OPTS` comes after them on the command line,
+  so its sizes win; `JAVA_TOOL_OPTIONS` cannot change them, because the JVM reads it first. The fixed `-Xmx` also
+  overrides `-XX:MaxRAMPercentage`, so give explicit sizes. The base sets them in `JVM_MEMORY_OPTS`, and the production
+  overlay replaces it; change it together with the memory request and limit.
+- **CPU.** The JVM sizes its GC, JIT and Netty threads from the CPU limit, and the autoscaler measures against the
+  request.
+
+The native part was measured in the image (`8.0.0-alpha.1`, `linux/arm64`, Docker with these limits and a read-only
+root filesystem), after about 45,000 requests to a route and to the health endpoint with no platform document
+published, so that each answered `503`: the container held 471 MiB (dev) and 1,277 MiB (production), and nothing was
+killed for memory.
 
 ## How CI checks the image
 

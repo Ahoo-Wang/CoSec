@@ -9,6 +9,18 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 存储、API、属性和可观测性。本页是迁移步骤的唯一出处。每个版本的发布说明见
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
+
+8.0.0-alpha.1 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，会破坏基于它写成的决策、代码或配置。7.x 部署在下面各节中读到它们。
+
+- **角色上限只移除 ALLOW**（RC1-1、`BND-9`、`IDN-2`）。带上限的凭证（带 `roles` 的 API key）仍然得不到其主体附加策略和主体绑定的授权，但它们的 DENY 现在作用于它：主体被拒绝的请求，该主体的每个 key 都被拒绝，无论是否有上限。alpha.1 中上限把这些 DENY 也一并去掉了，因此带上限的 key 能做主体不能做的事。无需迁移；要看哪些请求的结果会变，用 `principalBindings: false` 对它们做 `simulate`（[策略测试](../policies/testing.md)）。授权分析以同样方式计入带上限作者的 DENY。
+- **break-glass 按来源判断**（RC1-26、`BRK-8`）。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能得到 break-glass。包装其他 `TokenVerifier` 的 `TokenAuthenticator` 认证其令牌时不带 break-glass，并以它的 `method`（默认 `token`）而不是 `jwt` 命名凭证。方式 `jwt` 是保留名：`AuthenticatedPrincipal` 拒绝你的代码用这个方式构造的凭证（`IllegalArgumentException`，即 `503`），`TokenAuthenticator` 也拒绝为非 CoSec 的校验器设置 `method = "jwt"`。请按凭证给你的认证器的方式命名（[扩展](../architecture/extending.md#authenticators)）。
+- **改名后的 API key 头是携带凭证的请求头**（RC1-21、`CND-5`）。设置了 `cosec.pipeline.api-key-header` 时，读取该请求头的文档（条件或限流规则的 `key`）无论在控制面还是实例上都不再能编译，管道也从不为条件读取它。升级前删除这类引用。代码中，`ConditionChecker`、`PolicyDocumentCompiler.forPlatform` 和 `of`、`PlatformCompiler`、`ChangeChecks`、`Simulator` 与 `HttpAttributes` 以新参数接收该请求头。
+- **`tenantId` 声明不是字符串时令牌无效**（RC1-22），alpha.1 则把它读作默认租户 `(0)`。请以字符串签发租户。
+- **租户切换重新得出成员关系**（RC1-23）。`AbstractSwitchTenantAuthentication.switchTenant` 回答一个 `TenantMembership`，即用户在目标租户中的角色、策略和属性（或 `TenantMembership.fromProvider()`），而不是一个主体；`authenticate` 只依据它构造新主体。包装 `previousPrincipal` 的实现会把先前租户的角色带进新令牌（[租户](../integration/authentication.md#tenants)）。
+- **JWT 密钥有最短长度**（RC1-24）：`hmac256`、`hmac384`、`hmac512` 分别至少 32、48、64 个 UTF-8 字节。更短的 `cosec.jwt.secret` 会让启动失败；在签发方和每个校验方设置更长的密钥，用旧密钥签发的令牌随之失效。
+- **社交登录只签名提供方拥有的字段**（RC1-25）。`DirectSocialUserPrincipalConverter` 只给主体两个属性 `cosec_oauth_provider` 和 `cosec_oauth_user_id`，不再使用用户可编辑的提供方原始用户信息，也不再写入它转换的 `SocialUser`。`attributes` 中带 `apiKeyId`（CoSec 为 API key 设置）的令牌按 `token-invalid` 拒绝，`JwtTokenConverter` 也不会签发这样的令牌。要保留资料字段，请声明你自己的 `SocialUserPrincipalConverter`，并且只保留用户无法更改的字段（[社交登录](../integration/authentication.md#social-login)）。
+
 ## 7.x 到 8.0 {#_7-x-to-8-0}
 
 8.0 只支持从 7.x 升级。从 6.x 升级时，先按
@@ -24,6 +36,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **变更经过控制面。** 写入、校验、模拟、影子、审批、解释和回滚策略都是控制面（`cosec-control`）的操作，而不是应用代码或本地文件。
 - **条件是数据。** 一套小的条件语言取代了匹配器工厂、OGNL 和 SpEL。策略中的任何内容都不会执行代码。
 - **错误响应是 `application/problem+json`。** 响应不再告诉客户端是否存在 DENY。
+- **Java 21。** 8.0 的每个模块都按 Java 21 编译，而 7.x 按 Java 17 编译：应用要在 JDK 21 或更高版本上构建和运行。`cosec-gateway-server` 镜像例外：它运行在 JDK 25 上，并带有 AOT 缓存（[部署](./deployment.md#the-image)）。
 
 ### 升级检查清单 {#upgrade-checklist}
 
@@ -34,7 +47,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
    端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
-4. **更新依赖和代码**：用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
+4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
 5. **更新配置**：改名或删除每一个 [7.x key](#removed-and-renamed-properties)，并对新属性做出决定。8.0 不读取的 `cosec.*` key 会让启动
    失败，并给出替代它的配置。另外三种常见情况也会让启动失败：WebFlux 或
    Spring MVC 宿主上 `classpath:cosec-routes.json` 没有路由映射（把 `cosec.authorization.routes.location` 设为一份映射，或设为空）；
@@ -282,7 +295,12 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
   读取，执行方得到主体的权限。CoSec 自己从不签发这种令牌；接受其他签发方令牌的校验器在支持委托之前不得放行它们
   （[认证](../integration/authentication.md#tokens)）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时审计记录 `ALLOW`，
   原因只出现在决策事件的 `subject.rejected` 中。刷新或吊销这种令牌同样失败。
-- `cosec.api-key.header` 改为 `cosec.pipeline.api-key-header`（默认 `X-API-Key`）。`cosec.api-key.store-blocking` 已删除：Redis 的 key
+- **`tenantId` 声明不是字符串**，或 `attributes` 声明中有 `apiKeyId`（CoSec 只为 API key 设置），令牌为 `token-invalid`；7.x 把这样的租户读作没有租户。
+  **`cosec.jwt.secret`** 对 `hmac256`、`hmac384`、`hmac512` 分别至少 32、48、64 个 UTF-8 字节，否则启动失败。
+- **break-glass（7.x 的 root）** 只作用于 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌，从不作用于自定义 `TokenVerifier` 的令牌，也不作用于其他认证器认可的主体（`BRK-8`）。
+- **租户切换与社交登录。** `AbstractSwitchTenantAuthentication.switchTenant` 回答用户在目标租户中的 `TenantMembership`，而不是一个主体，因此新令牌不会带上先前租户的角色。
+  `DirectSocialUserPrincipalConverter` 只签名 `cosec_oauth_provider` 和 `cosec_oauth_user_id`，不签名提供方的用户信息（[认证](../integration/authentication.md#tenants)）。
+- `cosec.api-key.header` 改为 `cosec.pipeline.api-key-header`（默认 `X-API-Key`），任何文档都不能读取它指定的请求头（`CND-5`）。`cosec.api-key.store-blocking` 已删除：Redis 的 key
   读取器从不阻塞。携带 API key 的请求只按 key 判定，即使它同时携带令牌（`PIP-8`）。
 - `cosec.authorization.allow-query-token` 改为 `cosec.pipeline.allow-query-token`（默认 `false`）。
 - 7.x 自定义的 `SecurityContextParser` bean 不再被使用。改为注册一个 `Authenticator` bean（[认证](../integration/authentication.md)）。
@@ -298,7 +316,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 - **`MembershipProvider` 返回 `MembershipAnswer`**（`Known(memberships)` 或 `Unknown`），`MembershipLoader.load` 也一样。为 8.0 里程碑版本编写、返回 `Memberships` 的提供者不再能编译：为每个它不认识的主体决定答案 `Unknown`，不要再对它返回空的成员关系，否则该主体的 API key 会继续有效。`Memberships` 增加了 `active`，已停用的主体为 false。未知或已停用主体的 API key，以及它带 `cosec.membership: provider` 标记的令牌，都按 `token-invalid` 拒绝（`IDN-3`）。约定见[扩展](../architecture/extending.md#memberships)。
 - **已存储的 key。** Redis 格式改变。8.0 之前存储的 key 在读取时被拒绝：带它的请求返回 `503`，日志会提到 `cosec-migrate api-keys`。切换前先转换 key（见下文）。
 - **必须有提供者。** `cosec.api-key.enabled=true` 而没有 `MembershipProvider` Bean 时启动失败（`IDN-6`）。`cosec.api-key.enabled` 只能是 `true` 或 `false`；`on`、`yes` 或 `1` 会导致启动失败。
-- **上限同样收窄主体绑定和 break-glass。** 带 `roles` 的 key 得不到其主体的任何主体绑定，`roles: []` 只有 `Anyone` 绑定给予的，任何 API key 都得不到 break-glass（`BND-9`、`BRK-8`）。
+- **上限同样收窄主体绑定和 break-glass。** 带 `roles` 的 key 得不到其主体的主体绑定和附加策略的任何授权，但它们的 DENY 照样作用于它；`roles: []` 只有 `Anyone` 绑定给予的，任何 API key 都得不到 break-glass（`BND-9`、`BRK-8`）。
 - **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
 - **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
 
@@ -406,6 +424,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `openapi-support` | `cosec-openapi`，同时添加 `spring-boot-starter-actuator` 和 `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`，同时添加 `spring-boot-starter-kafka` |
 | （8.0 新增） | `cosec-control`，即控制面，同时添加 `cosec-cocache` |
+| （8.0 新增） | `cosec-cosid`，即来自 CosId 5 的 CoSec id（见下文） |
 
 完整列表见[模块](../guide/introduction.md#modules)。已开启的功能所需的模块会在启动时检查：缺少适配器模块的 Web 宿主、缺少 `cosec-gateway` 的网关、缺少 `cosec-cocache` 的 `cosec.api-key.store=redis`、缺少 `cosec-kafka` 的 `cosec.audit.kafka.delivery=required`，都会启动失败并给出制品名（[缺少模块时启动失败](./troubleshooting.md#startup-fails-on-a-missing-module)）。
 
@@ -435,6 +454,19 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 **`CoSecJsonSerializer` 已删除。** CoSec 的 Jackson mapper 是 CoSec 内部的，核心模块的公共签名中不出现 Jackson 类型。用你自己的 mapper 序列化你自己的类型；用 `PolicyDocumentCodec` 读写策略文档。mapper 的配置没有变化，所以已存放在 Redis 中或已发送到 Kafka 的文档、令牌和记录照常可读。标注了 `@InternalCoSecApi` 的声明之所以公开，只是为了让 CoSec 的模块互相调用：它没有兼容性承诺，任何版本都可能改变，而且不显式 opt in 编译器就拒绝调用它。不要在应用中 opt in。
 
 **`KafkaAuditEventSink` 接收 `Executor`。** 它的第三个参数原来是 Reactor `Scheduler`，现在是 `java.util.concurrent.Executor`（默认是它自己的、带有界队列的单线程）。
+
+**CoSec 不再引入 CosId。** 在 7.x 中，`cosec-core`、`cosec-jwt` 和 `cosec-social` 在其 API 中带有 `cosid-core`，CoSec 的平台 `cosec-dependencies` 还导入了 `cosid-bom`。在 8.0 中只有 `cosec-cosid` 依赖 CosId，CoSec 的 BOM 都不导入它、也不设定它的版本，因此应用可以使用任意版本的 CosId，也可以不用，并自己声明它及其版本。CoSec 通过自己的端口 `IdGenerator`（`me.ahoo.cosec.spi.id`，位于 `cosec-spi`）生成 id。没有你自己的 bean 时，id 来自 `RandomIdGenerator`，即随机的版本 4 UUID。要继续使用 CosId 的 id（[Id](../architecture/extending.md#ids)）：
+
+- **使用 CosId 5 时**，添加 `cosec-cosid`：starter 把 `cosec.cosid.generator` 指定的生成器（未设置时为 CosId 的 `default`）的 id 交给 CoSec。CosId 5 本身也需要迁移：见它的 [4.x 到 5.0 指南](https://github.com/Ahoo-Wang/CosId/blob/main/documentation/docs/zh/guide/migration/from-4x.md)。
+- **使用 CosId 4 时**，声明一个 bean：
+
+```kotlin
+// CosId 4：7.x starter 接收的 StringIdGenerator
+@Bean
+fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.generateAsString() }
+```
+
+社交登录的 OAuth `state` 不再来自这个 bean：它始终是来自 `SecureRandom` 的 128 个随机位，因为回调依赖于它不可预测。
 
 ### 已删除和替换的 API {#removed-and-replaced-apis}
 
@@ -467,6 +499,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | CoSec 网关之后的 `cosec.pipeline.mode=gateway`（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。8.0 的过滤器在每个放行的请求上放入安全上下文。 |
 | 授权之后留在调用方安全上下文中的路径变量 | 无。从你的 Web 框架读取路径变量。 |
 | `cosecPolicyGenerator`、`cosecAppPermissionGenerator` actuator 端点 | `cosecServiceGenerator/routes`（路由映射）和 `cosecServiceGenerator/app`（应用文档）。 |
+| `JwtTokenConverter`、`JustAuthProvider` 和 starter 的 bean 中的 `StringIdGenerator`、`UuidGenerator`（CosId）；在 8.0 预览版中还有 `PipelineComponents.idGenerator` 和 `IdentityGate` | `IdGenerator`（`cosec-spi`，[Id](../architecture/extending.md#ids)），默认是 `RandomIdGenerator`。`JustAuthProvider` 不接收 id 生成器：它从 `SecureRandom` 抽取 OAuth `state`。 |
 | `SocialUserConverter`（`cosec-social`） | 无：它是 `cosec-social` 的内部实现。用 `SocialUserPrincipalConverter` bean 把提供方的用户变成你的主体（[社交登录](../integration/authentication.md#social-login)）。 |
 
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、

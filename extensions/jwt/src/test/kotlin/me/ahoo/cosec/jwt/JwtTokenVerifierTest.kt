@@ -16,18 +16,23 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
+import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.SimpleAccessToken
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Assertions.*
@@ -37,7 +42,7 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class JwtTokenVerifierTest {
-    var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
+    var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
     @Test
@@ -101,6 +106,45 @@ class JwtTokenVerifierTest {
         assertFalse(thrown is TokenExpiredException)
     }
 
+    /**
+     * RC1-22: a `tenantId` claim that is not a string is an invalid token, never the default tenant with the token's
+     * roles. An absent or empty claim is the default tenant, as before.
+     */
+    @Test
+    fun aTenantIdThatIsNotAStringIsInvalid() {
+        for (token in listOf(
+            signed { withClaim("tenantId", 42) },
+            signed { withNullClaim("tenantId") },
+            signed { withClaim("tenantId", mapOf("id" to "acme")) },
+            signed { withClaim("tenantId", true) },
+        )) {
+            val thrown = assertThrows(TokenVerificationException::class.java) {
+                jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token))
+            }
+            assertFalse(thrown is TokenExpiredException)
+        }
+        jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(signed { withClaim("tenantId", "acme") }))
+            .assert().isInstanceOf(TokenTenantPrincipal::class.java)
+        jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(signed {})).assert()
+            .isNotInstanceOf(TokenTenantPrincipal::class.java)
+    }
+
+    /**
+     * RC1-26: [JwtTokenVerifier] is CoSec's own verifier, so the tokens it verifies may use break-glass, and their
+     * credential is named `jwt`; the same token through a verifier that wraps it is not CoSec's, and may not.
+     */
+    @Test
+    fun onlyThisVerifiersTokensMayUseBreakGlass() {
+        val token = signed {}
+        fun authenticate(verifier: TokenVerifier) = runBlocking {
+            (TokenAuthenticator(verifier).authenticate(Credentials(token, null)) as AuthnResult.Authenticated).principal
+        }
+        val principal = authenticate(jwtTokenVerifier)
+        principal.breakGlass.assert().isTrue()
+        principal.credential!!.method.assert().isEqualTo(Identity.Method.JWT)
+        authenticate(object : TokenVerifier by jwtTokenVerifier {}).breakGlass.assert().isFalse()
+    }
+
     /** `may_act` only says who may act for the subject; the token is still the subject's own. */
     @Test
     fun mayActIsIgnored() {
@@ -120,7 +164,7 @@ class JwtTokenVerifierTest {
     fun refreshWhenExpired() {
         val converter =
             JwtTokenConverter(
-                MockIdGenerator.INSTANCE,
+                JwtFixture.IDS,
                 JwtFixture.ALGORITHM,
                 Duration.ofMillis(1),
                 Duration.ofMillis(1)
@@ -163,7 +207,7 @@ class JwtTokenVerifierTest {
     @Test
     fun refreshWhenAccessTokenExpiredButSignatureValid() {
         val converter = JwtTokenConverter(
-            MockIdGenerator.INSTANCE,
+            JwtFixture.IDS,
             JwtFixture.ALGORITHM,
             Duration.ofMillis(1),
             Duration.ofDays(7),

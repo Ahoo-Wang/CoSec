@@ -18,6 +18,8 @@ import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityCodec
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.Binder
+import org.springframework.core.env.Environment
 import org.springframework.util.unit.DataSize
 import java.time.Duration
 
@@ -33,8 +35,8 @@ class PipelineProperties {
     /** Whether a token may come in the query string; off, since URLs end up in logs. */
     var allowQueryToken: Boolean = false
 
-    /** The header an API key comes in. */
-    var apiKeyHeader: String = "X-API-Key"
+    /** The header an API key comes in. No document may read it (`CND-5`, [credentialHeaders]). */
+    var apiKeyHeader: String = DEFAULT_API_KEY_HEADER
 
     /** How much of an evaluation's trace decision events carry. */
     var traceLevel: TraceLevel = TraceLevel.OFF
@@ -58,8 +60,20 @@ class PipelineProperties {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "pipeline"
         const val MODE_KEY = "$PREFIX.mode"
+        const val API_KEY_HEADER_KEY = "$PREFIX.api-key-header"
+        const val DEFAULT_API_KEY_HEADER = "X-API-Key"
     }
 }
+
+/**
+ * The headers this host reads credentials from besides the fixed ones of `CND-5`: its API key header, as
+ * `cosec.pipeline.api-key-header` names it, read as [PipelineProperties] binds it. Every compiler of the host, the data
+ * plane's and the control plane's, refuses a reference to it, as the pipeline refuses to read it (RC1-21).
+ */
+internal fun credentialHeaders(environment: Environment): Set<String> = setOf(
+    Binder.get(environment).bind(PipelineProperties.API_KEY_HEADER_KEY, String::class.java).orElse(null)
+        ?: PipelineProperties.DEFAULT_API_KEY_HEADER,
+)
 
 /** `cosec.gateway.identity.*`: what a gateway forwards to the services behind it (`CoSec-Identity`). */
 @ConfigurationProperties(prefix = GatewayIdentityProperties.PREFIX)

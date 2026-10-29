@@ -131,8 +131,8 @@ interface PublishedDocuments {
  *   to the principal, each key capped to its own roles and a role of its own (`<role prefix><key id>`) bound to its
  *   attached policies. The roles the principal newly gains are reported.
  *
- * In place and granted, a key is capped, so its principal's own bindings no longer reach it; and no API key gets
- * break-glass. Those are losses, never gains, and the report lists them per key.
+ * In place and granted, a key is capped, so its principal's own bindings grant it nothing, though their DENYs still
+ * apply to it (RC1-1); and no API key gets break-glass. Those are losses, never gains, and the report lists them per key.
  *
  * A key is rejected, and nothing is written, when it has attributes (a condition may read them), malformed roles, an id
  * with `@`, `*` or blanks, a role named with the role prefix, an attachment that does not resolve exactly (it made every

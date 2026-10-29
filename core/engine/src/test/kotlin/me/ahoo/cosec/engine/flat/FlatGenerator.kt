@@ -172,6 +172,8 @@ class FlatGenerator(private val random: Random) {
             roles = roles.shuffled(random).take(roleCount),
             attachments = List(random.nextInt(4)) { attachable.random(random) },
             blocked = chance(4),
+            // A capped credential (RFC 0009 §4.2).
+            principalBindings = !chance(25),
         )
     }
 

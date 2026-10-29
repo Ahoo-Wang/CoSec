@@ -1,0 +1,17 @@
+# Admits connections to the gateway's HTTP port only, from anywhere; narrow `from` to your ingress controller. Every
+# other port stays closed, the JMX agent the image starts (5555, no authentication) included, should it ever listen
+# beyond 127.0.0.1. Needs a network plugin that enforces NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cosec-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: http
+          protocol: TCP

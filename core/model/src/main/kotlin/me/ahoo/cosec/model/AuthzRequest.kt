@@ -37,9 +37,11 @@ class Subject(
     /** Decided beforehand by `RootPrincipalMatcher` (RFC 0002 stages 2–3); a break-glass binding replaces it later. */
     val root: Boolean,
     /**
-     * Whether the principal's own bindings (platform and tenant principal bindings) apply. False for a credential with a
-     * role cap (RFC 0009 §4.2): a cap means "only these roles", so nothing bound to the principal by name reaches it.
-     * `Anyone` bindings still apply. No default: whoever makes a subject says, so none is wider by omission.
+     * Whether what is bound to the principal by name (its attachments, and the principal bindings of the platform and
+     * the tenant) grants it anything. False for a credential with a role cap (RFC 0009 §4.2): a cap means "only these
+     * roles", so their ALLOWs do not reach it; their DENYs still do, since a cap never lifts a restriction of the
+     * principal (RC1-1). `Anyone` bindings still apply. No default: whoever makes a subject says, so none is wider by
+     * omission.
      */
     val principalBindings: Boolean,
     /**

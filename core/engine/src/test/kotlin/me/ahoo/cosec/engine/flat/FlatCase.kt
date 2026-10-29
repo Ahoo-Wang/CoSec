@@ -15,9 +15,11 @@ package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.MatcherException
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -109,6 +111,18 @@ class FlatCase(
         }
     }
 
+    /** The same request by a capped credential (RFC 0009 §4.2): no principal bindings. */
+    fun capped(): FlatCase {
+        val authz = request.request
+        val subject = with(authz.subject) {
+            Subject(id, tenantId, authenticated, roles, policies, attributes, root, false, breakGlass)
+        }
+        val capped = AuthzRequest(subject, authz.scope, authz.action, authz.resource, authz.environment)
+        return copy(
+            request = with(request) { FlatRequest(capped, scope, memberships, time, attributes, external) }
+        )
+    }
+
     /** The case with a document unavailable, or an attached policy gone. */
     fun degradations(random: Random): List<FlatCase> {
         val error = MatcherException("unavailable")
@@ -132,6 +146,7 @@ class FlatCase(
             val subject = request.request.subject
             val scope = request.scope
             append("request: ${subject.id}@${scope.tenant.value} authenticated=${subject.authenticated} ")
+            append("principalBindings=${subject.principalBindings} ")
             append("app=${scope.app.value} space=${scope.space.value} roles=${scope.roles.map { it.value }} ")
             appendLine("attachments=$attachmentIds blocked=${request.request.environment.blocked}")
             appendLine("loaded: app=$appLoaded tenant=$tenantLoaded unresolved=$unresolved")

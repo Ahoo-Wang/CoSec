@@ -1,0 +1,16 @@
+# Rule: GRT-1
+# Mutant: the grant analysis reads no attachment of a capped grantor, so its key grants past a DENY its principal attaches
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+index 7e012378..a66821f5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+@@ -99,6 +99,7 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
+         }
+ 
+         fun attachments() {
++            if (!grantor.principalBindings) return
+             for (id in grantor.memberships.attachments) {
+                 val policy = (snapshot.tenant(grantor.tenant).policy(id) ?: snapshot.platform.policy(id))
+                     ?.takeIf { it.attachable }

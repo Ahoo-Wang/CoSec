@@ -183,6 +183,15 @@ public final class me/ahoo/cosec/spi/authn/MembershipSource$Unusable : me/ahoo/c
 	public final fun getReason ()Ljava/lang/String;
 }
 
+public abstract interface class me/ahoo/cosec/spi/id/IdGenerator {
+	public abstract fun generate ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/id/RandomIdGenerator : me/ahoo/cosec/spi/id/IdGenerator {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/id/RandomIdGenerator;
+	public fun generate ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/spi/identity/Identity {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V

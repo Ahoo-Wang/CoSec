@@ -106,6 +106,8 @@ class ChangeChecks(
     private val options: ChangeOptions = ChangeOptions(),
     /** The host's `AttributeProvider` catalog: a candidate compiles against it as an instance would ([PolicyDocumentCompiler.forPlatform]). */
     private val attributes: AttributeCatalog = AttributeCatalog.NONE,
+    /** The headers the host reads credentials from besides the fixed ones, which no reference may read (`CND-5`). */
+    private val credentialHeaders: Set<String> = emptySet(),
 ) {
     /** Reads what the checks combine a candidate with: current heads, and the back-references of the platform's policies. */
     interface Context {
@@ -149,7 +151,8 @@ class ChangeChecks(
             }
         }
         try {
-            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit).compile(candidate)
+            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit, credentialHeaders)
+                .compile(candidate)
         } catch (error: DocumentCompileException) {
             error.errors.forEach { findings += Finding("COMPILE", it.path, it.message, UNPROCESSABLE) }
         }

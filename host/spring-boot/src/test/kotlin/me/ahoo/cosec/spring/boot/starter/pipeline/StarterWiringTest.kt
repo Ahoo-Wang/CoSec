@@ -51,12 +51,15 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
+import me.ahoo.cosec.runtime.document.DocumentCompileException
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -64,6 +67,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
@@ -81,6 +85,7 @@ import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -167,6 +172,23 @@ class StarterWiringTest {
         pipelineRunner.withBean(BlacklistSource::class.java, { failing }).run { context ->
             status(context, token(context, "bob")).assert().isEqualTo(503)
         }
+    }
+
+    /** RC1-21 (`CND-5`): the API key header a host renames is a credential header to the documents it compiles. */
+    @Test
+    fun `a renamed api key header is refused by the host's compiler`() {
+        val keyed = PolicyDocumentCodec.decode(
+            DocumentKind.PLATFORM,
+            "",
+            """{"schema":2,"revision":1,"publishedAt":"2026-10-01T00:00:00Z","rateLimits":[{"id":"per-key","action":"*",
+                "permitsPerSecond":10,"key":"http.header.x-acme-key"}]}""".encodeToByteArray(),
+        )
+        pipelineRunner.withPropertyValues("cosec.pipeline.api-key-header=X-Acme-Key").run { context ->
+            assertThrownBy<DocumentCompileException> {
+                context.getBean(PlatformCompiler::class.java).current.compile(keyed)
+            }.hasMessageContaining("credential header")
+        }
+        pipelineRunner.run { context -> context.getBean(PlatformCompiler::class.java).current.compile(keyed) }
     }
 
     @Test

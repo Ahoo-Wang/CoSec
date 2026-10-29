@@ -38,7 +38,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosid.StringIdGenerator
+import me.ahoo.cosec.spi.id.IdGenerator
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -61,7 +61,7 @@ object PipelineFixtures {
     )
     val IMPLICIT_DENY: Decision = Decision.Deny(null)
 
-    val ids = StringIdGenerator { GENERATED_ID }
+    val ids = IdGenerator { GENERATED_ID }
 
     fun facts(
         path: String = "/orders",

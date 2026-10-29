@@ -16,12 +16,12 @@ CI 在每次推送时用 [`platform/gateway-server/Dockerfile`](https://github.c
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
 
-- **JDK。** 镜像运行在 Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上。代码和其他 CoSec 模块一样按 Java 17 编译，
-  JDK 17 基线不变。
+- **JDK。** CoSec 的库以 Java 21 为目标，这也是基于它们的应用所需的版本。镜像本身是一个应用，运行在 JDK 25，即
+  Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上，并带有 JDK 25 的 [AOT 缓存](#aot-cache)：它的运行时是 25，而不是 21。
 - **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址，例如
   `SPRING_DATA_REDIS_URL`。
 - **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
-  `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数。
+  `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。
 - **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
   （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
   （`cosec.ip2region.enabled: false`）。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
@@ -128,23 +128,89 @@ management:
 
 ## Kubernetes {#kubernetes}
 
-[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中有示例清单：
+[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中是 [Kustomize](https://kustomize.io/) 清单：一个 base，
+每类集群一个 overlay。部署时用 overlay，不要单独部署 base。
 
-| 文件 | 内容 |
-|---|---|
-| `cosec-gateway-config.yaml` | 一个 ConfigMap，含 `application.yaml`，挂载到 `/opt/cosec-gateway-server/config/`：路由和上面的 `cosec.*` 设置。 |
-| `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），启动探针和存活探针为 `/actuator/health/liveness`，就绪探针为 `/actuator/health/readiness`，以及注入 OpenTelemetry Java agent 的注解。 |
-| `cosec-gateway-redis.yaml` | Secret `redis-secret`，值为占位符。 |
-| `cosec-gateway-service.yaml` | 一个 Service，80 端口转发到容器的 8080。 |
-| `cosec-gateway-hpa.yaml` | 一个 HorizontalPodAutoscaler，按 CPU 在 2 到 10 个副本之间伸缩。 |
+| 目录 | 用途 | 内容 |
+|---|---|---|
+| `base/` | 供 overlay 在其上构建 | Deployment 和一个 Service（80 端口转发到容器的 8080）。`application.yaml`（路由和上面的 `cosec.*` 设置）生成一个 ConfigMap，挂载到 `/opt/cosec-gateway-server/config/`；它的名字带有文件的哈希，所以修改文件会滚动更新 pod。镜像是 `ghcr.io/ahoo-wang/cosec-gateway`，标签在 `images:` 中设置。每个网关 768Mi，堆 256 MiB。 |
+| `overlays/dev/` | 在任何集群上试用 CoSec，包括 kind 和 minikube | 命名空间 `cosec-dev`，一个使用 base 资源配置的网关，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
+| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个只放行 8080 端口的 NetworkPolicy；每个网关 2Gi，堆 1 GiB，分散到不同节点。 |
 
-Deployment 中的镜像是 `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`：把标签改成你部署的版本。自己创建 `cosec-jwt-secret`
-（`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`），并在 `redis-secret` 中填入
-你的节点和密码。`cosec-migrate` 通过 `--to-redis` 连接一台 Redis 服务器。
+### 部署 {#deploying}
 
-启动探针和存活探针读取 `/actuator/health/liveness`，就绪探针读取 `/actuator/health/readiness`；网关服务启用了这些分组
-（`management.endpoint.health.probes.enabled`）。因此 Redis 中还没有平台文档时 pod 也能启动，并在文档安装前留在 Service 之外
-（[就绪](#readiness)）。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
+1. **创建命名空间和 JWT 密钥。** 仓库中没有任何密钥，而没有这个密钥网关无法启动（`COSEC_JWT_SECRET`，见[认证](../integration/authentication.md)）：
+
+   ```bash
+   kubectl create namespace cosec-dev
+   kubectl -n cosec-dev create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
+   ```
+
+   使用 production overlay 时，命名空间用 `cosec`，并且还要创建 Redis 凭证：
+   `kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<password>`。
+2. **production：指向你的 Redis。** 在 overlay 的 `kustomization.yaml` 中，于 ConfigMap `cosec-gateway-redis` 里设置地址。
+   Redis 必须以 `maxmemory-policy noeviction` 运行（[Redis 要求](./storage.md#redis-requirements)）。把你的路由、命名空间和
+   镜像标签放在你自己的 overlay 中，建在这个 overlay 之上：用
+   `configMapGenerator: [{name: cosec-gateway-config, behavior: replace, files: [application.yaml]}]` 替换配置，
+   并在 `images:` 中设置标签。
+3. **应用 overlay：**
+
+   ```bash
+   kubectl apply -k k8s/overlays/dev
+   ```
+
+4. **发布平台文档。** 在它安装之前，每个网关都在运行，但报告自己未就绪，不在 Service 中（[就绪](#readiness)），
+   `kubectl rollout status` 会一直等待。这是有意的设计：否则它会对每个被路由的请求回答 `503`。使用 dev overlay 时，用
+   `kubectl -n cosec-dev port-forward svc/redis 6379` 连到它的 Redis，再用
+   `cosec-migrate publish --to-redis redis://localhost:6379 --in <dir>` 发布（[最初的文档](./storage.md#the-first-documents)）。
+5. **发一个请求试试**，通过 `kubectl -n cosec-dev port-forward svc/cosec-gateway 8080:80`。
+
+### 清单设置了什么 {#what-the-manifests-set}
+
+- **不注入 Service 链接**（`enableServiceLinks: false`）。否则 Kubernetes 会把 `COSEC_GATEWAY_SERVICE_HOST`、
+  `COSEC_GATEWAY_PORT_80_TCP_ADDR` 这类由 Service `cosec-gateway` 派生的变量放进网关的环境。Spring 把它们读作
+  `cosec.gateway.*` 配置项，8.0.0-alpha.1 会把它们当作 CoSec 不读取的 `cosec.*` key 而拒绝启动；从 alpha.2 起，检查会跳过这些确切的变量
+  （[未知配置项](./configuration.md#unknown-properties)）。网关通过 DNS 找到服务，环境里并不需要它们。
+- **Pod 安全。** 网关以镜像中的 `appuser` 运行（uid 999；镜像只给出用户名、没有给出 uid，所以清单写明 uid，让
+  `runAsNonRoot` 能够检查），根文件系统只读，不允许提权，丢弃所有 capability，使用运行时默认的 seccomp 配置，不挂载
+  service account 令牌：它从不调用 Kubernetes API。两个 overlay 都符合 `restricted` Pod 安全标准。它只写三个
+  `emptyDir` 卷：`logs/`（GC 日志）、`data/`（`OutOfMemoryError` 时的堆转储）和 `/tmp`（Netty 的原生传输、JVM 的性能数据）。
+  AOT 缓存只读不写。
+- **探针。** 启动探针和存活探针读取 `/actuator/health/liveness`，就绪探针读取 `/actuator/health/readiness`，这两个分组由
+  `application.yaml` 启用（`management.endpoint.health.probes.enabled`）。因此 Redis 中还没有平台文档时 pod 也能启动，
+  并在文档安装前留在 Service 之外。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
+- **Actuator。** 通过 HTTP 只暴露 `health`；能读取和修改路由的 `gateway` 端点处于关闭状态
+  （`management.endpoint.gateway.access: none`）。CoSec 授权的是网关的路由，不是它的 actuator 端点。
+- **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
+  Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
+- **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；以及
+  `-Dcom.sun.management.jmxremote.host=127.0.0.1`。镜像的启动脚本会在 5555 端口启动一个不需要认证的 JMX agent；这个参数把它
+  限制在 pod 内部，production 的 NetworkPolicy 还关闭了 8080 以外的所有端口。
+
+### 内存 {#memory}
+
+网关的内存由堆、直接内存和 JVM 自身的原生内存组成。base 和 production overlay 按各自的限制设置它们：
+
+| | `dev`（base） | `production` |
+|---|---|---|
+| 内存请求与限制 | 768Mi | 2Gi |
+| 堆（`-Xms` = `-Xmx`） | 256 MiB | 1 GiB |
+| 直接内存，Netty 的缓冲区（`-XX:MaxDirectMemorySize`） | 最多 64 MiB | 最多 256 MiB |
+| 原生内存：AOT 缓存的类数据（约 105 MiB）、JIT 代码、metaspace、GC 结构、线程 | 约 220 MiB | 约 250 MiB |
+| 留给页缓存和峰值 | 约 230 MiB | 约 500 MiB |
+| CPU 请求与限制 | 250m，1 | 1，2 |
+
+- **ZGC 在启动时提交整个堆**，以共享内存的形式立即计入容器。容不下堆的限制会让 pod 在几秒内失败，而不是在承载流量几小时后。
+- **堆需要空闲空间。** ZGC 在网关分配内存的同时回收；堆中大部分是存活数据时，请求线程要等它。编译后的文档在堆上：按你的文档和
+  流量确定堆的大小，再把限制设为堆，加上直接内存，加上约 250 MiB，再加四分之一。
+- **镜像自己的默认值放不进小集群。** 它的启动脚本设置 `-Xms2048M -Xmx2048M -XX:MaxDirectMemorySize=512M`，加上原生部分约
+  2.8 GiB。`JAVA_OPTS` 在命令行上排在它们之后，所以其中的大小生效；`JAVA_TOOL_OPTIONS` 改不了它们，因为 JVM 最先读取它。
+  固定的 `-Xmx` 也会覆盖 `-XX:MaxRAMPercentage`，所以要给出明确的大小。base 在 `JVM_MEMORY_OPTS` 中设置它们，production
+  overlay 替换这个变量；修改时同时修改内存请求和限制。
+- **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
+
+原生部分在镜像中测得（`8.0.0-alpha.1`，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
+`503` 的情况下，向一条路由和健康端点发送约 45,000 个请求后，容器占用 471 MiB（dev）和 1,277 MiB（production），没有进程因内存被杀。
 
 ## CI 如何检查镜像 {#how-ci-checks-the-image}
 

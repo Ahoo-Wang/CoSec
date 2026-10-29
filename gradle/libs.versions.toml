@@ -4,8 +4,9 @@ spring-boot = "4.1.2"
 # kotlinx-coroutines (core, reactor, slf4j, test, debug) and opentelemetry-extension-kotlin take their versions from the
 # BOMs above (kotlinx-coroutines-bom, opentelemetry-bom), so they stay aligned with Spring Boot (RFC 0006 Q7).
 spring-cloud = "2025.1.4"
-cosid = "4.0.2"
 cocache = "6.7.0"
+# cosec-cosid only: never in cosec-dependencies, so CoSec forces no CosId version on an application
+cosid = "5.0.0-alpha.2"
 opentelemetry = "2.32.0"
 guava = "33.7.2-jre"
 kotlin-logging = "8.0.4"
@@ -33,8 +34,9 @@ jmh-plugin = "0.7.3"
 [libraries]
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
 spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
-cosid-bom = { module = "me.ahoo.cosid:cosid-bom", version.ref = "cosid" }
 cocache-bom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" }
+cosid-core = { module = "me.ahoo.cosid:cosid-core", version.ref = "cosid" }
+cosid-spring-boot-autoconfigure = { module = "me.ahoo.cosid:cosid-spring-boot-autoconfigure", version.ref = "cosid" }
 opentelemetry-instrumentation-bom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }

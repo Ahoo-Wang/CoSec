@@ -103,7 +103,7 @@ change's candidate too:
 | `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). |
 | `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
-| `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too. Only a boolean is accepted. |
+| `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
 
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
@@ -246,7 +246,8 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
 
 The author's rights are those of the credential the request came with. With a role cap (an API key with `roles`), the
-bindings that name the author do not count, only the capped roles and `Anyone` bindings, as on the data plane.
+ALLOWs bound to the author by name or attached do not count, only the capped roles and `Anyone` bindings, as on the
+data plane; the DENYs bound to the author or attached still limit what it may grant.
 Break-glass bindings never count toward what anyone may grant.
 
 Removing entries and narrowing ALLOWs grant nothing. A holder of `cosec:approve` on the document is the trust root:
@@ -273,7 +274,7 @@ The window id and counts are in the change's `shadow`; zero counts may be left o
 everything again as the publisher, on the current documents: their rights to every entry, the grant analysis, and the
 approval, which must cover the escalations found now, be unexpired, be for this candidate, come from neither the author
 nor the publisher, and come from someone who still holds `cosec:approve`. The approver is checked with the credential
-they approved with: an approval given with a capped key does not count the approver's own bindings at publish time, and
+they approved with: an approval given with a capped key does not count the ALLOWs of the approver's own bindings at publish time, and
 one given without CoSec's own token does not count their break-glass bindings. If the approval no longer holds, the change
 goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved, the change is `CONFLICTED`; if the
 candidate no longer compiles against the current documents, it is `DRAFT` with the findings.

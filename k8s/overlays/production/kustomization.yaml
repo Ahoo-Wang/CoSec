@@ -1,0 +1,38 @@
+# Production: your own Redis, two to ten gateways behind a HorizontalPodAutoscaler, a PodDisruptionBudget, a
+# NetworkPolicy, and 2Gi per gateway (a 1 GB heap). Set the Redis address below, then build your own overlay on this
+# one (or copy it) for your namespace, routes and image tag.
+#
+#   kubectl create namespace cosec
+#   kubectl -n cosec create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
+#   kubectl -n cosec create secret generic cosec-redis-secret --from-literal=password=<the Redis password>
+#   kubectl apply -k k8s/overlays/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cosec
+
+resources:
+  - ../../base
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: cosec
+    includeTemplates: true
+
+configMapGenerator:
+  # Your Redis, as spring.data.redis.* properties. It must run with maxmemory-policy noeviction: each gateway checks
+  # it with CONFIG GET at startup and refuses to start otherwise. For a Redis Cluster, set
+  # SPRING_DATA_REDIS_CLUSTER_NODES=host1:6379,host2:6379,... instead of the host and port.
+  - name: cosec-gateway-redis
+    literals:
+      - SPRING_DATA_REDIS_HOST=redis.example.internal
+      - SPRING_DATA_REDIS_PORT=6379
+      # - SPRING_DATA_REDIS_SSL_ENABLED=true
+      # Only for a managed Redis that hides CONFIG GET, once you have set noeviction on it yourself:
+      # - COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn
+
+patches:
+  - path: deployment-patch.yaml

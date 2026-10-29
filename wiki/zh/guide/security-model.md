@@ -54,7 +54,7 @@ flowchart TD
 4. 应用文档的角色绑定，然后是租户文档的角色绑定，按主体在请求空间中拥有的每个角色、按声明顺序；
 5. 主体的 [break-glass](#break-glass) 绑定，排在最后。
 
-绑定只在以下条件都满足时适用：它的应用和空间与作用域完全一致（`*` 匹配任意值）；指定了租户的角色绑定指定的是主体所在租户；绑定尚未过期。匿名主体没有附加策略，也不匹配主体绑定、角色绑定和 break-glass：对它只有 `Anyone` 绑定生效。带角色上限的凭证（带 `roles` 的 API key）不匹配主体绑定，只有 CoSec 自己的令牌才匹配 break-glass（`BND-9`、`BRK-8`；[API key](../integration/authentication.md#api-keys)）：`roles: []` 只留下 `Anyone` 绑定给予的。
+绑定只在以下条件都满足时适用：它的应用和空间与作用域完全一致（`*` 匹配任意值）；指定了租户的角色绑定指定的是主体所在租户；绑定尚未过期。匿名主体没有附加策略，也不匹配主体绑定、角色绑定和 break-glass：对它只有 `Anyone` 绑定生效。带角色上限的凭证（带 `roles` 的 API key）不会从它的附加策略和主体绑定得到任何授权：它们只是 DENY 轮的候选，因此指名该主体的 DENY、或它附加的 DENY，对该主体的每个 key 都生效，无论是否有上限；上限从不解除限制（`BND-9`；[API key](../integration/authentication.md#api-keys)）。只有 CoSec 自己的令牌才匹配 break-glass（`BRK-8`）。`roles: []` 只留下 `Anyone` 绑定给予的，再减去该主体被拒绝的。
 
 顺序不会改变决策的类型，只影响多条语句同时命中时报告的是哪一条：DENY 轮总是先遍历完所有候选，ALLOW 轮才开始。
 
@@ -159,7 +159,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 绑定 `cosec:root` 时，只对平台租户 `(platform)` 的主体生效；
 - 只能通过控制面创建：一人申请，另一人批准，有效期最长为 `cosec.control.break-glass.max-duration`（[策略测试](../policies/testing.md)）；
 - 是最后一个候选。它只放行别处都不放行的请求，所有 DENY 对该主体照常生效；
-- 只作用于出示了 CoSec 自己令牌（凭证方式 `jwt`）的主体：从不作用于 API key（无论是否有上限），也不作用于自定义认证器以其他方式认可的主体。它是给人的、有时限的授予，而不是给长期凭证的（`BRK-8`）。网关会转发凭证的方式，因此网关之后的服务按同一规则处理。
+- 只作用于令牌由 CoSec 自己的校验器（`JwtTokenVerifier`）校验过的主体：从不作用于 API key（无论是否有上限）、其他 `TokenVerifier` 认可的令牌，也不作用于自定义认证器认可的主体，无论它的凭证叫什么名字。判断依据是令牌在哪里被校验，而不是名字：凭证方式 `jwt` 保留给 CoSec 的令牌，其他认证器无法用它构造主体（`BRK-8`）。它是给人的、有时限的授予，而不是给长期凭证的。网关只为 CoSec 的令牌转发 `jwt`，因此网关之后的服务按同一规则处理。
 
 每个由 break-glass 放行的请求都必须先写入一个 REQUIRED 决策监听器。没有这样的监听器，或它失败时，请求返回 `503`。代码中的权限检查（`AuthorizationChecker`）如果只有 break-glass 放行，结果为 `false`，因为检查不写审计事件（[代码中的权限检查](../integration/checks.md)）。
 
@@ -205,7 +205,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 **请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：针对它的 DENY 为 Indeterminate（`503`），针对它的 ALLOW 不匹配（[属性](../policies/language.md#attributes)）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
 
-任何属性引用都不能读取携带凭证的请求头：`authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 和 `cosec-identity`，条件和限流规则的 `key` 都是如此（[请求头](../policies/language.md#headers)）。读取它们的文档无法编译。否则策略可以通过决策逐字符泄露其他主体的凭证，或者信任客户端写入的身份。用 `cosec.pipeline.api-key-header` 改名后的 API key 头不在这个列表中。
+任何属性引用都不能读取携带凭证的请求头：`authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 和 `cosec-identity`，条件和限流规则的 `key` 都是如此（[请求头](../policies/language.md#headers)）。读取它们的文档无法编译。否则策略可以通过决策逐字符泄露其他主体的凭证，或者信任客户端写入的身份。用 `cosec.pipeline.api-key-header` 改名后的 API key 头同样是携带凭证的请求头：starter 在数据面和控制面编译每个文档时都拒绝它，而且无论文档由谁编译，管道都不会为条件读取它。
 
 **网关后面的服务。** gateway 模式（`cosec.pipeline.mode=gateway`）的服务不持有密钥和文档：它相信收到的 `CoSec-Identity` 头，自己不做任何决策。只有当网关是唯一能访问该服务的一方时，上面的保证才成立：
 

@@ -169,7 +169,7 @@ class GrantAnalyzerTest {
     }
 
     /**
-     * RFC 0009 §4.2, review N1: a grantor with a capped credential (a CI key) holds nothing bound to its principal by
+     * RFC 0009 §4.2, review N1: a grantor with a capped credential (a CI key) holds no ALLOW bound to its principal by
      * name, so it cannot lend it: binding it to a role the principal holds would hand the key what its cap withholds.
      */
     @Test
@@ -188,6 +188,41 @@ class GrantAnalyzerTest {
         val analysis = analyzer.analyze(key, snapshot(tenant = published), GrantChange(ACME, candidate))
         analysis.verdicts.map { it.second }.assertUnknown(UnknownReason.NOT_COVERED, Shortfall.NO_ALLOW)
         analysis.needsApproval.assert().isTrue()
+    }
+
+    /**
+     * RC1-1: a cap removes ALLOWs only. A capped grantor is still subject to the DENYs bound to its principal by name
+     * or attached, so it cannot grant past them through a role it holds, as its credential cannot use them either.
+     */
+    @Test
+    fun `a capped grantor is still bound by its principal's denies`() {
+        val published = GrantDocument(
+            policies = listOf(
+                policy("orders", allow("order:*")),
+                policy("no-delete", deny("order:delete")),
+                policy("no-export", deny("order:export"), attachable = true),
+            ),
+            bindings = listOf(
+                bind("editor", role("policy-editor"), "orders"),
+                bind("nd", principal("gina"), "no-delete")
+            ),
+        )
+        val grant = { action: String ->
+            GrantDocument(
+                policies = published.policies + policy("granted", allow(action)),
+                // In the default space, where the key holds policy-editor.
+                bindings = published.bindings + bind("g", role("viewer"), "granted", space = ""),
+            )
+        }
+        val key =
+            grantor(
+                roles = mapOf("" to listOf("policy-editor")),
+                attachments = listOf("no-export"),
+                principalBindings = false
+            )
+        verdicts(key, snapshot(tenant = published), grant("order:read")).assertContained()
+        verdicts(key, snapshot(tenant = published), grant("order:delete")).assertUnknown(UnknownReason.DENY_OVERLAP)
+        verdicts(key, snapshot(tenant = published), grant("order:export")).assertUnknown(UnknownReason.DENY_OVERLAP)
     }
 
     @Test

@@ -74,8 +74,11 @@ The candidates are the policies that bindings and attachments make applicable to
 A binding applies only when its app and space match the scope exactly (`*` matches any), when a role binding that
 names a tenant names the principal's, and when it has not expired. An anonymous principal has no attachments, no
 principal or role bindings and no break-glass: only `Anyone` bindings apply to it. A credential with a role cap (an
-API key with `roles`) has no principal bindings, and only CoSec's own token has break-glass (`BND-9`, `BRK-8`;
-[API keys](../integration/authentication.md#api-keys)): `roles: []` leaves only what `Anyone` bindings give.
+API key with `roles`) is granted nothing by its attachments and principal bindings: they are candidates of the DENY
+pass only, so a DENY that names the principal, or that it attaches, applies to every key of the principal, capped or
+not, and a cap never lifts a restriction (`BND-9`; [API keys](../integration/authentication.md#api-keys)). Only CoSec's
+own token has break-glass (`BRK-8`). `roles: []` leaves only what `Anyone` bindings give, less what the principal is
+denied.
 
 The order never changes the kind of decision, only which statement is reported when several match: the DENY pass
 always visits every candidate before the ALLOW pass starts.
@@ -224,10 +227,12 @@ Break-glass grants a named principal a policy for a bounded time, for emergencie
 - is created only through the control plane: one person requests it, a second approves it, and its lifetime is at
   most `cosec.control.break-glass.max-duration` ([Testing policies](../policies/testing.md));
 - is the last candidate. It permits only what nothing else permits, and every DENY still applies to the principal;
-- applies only to a principal that presented CoSec's own token (credential method `jwt`): never to an API key, capped
-  or not, nor to a principal that a custom authenticator accepted some other way. It is a time-limited grant to a
-  person, not to a long-lived credential (`BRK-8`). A gateway forwards the credential's method, so a service behind it
-  applies the same rule.
+- applies only to a principal whose token CoSec's own verifier (`JwtTokenVerifier`) verified: never to an API key,
+  capped or not, a token another `TokenVerifier` accepted, or a principal that a custom authenticator accepted,
+  whatever its credential is called. It is decided by where the token was verified, not by a name: the credential
+  method `jwt` is reserved for CoSec's token, and no other authenticator can make a principal with it (`BRK-8`). It is a
+  time-limited grant to a person, not to a long-lived credential. A gateway forwards `jwt` only for CoSec's token, so a
+  service behind it applies the same rule.
 
 Every request that break-glass permits must be written to a REQUIRED decision listener first. Without one, or when
 it fails, the request is `503`. A permission check in code (`AuthorizationChecker`) that only break-glass permits is
@@ -305,7 +310,9 @@ No attribute reference can read the headers that carry credentials: `authorizati
 `cookie`, `set-cookie`, `x-api-key` and `cosec-identity`, neither a condition nor a rate limit `key`
 ([Headers](../policies/language.md#headers)). A document that reads one does not compile. Otherwise a policy could
 leak another principal's credential through decisions, one character at a time, or trust an identity a client wrote.
-An API key header renamed with `cosec.pipeline.api-key-header` is not on that list.
+An API key header renamed with `cosec.pipeline.api-key-header` is a credential header too: the starter compiles every
+document, on the data plane and in the control plane, with it refused, and the pipeline never reads it for a
+condition, whoever compiled the document.
 
 **Services behind a gateway.** A service in gateway mode (`cosec.pipeline.mode=gateway`) holds no keys and no
 documents: it believes the `CoSec-Identity` header it receives, and decides nothing itself. The guarantees above then

@@ -1,18 +1,18 @@
 # Rule: BND-9
-# Mutant: principal bindings reach a capped credential, so a key with an empty cap keeps its principal's grants by name
+# Mutant: principal bindings and attachments reach a capped credential in the ALLOW pass, so a key with an empty cap keeps its principal's grants by name
 # Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEngineTest :conformance:test
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
-index db1e826d..4ff9a417 100644
+index be1cd013..2f0d8572 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
-@@ -90,9 +90,6 @@ internal object CandidateOrder {
+@@ -96,9 +96,6 @@ internal object CandidateOrder {
+         visitor: CandidateVisitor,
+         app: CompiledDocument?,
+     ): Boolean {
+-        if (effect === Effect.ALLOW && !request.request.subject.principalBindings) {
+-            return false
+-        }
          if (attachments(request, platform, tenant, visitor)) {
              return true
          }
--        if (!request.request.subject.principalBindings) {
--            return false
--        }
-         val tenantId = request.scope.tenant.value
-         if (visit(platform.principal(tenantId, principal), request, platform, visitor)) {
-             return true

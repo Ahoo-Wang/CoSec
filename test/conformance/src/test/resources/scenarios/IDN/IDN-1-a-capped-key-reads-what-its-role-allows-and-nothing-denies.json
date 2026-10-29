@@ -1,0 +1,98 @@
+{
+  "rules": [
+    "IDN-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same key, capped to billing, with the DENYs of svc in place, still reads an order they do not deny.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "no-export",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET",
+                "resource": "http:path:/orders/export"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "p:svc",
+            "subject": {
+              "principal": "svc"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "no-export"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": [
+          "billing"
+        ]
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc",
+        "roles": {
+          "": [
+            "billing"
+          ]
+        },
+        "attachments": [
+          "no-export"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

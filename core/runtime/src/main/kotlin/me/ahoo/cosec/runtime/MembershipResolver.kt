@@ -117,7 +117,8 @@ class MembershipResolver(
 
     /**
      * [memberships] narrowed to [cap] (RFC 0009 §4.2, `IDN-2`): a role stays only when the cap names it in the same
-     * space, and attached policies never do, since a cap is expressed in roles.
+     * space. Attached policies stay: the engine reads only their DENYs for a capped credential, which has no principal
+     * bindings, so they restrict the key as they restrict its principal and grant it nothing (RC1-1).
      */
     private fun capped(memberships: Memberships, cap: Map<SpaceId, Set<RoleId>>?): Memberships {
         cap ?: return memberships
@@ -132,7 +133,7 @@ class MembershipResolver(
         return Memberships(
             Memberships.Source.PROVIDER,
             Collections.unmodifiableMap(roles),
-            emptyList(),
+            memberships.attachments,
             memberships.malformed,
             memberships.active,
         )

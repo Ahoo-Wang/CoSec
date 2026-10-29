@@ -68,6 +68,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import java.time.Clock
 import java.util.UUID
 
@@ -199,9 +200,11 @@ class CoSecSnapshotAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecSnapshotDocumentStore(): SnapshotDocumentStore = InMemorySnapshotDocumentStore()
 
+    /** No document may read the host's API key header (`CND-5`, RC1-21). */
     @Bean
     @ConditionalOnMissingBean
-    fun cosecPlatformCompiler(attributes: AttributeProviders): PlatformCompiler = PlatformCompiler(attributes.catalog)
+    fun cosecPlatformCompiler(attributes: AttributeProviders, environment: Environment): PlatformCompiler =
+        PlatformCompiler(attributes.catalog, credentialHeaders = credentialHeaders(environment))
 
     /**
      * The snapshot source. It loads the platform first, so that no app or tenant document compiles against default

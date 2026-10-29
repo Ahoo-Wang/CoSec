@@ -81,7 +81,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.runtime.token.SimpleAccessToken
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
@@ -93,6 +92,8 @@ import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
@@ -119,7 +120,6 @@ import me.ahoo.cosec.testkit.required
 import me.ahoo.cosec.testkit.strings
 import me.ahoo.cosec.testkit.text
 import me.ahoo.cosec.testkit.textOrNull
-import me.ahoo.cosid.StringIdGenerator
 import org.springframework.cloud.gateway.filter.headers.HttpHeadersFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
@@ -163,8 +163,10 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
- *                       // "jwt": the real TokenAuthenticator over the real JwtTokenVerifier, given a token signed from
- *                       // these claims (valid for an hour from now) in place of the request's Authorization header
+ *                       // "token" stands for a token of a TokenVerifier other than CoSec's own: it gets no break-glass
+ *                       // "jwt": the real TokenAuthenticator over the real JwtTokenVerifier, CoSec's own, given a token
+ *                       // signed from these claims (valid for an hour from now) in place of the request's
+ *                       // Authorization header
  *                       "jwt": { "jti": "t1", "sub": "alice", "tenantId": "acme", "claims": { "act": { "sub": "agent" } } },
  *                       // "composite": the CompositeAuthenticator, the API key one over "apiKeys" at 2026-11-01
  *                       // ("apiKeysFail": "message" makes the store throw), the token one over "token" if any
@@ -181,7 +183,9 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       // the host's DocumentSnapshotViews over a SnapshotSource that loaded the documents
  *                       // lagSeconds before the request
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
- *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000 },
+ *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000,
+ *                         // the API key header, which the documents are compiled against too (CND-5)
+ *                         "apiKeyHeader": "X-API-Key" },
  * // External attributes (RFC 0006 §5.4): providers that declare them, which the documents are compiled against
  * "attributeProviders": [{ "stage": "B", "declares": { "ext.geo.inFence": "bool" | "string" | "stringSet" | "ip" },
  *                          "values": { "ext.geo.inFence": true } | "fails": "message" | "hangs": true }],
@@ -210,8 +214,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
+        val apiKeyHeader = node.get("options")?.get("apiKeyHeader")?.text()
         val snapshot = try {
-            compiler(attributes).compile(
+            compiler(attributes, apiKeyHeader).compile(
                 ScenarioDocuments(
                     platform = documents.get("platform"),
                     apps = documents.get("apps")?.fields().orEmpty(),
@@ -245,7 +250,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                     snapshots(snapshot, documents, node.get("snapshot"), attributes) { reach("snapshot") }
                 ),
                 membershipProvider = provider,
-                idGenerator = StringIdGenerator { REQUEST_ID },
+                idGenerator = IdGenerator { REQUEST_ID },
                 options = options(node.get("options") ?: EMPTY),
                 attributes = attributes,
                 listeners = listeners,
@@ -281,10 +286,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private fun routes(node: JsonNode?): RouteMap =
         node?.let { RouteMapCodec.load(listOf("scenario" to it.toString().encodeToByteArray())) } ?: RouteMap.EMPTY
 
-    /** The compiler, with the providers' attributes declared when the scenario registers any. */
-    private fun compiler(attributes: AttributeProviders): SnapshotCompiler =
-        if (compiler === DocumentSnapshotCompiler && !attributes.isEmpty) {
-            DocumentSnapshotCompiler.with(attributes.catalog)
+    /**
+     * The compiler, with the providers' attributes declared when the scenario registers any, and the API key header
+     * refused when the scenario renames it, as the starter compiles with both.
+     */
+    private fun compiler(attributes: AttributeProviders, apiKeyHeader: String?): SnapshotCompiler =
+        if (compiler === DocumentSnapshotCompiler && (!attributes.isEmpty || apiKeyHeader != null)) {
+            DocumentSnapshotCompiler.with(attributes.catalog, setOfNotNull(apiKeyHeader))
         } else {
             compiler
         }
@@ -363,7 +371,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         )
         return when (val result = resultOf(node)) {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
-            "jwt" -> TokenAuthenticator(ScenarioJwtVerifier(node.required("jwt")), revocations(revocations))
+            "jwt" -> scenarioJwt(node.required("jwt"), revocations(revocations))
             "composite" -> CompositeAuthenticator(
                 token = node.get("token")?.let { TokenAuthenticator(ScenarioTokenVerifier(it), revocations(revocations)) }
                     ?: Authenticator { AuthnResult.Anonymous },
@@ -486,9 +494,23 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
     }
 
-    /** Signs the scenario's claims and verifies that token with the real [JwtTokenVerifier], whatever the request sent. */
-    private class ScenarioJwtVerifier(node: JsonNode) : TokenVerifier {
-        private val token: String
+    /**
+     * Signs the scenario's claims and authenticates that token with the real [JwtTokenVerifier], unwrapped, so that it is
+     * CoSec's own token (RC1-26), whatever token the request sent; a request without one is anonymous.
+     */
+    private fun scenarioJwt(node: JsonNode, revocations: RevocationReader): Authenticator {
+        val token = ScenarioJwt(node).token
+        val authenticator = TokenAuthenticator(ScenarioJwt.VERIFIER, revocations)
+        return Authenticator { credentials ->
+            authenticator.authenticate(
+                if (credentials.token == null) credentials else Credentials(token, credentials.apiKey)
+            )
+        }
+    }
+
+    /** A token signed from the scenario's claims. */
+    private class ScenarioJwt(node: JsonNode) {
+        val token: String
 
         init {
             node.only("jti", "sub", "tenantId", "claims")
@@ -509,14 +531,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             token = builder.sign(ALGORITHM)
         }
 
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T =
-            VERIFIER.verify(SimpleAccessToken(token))
-
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
-
         companion object {
             private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
-            private val VERIFIER = JwtTokenVerifier(ALGORITHM)
+            val VERIFIER = JwtTokenVerifier(ALGORITHM)
         }
     }
 
@@ -693,6 +710,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "membershipTimeoutMillis",
             "attributeTimeoutMillis",
             "requiredTimeoutMillis",
+            "apiKeyHeader",
         )
         val defaults = PipelineOptions()
         fun millis(field: String) = node.get(field)?.let { it.asLong().milliseconds }
@@ -701,6 +719,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             authenticationTimeout = millis("authenticationTimeoutMillis") ?: defaults.authenticationTimeout,
             membershipTimeout = millis("membershipTimeoutMillis") ?: defaults.membershipTimeout,
             attributeTimeout = millis("attributeTimeoutMillis") ?: defaults.attributeTimeout,
+            apiKeyHeader = node.get("apiKeyHeader")?.text() ?: defaults.apiKeyHeader,
         )
     }
 

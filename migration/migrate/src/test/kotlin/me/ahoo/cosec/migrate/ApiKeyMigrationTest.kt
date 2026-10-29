@@ -110,6 +110,18 @@ class ApiKeyMigrationTest {
         tenantBindings + extra
     )
 
+    /**
+     * What a 7.x key decided against: acme's document without the bindings that name a principal, which no 7.x key
+     * reached. The key's own attachments grant there, which a capped credential's no longer do (RC1-1), so the key is
+     * decided as an uncapped one over these documents.
+     */
+    private val legacyTenant = document(
+        DocumentKind.TENANT,
+        "acme",
+        tenantPolicies,
+        tenantBindings.filterNot { it.contains("\"principal\"") },
+    )
+
     /** The published documents as the plan reads them: [platform] and acme's tenant document. */
     private val published = object : PublishedDocuments {
         private val documents = PublishedDocumentsFixture(platform, mapOf(acme to tenant()))
@@ -259,8 +271,8 @@ class ApiKeyMigrationTest {
                         legacy.tenant,
                         legacy.principalId,
                         claims(legacy.roles, legacy.policies),
-                        false,
-                        tenant(),
+                        true,
+                        legacyTenant,
                         action,
                         space
                     )
@@ -293,14 +305,14 @@ class ApiKeyMigrationTest {
             acme,
             "alice",
             claims(k2.roles, k2.policies),
-            false,
-            tenant(),
+            true,
+            legacyTenant,
             Action("report", action),
             "",
         )
         before("read").assert().isEqualTo("Permit")
         before("delete").assert().isEqualTo("Deny")
-        decide(acme, "alice", claims(k2.roles, listOf("ghost")), false, tenant(), Action("order", "read"), "")
+        decide(acme, "alice", claims(k2.roles, listOf("ghost")), true, legacyTenant, Action("order", "read"), "")
             .assert().isEqualTo("Indeterminate")
         val plan = plan()
         // Without the bindings that carry the attachments, k2 loses its reports and k5 its audit.

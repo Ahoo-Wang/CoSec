@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cosec-gateway
+  labels:
+    app.kubernetes.io/name: cosec-gateway
+spec:
+  # No replicas field: without an autoscaler the Deployment runs one pod, and with the production overlay's
+  # HorizontalPodAutoscaler a replicas field would reset its count on every apply.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cosec-gateway
+    spec:
+      # Service links would put COSEC_GATEWAY_SERVICE_HOST, COSEC_GATEWAY_PORT_80_TCP_* and the like, from the
+      # Service cosec-gateway, into the environment. Spring reads them as cosec.gateway.* properties, which
+      # 8.0.0-alpha.1 refused at startup (alpha.2 skips exactly these variables). Services are found by DNS instead.
+      enableServiceLinks: false
+      # The gateway never calls the Kubernetes API.
+      automountServiceAccountToken: false
+      # preStop (5 s), then Spring's graceful shutdown (30 s at most) and the decision listeners' drain (5 s).
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        # The image's appuser:appgroup. The image names its user instead of giving a uid, so runAsNonRoot cannot
+        # check it without these.
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cosec-gateway
+          image: ghcr.io/ahoo-wang/cosec-gateway
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Required, with no fallback: the gateway signs and verifies tokens with it. Create the Secret in the
+            # overlay's namespace before the first apply, for example:
+            #   kubectl create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
+            - name: COSEC_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cosec-jwt-secret
+                  key: secret
+            # Heap, direct memory and metaspace, sized for the memory limit below. An overlay that changes the limit
+            # replaces this variable too.
+            - name: JVM_MEMORY_OPTS
+              value: -Xms256m -Xmx256m -XX:MaxDirectMemorySize=64m -XX:MaxMetaspaceSize=192m
+            # The image's start script puts JAVA_OPTS after its own defaults (-Xmx2048M, ZGC, ...), so these win.
+            # JAVA_TOOL_OPTIONS would not: the JVM reads it before the command line.
+            # - ExitOnOutOfMemoryError: a JVM that ran out of memory is restarted rather than left half-working.
+            # - jmxremote.host: the image starts a JMX agent on port 5555 with no authentication; keep it to the pod.
+            # - preferIPv4Stack: https://github.com/netty/netty/issues/16082
+            - name: JAVA_OPTS
+              value: >-
+                $(JVM_MEMORY_OPTS)
+                -XX:+ExitOnOutOfMemoryError
+                -Dcom.sun.management.jmxremote.host=127.0.0.1
+                -Djava.net.preferIPv4Stack=true
+          # spring.data.redis.* from the overlay's ConfigMap cosec-gateway-redis.
+          envFrom:
+            - configMapRef:
+                name: cosec-gateway-redis
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              # The JVM sizes its GC, JIT and Netty thread pools from the CPU limit.
+              cpu: "1"
+              memory: 768Mi
+          # Spring Boot's probe groups. Readiness is REFUSING_TRAFFIC until the platform document (and any prewarmed
+          # document) is installed, so a gateway on a Redis with no documents runs but stays out of the Service.
+          # That is by design: it would answer every routed request 503. Never probe /actuator/health, which is DOWN
+          # until then as well.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 2
+            failureThreshold: 90
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            # Lets the Service drop the pod before the gateway stops taking connections.
+            preStop:
+              sleep:
+                seconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /opt/cosec-gateway-server/config
+              readOnly: true
+            # The root filesystem is read-only. The image writes only here: the GC log (logs/), a heap dump on
+            # OutOfMemoryError (data/), and Netty's native transport and the JVM's perf data (/tmp). The AOT cache
+            # is only read.
+            - name: logs
+              mountPath: /opt/cosec-gateway-server/logs
+            - name: data
+              mountPath: /opt/cosec-gateway-server/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: cosec-gateway-config
+        # Ten GC log files of 32 MB at most.
+        - name: logs
+          emptyDir:
+            sizeLimit: 512Mi
+        # One heap dump, as large as the heap.
+        - name: data
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

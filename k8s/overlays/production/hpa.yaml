@@ -1,7 +1,9 @@
+# Scales on CPU, relative to the 1 CPU each gateway requests; needs the metrics server. Pods that are not ready yet
+# (no platform document) do not count towards a scale-up.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: cosec-gateway-hpa
+  name: cosec-gateway
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -15,4 +17,4 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 600
+          averageUtilization: 70

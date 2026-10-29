@@ -113,6 +113,17 @@ class CoSecModuleCheckAutoConfigurationTest {
     }
 
     @Test
+    fun `a CosId generator for CoSec's ids without cosec-cosid fails startup`() {
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cosid.CosIdIdGenerator"))
+                .withPropertyValues("cosec.cosid.generator=order"),
+            "cosec-cosid",
+        )
+        // Without the key, CoSec's own ids need no cosec-cosid.
+        starts(plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cosid.CosIdIdGenerator")))
+    }
+
+    @Test
     fun `a required Kafka audit without cosec-kafka fails startup`() {
         failsNaming(
             plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.kafka.KafkaAuditListener"))
