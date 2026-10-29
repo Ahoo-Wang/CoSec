@@ -73,7 +73,9 @@ The candidates are the policies that bindings and attachments make applicable to
 
 A binding applies only when its app and space match the scope exactly (`*` matches any), when a role binding that
 names a tenant names the principal's, and when it has not expired. An anonymous principal has no attachments, no
-principal or role bindings and no break-glass: only `Anyone` bindings apply to it.
+principal or role bindings and no break-glass: only `Anyone` bindings apply to it. A credential with a role cap (an
+API key with `roles`) has no principal bindings, and an API key never has break-glass (`BND-9`, `BRK-8`;
+[API keys](../integration/authentication.md#api-keys)): `roles: []` leaves only what `Anyone` bindings give.
 
 The order never changes the kind of decision, only which statement is reported when several match: the DENY pass
 always visits every candidate before the ALLOW pass starts.
@@ -221,7 +223,9 @@ Break-glass grants a named principal a policy for a bounded time, for emergencie
 - to `cosec:root`, applies only to a principal of the platform tenant `(platform)`;
 - is created only through the control plane: one person requests it, a second approves it, and its lifetime is at
   most `cosec.control.break-glass.max-duration` ([Testing policies](../policies/testing.md));
-- is the last candidate. It permits only what nothing else permits, and every DENY still applies to the principal.
+- is the last candidate. It permits only what nothing else permits, and every DENY still applies to the principal;
+- never applies to an API key, capped or not: it is a time-limited grant to a person, not to a long-lived credential
+  (`BRK-8`). A gateway forwards the credential's method, so a service behind it does not apply it either.
 
 Every request that break-glass permits must be written to a REQUIRED decision listener first. Without one, or when
 it fails, the request is `503`. A permission check in code (`AuthorizationChecker`) that only break-glass permits is
@@ -246,8 +250,8 @@ A grant is only as trustworthy as the inputs it depends on.
 
 | Input | Source | Controlled by |
 |---|---|---|
-| Principal id, attributes, roles and attached policies | The verified credential (JWT claims, API key), or your `MembershipProvider` | Whoever issues credentials |
-| Tenant | The credential (`tenantId` claim, API key tenant); `(0)` when it has none. An anonymous request is always in `(0)` | Whoever issues credentials |
+| Principal id, attributes, roles and attached policies | The verified token's claims, or your `MembershipProvider`. An API key gives only its principal and tenant, and the attribute `apiKeyId`; its roles always come from the provider, narrowed to the key's cap | Whoever issues credentials, and whoever runs the membership source |
+| Tenant | The credential (`tenantId` claim, the API key's required tenant); `(0)` for a token without one. An anonymous request is always in `(0)` | Whoever issues credentials |
 | App | `cosec.authorization.scope.app-id` when set (a different `CoSec-App-Id` is rejected); otherwise `CoSec-App-Id` | Your configuration, or the client |
 | Space | `CoSec-Space-Id`, accepted only when the principal has a role in that space | The client, among the credential's spaces |
 | Device | `CoSec-Device-Id` | The client |

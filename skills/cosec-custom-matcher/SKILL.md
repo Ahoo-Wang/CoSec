@@ -104,17 +104,19 @@ API keys, which carry no memberships of their own. Tokens carrying `cosec.member
 @Bean
 fun membershipProvider(directory: Directory): MembershipProvider = MembershipProvider { tenant, principal ->
     val grants = directory.grants(tenant.value, principal.value) // suspend, non-blocking
-        ?: return@MembershipProvider null // not in the directory: its credentials are refused
-    Memberships(
-        Memberships.Source.PROVIDER,
-        roles = grants.rolesBySpace.mapKeys { SpaceId(it.key) }.mapValues { (_, r) -> r.map(::RoleId).toSet() },
-        attachments = grants.policies.map(::PolicyId),
-        active = !grants.disabled,
+        ?: return@MembershipProvider MembershipAnswer.Unknown // not in the directory: its credentials are refused
+    MembershipAnswer.Known(
+        Memberships(
+            Memberships.Source.PROVIDER,
+            roles = grants.rolesBySpace.mapKeys { SpaceId(it.key) }.mapValues { (_, r) -> r.map(::RoleId).toSet() },
+            attachments = grants.policies.map(::PolicyId),
+            active = !grants.disabled,
+        )
     )
 }
 ```
 
-Answer `null` for a principal you do not know and `active = false` for a deactivated one: its API keys and its
+Answer `MembershipAnswer.Unknown` for a principal you do not know and `active = false` for a deactivated one: its API keys and its
 provider-marked tokens are then refused as `token-invalid` (IDN-3). Never answer empty memberships for an unknown
 principal: that is a known principal with no roles, whose keys keep working. Answer the principal's memberships, not a
 key's: the pipeline narrows them to the key's `roles` cap itself. With `cosec-cocache`, a `MembershipLoader` bean

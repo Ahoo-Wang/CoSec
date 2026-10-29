@@ -100,16 +100,16 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 
 ```kotlin
 fun interface MembershipProvider {
-    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships?
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }
 ```
 
-- 返回 `Memberships(Memberships.Source.PROVIDER, roles, attachments)`：按空间组织的角色（默认空间用 `SpaceId.DEFAULT`）和附加策略 id，保持顺序。其他来源会被拒绝。
-- 不认识的主体返回 `null`，已停用的主体返回 `active = false`：此时凭证被拒绝（`token-invalid`），如同其认证器拒绝了它（`IDN-3`）。不要对未知主体返回空的成员关系：那表示一个没有角色的已知主体，它的 API key 会继续有效。
+- 返回 `MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, roles, attachments))`：按空间组织的角色（默认空间用 `SpaceId.DEFAULT`）和附加策略 id，保持顺序。其他来源会被拒绝。
+- 不认识的主体返回 `MembershipAnswer.Unknown`，已停用的主体返回 `active = false` 的成员关系：此时凭证被拒绝（`token-invalid`），如同其认证器拒绝了它（`IDN-3`）。不要对未知主体返回空的成员关系：那表示一个没有角色的已知主体，它的 API key 会继续有效。答案是密封类型，所以提供者必须说明它指的是哪一种。
 - 查找失败时抛出异常。失败、超时（`cosec.authorization.membership.timeout`）或没有提供者，都让请求得到 `503`，绝不当作“未知”，也绝不当作“没有角色”：没有角色也就意味着绑定到角色的 DENY 都不适用。
 - API key 的上限（`MembershipSource.Provider.cap`）由 Pipeline 的 `MembershipResolver` 在你的应答之后应用：返回主体的成员关系，而不是某个 key 的。
 
-`InMemoryMembershipProvider`（`cosec-spi`）用于测试；对没有放入的主体返回 `null`。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；`MembershipLoader.load` 遵守同样的约定，`null` 应答不会被缓存。主体的成员关系变化时调用它的 `invalidate`。你声明了 `MembershipLoader` bean 且没有 `MembershipProvider` 时，starter 注册 `CoCacheMembershipProvider`；否则把你需要的那个声明为 bean。启用 API key 时必须有一个（`IDN-6`）。
+`InMemoryMembershipProvider`（`cosec-spi`）用于测试；对没有放入的主体返回 `Unknown`。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；`MembershipLoader.load` 遵守同样的约定，`Unknown` 不会被缓存，耗时超过填充超时（在 starter 中为 `cosec.authorization.membership.timeout`）的加载会失败，以便下一个请求重试。主体的成员关系变化时调用它的 `invalidate`。你声明了 `MembershipLoader` bean 且没有 `MembershipProvider` 时，starter 注册 `CoCacheMembershipProvider`；否则把你需要的那个声明为 bean。启用 API key 时必须有一个（`IDN-6`）。
 
 ## 外部属性 {#external-attributes}
 

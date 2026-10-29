@@ -120,19 +120,24 @@ claims would take more than its `membershipClaimLimit` bytes; the starter's conv
 tokens with your own converter or issuer. A token refreshed from a marked token keeps the marker.
 
 **The provider.** `MembershipProvider` is a `suspend` function that must not block the calling thread. It answers
-`Memberships` whose source is `PROVIDER`; `null` when it does not know the principal, which is not the same as
-knowing it with no memberships; and `active = false` for a principal that is deactivated. It reports a failed lookup
-by throwing. `InMemoryMembershipProvider` serves tests and local development, and answers `null` for a principal it
-was not given. `cosec-cocache` has `CoCacheMembershipProvider`, which caches the answers of your `MembershipLoader` in
+`MembershipAnswer.Known` with `Memberships` whose source is `PROVIDER`, with `active = false` for a principal that is
+deactivated, or `MembershipAnswer.Unknown` when it does not know the principal, which is not the same as knowing it
+with no memberships. It reports a failed lookup by throwing. `InMemoryMembershipProvider` serves tests and local
+development, and answers `Unknown` for a principal it was not given. `cosec-cocache` has `CoCacheMembershipProvider`, which caches the answers of your `MembershipLoader` in
 Redis, shared by every instance, and drops them on `invalidate(tenant, principal)` when the principal's memberships
 change; entries also expire after the cache's TTL. The starter declares it as the `MembershipProvider` when the
-application has a `MembershipLoader` bean and no `MembershipProvider` of its own. An unknown principal is not cached:
-each request for it asks the loader again. A principal has one source: claims or the provider, never both.
+application has a `MembershipLoader` bean and no `MembershipProvider` of its own, and bounds each load by
+`cosec.authorization.membership.timeout`: a load that hangs fails, and the next request starts another. An unknown
+principal is not cached: each request for it asks the loader again. A principal has one source: claims or the
+provider, never both.
 
-**Unknown or deactivated means refused.** When the provider answers `null` or `active = false`, the credential that
+**Unknown or deactivated means refused.** When the provider answers `Unknown` or `active = false`, the credential that
 asked for it (a marked token, or an [API key](#api-keys)) is refused: the request is evaluated as anonymous, and a
 denial answers `401` `token-invalid`. The decision event's `subject.rejected` is `API_KEY_INVALID` for a key and
-`TOKEN_INVALID` for a token. Deactivating a principal therefore deactivates every one of its keys at once (`IDN-3`).
+`TOKEN_INVALID` for a token, and `subject.refused` names the principal and the credential (`IDN-3`). Deactivating a
+principal therefore deactivates every one of its keys, once the provider answers so: with `CoCacheMembershipProvider`,
+call `invalidate`, or wait out the cache's TTL. A token that carries its memberships as claims does not ask the
+provider: it stays valid until it expires or is [revoked](#revoking-every-token-of-a-principal).
 
 **Failure means `503`.** The request is unavailable, never decided with "no memberships", when:
 
@@ -279,13 +284,18 @@ tenant, and is authorized like anyone else. API keys are off by default; turn th
 [`MembershipProvider`](#memberships), so a key is never more than its principal. What the principal is decides what
 the key is: a key of a user is a personal access token, a key of a workload principal (a service account) is that
 service's credential. Roles and bindings are written for the principal, in documents or in the provider, never on
-the key. A key may only narrow them, with `roles`, its **cap** (`IDN-2`):
+the key. A key may only narrow them, with `roles`, its **cap** (`IDN-2`), or say that it does not, with `uncapped`:
 
-| `roles` | The key holds |
+| The key says | The key holds |
 |---|---|
-| unset | everything its principal holds, attached policies included |
-| `[billing, auditor@team-a]` | only those of its principal's roles, matched exactly by space (`role` is the default space, `role@space` that space), and no attached policies: a cap is written in roles. A role in the cap that the principal does not hold gives nothing. |
-| `[]` | no roles and no attached policies |
+| `uncapped: true` | everything its principal holds: its roles, attached policies and principal bindings |
+| `roles: [billing, auditor@team-a]` | only those of its principal's roles, matched exactly by space (`role` is the default space, `role@space` that space). No attached policy and no principal binding reaches it: a cap is written in roles. A role in the cap that the principal does not hold gives nothing. |
+| `roles: []` | only what `Anyone` bindings give: no roles, attached policies or principal bindings |
+
+`Anyone` bindings apply to every key. **An API key never gets break-glass**, capped or not: break-glass is a
+time-limited emergency grant to a person, not to a long-lived credential (`BRK-8`). A key carries no attributes of
+its principal's token either, only `apiKeyId`: a DENY whose condition reads `subject.attributes.<name>` with
+`onMissing: nomatch` does not apply to a key, so write such a DENY for keys with a role or `apiKeyId`.
 
 A request that carries a key is judged by the key alone ([Authenticators](#authenticators)). An unknown, disabled
 or expired key makes the request anonymous; a denial then answers `401` `token-invalid`. So does a key whose
@@ -295,7 +305,7 @@ CoSec never stores or logs the key itself, only its SHA-256 hash (`ApiKeys.hash`
 delegation is [refused](#tokens) for every credential.
 
 **A provider is required.** With `cosec.api-key.enabled=true` and no `MembershipProvider` bean, the application does
-not start (`IDN-6`): add `cosec-cocache` and a `MembershipLoader` bean, which configures `CoCacheMembershipProvider`,
+not start (`IDN-6`); the property is `true` or `false`, and any other value (`on`, `yes`, `1`) stops startup too: add `cosec-cocache` and a `MembershipLoader` bean, which configures `CoCacheMembershipProvider`,
 or declare a `MembershipProvider` of your own. The check runs where keys are authenticated, in
 `cosec.pipeline.mode=enforce`; a service behind a gateway (`gateway` mode) reads no keys, only the identity the
 gateway verified, so it needs no provider for them.
@@ -318,12 +328,14 @@ cosec:
         hash: <SHA-256 hex of the other key>
         principal-id: svc-billing
         tenant-id: acme
-        # no roles: the key holds everything svc-billing holds
+        uncapped: true # the key holds everything svc-billing holds
 ```
 
-Each key needs an `id`, a 64-character lowercase hex `hash`, a `principal-id` and a `tenant-id`, and ids must be
-unique; otherwise the application does not start. So does a key configured with `policies` or `attributes`, which
-keys no longer carry: unknown fields fail binding instead of being dropped. Give a key used through a gateway an `expires-at`: the gateway refuses to forward the
+Each key needs an `id`, a 64-character lowercase hex `hash`, a `principal-id`, a `tenant-id`, and exactly one of
+`roles` and `uncapped: true`, and ids must be unique; otherwise the application does not start, so no key ends up
+uncapped by omission. A key configured with `policies` or `attributes`, which keys no longer carry, does not start
+either: unknown fields fail binding instead of being dropped. In code, `ApiKey` has no default for `roles` either:
+whoever creates a key, `RedisApiKeyStore.issue` included, passes the cap or `null`. Give a key used through a gateway an `expires-at`: the gateway refuses to forward the
 identity of a credential that never expires ([Forwarding the identity](./web.md#forwarding-the-identity)). Rotate a
 key by adding the new one, moving the client over, then removing the old one.
 

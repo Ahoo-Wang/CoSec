@@ -72,8 +72,9 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
   API key 的请求只按 key 判断；不读取它的令牌。
 - **主体未知或已停用：** `MembershipProvider` 对 key 的主体、或带 `cosec.membership: provider` 标记的令牌的主体返回了
-  `null`，或返回了 `active = false`（`IDN-3`）。决策事件的 `subject.rejected` 是 `API_KEY_INVALID` 或 `TOKEN_INVALID`。
-  让提供者在 key 的租户中认识该主体，或重新启用它。对已知主体返回空成员关系的提供者会让 key 保持有效但没有角色：那是
+  `Unknown`，或返回了 `active = false`（`IDN-3`）。决策事件的 `subject.rejected` 是 `API_KEY_INVALID` 或 `TOKEN_INVALID`，
+  `subject.refused` 指明主体和凭证。让提供者在 key 的租户中认识该主体，或重新启用它；使用 `CoCacheMembershipProvider` 时，
+  调用 `invalidate`，让变化在缓存的 TTL 之前生效。对已知主体返回空成员关系的提供者会让 key 保持有效但没有角色：那是
   `forbidden`，不是这里的情况。
 - **网关之后：** `CoSec-Identity` 是其他版本、没有 `auth.exp`，或签发时间在未来（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
@@ -136,7 +137,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`，只有部分租户 | 该租户在 [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot) 中，而它的请求读取的最旧文档上次确认距今超过 `fail-closed.max-lag`（`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`）。 | 恢复 Redis；见[决策使用了旧的修订](#decisions-use-an-old-revision)。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码或编译，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `INDETERMINATE: MissingPolicies`、`AmbiguousPolicy` / `missing_policies` | 绑定或附加策略指向文档中未定义的策略，或者租户和平台都定义了同一个策略 id。 | 通过控制面修正文档。 |
-| `INDETERMINATE: MembershipUnavailable` / `membership` | `MembershipProvider` 失败，或耗时超过 [`cosec.authorization.membership.timeout`](./configuration.md#authorization)。 | 修复提供者或它的存储。 |
+| `INDETERMINATE: MembershipUnavailable` / `membership` | `MembershipProvider` 失败，或耗时超过 [`cosec.authorization.membership.timeout`](./configuration.md#authorization)。使用 `CoCacheMembershipProvider` 时，在该时间内没有应答的 `MembershipLoader` 会让这次加载失败（`The membership loader did not answer within ...`），下一个请求会再试。 | 修复提供者或它的存储。 |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | 某条语句需要的外部属性的提供者失败或超时（以 `WARN` 记录 `<provider> failed to fetch [...]`）。 | 修复提供者，或者调大 [`cosec.authorization.attributes.timeout`](./configuration.md#authorization)。 |
 | `INDETERMINATE: MatcherFailed` / `matcher` | 某条 DENY 语句的条件，或它所在策略的条件，无法求值。包括请求以不同的值多次发送某个请求头时，基于 `http.header.<name>` 的 DENY（`Header [<name>] arrived with different values; a condition on it cannot decide.`）；同一个值重复发送时按该值读取。失败的 ALLOW 永远不会让请求变成 `503`：基于这种请求头的 ALLOW 不匹配。 | 修正条件，或修正重复发送该请求头的客户端。 |
 | `INDETERMINATE: BoundaryUnavailable` / `boundary` | 对一个被放行的请求，租户边界中的某条语句无法求值。 | 修正边界。 |
@@ -317,6 +318,9 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
   因为只有那里读取 key；`gateway` 模式的服务不读取 key。
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`... needs a tenant-id.`、
   `Duplicate API key ids: [...].` 修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。
+- `API key [<id>] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, not neither`（或 `not
+  both`）：说明 key 拥有什么，即它的上限或 `uncapped: true`；key 不会因遗漏而没有上限。
+- `cosec.api-key.enabled=[<value>] is neither true nor false.`：写 `true` 或 `false`。
 - 绑定错误提到 `cosec.api-key.keys[n].policies` 或 `.attributes`：key 不再携带它们。通过提供者授予主体角色，再用
   `roles` 收窄 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。
 

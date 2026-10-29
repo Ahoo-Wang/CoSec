@@ -349,46 +349,62 @@ In 7.x an API key granted its own roles, policies and attributes. In 8.0 a key g
 principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0009 §4,
 [API keys](../integration/authentication.md#api-keys)). What breaks:
 
+- **`MembershipProvider` answers `MembershipAnswer`** (`Known(memberships)` or `Unknown`), and so does
+  `MembershipLoader.load`. A provider written for the 8.0 milestones, which answered `Memberships`, no longer
+  compiles: decide what each principal it does not know is, `Unknown`, and stop answering empty memberships for it,
+  which would keep that principal's API keys valid. `Memberships` has `active`, false for a deactivated principal.
+  An unknown or deactivated principal's API keys, and its tokens marked `cosec.membership: provider`, are refused as
+  `token-invalid` (`IDN-3`). [Extending](../architecture/extending.md#memberships) has the contract.
 - **Stored keys.** The Redis format changes. A key stored before 8.0 is refused when it is read: a request with it is
   `503` and the log names `cosec-migrate api-keys`. Convert the keys before switching (below).
 - **A provider is required.** `cosec.api-key.enabled=true` without a `MembershipProvider` bean fails startup
-  (`IDN-6`). The principals of your keys must be known to it: a key whose principal it does not know, or knows as
-  deactivated, is refused as `token-invalid` (`IDN-3`).
-- **Configured keys** (`cosec.api-key.keys[]`): `tenant-id` is required, and `policies` and `attributes` are gone; a key
-  that still sets them stops startup. `roles` is now a cap: unset, the key holds everything its principal holds. A 7.x
-  key configured with neither `roles` nor `policies` had no access; give it `roles: []` to keep it that way.
+  (`IDN-6`). `cosec.api-key.enabled` is `true` or `false`; `on`, `yes` or `1` fail startup.
+- **A cap narrows principal bindings and break-glass too.** A key with `roles` gets none of its principal's principal
+  bindings, `roles: []` only what `Anyone` bindings give, and no API key ever gets break-glass (`BND-9`, `BRK-8`).
+- **Configured keys** (`cosec.api-key.keys[]`): `tenant-id` is required, and each key sets exactly one of `roles`
+  (its cap; `[]` for no roles) and `uncapped: true`. `policies` and `attributes` are gone; a key that still sets them
+  stops startup, and so does one that sets neither or both of `roles` and `uncapped`. A 7.x key held only the roles
+  and policies it named; to keep a key with none, give it `roles: []`.
 - **`ApiKey`** is a plain class `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`: `policies`,
-  `attributes` and `toPrincipal()` are gone, `tenantId` is required and `roles: Set<String>?` is the cap.
-- **`MembershipProvider.memberships`** and `MembershipLoader.load` answer `Memberships?`: `null` for a principal the
-  provider does not know, where 7.x expected empty memberships. `Memberships` has `active`. The refusal applies to a
-  token marked `cosec.membership: provider` too: a token of an unknown or deactivated principal is `token-invalid`.
-  [Extending](../architecture/extending.md#memberships) has the contract.
+  `attributes` and `toPrincipal()` are gone, `tenantId` is required and `roles: Set<String>?` is the cap, with no
+  default.
 
 **Converting stored keys.** `cosec-migrate api-keys` reads every key under `--api-key-prefix` (default
-`cosec:api-key`) and writes `api-keys-report.json` to `--out`:
+`cosec:api-key`) and writes `api-keys-report.json` to `--out`. Export what each principal holds now, as a JSON array
+of `{"tenant", "principal", "roles": ["role", "role@space", ...]}`, and pass it as `--memberships`:
 
 ```bash
-cosec-migrate api-keys --redis redis://localhost:6379 --out ./api-keys --dry-run
+cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
 ```
 
-For each key the report gives its new cap (`keys[].cap`): the roles it had, and, when it had attached policies that
-applied, a role of its own named `--role-prefix` (default `api-key.`) plus the key id, in the default space and every
-space it had a role in. `memberships` lists the roles each principal must hold, the union of its keys' caps;
-`roleBindings` lists the bindings of the keys' own roles to their old policies, one per tenant document. An
-attachment that never applied (its policy missing or not attachable in the published documents) is dropped and
-listed; a policy both the tenant and the platform define is dropped too, to bind by hand. A key without a tenant
-goes to the default tenant (`defaultTenant`). A key with attributes or malformed roles is rejected: then the command
-exits `1` and writes no key. No key gains access: its cap is exactly what it held.
+A key goes one of three ways (`keys[].mode`):
+
+| Mode | When | The key afterwards |
+|---|---|---|
+| `in-place` | `--memberships` shows its principal holds every role the key named, and the key attached no policy | stays with its principal, capped to those roles |
+| `own-principal` | otherwise, by default | moves to a workload principal `apikey:<key id>` in its tenant, uncapped; `memberships` lists the key's roles for that principal, `principalBindings` its attached policies bound to it by name |
+| `granted` | only for the principals `--grant-to-principal <ids>` (or `all`) names | stays with its principal, capped to its roles and a role of its own (`--role-prefix`, default `api-key.`, plus the key id), which `roleBindings` binds to its attached policies; the principal is granted the union of its usable keys' caps, and `memberships[].newlyGained` says what it did not hold |
+
+No key gains access, and no principal does unless named in `--grant-to-principal`. What a key loses is listed per
+key: `lost`, its principal's principal and break-glass bindings, which a key no longer reaches; and for `own-principal`,
+`changes`, what depends on the principal's id (the audit subject, conditions on `subject.id`, rate limit buckets keyed
+by principal, the `sub` of a forwarded `CoSec-Identity`).
+
+A key is rejected, and then the command exits `1` and writes no key, when it has attributes (a condition may read
+them), malformed roles, an id with `@`, `*` or a blank, a role that starts with the role prefix, a per-key role a
+document already binds, or an attached policy that does not resolve exactly: missing, not attachable, or defined by
+both the tenant and the platform with different content. Such an attachment made every request of the key
+indeterminate in 8.0, and dropping it could drop a DENY: fix the documents or the key first. A key without a tenant
+goes to the default tenant (`defaultTenant`).
 
 1. Run with `--dry-run` and read the report.
-2. Grant the `memberships` in your `MembershipProvider`'s source, and add the `roleBindings` through the control
-   plane (a change request).
-3. Run again without `--dry-run`: the keys are rewritten in the new format. Keys already converted are left as they
-   are, so the command can be repeated.
+2. Grant the `memberships` in your `MembershipProvider`'s source, and add the `principalBindings` and `roleBindings`
+   through the control plane (a change request).
+3. Run again without `--dry-run`. Each key is rewritten only while it still holds what was read, so a key revoked or
+   disabled in between is never brought back: the report lists it under `changedSinceRead`, and the command exits `1`
+   and asks to be run again. Keys already converted are left as they are, so the command can be repeated.
 
-A key converted before step 2 is complete is refused or narrower, never wider. The roles go to the principal itself:
-if the principal is a user whose own tokens ask the provider (`cosec.membership: provider`), those tokens get them
-too.
+A key converted before step 2 is complete is refused or narrower, never wider.
 
 #### Inject mode becomes identity propagation
 

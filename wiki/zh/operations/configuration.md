@@ -32,7 +32,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.authentication.login.enabled` | boolean | `true` | 把凭证换成令牌的登录 bean：基于你的 `Authentication` bean 的 `CompositeAuthentication`、启用 JWT 时的 `TokenCompositeAuthentication`，以及社交登录。管道中对请求的认证不依赖它 |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`cosec-social`；需要 `cosec.authentication.login.enabled`） |
 | `cosec.jwt.enabled` | boolean | `true` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
-| `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md) |
+| `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
 | `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean） |
@@ -174,7 +174,8 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。 |
 | `principal-id` | string | 无 | **必填。** key 认证成的主体。 |
 | `tenant-id` | string | 无 | **必填。** 主体所在的租户。 |
-| `roles` | set | 不设置 | 上限：key 只拥有其主体角色中的这些（`role`、`role@space`），且没有附加的策略。不设置时拥有主体拥有的一切；为空时什么都没有。 |
+| `roles` | set | 无 | 上限：key 只拥有其主体角色中的这些（`role`、`role@space`），没有附加的策略或主体绑定；`[]` 只留下 `Anyone` 绑定给予的。设置它或 `uncapped`。 |
+| `uncapped` | boolean | `false` | `true` 表示 key 拥有其主体拥有的一切。`roles` 与 `uncapped: true` 必须恰好设置其一，否则应用无法启动。 |
 | `expires-at` | instant | 无 | 过了这个时刻 key 被拒绝。 |
 | `enabled` | boolean | `true` | 停用的 key 被拒绝。 |
 

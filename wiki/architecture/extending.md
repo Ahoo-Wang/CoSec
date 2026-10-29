@@ -141,24 +141,27 @@ provider marker instead. An API key never carries them (RFC 0009 §4). For those
 
 ```kotlin
 fun interface MembershipProvider {
-    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships?
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }
 ```
 
-- Answer `Memberships(Memberships.Source.PROVIDER, roles, attachments)`: roles by space (`SpaceId.DEFAULT` for the
-  default space) and attached policy ids, in order. Any other source is rejected.
-- Answer `null` for a principal you do not know, and `active = false` for one that is deactivated: the credential is
-  then refused (`token-invalid`), as if its authenticator had rejected it (`IDN-3`). Do not answer empty memberships
-  for an unknown principal: that is a known principal with no roles, and its API keys would keep working.
+- Answer `MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, roles, attachments))`: roles by space
+  (`SpaceId.DEFAULT` for the default space) and attached policy ids, in order. Any other source is rejected.
+- Answer `MembershipAnswer.Unknown` for a principal you do not know, and memberships with `active = false` for one that
+  is deactivated: the credential is then refused (`token-invalid`), as if its authenticator had rejected it (`IDN-3`).
+  Do not answer empty memberships for an unknown principal: that is a known principal with no roles, and its API keys
+  would keep working. A sealed answer, so that a provider has to say which it means.
 - Throw when the lookup fails. A failure, a timeout (`cosec.authorization.membership.timeout`) or a missing provider
   makes the request `503`, never "unknown" and never "no roles": no roles would also mean that no DENY bound to a role
   applies.
 - An API key's cap (`MembershipSource.Provider.cap`) is applied by the pipeline's `MembershipResolver`, after your
   answer: answer the principal's memberships, never a key's.
 
-`InMemoryMembershipProvider` (`cosec-spi`) is for tests; it answers `null` for a principal it was not given.
+`InMemoryMembershipProvider` (`cosec-spi`) is for tests; it answers `Unknown` for a principal it was not given.
 `CoCacheMembershipProvider` (`cosec-cocache`) caches what your `MembershipLoader` answers in Redis, shared by every
-instance; `MembershipLoader.load` follows the same contract, and a `null` answer is not cached. Call its `invalidate`
+instance; `MembershipLoader.load` follows the same contract, `Unknown` is not cached, and a load that takes longer
+than its fill timeout (`cosec.authorization.membership.timeout` in the starter) fails, so that the next request
+retries. Call its `invalidate`
 when a principal's memberships change. The starter registers `CoCacheMembershipProvider` when you declare a
 `MembershipLoader` bean and no `MembershipProvider`; otherwise declare the one you want as a bean. With API keys on,
 one is required (`IDN-6`).

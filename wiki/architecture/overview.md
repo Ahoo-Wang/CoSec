@@ -188,8 +188,10 @@ sequenceDiagram
   evaluated as anonymous; an authenticator that fails or times out is a `503`.
 - **Memberships and stage A.** Stage-A attributes, those that decide what is loaded such as the blacklist, are fetched
   together with the memberships (steps 4 and 5). Memberships come from the token's claims, or from the
-  `MembershipProvider` when the token carries the provider marker. A membership source that fails, times out or answers
-  the wrong kind of memberships is a `503`, never "no roles".
+  `MembershipProvider` for an API key and for a token that carries the provider marker, narrowed to a key's cap. A
+  principal the provider does not know or knows as deactivated refuses the credential, and the request is decided as
+  anonymous. A membership source that fails, times out or answers the wrong kind of memberships is a `503`, never "no
+  roles".
 - **Scope.** `ScopeResolver` turns the declared app and space into a checked scope (step 6): the tenant is the
   principal's (the default tenant when anonymous); a service bound to an app (`cosec.authorization.scope.app-id`) uses
   that app and rejects a request that declares another; a space other than the default needs a role in it. A rejected
