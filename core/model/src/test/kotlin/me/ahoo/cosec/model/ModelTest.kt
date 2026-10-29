@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test
 class ModelTest {
     @Test
     fun `a request keeps what it is given`() {
-        val subject = Subject("user", "tenant", true, setOf("admin@space"), setOf("p"), mapOf("k" to 1), root = false)
+        val subject = Subject("user", "tenant", true, setOf("admin@space"), setOf("p"), mapOf("k" to 1), root = false, principalBindings = true, breakGlass = true)
         val scope = Scope.declared("tenant", "app", "space")
         val action = Action("http", "GET")
         val resource = Resource("http", "/orders/1", mapOf("resource.owner" to "user"))

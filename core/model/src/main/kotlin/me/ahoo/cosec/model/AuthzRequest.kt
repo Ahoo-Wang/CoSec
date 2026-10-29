@@ -39,14 +39,15 @@ class Subject(
     /**
      * Whether the principal's own bindings (platform and tenant principal bindings) apply. False for a credential with a
      * role cap (RFC 0009 §4.2): a cap means "only these roles", so nothing bound to the principal by name reaches it.
-     * `Anyone` bindings still apply.
+     * `Anyone` bindings still apply. No default: whoever makes a subject says, so none is wider by omission.
      */
-    val principalBindings: Boolean = true,
+    val principalBindings: Boolean,
     /**
-     * Whether the principal's break-glass bindings may apply. False for an API key, capped or not (RFC 0009 §4.2):
-     * break-glass is a time-limited emergency grant to a person, never to a long-lived credential.
+     * Whether the principal's break-glass bindings may apply: only for CoSec's own tokens, never for an API key or any
+     * other credential (RFC 0009 §4.2). Break-glass is a time-limited emergency grant to a person, never to a
+     * long-lived credential. No default either.
      */
-    val breakGlass: Boolean = true,
+    val breakGlass: Boolean,
 )
 
 /**

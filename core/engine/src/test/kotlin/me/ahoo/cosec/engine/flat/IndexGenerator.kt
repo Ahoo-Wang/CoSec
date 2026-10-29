@@ -187,7 +187,7 @@ class IndexGenerator(private val random: Random) {
         )
         val scope = (resolution as ScopeResolution.Resolved).scope
         val authz = AuthzRequest(
-            Subject("alice", tenant, true, emptySet(), emptySet(), emptyMap(), false),
+            Subject("alice", tenant, true, emptySet(), emptySet(), emptyMap(), false, true, true),
             Scope.declared(tenant, scope.app.value, space),
             action,
             resource,

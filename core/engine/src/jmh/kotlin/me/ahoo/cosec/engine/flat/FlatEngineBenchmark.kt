@@ -146,7 +146,7 @@ open class FlatEngineBenchmark {
         val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
         val resolution = ScopeResolver.resolve(subject, DeclaredScope("app", ""), HostScope(null))
         val authz = AuthzRequest(
-            subject = Subject("user", "acme", true, emptySet(), emptySet(), emptyMap(), root = false),
+            subject = Subject("user", "acme", true, emptySet(), emptySet(), emptyMap(), root = false, principalBindings = true, breakGlass = true),
             scope = Scope.declared("acme", "app", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),

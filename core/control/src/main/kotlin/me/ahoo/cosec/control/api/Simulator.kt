@@ -69,6 +69,10 @@ data class SimulatedRequest(
     val headers: Map<String, List<String>> = emptyMap(),
     /** What the host knows besides HTTP, such as a gateway's route id: what `request.attributes.*` conditions read. */
     val requestAttributes: Map<String, String> = emptyMap(),
+    /** False for a credential with a role cap: its principal bindings do not apply (RFC 0009 §4.2). A token by default. */
+    val principalBindings: Boolean = true,
+    /** False for an API key or any credential but CoSec's own token: break-glass does not apply. A token by default. */
+    val breakGlass: Boolean = true,
 )
 
 /** The revisions of the documents to decide on (RFC 0006 §9.2's `snapshotVersion`): what an audit event records. */
@@ -105,6 +109,9 @@ class Simulator(
             policies = emptySet(),
             attributes = emptyMap(),
             root = false,
+            // As the credential would be (RFC 0009 §4.2): a key's cap drops principal bindings, a key gets no break-glass.
+            principalBindings = request.principalBindings,
+            breakGlass = request.breakGlass,
         )
         val authz = AuthzRequest(
             subject = subject,

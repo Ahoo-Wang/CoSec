@@ -139,6 +139,20 @@ class ControlHttpTest {
         call("POST", "/analyze", """{"query":$query}""").second.get("allows").size().assert().isEqualTo(1)
     }
 
+    /** RFC 0009 §4.2: a simulated credential states its flags; anything but a boolean is refused, never read as one. */
+    @Test
+    fun `simulate reads the credential's flags as booleans only`() {
+        val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order","space":"team-a",""" +
+            """"action":"order:read","resource":"order/1","time":"2026-11-01T00:00:00Z""""
+        call("POST", "/simulate", """{"request":$request,"principalBindings":false,"breakGlass":false}}""")
+            .second.get("enforced").get("decision").asString().assert().isEqualTo("Permit")
+        for (field in listOf("principalBindings", "breakGlass")) {
+            val (status, problem) = call("POST", "/simulate", """{"request":$request,"$field":"false"}}""")
+            status.assert().describedAs(field).isEqualTo(400)
+            problem.get("detail").asString().assert().contains("boolean")
+        }
+    }
+
     /** Review K1 and K2: a change's kind is not the request's, and a change of another tenant is a missing one. */
     @Test
     fun `a body kind is refused, and another tenant's change answers like a missing one`() {
