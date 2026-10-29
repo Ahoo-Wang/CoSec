@@ -374,7 +374,7 @@ class ControlRoundTwoFixesTest {
         val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
             pia.actor.tenant,
-            me.ahoo.cosec.spi.authn.MembershipSource.Provider,
+            me.ahoo.cosec.spi.authn.MembershipSource.Provider.UNCAPPED,
         )
         val approve = me.ahoo.cosec.control.authz.ControlActions.APPROVE
         val document = me.ahoo.cosec.control.authz.ControlResources.document(SnapshotKey.Platform)

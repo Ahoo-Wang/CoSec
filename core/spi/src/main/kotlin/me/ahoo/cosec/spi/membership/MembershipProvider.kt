@@ -18,8 +18,9 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 
 /**
- * Where the memberships of principals whose token carries [MembershipClaims.PROVIDER] come from (RFC 0004 §4.5.2):
- * memberships that change often, must be revoked at once, or do not fit in a token.
+ * Where the memberships of principals come from when their credential does not carry them (RFC 0004 §4.5.2): tokens
+ * that carry [MembershipClaims.PROVIDER], whose memberships change often, must be revoked at once, or do not fit in a
+ * token, and every API key (RFC 0009 §4.2), which only narrows what the provider answers.
  *
  * The pipeline calls it through `me.ahoo.cosec.runtime.MembershipResolver` (`cosec-runtime`), which enforces the
  * contract: failure means deny. A failed or late answer makes the memberships unavailable, and the request fails closed
@@ -29,9 +30,12 @@ import me.ahoo.cosec.model.TenantId
  */
 fun interface MembershipProvider {
     /**
+     * The memberships of [principal] in [tenant], with [Memberships.Source.PROVIDER]; null when the provider does not
+     * know the principal, which is not the same as knowing it with no memberships: its credential is then refused, as
+     * when [Memberships.active] is false (`IDN-3`).
+     *
      * Must not block the calling thread, which may be an event loop: an implementation that needs a blocking client
-     * moves the call to its own bounded executor (RFC 0006 §7.7). Report a failed lookup by throwing. Answer
-     * `Memberships(PROVIDER, emptyMap(), emptyList())` when the principal is unknown.
+     * moves the call to its own bounded executor (RFC 0006 §7.7). Report a failed lookup by throwing.
      */
-    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships?
 }

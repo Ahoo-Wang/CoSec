@@ -16,6 +16,7 @@ package me.ahoo.cosec.spi.apikey
 import me.ahoo.cosec.spi.now
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
 class ApiKeyReaderTest {
@@ -23,16 +24,24 @@ class ApiKeyReaderTest {
 
     @Test
     fun usableWhileEnabledAndBeforeExpiry() {
-        val key = ApiKey(id = "k", principalId = "svc", expiresAt = expiresAt)
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", expiresAt = expiresAt)
         key.usableAt(expiresAt.minusMillis(1)).assert().isTrue()
         key.usableAt(expiresAt).assert().isFalse()
-        key.copy(enabled = false).usableAt(expiresAt.minusSeconds(60)).assert().isFalse()
-        key.copy(expiresAt = null).usableAt(Instant.MAX).assert().isTrue()
+        ApiKey("k", "svc", "acme", expiresAt = expiresAt, enabled = false).usableAt(expiresAt.minusSeconds(60))
+            .assert().isFalse()
+        ApiKey("k", "svc", "acme").usableAt(Instant.MAX).assert().isTrue()
+    }
+
+    @Test
+    fun aKeyBelongsToATenantAndAPrincipal() {
+        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "") }
+        assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme") }
+        assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme") }
     }
 
     @Test
     fun theInMemoryStoreReadsWithoutBlocking() {
-        val key = ApiKey(id = "k", principalId = "svc")
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme")
         val reader = InMemoryApiKeyStore(mapOf("hash" to key)).reader
         now { reader.findByHash("hash") }.assert().isEqualTo(key)
         now { reader.findByHash("other") }.assert().isNull()

@@ -260,7 +260,7 @@ class ChangeAuthority(
         val principal = AuthenticatedPrincipal(
             approval.approver.principal,
             approval.approver.tenant,
-            MembershipSource.Provider,
+            MembershipSource.Provider.UNCAPPED,
             approval.attributes,
         )
         val approver = Operator(approval.approver, memberships, strings(approval.attributes))

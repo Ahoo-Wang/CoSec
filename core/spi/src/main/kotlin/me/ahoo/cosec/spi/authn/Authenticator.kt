@@ -16,6 +16,8 @@ package me.ahoo.cosec.spi.authn
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
@@ -84,7 +86,7 @@ class AuthenticatedPrincipal(
     ) : this(
         id,
         tenant,
-        memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider,
+        memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider.UNCAPPED,
         attributes,
         credential,
     )
@@ -104,8 +106,23 @@ sealed interface MembershipSource {
         }
     }
 
-    /** The token carries the provider marker: ask the `MembershipProvider` (§4.5.2). */
-    data object Provider : MembershipSource
+    /**
+     * Ask the `MembershipProvider` (§4.5.2): a token that carries the provider marker, or an API key (RFC 0009 §4.2).
+     * The credential is refused when the provider does not know the principal or says it is not active (`IDN-3`).
+     *
+     * [cap], when not null, only narrows what the provider answers: the roles outside it are dropped, matched exactly
+     * by space and role, and so are the directly attached policies, since a cap is expressed in roles only (`IDN-2`).
+     * An empty cap leaves no roles; null leaves the memberships as they are.
+     */
+    class Provider(val cap: Map<SpaceId, Set<RoleId>>? = null) : MembershipSource {
+        companion object {
+            /** The provider's memberships as they are. */
+            val UNCAPPED: Provider = Provider()
+
+            /** A cap of [roles], written as in claims and in documents: `role`, or `role@space`. */
+            fun capped(roles: Collection<String>): Provider = Provider(MembershipClaims.parse(roles, emptyList()).roles)
+        }
+    }
 
     /**
      * The token's membership claims cannot be used, such as an unknown marker or a marker together with claims
@@ -129,7 +146,7 @@ sealed interface MembershipSource {
                     "The token of principal [${principal.id}] asks for a membership provider but also claims roles or policies."
                 )
 
-                else -> Provider
+                else -> Provider.UNCAPPED
             }
         }
     }

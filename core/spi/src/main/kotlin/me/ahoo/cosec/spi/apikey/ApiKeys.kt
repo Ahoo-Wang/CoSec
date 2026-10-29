@@ -13,44 +13,42 @@
 
 package me.ahoo.cosec.spi.apikey
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64
 
 /**
- * A machine identity: whoever presents the key acts as [principalId] with these roles and policies.
+ * A credential of a principal (RFC 0009 §4): whoever presents the key acts as [principalId] in [tenantId], with the
+ * memberships the `MembershipProvider` gives that principal, narrowed to [roles]. A key grants nothing of its own: a key
+ * of a user is a personal access token, one of a workload a service account's key, and neither is ever more than its
+ * principal (`IDN-1`). The principal must be known to the provider and active, or the key is refused (`IDN-3`).
  *
- * Only the key's hash is ever stored (see [ApiKeys.hash]); the key itself is shown once, when it is created.
+ * Only the key's hash is ever stored (see [ApiKeys.hash]); the key itself is shown once, when it is created. A plain
+ * class, not a data class, so that a field can be added later without breaking callers (RFC 0010 §1).
  *
+ * @param roles the cap, as `role` or `role@space`: null does not narrow, an empty set leaves no roles (`IDN-2`)
  * @param expiresAt when the key stops working; null never expires
  */
-data class ApiKey(
+class ApiKey(
     val id: String,
     val principalId: String,
-    val tenantId: String? = null,
-    val roles: Set<String> = emptySet(),
-    val policies: Set<String> = emptySet(),
-    val attributes: Map<String, String> = emptyMap(),
+    val tenantId: String,
+    val roles: Set<String>? = null,
     val expiresAt: Instant? = null,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
 ) {
-    fun toPrincipal(): CoSecPrincipal {
-        val principal = SimplePrincipal(
-            id = principalId,
-            policies = policies,
-            roles = roles,
-            attributes = attributes + (API_KEY_ID_ATTRIBUTE to id),
-        )
-        return tenantId?.let { SimpleTenantPrincipal(principal, SimpleTenant(it)) } ?: principal
+    init {
+        require(id.isNotEmpty()) { "An API key has an id." }
+        require(principalId.isNotEmpty()) { "API key [$id] has a principal." }
+        require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }
     }
 
     /** Whether the key works at [now]: enabled, and not past [expiresAt]. */
     fun usableAt(now: Instant): Boolean = enabled && (expiresAt == null || now.isBefore(expiresAt))
+
+    override fun toString(): String =
+        "ApiKey(id=$id, principalId=$principalId, tenantId=$tenantId, roles=$roles, expiresAt=$expiresAt, enabled=$enabled)"
 
     companion object {
         /** Principal attribute naming the key a request authenticated with. */

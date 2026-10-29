@@ -108,7 +108,7 @@ class MembershipCacheFailureTest {
 
         val resolver = MembershipResolver(providerA)
         val failure = assertThrows<MembershipUnavailableException> {
-            runBlocking { resolver.resolve(tenant, alice, MembershipSource.Provider) }
+            runBlocking { resolver.resolve(tenant, alice, MembershipSource.Provider.UNCAPPED) }
         }
         failure.message.assert().contains("failed")
     }

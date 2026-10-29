@@ -132,7 +132,9 @@ class TokenAuthenticatorTest {
     @Test
     fun theProviderMarkerAsksTheProvider() = runTest {
         val marked = MembershipMarkedPrincipal(SimplePrincipal("alice"), MembershipClaims.PROVIDER)
-        authenticate({ token(marked) }).principal().membershipSource.assert().isSameAs(MembershipSource.Provider)
+        authenticate(
+            { token(marked) }
+        ).principal().membershipSource.assert().isSameAs(MembershipSource.Provider.UNCAPPED)
     }
 
     /** `MEM-1`: the marker together with claims is unusable, never a choice between them. */

@@ -28,6 +28,12 @@ class Memberships(
      * in no scope.
      */
     val malformed: List<String> = emptyList(),
+    /**
+     * False when the provider knows the principal but it is deactivated (RFC 0009 §4.2): a credential whose memberships
+     * come from the provider is then refused, so deactivating a principal deactivates its API keys (`IDN-3`).
+     * Claims are always active.
+     */
+    val active: Boolean = true,
 ) {
     enum class Source { CLAIMS, PROVIDER }
 }

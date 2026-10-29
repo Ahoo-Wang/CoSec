@@ -140,7 +140,7 @@ class AuthorizationCheckerTest {
             AuthenticatedPrincipal(
                 PrincipalId("ada"),
                 PipelineFixtures.TENANT,
-                MembershipSource.Provider,
+                MembershipSource.Provider.UNCAPPED,
                 mapOf("level" to level)
             )
         checker.decide(security, control, approve, doc).assert().isEqualTo(Decision.Deny(null))

@@ -20,6 +20,9 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -45,6 +48,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -328,6 +332,81 @@ class PipelineTest {
                 .isInstanceOf(Cause.MembershipUnavailable::class.java)
             engine.requests.assert().isEmpty()
         }
+    }
+
+    private fun keyOf(cap: MembershipSource.Provider = MembershipSource.Provider.UNCAPPED): AuthnResult =
+        AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PRINCIPAL,
+                TENANT,
+                cap,
+                credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+            ),
+            "apikey",
+        )
+
+    /**
+     * `IDN-3`: a key whose principal the provider does not know, or knows as inactive, is refused: the request is
+     * evaluated as anonymous, and a deny is 401 `token-invalid`, audited as an invalid API key.
+     */
+    @Test
+    fun aKeyOfAnUnknownOrInactivePrincipalIsRefused() = runTest {
+        val inactive = Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList(), active = false)
+        listOf(MembershipProvider { _, _ -> null }, MembershipProvider { _, _ -> inactive }).forEach { provider ->
+            val engine = StubEngine(IMPLICIT_DENY)
+            val outcome = pipeline(authenticator(keyOf()), engine) { it.copy(membershipProvider = provider) }
+                .evaluate(facts())
+            outcome.assertProblem(ProblemType.TOKEN_INVALID)
+            val request = engine.requests.single()
+            request.request.subject.authenticated.assert().isFalse()
+            request.memberships.roles.assert().isEmpty()
+        }
+    }
+
+    /** A token whose principal the provider does not know is refused the same way, as an invalid token. */
+    @Test
+    fun aTokenOfAnUnknownPrincipalIsRefused() = runTest {
+        val engine = StubEngine(IMPLICIT_DENY)
+        pipeline(authenticator(authenticated(null)), engine) {
+            it.copy(membershipProvider = MembershipProvider { _, _ -> null })
+        }.evaluate(facts()).assertProblem(ProblemType.TOKEN_INVALID)
+        engine.requests.single().request.subject.authenticated.assert().isFalse()
+    }
+
+    /** A refused key never stops a permit for anonymous callers: the request goes on as anonymous. */
+    @Test
+    fun aRefusedKeyMayStillDoWhatAnonymousCallersMay() = runTest {
+        val engine = StubEngine(PERMIT)
+        val outcome = pipeline(authenticator(keyOf()), engine) {
+            it.copy(membershipProvider = MembershipProvider { _, _ -> null })
+        }.evaluate(facts())
+        outcome.proceed.assert().isTrue()
+        outcome.security!!.principal.assert().isNull()
+    }
+
+    /** `IDN-2`: the engine sees the provider's memberships narrowed to the key's cap. */
+    @Test
+    fun aKeysCapReachesTheEngine() = runTest {
+        val provided = Memberships(
+            Memberships.Source.PROVIDER,
+            mapOf(SpaceId.DEFAULT to setOf(RoleId("admin"), RoleId("viewer"))),
+            listOf(PolicyId("p1")),
+        )
+        val engine = StubEngine(PERMIT)
+        pipeline(authenticator(keyOf(MembershipSource.Provider.capped(listOf("viewer")))), engine) {
+            it.copy(membershipProvider = MembershipProvider { _, _ -> provided })
+        }.evaluate(facts()).proceed.assert().isTrue()
+        val memberships = engine.requests.single().memberships
+        memberships.roles.assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"))))
+        memberships.attachments.assert().isEmpty()
+    }
+
+    /** A provider that fails is a 503 for a key too: never "unknown", never refused. */
+    @Test
+    fun aKeyWhoseProviderFailsIs503() = runTest {
+        pipeline(authenticator(keyOf())) {
+            it.copy(membershipProvider = MembershipProvider { _, _ -> throw IllegalStateException("down") })
+        }.evaluate(facts()).assertProblem(ProblemType.UNAVAILABLE)
     }
 
     /** `MEM-1`: unusable membership claims are a 503, and the provider is never asked. */

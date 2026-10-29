@@ -58,6 +58,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
@@ -246,9 +247,27 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             // A capture that would change the resource id's segments: refused, never read as another resource.
             is RouteResolution.Invalid -> return StatusMapping.invalidRequest(requestId, "path", traceId)
         }
-        val fetched = fetchedAttributes()
-
         val authn = authenticate(credentials(facts))
+        return authorize(facts, requestId, traceId, record, path, parameters, action, resource, authn)
+    }
+
+    /**
+     * The rest of [decide], for the request as [authn] authenticated it. A credential whose principal the membership
+     * provider does not know, or knows as not active, is refused here (`IDN-3`): the request is then authorized again
+     * as anonymous, with the credential rejected, as if the authenticator had rejected it (RFC 0006 K2).
+     */
+    private suspend fun authorize(
+        facts: HttpFacts,
+        requestId: String,
+        traceId: String?,
+        record: RequestRecord?,
+        path: String,
+        parameters: CoSecParameters,
+        action: Action,
+        resource: Resource,
+        authn: AuthnResult,
+    ): Outcome {
+        val fetched = fetchedAttributes()
         record?.authenticated(path, parameters.deviceId, authn, action, resource, fetched)
         if (authn is AuthnResult.Unavailable) {
             return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), traceId)
@@ -265,6 +284,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             AttributeRequest(authzSubject, null, action, resource, facts.remoteAddress, requestId, parameters.deviceId)
         }
         val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
+            ?: return authorize(
+                facts, requestId, traceId, record, path, parameters, action, resource, refused(checkNotNull(principal))
+            )
         val memberships = membershipsFetched.valueOr {
             return unavailable(requestId, traceId, Cause.MembershipUnavailable(it))
         }
@@ -472,12 +494,15 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         root = false,
     )
 
-    /** Stage A, when there is a [request] for it, together with the memberships (K17): neither waits for the other. */
+    /**
+     * Stage A, when there is a [request] for it, together with the memberships (K17): neither waits for the other. Null
+     * when the credential is refused ([memberships]).
+     */
     private suspend fun membershipsWithStageA(
         principal: AuthenticatedPrincipal?,
         request: AttributeRequest?,
         fetched: FetchedAttributes?,
-    ): Fetched<Memberships> {
+    ): Fetched<Memberships>? {
         if (request == null || fetched == null) {
             return memberships(principal)
         }
@@ -639,18 +664,23 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * The memberships of [principal] (RFC 0004 §4.5): none for an anonymous one, else what [memberships] resolves. Its
-     * failure is a failure, never "no memberships": no roles would also mean no `inRole` DENY matches.
+     * failure is a failure, never "no memberships": no roles would also mean no `inRole` DENY matches. Null when the
+     * provider does not know the principal or it is not active: its credential is refused.
      */
-    private suspend fun memberships(principal: AuthenticatedPrincipal?): Fetched<Memberships> {
+    private suspend fun memberships(principal: AuthenticatedPrincipal?): Fetched<Memberships>? {
         if (principal == null) {
             return NO_MEMBERSHIPS
         }
         return try {
-            Fetched.Value(memberships.resolve(principal.tenant, principal.id, principal.membershipSource))
+            memberships.resolve(principal.tenant, principal.id, principal.membershipSource)?.let { Fetched.Value(it) }
         } catch (e: MembershipUnavailableException) {
             Fetched.Failed(e)
         }
     }
+
+    /** [principal]'s credential, refused: an API key as an invalid key, anything else as an invalid token. */
+    private fun refused(principal: AuthenticatedPrincipal): AuthnResult.Rejected =
+        if (principal.credential?.method == Identity.Method.API_KEY) REFUSED_API_KEY else REFUSED_TOKEN
 
     /**
      * Calls an SPI through [resumeOffIo], within [timeout] when there is one. An external cancellation propagates;
@@ -719,6 +749,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         const val AUTHORIZATION = "authorization"
         val AUTHORIZATION_NAMES = setOf(AUTHORIZATION)
         val NO_CREDENTIALS = Credentials(null, null)
+        val REFUSED_API_KEY = AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID)
+        val REFUSED_TOKEN = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)
         val NO_MEMBERSHIPS: Fetched<Memberships> =
             Fetched.Value(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()))
     }
