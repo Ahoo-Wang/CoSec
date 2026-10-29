@@ -58,8 +58,12 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
 
     /**
      * The decision that [check] answers for the same arguments. A context the pipeline did not make, or an action
-     * without `:`, is an implicit deny (`Deny(null)`); an error is [Decision.Indeterminate]; a permit only break-glass
-     * gives is indeterminate too, since a check writes no audit. The obligations of a permit, rate limits, did not run.
+     * without `:`, is an implicit deny (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check
+     * writes no audit. The obligations of a permit, rate limits, did not run.
+     *
+     * An error thrown by the check is `Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, error))`. That cause
+     * stands for any failure of the check, not only a platform document that could not be read: [Cause] has no case for
+     * the check itself failing. Read `error` for what failed; the failure is logged as a warning too.
      */
     suspend fun decide(security: SecurityContext, action: String, resource: String): Decision {
         val request = (security as? PipelineSecurityContext)?.security ?: return Decision.Deny(null)

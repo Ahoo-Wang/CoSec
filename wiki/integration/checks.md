@@ -78,7 +78,7 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 |---|---|---|
 | `Permit(by)` | An ALLOW matched and no DENY did. `by` is the statement that permitted: `policy`, `index`, `name`, and `via`, how the policy applied. `BindingRef.Bound(id, document)` is a binding, in a `PLATFORM`, `APP` or `TENANT` document; `BindingRef.Attached(policy)` is a policy the principal's memberships attach. | `true` |
 | `Deny(by)` | A DENY matched (`by` is that statement), the tenant's platform boundary refused the permit (`StatementRef.Boundary`), or nothing matched (`null`). A `SecurityContext` the pipeline did not build, or an action without `:`, is `Deny(null)` too. | `false` |
-| `Indeterminate(cause)` | No decision could be made: a document could not be read, a DENY failed, the check itself failed (with a warning in the log), or only break-glass would permit. | `false` |
+| `Indeterminate(cause)` | No decision could be made: a document could not be read, a DENY failed, the check itself failed, or only break-glass would permit. A failure of the check is logged as a warning and reported as `SourceUnavailable(PLATFORM, error)`, whatever failed: read `error`, not the document kind. | `false` |
 
 Use it to record what allowed an action your code takes, such as "permitted by role binding `order-admins` of the app
 document". A `Decision` stays in your process: never write it or its cause into a response. The web adapters never
