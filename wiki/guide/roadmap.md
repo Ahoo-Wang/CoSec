@@ -42,7 +42,7 @@ migrate when 8.0 is assembled.
 ## Milestones
 
 In dependency order, without dates. They follow the dependency table and critical path in RFC 0008 §4.5. Status is
-as of `main` on 2026-10-27. This page changes only when a milestone starts or ends (RFC 0008 §4.7); per-PR status is in
+as of `main` on 2026-10-29. This page changes only when a milestone starts or ends (RFC 0008 §4.7); per-PR status is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md).
 
 ```mermaid
@@ -64,15 +64,17 @@ flowchart LR
 | **M2** Coroutine pipeline | Suspend-based authentication and memberships, external attributes, obligations, decision listeners, 503 and problem+json, all three web adapters on the new pipeline (RFC 0006 PR-2–PR-7) | The three adapters answer identically through the new pipeline | Done: authentication, memberships, external attributes, listeners, rate limits as obligations and all three adapters on the new pipeline merged; only the starter wiring at the switch remains |
 | **M3** Control plane | Revisions, conditional publishing, validation, grant analysis, shadow windows, break-glass, tenant self-service, change audit, HTTP API (RFC 0007 PR-3–PR-9) | Every write goes through the control plane library and its HTTP routes | Done: storage, revisions, the change flow, grant analysis, authorization with approvals, shadow windows, break-glass, tenant self-service, change audit, platform boundaries and the control plane library and HTTP routes merged, along with the round-1 review security fixes; only the registration in the starter at the switch remains |
 | **M4** Conformance suite, baseline and end-to-end slice | A rule registry with positive and negative scenarios for every normative rule, property and mutation checks, and a 7.0 performance baseline (RFC 0008 PR-1–PR-3). An end-to-end slice wires snapshots, the flat engine, the coroutine pipeline and WebFlux over real CoCache and Redis, and measures the performance budgets as soon as it runs (RFC 0008 §4.4.3). The dotted arrows: the slice needs part of M1 and M2 | Every merged rule has both scenarios; the 7.0 baseline is recorded; the slice runs and its first measurement is recorded | In progress: conformance suite (including mutation checks), end-to-end slice and the 7.0 JMH baseline merged; the k6 end-to-end measurement remains |
-| **M5** Switch | Five PRs in order (RFC 0008 §4.4): S1 wires the 8.0 path in the starter and moves `cosec-gateway-server` to it; S2–S4 remove the 7.x path module by module; S5 writes the docs and [Upgrading](../operations/upgrading.md) | S1 merges only when all of RFC 0008 §3.9 holds (suite green, no pending rule, properties and mutants pass, budgets met); there is no way back after S1. S2–S5 merge in order, each reviewed twice | In progress: S1 is split in two. S1a, the additive 8.0 auto-configuration in the starter (not yet registered), has merged; S1b, the point of no return, waits for the RFC 0008 §3.9 evidence |
-| **M6** Legacy cleanup | Code, build settings and doc history that exist only for older versions removed (RFC 0008 §4.6, PR-5, PR-6) | The §4.6.1 inventory is empty except "keep" items and its guards run in `check` | Not started |
-| **M7** RC readiness | A candidate the maintainer can release | Every PR has two review rounds; the `cosec-gateway-server` AOT cache smoke test passes in CI; an RC security review of the integrated system (tenant isolation, control-plane privilege escalation and grant analysis, break-glass, snapshot and cache poisoning, problem+json disclosure, denial of service) is done and its findings are fixed; the maintainer decides between an RC and GA | Not started |
+| **M5** Switch | Five PRs in order (RFC 0008 §4.4): S1 wires the 8.0 path in the starter and moves `cosec-gateway-server` to it; S2–S4 remove the 7.x path module by module; S5 writes the docs and [Upgrading](../operations/upgrading.md) | S1 merges only when all of RFC 0008 §3.9 holds (suite green, no pending rule, properties and mutants pass, budgets met); there is no way back after S1. S2–S5 merge in order, each reviewed twice | Done: S1 wired the 8.0 path in the starter (the point of no return, with the RFC 0008 §3.9 evidence), S2–S4 removed the 7.x path and S5 wrote the docs and [Upgrading](../operations/upgrading.md) |
+| **M6** Legacy cleanup | Code, build settings and doc history that exist only for older versions removed (RFC 0008 §4.6, PR-5, PR-6) | The §4.6.1 inventory is empty except "keep" items and its guards run in `check` | Done: the legacy code and build settings are removed (RFC 0008 PR-5), and a docs guard keeps removed APIs out of the docs in CI (PR-6) |
+| **M7** RC readiness | A candidate the maintainer can release | Two review rounds of the whole system on the RC candidate: the RC security review, then a correctness review of each module; the `cosec-gateway-server` AOT cache smoke test passes in CI; an RC security review of the integrated system (tenant isolation, control-plane privilege escalation and grant analysis, break-glass, snapshot and cache poisoning, problem+json disclosure, denial of service) is done and its findings are fixed; the maintainer decides between an RC and GA | In progress: the AOT cache smoke test passes in CI; ABI validation (RFC 0011 PR-3) and the RC security review remain. `8.0.0-alpha.1` is published as a preview first (see below) |
 
 ## Release policy
 
-- **No 8.0 release of any kind** (no milestone builds, no RC) until the target architecture is complete and every
-  PR has had two review rounds (RFC 0001 §6). Do not depend on `main` from an application.
-- The version on `main` will read `8.0.0-alpha.1`. That is a version string only, not a release (RFC 0008 Q13).
+- **`8.0.0-alpha.1` is a preview with no compatibility promise.** Public APIs, `cosec.*` properties, the document
+  and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics may change in any later alpha or RC,
+  without a migration path between previews. Try it outside production; do not build on it yet.
+- RC and GA wait for M7: two review rounds of the whole system (the RC security review, then a review of each module) with their findings fixed, and ABI validation,
+  which freezes the public API at GA (RFC 0011 D4). Only then does semantic versioning apply to 8.0.
 - **8.0 is not slower than 7.0.** Performance budgets are set from 7.0 measurements: compiled authorization and
   pipeline throughput at least 100 % of 7.0, with no more allocation (RFC 0008 §3.8). They are first measured on the
   end-to-end slice, and S1 does not merge until they are met.
@@ -88,7 +90,8 @@ flowchart LR
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: upgrade to 7.0.2, the latest 7.0.x. To follow the design, read the RFCs. There is nothing to migrate yet.
+- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try `8.0.0-alpha.1` in a test
+  environment with [Upgrading](../operations/upgrading.md); expect changes before the RC.
 
 ## How to follow
 

@@ -216,6 +216,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
+- RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
@@ -266,6 +267,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`platform` 分组（`platform/gateway-server` 是给用户直接部署的网关服务）；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
 | **API Key 上限只留角色，迁移不扩大任何凭据**（#1149 安全审查）：有上限时不取主体绑定，API Key 不取 break-glass，上限必须显式写出，`MembershipProvider` 的未知主体是显式分支；迁移默认原地转换或每把 key 一个专用工作负载主体，并集授予原主体须显式选择 | 2026-10-29 | [RFC 0009](rfc/0009-identity-and-credentials.md) 修订、Q6、Q7 |
 | **运行时依赖的 patch 升级**：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4（#1116），`ognl` 3.4.16 → 3.4.17（#1115，只剩 `migrate` 的 `compileOnly`） | 2026-10-29 | 维护者："升级" |
+| **先发布 `8.0.0-alpha.1` 预览版，不承诺兼容性**：RFC 0011 PR-3（ABI 校验）合入后发布；GitHub 上标为 prerelease，Docker 只推 `8.0.0-alpha.1` 标签（不推 `latest`）；发布后 `main` 回到 `8.0.0-SNAPSHOT`。RC/GA 的前提不变（取代 RFC 0001 §6 "RC 前不发布任何版本"） | 2026-10-29 | 维护者："完成后，保守一点，发布 -alpha.1 ，不承诺兼容性。" |
+| **RC 的两轮审查改为对 RC 候选提交做整体审查**：第 1 轮是 RC 安全审查，第 2 轮是按模块的正确性审查（每个模块一个只读审查者），不再逐个补做已合入 PR 的第二轮 | 2026-10-29 | [RFC 0008 §3.9](rfc/0008-conformance-and-direct-build.md) 修订；维护者："Go with that" |
 
 ## 10. 尚未派发的下一步
 
