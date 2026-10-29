@@ -11,5 +11,5 @@
  * limitations under the License.
  */
 
-// RFC 0011 D4: the API stability markers. PR-2 brings only @InternalCoSecApi, which D3 needs; the rest and the ABI
-// validation come with RFC 0011 PR-3.
+// RFC 0011 D4: the API stability markers (@InternalCoSecApi, @ExperimentalCoSecApi, @CoSecSpi). The root build's ABI
+// validation reads the first and leaves its declarations out of every dump.

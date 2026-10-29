@@ -71,14 +71,18 @@ The rules behind the picture:
 - **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`,
   tokens, `SecurityContext`, `AuditEvent`, and their simple implementations (`SimplePrincipal`, `SimpleTenant`). It
   depends on the Kotlin standard library alone. Changing it is a breaking change.
-- **`cosec-annotations`** (directory `api/annotations/`) holds `@InternalCoSecApi`, an opt-in marker at error level: a
+- **`cosec-annotations`** (directory `api/annotations/`) holds the stability markers
+  ([Stability levels](./extending.md#stability-levels)). `@InternalCoSecApi` is an opt-in marker at error level: a
   declaration carrying it is public only so CoSec's own modules can reach it, and has no compatibility promise.
   Applications do not opt in; `SourceRulesTest` fails when an opt-in appears outside CoSec's own Kotlin sources.
+  `@ExperimentalCoSecApi` (an opt-in at warning level) marks public API that a minor release may still change, and
+  `@CoSecSpi` the interfaces applications implement.
 - **`cosec-spi`** (directory `core/spi/`) holds the ports a request or a store calls, with their values and in-memory
   implementations, under `me.ahoo.cosec.spi.*`: the snapshot store (`SnapshotDocumentStore`), memberships, token
   verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
   limiters, attribute providers, authenticators, the forwarded identity and the audit sink. It depends on
-  `cosec-model`, `cosec-api` and kotlinx-coroutines only, so a third party implements a port against it alone. A port
+  `cosec-model`, `cosec-api`, `cosec-annotations` and kotlinx-coroutines only, so a third party implements a port
+  against it alone. A port
   whose signature needs a layer's types stays with that layer: `DecisionListener`, `RequestGate`, the shadow window
   ports in `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
   ([Extending](./extending.md)).
@@ -132,6 +136,13 @@ The rules behind the picture:
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
+- `SpiMarkerTest`: every public interface of `cosec-spi` that an application can implement, and every extension point
+  [Extending](./extending.md#extension-points) lists, carries `@CoSecSpi`, and the marker is on nothing else.
+
+The public API itself is held by the build, not by review (RFC 0011 D4): every published module keeps its ABI in a dump,
+`api/<project>.api` in its directory, and its `check` runs the Kotlin Gradle plugin's `checkKotlinAbi`, which fails
+when a public signature changed without the dump. `@InternalCoSecApi` declarations are not in the dumps. From 8.0 GA
+on, a removed or changed line of a dump is a breaking change.
 
 ## Request path
 
@@ -381,6 +392,7 @@ each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks 
 | **Snapshot caches never expire and throw on failed reads**, whatever a CoCache customizer or property says. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
 | **One revision per document per evaluation**, installed in load order. | A decision must never mix two revisions of one document. | `SnapshotConsistencyPropertyTest`, `SnapshotInstallOrderPropertyTest` |
 | **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `FlatAuthorizationBenchmark`, `PipelineBenchmark` (review) |
+| **Public signatures change only on purpose.** Each published module's ABI is in its dump; a change that is not in the dump fails the build. | Applications compile against CoSec and implement its SPIs; a signature change nobody noticed breaks them. | `checkKotlinAbi` (part of `check`), `SpiMarkerTest` |
 
 ## Performance
 

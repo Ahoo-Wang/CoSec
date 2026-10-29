@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Duration
@@ -34,6 +35,7 @@ import java.time.Instant
  * @see RevocableTokenVerifier
  * @see TokenRevoker
  */
+@CoSecSpi
 interface TokenStore {
 
     /**

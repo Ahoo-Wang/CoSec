@@ -13,12 +13,14 @@
 
 package me.ahoo.cosec.spi.membership
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.Delegated
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 
 /**
  * A principal whose token carried the [MembershipClaims.MARKER_KEY] claim.
  */
+@CoSecSpi
 interface MembershipMarkerCapable {
     /**
      * The claim's value: [MembershipClaims.PROVIDER], or anything else the token said (a value that is not a string is

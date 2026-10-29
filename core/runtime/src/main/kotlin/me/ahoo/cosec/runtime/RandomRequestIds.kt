@@ -40,7 +40,7 @@ internal object RandomRequestIds {
 }
 
 /** Which client request ids the pipeline accepts. */
-object RequestIds {
+internal object RequestIds {
     /** The longest id accepted; a UUID is 36 characters. */
     const val MAX_LENGTH = 64
 

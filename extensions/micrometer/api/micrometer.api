@@ -1,0 +1,18 @@
+public final class me/ahoo/cosec/micrometer/MetricsListener : me/ahoo/cosec/runtime/event/DecisionListener {
+	public static final field CAUSE_TAG Ljava/lang/String;
+	public static final field Companion Lme/ahoo/cosec/micrometer/MetricsListener$Companion;
+	public static final field LISTENER_TAG Ljava/lang/String;
+	public static final field METRIC_NAME Ljava/lang/String;
+	public static final field NAME Ljava/lang/String;
+	public static final field RESULT_TAG Ljava/lang/String;
+	public static final field SOURCE_TAG Ljava/lang/String;
+	public fun <init> (Lio/micrometer/core/instrument/MeterRegistry;)V
+	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
+	public fun getName ()Ljava/lang/String;
+	public fun onDecision (Lme/ahoo/cosec/runtime/event/DecisionEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/micrometer/MetricsListener$Companion {
+	public final fun bind (Lio/micrometer/core/instrument/MeterRegistry;Lme/ahoo/cosec/runtime/event/DecisionListeners;)V
+}
+

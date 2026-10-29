@@ -28,7 +28,7 @@ object DependencyRules {
         "api" to emptySet(),
         "model" to setOf("api"),
         "engine" to setOf("model", "api"),
-        "spi" to setOf("model", "api"),
+        "spi" to setOf("model", "api", "annotations"),
         "runtime" to setOf("engine", "spi", "model", "api", "annotations"),
         "control" to CORE - "control",
         "cocache" to setOf("spi", "model", "api", "annotations"),

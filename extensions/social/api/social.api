@@ -1,0 +1,112 @@
+public final class me/ahoo/cosec/social/DirectSocialUserPrincipalConverter : me/ahoo/cosec/social/SocialUserPrincipalConverter {
+	public static final field INSTANCE Lme/ahoo/cosec/social/DirectSocialUserPrincipalConverter;
+	public fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;)Lreactor/core/publisher/Mono;
+}
+
+public final class me/ahoo/cosec/social/SocialAuthentication : me/ahoo/cosec/login/Authentication {
+	public fun <init> ()V
+	public fun <init> (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
+	public final fun authorizeUrl (Ljava/lang/String;)Ljava/lang/String;
+	public fun getSupportCredentials ()Ljava/lang/Class;
+}
+
+public final class me/ahoo/cosec/social/SocialAuthenticationException : me/ahoo/cosec/model/CoSecException {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public fun <init> (Ljava/lang/Throwable;)V
+}
+
+public abstract interface class me/ahoo/cosec/social/SocialAuthenticationProvider : me/ahoo/cosec/api/Named {
+	public abstract fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
+	public abstract fun authorizeUrl ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/social/SocialCredentials : me/ahoo/cosec/login/Credentials {
+	public abstract fun getProvider ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/SocialProviderManager {
+	public static final field INSTANCE Lme/ahoo/cosec/social/SocialProviderManager;
+	public final fun get (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
+	public final fun getRequired (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
+	public final fun register (Ljava/lang/String;Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
+	public final fun register (Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
+}
+
+public final class me/ahoo/cosec/social/SocialUser {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser$Gender;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser$Gender;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Lme/ahoo/cosec/social/SocialUser$Gender;
+	public final fun component8 ()Ljava/util/Map;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser$Gender;Ljava/util/Map;Ljava/lang/String;)Lme/ahoo/cosec/social/SocialUser;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/social/SocialUser;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser$Gender;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/social/SocialUser;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAvatar ()Ljava/lang/String;
+	public final fun getEmail ()Ljava/lang/String;
+	public final fun getGender ()Lme/ahoo/cosec/social/SocialUser$Gender;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLocation ()Ljava/lang/String;
+	public final fun getNickname ()Ljava/lang/String;
+	public final fun getProvider ()Ljava/lang/String;
+	public final fun getRawInfo ()Ljava/util/Map;
+	public final fun getUsername ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/SocialUser$Gender : java/lang/Enum {
+	public static final field FEMALE Lme/ahoo/cosec/social/SocialUser$Gender;
+	public static final field MALE Lme/ahoo/cosec/social/SocialUser$Gender;
+	public static final field UNKNOWN Lme/ahoo/cosec/social/SocialUser$Gender;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialUser$Gender;
+	public static fun values ()[Lme/ahoo/cosec/social/SocialUser$Gender;
+}
+
+public abstract interface class me/ahoo/cosec/social/SocialUserPrincipalConverter {
+	public static final field Companion Lme/ahoo/cosec/social/SocialUserPrincipalConverter$Companion;
+	public static final field OAUTH_PROVIDER Ljava/lang/String;
+	public abstract fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;)Lreactor/core/publisher/Mono;
+}
+
+public final class me/ahoo/cosec/social/SocialUserPrincipalConverter$Companion {
+	public static final field OAUTH_PROVIDER Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/oauth/model/AuthCallback, me/ahoo/cosec/social/SocialCredentials {
+	public fun <init> (Ljava/lang/String;)V
+	public fun getProvider ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cosec/social/SocialAuthenticationProvider {
+	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosid/StringIdGenerator;)V
+	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
+	public fun authorizeUrl ()Ljava/lang/String;
+	public fun getName ()Ljava/lang/String;
+	public final fun name ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/justauth/RedisAuthStateCache : me/zhyd/oauth/cache/AuthStateCache {
+	public static final field Companion Lme/ahoo/cosec/social/justauth/RedisAuthStateCache$Companion;
+	public fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun cache (Ljava/lang/String;Ljava/lang/String;)V
+	public fun cache (Ljava/lang/String;Ljava/lang/String;J)V
+	public fun containsKey (Ljava/lang/String;)Z
+	public fun get (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/justauth/RedisAuthStateCache$Companion {
+}
+

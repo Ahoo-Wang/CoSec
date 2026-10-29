@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.attribute
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
@@ -28,6 +29,7 @@ import kotlin.time.Duration
  * a value left out is *absent* (a comparison with it is false), a failure makes every attribute asked for *unavailable*
  * and the statements reading them follow their `onMissing`.
  */
+@CoSecSpi
 interface AttributeProvider {
     /** Registered in the attribute catalog at startup; a policy reading any other `ext.` path does not compile. */
     val attributes: List<AttributeDeclaration>

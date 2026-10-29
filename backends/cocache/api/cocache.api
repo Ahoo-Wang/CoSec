@@ -1,0 +1,460 @@
+public final class me/ahoo/cosec/cache/ApiKeyCodec {
+	public static final field FORMAT I
+	public static final field INSTANCE Lme/ahoo/cosec/cache/ApiKeyCodec;
+	public final fun decode (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
+	public final fun encode (Lme/ahoo/cosec/spi/apikey/ApiKey;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/CoCacheMembershipProvider : me/ahoo/cosec/spi/membership/MembershipProvider {
+	public static final field Companion Lme/ahoo/cosec/cache/CoCacheMembershipProvider$Companion;
+	public synthetic fun <init> (Lme/ahoo/cosec/cache/MembershipCache;JLme/ahoo/cosec/cache/MembershipLoader;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/cache/MembershipCache;JLme/ahoo/cosec/cache/MembershipLoader;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun invalidate-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)V
+	public fun memberships-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/CoCacheMembershipProvider$Companion {
+	public final fun getDEFAULT_FILL_TIMEOUT-UwyO8pc ()J
+}
+
+public final class me/ahoo/cosec/cache/CoCacheRevocationReader : me/ahoo/cosec/spi/token/RevocationReader {
+	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;)V
+	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun isRevoked (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun subjectRevokedBefore-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/CoCacheTokenStore : me/ahoo/cosec/spi/token/TokenStore {
+	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;)V
+	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getReader ()Lme/ahoo/cosec/spi/token/RevocationReader;
+	public fun isRevoked (Ljava/lang/String;)Z
+	public fun revoke (Ljava/lang/String;Ljava/time/Duration;)V
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
+	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+}
+
+public final class me/ahoo/cosec/cache/CoSecCacheSpecs {
+	public static final field CANDIDATE_CACHE_NAME Ljava/lang/String;
+	public static final field CHANGE_REQUEST_CACHE_NAME Ljava/lang/String;
+	public static final field CONTROL_LEASE_CACHE_NAME Ljava/lang/String;
+	public static final field CONTROL_LIST_CACHE_NAME Ljava/lang/String;
+	public static final field INSTANCE Lme/ahoo/cosec/cache/CoSecCacheSpecs;
+	public static final field INSTANCE_STATUS_CACHE_NAME Ljava/lang/String;
+	public static final field MEMBERSHIP_CACHE_NAME Ljava/lang/String;
+	public static final field POLICY_SNAPSHOT_CACHE_NAME Ljava/lang/String;
+	public static final field REFERENCE_INDEX_CACHE_NAME Ljava/lang/String;
+	public static final field REVISION_INDEX_CACHE_NAME Ljava/lang/String;
+	public static final field REVISION_RECORD_CACHE_NAME Ljava/lang/String;
+	public static final field REVOKED_SUBJECT_CACHE_NAME Ljava/lang/String;
+	public static final field REVOKED_TOKEN_CACHE_NAME Ljava/lang/String;
+	public static final field SHADOW_REPORTER_CACHE_NAME Ljava/lang/String;
+	public static final field SHADOW_REPORT_CACHE_NAME Ljava/lang/String;
+	public static final field STAGE_CACHE_NAME Ljava/lang/String;
+	public final fun cacheNamespace (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun expiringFailClosed (Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/policy/CachePolicy;
+	public final fun failOnForeignFormat (Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/policy/CachePolicy;
+	public final fun getCONTROL_CACHE_NAMES ()Ljava/util/Set;
+	public final fun getDEFAULT_MEMBERSHIP_TTL ()Ljava/time/Duration;
+	public final fun getDEFAULT_SNAPSHOT_LOCAL_MAX_AGE ()Ljava/time/Duration;
+	public final fun getSTORE_OF_RECORD_CACHE_NAMES ()Ljava/util/Set;
+	public final fun membership (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;Ljava/time/Duration;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun membership$default (Lme/ahoo/cosec/cache/CoSecCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;Ljava/time/Duration;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun pinPolicySnapshot (Lme/ahoo/cocache/core/CacheSpec;Lme/ahoo/cocache/core/CacheSpec;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun pinnedPolicy (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/policy/CachePolicy;
+	public final fun policySnapshot (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;Ljava/time/Duration;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun policySnapshot$default (Lme/ahoo/cosec/cache/CoSecCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;Ljava/time/Duration;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun revokedSubject (Lme/ahoo/cocache/api/Codec;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun revokedSubject$default (Lme/ahoo/cosec/cache/CoSecCacheSpecs;Lme/ahoo/cocache/api/Codec;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun revokedToken (Lme/ahoo/cocache/api/Codec;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun revokedToken$default (Lme/ahoo/cosec/cache/CoSecCacheSpecs;Lme/ahoo/cocache/api/Codec;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun storeOfRecord (Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/policy/CachePolicy;
+}
+
+public abstract interface class me/ahoo/cosec/cache/MembershipCache : me/ahoo/cocache/api/Cache {
+	public static final field Companion Lme/ahoo/cosec/cache/MembershipCache$Companion;
+}
+
+public final class me/ahoo/cosec/cache/MembershipCache$Companion {
+	public final fun key-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/MembershipCache$DefaultImpls {
+	public static fun async (Lme/ahoo/cosec/cache/MembershipCache;)Lme/ahoo/cocache/api/AsyncCache;
+	public static fun getIfChanged (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public static fun putAll (Lme/ahoo/cosec/cache/MembershipCache;Ljava/util/Map;)V
+	public static fun putAll (Lme/ahoo/cosec/cache/MembershipCache;Ljava/util/Map;Ljava/time/Duration;)V
+	public static fun putIfMatch (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/model/Memberships;)Lme/ahoo/cocache/api/ConditionalPut;
+	public static fun putIfMatch (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/model/Memberships;Ljava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+}
+
+public abstract interface class me/ahoo/cosec/cache/MembershipLoader {
+	public abstract fun load-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/MembershipsCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/MembershipsCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/model/Memberships;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/model/Memberships;)[B
+}
+
+public final class me/ahoo/cosec/cache/RedisApiKeyReader : me/ahoo/cosec/spi/apikey/ApiKeyReader {
+	public fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun findByHash (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/RedisApiKeyStore : me/ahoo/cosec/spi/apikey/ApiKeyStore {
+	public static final field Companion Lme/ahoo/cosec/cache/RedisApiKeyStore$Companion;
+	public fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun findByHash (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
+	public final fun issue (Lme/ahoo/cosec/spi/apikey/ApiKey;)Ljava/lang/String;
+	public final fun revoke (Ljava/lang/String;)Z
+	public final fun save (Ljava/lang/String;Lme/ahoo/cosec/spi/apikey/ApiKey;)V
+}
+
+public final class me/ahoo/cosec/cache/RedisApiKeyStore$Companion {
+	public final fun redisKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/RedisApiKeyStoreKt {
+	public static final field DEFAULT_API_KEY_KEY_PREFIX Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/cache/RevokedSubjectCache : me/ahoo/cocache/api/Cache {
+	public static final field Companion Lme/ahoo/cosec/cache/RevokedSubjectCache$Companion;
+}
+
+public final class me/ahoo/cosec/cache/RevokedSubjectCache$Companion {
+	public final fun key-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/RevokedSubjectCache$DefaultImpls {
+	public static fun async (Lme/ahoo/cosec/cache/RevokedSubjectCache;)Lme/ahoo/cocache/api/AsyncCache;
+	public static fun getIfChanged (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public static fun putAll (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/util/Map;)V
+	public static fun putAll (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/util/Map;Ljava/time/Duration;)V
+	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;J)Lme/ahoo/cocache/api/ConditionalPut;
+	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;JLjava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+}
+
+public abstract interface class me/ahoo/cosec/cache/RevokedTokenCache : me/ahoo/cocache/api/Cache {
+	public static final field Companion Lme/ahoo/cosec/cache/RevokedTokenCache$Companion;
+	public static final field MISSING_TTL_SECONDS J
+}
+
+public final class me/ahoo/cosec/cache/RevokedTokenCache$Companion {
+	public static final field MISSING_TTL_SECONDS J
+}
+
+public final class me/ahoo/cosec/cache/RevokedTokenCache$DefaultImpls {
+	public static fun async (Lme/ahoo/cosec/cache/RevokedTokenCache;)Lme/ahoo/cocache/api/AsyncCache;
+	public static fun getIfChanged (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public static fun putAll (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/util/Map;)V
+	public static fun putAll (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/util/Map;Ljava/time/Duration;)V
+	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;Z)Lme/ahoo/cocache/api/ConditionalPut;
+	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;ZLjava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+}
+
+public final class me/ahoo/cosec/cache/control/ChangeRequestCacheCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/ChangeRequestCacheCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/control/change/ChangeRequest;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/control/change/ChangeRequest;)[B
+}
+
+public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cosec/control/store/ControlStore {
+	public static final field Companion Lme/ahoo/cosec/cache/control/CoCacheControlStore$Companion;
+	public fun <init> (Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lkotlin/jvm/functions/Function1;Ljava/time/Clock;Ljava/time/Duration;)V
+	public synthetic fun <init> (Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lkotlin/jvm/functions/Function1;Ljava/time/Clock;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun acquireLease (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun candidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun change-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putStage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/StageSlot;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun record (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun releaseLease (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/control/CoCacheControlStore$Companion {
+	public final fun create (Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Ljava/time/Duration;)Lme/ahoo/cosec/cache/control/CoCacheControlStore;
+	public static synthetic fun create$default (Lme/ahoo/cosec/cache/control/CoCacheControlStore$Companion;Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Ljava/time/Duration;ILjava/lang/Object;)Lme/ahoo/cosec/cache/control/CoCacheControlStore;
+	public final fun digest (Lme/ahoo/cocache/api/Codec;Ljava/lang/Object;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun getDEFAULT_MISSING_GRACE ()Ljava/time/Duration;
+}
+
+public final class me/ahoo/cosec/cache/control/ControlCacheSpecs {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/ControlCacheSpecs;
+	public final fun changeRequest (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun changeRequest$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun lease (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun lease$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun list (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun list$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun referenceIndex (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun referenceIndex$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun revisionIndex (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun revisionIndex$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun revisionRecord (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun revisionRecord$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun stage (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun stage$default (Lme/ahoo/cosec/cache/control/ControlCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+}
+
+public final class me/ahoo/cosec/cache/control/ListedCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/ListedCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Ljava/util/Map;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Ljava/util/Map;)[B
+}
+
+public final class me/ahoo/cosec/cache/control/ReferenceKey {
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public final fun component2-uumxgvY ()Ljava/lang/String;
+	public final fun copy-RYblKPM (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;)Lme/ahoo/cosec/cache/control/ReferenceKey;
+	public static synthetic fun copy-RYblKPM$default (Lme/ahoo/cosec/cache/control/ReferenceKey;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/cache/control/ReferenceKey;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPolicy-uumxgvY ()Ljava/lang/String;
+	public final fun getTarget ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/control/ReferenceKeyEncoder : me/ahoo/cocache/core/KeyEncoder {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/ReferenceKeyEncoder;
+	public synthetic fun encode (Ljava/lang/Object;)Ljava/lang/String;
+	public fun encode (Lme/ahoo/cosec/cache/control/ReferenceKey;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/control/RevisionIndexCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/RevisionIndexCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/control/store/RevisionIndex;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/control/store/RevisionIndex;)[B
+}
+
+public final class me/ahoo/cosec/cache/control/RevisionRecordKey {
+	public fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)V
+	public final fun component1 ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public final fun component2 ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun copy (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Lme/ahoo/cosec/cache/control/RevisionRecordKey;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/cache/control/RevisionRecordKey;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;ILjava/lang/Object;)Lme/ahoo/cosec/cache/control/RevisionRecordKey;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDigest ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun getDocument ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/control/RevisionRecordKeyEncoder : me/ahoo/cocache/core/KeyEncoder {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/RevisionRecordKeyEncoder;
+	public synthetic fun encode (Ljava/lang/Object;)Ljava/lang/String;
+	public fun encode (Lme/ahoo/cosec/cache/control/RevisionRecordKey;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/control/SnapshotKeySetCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/SnapshotKeySetCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Ljava/util/Set;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Ljava/util/Set;)[B
+}
+
+public final class me/ahoo/cosec/cache/control/StageSlotCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/control/StageSlotCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/control/change/StageSlot;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/control/change/StageSlot;)[B
+}
+
+public final class me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter : me/ahoo/cosec/spi/ratelimit/RateLimiter {
+	public static final field Companion Lme/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter$Companion;
+	public fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun tryAcquire (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter$Companion {
+}
+
+public final class me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiterKt {
+	public static final field DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/shadow/CoCacheCandidateStore : me/ahoo/cosec/runtime/shadow/CandidateStore {
+	public static final field Companion Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion;
+	public fun <init> (Lme/ahoo/cocache/api/Cache;)V
+	public fun candidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion {
+	public final fun create (Lme/ahoo/cocache/core/CacheRuntime;Ljava/lang/String;)Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore;
+	public static synthetic fun create$default (Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion;Lme/ahoo/cocache/core/CacheRuntime;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore;
+}
+
+public final class me/ahoo/cosec/cache/shadow/CoCacheShadowReports : me/ahoo/cosec/runtime/shadow/ShadowReportReader, me/ahoo/cosec/runtime/shadow/ShadowReportSink {
+	public static final field Companion Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports$Companion;
+	public fun <init> (Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Lme/ahoo/cocache/api/Cache;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun write (Lme/ahoo/cosec/runtime/shadow/InstanceStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun write (Lme/ahoo/cosec/runtime/shadow/ShadowReport;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/cache/shadow/CoCacheShadowReports$Companion {
+	public final fun create (Lme/ahoo/cocache/core/CacheRuntime;Ljava/lang/String;Ljava/time/Clock;)Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;
+	public static synthetic fun create$default (Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports$Companion;Lme/ahoo/cocache/core/CacheRuntime;Ljava/lang/String;Ljava/time/Clock;ILjava/lang/Object;)Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;
+}
+
+public final class me/ahoo/cosec/cache/shadow/InstanceStatusesCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/shadow/InstanceStatusesCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Ljava/util/Map;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Ljava/util/Map;)[B
+}
+
+public final class me/ahoo/cosec/cache/shadow/ReportersCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/shadow/ReportersCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Ljava/util/Set;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Ljava/util/Set;)[B
+}
+
+public final class me/ahoo/cosec/cache/shadow/ShadowCacheSpecs {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/shadow/ShadowCacheSpecs;
+	public static final field STATUS_KEY Ljava/lang/String;
+	public final fun candidate (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun candidate$default (Lme/ahoo/cosec/cache/shadow/ShadowCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun getREPORT_TTL ()Ljava/time/Duration;
+	public final fun getSTATUS_TTL ()Ljava/time/Duration;
+	public final fun reportKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun reporters (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun reporters$default (Lme/ahoo/cosec/cache/shadow/ShadowCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun reports (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun reports$default (Lme/ahoo/cosec/cache/shadow/ShadowCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+	public final fun statuses (Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;)Lme/ahoo/cocache/core/CacheSpec;
+	public static synthetic fun statuses$default (Lme/ahoo/cosec/cache/shadow/ShadowCacheSpecs;Ljava/lang/String;Lme/ahoo/cocache/core/policy/CachePolicy;ILjava/lang/Object;)Lme/ahoo/cocache/core/CacheSpec;
+}
+
+public final class me/ahoo/cosec/cache/shadow/ShadowReportCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/shadow/ShadowReportCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/runtime/shadow/ShadowReport;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/runtime/shadow/ShadowReport;)[B
+}
+
+public final class me/ahoo/cosec/cache/shadow/StoredCandidateCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/shadow/StoredCandidateCodec;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/runtime/shadow/StoredCandidate;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/runtime/shadow/StoredCandidate;)[B
+}
+
+public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCache : me/ahoo/cocache/api/Cache {
+	public fun async ()Lme/ahoo/cocache/api/AsyncCache;
+	public synthetic fun get (Ljava/lang/Object;)Ljava/lang/Object;
+	public synthetic fun get (Ljava/lang/Object;Lme/ahoo/cocache/api/CacheLoader;)Ljava/lang/Object;
+	public fun get (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+	public fun get (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cocache/api/CacheLoader;)Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+	public fun getAll (Ljava/util/Collection;)Ljava/util/Map;
+	public synthetic fun getIfChanged (Ljava/lang/Object;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public fun getIfChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public final fun getLocalCopyMaxAge ()Ljava/time/Duration;
+	public fun getName ()Ljava/lang/String;
+	public final fun getNamespace ()Ljava/lang/String;
+	public synthetic fun invalidate (Ljava/lang/Object;)V
+	public fun invalidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
+	public fun invalidateAll (Ljava/util/Collection;)V
+	public synthetic fun lookup (Ljava/lang/Object;)Lme/ahoo/cocache/api/Lookup;
+	public fun lookup (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cocache/api/Lookup;
+	public synthetic fun put (Ljava/lang/Object;Ljava/lang/Object;)V
+	public synthetic fun put (Ljava/lang/Object;Ljava/lang/Object;Ljava/time/Duration;)V
+	public fun put (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)V
+	public fun put (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Ljava/time/Duration;)V
+	public fun putAll (Ljava/util/Map;)V
+	public fun putAll (Ljava/util/Map;Ljava/time/Duration;)V
+	public synthetic fun putIfMatch (Ljava/lang/Object;Lme/ahoo/cocache/api/spi/Digest;Ljava/lang/Object;)Lme/ahoo/cocache/api/ConditionalPut;
+	public synthetic fun putIfMatch (Ljava/lang/Object;Lme/ahoo/cocache/api/spi/Digest;Ljava/lang/Object;Ljava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+	public fun putIfMatch (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cocache/api/ConditionalPut;
+	public fun putIfMatch (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Ljava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCacheKt {
+	public static final fun createPolicySnapshotCache (Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cocache/core/CacheSpec;)Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;
+}
+
+public final class me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore : me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore {
+	public static final field Companion Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore$Companion;
+	public fun <init> (Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;Ljava/util/concurrent/Executor;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;Ljava/util/concurrent/Executor;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getLocalCopyMaxAge ()Ljava/time/Duration;
+	public final fun notifyChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
+	public fun read (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/util/concurrent/CompletableFuture;
+	public fun readIfChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Ljava/util/concurrent/CompletableFuture;
+	public fun subscribe (Lme/ahoo/cosec/spi/snapshot/SnapshotChangeListener;)Ljava/lang/AutoCloseable;
+}
+
+public final class me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore$Companion {
+	public final fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+}
+
+public final class me/ahoo/cosec/cache/snapshot/SnapshotDocumentCodec : me/ahoo/cocache/api/Codec {
+	public static final field INSTANCE Lme/ahoo/cosec/cache/snapshot/SnapshotDocumentCodec;
+	public static final field PUBLISHED_AT Ljava/lang/String;
+	public static final field REVISION Ljava/lang/String;
+	public static final field SCHEMA Ljava/lang/String;
+	public synthetic fun decode ([B)Ljava/lang/Object;
+	public fun decode ([B)Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+	public synthetic fun encode (Ljava/lang/Object;)[B
+	public fun encode (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)[B
+}
+
+public final class me/ahoo/cosec/cache/snapshot/SnapshotKeyEncoder : me/ahoo/cocache/core/KeyEncoder {
+	public static final field APP_PREFIX Ljava/lang/String;
+	public static final field INSTANCE Lme/ahoo/cosec/cache/snapshot/SnapshotKeyEncoder;
+	public static final field PLATFORM Ljava/lang/String;
+	public static final field TENANT_PREFIX Ljava/lang/String;
+	public final fun decode (Ljava/lang/String;)Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public synthetic fun encode (Ljava/lang/Object;)Ljava/lang/String;
+	public fun encode (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/cache/snapshot/SnapshotRuntimeHints : org/springframework/aot/hint/RuntimeHintsRegistrar {
+	public static final field Companion Lme/ahoo/cosec/cache/snapshot/SnapshotRuntimeHints$Companion;
+	public fun <init> ()V
+	public fun registerHints (Lorg/springframework/aot/hint/RuntimeHints;Ljava/lang/ClassLoader;)V
+}
+
+public final class me/ahoo/cosec/cache/snapshot/SnapshotRuntimeHints$Companion {
+	public final fun getSERVICES ()Ljava/util/List;
+}
+

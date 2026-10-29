@@ -1,0 +1,639 @@
+public final class me/ahoo/cosec/spi/apikey/ApiKey {
+	public static final field API_KEY_ID_ATTRIBUTE Ljava/lang/String;
+	public static final field Companion Lme/ahoo/cosec/spi/apikey/ApiKey$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Instant;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/time/Instant;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getEnabled ()Z
+	public final fun getExpiresAt ()Ljava/time/Instant;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getPrincipalId ()Ljava/lang/String;
+	public final fun getRoles ()Ljava/util/Set;
+	public final fun getTenantId ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+	public final fun usableAt (Ljava/time/Instant;)Z
+}
+
+public final class me/ahoo/cosec/spi/apikey/ApiKey$Companion {
+}
+
+public abstract interface class me/ahoo/cosec/spi/apikey/ApiKeyReader {
+	public abstract fun findByHash (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class me/ahoo/cosec/spi/apikey/ApiKeyStore {
+	public abstract fun findByHash (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
+}
+
+public final class me/ahoo/cosec/spi/apikey/ApiKeys {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/apikey/ApiKeys;
+	public final fun generate ()Ljava/lang/String;
+	public final fun hash (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/apikey/InMemoryApiKeyStore : me/ahoo/cosec/spi/apikey/ApiKeyStore {
+	public fun <init> (Ljava/util/Map;)V
+	public fun findByHash (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
+	public final fun getReader ()Lme/ahoo/cosec/spi/apikey/ApiKeyReader;
+}
+
+public final class me/ahoo/cosec/spi/attribute/AttributeDeclaration {
+	public fun <init> (Ljava/lang/String;Lme/ahoo/cosec/model/condition/AttributeType;Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/model/condition/AttributeType;Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getStage ()Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;
+	public final fun getType ()Lme/ahoo/cosec/model/condition/AttributeType;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage : java/lang/Enum {
+	public static final field A Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;
+	public static final field B Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;
+	public static fun values ()[Lme/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage;
+}
+
+public abstract interface class me/ahoo/cosec/spi/attribute/AttributeProvider {
+	public abstract fun fetch (Lme/ahoo/cosec/spi/attribute/AttributeRequest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getAttributes ()Ljava/util/List;
+	public fun getTimeout-FghU774 ()Lkotlin/time/Duration;
+}
+
+public final class me/ahoo/cosec/spi/attribute/AttributeProvider$DefaultImpls {
+	public static fun getTimeout-FghU774 (Lme/ahoo/cosec/spi/attribute/AttributeProvider;)Lkotlin/time/Duration;
+}
+
+public final class me/ahoo/cosec/spi/attribute/AttributeRequest {
+	public fun <init> (Lme/ahoo/cosec/model/Subject;Lme/ahoo/cosec/model/scope/Scope;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getAction ()Lme/ahoo/cosec/model/Action;
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getRemoteIp ()Ljava/lang/String;
+	public final fun getRequestId ()Ljava/lang/String;
+	public final fun getResource ()Lme/ahoo/cosec/model/Resource;
+	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
+	public final fun getSubject ()Lme/ahoo/cosec/model/Subject;
+}
+
+public abstract interface class me/ahoo/cosec/spi/audit/AuditEventSink {
+	public abstract fun publish (Lme/ahoo/cosec/api/audit/AuditEvent;)V
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthenticatedPrincipal {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/Memberships;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/Memberships;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/authn/MembershipSource;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/authn/MembershipSource;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getBreakGlass ()Z
+	public final fun getCredential ()Lme/ahoo/cosec/spi/identity/Identity$Credential;
+	public final fun getId-YkQvfWk ()Ljava/lang/String;
+	public final fun getMembershipSource ()Lme/ahoo/cosec/spi/authn/MembershipSource;
+	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
+	public final fun getPrincipalBindings ()Z
+	public final fun getTenant-Zu1zXv4 ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/spi/authn/Authenticator {
+	public abstract fun authenticate (Lme/ahoo/cosec/spi/authn/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class me/ahoo/cosec/spi/authn/AuthnResult {
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthnResult$Anonymous : me/ahoo/cosec/spi/authn/AuthnResult {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/authn/AuthnResult$Anonymous;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthnResult$Authenticated : me/ahoo/cosec/spi/authn/AuthnResult {
+	public fun <init> (Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;Ljava/lang/String;)V
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPrincipal ()Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthnResult$RefusedCredential {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCredentialId ()Ljava/lang/String;
+	public final fun getPrincipal-YkQvfWk ()Ljava/lang/String;
+	public final fun getTenant-Zu1zXv4 ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthnResult$RejectReason : java/lang/Enum {
+	public static final field API_KEY_INVALID Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static final field DELEGATION_UNSUPPORTED Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static final field TOKEN_EXPIRED Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static final field TOKEN_INVALID Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static final field TOKEN_REVOKED Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public static fun values ()[Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthnResult$Rejected : me/ahoo/cosec/spi/authn/AuthnResult {
+	public fun <init> (Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;Lme/ahoo/cosec/spi/authn/AuthnResult$RefusedCredential;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;Lme/ahoo/cosec/spi/authn/AuthnResult$RefusedCredential;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getReason ()Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
+	public final fun getRefused ()Lme/ahoo/cosec/spi/authn/AuthnResult$RefusedCredential;
+}
+
+public final class me/ahoo/cosec/spi/authn/AuthnResult$Unavailable : me/ahoo/cosec/spi/authn/AuthnResult {
+	public fun <init> (Ljava/lang/Throwable;)V
+	public final fun getCause ()Ljava/lang/Throwable;
+}
+
+public final class me/ahoo/cosec/spi/authn/Credentials {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getApiKey ()Ljava/lang/String;
+	public final fun getToken ()Ljava/lang/String;
+	public final fun isEmpty ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/spi/authn/MembershipSource {
+	public static final field Companion Lme/ahoo/cosec/spi/authn/MembershipSource$Companion;
+}
+
+public final class me/ahoo/cosec/spi/authn/MembershipSource$Claims : me/ahoo/cosec/spi/authn/MembershipSource {
+	public fun <init> (Lme/ahoo/cosec/model/Memberships;)V
+	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
+}
+
+public final class me/ahoo/cosec/spi/authn/MembershipSource$Companion {
+	public final fun of (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lme/ahoo/cosec/spi/authn/MembershipSource;
+}
+
+public final class me/ahoo/cosec/spi/authn/MembershipSource$Provider : me/ahoo/cosec/spi/authn/MembershipSource {
+	public static final field Companion Lme/ahoo/cosec/spi/authn/MembershipSource$Provider$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCap ()Ljava/util/Map;
+}
+
+public final class me/ahoo/cosec/spi/authn/MembershipSource$Provider$Companion {
+	public final fun capped (Ljava/util/Collection;)Lme/ahoo/cosec/spi/authn/MembershipSource$Provider;
+	public final fun getUNCAPPED ()Lme/ahoo/cosec/spi/authn/MembershipSource$Provider;
+}
+
+public final class me/ahoo/cosec/spi/authn/MembershipSource$Unusable : me/ahoo/cosec/spi/authn/MembershipSource {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getReason ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/util/Set;
+	public final fun component6 ()Lme/ahoo/cosec/spi/identity/Identity$Credential;
+	public final fun component7 ()Ljava/time/Instant;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;)Lme/ahoo/cosec/spi/identity/Identity;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/identity/Identity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Lme/ahoo/cosec/spi/identity/Identity$Credential;Ljava/time/Instant;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/spi/identity/Identity;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getApp ()Ljava/lang/String;
+	public final fun getClaims ()Ljava/util/Map;
+	public final fun getCredential ()Lme/ahoo/cosec/spi/identity/Identity$Credential;
+	public final fun getIssuedAt ()Ljava/time/Instant;
+	public final fun getRequestId ()Ljava/lang/String;
+	public final fun getRoles ()Ljava/util/Set;
+	public final fun getSpace ()Ljava/lang/String;
+	public final fun getSubject ()Ljava/lang/String;
+	public final fun getTenant ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity$Credential {
+	public fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;Z)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lme/ahoo/cosec/spi/identity/Identity$Method;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/time/Instant;
+	public final fun component4 ()Z
+	public final fun copy (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;Z)Lme/ahoo/cosec/spi/identity/Identity$Credential;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/identity/Identity$Credential;Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZILjava/lang/Object;)Lme/ahoo/cosec/spi/identity/Identity$Credential;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCapped ()Z
+	public final fun getExpiresAt ()Ljava/time/Instant;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMethod ()Lme/ahoo/cosec/spi/identity/Identity$Method;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity$Method {
+	public static final field Companion Lme/ahoo/cosec/spi/identity/Identity$Method$Companion;
+	public fun <init> (Ljava/lang/String;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/identity/Identity$Method$Companion {
+	public final fun getAPI_KEY ()Lme/ahoo/cosec/spi/identity/Identity$Method;
+	public final fun getJWT ()Lme/ahoo/cosec/spi/identity/Identity$Method;
+}
+
+public final class me/ahoo/cosec/spi/identity/IdentityFormatException : java/lang/IllegalArgumentException {
+	public fun <init> (Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getReason ()Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+}
+
+public final class me/ahoo/cosec/spi/identity/IdentityFormatException$Reason : java/lang/Enum {
+	public static final field MALFORMED Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+	public static final field OVERSIZE Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+	public static final field UNBOUNDED Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+	public static final field UNSUPPORTED_VERSION Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+	public static fun values ()[Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
+}
+
+public final class me/ahoo/cosec/spi/identity/IdentityOverflowException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class me/ahoo/cosec/spi/membership/InMemoryMembershipProvider : me/ahoo/cosec/spi/membership/MembershipProvider {
+	public fun <init> ()V
+	public fun memberships-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun put-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/Memberships;)V
+	public final fun remove-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)V
+}
+
+public abstract interface class me/ahoo/cosec/spi/membership/MembershipAnswer {
+}
+
+public final class me/ahoo/cosec/spi/membership/MembershipAnswer$Known : me/ahoo/cosec/spi/membership/MembershipAnswer {
+	public fun <init> (Lme/ahoo/cosec/model/Memberships;)V
+	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/membership/MembershipAnswer$Unknown : me/ahoo/cosec/spi/membership/MembershipAnswer {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/membership/MembershipAnswer$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/membership/MembershipClaims {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/membership/MembershipClaims;
+	public static final field MARKER_KEY Ljava/lang/String;
+	public static final field PROVIDER Ljava/lang/String;
+	public final fun markerOf (Ljava/lang/Object;)Ljava/lang/String;
+	public final fun parse (Ljava/util/Collection;Ljava/util/Collection;)Lme/ahoo/cosec/model/Memberships;
+	public final fun tenantOf-tBhzdXo (Ljava/lang/Object;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/membership/MembershipMarkedPrincipal : me/ahoo/cosec/api/Delegated, me/ahoo/cosec/api/principal/CoSecPrincipal, me/ahoo/cosec/spi/membership/MembershipMarkerCapable {
+	public fun <init> (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Ljava/lang/String;)V
+	public final fun component1 ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Ljava/lang/String;)Lme/ahoo/cosec/spi/membership/MembershipMarkedPrincipal;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/membership/MembershipMarkedPrincipal;Lme/ahoo/cosec/api/principal/CoSecPrincipal;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/spi/membership/MembershipMarkedPrincipal;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getAnonymous ()Z
+	public fun getAttributes ()Ljava/util/Map;
+	public fun getAuthenticated ()Z
+	public synthetic fun getDelegate ()Ljava/lang/Object;
+	public fun getDelegate ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
+	public fun getId ()Ljava/lang/String;
+	public fun getMembershipMarker ()Ljava/lang/String;
+	public fun getName ()Ljava/lang/String;
+	public fun getPolicies ()Ljava/util/Set;
+	public fun getRoles ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/spi/membership/MembershipMarkerCapable {
+	public abstract fun getMembershipMarker ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/spi/membership/MembershipProvider {
+	public abstract fun memberships-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/membership/MembershipUnavailableException : me/ahoo/cosec/model/CoSecException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class me/ahoo/cosec/spi/ratelimit/RateLimit {
+	public static final field Companion Lme/ahoo/cosec/spi/ratelimit/RateLimit$Companion;
+	public fun <init> (DJ)V
+	public synthetic fun <init> (DJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()D
+	public final fun component2 ()J
+	public final fun copy (DJ)Lme/ahoo/cosec/spi/ratelimit/RateLimit;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/ratelimit/RateLimit;DJILjava/lang/Object;)Lme/ahoo/cosec/spi/ratelimit/RateLimit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLimitPerWindow ()D
+	public final fun getPermitsPerSecond ()D
+	public final fun getWindowMillis ()J
+	public final fun getWindowSeconds ()J
+	public fun hashCode ()I
+	public final fun resultOf (ZDJ)Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/ratelimit/RateLimit$Companion {
+}
+
+public final class me/ahoo/cosec/spi/ratelimit/RateLimitResult {
+	public fun <init> (ZJJLjava/time/Duration;)V
+	public final fun component1 ()Z
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun component4 ()Ljava/time/Duration;
+	public final fun copy (ZJJLjava/time/Duration;)Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;ZJJLjava/time/Duration;ILjava/lang/Object;)Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowed ()Z
+	public final fun getLimit ()J
+	public final fun getRemaining ()J
+	public final fun getResetAfter ()Ljava/time/Duration;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/spi/ratelimit/RateLimiter {
+	public static final field Companion Lme/ahoo/cosec/spi/ratelimit/RateLimiter$Companion;
+	public abstract fun tryAcquire (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/ratelimit/RateLimiter$Companion {
+	public final fun window (Lme/ahoo/cosec/model/decision/RateLimitSpec;)Lme/ahoo/cosec/spi/ratelimit/RateLimit;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/InMemorySnapshotDocumentStore : me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore {
+	public static final field Companion Lme/ahoo/cosec/spi/snapshot/InMemorySnapshotDocumentStore$Companion;
+	public fun <init> ()V
+	public final fun get (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+	public fun getLocalCopyMaxAge ()Ljava/time/Duration;
+	public final fun put (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public fun read (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/util/concurrent/CompletableFuture;
+	public fun readIfChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Ljava/util/concurrent/CompletableFuture;
+	public final fun remove (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
+	public final fun reset ()V
+	public fun subscribe (Lme/ahoo/cosec/spi/snapshot/SnapshotChangeListener;)Ljava/lang/AutoCloseable;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/InMemorySnapshotDocumentStore$Companion {
+	public final fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+}
+
+public abstract interface class me/ahoo/cosec/spi/snapshot/SnapshotChangeListener {
+	public abstract fun onChanged (Ljava/util/Collection;)V
+	public abstract fun onReset ()V
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotDigest {
+	public fun <init> ([B)V
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public final fun toByteArray ()[B
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotDocument {
+	public static final field Companion Lme/ahoo/cosec/spi/snapshot/SnapshotDocument$Companion;
+	public static final field DOCUMENT_SCHEMA I
+	public fun <init> (IJLjava/time/Instant;[B)V
+	public final fun bodyBytes ()[B
+	public final fun bodyStream ()Ljava/io/InputStream;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBodySize ()I
+	public final fun getPublishedAt ()Ljava/time/Instant;
+	public final fun getRevision ()J
+	public final fun getSchema ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotDocument$Companion {
+}
+
+public abstract interface class me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore {
+	public fun getLocalCopyMaxAge ()Ljava/time/Duration;
+	public abstract fun read (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/util/concurrent/CompletableFuture;
+	public abstract fun readIfChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Ljava/util/concurrent/CompletableFuture;
+	public abstract fun subscribe (Lme/ahoo/cosec/spi/snapshot/SnapshotChangeListener;)Ljava/lang/AutoCloseable;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore$DefaultImpls {
+	public static fun getLocalCopyMaxAge (Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;)Ljava/time/Duration;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotFormatException : me/ahoo/cosec/model/CoSecException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public abstract interface class me/ahoo/cosec/spi/snapshot/SnapshotKey {
+	public abstract fun getKind ()Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotKey$App : me/ahoo/cosec/spi/snapshot/SnapshotKey {
+	public static final field APP_ID_SEPARATOR Ljava/lang/String;
+	public static final field Companion Lme/ahoo/cosec/spi/snapshot/SnapshotKey$App$Companion;
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lme/ahoo/cosec/spi/snapshot/SnapshotKey$App;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/snapshot/SnapshotKey$App;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/spi/snapshot/SnapshotKey$App;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAppId ()Ljava/lang/String;
+	public fun getKind ()Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotKey$App$Companion {
+	public final fun isValidAppId (Ljava/lang/String;)Z
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotKey$Platform : me/ahoo/cosec/spi/snapshot/SnapshotKey {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/snapshot/SnapshotKey$Platform;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getKind ()Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotKey$Tenant : me/ahoo/cosec/spi/snapshot/SnapshotKey {
+	public static final field Companion Lme/ahoo/cosec/spi/snapshot/SnapshotKey$Tenant$Companion;
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lme/ahoo/cosec/spi/snapshot/SnapshotKey$Tenant;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/snapshot/SnapshotKey$Tenant;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/spi/snapshot/SnapshotKey$Tenant;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getKind ()Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public final fun getTenantId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotKey$Tenant$Companion {
+	public final fun isValidTenantId (Ljava/lang/String;)Z
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotKind : java/lang/Enum {
+	public static final field APP Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public static final field PLATFORM Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public static final field TENANT Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+	public static fun values ()[Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
+}
+
+public abstract interface class me/ahoo/cosec/spi/snapshot/SnapshotRead {
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotRead$Absent : me/ahoo/cosec/spi/snapshot/SnapshotRead {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/snapshot/SnapshotRead$Absent;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotRead$Present : me/ahoo/cosec/spi/snapshot/SnapshotRead {
+	public fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)V
+	public final fun getDigest ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun getDocument ()Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotRead$Unchanged : me/ahoo/cosec/spi/snapshot/SnapshotRead {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/snapshot/SnapshotRead$Unchanged;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotStaleException : me/ahoo/cosec/model/CoSecException {
+	public fun <init> (Ljava/lang/String;Ljava/time/Duration;Ljava/time/Duration;)V
+	public final fun getLag ()Ljava/time/Duration;
+	public final fun getMaxLag ()Ljava/time/Duration;
+	public final fun getTenantId ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotUnavailableException : me/ahoo/cosec/model/CoSecException {
+	public fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getKey ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotVersion {
+	public fun <init> (JJ)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun copy (JJ)Lme/ahoo/cosec/spi/snapshot/SnapshotVersion;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/snapshot/SnapshotVersion;JJILjava/lang/Object;)Lme/ahoo/cosec/spi/snapshot/SnapshotVersion;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getScoped ()J
+	public final fun getShared ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/token/DefaultTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun revoke (Lme/ahoo/cosec/api/token/AccessToken;)Lme/ahoo/cosec/api/token/TokenPrincipal;
+	public fun revokeSubject-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;)V
+}
+
+public final class me/ahoo/cosec/spi/token/DelegationUnsupportedException : me/ahoo/cosec/spi/token/TokenVerificationException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/ExpiresAtCapable {
+	public abstract fun getExpiresAt ()Ljava/time/Instant;
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/IssuedAtCapable {
+	public abstract fun getIssuedAt ()Ljava/time/Instant;
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/RevocationReader {
+	public static final field Companion Lme/ahoo/cosec/spi/token/RevocationReader$Companion;
+	public abstract fun isRevoked (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun subjectRevokedBefore-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/token/RevocationReader$Companion {
+	public final fun getNONE ()Lme/ahoo/cosec/spi/token/RevocationReader;
+}
+
+public final class me/ahoo/cosec/spi/token/SubjectRevocation {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/token/SubjectRevocation;
+	public final fun getDEFAULT_SKEW ()Ljava/time/Duration;
+	public final fun revokes (Ljava/time/Instant;Ljava/time/Instant;Ljava/time/Duration;)Z
+	public final fun revokes (Ljava/time/Instant;Lme/ahoo/cosec/api/token/TokenPrincipal;Ljava/time/Duration;)Z
+}
+
+public final class me/ahoo/cosec/spi/token/TokenExpiredException : me/ahoo/cosec/spi/token/TokenVerificationException {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public fun <init> (Ljava/lang/Throwable;)V
+}
+
+public final class me/ahoo/cosec/spi/token/TokenRevokedException : me/ahoo/cosec/spi/token/TokenVerificationException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/TokenRevoker {
+	public abstract fun revoke (Lme/ahoo/cosec/api/token/AccessToken;)Lme/ahoo/cosec/api/token/TokenPrincipal;
+	public fun revokeSubject-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;)V
+	public static synthetic fun revokeSubject-hPxUw84$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;ILjava/lang/Object;)V
+}
+
+public final class me/ahoo/cosec/spi/token/TokenRevoker$DefaultImpls {
+	public static fun revokeSubject-hPxUw84 (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;)V
+	public static synthetic fun revokeSubject-hPxUw84$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;ILjava/lang/Object;)V
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/TokenStore {
+	public abstract fun isRevoked (Ljava/lang/String;)Z
+	public abstract fun revoke (Ljava/lang/String;Ljava/time/Duration;)V
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
+	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+}
+
+public final class me/ahoo/cosec/spi/token/TokenStore$DefaultImpls {
+	public static fun revokeSubject-opWVSHk (Lme/ahoo/cosec/spi/token/TokenStore;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
+	public static fun subjectRevokedBefore-xnbzu10 (Lme/ahoo/cosec/spi/token/TokenStore;Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+}
+
+public final class me/ahoo/cosec/spi/token/TokenStore$NoOp : me/ahoo/cosec/spi/token/TokenStore {
+	public static final field INSTANCE Lme/ahoo/cosec/spi/token/TokenStore$NoOp;
+	public fun isRevoked (Ljava/lang/String;)Z
+	public fun revoke (Ljava/lang/String;Ljava/time/Duration;)V
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
+	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+}
+
+public class me/ahoo/cosec/spi/token/TokenVerificationException : me/ahoo/cosec/model/CoSecException {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public fun <init> (Ljava/lang/Throwable;)V
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/TokenVerifier {
+	public abstract fun refresh (Lme/ahoo/cosec/api/token/CompositeToken;)Lme/ahoo/cosec/api/token/TokenPrincipal;
+	public abstract fun verify (Lme/ahoo/cosec/api/token/AccessToken;)Lme/ahoo/cosec/api/token/TokenPrincipal;
+}
+

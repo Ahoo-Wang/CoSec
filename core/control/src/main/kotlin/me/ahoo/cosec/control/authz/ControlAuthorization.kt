@@ -242,7 +242,7 @@ object ControlResources {
  * document; the platform and app documents are the platform tenant's alone. It is the last line when a policy is
  * written wrongly, so it is checked before any policy is.
  */
-object TenantIsolation {
+internal object TenantIsolation {
     fun allows(operator: Operator, key: SnapshotKey): Boolean = when (key) {
         is SnapshotKey.Tenant -> operator.platform || key.tenantId == operator.tenant.value
         else -> operator.platform

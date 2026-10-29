@@ -20,6 +20,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.withTimeoutOrNull
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -37,6 +38,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * you do not know, which refuses its credentials, and memberships with [Memberships.active] false for one that is
  * deactivated (RFC 0009 §4.2); report a failed lookup by throwing.
  */
+@CoSecSpi
 fun interface MembershipLoader {
     suspend fun load(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }

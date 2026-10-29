@@ -1,0 +1,32 @@
+public final class me/ahoo/cosec/openapi/generator/OpenAPIGenerationException : java/lang/IllegalArgumentException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator {
+	public static final field ACTION_EXTENSION Ljava/lang/String;
+	public static final field DEFAULT_GROUP Ljava/lang/String;
+	public static final field INSTANCE Lme/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator;
+	public static final field RESOURCE_EXTENSION Ljava/lang/String;
+	public static final field SERVICE_EXTENSION Ljava/lang/String;
+	public final fun appDocument (Lio/swagger/v3/oas/models/OpenAPI;JLjava/time/Instant;)Lme/ahoo/cosec/runtime/document/PolicyDocument;
+	public static synthetic fun appDocument$default (Lme/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator;Lio/swagger/v3/oas/models/OpenAPI;JLjava/time/Instant;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocument;
+	public final fun operations (Lio/swagger/v3/oas/models/OpenAPI;)Ljava/util/List;
+	public final fun routeMap (Lio/swagger/v3/oas/models/OpenAPI;)Lme/ahoo/cosec/runtime/route/RouteMapDocument;
+	public final fun service (Lio/swagger/v3/oas/models/OpenAPI;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator$GeneratedOperation {
+	public fun <init> (Lme/ahoo/cosec/runtime/route/Route;Lio/swagger/v3/oas/models/Operation;)V
+	public final fun getOperation ()Lio/swagger/v3/oas/models/Operation;
+	public final fun getRoute ()Lme/ahoo/cosec/runtime/route/Route;
+}
+
+public final class me/ahoo/cosec/openapi/security/BearerAuthOpenApiCustomizer : java/util/function/Consumer {
+	public static final field BEARER_AUTH_NAME Ljava/lang/String;
+	public static final field BEARER_SCHEME Ljava/lang/String;
+	public static final field INSTANCE Lme/ahoo/cosec/openapi/security/BearerAuthOpenApiCustomizer;
+	public fun accept (Lio/swagger/v3/oas/models/OpenAPI;)V
+	public synthetic fun accept (Ljava/lang/Object;)V
+}
+

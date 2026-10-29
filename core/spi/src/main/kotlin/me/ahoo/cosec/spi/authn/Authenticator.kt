@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.authn
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -29,6 +30,7 @@ import me.ahoo.cosec.spi.membership.MembershipClaims
  * the call to its own bounded executor (§7.7). Report a failed dependency as [AuthnResult.Unavailable] rather than by
  * throwing; the pipeline treats a thrown exception the same way, and both deny with 503.
  */
+@CoSecSpi
 fun interface Authenticator {
     suspend fun authenticate(credentials: Credentials): AuthnResult
 }

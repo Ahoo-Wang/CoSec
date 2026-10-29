@@ -13,9 +13,11 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import java.time.Instant
 
 /** A token principal that knows when its token expires (the JWT `exp` claim). */
+@CoSecSpi
 interface ExpiresAtCapable {
     /** When the token stops being valid, or `null` if it does not say. */
     val expiresAt: Instant?

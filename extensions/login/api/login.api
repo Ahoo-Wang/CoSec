@@ -1,0 +1,80 @@
+public abstract interface class me/ahoo/cosec/login/Authentication {
+	public abstract fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public abstract fun getSupportCredentials ()Ljava/lang/Class;
+}
+
+public abstract interface class me/ahoo/cosec/login/AuthenticationProvider {
+	public abstract fun get (Ljava/lang/Class;)Lme/ahoo/cosec/login/Authentication;
+	public fun getRequired (Ljava/lang/Class;)Lme/ahoo/cosec/login/Authentication;
+	public abstract fun register (Ljava/lang/Class;Lme/ahoo/cosec/login/Authentication;)V
+	public fun register (Lme/ahoo/cosec/login/Authentication;)V
+}
+
+public final class me/ahoo/cosec/login/AuthenticationProvider$DefaultImpls {
+	public static fun getRequired (Lme/ahoo/cosec/login/AuthenticationProvider;Ljava/lang/Class;)Lme/ahoo/cosec/login/Authentication;
+	public static fun register (Lme/ahoo/cosec/login/AuthenticationProvider;Lme/ahoo/cosec/login/Authentication;)V
+}
+
+public final class me/ahoo/cosec/login/CompositeAuthentication : me/ahoo/cosec/login/Authentication {
+	public fun <init> (Lme/ahoo/cosec/login/AuthenticationProvider;)V
+	public final fun authenticate (Ljava/lang/Class;Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun getSupportCredentials ()Ljava/lang/Class;
+}
+
+public abstract interface class me/ahoo/cosec/login/Credentials {
+}
+
+public final class me/ahoo/cosec/login/DefaultAuthenticationProvider : me/ahoo/cosec/login/AuthenticationProvider {
+	public static final field INSTANCE Lme/ahoo/cosec/login/DefaultAuthenticationProvider;
+	public fun get (Ljava/lang/Class;)Lme/ahoo/cosec/login/Authentication;
+	public fun getRequired (Ljava/lang/Class;)Lme/ahoo/cosec/login/Authentication;
+	public fun register (Ljava/lang/Class;Lme/ahoo/cosec/login/Authentication;)V
+	public fun register (Lme/ahoo/cosec/login/Authentication;)V
+}
+
+public abstract class me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication : me/ahoo/cosec/login/Authentication {
+	public fun <init> (Ljava/lang/Class;)V
+	public fun getSupportCredentials ()Ljava/lang/Class;
+}
+
+public abstract class me/ahoo/cosec/login/token/AbstractSwitchTenantAuthentication : me/ahoo/cosec/login/Authentication {
+	public fun <init> ()V
+	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun authenticate (Lme/ahoo/cosec/login/token/SwitchTenantCredentials;)Lreactor/core/publisher/Mono;
+	public fun getSupportCredentials ()Ljava/lang/Class;
+	protected abstract fun switchTenant (Ljava/lang/String;Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lreactor/core/publisher/Mono;
+}
+
+public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredentials : me/ahoo/cosec/api/token/CompositeToken, me/ahoo/cosec/login/Credentials {
+}
+
+public final class me/ahoo/cosec/login/token/RefreshTokenMismatchException : me/ahoo/cosec/spi/token/TokenVerificationException {
+	public fun <init> ()V
+}
+
+public final class me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication : me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;)V
+	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun authenticate (Lme/ahoo/cosec/login/token/RefreshTokenCredentials;)Lreactor/core/publisher/Mono;
+}
+
+public abstract interface class me/ahoo/cosec/login/token/SwitchTenantCredentials : me/ahoo/cosec/login/Credentials {
+	public abstract fun getPrincipal ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
+	public abstract fun getTargetTenantId ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/login/token/TokenCompositeAuthentication : me/ahoo/cosec/login/Authentication {
+	public fun <init> (Lme/ahoo/cosec/login/CompositeAuthentication;Lme/ahoo/cosec/login/token/TokenConverter;)V
+	public final fun authenticate (Ljava/lang/Class;Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public final fun authenticateAsToken (Ljava/lang/Class;Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public final fun authenticateAsToken (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
+	public fun getSupportCredentials ()Ljava/lang/Class;
+}
+
+public abstract interface class me/ahoo/cosec/login/token/TokenConverter {
+	public abstract fun toToken (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lme/ahoo/cosec/api/token/CompositeToken;
+	public abstract fun toToken (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Ljava/time/Duration;Ljava/time/Duration;)Lme/ahoo/cosec/api/token/CompositeToken;
+}
+

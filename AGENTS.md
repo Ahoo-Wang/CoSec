@@ -23,6 +23,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck             # break each security rule on purpose, expect a test to fail (manual, not in check)
+./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
 ```
 
 - `cosec-cocache` and `cosec-spring-boot` tests need Redis on `localhost:6379`
@@ -47,6 +48,11 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   `runtime/document/format/`): `./gradlew :runtime:generateSchemas` writes it, `verifySchemas` (part of `check`)
   fails when it is stale, and `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that
   changes a document format changes the descriptor.
+- Every published module (the root build's `libraryProjects`) keeps its public ABI in `api/<project>.api`, and its
+  `check` runs `checkKotlinAbi` (RFC 0011 D4). **A failing ABI check means a public signature changed.** If that was
+  not the intent, make the declaration `internal` (or `@InternalCoSecApi` when another CoSec module needs it, which
+  keeps it out of the dump); if it was, run `updateKotlinAbi` for that module and commit the dump with the change.
+  From GA on, a removed or changed dump line is a breaking change: `!` in the PR title (`CONTRIBUTING.md` §3).
 - `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
   failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
   mutants the change kills in the PR.
@@ -86,15 +92,18 @@ the adapters, snapshots or the control plane. The parts that take several files 
   in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports and `CoSecJson`;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
-  `cosec-cocache`), `EnginePurityTest`,
+  `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
+  extension point `wiki/architecture/extending.md` lists, and on nothing else), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler and the bug report template; CI picks it up from `settings.gradle.kts`
   (`scripts/ci/plan.py`). Rule guards in
   `test/conformance/src/test/resources/rules/` name the project (`runtime:SnapshotRecompileTest`,
   `architecture:EnginePurityTest`).
-  - `cosec-annotations` (`api/annotations/`) holds `@InternalCoSecApi` (`@RequiresOptIn(level = ERROR)`): public
-    only so CoSec's modules can call each other; no compatibility promise, and applications never opt in.
+  - `cosec-annotations` (`api/annotations/`) holds the stability markers (RFC 0011 D4): `@InternalCoSecApi`
+    (`@RequiresOptIn(level = ERROR)`): public only so CoSec's modules can call each other; no compatibility promise,
+    left out of the ABI dumps, and applications never opt in. `@ExperimentalCoSecApi` (`level = WARNING`, in the
+    dumps): may change in a minor release. `@CoSecSpi`: a plain marker for the interfaces applications implement.
     `cosec-api` (`api/api/`) is the thin contract module left over from 7.x (principal, tenant, token,
     `SecurityContext`, audit events, `SimplePrincipal`, `SimpleTenant`).
   - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library only:
@@ -104,8 +113,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
     `SnapshotKey`, `InMemorySnapshotDocumentStore`), `membership`, `token` (`TokenVerifier`, `RevocationReader`,
-    `TokenStore`, `TokenRevoker`), `apikey`, `ratelimit`, `attribute`, `authn`, `identity`, `audit`. Model, api and
-    kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
+    `TokenStore`, `TokenRevoker`), `apikey`, `ratelimit`, `attribute`, `authn`, `identity`, `audit`. Model, api,
+    annotations and kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
     (`DecisionListener`, `RequestGate`, `CandidateStore`, the shadow report ports in `runtime`; `ControlStore`,
     `ChangeListener` in `control`).
   - `cosec-runtime` (`core/runtime/`) is the coroutine `Pipeline` and what every host needs around the engine: the
@@ -171,6 +180,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | **Authorization is a pure decision**: the engine does no I/O and keeps no state; obligations run only after a permit, so denied requests never spend a rate-limit permit | Keeps evaluation fast, predictable and explainable | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime, OBL-1) |
 | **Snapshot and control-plane caches never expire (`ttl = null`) and throw on failed reads (`ReadFailureMode.THROW`)**, applied after any CoCache customizer or property; Redis must run with `maxmemory-policy noeviction` | Redis is the store of record; expiry, eviction or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest`, `CoSecPipelineAutoConfigurationTest` (SNP-3) |
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `FlatAuthorizationBenchmark`, `PipelineBenchmark` |
+| **Public signatures change only on purpose**: each published module's ABI is in its `api/<project>.api` dump | Applications compile against CoSec and implement its SPIs | `checkKotlinAbi` (in `check`), `SpiMarkerTest` |
 
 Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` and the tests that guard it;
 `verifyRuleCoverage` fails when a rule loses them.
@@ -196,7 +206,8 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Tokens, login, revocation | `wiki/integration/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | A new place a document reads an attribute (a condition operand, a rate limit `key`, anything later) | resolve it through `ConditionChecker.attribute`, which refuses credential headers (CND-5) for every reference; never `Attribute.parse` directly |
-| Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
+| Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `@CoSecSpi` on the interface, `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
+| A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |

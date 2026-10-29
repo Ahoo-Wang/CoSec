@@ -17,6 +17,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `TokenStore`、`RevocationReader` | `cosec-spi`，`spi.token` | 把被吊销的令牌存放在 Redis 以外的地方。 | 各一个 bean |
 | `ApiKeyReader` | `cosec-spi`，`spi.apikey` | 从内存或 Redis 以外的地方查找 API key。 | 一个 bean |
 | `MembershipProvider` | `cosec-spi`，`spi.membership` | 为凭证不携带角色和附加策略的主体提供它们：带 provider 标记的令牌，以及每个 API key。说明主体是否已知且处于启用状态。 | 一个 bean；启用 API key 时必需 |
+| `MembershipLoader` | `cosec-cocache`，`cache` | 加载 `CoCacheMembershipProvider` 在 Redis 中为所有实例缓存的成员关系。 | 一个 bean，没有 `MembershipProvider` 时包装进 `CoCacheMembershipProvider` |
 | `AttributeProvider` | `cosec-spi`，`spi.attribute` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
 | `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
@@ -28,13 +29,40 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录保存在 Redis 以外的地方。 | 一个 bean，使用 `cosec-control` 时 |
 | 路由映射 | `cosec-runtime`，`runtime.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
-包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`）接收 runtime 的候选与报告，`ControlStore` 和 `ChangeListener` 接收控制面的记录与事件。
+包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`）接收 runtime 的候选与报告，`ControlStore` 和 `ChangeListener` 接收控制面的记录与事件。
 
-修改这些接口本身（而不是实现它们）对每个实现了它们的应用都是破坏性变更。
+这些接口都带有 `@CoSecSpi`：修改其中一个（而不是实现它），会破坏每个实现了它的应用（[稳定性等级](#stability-levels)）。
 
 适配器本身调用的是 `RequestGate`（`cosec-runtime`）：`Pipeline`，或者在 CoSec 网关后面的服务上
 （`cosec.pipeline.mode=gateway`）是 `IdentityGate`。它不是扩展点：两者都通过 `StatusMapping` 构造每个结果，自己写的
 gate 会成为第二条决策路径。
+
+## 稳定性等级 {#stability-levels}
+
+发布模块的每个公共声明都属于四个等级之一。标记在 `cosec-annotations`（`me.ahoo.cosec.annotations`）中：
+
+| 标记 | 承诺什么 | 你该怎么做 |
+|---|---|---|
+| 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
+| `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点，以及主体声明的能力（`ExpiresAtCapable`、`IssuedAtCapable`、`MembershipMarkerCapable`）。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
+
+这些承诺由构建守住。每个发布模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
+（`cosec-spi` 的是 `core/spi/api/spi.api`）；`check` 运行 Kotlin Gradle 插件的 `checkKotlinAbi`，编译出的模块与转储不一致时失败。
+`@InternalCoSecApi` 声明不进转储；实验性声明在转储里，所以它们的变化同样会出现在评审中。转储只列签名、不列注解，所以哪些接口是
+SPI 要从源码、API 文档和本页看；`test/architecture` 的 `SpiMarkerTest` 在 `cosec-spi` 的公共接口或上表列出的类型缺少
+`@CoSecSpi` 时失败。
+
+有意修改公共签名时，重新生成该模块的转储，并与改动一起提交：
+
+```bash
+./gradlew :spi:updateKotlinAbi
+```
+
+像评审代码一样评审转储的 diff：新增一行是新的 API；删除或修改一行会破坏该声明的调用方或实现。从 8.0 GA 起，删除或修改转储中任何一行的
+PR 都是破坏性变更，标题要带 `!`，除非该声明是 `@ExperimentalCoSecApi`
+（[`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md#3-commits-and-pull-request-titles)）。
 
 ## 每个扩展都遵守的规则 {#rules-every-extension-follows}
 

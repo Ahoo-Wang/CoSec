@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.findInDelegationChain
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
@@ -31,6 +32,7 @@ import java.time.Instant
  * itself, as `CoSecCacheSpecs` configures the revocation caches to do. Anything an implementation throws fails the
  * request with 503.
  */
+@CoSecSpi
 interface RevocationReader {
     /** Whether the token with id [tokenId] (jti) has been revoked. */
     suspend fun isRevoked(tokenId: String): Boolean

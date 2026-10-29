@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.membership
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -28,6 +29,7 @@ import me.ahoo.cosec.model.TenantId
  *
  * A suspend function, like every data-plane SPI (RFC 0006 Q11).
  */
+@CoSecSpi
 fun interface MembershipProvider {
     /**
      * What the provider knows of [principal] in [tenant]: [MembershipAnswer.Known] with memberships whose source is

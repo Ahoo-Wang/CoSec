@@ -50,8 +50,8 @@ flowchart BT
 
 - **`cosec-model` 和 `cosec-engine`**（目录 `core/model/` 与 `core/engine/`）是纯粹的内核：模型中有各类 id、绑定、成员关系、条件 AST、作用域和决策；引擎中有动作与资源模式、策略编译器和扁平引擎。它们只依赖 Kotlin 标准库。`EnginePurityTest`（ArchUnit）在出现对 Reactor、Spring、日志、I/O、线程或时钟的任何引用时失败；`DependencyRulesTest` 在解析出任何其他依赖时失败。`ScopeConstructionTest` 检查只有 `ScopeResolver` 能构造已解析的 `Scope`。
 - **`cosec-api`**（目录 `api/api/`）容纳应用编译时依赖的契约：`CoSecPrincipal`、`Tenant`、令牌、`SecurityContext`、`AuditEvent`，以及它们的简单实现（`SimplePrincipal`、`SimpleTenant`）。它只依赖 Kotlin 标准库。修改它就是破坏性变更。
-- **`cosec-annotations`**（目录 `api/annotations/`）容纳 `@InternalCoSecApi`，一个错误级别的 opt-in 标记：带有它的声明之所以公开，只是为了让 CoSec 自己的模块能访问，不作兼容性承诺。应用不 opt in；opt-in 出现在 CoSec 自己的 Kotlin 源码之外时，`SourceRulesTest` 失败。
-- **`cosec-spi`**（目录 `core/spi/`）在 `me.ahoo.cosec.spi.*` 下容纳请求或存储会调用的端口，以及它们的值类型和内存实现：快照存储（`SnapshotDocumentStore`）、成员关系、令牌校验与吊销（`TokenVerifier`、`RevocationReader`、`TokenStore`、`TokenRevoker`）、API key、限流器、属性提供者、认证器、转发的身份和审计 sink。它只依赖 `cosec-model`、`cosec-api` 和 kotlinx-coroutines，第三方只需依赖它就能实现一个端口。签名需要某一层类型的端口留在那一层：`DecisionListener`、`RequestGate` 和影子窗口端口在 `cosec-runtime`；`ControlStore` 和 `ChangeListener` 在 `cosec-control`（[扩展 CoSec](./extending.md)）。
+- **`cosec-annotations`**（目录 `api/annotations/`）容纳稳定性标记（[稳定性等级](./extending.md#stability-levels)）。`@InternalCoSecApi` 是一个错误级别的 opt-in 标记：带有它的声明之所以公开，只是为了让 CoSec 自己的模块能访问，不作兼容性承诺。应用不 opt in；opt-in 出现在 CoSec 自己的 Kotlin 源码之外时，`SourceRulesTest` 失败。`@ExperimentalCoSecApi`（警告级别的 opt-in）标记次版本仍可能改变的公共 API，`@CoSecSpi` 标记应用要实现的接口。
+- **`cosec-spi`**（目录 `core/spi/`）在 `me.ahoo.cosec.spi.*` 下容纳请求或存储会调用的端口，以及它们的值类型和内存实现：快照存储（`SnapshotDocumentStore`）、成员关系、令牌校验与吊销（`TokenVerifier`、`RevocationReader`、`TokenStore`、`TokenRevoker`）、API key、限流器、属性提供者、认证器、转发的身份和审计 sink。它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，第三方只需依赖它就能实现一个端口。签名需要某一层类型的端口留在那一层：`DecisionListener`、`RequestGate` 和影子窗口端口在 `cosec-runtime`；`ControlStore` 和 `ChangeListener` 在 `cosec-control`（[扩展 CoSec](./extending.md)）。
 - **`cosec-runtime`**（目录 `core/runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，快照文档及其编解码器、编译器和格式描述符（由它们生成 `schema/*.schema.json`），`SnapshotSource`，路由映射，令牌校验，内置认证器，以及写日志的审计 sink。它唯一的 Jackson mapper `CoSecJson` 是内部 API（`@InternalCoSecApi`），`api/` 与 `core/` 的公共签名中不出现 Jackson 类型（`JacksonSignatureTest`）。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
 - **`cosec-control`**（目录 `core/control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。它是一个由宿主装配的库。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
 - **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），Kafka（`cosec-kafka`），登录与签发令牌（`cosec-login`，保留 7.x 基于 Reactor 的登录契约），JWT（`cosec-jwt`），OAuth（`cosec-social`），OpenAPI，或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
@@ -64,6 +64,9 @@ flowchart BT
 - `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程），或当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端时失败。
 - `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge、extensions 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口和 `CoSecJson` 进入 `cosec-runtime` 与 `cosec-control`；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
 - `JacksonSignatureTest`（`api/` 与 `core/` 的公共签名中没有 Jackson 类型；`cosec-cocache` 在内部以响应式方式读取 Redis，但其公共签名中没有 Reactor 类型），上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
+- `SpiMarkerTest`：`cosec-spi` 中应用能够实现的每个公共接口，以及[扩展 CoSec](./extending.md#extension-points) 列出的每个扩展点，都带有 `@CoSecSpi`，且这个标记不出现在其他地方。
+
+公共 API 本身由构建守住，而不是靠评审（RFC 0011 D4）：每个发布模块把自己的 ABI 存在模块目录下的转储 `api/<project>.api` 里，它的 `check` 运行 Kotlin Gradle 插件的 `checkKotlinAbi`，公共签名变了而转储没变时失败。`@InternalCoSecApi` 声明不进转储。从 8.0 GA 起，删除或修改转储中的一行即破坏性变更。
 
 ## 请求路径 {#request-path}
 
@@ -214,6 +217,7 @@ sequenceDiagram
 | **快照缓存永不过期，读取失败时抛出异常**，无论 CoCache 的定制器或属性怎么设置。 | Redis 是权威存储；过期或吞掉的错误会悄悄丢掉策略。 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` |
 | **一次求值中每个文档只有一个修订**，并按加载顺序安装。 | 决策绝不能混用同一文档的两个修订。 | `SnapshotConsistencyPropertyTest`、`SnapshotInstallOrderPropertyTest` |
 | **热路径修改必须附带 JMH 前后对比。** | 每个请求都要授权。 | `FlatAuthorizationBenchmark`、`PipelineBenchmark`（评审） |
+| **公共签名只在有意时改变。** 每个发布模块的 ABI 都在它的转储里；不在转储里的改动让构建失败。 | 应用针对 CoSec 编译并实现它的 SPI；没人察觉的签名改动会破坏它们。 | `checkKotlinAbi`（`check` 的一部分）、`SpiMarkerTest` |
 
 ## 性能 {#performance}
 

@@ -1,0 +1,51 @@
+public final class me/ahoo/cosec/servlet/PipelineServletFilter : jakarta/servlet/Filter {
+	public fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun doFilter (Ljakarta/servlet/ServletRequest;Ljakarta/servlet/ServletResponse;Ljakarta/servlet/FilterChain;)V
+}
+
+public final class me/ahoo/cosec/servlet/PipelineServletFilterKt {
+	public static final fun checkBlocking (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Z
+}
+
+public final class me/ahoo/cosec/servlet/SecurityContextHolder {
+	public static final field INSTANCE Lme/ahoo/cosec/servlet/SecurityContextHolder;
+	public static final fun getContext ()Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun getRequiredContext ()Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun remove ()V
+	public static final fun setContext (Lme/ahoo/cosec/api/context/SecurityContext;)V
+}
+
+public final class me/ahoo/cosec/servlet/ServletHttpFactsReader {
+	public static final field INSTANCE Lme/ahoo/cosec/servlet/ServletHttpFactsReader;
+	public final fun getNO_HOST ()Lme/ahoo/cosec/model/scope/HostScope;
+	public final fun read (Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;)Lme/ahoo/cosec/runtime/http/HttpFacts;
+	public static synthetic fun read$default (Lme/ahoo/cosec/servlet/ServletHttpFactsReader;Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/http/HttpFacts;
+}
+
+public final class me/ahoo/cosec/servlet/ServletRemoteIpResolver : me/ahoo/cosec/runtime/http/RemoteIpResolver {
+	public static final field INSTANCE Lme/ahoo/cosec/servlet/ServletRemoteIpResolver;
+	public fun resolve (Ljakarta/servlet/http/HttpServletRequest;)Ljava/lang/String;
+	public synthetic fun resolve (Ljava/lang/Object;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/servlet/ServletRequests {
+	public static final field INSTANCE Lme/ahoo/cosec/servlet/ServletRequests;
+	public final fun getSecurityContext (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public final fun setSecurityContext (Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/api/context/SecurityContext;)V
+}
+
+public final class me/ahoo/cosec/servlet/ServletXForwardedRemoteIpResolver : me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver {
+	public static final field Companion Lme/ahoo/cosec/servlet/ServletXForwardedRemoteIpResolver$Companion;
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun extractXForwardedHeaderValues (Ljakarta/servlet/http/HttpServletRequest;)Ljava/util/List;
+	public synthetic fun extractXForwardedHeaderValues (Ljava/lang/Object;)Ljava/util/List;
+	public fun getMaxTrustedIndex ()I
+}
+
+public final class me/ahoo/cosec/servlet/ServletXForwardedRemoteIpResolver$Companion {
+	public final fun getTRUST_ALL ()Lme/ahoo/cosec/servlet/ServletXForwardedRemoteIpResolver;
+}
+

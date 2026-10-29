@@ -17,6 +17,7 @@ import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.dokka.gradle.DokkaPlugin
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
     alias(libs.plugins.publish)
@@ -103,6 +104,7 @@ configure(libraryProjects) {
         archivesName.set(artifactIdOf(project))
     }
     kotlinJvm()
+    abiValidation()
     jmhBenchmarks()
     junitTests()
     coverageReport()
@@ -342,6 +344,23 @@ fun Project.kotlinJvm() {
     }
     tasks.withType<JavaCompile> {
         options.compilerArgs.addAll(listOf("-parameters"))
+    }
+}
+
+/**
+ * RFC 0011 D4: `check` runs `checkKotlinAbi`, which fails when the module's public ABI differs from its dump,
+ * `api/<project>.api`; `updateKotlinAbi` rewrites the dump. `@InternalCoSecApi` declarations are left out of it.
+ */
+@OptIn(ExperimentalAbiValidation::class)
+fun Project.abiValidation() {
+    configure<KotlinJvmProjectExtension> {
+        abiValidation {
+            filters {
+                exclude {
+                    annotatedWith.add("me.ahoo.cosec.annotations.InternalCoSecApi")
+                }
+            }
+        }
     }
 }
 

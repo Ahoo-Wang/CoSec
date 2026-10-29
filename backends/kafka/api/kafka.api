@@ -1,0 +1,43 @@
+public final class me/ahoo/cosec/kafka/KafkaAuditEventSink : me/ahoo/cosec/spi/audit/AuditEventSink, org/springframework/beans/factory/DisposableBean {
+	public static final field Companion Lme/ahoo/cosec/kafka/KafkaAuditEventSink$Companion;
+	public fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Ljava/util/concurrent/Executor;Ljava/time/Duration;)V
+	public synthetic fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Ljava/util/concurrent/Executor;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun destroy ()V
+	public fun publish (Lme/ahoo/cosec/api/audit/AuditEvent;)V
+}
+
+public final class me/ahoo/cosec/kafka/KafkaAuditEventSink$Companion {
+}
+
+public final class me/ahoo/cosec/kafka/KafkaAuditListener : me/ahoo/cosec/runtime/event/DecisionListener, org/springframework/beans/factory/DisposableBean {
+	public static final field Companion Lme/ahoo/cosec/kafka/KafkaAuditListener$Companion;
+	public static final field DEFAULT_QUEUE_CAPACITY I
+	public static final field NAME Ljava/lang/String;
+	public fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;I)V
+	public synthetic fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun destroy ()V
+	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
+	public fun getName ()Ljava/lang/String;
+	public fun onDecision (Lme/ahoo/cosec/runtime/event/DecisionEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/kafka/KafkaAuditListener$Companion {
+}
+
+public final class me/ahoo/cosec/kafka/KafkaChangeListener : me/ahoo/cosec/control/audit/ChangeListener, org/springframework/beans/factory/DisposableBean {
+	public static final field Companion Lme/ahoo/cosec/kafka/KafkaChangeListener$Companion;
+	public static final field DEFAULT_TOPIC Ljava/lang/String;
+	public static final field NAME Ljava/lang/String;
+	public fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;I)V
+	public synthetic fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun destroy ()V
+	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
+	public fun getName ()Ljava/lang/String;
+	public fun onChange (Lme/ahoo/cosec/control/audit/ChangeEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/kafka/KafkaChangeListener$Companion {
+}
+

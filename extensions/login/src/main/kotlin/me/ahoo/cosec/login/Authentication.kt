@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.login
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 
@@ -29,6 +30,7 @@ import reactor.core.publisher.Mono
  * @see AuthenticationProvider
  * @see CoSecPrincipal
  */
+@CoSecSpi
 interface Authentication<C : Credentials, out P : CoSecPrincipal> {
     /**
      * The type of credentials this authentication supports.

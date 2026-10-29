@@ -16,6 +16,7 @@ package me.ahoo.cosec.runtime.shadow
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -40,6 +41,7 @@ class StoredCandidate(val window: String, val baseRevision: Long, val document: 
 }
 
 /** Where candidates are read from: the `candidate:` namespace. Reads never block the caller. */
+@CoSecSpi
 fun interface CandidateStore {
     suspend fun candidate(key: SnapshotKey): StoredCandidate?
 }
