@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -39,7 +39,7 @@ internal class CoCacheTokenStoreIntegrationTest {
 
     @Test
     fun revokeThenIsRevokedUntilTtlExpires() {
-        val tokenId = MockIdGenerator.INSTANCE.generateAsString()
+        val tokenId = RandomIdGenerator.generate()
         tokenStoreA.isRevoked(tokenId).assert().isFalse()
         tokenStoreA.revoke(tokenId, REVOCATION_TTL)
         tokenStoreA.isRevoked(tokenId).assert().isTrue()
@@ -50,12 +50,12 @@ internal class CoCacheTokenStoreIntegrationTest {
 
     @Test
     fun isRevokedWhenUnknownTokenId() {
-        tokenStoreA.isRevoked(MockIdGenerator.INSTANCE.generateAsString()).assert().isFalse()
+        tokenStoreA.isRevoked(RandomIdGenerator.generate()).assert().isFalse()
     }
 
     @Test
     fun revocationOnOneInstanceReplacesCachedNotRevokedOnAnother() {
-        val tokenId = MockIdGenerator.INSTANCE.generateAsString()
+        val tokenId = RandomIdGenerator.generate()
         // instance B caches "not revoked" locally
         tokenStoreB.isRevoked(tokenId).assert().isFalse()
 

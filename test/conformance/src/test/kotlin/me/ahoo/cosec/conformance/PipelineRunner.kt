@@ -93,6 +93,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
@@ -119,7 +120,6 @@ import me.ahoo.cosec.testkit.required
 import me.ahoo.cosec.testkit.strings
 import me.ahoo.cosec.testkit.text
 import me.ahoo.cosec.testkit.textOrNull
-import me.ahoo.cosid.StringIdGenerator
 import org.springframework.cloud.gateway.filter.headers.HttpHeadersFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
@@ -250,7 +250,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                     snapshots(snapshot, documents, node.get("snapshot"), attributes) { reach("snapshot") }
                 ),
                 membershipProvider = provider,
-                idGenerator = StringIdGenerator { REQUEST_ID },
+                idGenerator = IdGenerator { REQUEST_ID },
                 options = options(node.get("options") ?: EMPTY),
                 attributes = attributes,
                 listeners = listeners,

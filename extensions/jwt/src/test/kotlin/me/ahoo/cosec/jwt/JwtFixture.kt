@@ -14,8 +14,15 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.spi.id.IdGenerator
+import java.util.concurrent.atomic.AtomicLong
 
 object JwtFixture {
     const val TEST_JWT_SECRET = "jwt-fixture-test-secret"
     var ALGORITHM = Algorithm.HMAC256(TEST_JWT_SECRET)
+
+    private val nextTokenId = AtomicLong()
+
+    /** Token ids in sequence, distinct across the whole test run: `token-1`, `token-2`, … */
+    val IDS = IdGenerator { "token-${nextTokenId.incrementAndGet()}" }
 }

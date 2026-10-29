@@ -16,7 +16,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Scope
 import org.openjdk.jmh.annotations.Setup
@@ -59,7 +59,7 @@ open class JwtTokenConverterBenchmark {
     @Setup
     fun init() {
         algorithm = Algorithm.HMAC256("jwt-benchmark-secret")
-        jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
+        jwtTokenConverter = JwtTokenConverter(RandomIdGenerator, algorithm)
         jwtTokenVerifier = JwtTokenVerifier(algorithm)
         token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
     }

@@ -24,7 +24,6 @@ import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -57,7 +56,7 @@ class SubjectRevocationJwtTest {
     }
 
     private val tokenStore = MapTokenStore()
-    private val converter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
+    private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
 
     // No skew: these tests place revocations to the millisecond of the tokens' `iat`.
     private val verifier = RevocableTokenVerifier(JwtTokenVerifier(JwtFixture.ALGORITHM), tokenStore, Duration.ZERO)

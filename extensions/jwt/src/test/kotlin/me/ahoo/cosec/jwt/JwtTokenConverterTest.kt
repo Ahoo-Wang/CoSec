@@ -16,7 +16,6 @@ import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -25,7 +24,7 @@ import org.junit.jupiter.api.Test
  * @author ahoo wang
  */
 internal class JwtTokenConverterTest {
-    var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
+    var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
     @Test

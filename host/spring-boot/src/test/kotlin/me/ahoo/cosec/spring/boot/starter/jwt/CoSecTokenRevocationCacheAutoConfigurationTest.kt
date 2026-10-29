@@ -19,9 +19,9 @@ import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
@@ -76,7 +76,7 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                 tokenStore.assert().isInstanceOf(CoCacheTokenStore::class.java)
                 // the wired store records subject revocations (RFC 0004 §4.5.3) in Redis
                 val tenant = TenantId("tenant")
-                val principal = PrincipalId(MockIdGenerator.INSTANCE.generateAsString())
+                val principal = PrincipalId(RandomIdGenerator.generate())
                 val issuedBefore = Instant.ofEpochMilli(1_790_000_000_000)
                 context.getBean(TokenRevoker::class.java).revokeSubject(tenant, principal, issuedBefore)
                 tokenStore.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)

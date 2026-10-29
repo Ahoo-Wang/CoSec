@@ -30,8 +30,6 @@ dependencies {
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
     testImplementation("io.lettuce:lettuce-core")
-    testImplementation("me.ahoo.cosid:cosid-core")
-    testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("io.projectreactor:reactor-test")
     // RFC 0003 §6: the snapshot store must not block a non-blocking caller.
     testImplementation("io.projectreactor.tools:blockhound")

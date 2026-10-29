@@ -77,7 +77,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
   `cosec.enabled=false`: its filter strips a client's `CoSec-Identity`), `cosec.api-key.store=redis` `cosec-cocache`,
-  `cosec.audit.kafka.delivery=required` `cosec-kafka`. Add the named artifact next to `cosec-spring-boot`; 8.0 has no
+  `cosec.audit.kafka.delivery=required` `cosec-kafka`, `cosec.cosid.generator` `cosec-cosid`. Add the named artifact next to `cosec-spring-boot`; 8.0 has no
   starter capabilities (`requireCapability("me.ahoo.cosec:...-support")` from 7.x no longer resolves). Do not suggest
   turning the feature off unless the user does not want it.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,

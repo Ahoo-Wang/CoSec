@@ -15,12 +15,22 @@ package me.ahoo.cosec.architecture
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import kotlin.io.path.exists
+import kotlin.io.path.readText
+import kotlin.io.path.relativeTo
 
 /**
  * RFC 0011 §5, the dependency graph: what each project declares in its main configurations, and what the inner ones
  * resolve. Replaces the root build's verifyPureClasspath.
  */
 class DependencyRulesTest {
+    private companion object {
+        const val COSID = "me.ahoo.cosid:"
+
+        /** How a build script names CosId: by coordinates, or through the catalog's `cosid-*` entries. */
+        val COSID_REFERENCES = listOf("me.ahoo.cosid", "libs.cosid", "libs.versions.cosid")
+    }
+
     private val libraryConfigurations = setOf("api", "implementation", "compileOnly", "runtimeOnly")
 
     private fun declaredProjects(project: String): List<String> = Projects.facts[project].orEmpty()
@@ -101,6 +111,32 @@ class DependencyRulesTest {
                 .map { "$project: $it" }
         }
         violations.assert().isEmpty()
+    }
+
+    /**
+     * Only [DependencyRules.COSID_OWNERS] declare or resolve CosId, in their main configurations and their build
+     * scripts, and nothing brings it at run time but `cosec-cosid`. The platforms have no facts, so the build scripts
+     * are read too: no BOM imports CosId or constrains its version.
+     */
+    @Test
+    fun `only cosec-cosid and the starter declare or resolve CosId, and no BOM imports it`() {
+        fun cosId(project: String, configuration: String? = null) =
+            (modules(project, "declared", configuration) + modules(project, "resolved", configuration))
+                .filter { it.startsWith(COSID) }
+                .distinct()
+        DependencyRules.COSID_OWNERS.keys.filter { cosId(it).isEmpty() }
+            .assert().describedAs("owners whose facts name no CosId: the rule would check nothing").isEmpty()
+        val violations = Projects.facts.keys.filterNot { it in DependencyRules.COSID_OWNERS }.flatMap { project ->
+            cosId(project).map { "$project: $it" }
+        } + cosId("spring-boot", "runtimeClasspath").map { "spring-boot runtimeClasspath: $it" }
+        violations.assert().isEmpty()
+        val others = Projects.directories.filterKeys { it !in DependencyRules.COSID_OWNERS }.values
+        val scripts = (others + listOf(Projects.root))
+            .map { it.resolve("build.gradle.kts") }
+            .filter { it.exists() }
+            .filter { script -> COSID_REFERENCES.any { it in script.readText() } }
+            .map { it.relativeTo(Projects.root).toString() }
+        scripts.assert().isEmpty()
     }
 
     @Test

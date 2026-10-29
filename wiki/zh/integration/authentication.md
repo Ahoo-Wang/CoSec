@@ -24,7 +24,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 | `cosec.membership` | 成员关系来自 `MembershipProvider` 时，以 `"provider"` 代替 `roles` 和 `policies`（[成员关系](#memberships)）。其他情况省略。 |
 | `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。`iat` 决定[吊销主体](#revoking-every-token-of-a-principal)时拒绝哪些令牌。 |
 
-刷新令牌只携带自己的 `jti`、`iat`、`exp`，以及作为 `sub` 的、所属访问令牌的 `jti`。应用有 `StringIdGenerator` Bean（例如来自 CosId）时由它生成令牌 id，否则使用 `UuidGenerator`。有效期为 `cosec.jwt.token-validity.access`（10 分钟）和 `cosec.jwt.token-validity.refresh`（7 天）。
+刷新令牌只携带自己的 `jti`、`iat`、`exp`，以及作为 `sub` 的、所属访问令牌的 `jti`。应用有 `IdGenerator` Bean（例如基于 CosId）时由它生成令牌 id，否则使用 `RandomIdGenerator`（[Id](../architecture/extending.md#ids)）。有效期为 `cosec.jwt.token-validity.access`（10 分钟）和 `cosec.jwt.token-validity.refresh`（7 天）。
 
 **被拒绝的令牌不是错误。** 过期、签名错误或已吊销的令牌会让调用方成为匿名主体，由策略决定匿名调用方能做什么：公开路径照常可用。如果请求被拒绝，响应为 `401`，problem 类型为 `token-expired`、`token-revoked` 或 `token-invalid`，而不是 `unauthorized`（[响应与状态码](./web.md#responses-and-status-codes)）。
 
@@ -232,9 +232,11 @@ cosec:
 
 启用 `cosec-social` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
 
-1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`，应用有 `StringIdGenerator` Bean 时由它生成，否则由 `UuidGenerator` 生成。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
+1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。
+
+这两步都会阻塞所在线程。`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调中的 `authenticateAsToken` 通过 JustAuth 的阻塞 HTTP 调用提供方。请在事件循环之外调用它们：在 WebFlux 中使用 `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` 和回调的 `Mono`，并分别加上 `.subscribeOn(Schedulers.boundedElastic())`。
 
 ## 网关之后 {#behind-a-gateway}
 

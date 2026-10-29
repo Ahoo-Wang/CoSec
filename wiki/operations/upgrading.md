@@ -563,6 +563,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `openapi-support` | `cosec-openapi`, with `spring-boot-starter-actuator` and `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`, with `spring-boot-starter-kafka` |
 | (new in 8.0) | `cosec-control`, the control plane, with `cosec-cocache` |
+| (new in 8.0) | `cosec-cosid`, CoSec's ids from CosId 5 (see below) |
 
 The full list is in [Modules](../guide/introduction.md#modules). A module a turned-on feature needs is checked at
 startup: a web host without its adapter module, a gateway without `cosec-gateway`, `cosec.api-key.store=redis` without
@@ -609,6 +610,26 @@ without an explicit opt-in. Do not opt in from an application.
 **`KafkaAuditEventSink` takes an `Executor`.** Its third parameter was a Reactor `Scheduler`; it is now a
 `java.util.concurrent.Executor` (by default its own single thread with a bounded queue).
 
+**CoSec no longer brings CosId.** In 7.x, `cosec-core`, `cosec-jwt` and `cosec-social` had `cosid-core` in their API,
+and CoSec's platform, `cosec-dependencies`, imported `cosid-bom`. In 8.0 only `cosec-cosid` depends on CosId, and no
+CoSec BOM imports it or sets its version, so an application can use any CosId version, or none, and declares it, and
+its version, itself. CoSec makes its
+ids through its own port, `IdGenerator` (`me.ahoo.cosec.spi.id`, in `cosec-spi`). Without a bean of yours they come
+from `RandomIdGenerator`, random version 4 UUIDs. To keep CosId's ids ([Ids](../architecture/extending.md#ids)):
+
+- **On CosId 5**, add `cosec-cosid`: the starter gives CoSec the ids of the generator `cosec.cosid.generator` names
+  (CosId's `default` unless set). CosId 5 itself is a migration of its own: its [4.x to 5.0 guide](https://github.com/Ahoo-Wang/CosId/blob/main/documentation/docs/en/guide/migration/from-4x.md).
+- **On CosId 4**, declare one bean:
+
+```kotlin
+// CosId 4: the StringIdGenerator the 7.x starter took
+@Bean
+fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.generateAsString() }
+```
+
+The OAuth `state` of social login no longer comes from that bean: it is always 128 random bits from a `SecureRandom`,
+because the callback relies on it being unpredictable.
+
 ### Removed and replaced APIs
 
 Code that uses any of these no longer compiles or is no longer called.
@@ -640,6 +661,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |
 | Path variables left in the caller's security context after authorization | None. Read path variables from your web framework. |
 | `cosecPolicyGenerator`, `cosecAppPermissionGenerator` actuator endpoints | `cosecServiceGenerator/routes` (a route map) and `cosecServiceGenerator/app` (an app document). |
+| `StringIdGenerator`, `UuidGenerator` (CosId) in `JwtTokenConverter`, `JustAuthProvider` and the starter's beans; in the 8.0 previews also `PipelineComponents.idGenerator` and `IdentityGate` | `IdGenerator` (`cosec-spi`, [Ids](../architecture/extending.md#ids)), `RandomIdGenerator` by default. `JustAuthProvider` takes no id generator: it draws its OAuth `state` from `SecureRandom`. |
 | `SocialUserConverter` (`cosec-social`) | None: it is internal to `cosec-social`. Turn a provider's user into your principal with a `SocialUserPrincipalConverter` bean ([Social login](../integration/authentication.md#social-login)). |
 
 Still available: `SecurityContext` (now with `scope`, the validated app, space and roles; read it rather than the

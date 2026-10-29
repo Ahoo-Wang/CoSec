@@ -34,7 +34,6 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemType
-import me.ahoo.cosec.runtime.RandomRequestIds
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.RequestIds
 import me.ahoo.cosec.runtime.RequestSecurity
@@ -44,9 +43,10 @@ import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
-import me.ahoo.cosid.StringIdGenerator
 import java.time.Clock
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
@@ -75,7 +75,8 @@ class IdentityGate(
     /** `cosec.authentication.revocation.skew`: how far the gateway's clock may be ahead of this service's. */
     private val skew: Duration = DEFAULT_SKEW,
     private val clock: Clock = Clock.systemUTC(),
-    private val idGenerator: StringIdGenerator? = null,
+    /** The ids of requests without a plain `CoSec-Request-Id` header. */
+    private val idGenerator: IdGenerator = RandomIdGenerator,
 ) : RequestGate {
     init {
         require(maxBytes > 0) { "The identity size limit must be positive, not $maxBytes." }
@@ -87,7 +88,7 @@ class IdentityGate(
     @Suppress("TooGenericExceptionCaught")
     override suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
-            ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
+            ?: idGenerator.generate()
         val traceId = currentCoroutineContext()[TraceContext]?.traceId
         return try {
             decide(facts, requestId, traceId)

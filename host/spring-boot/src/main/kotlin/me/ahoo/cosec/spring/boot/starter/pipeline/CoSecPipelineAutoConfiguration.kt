@@ -40,6 +40,8 @@ import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -49,7 +51,6 @@ import me.ahoo.cosec.spring.boot.starter.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosid.StringIdGenerator
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -185,7 +186,7 @@ class CoSecPipelineAutoConfiguration {
         authenticator: Authenticator,
         snapshots: SuspendingSnapshotSource,
         membershipProvider: ObjectProvider<MembershipProvider>,
-        idGenerator: ObjectProvider<StringIdGenerator>,
+        idGenerator: ObjectProvider<IdGenerator>,
         attributes: AttributeProviders,
         listeners: DecisionListeners,
         rateLimiter: ObjectProvider<RateLimiter>,
@@ -198,7 +199,7 @@ class CoSecPipelineAutoConfiguration {
             authenticator = authenticator,
             snapshots = snapshots,
             membershipProvider = membershipProvider.ifAvailable,
-            idGenerator = idGenerator.ifAvailable,
+            idGenerator = idGenerator.getIfAvailable { RandomIdGenerator },
             options = PipelineOptions(
                 timeout = pipelineProperties.timeout.toKotlinDuration(),
                 authenticationTimeout = pipelineProperties.authenticationTimeout.toKotlinDuration(),

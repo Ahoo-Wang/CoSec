@@ -20,6 +20,5 @@ dependencies {
     // checkBlocking refuses a non-blocking thread, as Reactor marks them (the Netty event loop).
     implementation("io.projectreactor:reactor-core")
     api("org.springframework:spring-webmvc")
-    testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("org.springframework:spring-test")
 }

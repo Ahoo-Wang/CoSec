@@ -248,7 +248,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return sampled?.let { ReplayHandle(request, view, it) }
     }
 
-    private fun eventId(): String = idGenerator?.generateAsString() ?: RandomRequestIds.next()
+    private fun eventId(): String = idGenerator.generate()
 
     private suspend fun decide(facts: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
         val path = PathNormalizer.normalize(facts.rawPath)
@@ -738,7 +738,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      */
     private fun requestId(facts: HttpFacts): String {
         val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
-        return given ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
+        return given ?: idGenerator.generate()
     }
 
     /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */

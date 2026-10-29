@@ -21,9 +21,10 @@ import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosid.StringIdGenerator
 import java.time.Clock
 
 /**
@@ -37,8 +38,8 @@ data class PipelineComponents(
     /** Asked when a token carries the provider marker instead of claims; without one such a request is a 503. */
     val membershipProvider: MembershipProvider? = null,
     val engine: FlatEngine = CoSecFlatEngine,
-    /** Request ids for requests without a `CoSec-Request-Id` header; without one, random ids that never block. */
-    val idGenerator: StringIdGenerator? = null,
+    /** The ids of requests without a plain `CoSec-Request-Id` header, and of decision events. */
+    val idGenerator: IdGenerator = RandomIdGenerator,
     val clock: Clock = Clock.systemUTC(),
     val options: PipelineOptions = PipelineOptions(),
     /** The external attribute providers; the documents must be compiled with their [AttributeProviders.catalog]. */

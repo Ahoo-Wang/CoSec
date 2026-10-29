@@ -1,0 +1,14 @@
+public final class me/ahoo/cosec/cosid/CosIdIdGenerator : me/ahoo/cosec/spi/id/IdGenerator {
+	public static final field Companion Lme/ahoo/cosec/cosid/CosIdIdGenerator$Companion;
+	public fun <init> (Lme/ahoo/cosid/StringIdGenerator;)V
+	public fun generate ()Ljava/lang/String;
+	public static final fun of (Lme/ahoo/cosid/runtime/CosIdRuntime;)Lme/ahoo/cosec/cosid/CosIdIdGenerator;
+	public static final fun of (Lme/ahoo/cosid/runtime/CosIdRuntime;Ljava/lang/String;)Lme/ahoo/cosec/cosid/CosIdIdGenerator;
+}
+
+public final class me/ahoo/cosec/cosid/CosIdIdGenerator$Companion {
+	public final fun of (Lme/ahoo/cosid/runtime/CosIdRuntime;)Lme/ahoo/cosec/cosid/CosIdIdGenerator;
+	public final fun of (Lme/ahoo/cosid/runtime/CosIdRuntime;Ljava/lang/String;)Lme/ahoo/cosec/cosid/CosIdIdGenerator;
+	public static synthetic fun of$default (Lme/ahoo/cosec/cosid/CosIdIdGenerator$Companion;Lme/ahoo/cosid/runtime/CosIdRuntime;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/cosid/CosIdIdGenerator;
+}
+
