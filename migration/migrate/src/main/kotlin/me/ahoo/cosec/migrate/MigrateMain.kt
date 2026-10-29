@@ -51,7 +51,7 @@ import kotlin.system.exitProcess
  * bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--api-key-prefix cosec:api-key] [--key-prefix cosec] --out ./api-keys
- *          [--role-prefix api-key.] [--dry-run]
+ *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
  * ```
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
@@ -75,7 +75,8 @@ object MigrateMain {
           publish --to-redis <uri> [--key-prefix <p>] --in <dir> [--resume] [--break-glass-max-duration <duration>]
           bootstrap --to-redis <uri> [--key-prefix <p>] --platform-admin <principal> [--force]
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
-          api-keys --redis <uri> [--api-key-prefix <p>] [--key-prefix <p>] --out <dir> [--role-prefix <p>] [--dry-run]
+          api-keys --redis <uri> [--api-key-prefix <p>] [--key-prefix <p>] --out <dir> [--memberships <file>]
+                   [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
     """.trimIndent()
 
     @JvmStatic
@@ -129,6 +130,7 @@ object MigrateMain {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "root-id", "root-expires-at", "to-redis", "in",
                 "rate-limit-rules", "platform-admin", "break-glass-max-duration", "redis", "api-key-prefix", "role-prefix",
+                "memberships", "grant-to-principal",
             )
             private val FLAGS = setOf("root-enabled", "resume", "force", "dry-run")
 
@@ -309,13 +311,16 @@ object MigrateMain {
     /**
      * `api-keys` (RFC 0009 §4.4): converts the keys under `--api-key-prefix` to the format of RFC 0009 and writes the
      * change report. With `--dry-run`, or when a key is refused, nothing is written to Redis. Keys already converted are
-     * left as they are, so a run can be repeated.
+     * left as they are, so a run can be repeated; each key is rewritten only while it still holds what was read.
      */
     private fun apiKeys(options: Options, out: PrintStream): Int {
         val uri = options.required("redis")
         val apiKeyPrefix = (options.value("api-key-prefix") ?: DEFAULT_API_KEY_PREFIX).trimEnd(':')
         val outDirectory = Path.of(options.required("out"))
         val dryRun = options.flag("dry-run")
+        val memberships = options.value("memberships")?.let { MembershipsExport.read(Files.readAllBytes(Path.of(it))) }
+        val grantTo = options.value("grant-to-principal")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?.toSet().orEmpty()
         val client = RedisClient.create(RedisURI.create(uri))
         try {
             client.connect().use { connection ->
@@ -323,54 +328,82 @@ object MigrateMain {
                 val stored = StoredApiKeys.read(commands, apiKeyPrefix) { pattern -> scan(commands, pattern) }
                 val plan = controlStore(uri, options.value("key-prefix") ?: CoSec.COSEC) { store ->
                     ApiKeyMigration(
+                        StoredDocuments(store),
+                        memberships,
+                        grantTo,
                         options.value("role-prefix") ?: ApiKeyMigration.DEFAULT_ROLE_PREFIX,
-                        StoredAttachability(store),
                     ).plan(stored.legacy)
                 }.withRejections(stored.unreadable)
+                val changed = if (plan.accepted && !dryRun) write(commands, apiKeyPrefix, plan) else emptyList()
                 Files.createDirectories(outDirectory)
                 val report = outDirectory.resolve(API_KEYS_REPORT_FILE)
-                val json = plan.report(dryRun, stored.converted)
+                val json = plan.report(dryRun, stored.converted, changed)
                 Files.write(report, CoSecJson.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(json))
                 summarize(plan, out)
                 out.println("Wrote $report")
-                return when {
-                    !plan.accepted -> {
-                        out.println(
-                            "Rejected: fix the ${plan.rejections.size} rejection(s) and run again. No key was written."
-                        )
-                        FAILED
-                    }
-
-                    dryRun -> {
-                        out.println("Dry run: ${plan.keys.size} key(s) would be converted. No key was written.")
-                        OK
-                    }
-
-                    else -> {
-                        plan.keys.forEach { commands.set("$apiKeyPrefix:${it.hash}", ApiKeyCodec.encode(it.key)) }
-                        out.println(
-                            "Converted ${plan.keys.size} key(s). Their principals need the memberships and the tenants " +
-                                "the role bindings in the report: until then the keys are refused or narrower, never wider."
-                        )
-                        OK
-                    }
-                }
+                return outcome(plan, dryRun, changed, out)
             }
         } finally {
             client.shutdown()
         }
     }
 
+    /** Rewrites each key over exactly what was read; the hashes of those that changed since, which are left alone. */
+    private fun write(
+        commands: RedisCommands<String, String>,
+        prefix: String,
+        plan: ApiKeyMigrationPlan
+    ): List<String> =
+        plan.keys.filterNot { converted ->
+            StoredApiKeys.replace(
+                commands,
+                "$prefix:${converted.legacy.hash}",
+                converted.legacy.json,
+                ApiKeyCodec.encode(converted.key)
+            )
+        }.map { it.legacy.hash }
+
+    private fun outcome(plan: ApiKeyMigrationPlan, dryRun: Boolean, changed: List<String>, out: PrintStream): Int = when {
+        !plan.accepted -> {
+            out.println("Rejected: fix the ${plan.rejections.size} rejection(s) and run again. No key was written.")
+            FAILED
+        }
+
+        dryRun -> {
+            out.println("Dry run: ${plan.keys.size} key(s) would be converted. No key was written.")
+            OK
+        }
+
+        changed.isNotEmpty() -> {
+            out.println(
+                "${changed.size} key(s) changed since they were read and were left as they are: run again. " +
+                    "The other ${plan.keys.size - changed.size} were converted."
+            )
+            FAILED
+        }
+
+        else -> {
+            out.println(
+                "Converted ${plan.keys.size} key(s). Grant the memberships and add the bindings in the report: until " +
+                    "then the keys are refused or narrower, never wider."
+            )
+            OK
+        }
+    }
+
     private fun summarize(plan: ApiKeyMigrationPlan, out: PrintStream) {
         plan.rejections.forEach { out.println("REJECT $it") }
-        plan.keys.filter { it.defaultTenant }.forEach {
-            out.println("WARN   API key [${it.key.id}] has no tenant: it goes to the default tenant.")
-        }
         plan.keys.forEach { key ->
-            key.dropped.forEach {
-                out.println(
-                    "WARN   API key [${key.key.id}] drops the attachment $it."
-                )
+            val id = key.key.id
+            out.println("KEY    [$id] ${key.mode.name.lowercase().replace('_', '-')}: principal ${key.key.principalId}")
+            if (key.legacy.tenantId.isNullOrEmpty()) {
+                out.println("WARN   API key [$id] has no tenant: it goes to the default tenant.")
+            }
+            key.lost.forEach { out.println("WARN   API key [$id] no longer reaches $it.") }
+        }
+        plan.memberships.forEach { principal ->
+            principal.newlyGained?.takeIf { it.isNotEmpty() }?.let {
+                out.println("WARN   ${principal.principal}@${principal.tenant.value} newly gains $it.")
             }
         }
     }
