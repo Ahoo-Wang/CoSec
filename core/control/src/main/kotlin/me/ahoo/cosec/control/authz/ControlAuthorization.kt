@@ -50,6 +50,9 @@ class Operator(
      */
     val principalBindings: Boolean get() = security?.principal?.principalBindings ?: true
 
+    /** Whether break-glass could reach the operator in this request: only with CoSec's own token. */
+    val breakGlass: Boolean get() = security?.principal?.breakGlass ?: true
+
     override fun toString(): String = "Operator(${actor.principal.value}@${actor.tenant.value})"
 
     companion object {

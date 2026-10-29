@@ -206,6 +206,13 @@ data class Approval(
      * booleans, lists and objects, so that the check at publish reads what the approval was decided on.
      */
     val attributes: Map<String, Any> = emptyMap(),
+    /**
+     * Whether the approver's principal bindings reached it when it approved: false with a capped credential (RFC 0009
+     * §4.2). Publish checks the approver again under the same terms, so a capped key never counts with more.
+     */
+    val principalBindings: Boolean = true,
+    /** Whether break-glass could reach the approver when it approved: only with CoSec's own token. */
+    val breakGlass: Boolean = true,
 )
 
 /**

@@ -437,6 +437,33 @@ class ControlRoundTwoFixesTest {
         authority.approverProblem(recordedInactive, needed, walt).assert().isEqualTo("the approver is deactivated")
     }
 
+    /**
+     * Review N3: an approval records whether the approver's principal bindings reached it. pia may approve only through a
+     * binding that names her: approved with a capped key, that never counted, and does not at publish either.
+     */
+    @Test
+    fun `an approver is checked again under the credential it approved with`() = runBlocking<Unit> {
+        val change = changes.propose(
+            walt,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("z"))),
+            "z"
+        )
+        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, pia.memberships)
+        val authority = ChangeAuthority(engine.authorizer)
+        authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
+        val capped = approval.copy(principalBindings = false)
+        authority.approverProblem(change.copy(approval = capped), needed, walt)
+            .assert().isEqualTo("the approver no longer holds cosec:approve on the document")
+        // Stored only when false, so an approval made with a token keeps its bytes.
+        val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = capped))).approval!!
+        stored.principalBindings.assert().isFalse()
+        stored.breakGlass.assert().isTrue()
+        String(ChangeRequestCodec.encode(change.copy(approval = approval))).assert().doesNotContain("principalBindings")
+    }
+
     @Test
     fun `a change whose readability cannot be decided is a 503 at every step, whether or not it exists`() = runBlocking<Unit> {
         val change = changes.propose(
