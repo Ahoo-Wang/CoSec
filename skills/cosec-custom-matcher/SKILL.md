@@ -12,7 +12,7 @@ external attributes.
 
 Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the ports live in
 `core/spi/src/main/kotlin/me/ahoo/cosec/spi/` (`attribute/`, `authn/`, `membership/`, `ratelimit/`, `token/`,
-`apikey/`, `snapshot/`, `audit/`; module `cosec-spi`, which depends only on the model, the contracts, the stability
+`apikey/`, `snapshot/`, `audit/`, `id/`; module `cosec-spi`, which depends only on the model, the contracts, the stability
 markers and coroutines), and
 the ones that carry runtime types in `core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`event/`, `attribute/` for
 `BlacklistSource`); the starter wires them in
@@ -46,6 +46,7 @@ The starter collects these beans:
 | `BlacklistSource` | `me.ahoo.cosec.runtime.attribute` | one; the starter wraps it in `BlacklistAttributeProvider` | says who and what is blocked |
 | `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | 7.x-style audit events |
 | `ControlStore` | `me.ahoo.cosec.control.store` | one, with `cosec-control`; replaces `CoCacheControlStore` | where the control plane keeps its records |
+| `IdGenerator` | `me.ahoo.cosec.spi.id` | one; replaces `RandomIdGenerator` | request, decision event, token (`jti`) and change ids |
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
 
@@ -194,6 +195,15 @@ writes, implement `documents()` (every document with indexed revisions; may name
 `openChanges()` (changes that may still be open; may name more, never fewer) and `acquireLease` / `releaseLease`
 (release only while the holder still has it). A failed read throws; never answer "absent". Start from
 `InMemoryControlStore` and the KDoc of `core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
+
+## IdGenerator: CoSec's ids
+
+CoSec's core depends on no id library. For CosId 5, add `cosec-cosid`: with the application's
+`CosIdRuntime` it gives CoSec the ids of the generator `cosec.cosid.generator` names (`default` unless set). Any other
+format is one bean, `IdGenerator { … }`. `generate` runs on every
+request, on the event loop: never block (prefer a Snowflake generator to one that waits for its store) and never
+throw. Ids must be unique across instances and 1 to 64 characters of `A-Z a-z 0-9 . _ -`. They are not secrets: never
+rely on one being unpredictable. The OAuth `state` of social login and API key secrets never come from this bean.
 
 ## Verification
 

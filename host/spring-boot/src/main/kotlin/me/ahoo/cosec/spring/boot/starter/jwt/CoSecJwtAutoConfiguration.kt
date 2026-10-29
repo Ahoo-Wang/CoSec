@@ -19,6 +19,8 @@ import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
@@ -26,8 +28,6 @@ import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
-import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -81,14 +81,15 @@ class CoSecJwtAutoConfiguration {
         }
     }
 
+    /** Token ids (`jti`) from the application's [IdGenerator] bean, else from [RandomIdGenerator]. */
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenConverter(
-        idGeneratorProvider: ObjectProvider<StringIdGenerator>,
+        idGeneratorProvider: ObjectProvider<IdGenerator>,
         algorithm: Algorithm,
         jwtProperties: JwtProperties
     ): TokenConverter {
-        val idGenerator = idGeneratorProvider.getIfAvailable { UuidGenerator.INSTANCE }
+        val idGenerator = idGeneratorProvider.getIfAvailable { RandomIdGenerator }
         return JwtTokenConverter(
             idGenerator = idGenerator,
             algorithm = algorithm,

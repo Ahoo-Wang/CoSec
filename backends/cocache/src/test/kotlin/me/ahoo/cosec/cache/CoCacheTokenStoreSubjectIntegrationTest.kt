@@ -18,7 +18,7 @@ package me.ahoo.cosec.cache
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -42,7 +42,7 @@ internal class CoCacheTokenStoreSubjectIntegrationTest {
     private val tenant = TenantId("tenant")
     private val issuedBefore = Instant.ofEpochMilli(1_790_000_000_123)
 
-    private fun principal() = PrincipalId(MockIdGenerator.INSTANCE.generateAsString())
+    private fun principal() = PrincipalId(RandomIdGenerator.generate())
 
     @AfterEach
     fun destroy() {

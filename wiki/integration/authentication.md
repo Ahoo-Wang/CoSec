@@ -32,9 +32,9 @@ The access token carries the principal, so authenticating a request needs no loo
 | `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
 
 The refresh token carries only its own `jti`, `iat`, `exp`, and, as `sub`, the `jti` of the access token it belongs
-to. Token ids come from the application's `StringIdGenerator` bean if it has one (for example from CosId),
-otherwise from `UuidGenerator`. The lifetimes are `cosec.jwt.token-validity.access` (10 minutes) and
-`cosec.jwt.token-validity.refresh` (7 days).
+to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
+from `RandomIdGenerator` ([Ids](../architecture/extending.md#ids)). The lifetimes are
+`cosec.jwt.token-validity.access` (10 minutes) and `cosec.jwt.token-validity.refresh` (7 days).
 
 **A rejected token is not an error.** An expired, badly signed or revoked token makes the caller anonymous, and the
 policies decide what anonymous callers may do: a public path still works. If the request is denied, the response
@@ -394,9 +394,9 @@ With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](ht
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 
-1. Send the user to `socialAuthentication.authorizeUrl("<name>")`. The URL carries a fresh OAuth `state`, generated
-   by the application's `StringIdGenerator` bean if it has one, otherwise by `UuidGenerator`. The state is kept in
-   Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
+1. Send the user to `socialAuthentication.authorizeUrl("<name>")`. The URL carries a fresh OAuth `state`, 128
+   random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since the state must be
+   unpredictable and those ids need not be. The state is kept in Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
    `JustAuthCredentials("<name>")`, and pass it to `TokenCompositeAuthentication.authenticateAsToken`.
 3. A `SocialUserPrincipalConverter` turns the provider's user into your principal. The default,

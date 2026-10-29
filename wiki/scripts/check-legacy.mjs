@@ -41,6 +41,8 @@ const TERMS = [
   { term: 'cache.migration', hint: 'property removed in 8.0' },
   { term: 'CoCache 5', hint: '8.0 runs on CoCache 6; do not describe CoCache 5' },
   { term: '6.x', hint: '8.0 upgrades only from 7.x; leave 6.x to the docs on the `7.x` branch' },
+  { term: 'StringIdGenerator', hint: 'CoSec takes its ids from `IdGenerator` (architecture/extending.md#ids)' },
+  { term: 'UuidGenerator', hint: 'CoSec takes its ids from `IdGenerator` (architecture/extending.md#ids)' },
 ]
 
 const EXEMPT_SECTIONS = [

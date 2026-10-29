@@ -33,7 +33,6 @@ import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Assertions.*
@@ -43,7 +42,7 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class JwtTokenVerifierTest {
-    var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
+    var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
     @Test
@@ -165,7 +164,7 @@ class JwtTokenVerifierTest {
     fun refreshWhenExpired() {
         val converter =
             JwtTokenConverter(
-                MockIdGenerator.INSTANCE,
+                JwtFixture.IDS,
                 JwtFixture.ALGORITHM,
                 Duration.ofMillis(1),
                 Duration.ofMillis(1)
@@ -208,7 +207,7 @@ class JwtTokenVerifierTest {
     @Test
     fun refreshWhenAccessTokenExpiredButSignatureValid() {
         val converter = JwtTokenConverter(
-            MockIdGenerator.INSTANCE,
+            JwtFixture.IDS,
             JwtFixture.ALGORITHM,
             Duration.ofMillis(1),
             Duration.ofDays(7),

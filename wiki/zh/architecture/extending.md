@@ -22,6 +22,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
 | `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cosec-cocache` 时 |
+| `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
 | `BlacklistSource` | `cosec-runtime`，`runtime.attribute` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
@@ -227,6 +228,30 @@ fun interface RateLimiter {
 - 永远不要删除文档。一个曾经有文档的键读到“不存在”时，会按失败即拒绝处理。
 
 使用 `cosec-cocache` 时，starter 使用 `RedisSnapshotDocumentStore`，控制面也写入同一个 Redis。不使用时，starter 注册 `InMemorySnapshotDocumentStore`；用 `put(key, document)` 放入文档，或者改为声明自己的 `SnapshotDocumentStore` bean。在平台文档就位之前，请求都按失败即拒绝处理。
+
+## Id {#ids}
+
+`IdGenerator`（`generate(): String`）为 CoSec 创建的东西生成 id：请求 id（`CoSec-Request-Id`，以及网关在 `CoSec-Identity` 中转发的 `rid`）、决策事件 id、令牌 id（`jti`）和控制面变更 id。没有你自己的实现时，CoSec 使用 `RandomIdGenerator`：从 `ThreadLocalRandom` 抽取的随机版本 4 UUID。`ThreadLocalRandom` 从不阻塞，而 `SecureRandom` 可能阻塞。
+
+- id 在共享存储的所有实例之间唯一，由 1 到 64 个 `A-Z a-z 0-9 . _ -` 字符组成：它会进入响应头、URL 和 Redis 键。
+- 每个请求都会在请求所在的线程上（包括事件循环）调用 `generate`，此时还没有可用来应答失败的结果：它从不阻塞，也从不抛出异常。
+- id 不是秘密，也不必不可预测：令牌是签名的，请求 id 只用来关联日志和审计事件。社交登录的 OAuth `state` 和 API key 的密钥必须不可预测，因此从不由它生成：CoSec 自己从 `SecureRandom` 抽取它们。
+
+CoSec 的核心不依赖任何 id 库。使用 CosId 5 时，添加 `cosec-cosid`。当应用有 CosId 的 `CosIdRuntime`、且没有自己的 `IdGenerator` 时，starter 把 `cosec.cosid.generator` 指定的生成器（未设置时为 CosId 的 `default`）生成的 id，按该生成器的编解码器写出，交给 CoSec（`CosIdIdGenerator`）。生成的 id 不符合上面第一条要求的生成器会导致启动失败。
+
+```kotlin
+implementation("me.ahoo.cosec:cosec-cosid")
+implementation("me.ahoo.cosid:cosid-spring-boot-starter") // 5.x，并用 cosid.* 配置你的生成器
+```
+
+其他任何 id 来源都只需一个 bean：
+
+```kotlin
+@Bean
+fun cosecIdGenerator(ids: MyIds): IdGenerator = IdGenerator { ids.next() }
+```
+
+由于 `generate` 在事件循环上运行，请选择从不等待其存储的生成器，例如 Snowflake 生成器。不使用 Spring 时，把它作为 `PipelineComponents(idGenerator = …)`、`IdentityGate(idGenerator = …)` 以及 `JwtTokenConverter` 的第一个参数传入。
 
 ## 桥接上下文 {#bridge-context}
 
