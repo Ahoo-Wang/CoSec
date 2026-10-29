@@ -815,6 +815,8 @@ RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为
 | G6 | CI 与模板的模块清单与 `settings.gradle.kts` 一致 | 根项目新增 `verifyRepositoryMetadata` 任务，挂在 `check` 上。它从 `settings.gradle.kts` 取模块集，断言 `labeler.yml`、`bug_report.yml`、`integration-test.yml` 覆盖每个模块（豁免：`cosec-bom`、`cosec-dependencies`、`code-coverage-report`、`conformance`）；还断言这三个文件与 `codecov.yml` 中的每个 glob 至少匹配一个已跟踪的文件 | 无 |
 | G7 | 不再出现迁移与兼容代码 | `conformance/` 中的 ArchUnit 规则：除 `migrate/` 外，`main` 中不得有名字含 `Migration`、`Legacy`、`Compat` 的类 | 无 |
 
+> **2026-10-28 修订**（#1147）：G6 不再检查 CI 的模块清单，CI 已没有清单。`ci.yml` 的矩阵由 `scripts/ci/plan.py` 从 `settings.gradle.kts` 推导，`ProjectListTest` 运行该脚本，断言除豁免项外每个项目恰好在其所在组的一个任务里；`integration-test.yml` 与 `codecov.yml` 工作流已删除。`labeler.yml` 与 `bug_report.yml` 的检查不变。
+
 #### 4.6.3 PR
 
 | PR | 标题 | 范围 | 依赖 |
