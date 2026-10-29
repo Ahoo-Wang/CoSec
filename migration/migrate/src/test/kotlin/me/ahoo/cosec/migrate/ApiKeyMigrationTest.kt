@@ -87,6 +87,8 @@ class ApiKeyMigrationTest {
         """{"id":"writer","subject":{"role":"writer"},"app":"*","space":"team-a","policy":"write-orders"}""",
         """{"id":"p:alice:admin","subject":{"principal":"alice","tenant":"acme"},"app":"*","space":"*","policy":"admin"}""",
         """{"id":"p:carol:admin","subject":{"principal":"carol","tenant":"acme"},"app":"*","space":"*","policy":"admin"}""",
+        // A principal someone already made, named like the one a key "taken" would move to.
+        """{"id":"p:taken","subject":{"principal":"apikey:taken","tenant":"acme"},"app":"*","space":"*","policy":"admin"}""",
     )
 
     private fun document(kind: DocumentKind, owner: String, policies: List<String>, bindings: List<String>): PolicyDocument =
@@ -133,6 +135,7 @@ class ApiKeyMigrationTest {
     private val export: Map<Pair<TenantId, String>, Set<String>> = mapOf(
         (acme to "alice") to setOf("reader", "writer@team-a"),
         (acme to "carol") to setOf("auditor"),
+        (acme to "apikey:known") to setOf("reader"),
     )
 
     /** Keys of one principal with different roles and attachments, one without a tenant, one that does not work. */
@@ -401,6 +404,11 @@ class ApiKeyMigrationTest {
             key("k*star", "eve"),
             key("k blank", "eve"),
             key("k-prefixed", "eve", roles = listOf("api-key.other")),
+            // Review N2: one id, two principals (7.x never made ids unique), and principals that already exist.
+            key("ci", "alice", roles = listOf("reader")),
+            key("ci", "bob", roles = listOf("writer@team-a")),
+            key("taken", "eve", roles = listOf("reader")),
+            key("known", "eve", roles = listOf("reader")),
         )
         val plan = plan(mixed + refused)
         plan.accepted.assert().isFalse()
@@ -441,6 +449,13 @@ class ApiKeyMigrationTest {
         assertThrows<IllegalArgumentException> { LegacyApiKey.parse("h", """{"id":"k","principalId":"a","extra":1}""") }
         MembershipsExport.read("""[{"tenant":"acme","principal":"alice","roles":["reader"]}]""".encodeToByteArray())
             .assert().isEqualTo(mapOf((acme to "alice") to setOf("reader")))
+        // Two entries for one principal: refused, never the last one kept.
+        assertThrows<IllegalArgumentException> {
+            MembershipsExport.read(
+                """[{"tenant":"acme","principal":"alice","roles":["reader"]},{"tenant":"acme","principal":"alice","roles":["admin"]}]"""
+                    .encodeToByteArray(),
+            )
+        }
         assertThrows<IllegalArgumentException> { MembershipsExport.read("""{"tenant":"acme"}""".encodeToByteArray()) }
     }
 }

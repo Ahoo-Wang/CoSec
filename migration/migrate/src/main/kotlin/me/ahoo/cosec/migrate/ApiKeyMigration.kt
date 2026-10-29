@@ -160,8 +160,14 @@ class ApiKeyMigration(
         val grants = LinkedHashMap<Pair<TenantId, String>, LinkedHashSet<String>>()
         val principalBindings = ArrayList<PrincipalBinding>()
         val roleBindings = ArrayList<RoleBinding>()
+        // 7.x never made key ids unique: two keys of one id would become one principal, or share one per-key role.
+        val shared = keys.groupBy { it.tenant to it.id }.filterValues { it.size > 1 }.keys
         for (key in keys.sortedBy { it.id }) {
-            val rejection = rejection(key)
+            val rejection = if (key.tenant to key.id in shared) {
+                "another key of tenant [${key.tenant.value}] has the id [${key.id}]: give each key an id of its own"
+            } else {
+                rejection(key)
+            }
             if (rejection != null) {
                 rejections += "API key [${key.id}]: $rejection"
                 continue
@@ -169,7 +175,11 @@ class ApiKeyMigration(
             val conversion = when {
                 granted(key) -> grant(key)
                 staysInPlace(key) -> inPlace(key)
-                else -> ownPrincipal(key)
+                else -> ownPrincipal(key) ?: run {
+                    rejections += "API key [${key.id}]: the principal [$OWN_PRINCIPAL_PREFIX${key.id}] it would move to " +
+                        "is already known (bound in a document or in --memberships): it would gain what that principal holds"
+                    continue
+                }
             }
             converted += conversion.key
             principalBindings += conversion.principalBindings
@@ -228,14 +238,19 @@ class ApiKeyMigration(
         ),
     )
 
-    private fun ownPrincipal(key: LegacyApiKey): Conversion {
+    /** The key on a principal of its own; null when that principal is already known, so it would not be the key's own. */
+    private fun ownPrincipal(key: LegacyApiKey): Conversion? {
         val principal = OWN_PRINCIPAL_PREFIX + key.id
+        if (documents.principalGrants(key.tenant, principal).isNotEmpty() || memberships?.containsKey(key.tenant to principal) == true) {
+            return null
+        }
         val bindings = key.policies.distinct().map { policy ->
             PrincipalBinding(key.tenant, principal, PolicyId(policy), "$principal:$policy")
         }
         return Conversion(
             ConvertedApiKey(
                 key,
+                // Even with no roles, the principal must be made known to the provider, or the key is refused.
                 ApiKey(key.id, principal, key.tenant.value, null, key.expiresAt, key.enabled),
                 ConvertedApiKey.Mode.OWN_PRINCIPAL,
                 lost(key),
@@ -496,12 +511,16 @@ object MembershipsExport {
     fun read(json: ByteArray): Map<Pair<TenantId, String>, Set<String>> {
         val node = CoSecJson.mapper.readTree(json)
         require(node.isArray) { "--memberships is a JSON array of {tenant, principal, roles}." }
-        return node.values().associate { entry ->
+        val read = LinkedHashMap<Pair<TenantId, String>, Set<String>>()
+        node.values().forEach { entry ->
             require(entry.isObject && entry.propertyNames().toSet() == setOf("tenant", "principal", "roles")) {
                 "--memberships entries have exactly tenant, principal and roles, not $entry"
             }
             val owner = TenantId(entry.get("tenant").asString()) to entry.get("principal").asString()
-            owner to entry.get("roles").values().mapTo(LinkedHashSet()) { it.asString() }
+            // Two entries for one principal: which is right is not for the migration to guess.
+            require(owner !in read) { "--memberships names ${owner.second}@${owner.first.value} twice." }
+            read[owner] = entry.get("roles").values().mapTo(LinkedHashSet()) { it.asString() }
         }
+        return read
     }
 }
