@@ -92,6 +92,19 @@ internal class CoSecApiKeyAutoConfigurationTest {
             }
     }
 
+    /** Review L5: `cosec.api-key.enabled` is true or false, as its condition reads it; anything else does not start. */
+    @Test
+    fun enabledIsTrueOrFalse() {
+        listOf("yes", "on", "1").forEach { value ->
+            contextRunner.withPropertyValues("cosec.api-key.enabled=$value").run { context ->
+                context.startupFailure!!.stackTraceToString().assert().contains("is neither true nor false")
+            }
+        }
+        contextRunner.withPropertyValues("cosec.api-key.enabled=FALSE").run { context ->
+            assertThat(context).hasNotFailed().doesNotHaveBean(ApiKeyStore::class.java)
+        }
+    }
+
     /** `IDN-6`: a key's memberships are its principal's, so API keys without a MembershipProvider do not start. */
     @Test
     fun apiKeysNeedAMembershipProvider() {

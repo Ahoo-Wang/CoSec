@@ -688,9 +688,21 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         }
     }
 
-    /** [principal]'s credential, refused: an API key as an invalid key, anything else as an invalid token. */
-    private fun refused(principal: AuthenticatedPrincipal): AuthnResult.Rejected =
-        if (principal.credential?.method == Identity.Method.API_KEY) REFUSED_API_KEY else REFUSED_TOKEN
+    /**
+     * [principal]'s credential, refused: an API key as an invalid key, anything else as an invalid token; the event names
+     * whose it was (review L3).
+     */
+    private fun refused(principal: AuthenticatedPrincipal): AuthnResult.Rejected {
+        val reason = if (principal.credential?.method == Identity.Method.API_KEY) {
+            AuthnResult.RejectReason.API_KEY_INVALID
+        } else {
+            AuthnResult.RejectReason.TOKEN_INVALID
+        }
+        return AuthnResult.Rejected(
+            reason,
+            AuthnResult.RefusedCredential(principal.tenant, principal.id, principal.credential?.id),
+        )
+    }
 
     /**
      * Calls an SPI through [resumeOffIo], within [timeout] when there is one. An external cancellation propagates;
@@ -759,8 +771,6 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         const val AUTHORIZATION = "authorization"
         val AUTHORIZATION_NAMES = setOf(AUTHORIZATION)
         val NO_CREDENTIALS = Credentials(null, null)
-        val REFUSED_API_KEY = AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID)
-        val REFUSED_TOKEN = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)
         val NO_MEMBERSHIPS: Fetched<Memberships> =
             Fetched.Value(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()))
     }

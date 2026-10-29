@@ -49,8 +49,14 @@ class ApiKeyAuthenticator(
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         val key = credentials.apiKey ?: return AuthnResult.Anonymous
         val apiKey = keys.findByHash(ApiKeys.hash(key))
-        if (apiKey == null || !apiKey.usableAt(clock.instant())) {
-            return INVALID
+        apiKey ?: return INVALID
+        if (!apiKey.usableAt(clock.instant())) {
+            val refused = AuthnResult.RefusedCredential(
+                TenantId(apiKey.tenantId),
+                PrincipalId(apiKey.principalId),
+                apiKey.id
+            )
+            return AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID, refused)
         }
         val principal = AuthenticatedPrincipal(
             id = PrincipalId(apiKey.principalId),

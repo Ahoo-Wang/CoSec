@@ -124,6 +124,8 @@ object AuditEvents {
     }
 
     private fun reason(event: DecisionEvent): String {
+        // A refused credential is named in the reason, not as the principal, which stays the anonymous one (review L3).
+        event.subject.refused?.let { return "${event.outcome.reason.name}: ${event.subject.rejected} of $it" }
         (event.by as? StatementRef.Boundary)?.let { return "${event.outcome.reason.name}: ${it.boundary.value}" }
         val cause = event.outcome.cause ?: return event.outcome.reason.name
         return "${event.outcome.reason.name}: ${cause::class.simpleName}"

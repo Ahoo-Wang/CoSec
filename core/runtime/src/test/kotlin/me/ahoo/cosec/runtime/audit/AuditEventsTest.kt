@@ -23,6 +23,8 @@ import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -41,8 +43,13 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.MembershipAnswer
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.slf4j.MDC
@@ -77,6 +84,49 @@ class AuditEventsTest {
             listeners.cancel()
         }
         return AuditEvents.from(capture.event!!)
+    }
+
+    /**
+     * Review L3: a refused credential names whose it was, in the event and the audit reason, while the subject stays
+     * anonymous: the refusal of a key whose principal the provider no longer knows names that principal and the key.
+     */
+    @Test
+    fun aRefusedCredentialIsNamedButIsNotTheSubject() {
+        val capture = Capture()
+        val listeners = DecisionListeners(listOf(capture))
+        val key = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PrincipalId("svc"),
+                TenantId("acme"),
+                MembershipSource.Provider.UNCAPPED,
+                credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+            ),
+            "apikey",
+        )
+        try {
+            runBlocking {
+                PipelineFixtures.pipeline(authenticator(key), StubEngine(Decision.Deny(null))) {
+                    it.copy(
+                        listeners = listeners,
+                        membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Unknown }
+                    )
+                }.evaluate(facts("/orders"))
+            }
+        } finally {
+            listeners.cancel()
+        }
+        val event = capture.event!!
+        event.subject.authenticated.assert().isFalse()
+        event.subject.rejected.assert().isEqualTo(AuthnResult.RejectReason.API_KEY_INVALID)
+        event.subject.refused!!.let {
+            it.tenant.assert().isEqualTo(TenantId("acme"))
+            it.principal.assert().isEqualTo(PrincipalId("svc"))
+            it.credentialId.assert().isEqualTo("k1")
+        }
+        val audit = AuditEvents.from(event)
+        audit.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_INVALID)
+        audit.authorization.reason.assert().contains("API_KEY_INVALID of svc@acme (k1)")
+        audit.principal.authenticated.assert().isFalse()
     }
 
     private fun HttpFacts.withRequestAttributes(attributes: Map<String, String>) =

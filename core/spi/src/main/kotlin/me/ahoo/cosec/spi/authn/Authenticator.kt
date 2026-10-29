@@ -53,9 +53,15 @@ sealed interface AuthnResult {
 
     /**
      * The credentials are not valid. The request is evaluated as anonymous; a deny then answers 401 with [reason]
-     * (RFC 0006 K2, Q2).
+     * (RFC 0006 K2, Q2). [refused] names whose credential it was, when that is known (a disabled key, a principal the
+     * membership provider no longer knows): for audit, never as the subject.
      */
-    class Rejected(val reason: RejectReason) : AuthnResult
+    class Rejected(val reason: RejectReason, val refused: RefusedCredential? = null) : AuthnResult
+
+    /** Whose credential was refused, and which one (a token's `jti`, an API key's id), for audit only. */
+    class RefusedCredential(val tenant: TenantId, val principal: PrincipalId, val credentialId: String?) {
+        override fun toString(): String = "${principal.value}@${tenant.value}" + (credentialId?.let { " ($it)" } ?: "")
+    }
 
     /** A dependency the authenticator needs failed, such as the API key store: 503. */
     class Unavailable(val cause: Throwable) : AuthnResult

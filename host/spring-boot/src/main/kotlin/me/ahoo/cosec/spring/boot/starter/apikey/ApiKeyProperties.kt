@@ -17,6 +17,7 @@ import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
+import org.springframework.core.env.Environment
 import java.time.Instant
 
 /**
@@ -90,5 +91,20 @@ data class ApiKeyProperties(
         private companion object {
             val HASH = Regex("[0-9a-f]{64}")
         }
+    }
+}
+
+/**
+ * Whether API keys are on, read as `@ConditionalOnProperty(havingValue = "true")` reads it: `true` or `false`, in any
+ * case, or unset for false. Anything else (`on`, `yes`, `1`) fails startup: Spring's conversion would read it as true
+ * while the condition does not, and the pipeline would then authenticate keys without the checks that come with them
+ * (`IDN-6`, review L5).
+ */
+internal fun apiKeysEnabled(environment: Environment): Boolean {
+    val value = environment.getProperty(ApiKeyProperties.ENABLED_KEY) ?: return false
+    return when {
+        value.equals("true", ignoreCase = true) -> true
+        value.equals("false", ignoreCase = true) -> false
+        else -> throw IllegalArgumentException("${ApiKeyProperties.ENABLED_KEY}=[$value] is neither true nor false.")
     }
 }

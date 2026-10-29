@@ -90,6 +90,17 @@ class ApiKeyAuthenticatorTest {
         (principal.membershipSource as MembershipSource.Provider).cap.assert().isNull()
     }
 
+    /** Review L3: a known key that does not work names its principal and itself, for audit. */
+    @Test
+    fun aKnownKeyThatDoesNotWorkNamesWhoseItIs() = runTest {
+        (authenticate("unknown") as AuthnResult.Rejected).refused.assert().isNull()
+        (authenticate("disabled") as AuthnResult.Rejected).refused!!.let {
+            it.principal.assert().isEqualTo(PrincipalId("svc-billing"))
+            it.tenant.assert().isEqualTo(TenantId("acme"))
+            it.credentialId.assert().isEqualTo("disabled")
+        }
+    }
+
     @Test
     fun unknownDisabledAndExpiredKeysAreRejected() = runTest {
         listOf("unknown", "disabled", "expired").forEach {
