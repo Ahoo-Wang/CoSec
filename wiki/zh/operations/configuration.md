@@ -166,17 +166,15 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.api-key.key-prefix` | string | `cosec:api-key` | `redis` 存储的 Redis key 前缀，去掉末尾的 `:`。与其他前缀都无关（[Redis key](./storage.md#redis-keys)）。 |
 | `cosec.api-key.keys[n].*` | list | 空 | `memory` 存储的 key；使用 `redis` 时忽略。 |
 
-请求头由 [`cosec.pipeline.api-key-header`](#pipeline) 决定。`cosec.api-key.keys` 的每一项：
+请求头由 [`cosec.pipeline.api-key-header`](#pipeline) 决定。API key 需要一个 `MembershipProvider` Bean，否则应用无法启动（`IDN-6`，[API key](../integration/authentication.md#api-keys)）。`cosec.api-key.keys` 的每一项如下，任何其他字段都会导致启动失败：
 
 | 字段 | 类型 | 默认值 | 含义 |
 |---|---|---|---|
 | `id` | string | 无 | **必填。** key 的 id；id 必须唯一。 |
 | `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。 |
 | `principal-id` | string | 无 | **必填。** key 认证成的主体。 |
-| `tenant-id` | string | 默认租户 | 主体所在的租户。 |
-| `roles` | set | 空 | 角色，作为成员关系声明。 |
-| `policies` | set | 空 | 附加到主体的策略，作为成员关系声明。 |
-| `attributes` | map | 空 | 主体属性。 |
+| `tenant-id` | string | 无 | **必填。** 主体所在的租户。 |
+| `roles` | set | 不设置 | 上限：key 只拥有其主体角色中的这些（`role`、`role@space`），且没有附加的策略。不设置时拥有主体拥有的一切；为空时什么都没有。 |
 | `expires-at` | instant | 无 | 过了这个时刻 key 被拒绝。 |
 | `enabled` | boolean | `true` | 停用的 key 被拒绝。 |
 

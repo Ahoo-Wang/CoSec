@@ -100,6 +100,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   route, a resource variable the path does not capture, or two routes for one method that may match the same request.
 - **`API keys are enabled, but no ApiKeyReader is available`**: `cosec.api-key.store=redis` needs a
   `ReactiveStringRedisTemplate`.
+- **`cosec.api-key.enabled=true needs a MembershipProvider bean`** (IDN-6): a key's memberships are its principal's.
+  Add `cosec-cocache` and a `MembershipLoader` bean (the starter then wires `CoCacheMembershipProvider`), or declare a
+  `MembershipProvider`. Checked only in `cosec.pipeline.mode=enforce`, where keys are read.
+- **`API key [<id>] needs a tenant-id`**, or a binding error on `cosec.api-key.keys[n].policies`/`.attributes`: keys
+  carry only a tenant, a principal and a role cap (`roles`) now; grant roles to the principal through the provider.
 - **Shadow instance id**: `cosec.authorization.shadow.instance-id` may hold only letters, digits, `.`, `_`, `-`.
 - **`Decision listener <name> is registered twice`** / **`External attribute <path> is declared twice`**: two beans
   share a listener name or an attribute path.
@@ -139,6 +144,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
   fails answers "not revoked" instead (the documented exception to fail closed).
+- **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
+  the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
+  it again without `--dry-run`).
 
 ### Unexpected 401
 
@@ -148,6 +156,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4).
+- `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the
+  `MembershipProvider` does not know (answers `null`) or knows as deactivated (`active = false`), IDN-3: the decision
+  event's `subject.rejected` is `API_KEY_INVALID` or `TOKEN_INVALID`.
+- An API key that is valid but holds fewer roles than expected: its `roles` cap keeps only the principal's roles it
+  names, exactly by space, and drops attached policies (IDN-2); a key grants nothing its principal does not hold
+  (IDN-1).
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 

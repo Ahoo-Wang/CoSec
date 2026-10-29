@@ -343,6 +343,53 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 - A token refresh applies the same `cosec.authentication.revocation.skew` (default `5s`) as a request: a token issued
   up to the skew after a subject revocation can no longer be refreshed.
 
+#### API keys narrow, and memberships decide {#api-keys-narrow-and-memberships-decide}
+
+In 7.x an API key granted its own roles, policies and attributes. In 8.0 a key grants nothing: its memberships are its
+principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0009 §4,
+[API keys](../integration/authentication.md#api-keys)). What breaks:
+
+- **Stored keys.** The Redis format changes. A key stored before 8.0 is refused when it is read: a request with it is
+  `503` and the log names `cosec-migrate api-keys`. Convert the keys before switching (below).
+- **A provider is required.** `cosec.api-key.enabled=true` without a `MembershipProvider` bean fails startup
+  (`IDN-6`). The principals of your keys must be known to it: a key whose principal it does not know, or knows as
+  deactivated, is refused as `token-invalid` (`IDN-3`).
+- **Configured keys** (`cosec.api-key.keys[]`): `tenant-id` is required, and `policies` and `attributes` are gone; a key
+  that still sets them stops startup. `roles` is now a cap: unset, the key holds everything its principal holds. A 7.x
+  key configured with neither `roles` nor `policies` had no access; give it `roles: []` to keep it that way.
+- **`ApiKey`** is a plain class `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`: `policies`,
+  `attributes` and `toPrincipal()` are gone, `tenantId` is required and `roles: Set<String>?` is the cap.
+- **`MembershipProvider.memberships`** and `MembershipLoader.load` answer `Memberships?`: `null` for a principal the
+  provider does not know, where 7.x expected empty memberships. `Memberships` has `active`. The refusal applies to a
+  token marked `cosec.membership: provider` too: a token of an unknown or deactivated principal is `token-invalid`.
+  [Extending](../architecture/extending.md#memberships) has the contract.
+
+**Converting stored keys.** `cosec-migrate api-keys` reads every key under `--api-key-prefix` (default
+`cosec:api-key`) and writes `api-keys-report.json` to `--out`:
+
+```bash
+cosec-migrate api-keys --redis redis://localhost:6379 --out ./api-keys --dry-run
+```
+
+For each key the report gives its new cap (`keys[].cap`): the roles it had, and, when it had attached policies that
+applied, a role of its own named `--role-prefix` (default `api-key.`) plus the key id, in the default space and every
+space it had a role in. `memberships` lists the roles each principal must hold, the union of its keys' caps;
+`roleBindings` lists the bindings of the keys' own roles to their old policies, one per tenant document. An
+attachment that never applied (its policy missing or not attachable in the published documents) is dropped and
+listed; a policy both the tenant and the platform define is dropped too, to bind by hand. A key without a tenant
+goes to the default tenant (`defaultTenant`). A key with attributes or malformed roles is rejected: then the command
+exits `1` and writes no key. No key gains access: its cap is exactly what it held.
+
+1. Run with `--dry-run` and read the report.
+2. Grant the `memberships` in your `MembershipProvider`'s source, and add the `roleBindings` through the control
+   plane (a change request).
+3. Run again without `--dry-run`: the keys are rewritten in the new format. Keys already converted are left as they
+   are, so the command can be repeated.
+
+A key converted before step 2 is complete is refused or narrower, never wider. The roles go to the principal itself:
+if the principal is a user whose own tokens ask the provider (`cosec.membership: provider`), those tokens get them
+too.
+
 #### Inject mode becomes identity propagation
 
 7.x inject mode (`cosec.inject.enabled=true`) let a service behind the gateway parse the forwarded JWT without

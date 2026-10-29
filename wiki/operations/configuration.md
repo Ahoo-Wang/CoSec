@@ -171,17 +171,17 @@ With JWT enabled, startup fails unless revocations can be recorded and read: `co
 | `cosec.api-key.key-prefix` | string | `cosec:api-key` | Redis key prefix of the `redis` store, with a trailing `:` removed. Independent of every other prefix ([Redis keys](./storage.md#redis-keys)). |
 | `cosec.api-key.keys[n].*` | list | empty | Keys of the `memory` store; ignored with `redis`. |
 
-The header is [`cosec.pipeline.api-key-header`](#pipeline). Each entry of `cosec.api-key.keys`:
+The header is [`cosec.pipeline.api-key-header`](#pipeline). API keys need a `MembershipProvider` bean, or the
+application does not start (`IDN-6`, [API keys](../integration/authentication.md#api-keys)). Each entry of
+`cosec.api-key.keys`, where any other field fails startup:
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `id` | string | none | **Required.** The key's id; ids must be unique. |
 | `hash` | string | none | **Required.** SHA-256 of the key, 64 lowercase hex characters. Never configure the key itself. |
 | `principal-id` | string | none | **Required.** The principal the key authenticates as. |
-| `tenant-id` | string | the default tenant | Tenant of the principal. |
-| `roles` | set | empty | Roles, claimed as memberships. |
-| `policies` | set | empty | Policies attached to the principal, claimed as memberships. |
-| `attributes` | map | empty | Principal attributes. |
+| `tenant-id` | string | none | **Required.** Tenant of the principal. |
+| `roles` | set | unset | The cap: the key holds only these of its principal's roles (`role`, `role@space`) and no attached policies. Unset, it holds everything its principal holds; empty, nothing. |
 | `expires-at` | instant | none | After this instant the key is rejected. |
 | `enabled` | boolean | `true` | A disabled key is rejected. |
 

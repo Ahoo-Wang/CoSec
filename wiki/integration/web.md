@@ -403,7 +403,7 @@ spring:
 | `auth` | `{method, jti, exp}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, and the credential's expiry. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
-| `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim, or an API key's attributes): strings, numbers and booleans. |
+| `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, numbers and booleans. |
 
 It never carries the token, the API key, cookies or other request headers, policies, the matched statement,
 external attribute values or the client IP.

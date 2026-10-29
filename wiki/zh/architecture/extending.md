@@ -16,7 +16,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `Authenticator` | `cosec-spi`，`spi.authn` | 接受另一种凭证，或替换令牌与 API key 认证。 | 一个 bean，替换内置实现 |
 | `TokenStore`、`RevocationReader` | `cosec-spi`，`spi.token` | 把被吊销的令牌存放在 Redis 以外的地方。 | 各一个 bean |
 | `ApiKeyReader` | `cosec-spi`，`spi.apikey` | 从内存或 Redis 以外的地方查找 API key。 | 一个 bean |
-| `MembershipProvider` | `cosec-spi`，`spi.membership` | 为令牌中不携带成员关系的主体提供角色和附加策略。 | 一个 bean |
+| `MembershipProvider` | `cosec-spi`，`spi.membership` | 为凭证不携带角色和附加策略的主体提供它们：带 provider 标记的令牌，以及每个 API key。说明主体是否已知且处于启用状态。 | 一个 bean；启用 API key 时必需 |
 | `AttributeProvider` | `cosec-spi`，`spi.attribute` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
 | `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
@@ -96,19 +96,20 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 
 ## 成员关系 {#memberships}
 
-令牌以声明的形式携带主体的角色和附加策略；如果它们变化频繁或放不进令牌，令牌改为携带 provider 标记。对这些主体，Pipeline 询问 `MembershipProvider`：
+令牌以声明的形式携带主体的角色和附加策略；如果它们变化频繁或放不进令牌，令牌改为携带 provider 标记。API key 从不携带它们（RFC 0009 §4）。对这些主体，Pipeline 询问 `MembershipProvider`：
 
 ```kotlin
 fun interface MembershipProvider {
-    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships?
 }
 ```
 
 - 返回 `Memberships(Memberships.Source.PROVIDER, roles, attachments)`：按空间组织的角色（默认空间用 `SpaceId.DEFAULT`）和附加策略 id，保持顺序。其他来源会被拒绝。
-- 未知主体返回 `Memberships(PROVIDER, emptyMap(), emptyList())`。查找失败时抛出异常。
-- 失败、超时（`cosec.authorization.membership.timeout`）或没有提供者，都让请求得到 `503`，绝不当作“没有角色”：没有角色也就意味着绑定到角色的 DENY 都不适用。
+- 不认识的主体返回 `null`，已停用的主体返回 `active = false`：此时凭证被拒绝（`token-invalid`），如同其认证器拒绝了它（`IDN-3`）。不要对未知主体返回空的成员关系：那表示一个没有角色的已知主体，它的 API key 会继续有效。
+- 查找失败时抛出异常。失败、超时（`cosec.authorization.membership.timeout`）或没有提供者，都让请求得到 `503`，绝不当作“未知”，也绝不当作“没有角色”：没有角色也就意味着绑定到角色的 DENY 都不适用。
+- API key 的上限（`MembershipSource.Provider.cap`）由 Pipeline 的 `MembershipResolver` 在你的应答之后应用：返回主体的成员关系，而不是某个 key 的。
 
-`InMemoryMembershipProvider`（`cosec-spi`）用于测试。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；主体的成员关系变化时调用它的 `invalidate`。starter 两者都不注册：把你需要的那个声明为 bean。
+`InMemoryMembershipProvider`（`cosec-spi`）用于测试；对没有放入的主体返回 `null`。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；`MembershipLoader.load` 遵守同样的约定，`null` 应答不会被缓存。主体的成员关系变化时调用它的 `invalidate`。你声明了 `MembershipLoader` bean 且没有 `MembershipProvider` 时，starter 注册 `CoCacheMembershipProvider`；否则把你需要的那个声明为 bean。启用 API key 时必须有一个（`IDN-6`）。
 
 ## 外部属性 {#external-attributes}
 

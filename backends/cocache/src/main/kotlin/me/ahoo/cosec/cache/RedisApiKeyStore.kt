@@ -25,7 +25,7 @@ const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"
  * writes it.
  *
  * Lookups are Redis round trips, so the security context must be parsed off the event loop (the starter does so
- * when `cosec.api-key.store=redis`). A Redis failure propagates and fails closed: the request is answered `500`.
+ * when `cosec.api-key.store=redis`). A Redis failure propagates and fails closed.
  */
 class RedisApiKeyStore(
     private val stringRedisTemplate: StringRedisTemplate,

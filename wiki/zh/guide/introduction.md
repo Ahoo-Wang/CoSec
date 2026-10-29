@@ -17,7 +17,7 @@ decide(principal, scope, action, resource, environment) -> decision
 
 | 输入 | 在 CoSec 中 | 来自 |
 |---|---|---|
-| principal（主体） | 谁在调用：id、租户、在各空间中的角色、附加策略 | 经过校验的令牌或 API key，或你的成员关系提供者 |
+| principal（主体） | 谁在调用：id、租户、在各空间中的角色、附加策略 | 经过校验的令牌或 API key；角色来自令牌，或来自你的成员关系提供者（API key 总是如此，它只收窄角色） |
 | scope（作用域） | 请求所处的租户、应用和空间，以及主体在其中的角色 | 主体的租户、服务绑定的应用或请求声明的应用，并对照主体的角色检查 |
 | action 与 resource（动作与资源） | 作用于 `http:path:/orders/42` 的 `http:GET`；有路由映射时为作用于 `order/42` 的 `order:read` | 请求 |
 | environment（环境） | 客户端 IP、时间、设备，以及地区、黑名单等外部属性 | 请求、时钟和你的属性提供者 |

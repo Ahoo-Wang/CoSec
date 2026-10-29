@@ -69,8 +69,12 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
-- **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md)）。携带
+- **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
   API key 的请求只按 key 判断；不读取它的令牌。
+- **主体未知或已停用：** `MembershipProvider` 对 key 的主体、或带 `cosec.membership: provider` 标记的令牌的主体返回了
+  `null`，或返回了 `active = false`（`IDN-3`）。决策事件的 `subject.rejected` 是 `API_KEY_INVALID` 或 `TOKEN_INVALID`。
+  让提供者在 key 的租户中认识该主体，或重新启用它。对已知主体返回空成员关系的提供者会让 key 保持有效但没有角色：那是
+  `forbidden`，不是这里的情况。
 - **网关之后：** `CoSec-Identity` 是其他版本、没有 `auth.exp`，或签发时间在未来（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 ### `token-expired` {#token-expired}
@@ -139,6 +143,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | `strictFailure: true` 的规则无法计数（以 `ERROR` 记录 `Rate limiter unavailable: rule [<id>] refuses the request.`）。 | 恢复 Redis，或去掉 `strictFailure`。 |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | `REQUIRED` 决策监听器在一次放行上失败或超时（`REQUIRED decision listener [<name>] failed on request [<id>].`），或者放行来自 break-glass 绑定而没有 `REQUIRED` 监听器（`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`）。 | 修复监听器的存储，或在使用 break-glass 之前注册 `REQUIRED` 监听器（[决策监听器](./observability.md#decision-listeners)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过 [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline)：例如 Redis API key 存储无法访问。 | 恢复存储。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以 8.0 之前的格式存储，读取时被拒绝（`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`）。 | 转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
 DENY 仍然会做出决定：只要匹配到 DENY，即使某个文档不可用，请求也是 `401` 或 `403`。
@@ -306,8 +311,14 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 
 - `API keys are enabled, but no ApiKeyReader is available for the store <class>: with cosec.api-key.store=redis, a ReactiveStringRedisTemplate is needed.`
   添加带 Spring Data Redis 的 `cosec-cocache`，或者注册一个 `ApiKeyReader`。
-- `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`Duplicate API key ids: [...].`
-  修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。
+- `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
+  (IDN-6).` key 的成员关系来自其主体的提供者。添加 `cosec-cocache` 和一个 `MembershipLoader` Bean，它会配置
+  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行，
+  因为只有那里读取 key；`gateway` 模式的服务不读取 key。
+- `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`... needs a tenant-id.`、
+  `Duplicate API key ids: [...].` 修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。
+- 绑定错误提到 `cosec.api-key.keys[n].policies` 或 `.attributes`：key 不再携带它们。通过提供者授予主体角色，再用
+  `roles` 收窄 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。
 
 ### 其他启动失败 {#other-startup-failures}
 

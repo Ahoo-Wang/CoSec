@@ -291,6 +291,30 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
   无论它如何设置，请求都由管道认证。
 - 刷新令牌时应用与请求相同的 `cosec.authentication.revocation.skew`（默认 `5s`）：签发时间在主体吊销之后不超过该偏差的令牌不能再被刷新。
 
+#### API key 只收窄，成员关系决定 {#api-keys-narrow-and-memberships-decide}
+
+7.x 中 API key 自带角色、策略和属性的授予。8.0 中 key 不授予任何东西：它的成员关系就是它的主体的，来自 `MembershipProvider`，再按 key 的 `roles` 收窄（RFC 0009 §4，[API key](../integration/authentication.md#api-keys)）。会破坏的地方：
+
+- **已存储的 key。** Redis 格式改变。8.0 之前存储的 key 在读取时被拒绝：带它的请求返回 `503`，日志会提到 `cosec-migrate api-keys`。切换前先转换 key（见下文）。
+- **必须有提供者。** `cosec.api-key.enabled=true` 而没有 `MembershipProvider` Bean 时启动失败（`IDN-6`）。key 的主体必须为它所知：它不认识或认为已停用其主体的 key，按 `token-invalid` 拒绝（`IDN-3`）。
+- **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败。`roles` 现在是上限：不设置时，key 拥有其主体拥有的一切。既没有 `roles` 也没有 `policies` 的 7.x key 原本没有任何权限；给它设置 `roles: []` 以保持不变。
+- **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限。
+- **`MembershipProvider.memberships`** 和 `MembershipLoader.load` 返回 `Memberships?`：提供者不认识的主体返回 `null`，而 7.x 期望返回空的成员关系。`Memberships` 增加了 `active`。拒绝同样适用于带 `cosec.membership: provider` 标记的令牌：未知或已停用主体的令牌是 `token-invalid`。约定见[扩展](../architecture/extending.md#memberships)。
+
+**转换已存储的 key。** `cosec-migrate api-keys` 读取 `--api-key-prefix`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`：
+
+```bash
+cosec-migrate api-keys --redis redis://localhost:6379 --out ./api-keys --dry-run
+```
+
+对每个 key，报告给出它的新上限（`keys[].cap`）：它原有的角色；如果它附加的策略生效过，再加上一个它自己的角色，名字是 `--role-prefix`（默认 `api-key.`）加上 key id，位于默认空间以及它拥有角色的每个空间。`memberships` 列出每个主体必须拥有的角色，即它的各个 key 的上限之并；`roleBindings` 列出把各 key 自己的角色绑定到其原有策略的绑定，按租户文档分组。从未生效的附加（其策略在已发布的文档中不存在或不可附加）会被丢弃并列出；租户和平台都定义了的策略也会被丢弃，需要手工绑定。没有租户的 key 归入默认租户（`defaultTenant`）。带属性或角色格式错误的 key 被拒绝：此时命令以 `1` 退出，不写入任何 key。没有 key 会获得更多权限：它的上限恰好是它原有的权限。
+
+1. 带 `--dry-run` 运行并阅读报告。
+2. 在你的 `MembershipProvider` 的数据源中授予 `memberships`，并通过控制面（变更请求）添加 `roleBindings`。
+3. 不带 `--dry-run` 再运行一次：key 被改写为新格式。已经转换的 key 保持不变，因此命令可以重复运行。
+
+在第 2 步完成之前被转换的 key 会被拒绝或权限更窄，绝不会更宽。角色授予的是主体本身：如果主体是用户，而它自己的令牌也询问提供者（`cosec.membership: provider`），这些令牌同样获得这些角色。
+
 #### 注入模式变为身份传递 {#inject-mode-becomes-identity-propagation}
 
 7.x 的注入模式（`cosec.inject.enabled=true`）让网关之后的服务不经校验地解析转发来的 JWT。8.0 没有不校验就读取令牌的模式。取而代之的是：

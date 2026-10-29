@@ -77,8 +77,13 @@ is not an error by itself: if a statement allows anonymous callers, the request 
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
 - **API key:** the key's SHA-256 is not stored, or the key is disabled or expired
-  ([API keys](../integration/authentication.md)). A request that carries an API key is judged by the key alone; its
-  token is not read.
+  ([API keys](../integration/authentication.md#api-keys)). A request that carries an API key is judged by the key
+  alone; its token is not read.
+- **Unknown or deactivated principal:** the `MembershipProvider` answered `null` for the principal of the key, or of a
+  token marked `cosec.membership: provider`, or answered `active = false` (`IDN-3`). The decision event's
+  `subject.rejected` is `API_KEY_INVALID` or `TOKEN_INVALID`. Make the provider know the principal in the key's
+  tenant, or reactivate it. A provider that answers empty memberships for a principal it knows keeps the key valid
+  with no roles: that is `forbidden`, not this.
 - **Behind a gateway:** a `CoSec-Identity` of another version, without `auth.exp`, or issued in the future
   ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
@@ -155,6 +160,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). | Restore Redis, or drop `strictFailure`. |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in the format before 8.0, which is refused when read (`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
 A DENY still decides: if a DENY matches, the request is `401` or `403` even when a document is unavailable.
@@ -349,8 +355,15 @@ random one.
 
 - `API keys are enabled, but no ApiKeyReader is available for the store <class>: with cosec.api-key.store=redis, a ReactiveStringRedisTemplate is needed.`
   Add `cosec-cocache` with Spring Data Redis, or register an `ApiKeyReader`.
-- `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `Duplicate API key ids: [...].`
-  Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
+- `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
+  (IDN-6).` A key's memberships come from its principal's provider. Add `cosec-cocache` and a `MembershipLoader`
+  bean, which configures `CoCacheMembershipProvider`, or declare a `MembershipProvider`. The check runs only in
+  `cosec.pipeline.mode=enforce`, where keys are read; a service in `gateway` mode reads none.
+- `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `... needs a tenant-id.`,
+  `Duplicate API key ids: [...].` Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
+- A binding error naming `cosec.api-key.keys[n].policies` or `.attributes`: keys no longer carry them. Grant the
+  principal its roles through the provider and narrow the key with `roles`
+  ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)).
 
 ### Other startup failures
 
