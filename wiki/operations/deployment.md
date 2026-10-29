@@ -188,8 +188,10 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
 
 - **No service links** (`enableServiceLinks: false`). Kubernetes would otherwise put variables such as
   `COSEC_GATEWAY_SERVICE_HOST` and `COSEC_GATEWAY_PORT_80_TCP_ADDR`, derived from the Service `cosec-gateway`, into the
-  gateway's environment. Spring reads them as `cosec.gateway.*` properties, and startup fails on `cosec.*` keys CoSec
-  does not read ([Unknown properties](./configuration.md#unknown-properties)). The gateway finds services by DNS.
+  gateway's environment. Spring reads them as `cosec.gateway.*` properties, which 8.0.0-alpha.1 refused at startup as
+  `cosec.*` keys CoSec does not read; since alpha.2 the check skips exactly these variables
+  ([Unknown properties](./configuration.md#unknown-properties)). The gateway finds services by DNS, so nothing needs
+  them in its environment.
 - **Pod security.** The gateway runs as the image's `appuser` (uid 999; the image names its user rather than its uid,
   so the manifests give the uid for `runAsNonRoot` to check), with a read-only root filesystem, no privilege
   escalation, every capability dropped, the runtime's default seccomp profile, and no service account token: it never

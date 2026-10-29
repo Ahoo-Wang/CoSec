@@ -68,8 +68,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
   at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
   logs the list; do not suggest it to hide a real typo. On Kubernetes, keys such as `cosec.gateway.service.host` or
-  `cosec.gateway.port` are service links (`COSEC_GATEWAY_SERVICE_HOST`, ... for a Service named `cosec-*` in the
-  namespace): set `enableServiceLinks: false` on the pod, as `k8s/` does.
+  `cosec.gateway.port` (`does not read 8 cosec.* properties`, a crash loop) are service links
+  (`COSEC_GATEWAY_SERVICE_HOST`, `COSEC_GATEWAY_PORT_80_TCP_ADDR`, ... for a Service named `cosec` or `cosec-*` in the
+  namespace). 8.0.0-alpha.2 and later skip exactly those variables, only from the process environment; a mistyped
+  `COSEC_*` variable or the same key in `application.yaml` still fails. On alpha.1, or to keep them out of the pod, set
+  `enableServiceLinks: false` on the pod, as `k8s/` does.
 - **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with

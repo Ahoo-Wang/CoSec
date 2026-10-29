@@ -169,8 +169,8 @@ management:
 
 - **不注入 Service 链接**（`enableServiceLinks: false`）。否则 Kubernetes 会把 `COSEC_GATEWAY_SERVICE_HOST`、
   `COSEC_GATEWAY_PORT_80_TCP_ADDR` 这类由 Service `cosec-gateway` 派生的变量放进网关的环境。Spring 把它们读作
-  `cosec.gateway.*` 配置项，而出现 CoSec 不读取的 `cosec.*` key 时启动失败（[未知配置项](./configuration.md#unknown-properties)）。
-  网关通过 DNS 找到服务。
+  `cosec.gateway.*` 配置项，8.0.0-alpha.1 会把它们当作 CoSec 不读取的 `cosec.*` key 而拒绝启动；从 alpha.2 起，检查会跳过这些确切的变量
+  （[未知配置项](./configuration.md#unknown-properties)）。网关通过 DNS 找到服务，环境里并不需要它们。
 - **Pod 安全。** 网关以镜像中的 `appuser` 运行（uid 999；镜像只给出用户名、没有给出 uid，所以清单写明 uid，让
   `runAsNonRoot` 能够检查），根文件系统只读，不允许提权，丢弃所有 capability，使用运行时默认的 seccomp 配置，不挂载
   service account 令牌：它从不调用 Kubernetes API。两个 overlay 都符合 `restricted` Pod 安全标准。它只写三个

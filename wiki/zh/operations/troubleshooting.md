@@ -244,10 +244,13 @@ Remove or rename them; cosec.unknown-properties=warn only logs this.
 CoSec 的任何模块都不读取的 `cosec.*` key：拼写错误，或 7.x 的 key，`->` 之后是替代它的配置（[7.x key](./upgrading.md#removed-and-renamed-properties)）。
 改名或删除它。[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) 只记录这份列表。
 
-在 Kubernetes 上，`cosec.gateway.service.host`、`cosec.gateway.port` 这类 key 来自 Service 链接：命名空间中每个名字以 `cosec-`
-开头的 Service，都会让 Kubernetes 在此后启动的 pod 中设置 `COSEC_GATEWAY_SERVICE_HOST`、`COSEC_GATEWAY_PORT` 这类变量，
-Spring 把它们读作 `cosec.*` key。在 pod spec 中设置 `enableServiceLinks: false`，`k8s/` 中的清单就是这样做的
-（[清单设置了什么](./deployment.md#what-the-manifests-set)）。
+在 Kubernetes 上，8.0.0-alpha.1 中 `cosec.gateway.service.host`、`cosec.gateway.port` 这类 key 来自 Service 链接，该命名空间中的每个 pod
+都会因 `CoSec does not read 8 cosec.* properties` 而反复崩溃重启。名字为 `cosec` 或以 `cosec-` 开头的 Service（`k8s/` 中的清单把
+它命名为 `cosec-gateway`），都会让 Kubernetes 在此后启动的 pod 中设置 `COSEC_GATEWAY_SERVICE_HOST`、`COSEC_GATEWAY_PORT` 这类变量，
+Spring 把它们读作 `cosec.*` key。从 8.0.0-alpha.2 起，检查只在进程环境变量中跳过这些确切的变量
+（[未知配置项](./configuration.md#unknown-properties)）：拼错的变量（如 `COSEC_JWT_SECRT`），以及出现在 `application.yaml` 或系统属性中的
+同一个 key，仍然使启动失败。在 alpha.1 上，或想让这些变量根本不进入 pod，就在 pod spec 中设置 `enableServiceLinks: false`，`k8s/`
+中的清单就是这样做的（[清单设置了什么](./deployment.md#what-the-manifests-set)）；此后服务通过 DNS 发现，CoSec 本来就是这样用的。
 
 ### 管道模式导致启动失败 {#startup-fails-on-the-pipeline-mode}
 
