@@ -101,6 +101,11 @@ class IdentityGateTest {
             it.principalBindings.assert().isFalse()
             it.breakGlass.assert().isFalse()
         }
+        // Break-glass is allowed for CoSec's own tokens only: a method of another authenticator never reaches it.
+        subject(Identity.Credential(Identity.Method("ldap"), "s1", now.plusSeconds(3600))).let {
+            it.principalBindings.assert().isTrue()
+            it.breakGlass.assert().isFalse()
+        }
     }
 
     @Test

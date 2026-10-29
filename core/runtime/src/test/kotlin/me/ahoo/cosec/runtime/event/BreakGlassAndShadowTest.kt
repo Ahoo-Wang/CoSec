@@ -40,6 +40,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -99,7 +100,13 @@ class BreakGlassAndShadowTest {
 
     private val operator = Authenticator {
         AuthnResult.Authenticated(
-            AuthenticatedPrincipal(PrincipalId("cosec"), TenantId.PLATFORM, PipelineFixtures.claims()),
+            // Break-glass reaches only CoSec's own tokens (RFC 0009 §4.2).
+            AuthenticatedPrincipal(
+                PrincipalId("cosec"),
+                TenantId.PLATFORM,
+                PipelineFixtures.claims(),
+                credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+            ),
             "token"
         )
     }

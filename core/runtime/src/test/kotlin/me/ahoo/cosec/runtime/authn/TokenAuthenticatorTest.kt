@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
@@ -123,6 +124,19 @@ class TokenAuthenticatorTest {
         val memberships = authenticated.memberships!!
         memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("admin"))
         memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("editor"))
+    }
+
+    /** RFC 0009 §4.2: break-glass reaches CoSec's own tokens only, never a principal some other way. */
+    @Test
+    fun onlyATokenMayUseBreakGlass() = runTest {
+        authenticate({ token() }).principal().breakGlass.assert().isTrue()
+        AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), null).breakGlass.assert().isFalse()
+        AuthenticatedPrincipal(
+            PrincipalId("alice"),
+            TenantId("acme"),
+            null,
+            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+        ).breakGlass.assert().isFalse()
     }
 
     @Test

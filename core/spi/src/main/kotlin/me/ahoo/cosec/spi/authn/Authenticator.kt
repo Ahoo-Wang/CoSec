@@ -115,8 +115,12 @@ class AuthenticatedPrincipal(
     val principalBindings: Boolean
         get() = (membershipSource as? MembershipSource.Provider)?.cap == null && credential?.capped != true
 
-    /** Whether the principal's break-glass bindings may apply: never for an API key (RFC 0009 §4.2). */
-    val breakGlass: Boolean get() = credential?.method != Identity.Method.API_KEY
+    /**
+     * Whether the principal's break-glass bindings may apply: only for CoSec's own tokens ([Identity.Method.JWT]), so an
+     * API key, a credential of another authenticator, whatever it is called, and a principal without a credential never
+     * get it (RFC 0009 §4.2).
+     */
+    val breakGlass: Boolean get() = credential?.method == Identity.Method.JWT
 }
 
 /** Where a principal's memberships come from (RFC 0004 §4.5). */

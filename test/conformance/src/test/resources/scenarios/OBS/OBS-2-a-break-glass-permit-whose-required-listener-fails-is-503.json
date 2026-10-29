@@ -23,9 +23,21 @@
       ]
     }
   },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
   "authentication": {
-    "tenant": "(platform)",
-    "id": "cosec"
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "(platform)",
+      "id": "cosec",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
   },
   "listeners": [
     {
