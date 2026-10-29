@@ -20,7 +20,7 @@ import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -53,7 +53,7 @@ class CoCacheRevocationReaderTest {
         redis.close()
     }
 
-    private fun tokenId(): String = MockIdGenerator.INSTANCE.generateAsString()
+    private fun tokenId(): String = RandomIdGenerator.generate()
 
     @Test
     fun readsRevokedTokensFromRedis() = runBlocking<Unit> {

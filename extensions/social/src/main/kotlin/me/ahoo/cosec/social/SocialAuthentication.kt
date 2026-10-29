@@ -19,6 +19,9 @@ import reactor.core.publisher.Mono
 /**
  * Social Authentication .
  *
+ * Blocking, like the [SocialAuthenticationProvider]s it calls: [authorizeUrl] and [authenticate] run off an event loop,
+ * on `Schedulers.boundedElastic()` in WebFlux.
+ *
  * @author ahoo wang
  */
 class SocialAuthentication(

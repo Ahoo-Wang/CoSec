@@ -25,7 +25,7 @@ import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 
 /**
  * One CoSec instance: its own [CacheRuntime] (local caches) over a [backend] that other instances may share.
@@ -59,7 +59,7 @@ internal class CoSecTestCaches(
     }
 
     companion object {
-        fun newKeyPrefix(): String = "test:" + MockIdGenerator.INSTANCE.generateAsString()
+        fun newKeyPrefix(): String = "test:" + RandomIdGenerator.generate()
 
         /** The Redis the tests run against (`localhost:6379`). */
         fun redisBackend(): RedisBackend = RedisBackend.standalone(RedisURI.create("redis://localhost:6379"))

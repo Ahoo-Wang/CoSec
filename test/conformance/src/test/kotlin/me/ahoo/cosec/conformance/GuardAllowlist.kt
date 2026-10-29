@@ -47,6 +47,7 @@ object GuardAllowlist {
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring Cloud Gateway host without cosec-gateway fails startup, even with CoSec off",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#Redis API keys without cosec-cocache fail startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a required Kafka audit without cosec-kafka fails startup",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#a CosId generator for CoSec's ids without cosec-cosid fails startup",
             "spring-boot:CoSecApiKeyAutoConfigurationTest#apiKeysNeedAMembershipProvider",
             "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
             "cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",

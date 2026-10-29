@@ -92,7 +92,7 @@ public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/o
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosid/StringIdGenerator;)V
+	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;)V
 	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
 	public fun authorizeUrl ()Ljava/lang/String;
 	public fun getName ()Ljava/lang/String;

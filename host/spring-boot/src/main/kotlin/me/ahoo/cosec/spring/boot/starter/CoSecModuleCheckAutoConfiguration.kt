@@ -17,6 +17,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
+import me.ahoo.cosec.spring.boot.starter.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -108,6 +109,21 @@ class CoSecModuleCheckAutoConfiguration {
                 ).afterPropertiesSet()
             }
         }
+    }
+
+    /** A CosId generator named for CoSec's ids, which would otherwise be CoSec's own without a word. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    @ConditionalOnProperty(value = [CosIdGeneratorProperties.GENERATOR_KEY])
+    class CosIdGenerator {
+        @Bean
+        fun cosecCosIdModuleCheck(context: ApplicationContext): InitializingBean =
+            requireModule(
+                context,
+                "me.ahoo.cosec.cosid.CosIdIdGenerator",
+                "cosec-cosid",
+                CosIdGeneratorProperties.GENERATOR_KEY,
+            )
     }
 
     /**

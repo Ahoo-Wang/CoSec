@@ -34,8 +34,8 @@ public final class me/ahoo/cosec/runtime/Pipeline : me/ahoo/cosec/runtime/Reques
 }
 
 public final class me/ahoo/cosec/runtime/PipelineComponents {
-	public fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosid/StringIdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosid/StringIdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lme/ahoo/cosec/spi/authn/Authenticator;
 	public final fun component10 ()Lme/ahoo/cosec/spi/ratelimit/RateLimiter;
 	public final fun component11 ()Lme/ahoo/cosec/runtime/route/RouteMap;
@@ -43,19 +43,19 @@ public final class me/ahoo/cosec/runtime/PipelineComponents {
 	public final fun component2 ()Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
 	public final fun component3 ()Lme/ahoo/cosec/spi/membership/MembershipProvider;
 	public final fun component4 ()Lme/ahoo/cosec/engine/flat/FlatEngine;
-	public final fun component5 ()Lme/ahoo/cosid/StringIdGenerator;
+	public final fun component5 ()Lme/ahoo/cosec/spi/id/IdGenerator;
 	public final fun component6 ()Ljava/time/Clock;
 	public final fun component7 ()Lme/ahoo/cosec/runtime/PipelineOptions;
 	public final fun component8 ()Lme/ahoo/cosec/runtime/attribute/AttributeProviders;
 	public final fun component9 ()Lme/ahoo/cosec/runtime/event/DecisionListeners;
-	public final fun copy (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosid/StringIdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)Lme/ahoo/cosec/runtime/PipelineComponents;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/PipelineComponents;Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosid/StringIdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/PipelineComponents;
+	public final fun copy (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)Lme/ahoo/cosec/runtime/PipelineComponents;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/PipelineComponents;Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/PipelineComponents;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAttributes ()Lme/ahoo/cosec/runtime/attribute/AttributeProviders;
 	public final fun getAuthenticator ()Lme/ahoo/cosec/spi/authn/Authenticator;
 	public final fun getClock ()Ljava/time/Clock;
 	public final fun getEngine ()Lme/ahoo/cosec/engine/flat/FlatEngine;
-	public final fun getIdGenerator ()Lme/ahoo/cosid/StringIdGenerator;
+	public final fun getIdGenerator ()Lme/ahoo/cosec/spi/id/IdGenerator;
 	public final fun getIdentity ()Lme/ahoo/cosec/runtime/identity/IdentityIssuer;
 	public final fun getListeners ()Lme/ahoo/cosec/runtime/event/DecisionListeners;
 	public final fun getMembershipProvider ()Lme/ahoo/cosec/spi/membership/MembershipProvider;
@@ -953,8 +953,8 @@ public final class me/ahoo/cosec/runtime/identity/IdentityCodec {
 public final class me/ahoo/cosec/runtime/identity/IdentityGate : me/ahoo/cosec/runtime/RequestGate {
 	public static final field Companion Lme/ahoo/cosec/runtime/identity/IdentityGate$Companion;
 	public fun <init> ()V
-	public fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosid/StringIdGenerator;)V
-	public synthetic fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosid/StringIdGenerator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosec/spi/id/IdGenerator;)V
+	public synthetic fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosec/spi/id/IdGenerator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

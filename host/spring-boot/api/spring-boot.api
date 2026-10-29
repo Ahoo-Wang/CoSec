@@ -16,6 +16,11 @@ public final class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfigu
 	public final fun requireModule (Lorg/springframework/context/ApplicationContext;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lorg/springframework/beans/factory/InitializingBean;
 }
 
+public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$CosIdGenerator {
+	public fun <init> ()V
+	public fun cosecCosIdModuleCheck (Lorg/springframework/context/ApplicationContext;)Lorg/springframework/beans/factory/InitializingBean;
+}
+
 public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$Gateway {
 	public fun <init> ()V
 	public fun cosecGatewayModuleCheck (Lorg/springframework/context/ApplicationContext;)Lorg/springframework/beans/factory/InitializingBean;
@@ -279,7 +284,7 @@ public class me/ahoo/cosec/spring/boot/starter/authentication/social/CoSecSocial
 	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/authentication/social/SocialAuthenticationProperties;)V
 	public fun authStateCache (Lorg/springframework/data/redis/core/StringRedisTemplate;)Lme/zhyd/oauth/cache/AuthStateCache;
 	public fun socialAuthentication (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;)Lme/ahoo/cosec/social/SocialAuthentication;
-	public fun socialProviderManager (Lme/zhyd/oauth/cache/AuthStateCache;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/social/SocialProviderManager;
+	public fun socialProviderManager (Lme/zhyd/oauth/cache/AuthStateCache;)Lme/ahoo/cosec/social/SocialProviderManager;
 	public fun socialUserPrincipalConverter ()Lme/ahoo/cosec/social/SocialUserPrincipalConverter;
 }
 
@@ -601,6 +606,23 @@ public final class me/ahoo/cosec/spring/boot/starter/control/ControlSnapshot : j
 	public fun close ()V
 	public final fun getClock ()Ljava/time/Clock;
 	public final fun getSource ()Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
+}
+
+public class me/ahoo/cosec/spring/boot/starter/cosid/CoSecCosIdAutoConfiguration {
+	public fun <init> ()V
+	public fun cosecIdGenerator (Lme/ahoo/cosid/runtime/CosIdRuntime;Lme/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties;)Lme/ahoo/cosec/spi/id/IdGenerator;
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties$Companion;
+	public static final field GENERATOR_KEY Ljava/lang/String;
+	public static final field PREFIX Ljava/lang/String;
+	public fun <init> ()V
+	public final fun getGenerator ()Ljava/lang/String;
+	public final fun setGenerator (Ljava/lang/String;)V
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties$Companion {
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperties : me/ahoo/cosec/spring/boot/starter/EnabledCapable {

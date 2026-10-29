@@ -424,6 +424,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `openapi-support` | `cosec-openapi`，同时添加 `spring-boot-starter-actuator` 和 `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`，同时添加 `spring-boot-starter-kafka` |
 | （8.0 新增） | `cosec-control`，即控制面，同时添加 `cosec-cocache` |
+| （8.0 新增） | `cosec-cosid`，即来自 CosId 5 的 CoSec id（见下文） |
 
 完整列表见[模块](../guide/introduction.md#modules)。已开启的功能所需的模块会在启动时检查：缺少适配器模块的 Web 宿主、缺少 `cosec-gateway` 的网关、缺少 `cosec-cocache` 的 `cosec.api-key.store=redis`、缺少 `cosec-kafka` 的 `cosec.audit.kafka.delivery=required`，都会启动失败并给出制品名（[缺少模块时启动失败](./troubleshooting.md#startup-fails-on-a-missing-module)）。
 
@@ -453,6 +454,19 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 **`CoSecJsonSerializer` 已删除。** CoSec 的 Jackson mapper 是 CoSec 内部的，核心模块的公共签名中不出现 Jackson 类型。用你自己的 mapper 序列化你自己的类型；用 `PolicyDocumentCodec` 读写策略文档。mapper 的配置没有变化，所以已存放在 Redis 中或已发送到 Kafka 的文档、令牌和记录照常可读。标注了 `@InternalCoSecApi` 的声明之所以公开，只是为了让 CoSec 的模块互相调用：它没有兼容性承诺，任何版本都可能改变，而且不显式 opt in 编译器就拒绝调用它。不要在应用中 opt in。
 
 **`KafkaAuditEventSink` 接收 `Executor`。** 它的第三个参数原来是 Reactor `Scheduler`，现在是 `java.util.concurrent.Executor`（默认是它自己的、带有界队列的单线程）。
+
+**CoSec 不再引入 CosId。** 在 7.x 中，`cosec-core`、`cosec-jwt` 和 `cosec-social` 在其 API 中带有 `cosid-core`，CoSec 的平台 `cosec-dependencies` 还导入了 `cosid-bom`。在 8.0 中只有 `cosec-cosid` 依赖 CosId，CoSec 的 BOM 都不导入它、也不设定它的版本，因此应用可以使用任意版本的 CosId，也可以不用，并自己声明它及其版本。CoSec 通过自己的端口 `IdGenerator`（`me.ahoo.cosec.spi.id`，位于 `cosec-spi`）生成 id。没有你自己的 bean 时，id 来自 `RandomIdGenerator`，即随机的版本 4 UUID。要继续使用 CosId 的 id（[Id](../architecture/extending.md#ids)）：
+
+- **使用 CosId 5 时**，添加 `cosec-cosid`：starter 把 `cosec.cosid.generator` 指定的生成器（未设置时为 CosId 的 `default`）的 id 交给 CoSec。CosId 5 本身也需要迁移：见它的 [4.x 到 5.0 指南](https://github.com/Ahoo-Wang/CosId/blob/main/documentation/docs/zh/guide/migration/from-4x.md)。
+- **使用 CosId 4 时**，声明一个 bean：
+
+```kotlin
+// CosId 4：7.x starter 接收的 StringIdGenerator
+@Bean
+fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.generateAsString() }
+```
+
+社交登录的 OAuth `state` 不再来自这个 bean：它始终是来自 `SecureRandom` 的 128 个随机位，因为回调依赖于它不可预测。
 
 ### 已删除和替换的 API {#removed-and-replaced-apis}
 
@@ -485,6 +499,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | CoSec 网关之后的 `cosec.pipeline.mode=gateway`（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。8.0 的过滤器在每个放行的请求上放入安全上下文。 |
 | 授权之后留在调用方安全上下文中的路径变量 | 无。从你的 Web 框架读取路径变量。 |
 | `cosecPolicyGenerator`、`cosecAppPermissionGenerator` actuator 端点 | `cosecServiceGenerator/routes`（路由映射）和 `cosecServiceGenerator/app`（应用文档）。 |
+| `JwtTokenConverter`、`JustAuthProvider` 和 starter 的 bean 中的 `StringIdGenerator`、`UuidGenerator`（CosId）；在 8.0 预览版中还有 `PipelineComponents.idGenerator` 和 `IdentityGate` | `IdGenerator`（`cosec-spi`，[Id](../architecture/extending.md#ids)），默认是 `RandomIdGenerator`。`JustAuthProvider` 不接收 id 生成器：它从 `SecureRandom` 抽取 OAuth `state`。 |
 | `SocialUserConverter`（`cosec-social`） | 无：它是 `cosec-social` 的内部实现。用 `SocialUserPrincipalConverter` bean 把提供方的用户变成你的主体（[社交登录](../integration/authentication.md#social-login)）。 |
 
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、

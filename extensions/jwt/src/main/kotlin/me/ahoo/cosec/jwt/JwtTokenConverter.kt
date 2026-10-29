@@ -24,8 +24,8 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.json.JsonMapper
 import java.time.Duration
 import java.util.*
@@ -36,7 +36,8 @@ import java.util.*
  * This converter generates JWT tokens containing principal information
  * including policies, roles, and tenant context.
  *
- * @param idGenerator Generator for unique token IDs
+ * @param idGenerator the token ids (`jti`), such as [me.ahoo.cosec.spi.id.RandomIdGenerator]; they need not be
+ * unpredictable, since every token is signed
  * @param algorithm The algorithm used to sign JWTs
  * @param accessTokenValidity Duration for which access tokens are valid
  * @param refreshTokenValidity Duration for which refresh tokens are valid
@@ -49,7 +50,7 @@ import java.util.*
  * @see JwtTokenVerifier
  */
 class JwtTokenConverter(
-    private val idGenerator: StringIdGenerator,
+    private val idGenerator: IdGenerator,
     private val algorithm: Algorithm,
     private val accessTokenValidity: Duration = Duration.ofMinutes(10),
     private val refreshTokenValidity: Duration = Duration.ofDays(7),
@@ -79,7 +80,7 @@ class JwtTokenConverter(
         accessTokenValidity: Duration,
         refreshTokenValidity: Duration
     ): CompositeToken {
-        val accessTokenId = idGenerator.generateAsString()
+        val accessTokenId = idGenerator.generate()
         val now = Date()
         val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())
         val accessTokenBuilder =
@@ -106,7 +107,7 @@ class JwtTokenConverter(
                 .withClaim(TENANT_ID_KEY, tenantCapable.tenant.tenantId)
         }
         val accessToken = accessTokenBuilder.sign(algorithm)
-        val refreshTokenId = idGenerator.generateAsString()
+        val refreshTokenId = idGenerator.generate()
         val refreshTokenExp = Date(System.currentTimeMillis() + refreshTokenValidity.toMillis())
         val refreshToken =
             JWT

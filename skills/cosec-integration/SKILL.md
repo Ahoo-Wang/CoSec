@@ -32,6 +32,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | Control plane (change, simulate, explain, publish) | `cosec-control` | `cosec-cocache` |
 | Social OAuth login | `cosec-social` | |
 | IP region attributes (`ext.ip2region.*`) | `cosec-ip2region` | |
+| Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 | OpenTelemetry spans | `cosec-opentelemetry` | |
 | Micrometer metrics | `cosec-micrometer` | `io.micrometer:micrometer-core` |
 | OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |

@@ -251,6 +251,14 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | Kafka topic of the change events. |
 | `cosec.control.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | `required` makes publishing and break-glass wait for the broker. Startup fails when it is `required` and no Kafka change listener could be created. |
 
+## Ids
+
+`cosec.cosid.*`, with `cosec-cosid` and an application on CosId 5 ([Ids](../architecture/extending.md#ids)).
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.cosid.generator` | string | `default` | The CosId generator whose ids CoSec takes, with its codec: request, decision event, token and change ids. A generator whose ids are not 1 to 64 characters of `A-Z a-z 0-9 . _ -` fails startup. Set without `cosec-cosid`, startup fails and names it ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-missing-module)). |
+
 ## Social login
 
 `cosec.authentication.login.social.registration.<name>.*` configures one OAuth provider per `<name>`:

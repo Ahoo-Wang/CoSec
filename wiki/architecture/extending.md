@@ -27,6 +27,7 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
+| `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
 | `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
@@ -330,6 +331,42 @@ the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and
 With `cosec-cocache`, the starter uses `RedisSnapshotDocumentStore`, and the control plane writes through the same Redis.
 Without it, the starter registers an `InMemorySnapshotDocumentStore`; put documents into it with `put(key, document)`, or
 declare your own `SnapshotDocumentStore` bean instead. Requests fail closed until a platform document is there.
+
+## Ids
+
+`IdGenerator` (`generate(): String`) makes the ids of what CoSec creates: request ids (`CoSec-Request-Id`, and the
+`rid` a gateway forwards in `CoSec-Identity`), decision event ids, token ids (`jti`) and control-plane change ids.
+Without one of yours, CoSec uses `RandomIdGenerator`: random version 4 UUIDs drawn from `ThreadLocalRandom`, which
+never blocks, rather than from `SecureRandom`, which can.
+
+- An id is unique across every instance that shares the stores, and is 1 to 64 characters of `A-Z a-z 0-9 . _ -`: it
+  goes into response headers, URLs and Redis keys.
+- `generate` runs on every request, on the request's thread, an event loop included, before there is an outcome: it
+  never blocks and never throws.
+- An id is not a secret and need not be unpredictable: a token is signed, and a request id only correlates logs and
+  audit events. The OAuth `state` of social login and the secret of an API key, which must be unpredictable, never
+  come from it: CoSec draws both from `SecureRandom` itself.
+
+CoSec's core depends on no id library. For CosId 5, add `cosec-cosid`. When the application has CosId's
+`CosIdRuntime` and no `IdGenerator` of its own, the starter gives CoSec the ids of the generator
+`cosec.cosid.generator` names, CosId's `default` unless set, as that generator's codec writes them
+(`CosIdIdGenerator`). A generator whose ids break the first rule above fails startup.
+
+```kotlin
+implementation("me.ahoo.cosec:cosec-cosid")
+implementation("me.ahoo.cosid:cosid-spring-boot-starter") // 5.x, with the cosid.* configuration of your generators
+```
+
+Any other source of ids is one bean:
+
+```kotlin
+@Bean
+fun cosecIdGenerator(ids: MyIds): IdGenerator = IdGenerator { ids.next() }
+```
+
+Pick a generator that never waits for its store, such as a Snowflake one, since `generate` runs on the event loop.
+Without Spring, pass it as `PipelineComponents(idGenerator = …)`, `IdentityGate(idGenerator = …)` and the first
+argument of `JwtTokenConverter`.
 
 ## Bridge context
 

@@ -19,16 +19,18 @@ import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialProviderManager
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
-import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
+import me.zhyd.oauth.cache.AuthDefaultStateCache
 import me.zhyd.oauth.cache.AuthStateCache
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.web.util.UriComponentsBuilder
 
 internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -46,7 +48,6 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                 "${SocialAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
                 "${SocialAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/github",
             )
-            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
@@ -78,8 +79,33 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
     }
 
     @Test
-    fun contextLoadsWithoutStringIdGenerator() {
-        // Without a StringIdGenerator bean the providers fall back to UuidGenerator instead of failing startup.
+    fun theStateNeverComesFromTheApplicationIdGenerator() {
+        // The application's ids need not be unpredictable; the OAuth state guards the callback against CSRF and must be,
+        // so it is CoSec's own 128 SecureRandom bits and never an id of the application's IdGenerator.
+        contextRunner
+            .withPropertyValues(
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.type=github",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://example.com/callback",
+            )
+            .withBean(IdGenerator::class.java, { IdGenerator { "predictable" } })
+            .withBean(AuthStateCache::class.java, { AuthDefaultStateCache.INSTANCE })
+            .withUserConfiguration(
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecSocialAuthenticationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context).hasNotFailed()
+                val url = context.getBean(SocialProviderManager::class.java).getRequired("github").authorizeUrl()
+                val state = UriComponentsBuilder.fromUriString(url).build().queryParams.getFirst("state")!!
+                state.assert().isNotEqualTo("predictable")
+                state.assert().matches("[A-Za-z0-9_-]{22}")
+            }
+    }
+
+    @Test
+    fun contextLoadsWithoutIdGenerator() {
         contextRunner
             .withPropertyValues(
                 "${SocialAuthenticationProperties.PREFIX}.registration.gitee.type=gitee",
@@ -95,7 +121,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
                     .hasNotFailed()
-                    .doesNotHaveBean(StringIdGenerator::class.java)
+                    .doesNotHaveBean(IdGenerator::class.java)
                     .getBean(SocialProviderManager::class.java)
                     .extracting { it!!.getRequired("gitee") }
             }

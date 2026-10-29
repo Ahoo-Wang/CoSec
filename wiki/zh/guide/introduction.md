@@ -81,10 +81,11 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-common` |
 | 把决策事件（以及可选的控制面变更）发送到 Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
+| 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
-“同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。使用 Gradle 时，CoSec 模块会带上为这些库提供版本的 platform；Maven 不会传递 platform，需要导入 `me.ahoo.cosec:cosec-dependencies`，或自己写明版本。
+“同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。使用 Gradle 时，CoSec 模块会带上为这些库提供版本的 platform，CosId 除外：CoSec 的 platform 不设定它的版本，由应用自己给出；Maven 不会传递 platform，需要导入 `me.ahoo.cosec:cosec-dependencies`，或自己写明版本。
 
-已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
+已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`；`cosec.cosid.generator` 缺少 `cosec-cosid`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
 
 starter 始终引入 `cosec-runtime`（协程请求 Pipeline、策略文档、快照与令牌校验）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
 

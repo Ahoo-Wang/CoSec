@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.social.justauth
 
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -43,9 +43,9 @@ internal class RedisAuthStateCacheTest {
 
     @Test
     fun cache() {
-        val key = MockIdGenerator.INSTANCE.generateAsString()
+        val key = RandomIdGenerator.generate()
         redisAuthStateCache.containsKey(key).assert().isEqualTo(false)
-        val value = MockIdGenerator.INSTANCE.generateAsString()
+        val value = RandomIdGenerator.generate()
         redisAuthStateCache.cache(key, value)
         val cacheValue = redisAuthStateCache.get(key)
         cacheValue.assert().isEqualTo(value)

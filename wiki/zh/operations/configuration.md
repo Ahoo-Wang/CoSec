@@ -243,6 +243,14 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | 变更事件的 Kafka topic。 |
 | `cosec.control.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | `required` 使发布和 break-glass 等待 broker 确认。设为 `required` 却无法创建 Kafka 变更监听器时，启动失败。 |
 
+## Id {#ids}
+
+`cosec.cosid.*`，需要 `cosec-cosid` 和使用 CosId 5 的应用（[Id](../architecture/extending.md#ids)）。
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.cosid.generator` | string | `default` | CoSec 取用其 id 的 CosId 生成器，连同它的编解码器：请求 id、决策事件 id、令牌 id 和变更 id。生成的 id 不是 1 到 64 个 `A-Z a-z 0-9 . _ -` 字符的生成器会导致启动失败。设置了它却没有 `cosec-cosid` 时，启动失败并给出这个制品（[故障排查](./troubleshooting.md#startup-fails-on-a-missing-module)）。 |
+
 ## 社交登录 {#social-login}
 
 `cosec.authentication.login.social.registration.<name>.*` 为每个 `<name>` 配置一个 OAuth 提供方：

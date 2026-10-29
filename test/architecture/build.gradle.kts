@@ -18,7 +18,7 @@
 val analyzed = listOf(
     "annotations", "api", "model", "engine", "spi", "runtime", "control",
     "cocache", "kafka", "webflux", "webmvc", "gateway", "openapi",
-    "jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "spring-boot",
+    "jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "spring-boot",
 )
 
 dependencies {
