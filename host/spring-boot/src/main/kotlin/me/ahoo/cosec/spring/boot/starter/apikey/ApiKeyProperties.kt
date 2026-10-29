@@ -20,9 +20,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 import java.time.Instant
 
 /**
- * API keys for machine clients. Off by default. The header they come in is `cosec.pipeline.api-key-header`.
+ * API keys: credentials of principals, for machine clients. Off by default. The header they come in is
+ * `cosec.pipeline.api-key-header`. A key's memberships come from its principal's `MembershipProvider`, so one is
+ * required (RFC 0009 §4.2, `IDN-6`).
+ *
+ * Unknown fields fail binding rather than being dropped: a key configured with 8.0's predecessors' `policies` or
+ * `attributes`, which keys no longer carry, stops startup instead of silently losing or keeping access.
  */
-@ConfigurationProperties(ApiKeyProperties.PREFIX)
+@ConfigurationProperties(ApiKeyProperties.PREFIX, ignoreUnknownFields = false)
 data class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
@@ -55,10 +60,13 @@ data class ApiKeyProperties(
         /** SHA-256 of the key, hex-encoded. Never configure the key itself. */
         var hash: String = "",
         var principalId: String = "",
-        var tenantId: String? = null,
-        var roles: Set<String> = emptySet(),
-        var policies: Set<String> = emptySet(),
-        var attributes: Map<String, String> = emptyMap(),
+        /** The principal's tenant: required. */
+        var tenantId: String = "",
+        /**
+         * The cap, as `role` or `role@space`: the key's memberships are its principal's, narrowed to these. Unset does
+         * not narrow; set it empty for a key with no roles.
+         */
+        var roles: Set<String>? = null,
         var expiresAt: Instant? = null,
         @DefaultValue("true") var enabled: Boolean = true,
     ) {
@@ -66,7 +74,8 @@ data class ApiKeyProperties(
             require(id.isNotBlank()) { "An API key needs an id." }
             require(HASH.matches(hash)) { "API key [$id] needs the SHA-256 hex of the key as hash." }
             require(principalId.isNotBlank()) { "API key [$id] needs a principal-id." }
-            return ApiKey(id, principalId, tenantId, roles, policies, attributes, expiresAt, enabled)
+            require(tenantId.isNotBlank()) { "API key [$id] needs a tenant-id." }
+            return ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)
         }
 
         private companion object {

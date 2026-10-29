@@ -17,14 +17,17 @@ import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
+import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
@@ -46,6 +49,19 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
 @EnableConfigurationProperties(ApiKeyProperties::class)
 class CoSecApiKeyAutoConfiguration {
+
+    /**
+     * `IDN-6`: an API key's memberships are its principal's, from the `MembershipProvider` (RFC 0009 §4.2). Without one
+     * every key would be a 503, so startup fails instead.
+     */
+    @Bean
+    fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+        check(context.getBeanNamesForType(MembershipProvider::class.java).isNotEmpty()) {
+            "${ApiKeyProperties.ENABLED_KEY}=true needs a MembershipProvider bean: an API key's memberships are its " +
+                "principal's (RFC 0009 §4.2). Add cosec-cocache and a MembershipLoader bean, which configures " +
+                "CoCacheMembershipProvider, or declare a MembershipProvider of your own (IDN-6)."
+        }
+    }
 
     @Bean
     @ConditionalOnMissingBean
