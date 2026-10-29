@@ -217,6 +217,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。S2–S4 的删除 PR 已合入（#1114，见 §6）。S5 文档进行中，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
 - 后续项（#1114 审查）：`SnapshotConsistencyPropertyTest`（SNP-1）的视图由测试内的副本拼装，补一个经生产 `DocumentSnapshotViews`、在并发重新发布下的 runtime 级变体；`migrate/` 改用不需要匹配器的读取器，去掉 `OgnlSandbox` 与 `ognl`（L8 余项）。
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。
+- 观察项（RC 批次 D，2026-10-29）：`SnapshotStoreBlockHoundTest#aColdLoadOverTheStoreNeverBlocksTheCaller` 在 #1164 的 CI 上失败一次（main 最近 15 次全绿，#1164 未改 `cocache`）。阻塞点在 Lettuce 内部：并发冷加载时 `DefaultEndpoint.write` → `SharedLock.incrementWriters` 的 `ReentrantLock` 在争用下 park（经 `MaintenanceAwareExpiryWriter`、CoCache 的 `RedisRemoteStore.readAsync`）。要查清：是 Lettuce 维护通知（maintenance events）等路径持有独占锁时的真实短暂阻塞，还是测试的并发方式造成；据此决定关闭该特性、预热连接，或按 Lettuce 自己的 BlockHound 集成放行 `SharedLock` 并写明理由。不得为了变绿而放宽守护。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
