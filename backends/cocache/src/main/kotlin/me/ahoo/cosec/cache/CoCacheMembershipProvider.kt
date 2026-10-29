@@ -114,11 +114,12 @@ class CoCacheMembershipProvider(
         this
     ) { it.cause.takeIf { cause -> cause !== it } }
 
-    /** The loader does not know the principal: never cached, so a principal added later is known at once. */
-    private object UnknownPrincipal : RuntimeException() {
+    /**
+     * The loader does not know the principal: never cached, so a principal added later is known at once. One shared
+     * instance, so it records neither a stack trace nor suppressed exceptions.
+     */
+    private object UnknownPrincipal : RuntimeException(null, null, false, false) {
         private fun readResolve(): Any = UnknownPrincipal
-
-        override fun fillInStackTrace(): Throwable = this
     }
 
     /** Drops the cached memberships of [principal] in [tenant] on every instance; the next request loads them. */
