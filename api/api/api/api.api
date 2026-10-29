@@ -162,9 +162,6 @@ public final class me/ahoo/cosec/api/audit/AuditTrace$Companion {
 	public static final field TRACE_ID_ATTRIBUTE_KEY Ljava/lang/String;
 }
 
-public abstract interface class me/ahoo/cosec/api/authentication/Credentials {
-}
-
 public abstract interface class me/ahoo/cosec/api/context/SecurityContext : me/ahoo/cosec/api/tenant/TenantCapable {
 	public static final field Companion Lme/ahoo/cosec/api/context/SecurityContext$Companion;
 	public static final field KEY Ljava/lang/String;
