@@ -12,12 +12,15 @@ pnpm install
 pnpm dev                 # dev server
 pnpm check:mermaid       # parses every Mermaid diagram in headless Chrome and checks the conventions below
 pnpm fix:mermaid         # rewrites <br/> to <br>, adds autonumber to sequence diagrams, and similar fixes
-pnpm check:docs          # links, #anchors, en/zh heading parity, en/zh sidebar parity
+pnpm check:docs          # links, #anchors, en/zh heading parity, en/zh sidebar parity, then check:legacy
+pnpm check:legacy        # no mention of an API or property that 8.0 removed (RFC 0008 G4)
 pnpm build               # production build; fails on dead links
 ```
 
-CI (`.github/workflows/deploy-wiki.yml`) runs `check:mermaid`, `check:docs` and `build` on every pull request
-that touches `wiki/`. `check:mermaid` needs Chrome; set `CHROME_BIN` if it is not on `PATH`.
+The `docs` job of `.github/workflows/ci.yml` runs `check:docs` and `build` on every pull request, and the required
+`CI` check needs it. `.github/workflows/deploy-wiki.yml` runs `check:mermaid`, `check:docs` and `build` again before
+it deploys from `main`; `check:mermaid` is not run on pull requests, so run it before pushing a change to a diagram.
+It needs Chrome; set `CHROME_BIN` if it is not on `PATH`.
 
 ## Structure
 
@@ -90,6 +93,13 @@ Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent
 - **Link to files, never to line numbers.** Line anchors rot with every commit. Use relative links between
   pages (`../policies/language.md#actions`) so `check:docs` and the build can verify them.
 - Write any text containing `<…>`, such as `Mono<T>`, in backticks; otherwise Vue parses it as HTML.
+- **Document 8.0, not what it replaced.** No version-history notes ("since 7.0", "removed in 6.1"), and no
+  mention of an API, property or version that 8.0 removed. `scripts/check-legacy.mjs` (`check:legacy`, part of
+  `check:docs`) fails on a whole-word match of its deny list in `wiki/`, `skills/`, `README*.md`, `llms.txt`,
+  `SECURITY.md` and `k8s/`, and prints the file, line, term and what to write instead. Migration text goes in the
+  `7.x to 8.0` section of `operations/upgrading.md`, the only exempt section. A deliberate contrast elsewhere
+  (for example "7.x matchers have no 8.0 equivalent") is a file-and-term entry with a reason in the script's
+  `ALLOWED` list; there is no inline escape, and an entry that matches nothing fails, so delete it with the text.
 
 - **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines five reading paths
   (evaluator, developer, policy author, operator, contributor). Every page on a path ends with one
