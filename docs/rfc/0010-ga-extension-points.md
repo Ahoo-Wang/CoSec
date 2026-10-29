@@ -40,6 +40,22 @@
 唯一的细节是公共 SPI 里的 `data class`：加字段会改变 `copy` 与 `componentN`，这对已编译的调用方是二进制破坏。会在 GA 前重写的两个
 （`ApiKey`、`Memberships`，[RFC 0009](0009-identity-and-credentials.md) PR-3）顺手改成普通类，没有额外成本；其余的等真正要加字段时再处理。
 
+> **2026-10-29 补充（移到 8.1 的项逐项检查）**：都可以新增，不需要在 GA 前改动已有 API。
+>
+> | 项 | 以后加入时 | 理由（对照 `main` 的代码） |
+> |---|---|---|
+> | `subject.type`、`auth.method` 属性（RFC 0009 PR-2） | 新增 | 属性目录是封闭的 `Attribute.Kind`，今天引用这两个名字的策略编译失败；token 与宿主属性都在 `subject.attributes.*` 之下，不会撞名。`Memberships` 是普通类，加 `type` 字段保留旧构造器 |
+> | 委托（RFC 8693 `act`） | 新增 | `AuthenticatedPrincipal`、`Subject`、`Memberships` 都是普通类，加 `actor` 保留旧构造器；`CoSec-Identity` 升 v2；8.0 拒绝 `act`，以后放开是新功能 |
+> | 未知主体的负缓存 | 新增 | `CoCacheMembershipProvider` 内部实现加一个属性 |
+> | `RedisApiKeyReader` 的本地缓存 | 新增，**默认关闭** | 今天吊销立即生效；默认打开会把它变成"失效通知到达或 TTL 之后"，属于授权语义的变化 |
+> | 签发 API Key 经授权 | 新增 | 控制面加一个操作与权限；`ApiKeyStore` 保留为底层存储 |
+>
+> 两条约束保证它们是新增：
+> 1. **公共类加字段只用次构造器**（新参数带默认值会改变 JVM 签名）。RFC 0011 PR-3 的 ABI 校验在 RC 后把它变成构建失败。`MembershipAnswer` 等 sealed 类型 GA 后不再加子类型：新信息加在值类上。
+> 2. **`CoSec-Identity` 的解码是严格的**（未知成员即拒绝，故意如此：被忽略的 `act` 会放行）。所以给头加成员时，网关在开关后面发（默认不发），或者升版本；滚动升级先升级下游服务，再升级网关。这是部署顺序的约束，不是 API 破坏；8.1 的 RFC 写明。
+>
+> 非数组 `roles`/`policies` 声明返回 500 是缺陷，修成 401 不是破坏性变更，放进 RC 前的修复批。
+
 ## 2. 唯一的安全问题
 
 `runtime/.../Pipeline.kt` 处理义务时跳过 `RateLimit` 以外的种类（`if (obligation !is Obligation.RateLimit) continue`）。今天只有 `RateLimit` 一种，
