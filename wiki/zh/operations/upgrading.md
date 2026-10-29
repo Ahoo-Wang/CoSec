@@ -36,7 +36,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **变更经过控制面。** 写入、校验、模拟、影子、审批、解释和回滚策略都是控制面（`cosec-control`）的操作，而不是应用代码或本地文件。
 - **条件是数据。** 一套小的条件语言取代了匹配器工厂、OGNL 和 SpEL。策略中的任何内容都不会执行代码。
 - **错误响应是 `application/problem+json`。** 响应不再告诉客户端是否存在 DENY。
-- **Java 21。** 8.0 的每个模块都按 Java 21 编译，而 7.x 按 Java 17 编译：应用要在 JDK 21 或更高版本上构建和运行。
+- **Java 21。** 8.0 的每个模块都按 Java 21 编译，而 7.x 按 Java 17 编译：应用要在 JDK 21 或更高版本上构建和运行。`cosec-gateway-server` 镜像例外：它运行在 JDK 25 上，并带有 AOT 缓存（[部署](./deployment.md#the-image)）。
 
 ### 升级检查清单 {#upgrade-checklist}
 

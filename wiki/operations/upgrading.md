@@ -71,7 +71,8 @@ What is different, in short:
   policy runs code.
 - **Errors are `application/problem+json`.** A response no longer tells a client whether a DENY exists.
 - **Java 21.** Every 8.0 module is compiled for Java 21, where 7.x was compiled for Java 17: an application builds
-  and runs on JDK 21 or later.
+  and runs on JDK 21 or later. The `cosec-gateway-server` image is the exception: it runs on JDK 25, with an AOT cache
+  ([Deployment](./deployment.md#the-image)).
 
 ### Upgrade checklist
 
