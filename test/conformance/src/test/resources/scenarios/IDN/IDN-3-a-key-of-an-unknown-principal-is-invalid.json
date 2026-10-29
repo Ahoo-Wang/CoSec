@@ -1,0 +1,102 @@
+{
+  "rules": [
+    "IDN-3"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The membership provider does not know the key's principal: the key is invalid, and the deny is 401 token-invalid.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/**"
+              }
+            ]
+          },
+          {
+            "id": "attached",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/reports/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme"
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "someone-else",
+        "roles": {
+          "": [
+            "billing"
+          ]
+        }
+      }
+    ]
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}
