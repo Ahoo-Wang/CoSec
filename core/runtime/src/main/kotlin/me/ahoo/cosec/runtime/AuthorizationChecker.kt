@@ -36,18 +36,35 @@ private val log = KotlinLogging.logger {}
  * which actions a UI shows. The same evaluation as the request, through [pipeline], for the principal and scope of a
  * request the pipeline permitted; no obligation runs and no listener hears of it.
  *
+ * [check] answers yes or no; [decide] answers the [Decision] itself, for host code that records what permitted it: a
+ * [Decision.Permit] names the statement in [Decision.Permit.by], with the binding it came through in
+ * [me.ahoo.cosec.model.decision.StatementRef.Policy.via] (a [me.ahoo.cosec.model.decision.BindingRef.Bound] names the
+ * binding and whether a platform, app or tenant document holds it). [check] is `decide(…) is Decision.Permit`, so the
+ * two never disagree.
+ *
+ * A [Decision] stays in the host's own process: it is never written to a response, and the web adapters never see one
+ * (one decision path, RFC 0006 §6.3), so a host must not put one, or its causes, into a response either.
+ *
  * Fails closed: only a permit is true. A context the pipeline did not make, an indeterminate decision and an error are
- * false. `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one.
+ * false. `cosec-webflux` adds a `Mono<Boolean>` form of [check] and `cosec-webmvc` a blocking one.
  */
 class AuthorizationChecker(private val pipeline: Pipeline) {
     /**
      * Whether the principal of [security] may perform [action] (`service:verb`, or `http:<METHOD>`) on [resource]:
      * `type/id` (`order/42`), or a path (`/orders/42`) for an `http` resource (RFC 0005 §5.1).
      */
-    suspend fun check(security: SecurityContext, action: String, resource: String): Boolean {
-        val request = (security as? PipelineSecurityContext)?.security ?: return false
-        val (namespace, verb) = action.split(':', limit = 2).takeIf { it.size == 2 } ?: return false
-        return check(request, Action(namespace, verb), resource(resource))
+    suspend fun check(security: SecurityContext, action: String, resource: String): Boolean =
+        decide(security, action, resource) is Decision.Permit
+
+    /**
+     * The decision that [check] answers for the same arguments. A context the pipeline did not make, or an action
+     * without `:`, is an implicit deny (`Deny(null)`); an error is [Decision.Indeterminate]; a permit only break-glass
+     * gives is indeterminate too, since a check writes no audit. The obligations of a permit, rate limits, did not run.
+     */
+    suspend fun decide(security: SecurityContext, action: String, resource: String): Decision {
+        val request = (security as? PipelineSecurityContext)?.security ?: return Decision.Deny(null)
+        val (namespace, verb) = action.split(':', limit = 2).takeIf { it.size == 2 } ?: return Decision.Deny(null)
+        return decide(request, Action(namespace, verb), resource(resource))
     }
 
     private fun resource(text: String): Resource {
@@ -63,18 +80,22 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     }
 
     /** As [check], with the action and resource given as the engine reads them. */
+    suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Boolean =
+        decide(security, action, resource) is Decision.Permit
+
+    /** As [decide], with the action and resource given as the engine reads them. */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Boolean = try {
-        pipeline.check(security, action, resource) is Decision.Permit
+    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
+        pipeline.check(security, action, resource)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
         }
-        log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - denied." }
-        false
+        log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
+        Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
     } catch (e: Exception) {
-        log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - denied." }
-        false
+        log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
+        Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
     }
 
     /**
@@ -83,21 +104,9 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * Three-valued, so that the caller can tell a deny from an outage; it fails closed like [check]. An anonymous
      * request is denied.
      */
-    @Suppress("TooGenericExceptionCaught")
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
-        return try {
-            pipeline.check(scoped, action, resource)
-        } catch (e: CancellationException) {
-            if (!currentCoroutineContext().isActive) {
-                throw e
-            }
-            log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
-            Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
-        } catch (e: Exception) {
-            log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
-            Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
-        }
+        return decide(scoped, action, resource)
     }
 
     /**

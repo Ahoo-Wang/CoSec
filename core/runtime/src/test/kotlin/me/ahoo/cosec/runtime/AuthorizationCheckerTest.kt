@@ -19,9 +19,13 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
@@ -106,6 +110,38 @@ class AuthorizationCheckerTest {
         checker.check(security, Action("http", "GET"), Resource("http", "/other", emptyMap())).assert().isFalse()
     }
 
+    /** What Wow records: which statement permitted the check, and through which binding of which document. */
+    @Test
+    fun decidesWithTheStatementAndBindingThatPermitted() = runBlocking<Unit> {
+        val context = permitted().securityContext
+        val permit = checker.decide(context, "order:read", "order/42")
+        permit.assert().isInstanceOf(Decision.Permit::class.java)
+        val by = (permit as Decision.Permit).by
+        by.policy.assert().isEqualTo(PolicyId("order"))
+        by.index.assert().isEqualTo(0)
+        by.via.assert().isEqualTo(BindingRef.Bound(BindingId("g:order"), DocumentKind.PLATFORM))
+        checker.decide(context, "order:write", "order/42").assert().isEqualTo(Decision.Deny(null))
+    }
+
+    @Test
+    fun checkIsWhetherDecidePermits() = runBlocking<Unit> {
+        val context = permitted().securityContext
+        val cases = listOf(
+            "http:GET" to "/orders/2",
+            "http:DELETE" to "/orders/2",
+            "order:read" to "order/42",
+            "order:write" to "order/42",
+            "GET" to "/orders/2",
+        )
+        for (failing in listOf(false, true)) {
+            views.fail = failing
+            for ((action, resource) in cases) {
+                val decision = checker.decide(context, action, resource)
+                checker.check(context, action, resource).assert().isEqualTo(decision is Decision.Permit)
+            }
+        }
+    }
+
     @Test
     fun theSecurityContextCarriesTheValidatedScope() {
         val context = permitted().securityContext
@@ -178,8 +214,16 @@ class AuthorizationCheckerTest {
         // A context the pipeline did not make, and an action without a namespace.
         checker.check(SimpleSecurityContext.anonymous(), "http:GET", "/orders/2").assert().isFalse()
         checker.check(security.securityContext, "GET", "/orders/2").assert().isFalse()
+        checker.decide(
+            SimpleSecurityContext.anonymous(),
+            "http:GET",
+            "/orders/2"
+        ).assert().isEqualTo(Decision.Deny(null))
+        checker.decide(security.securityContext, "GET", "/orders/2").assert().isEqualTo(Decision.Deny(null))
         // An unreadable snapshot is not a permit.
         views.fail = true
         checker.check(security.securityContext, "http:GET", "/orders/2").assert().isFalse()
+        checker.decide(security.securityContext, "http:GET", "/orders/2").assert()
+            .isInstanceOf(Decision.Indeterminate::class.java)
     }
 }

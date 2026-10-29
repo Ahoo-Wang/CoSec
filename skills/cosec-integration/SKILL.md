@@ -200,7 +200,9 @@ checker.checkBlocking(securityContext, "order:ship", "order/42") // cosec-webmvc
 
 The resource is `type/id`, or a path (`/orders/42`) for an `http:` action. It uses the principal and scope of the
 permitted request, runs no rate limits and notifies no listener, and is `false` on any deny, error or outage. Keep
-enforcing on the real request. See https://cosec.ahoo.me/integration/checks.
+enforcing on the real request. To record what permitted an action, `checker.decide(...)` (suspend) answers the
+`Decision` itself: `Decision.Permit.by` names the statement and, in `via`, the binding and its document. Keep a
+`Decision` in the process; never put it into a response. See https://cosec.ahoo.me/integration/checks.
 
 ## Hosting the control plane
 

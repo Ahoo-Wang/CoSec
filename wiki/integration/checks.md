@@ -65,6 +65,28 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
 
 The endpoint itself is a route like any other: your documents must permit it.
 
+### The decision behind a check
+
+`decide` takes the same arguments and answers the `Decision` (`me.ahoo.cosec.model.decision`) that `check` turns into
+a Boolean. `check` is `decide(...) is Decision.Permit`, so the two always agree:
+
+```kotlin
+suspend fun decide(security: SecurityContext, action: String, resource: String): Decision
+```
+
+| Decision | When | `check` |
+|---|---|---|
+| `Permit(by)` | An ALLOW matched and no DENY did. `by` is the statement that permitted: `policy`, `index`, `name`, and `via`, how the policy applied. `BindingRef.Bound(id, document)` is a binding, in a `PLATFORM`, `APP` or `TENANT` document; `BindingRef.Attached(policy)` is a policy the principal's memberships attach. | `true` |
+| `Deny(by)` | A DENY matched (`by` is that statement), the tenant's platform boundary refused the permit (`StatementRef.Boundary`), or nothing matched (`null`). A `SecurityContext` the pipeline did not build, or an action without `:`, is `Deny(null)` too. | `false` |
+| `Indeterminate(cause)` | No decision could be made: a document could not be read, a DENY failed, the check itself failed (with a warning in the log), or only break-glass would permit. | `false` |
+
+Use it to record what allowed an action your code takes, such as "permitted by role binding `order-admins` of the app
+document". A `Decision` stays in your process: never write it or its cause into a response. The web adapters never
+see one either, which is how every status code comes from one place
+([Responses and status codes](./web.md#responses-and-status-codes)). For the same reason the adapter modules add no
+`Mono` or blocking form of `decide`: call it from a coroutine. The obligations a `Permit` carries, its rate limits,
+did not run.
+
 ### How a check relates to the request pipeline
 
 A check evaluates with the same engine, the same documents and the same rules as a request, in the
@@ -80,7 +102,7 @@ decision:
 | Rate limits | spends permits, can answer `429` | never spends, never limited |
 | A Permit only break-glass gives | proceeds, after a REQUIRED audit | `false`: a check writes no audit |
 | Deny, Indeterminate, an error | a status code | `false`, with a warning in the log for an error |
-| Result | an HTTP status | `true` only on a Permit |
+| Result | an HTTP status | `true` only on a Permit; `decide` answers the decision |
 
 A check fails closed: a `SecurityContext` the pipeline did not build (one you made yourself, or none) is `false`,
 whatever the documents say. There is therefore no check outside a request: a message consumer that acts for a user
