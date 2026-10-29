@@ -20,6 +20,18 @@ key 会悄无声息地不起作用。classpath 上的配置元数据（`META-INF
 map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，对 7.x 的 key 还给出替代它的配置
 （[7.x key 对照表](./upgrading.md#removed-and-renamed-properties)）。
 
+有一类变量永远不算未知 key：Kubernetes 为名为 `cosec` 或 `cosec-*` 的 Service 注入的环境变量（Service 链接），Spring 会把它们读作
+`cosec.*` key（`COSEC_GATEWAY_SERVICE_HOST` 读作 `cosec.gateway.service.host`）。检查只跳过它们的确切形状，按变量名匹配，
+并且只在进程环境变量中生效；其中 `<SVC>` 是 `COSEC` 或 `COSEC_<名字>`：
+
+- `<SVC>_SERVICE_HOST`、`<SVC>_SERVICE_PORT` 和 `<SVC>_SERVICE_PORT_<端口名>`；
+- `<SVC>_PORT`，且值是 `tcp://`、`udp://` 或 `sctp://` 开头的 URL；
+- `<SVC>_PORT_<端口>_<TCP|UDP|SCTP>`，以及带 `_PROTO`、`_PORT` 或 `_ADDR` 后缀的同名变量。
+
+其余的 `COSEC_*` 变量照常检查（`COSEC_JWT_SECRT` 会使启动失败），同一个 key 出现在 `application.yaml`、系统属性或其他来源中也一样。
+CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不是未知的，所以这个豁免不会藏起 CoSec 读取的配置项。在 pod 上设置
+`enableServiceLinks: false`，则这些变量根本不会进入环境（[故障排查](./troubleshooting.md#startup-fails-on-an-unknown-property)）。
+
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.unknown-properties` | `fail`、`warn` | `fail` | `fail` 在出现未知 `cosec.*` key 时终止启动；`warn` 以 `WARN` 记录同样的列表并照常启动。 |

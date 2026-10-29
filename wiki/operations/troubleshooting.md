@@ -281,11 +281,16 @@ A `cosec.*` key that no CoSec module reads: a typo, or a 7.x key, whose replacem
 ([7.x keys](./upgrading.md#removed-and-renamed-properties)). Rename or remove it.
 [`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) only logs the list.
 
-On Kubernetes, keys such as `cosec.gateway.service.host` and `cosec.gateway.port` come from service links: for every
-Service in the namespace whose name starts with `cosec-`, Kubernetes sets variables such as
-`COSEC_GATEWAY_SERVICE_HOST` and `COSEC_GATEWAY_PORT` in the pods it starts afterwards, and Spring reads them as
-`cosec.*` keys. Set `enableServiceLinks: false` in the pod spec, as the manifests in `k8s/` do
-([What the manifests set](./deployment.md#what-the-manifests-set)).
+On Kubernetes, with 8.0.0-alpha.1, keys such as `cosec.gateway.service.host` and `cosec.gateway.port` came from service
+links, and every pod of the namespace crash-looped on `CoSec does not read 8 cosec.* properties`. For every Service
+whose name is `cosec` or starts with `cosec-` (the manifests in `k8s/` name theirs `cosec-gateway`), Kubernetes sets
+variables such as `COSEC_GATEWAY_SERVICE_HOST` and `COSEC_GATEWAY_PORT` in the pods it starts afterwards, and Spring
+reads them as `cosec.*` keys. Since 8.0.0-alpha.2 the check skips exactly those variables, only in the process
+environment ([Unknown properties](./configuration.md#unknown-properties)): a mistyped variable such as
+`COSEC_JWT_SECRT`, and the same key in `application.yaml` or a system property, still fail. On alpha.1, or to keep the
+variables out of the pod altogether, set `enableServiceLinks: false` in the pod spec, as the manifests in `k8s/` do
+([What the manifests set](./deployment.md#what-the-manifests-set)); services are then found by DNS, which CoSec uses
+anyway.
 
 ### Startup fails on the pipeline mode
 

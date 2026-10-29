@@ -24,6 +24,21 @@ classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when i
 property. The message lists every unknown key and, for a 7.x key, what replaced it
 ([the 7.x key table](./upgrading.md#removed-and-renamed-properties)).
 
+One thing is never an unknown key: the variables Kubernetes injects for a Service named `cosec` or `cosec-*` (service
+links), which Spring reads as `cosec.*` keys (`COSEC_GATEWAY_SERVICE_HOST` as `cosec.gateway.service.host`). The check
+skips exactly their shapes, matched on the variable names and only in the process environment, where `<SVC>` is
+`COSEC` or `COSEC_<NAME>`:
+
+- `<SVC>_SERVICE_HOST`, `<SVC>_SERVICE_PORT` and `<SVC>_SERVICE_PORT_<PORT NAME>`;
+- `<SVC>_PORT`, when the value is a `tcp://`, `udp://` or `sctp://` URL;
+- `<SVC>_PORT_<port>_<TCP|UDP|SCTP>` and the same with `_PROTO`, `_PORT` or `_ADDR`.
+
+Every other `COSEC_*` variable is checked (`COSEC_JWT_SECRT` fails startup), and so is the same key in
+`application.yaml`, a system property or any other source. No CoSec property has one of these names, and a known key is
+never unknown whatever its source, so the exemption cannot hide a property CoSec reads. Setting
+`enableServiceLinks: false` on the pod keeps the variables out of the environment altogether
+([Troubleshooting](./troubleshooting.md#startup-fails-on-an-unknown-property)).
+
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.unknown-properties` | `fail`, `warn` | `fail` | `fail` stops startup on an unknown `cosec.*` key; `warn` logs the same list at `WARN` and starts. |
