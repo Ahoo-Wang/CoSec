@@ -27,6 +27,10 @@ fun interface SocialUserPrincipalConverter {
     fun convert(provider: String, authUser: SocialUser): Mono<CoSecPrincipal>
 
     companion object {
+        /** The attribute naming the provider registration the user signed in with. */
         const val OAUTH_PROVIDER = "cosec_oauth_provider"
+
+        /** The attribute holding the provider's id of the user, which the provider owns. */
+        const val OAUTH_USER_ID = "cosec_oauth_user_id"
     }
 }

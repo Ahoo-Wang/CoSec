@@ -278,8 +278,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 任何属性引用都不能读取携带凭证的请求头：`http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、
 `x-api-key` 和 `cosec-identity`，大小写不限，条件和限流规则的 `key` 都是如此。含有这种引用的文档无法编译，无论经由控制面还是
 `cosec-migrate`：在 `authorization` 上用 `prefix` 写的 DENY 会让文档作者逐个字符地获知其他主体的令牌，以它为 `key` 则会按令牌计数。`cosec-identity` 是网关转发给后端服务的请求头，在网关上它只是客户端的声明。这份列表是固定的
-（[`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)）；
-从其他请求头读取 API key 的宿主不在其覆盖范围内。
+（[`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)），
+再加上宿主读取 API key 的请求头（用 `cosec.pipeline.api-key-header` 改名时）：starter 在数据面和控制面编译每个文档时也拒绝它，管道也从不为条件读取它。
 
 同一请求头出现多次且每份值都相同时，读作该值。各份值不同时，该请求头没有单一的值，读取它的语句出错：基于它的 DENY
 让请求成为 Indeterminate（`503`），除非另有 DENY 匹配；基于它的 ALLOW 不匹配。第一份或最后一份值永远不会单独决定结果。

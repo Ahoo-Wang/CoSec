@@ -22,6 +22,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
 | `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cosec-cocache` 时 |
+| `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
 | `BlacklistSource` | `cosec-runtime`，`runtime.attribute` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
@@ -88,7 +89,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 `AuthenticatedPrincipal` 包含 id、租户、成员关系来源（令牌的声明，或[成员关系提供者](#memberships)）、属性和 `credential`。条件以 `subject.attributes.<name>` 读取这些属性。`credential`（`Identity.Credential`：方法 `JWT` 或 `API_KEY`、凭证的 id 及其过期时间，从不包含凭证的值）是网关随身份一起转发的内容：在网关上，没有它的主体会被放行，但不会以已认证身份转发给任何后端；凭证没有过期时间的主体会让请求以 `500` 失败。
 
-凭证的方式还决定 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用：只有 `JWT` 能得到它。你的认证器返回的主体如果没有凭证，或使用自己的方式（例如 `Identity.Method("ldap")`），永远得不到 break-glass。只对你按 CoSec 令牌验证过的令牌使用 `JWT`。
+[break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -112,7 +113,7 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 }
 ```
 
-交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier`：吊销通过挂起式的 `RevocationReader` 检查。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
+交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier` 或其他包装：吊销通过挂起式的 `RevocationReader` 检查，而且只有普通校验器的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
 ## 凭证与吊销 {#credentials-and-revocation}
 
@@ -227,6 +228,30 @@ fun interface RateLimiter {
 - 永远不要删除文档。一个曾经有文档的键读到“不存在”时，会按失败即拒绝处理。
 
 使用 `cosec-cocache` 时，starter 使用 `RedisSnapshotDocumentStore`，控制面也写入同一个 Redis。不使用时，starter 注册 `InMemorySnapshotDocumentStore`；用 `put(key, document)` 放入文档，或者改为声明自己的 `SnapshotDocumentStore` bean。在平台文档就位之前，请求都按失败即拒绝处理。
+
+## Id {#ids}
+
+`IdGenerator`（`generate(): String`）为 CoSec 创建的东西生成 id：请求 id（`CoSec-Request-Id`，以及网关在 `CoSec-Identity` 中转发的 `rid`）、决策事件 id、令牌 id（`jti`）和控制面变更 id。没有你自己的实现时，CoSec 使用 `RandomIdGenerator`：从 `ThreadLocalRandom` 抽取的随机版本 4 UUID。`ThreadLocalRandom` 从不阻塞，而 `SecureRandom` 可能阻塞。
+
+- id 在共享存储的所有实例之间唯一，由 1 到 64 个 `A-Z a-z 0-9 . _ -` 字符组成：它会进入响应头、URL 和 Redis 键。
+- 每个请求都会在请求所在的线程上（包括事件循环）调用 `generate`，此时还没有可用来应答失败的结果：它从不阻塞，也从不抛出异常。
+- id 不是秘密，也不必不可预测：令牌是签名的，请求 id 只用来关联日志和审计事件。社交登录的 OAuth `state` 和 API key 的密钥必须不可预测，因此从不由它生成：CoSec 自己从 `SecureRandom` 抽取它们。
+
+CoSec 的核心不依赖任何 id 库。使用 CosId 5 时，添加 `cosec-cosid`。当应用有 CosId 的 `CosIdRuntime`、且没有自己的 `IdGenerator` 时，starter 把 `cosec.cosid.generator` 指定的生成器（未设置时为 CosId 的 `default`）生成的 id，按该生成器的编解码器写出，交给 CoSec（`CosIdIdGenerator`）。生成的 id 不符合上面第一条要求的生成器会导致启动失败。
+
+```kotlin
+implementation("me.ahoo.cosec:cosec-cosid")
+implementation("me.ahoo.cosid:cosid-spring-boot-starter") // 5.x，并用 cosid.* 配置你的生成器
+```
+
+其他任何 id 来源都只需一个 bean：
+
+```kotlin
+@Bean
+fun cosecIdGenerator(ids: MyIds): IdGenerator = IdGenerator { ids.next() }
+```
+
+由于 `generate` 在事件循环上运行，请选择从不等待其存储的生成器，例如 Snowflake 生成器。不使用 Spring 时，把它作为 `PipelineComponents(idGenerator = …)`、`IdentityGate(idGenerator = …)` 以及 `JwtTokenConverter` 的第一个参数传入。
 
 ## 桥接上下文 {#bridge-context}
 

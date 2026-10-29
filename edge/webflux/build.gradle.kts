@@ -18,7 +18,6 @@ dependencies {
     api("io.projectreactor.kotlin:reactor-kotlin-extensions")
     api("org.springframework:spring-context")
     api("org.springframework:spring-webflux")
-    testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("org.springframework:spring-test")
     testImplementation("io.projectreactor:reactor-test")
 }

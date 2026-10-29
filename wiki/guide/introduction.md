@@ -108,16 +108,18 @@ record for policy snapshots and revoked tokens.
 | Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
 | Decision events, and optionally control-plane changes, sent to Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | The client's region as an external attribute | `cosec-ip2region` | |
+| Request, token and change ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
 The "With" column is what the starter's auto-configuration for that module needs besides the module itself. With
-Gradle, the CoSec modules bring the platform that gives these libraries their versions; with Maven, which does not
+Gradle, the CoSec modules bring the platform that gives these libraries their versions, CosId's aside: no CoSec platform
+sets it, so the application gives its version; with Maven, which does not
 pass a platform on, import `me.ahoo.cosec:cosec-dependencies` or give the versions yourself.
 
 A module that a feature you turned on needs is checked at startup (STA-1): the application does not start, and the
 message names the artifact to add, when a Spring MVC host lacks `cosec-webmvc`, a WebFlux host lacks `cosec-webflux`,
 a Spring Cloud Gateway host lacks `cosec-gateway` (even with `cosec.enabled=false`), `cosec.api-key.store=redis`
-lacks `cosec-cocache`, or `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`
-([Troubleshooting](../operations/troubleshooting.md#startup-fails-on-a-missing-module)).
+lacks `cosec-cocache`, `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`, or `cosec.cosid.generator` lacks
+`cosec-cosid` ([Troubleshooting](../operations/troubleshooting.md#startup-fails-on-a-missing-module)).
 
 The starter always brings `cosec-runtime` (the coroutine request pipeline, the policy documents, snapshots and token
 verification), `cosec-spi` (the extension points), `cosec-engine` and `cosec-model` (the pure decision engine),

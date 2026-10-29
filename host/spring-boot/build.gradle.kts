@@ -32,6 +32,10 @@ dependencies {
     testImplementation(project(":gateway"))
     compileOnly(project(":social"))
     testImplementation(project(":social"))
+    compileOnly(project(":cosid"))
+    testImplementation(project(":cosid"))
+    // CoSecCosIdAutoConfigurationTest starts a real CosId runtime through CosId's own auto-configuration.
+    testImplementation(libs.cosid.spring.boot.autoconfigure)
     compileOnly(project(":cocache"))
     testImplementation(project(":cocache"))
     compileOnly("org.springframework.boot:spring-boot-data-redis")
@@ -68,7 +72,6 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-health")
     testImplementation("org.springframework.boot:spring-boot-webflux")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
-    testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("me.ahoo.cocache:cocache-test")
     testImplementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
 }

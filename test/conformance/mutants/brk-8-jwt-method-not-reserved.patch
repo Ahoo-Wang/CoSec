@@ -1,0 +1,17 @@
+# Rule: BRK-8
+# Mutant: an authenticator may name its credential jwt, CoSec's own token's method, so a service behind a gateway gives its principal break-glass
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+index 37a0489c..69b701eb 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+@@ -104,7 +104,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
+     val breakGlass: Boolean,
+ ) {
+     init {
+-        require(breakGlass == (credential?.method == Identity.Method.JWT)) {
++        require(!breakGlass || credential?.method == Identity.Method.JWT) {
+             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
+                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+         }

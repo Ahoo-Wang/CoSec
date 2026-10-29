@@ -1,0 +1,17 @@
+# Rule: BRK-8
+# Mutant: TokenAuthenticator takes every verifier for CoSec's own, so a token a custom TokenVerifier accepted gets root during break-glass
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+index 85ad9e91..01189b15 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+@@ -71,7 +71,7 @@ class TokenAuthenticator(
+     private val revocationSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
+ ) : Authenticator {
+     /** Whether [verifier] verifies CoSec's own tokens, which alone may use break-glass (RC1-26). */
+-    private val ownTokens = verifier is CoSecTokenVerifier
++    private val ownTokens = true
+ 
+     private val credentialMethod = if (ownTokens) Identity.Method.JWT else Identity.Method(method)
+ 

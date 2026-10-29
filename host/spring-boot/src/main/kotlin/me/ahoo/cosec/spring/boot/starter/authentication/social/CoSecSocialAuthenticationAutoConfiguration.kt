@@ -22,14 +22,11 @@ import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosec.social.justauth.RedisAuthStateCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
-import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.jvm.UuidGenerator
 import me.zhyd.oauth.cache.AuthStateCache
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.request.AuthDefaultRequest
 import me.zhyd.oauth.request.AuthRequest
 import org.springframework.beans.BeanUtils
-import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -60,13 +57,13 @@ class CoSecSocialAuthenticationAutoConfiguration(
         return RedisAuthStateCache(stringRedisTemplate)
     }
 
+    /**
+     * The OAuth `state` is JustAuthProvider's own secure random one, never the application's `IdGenerator`: those ids
+     * need not be unpredictable, and the state must be.
+     */
     @Bean
     @ConditionalOnMissingBean
-    fun socialProviderManager(
-        authStateCache: AuthStateCache,
-        idGeneratorProvider: ObjectProvider<StringIdGenerator>
-    ): SocialProviderManager {
-        val idGenerator = idGeneratorProvider.getIfAvailable { UuidGenerator.INSTANCE }
+    fun socialProviderManager(authStateCache: AuthStateCache): SocialProviderManager {
         for ((key, provider) in socialAuthenticationProperties.registration) {
             val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
@@ -75,7 +72,7 @@ class CoSecSocialAuthenticationAutoConfiguration(
             )
             val authConfig = provider.toJustAuthConfig()
             val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, authConfig, authStateCache)
-            val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest, idGenerator)
+            val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest)
             SocialProviderManager.register(authProvider)
         }
         return SocialProviderManager

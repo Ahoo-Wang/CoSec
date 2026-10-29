@@ -34,7 +34,6 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemType
-import me.ahoo.cosec.runtime.RandomRequestIds
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.RequestIds
 import me.ahoo.cosec.runtime.RequestSecurity
@@ -43,9 +42,11 @@ import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
-import me.ahoo.cosid.StringIdGenerator
 import java.time.Clock
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
@@ -74,7 +75,8 @@ class IdentityGate(
     /** `cosec.authentication.revocation.skew`: how far the gateway's clock may be ahead of this service's. */
     private val skew: Duration = DEFAULT_SKEW,
     private val clock: Clock = Clock.systemUTC(),
-    private val idGenerator: StringIdGenerator? = null,
+    /** The ids of requests without a plain `CoSec-Request-Id` header. */
+    private val idGenerator: IdGenerator = RandomIdGenerator,
 ) : RequestGate {
     init {
         require(maxBytes > 0) { "The identity size limit must be positive, not $maxBytes." }
@@ -86,7 +88,7 @@ class IdentityGate(
     @Suppress("TooGenericExceptionCaught")
     override suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
-            ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
+            ?: idGenerator.generate()
         val traceId = currentCoroutineContext()[TraceContext]?.traceId
         return try {
             decide(facts, requestId, traceId)
@@ -155,12 +157,14 @@ class IdentityGate(
         val tenant = TenantId(identity.tenant)
         val roles = identity.roles.mapTo(LinkedHashSet(), ::RoleId)
         val memberships = Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(identity.space) to roles), emptyList())
+        // The gateway names a credential `jwt` only for CoSec's own token, the one that may use break-glass (RC1-26).
         val principal = AuthenticatedPrincipal(
             PrincipalId(identity.subject),
             tenant,
-            memberships,
+            MembershipSource.Claims(memberships),
             identity.claims,
             identity.credential,
+            breakGlass = identity.credential.method == Identity.Method.JWT,
         )
         val resolution = ScopeResolver.resolve(
             ScopeSubject(tenant, true, memberships),
@@ -168,7 +172,7 @@ class IdentityGate(
             facts.host,
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return null
-        // The gateway's credential decides here too: a capped one has no principal bindings, an API key no break-glass.
+        // The gateway's credential decides here too: a capped one is granted nothing by name, an API key no break-glass.
         val subject = Subject(
             identity.subject,
             identity.tenant,

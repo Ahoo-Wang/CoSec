@@ -19,6 +19,8 @@ import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
@@ -26,8 +28,6 @@ import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
-import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -52,12 +52,19 @@ import org.springframework.context.annotation.Configuration
 )
 class CoSecJwtAutoConfiguration {
 
+    /** Startup fails on a blank secret, or one shorter than [JwtProperties.Algorithm.minSecretBytes] (RC1-24). */
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenAlgorithm(jwtProperties: JwtProperties): Algorithm {
         require(jwtProperties.secret.isNotBlank()) {
             "Property [${JwtProperties.PREFIX}.secret] must not be blank when JWT is enabled. " +
                 "Set cosec.jwt.secret to a strong random value, or disable JWT via cosec.jwt.enabled=false."
+        }
+        val bytes = jwtProperties.secret.toByteArray(Charsets.UTF_8).size
+        val required = jwtProperties.algorithm.minSecretBytes
+        require(bytes >= required) {
+            "Property [${JwtProperties.PREFIX}.secret] has $bytes bytes, and ${jwtProperties.algorithm} needs at least " +
+                "$required (RFC 7518 §3.2). Set cosec.jwt.secret to a random value of at least $required bytes."
         }
         return when (jwtProperties.algorithm) {
             JwtProperties.Algorithm.HMAC256 -> Algorithm.HMAC256(
@@ -74,14 +81,15 @@ class CoSecJwtAutoConfiguration {
         }
     }
 
+    /** Token ids (`jti`) from the application's [IdGenerator] bean, else from [RandomIdGenerator]. */
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenConverter(
-        idGeneratorProvider: ObjectProvider<StringIdGenerator>,
+        idGeneratorProvider: ObjectProvider<IdGenerator>,
         algorithm: Algorithm,
         jwtProperties: JwtProperties
     ): TokenConverter {
-        val idGenerator = idGeneratorProvider.getIfAvailable { UuidGenerator.INSTANCE }
+        val idGenerator = idGeneratorProvider.getIfAvailable { RandomIdGenerator }
         return JwtTokenConverter(
             idGenerator = idGenerator,
             algorithm = algorithm,

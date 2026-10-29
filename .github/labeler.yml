@@ -48,6 +48,9 @@
 'module: micrometer':
   - changed-files:
       - any-glob-to-any-file: 'extensions/micrometer/**'
+'module: cosid':
+  - changed-files:
+      - any-glob-to-any-file: 'extensions/cosid/**'
 'module: migrate':
   - changed-files:
       - any-glob-to-any-file: 'migration/migrate/**'

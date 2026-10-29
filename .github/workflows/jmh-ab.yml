@@ -98,13 +98,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The code is compiled for 17 (Gradle toolchain); the benchmark JVMs run on 25. 17 is listed last so it is JAVA_HOME.
-      - name: Set up JDK 25 and 17, and Gradle
+      # Each ref compiles with its own Gradle toolchain: 21, or 17 for a ref from before the Java 21 baseline. The benchmark
+      # JVMs run on 25. 21 is listed last so it is JAVA_HOME, the JDK Gradle runs on.
+      - name: Set up JDK 17, 25 and 21, and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
           java-version: |
-            25
             17
+            25
+            21
 
       - name: Check out both refs
         run: |
@@ -115,10 +117,12 @@ jobs:
           # Keep the A/B script itself independent of the refs under test.
           cp "$GITHUB_WORKSPACE"/scripts/jmh-ab/*.py "$RUNNER_TEMP/"
 
+      # Names setup-java's JDKs to Gradle's toolchain detection, whichever ref's gradle.properties is in use.
       - name: Build benchmark jars
         run: |
+          toolchains="-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64"
           for side in base head; do
-            (cd "$RUNNER_TEMP/$side" && ./gradlew ":$MODULE:jmhJar" --no-daemon)
+            (cd "$RUNNER_TEMP/$side" && ./gradlew ":$MODULE:jmhJar" "$toolchains" --no-daemon)
           done
 
       # Every @Param combination of every matching benchmark runs once per side and round, so a class with several

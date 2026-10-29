@@ -13,17 +13,18 @@
 
 package me.ahoo.cosec.spring.boot.starter.jwt
 
+import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
@@ -31,6 +32,7 @@ import org.springframework.boot.test.context.assertj.AssertableApplicationContex
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.test.util.ReflectionTestUtils
 import java.time.Duration
+import java.util.UUID
 
 class CoSecJwtAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -41,7 +43,7 @@ class CoSecJwtAutoConfigurationTest {
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
-            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(IdGenerator::class.java, { IdGenerator { "app-token-id" } })
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
@@ -53,6 +55,8 @@ class CoSecJwtAutoConfigurationTest {
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenCompositeAuthentication::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
+                val token = context.getBean(TokenConverter::class.java).toToken(SimplePrincipal("alice"))
+                JWT.decode(token.accessToken).id.assert().isEqualTo("app-token-id")
             }
     }
 
@@ -71,6 +75,9 @@ class CoSecJwtAutoConfigurationTest {
                     .hasSingleBean(Algorithm::class.java)
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
+                // Without an IdGenerator bean (no cosec-cosid, none of the application's): RandomIdGenerator's UUIDs.
+                val token = context.getBean(TokenConverter::class.java).toToken(SimplePrincipal("alice"))
+                UUID.fromString(JWT.decode(token.accessToken).id).version().assert().isEqualTo(4)
             }
     }
 
@@ -104,6 +111,34 @@ class CoSecJwtAutoConfigurationTest {
                     .getFailure()
                     .hasRootCauseInstanceOf(IllegalArgumentException::class.java)
             }
+    }
+
+    /** RC1-24: a secret shorter than the algorithm's hash fails startup, counted in UTF-8 bytes (RFC 7518 §3.2). */
+    @Test
+    fun aSecretShorterThanTheAlgorithmNeedsFailsStartup() {
+        fun run(algorithm: String, secret: String, check: (AssertableApplicationContext) -> Unit) = contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.algorithm=$algorithm",
+                "${JwtProperties.PREFIX}.secret=$secret"
+            )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run(check)
+        val refused = { context: AssertableApplicationContext ->
+            context.startupFailure!!.stackTraceToString().assert().contains("needs at least")
+            Unit
+        }
+        val started = { context: AssertableApplicationContext ->
+            AssertionsForInterfaceTypes.assertThat(context).hasNotFailed().hasSingleBean(Algorithm::class.java)
+            Unit
+        }
+        for ((algorithm, bytes) in listOf("hmac256" to 32, "hmac384" to 48, "hmac512" to 64)) {
+            run(algorithm, "s".repeat(bytes - 1), refused)
+            run(algorithm, "s".repeat(bytes), started)
+        }
+        // Bytes, not characters: 16 two-byte characters are 32 bytes.
+        run("hmac256", "é".repeat(16), started)
+        run("hmac256", "é".repeat(15), refused)
     }
 
     @Test

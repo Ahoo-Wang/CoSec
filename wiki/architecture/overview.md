@@ -30,7 +30,7 @@ change must keep. What a decision *means* (deny first, default deny, fail closed
 
 Modules sit in group directories: `api/` (annotations, api), `core/` (model, engine, spi, runtime, control),
 `backends/` (cocache, kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, login,
-ip2region, micrometer, opentelemetry), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
+ip2region, micrometer, opentelemetry, cosid), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
 (gateway-server). A Gradle project is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the
 `cosec-` prefix.
 
@@ -50,11 +50,12 @@ flowchart BT
     social[cosec-social] --> login
     openapi[cosec-openapi] --> runtime
     listeners[cosec-opentelemetry<br>cosec-micrometer<br>cosec-ip2region] --> runtime
+    cosid[cosec-cosid] --> spi
     webflux[cosec-webflux] --> runtime
     webmvc[cosec-webmvc] --> runtime
     gateway[cosec-gateway] --> webflux
     starter[cosec-spring-boot] --> runtime & login & jwt
-    starter -. on the classpath .-> webflux & webmvc & gateway & cocache & control & kafka & social & listeners & openapi
+    starter -. on the classpath .-> webflux & webmvc & gateway & cocache & control & kafka & social & listeners & openapi & cosid
     migrate[cosec-migrate] --> cocache & control
     testkit[cosec-testkit] --> runtime
     server[cosec-gateway-server] --> starter
@@ -80,7 +81,8 @@ The rules behind the picture:
 - **`cosec-spi`** (directory `core/spi/`) holds the ports a request or a store calls, with their values and in-memory
   implementations, under `me.ahoo.cosec.spi.*`: the snapshot store (`SnapshotDocumentStore`), memberships, token
   verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
-  limiters, attribute providers, authenticators, the forwarded identity and the audit sink. It depends on
+  limiters, attribute providers, authenticators, the forwarded identity, the audit sink and the id generator
+  (`IdGenerator`, with its default `RandomIdGenerator`). It depends on
   `cosec-model`, `cosec-api`, `cosec-annotations` and kotlinx-coroutines only, so a third party implements a port
   against it alone. A port
   whose signature needs a layer's types stays with that layer: `DecisionListener`, `RequestGate`, the shadow window
@@ -103,8 +105,8 @@ The rules behind the picture:
 - **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
   `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
   shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, which keeps the 7.x Reactor login
-  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, or an observer of decisions
-  (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
+  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
+  decisions (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
   and `cosec-jwt`; every other module is `compileOnly` in
   [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts),
@@ -126,13 +128,15 @@ The rules behind the picture:
   `architectureFacts` task writes, and fails when a declared dependency points outwards (the reviewed exceptions, such
   as `cosec-kafka` on `cosec-runtime` for `DecisionListener`, are listed with their reason in `DependencyRules`), when
   `cosec-annotations`, `cosec-api`, `cosec-model` or `cosec-engine` resolves anything but the Kotlin standard library
-  (`cosec-spi` adds coroutines), or when `cosec-runtime` or `cosec-control` resolves Reactor, Spring, the Servlet API or
-  a Redis client.
+  (`cosec-spi` adds coroutines), when `cosec-runtime` or `cosec-control` resolves Reactor, Spring, the Servlet API or
+  a Redis client, or when a project other than `cosec-cosid` and the starter declares or resolves CosId, or another
+  build script names it (a BOM importing CosId included): CoSec makes its own ids (`IdGenerator`), so that an application
+  can use any CosId version.
 - `SourceRulesTest` scans the compiled classes: Reactor only in the edge, the extensions and the host (and
   `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
   `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
-  `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; a package belongs to one module;
-  opt-ins to the internal API only in CoSec's own sources.
+  `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; only `cosec-cosid`'s and the starter's
+  sources name CosId's packages; a package belongs to one module; opt-ins to the internal API only in CoSec's own sources.
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
@@ -256,7 +260,7 @@ The engine first enumerates the policies that apply to the request, the *candida
 | 0 | The built-in blacklist rule `cosec:blacklist`, which denies a blocked request. |
 | 1 | Platform bindings to anyone, by policy id. |
 | 2 | Tenant bindings to anyone, by policy id. |
-| 3 | For an authenticated principal: its attachments in claim order, then its principal bindings in the platform and the tenant document, by binding id. |
+| 3 | For an authenticated principal: its attachments in claim order, then its principal bindings in the platform and the tenant document, by binding id. For a credential with a role cap, DENY candidates only: a cap removes ALLOWs, never DENYs. |
 | 4 | Role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a role in document order. |
 | 5 | For an authenticated principal: its break-glass bindings, last. |
 
@@ -432,7 +436,7 @@ Run a benchmark through Gradle:
 These runs use one fork with one warm-up and one measurement iteration (the defaults in the root `build.gradle.kts`):
 enough to see that a benchmark runs, not to compare versions. Gradle properties override the defaults:
 `-PjmhWarmupIterations`, `-PjmhIterations`, `-PjmhFork`, `-PjmhProfilers` (comma-separated, such as `gc`) and
-`-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still compiled for 17).
+`-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still compiled for 21).
 
 To compare versions, build the jar and run it with real settings:
 

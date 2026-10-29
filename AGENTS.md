@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 17, Spring Boot 4, Kotlin coroutines (Project
+CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 21, Spring Boot 4, Kotlin coroutines (Project
 Reactor only at the edges, in the extensions and in `cosec-login`'s API), built with Gradle (Kotlin DSL). This file is
 for agents and contributors **changing** CoSec. To **use** CoSec, see `skills/` and https://cosec.ahoo.me.
 Branching, reviews and releases: `CONTRIBUTING.md`.
@@ -85,7 +85,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `runtime`, `backends` implementing `spi`, and `control` on top of `runtime`. Projects sit in group directories
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `runtime`, `control`), `backends/`
   (`cocache`, `kafka`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
-  `ip2region`, `micrometer`, `opentelemetry`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
+  `ip2region`, `micrometer`, `opentelemetry`, `cosid`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
@@ -93,7 +93,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library and `spi` adds coroutines;
-  `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client), `SourceRulesTest`
+  `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; only `cosid` and the
+  starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge, extensions and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports and `CoSecJson`;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
@@ -119,8 +120,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
     `SnapshotKey`, `InMemorySnapshotDocumentStore`), `membership`, `token` (`TokenVerifier`, `RevocationReader`,
-    `TokenStore`, `TokenRevoker`), `apikey`, `ratelimit`, `attribute`, `authn`, `identity`, `audit`. Model, api,
-    annotations and kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
+    `TokenStore`, `TokenRevoker`), `apikey`, `ratelimit`, `attribute`, `authn`, `identity`, `audit`, `id`
+    (`IdGenerator`). Model, api, annotations and kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
     (`DecisionListener`, `RequestGate`, `CandidateStore`, the shadow report ports in `runtime`; `ControlStore`,
     `ChangeListener` in `control`).
   - `cosec-runtime` (`core/runtime/`) is the coroutine `Pipeline` and what every host needs around the engine: the
@@ -139,7 +140,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
     `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits),
     `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`; the one module that keeps Reactor in
     its API), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
-    `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps).
+    `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps),
+    `cosec-cosid` (an `IdGenerator` over CosId 5). Only `cosec-cosid` and the starter, which wires it, may reference
+    or bring CosId (`DependencyRules.COSID_OWNERS`).
     `cosec-migrate` (`migration/migrate/`) converts 7.x data, and holds the only copy of the 7.x model
     (`me.ahoo.cosec.migrate.v7`).
   - `cosec-testkit` (`test/testkit/`) is the policy test kit applications run their own scenarios with. It depends on

@@ -43,6 +43,8 @@ object DependencyRules {
         "ip2region" to CORE - "control",
         "micrometer" to CORE - "control",
         "opentelemetry" to CORE - "control",
+        // An implementation of the IdGenerator port, and nothing more of CoSec.
+        "cosid" to setOf("spi", "model", "api", "annotations"),
     )
 
     class Exception(val from: String, val to: String, val reason: String)
@@ -73,6 +75,15 @@ object DependencyRules {
     val SPI_LIBRARIES: Set<String> = PURE_LIBRARIES + setOf(
         "org.jetbrains.kotlinx:kotlinx-coroutines-core",
         "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm",
+    )
+
+    /**
+     * The projects that may reference or bring CosId, with the reason. CoSec owns its ids (`IdGenerator`), so an
+     * application on any CosId version can put CoSec on its class path.
+     */
+    val COSID_OWNERS: Map<String, String> = mapOf(
+        "cosid" to "cosec-cosid adapts CosId 5 to the IdGenerator port",
+        "spring-boot" to "the host wires cosec-cosid by class path, as it does every module (RFC 0011 §2)",
     )
 
     /** What `runtime` and `control` never have (§5): Reactor, Spring, the Servlet API, a Redis client. */

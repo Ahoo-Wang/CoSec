@@ -14,7 +14,9 @@ mentioned here, with its default, is listed in [Configuration](../operations/con
 
 A login produces a **composite token**: a short-lived access token and a longer-lived refresh token, both JWTs
 signed with `cosec.jwt.secret` (HMAC-SHA256 by default, or HMAC-SHA384/512). With JWT enabled, which is the
-default, the application does not start until the secret is set.
+default, the application does not start until the secret is set, at least as long as the algorithm's hash: 32 bytes
+(in UTF-8) for HMAC-SHA256, 48 for HMAC-SHA384, 64 for HMAC-SHA512 (RFC 7518 §3.2). A shorter secret can be guessed
+offline from any token issued with it.
 
 The access token carries the principal, so authenticating a request needs no lookup beyond the revocation check:
 
@@ -24,15 +26,15 @@ The access token carries the principal, so authenticating a request needs no loo
 | `sub` | The principal id. |
 | `roles` | Role ids, written `role` or `role@space` ([Roles and spaces](#roles-and-spaces)). Left out when empty. |
 | `policies` | Ids of the policies attached to the principal. Left out when empty. |
-| `attributes` | Free-form principal attributes; conditions read them as `subject.attributes.<name>`. |
-| `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). |
+| `attributes` | Free-form principal attributes; conditions read them as `subject.attributes.<name>`. `apiKeyId`, which CoSec sets for an [API key](#api-keys), is reserved: a token that carries it is refused as `token-invalid`, and `JwtTokenConverter` does not issue one. |
+| `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). A value that is not a string makes the token invalid. |
 | `cosec.membership` | `"provider"` in place of `roles` and `policies`, when they come from a `MembershipProvider` ([Memberships](#memberships)). Left out otherwise. |
 | `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
 
 The refresh token carries only its own `jti`, `iat`, `exp`, and, as `sub`, the `jti` of the access token it belongs
-to. Token ids come from the application's `StringIdGenerator` bean if it has one (for example from CosId),
-otherwise from `UuidGenerator`. The lifetimes are `cosec.jwt.token-validity.access` (10 minutes) and
-`cosec.jwt.token-validity.refresh` (7 days).
+to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
+from `RandomIdGenerator` ([Ids](../architecture/extending.md#ids)). The lifetimes are
+`cosec.jwt.token-validity.access` (10 minutes) and `cosec.jwt.token-validity.refresh` (7 days).
 
 **A rejected token is not an error.** An expired, badly signed or revoked token makes the caller anonymous, and the
 policies decide what anonymous callers may do: a public path still works. If the request is denied, the response
@@ -55,7 +57,9 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
 - **`TokenAuthenticator`** verifies the token with the JWT algorithm, then asks the revocation reader whether the
   token, or every token of its principal, was revoked. Only `TokenVerifier.verify` (and `refresh`) turns a token into
   a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
-  (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`.
+  (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
+  `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`
+  around a verifier of your own authenticates its tokens, but never with break-glass.
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 
 A request that carries an API key (and API keys are enabled) is judged by the key alone, even if it also sends a
@@ -289,10 +293,12 @@ the key. A key may only narrow them, with `roles`, its **cap** (`IDN-2`), or say
 | The key says | The key holds |
 |---|---|
 | `uncapped: true` | everything its principal holds: its roles, attached policies and principal bindings |
-| `roles: [billing, auditor@team-a]` | only those of its principal's roles, matched exactly by space (`role` is the default space, `role@space` that space). No attached policy and no principal binding reaches it: a cap is written in roles. A role in the cap that the principal does not hold gives nothing. |
-| `roles: []` | only what `Anyone` bindings give: no roles, attached policies or principal bindings |
+| `roles: [billing, auditor@team-a]` | only those of its principal's roles, matched exactly by space (`role` is the default space, `role@space` that space). A cap is written in roles, so the principal's attached policies and principal bindings grant the key nothing; their DENYs still apply to it, as to the principal. A role in the cap that the principal does not hold gives nothing. |
+| `roles: []` | only what `Anyone` bindings give, less what the principal's own DENYs deny: no roles, and nothing granted by attached policies or principal bindings |
 
-`Anyone` bindings apply to every key. **An API key never gets break-glass**, capped or not: break-glass is a
+`Anyone` bindings apply to every key. **A cap never lifts a restriction** (`BND-9`): a DENY bound to the principal, or
+attached to it, applies to all of its keys, capped or not, so a key is never more than its principal.
+**An API key never gets break-glass**, capped or not: break-glass is a
 time-limited emergency grant to a person, not to a long-lived credential, and only CoSec's own token gets it (`BRK-8`;
 [Break-glass](../guide/security-model.md#break-glass)). A key carries no attributes of
 its principal's token either, only `apiKeyId`: a DENY whose condition reads `subject.attributes.<name>` with
@@ -364,13 +370,18 @@ With API keys enabled and neither the in-memory store nor an `ApiKeyReader`, sta
 
 A principal may act within a tenant. The principal your `Authentication` returns decides it: a `TenantPrincipal`
 (such as `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`) puts its tenant in the token's `tenantId` claim;
-a token without the claim, or with an empty one, belongs to the default tenant `(0)`. The tenant decides which tenant
+a token without the claim, or with an empty one, belongs to the default tenant `(0)`, and one whose claim is not a
+string (a number, `null`, an object) is invalid (`token-invalid`). The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
-To let a user switch tenants, extend `AbstractSwitchTenantAuthentication`, implement
-`switchTenant(targetTenantId, previousPrincipal)` (check that the user belongs to the target tenant), and issue a
-new token for the principal it returns.
+To let a user switch tenants, extend `AbstractSwitchTenantAuthentication` and implement
+`switchTenant(targetTenantId, previousPrincipal)`: check that the user belongs to the target tenant, and answer what it
+holds there, looked up for that tenant: a `TenantMembership` of its roles, policies and attributes in the target
+tenant, or `TenantMembership.fromProvider()` when your `MembershipProvider` answers for it. Then issue a new token for
+the principal `authenticate` returns. That principal has the previous principal's id, the target tenant and only that
+membership: roles belong to a tenant, so none of the previous token's roles, policies or attributes reach the new one
+(an administrator of one tenant is not one of another).
 
 **The platform tenant `(platform)` is privileged**: only its principals can be granted `cosec:root` through
 break-glass, and only they act on the platform and app documents in the control plane
@@ -383,15 +394,23 @@ With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](ht
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 
-1. Send the user to `socialAuthentication.authorizeUrl("<name>")`. The URL carries a fresh OAuth `state`, generated
-   by the application's `StringIdGenerator` bean if it has one, otherwise by `UuidGenerator`. The state is kept in
-   Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
+1. Send the user to `socialAuthentication.authorizeUrl("<name>")`. The URL carries a fresh OAuth `state`, 128
+   random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since the state must be
+   unpredictable and those ids need not be. The state is kept in Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
    `JustAuthCredentials("<name>")`, and pass it to `TokenCompositeAuthentication.authenticateAsToken`.
 3. A `SocialUserPrincipalConverter` turns the provider's user into your principal. The default,
-   `DirectSocialUserPrincipalConverter`, makes a principal with the id `<provider user id>@<name>`, the provider's
-   raw user info as attributes, and **no roles, policies or tenant**. To look the user up in your own system and
-   give them roles, declare your own `SocialUserPrincipalConverter` bean.
+   `DirectSocialUserPrincipalConverter`, makes a principal with the id `<provider user id>@<name>`, two attributes,
+   `cosec_oauth_provider` (the registration name) and `cosec_oauth_user_id` (the provider's id of the user), and
+   **no roles, policies or tenant**. Attributes become signed claims that conditions read and a gateway may forward,
+   so the user's profile (name, email, company, bio, the raw user info), which the user edits on the provider, is not
+   among them. To look the user up in your own system and give them roles, declare your own
+   `SocialUserPrincipalConverter` bean.
+
+Both steps block their thread. `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache,
+and the callback's `authenticateAsToken` calls the provider over JustAuth's blocking HTTP. Call them off the event
+loop: in WebFlux, `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` and the callback's `Mono`, each
+with `.subscribeOn(Schedulers.boundedElastic())`.
 
 ## Behind a gateway
 

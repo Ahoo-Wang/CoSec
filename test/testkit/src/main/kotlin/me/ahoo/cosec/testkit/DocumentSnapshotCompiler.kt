@@ -67,8 +67,12 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
     override fun compile(documents: ScenarioDocuments): CompiledSnapshot =
         compile(documents, AttributeCatalog.NONE, faults = true)
 
-    /** Compiles as this does, with the external attributes of [catalog] declared (RFC 0006 §5.4.1). */
-    fun with(catalog: AttributeCatalog): SnapshotCompiler = SnapshotCompiler { compile(it, catalog, faults = true) }
+    /**
+     * Compiles as this does, with the external attributes of [catalog] declared (RFC 0006 §5.4.1), and [credentialHeaders]
+     * refused as credential headers are, such as a host's renamed API key header (`CND-5`).
+     */
+    fun with(catalog: AttributeCatalog, credentialHeaders: Set<String> = emptySet()): SnapshotCompiler =
+        SnapshotCompiler { compile(it, catalog, faults = true, credentialHeaders) }
 
     /** Compiles as a published document is compiled: without `"fault"`. */
     val stored: SnapshotCompiler = SnapshotCompiler { compile(it, AttributeCatalog.NONE, faults = false) }
@@ -78,9 +82,16 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
      * uses): every document, the platform's own included, against the platform's `limits` and the attributes it
      * declares, plus those of [providers].
      */
-    private fun compile(documents: ScenarioDocuments, providers: AttributeCatalog, faults: Boolean): CompiledSnapshot {
+    private fun compile(
+        documents: ScenarioDocuments,
+        providers: AttributeCatalog,
+        faults: Boolean,
+        credentialHeaders: Set<String> = emptySet(),
+    ): CompiledSnapshot {
         val platform = decode(DocumentKind.PLATFORM, "", documents.platform, faults)
-        val compiler = guarded("platform") { PolicyDocumentCompiler.forPlatform(platform, providers) }
+        val compiler = guarded("platform") {
+            PolicyDocumentCompiler.forPlatform(platform, providers, credentialHeaders = credentialHeaders)
+        }
         return CompiledSnapshot(
             platform = guarded("platform") { compiler.compile(platform) },
             apps = documents.apps.mapValues { (app, node) -> compile(compiler, DocumentKind.APP, app, node, faults) },

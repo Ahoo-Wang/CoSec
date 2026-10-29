@@ -125,7 +125,12 @@ internal class PipelineSecurityContext(val security: RequestSecurity) : Security
     override val principal: CoSecPrincipal = SimpleTenantPrincipal(
         SimplePrincipal(
             id = security.request.subject.id,
-            policies = security.memberships.attachments.mapTo(LinkedHashSet()) { it.value },
+            // A capped credential's attachments only restrict it (RC1-1): it does not hold them.
+            policies = if (security.request.subject.principalBindings) {
+                security.memberships.attachments.mapTo(LinkedHashSet()) { it.value }
+            } else {
+                emptySet()
+            },
             roles = security.scope.roles.mapTo(LinkedHashSet()) { it.value },
             attributes = security.principal?.attributes.orEmpty(),
         ),

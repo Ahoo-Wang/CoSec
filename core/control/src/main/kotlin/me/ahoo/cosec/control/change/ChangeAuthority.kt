@@ -292,6 +292,7 @@ class ChangeAuthority(
                 null,
                 capped = !approval.principalBindings,
             ),
+            breakGlass = approval.breakGlass,
         )
         val approver = Operator(approval.approver, memberships, strings(approval.attributes))
         val permitted = TenantIsolation.allows(approver, change.key) &&

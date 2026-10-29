@@ -29,4 +29,41 @@ internal class DirectSocialUserPrincipalConverterTest {
             }
             .verifyComplete()
     }
+
+    /**
+     * RC1-25: only the provider registration and the provider's user id become (signed) attributes; profile fields the
+     * user edits, the raw user info and names CoSec sets for other credentials never do, and the input is left alone.
+     */
+    @Test
+    fun onlyProviderOwnedFieldsBecomeAttributes() {
+        val rawInfo = mutableMapOf<String, Any>(
+            "login" to "octocat",
+            "company" to "Acme",
+            "bio" to "admin",
+            "apiKeyId" to "k1",
+            SocialUserPrincipalConverter.OAUTH_USER_ID to "forged",
+        )
+        val authUser = SocialUser(
+            id = "583231",
+            username = "octocat",
+            nickname = "The Octocat",
+            email = "octocat@example.com",
+            rawInfo = rawInfo,
+            provider = "github",
+        )
+        DirectSocialUserPrincipalConverter.convert("github", authUser)
+            .test()
+            .consumeNextWith {
+                it.attributes.assert().isEqualTo(
+                    mapOf(
+                        SocialUserPrincipalConverter.OAUTH_PROVIDER to "github",
+                        SocialUserPrincipalConverter.OAUTH_USER_ID to "583231",
+                    )
+                )
+                it.roles.assert().isEmpty()
+                it.policies.assert().isEmpty()
+            }
+            .verifyComplete()
+        rawInfo.keys.assert().doesNotContain(SocialUserPrincipalConverter.OAUTH_PROVIDER)
+    }
 }

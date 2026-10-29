@@ -20,6 +20,8 @@ import com.tngtech.archunit.core.importer.ImportOption
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.name
 import kotlin.io.path.readText
@@ -79,6 +81,17 @@ class SourceRulesTest {
         /** The one entry every backend class has (the mapper allowlist entry): the mapper factory and nothing else. */
         const val MAPPER = "me.ahoo.cosec.runtime.json.CoSecJson"
 
+        /** The main source files of [project], by extension. */
+        fun mainSources(project: String, extensions: Set<String> = setOf("kt", "java")): List<Path> {
+            val main = Projects.directory(project).resolve("src/main")
+            if (!main.exists()) {
+                return emptyList()
+            }
+            return Files.walk(main).use { files ->
+                files.filter { Files.isRegularFile(it) && it.extension in extensions }.toList()
+            }
+        }
+
         fun projectOf(javaClass: JavaClass): String? = Projects.projectOfPackage(javaClass.packageName)
     }
 
@@ -129,6 +142,22 @@ class SourceRulesTest {
             BACKEND_REACH.any { (from, to) ->
                 origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
             }
+        }.assert().isEmpty()
+    }
+
+    /**
+     * CoSec owns its ids (`IdGenerator`): only [DependencyRules.COSID_OWNERS] name CosId's packages, in their code,
+     * strings or resources. A text scan of every project, so that projects off this class path count too.
+     */
+    @Test
+    fun `only cosec-cosid and the starter reference CosId`() {
+        val texts = setOf("kt", "java", "kts", "imports", "properties", "json", "yml", "yaml", "xml")
+        DependencyRules.COSID_OWNERS.keys.filterNot { owner ->
+            mainSources(owner, texts).any { "me.ahoo.cosid." in it.readText() }
+        }.assert().describedAs("owners that name no CosId package: the rule would check nothing").isEmpty()
+        Projects.directories.keys.filterNot { it in DependencyRules.COSID_OWNERS }.flatMap { project ->
+            mainSources(project, texts).filter { "me.ahoo.cosid." in it.readText() }
+                .map { "$project: ${it.relativeTo(Projects.root)}" }
         }.assert().isEmpty()
     }
 

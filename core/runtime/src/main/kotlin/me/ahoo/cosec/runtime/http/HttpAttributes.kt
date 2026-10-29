@@ -32,17 +32,29 @@ import java.net.URISyntaxException
  * - `request.attributes.<name>`: what the adapter knows besides HTTP ([HttpFacts.requestAttributes]), such as the
  *   gateway's route id.
  *
- * Every other attribute is absent here: the engine answers it. Only an ambiguous header throws; the engine counts the
- * statement that read it as erring.
+ * Every other attribute is absent here: the engine answers it. Only an ambiguous header throws, and [credentialHeader]:
+ * the engine counts the statement that read it as erring.
  */
 class HttpAttributes(
     private val headers: Headers,
     private val requestAttributes: Map<String, String> = emptyMap(),
+    /**
+     * The header the host reads API keys from, which no document may read (`CND-5`). The compilers refuse a reference
+     * to it when the host names it to them; reading it here throws all the same, so a compiler that was not told
+     * cannot leak a key (RC1-21). Folded to ASCII lower case, as header names arrive.
+     */
+    credentialHeader: String? = null,
 ) : ConditionInput {
-    constructor(facts: HttpFacts) : this(facts.headers, facts.requestAttributes)
+    constructor(facts: HttpFacts, credentialHeader: String? = null) :
+        this(facts.headers, facts.requestAttributes, credentialHeader)
+
+    private val credentialHeader: String? = credentialHeader?.let(HttpNames::fold)
 
     override fun string(attribute: Attribute): String? = when (attribute.kind) {
-        Attribute.Kind.HTTP_HEADER -> header(attribute.name)
+        Attribute.Kind.HTTP_HEADER -> {
+            if (attribute.name == credentialHeader) throw CredentialHeaderException(attribute.name)
+            header(attribute.name)
+        }
         Attribute.Kind.HTTP_ORIGIN -> header(ORIGIN)
         Attribute.Kind.HTTP_REFERER -> header(REFERER)
         Attribute.Kind.HTTP_ORIGIN_HOST -> header(ORIGIN)?.let(::hostOf)
@@ -81,6 +93,10 @@ class HttpAttributes(
         const val REFERER = "referer"
     }
 }
+
+/** Header [header] carries the host's API keys: no condition may read it (`CND-5`). */
+internal class CredentialHeaderException(val header: String) :
+    IllegalArgumentException("Header [$header] carries credentials; no condition may read it.")
 
 /** Header [header] arrived more than once with different values: a condition on it cannot tell which one to read. */
 internal class AmbiguousHeaderException(val header: String) :

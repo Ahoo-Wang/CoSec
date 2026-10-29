@@ -30,6 +30,7 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -92,6 +93,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     private val idGenerator = components.idGenerator
     private val clock = components.clock
     private val options = components.options
+
+    /** Folded once: no condition reads it ([HttpAttributes], `CND-5`). */
+    private val apiKeyHeader = HttpNames.fold(options.apiKeyHeader)
     private val attributes = components.attributes
     private val listeners = components.listeners
     private val rateLimiter = components.rateLimiter
@@ -244,7 +248,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return sampled?.let { ReplayHandle(request, view, it) }
     }
 
-    private fun eventId(): String = idGenerator?.generateAsString() ?: RandomRequestIds.next()
+    private fun eventId(): String = idGenerator.generate()
 
     private suspend fun decide(facts: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
         val path = PathNormalizer.normalize(facts.rawPath)
@@ -331,7 +335,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                 blocked = blacklist.blocked,
             ),
         )
-        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts))
+        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts, apiKeyHeader))
         val decision = evaluate(request, view, fetched, record)
         breakGlass(requestId, traceId, decision, view, record)?.let { return it }
         return decided(requestId, traceId, decision, authn, security(requestId, principal, request, decision))
@@ -734,7 +738,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      */
     private fun requestId(facts: HttpFacts): String {
         val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
-        return given ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
+        return given ?: idGenerator.generate()
     }
 
     /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */

@@ -35,7 +35,6 @@ import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
-import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -56,7 +55,7 @@ class MembershipClaimsJwtTest {
     private val attributes = mapOf("department" to "sales")
 
     private fun converter(limit: Int? = null) = JwtTokenConverter(
-        MockIdGenerator.INSTANCE,
+        JwtFixture.IDS,
         JwtFixture.ALGORITHM,
         membershipClaimLimit = limit,
     )

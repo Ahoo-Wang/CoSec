@@ -53,6 +53,22 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
 
 这个端点本身也是普通路由：你的文档必须放行它。
 
+### 检查背后的决策 {#the-decision-behind-a-check}
+
+`decide` 接收相同的参数，返回 `check` 归结为布尔值之前的那个 `Decision`（`me.ahoo.cosec.model.decision`）。`check` 就是 `decide(...) is Decision.Permit`，因此两者的结果始终一致：
+
+```kotlin
+suspend fun decide(security: SecurityContext, action: String, resource: String): Decision
+```
+
+| 决策 | 何时 | `check` |
+|---|---|---|
+| `Permit(by)` | 有 ALLOW 匹配，且没有 DENY 匹配。`by` 是放行的语句：`policy`、`index`、`name`，以及 `via`，即策略生效的途径。`BindingRef.Bound(id, document)` 是一个绑定，位于 `PLATFORM`、`APP` 或 `TENANT` 文档中；`BindingRef.Attached(policy)` 是主体的成员关系附加的策略。 | `true` |
+| `Deny(by)` | 有 DENY 匹配（`by` 为该语句），租户的平台边界拒绝了放行（`StatementRef.Boundary`），或者没有任何匹配（`null`）。管道没有构建的 `SecurityContext`，或者不含 `:` 的动作，也是 `Deny(null)`。 | `false` |
+| `Indeterminate(cause)` | 无法作出决策：某个文档读不到，某个 DENY 求值出错，检查本身出错，或者只有 break-glass 会放行。检查本身出错时日志中会有一条警告，并且无论出错的是什么，都报告为 `SourceUnavailable(PLATFORM, error)`：请看 `error`，而不是文档种类。 | `false` |
+
+用它记录是什么允许了你的代码执行某个操作，例如“由应用文档中的角色绑定 `order-admins` 放行”。`Decision` 只留在你的进程中：永远不要把它或它的原因写进响应。Web 适配器也从不接触它，所有状态码正是因此出自同一处（[响应与状态码](./web.md#responses-and-status-codes)）。出于同样的原因，适配器模块不提供 `decide` 的 `Mono` 或阻塞形式：请在协程中调用它。`Permit` 携带的义务（即限流）并没有执行。
+
 ### 检查与请求管道的关系 {#how-a-check-relates-to-the-request-pipeline}
 
 检查与请求使用相同的引擎、相同的文档和相同的规则，遵循同样的[求值顺序](../guide/security-model.md#evaluation-order)。它沿用请求的主体、成员关系、作用域（租户、应用、空间和角色）以及环境（客户端 IP、设备），不同之处只在决策之外：
@@ -65,7 +81,7 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
 | 限流 | 消耗许可，可能返回 `429` | 从不消耗，也从不受限 |
 | 只有 break-glass 放行的 Permit | 在 REQUIRED 审计之后继续 | `false`：检查不写审计 |
 | Deny、Indeterminate、错误 | 一个状态码 | `false`，出错时日志中有一条警告 |
-| 结果 | HTTP 状态码 | 只有 Permit 才为 `true` |
+| 结果 | HTTP 状态码 | 只有 Permit 才为 `true`；`decide` 返回决策本身 |
 
 检查失败即拒绝：不是由管道构建的 `SecurityContext`（你自己构造的，或者根本没有）一律为 `false`，不论文档怎么写。因此请求之外不存在检查：代表用户执行操作的消息消费者没有可供检查的已放行请求，必须自己携带授权。
 

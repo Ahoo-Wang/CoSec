@@ -18,19 +18,27 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 /**
- * DirectSocialUserPrincipalConverter .
+ * The principal of a social login as it is: the id `<provider user id>@<provider>`, no roles, policies or tenant.
+ *
+ * Its attributes become signed token claims, which conditions read as `subject.attributes.*` and a gateway may
+ * forward, so they are only what the provider owns and the user cannot edit (RC1-25): the registration name
+ * ([SocialUserPrincipalConverter.OAUTH_PROVIDER]) and the provider's id of the user
+ * ([SocialUserPrincipalConverter.OAUTH_USER_ID]). The profile (name, nickname, email, company, bio, the raw user info)
+ * is the user's to change, so none of it is signed; a converter of your own looks the user up instead.
  *
  * @author ahoo wang
  */
 object DirectSocialUserPrincipalConverter : SocialUserPrincipalConverter {
 
     override fun convert(provider: String, authUser: SocialUser): Mono<CoSecPrincipal> {
-        authUser.rawInfo[SocialUserPrincipalConverter.OAUTH_PROVIDER] = provider
         return SimplePrincipal(
             id = asProviderUserId(provider, authUser),
             policies = emptySet(),
             roles = emptySet(),
-            attributes = authUser.rawInfo.mapValues { it.value.toString() },
+            attributes = mapOf(
+                SocialUserPrincipalConverter.OAUTH_PROVIDER to provider,
+                SocialUserPrincipalConverter.OAUTH_USER_ID to authUser.id,
+            ),
         ).toMono()
     }
 

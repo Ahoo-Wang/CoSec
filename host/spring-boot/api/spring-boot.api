@@ -16,6 +16,11 @@ public final class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfigu
 	public final fun requireModule (Lorg/springframework/context/ApplicationContext;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lorg/springframework/beans/factory/InitializingBean;
 }
 
+public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$CosIdGenerator {
+	public fun <init> ()V
+	public fun cosecCosIdModuleCheck (Lorg/springframework/context/ApplicationContext;)Lorg/springframework/beans/factory/InitializingBean;
+}
+
 public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$Gateway {
 	public fun <init> ()V
 	public fun cosecGatewayModuleCheck (Lorg/springframework/context/ApplicationContext;)Lorg/springframework/beans/factory/InitializingBean;
@@ -279,7 +284,7 @@ public class me/ahoo/cosec/spring/boot/starter/authentication/social/CoSecSocial
 	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/authentication/social/SocialAuthenticationProperties;)V
 	public fun authStateCache (Lorg/springframework/data/redis/core/StringRedisTemplate;)Lme/zhyd/oauth/cache/AuthStateCache;
 	public fun socialAuthentication (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;)Lme/ahoo/cosec/social/SocialAuthentication;
-	public fun socialProviderManager (Lme/zhyd/oauth/cache/AuthStateCache;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/social/SocialProviderManager;
+	public fun socialProviderManager (Lme/zhyd/oauth/cache/AuthStateCache;)Lme/ahoo/cosec/social/SocialProviderManager;
 	public fun socialUserPrincipalConverter ()Lme/ahoo/cosec/social/SocialUserPrincipalConverter;
 }
 
@@ -458,13 +463,13 @@ public class me/ahoo/cosec/spring/boot/starter/control/CoSecControlAutoConfigura
 	public fun cosecChangeAuthority (Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/change/ChangeAuthority;
 	public fun cosecChangeListeners (Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/audit/ChangeListeners;
 	public fun cosecChangeOptions (Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/change/ChangeOptions;
-	public fun cosecChanges (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cosec/control/audit/ChangeListeners;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/control/change/Changes;
+	public fun cosecChanges (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cosec/control/audit/ChangeListeners;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/control/change/Changes;
 	public fun cosecControlAuthorizer (Lme/ahoo/cosec/spring/boot/starter/control/ControlSnapshot;Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/authz/ControlAuthorizer;
 	public fun cosecControlHttp (Lme/ahoo/cosec/control/api/ControlPlane;)Lme/ahoo/cosec/control/api/ControlHttp;
 	public fun cosecControlMaintenance (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/store/ControlMaintenance;
 	public fun cosecControlMaintenanceScheduler (Lme/ahoo/cosec/control/store/ControlMaintenance;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/spring/boot/starter/control/ControlMaintenanceScheduler;
-	public fun cosecControlPlane (Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;)Lme/ahoo/cosec/control/api/ControlPlane;
-	public fun cosecControlSnapshot (Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/control/ControlSnapshot;
+	public fun cosecControlPlane (Lme/ahoo/cosec/control/change/Changes;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/change/ChangeAuthority;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/control/api/ControlPlane;
+	public fun cosecControlSnapshot (Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/spring/boot/starter/control/ControlSnapshot;
 	public fun cosecControlStore (Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/store/ControlStore;
 	public fun cosecLoggingChangeListener ()Lme/ahoo/cosec/control/audit/LoggingChangeListener;
 	public fun cosecRevisions (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;)Lme/ahoo/cosec/control/store/Revisions;
@@ -603,6 +608,23 @@ public final class me/ahoo/cosec/spring/boot/starter/control/ControlSnapshot : j
 	public final fun getSource ()Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
 }
 
+public class me/ahoo/cosec/spring/boot/starter/cosid/CoSecCosIdAutoConfiguration {
+	public fun <init> ()V
+	public fun cosecIdGenerator (Lme/ahoo/cosid/runtime/CosIdRuntime;Lme/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties;)Lme/ahoo/cosec/spi/id/IdGenerator;
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties$Companion;
+	public static final field GENERATOR_KEY Ljava/lang/String;
+	public static final field PREFIX Ljava/lang/String;
+	public fun <init> ()V
+	public final fun getGenerator ()Ljava/lang/String;
+	public final fun setGenerator (Ljava/lang/String;)V
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/cosid/CosIdGeneratorProperties$Companion {
+}
+
 public final class me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperties : me/ahoo/cosec/spring/boot/starter/EnabledCapable {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperties$Companion;
 	public static final field PREFIX Ljava/lang/String;
@@ -679,6 +701,7 @@ public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm
 	public static final field HMAC384 Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;
 	public static final field HMAC512 Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getMinSecretBytes ()I
 	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;
 	public static fun values ()[Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;
 }
@@ -857,7 +880,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineWebAutoConf
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration {
 	public fun <init> ()V
-	public fun cosecPlatformCompiler (Lme/ahoo/cosec/runtime/attribute/AttributeProviders;)Lme/ahoo/cosec/runtime/snapshot/PlatformCompiler;
+	public fun cosecPlatformCompiler (Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/runtime/snapshot/PlatformCompiler;
 	public fun cosecSnapshotDocumentStore ()Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;
 	public fun cosecSnapshotReadiness (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lorg/springframework/context/ApplicationEventPublisher;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/spring/boot/starter/pipeline/SnapshotReadiness;
 	public fun cosecSnapshotSource (Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/snapshot/PlatformCompiler;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
@@ -924,7 +947,9 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties {
+	public static final field API_KEY_HEADER_KEY Ljava/lang/String;
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Companion;
+	public static final field DEFAULT_API_KEY_HEADER Ljava/lang/String;
 	public static final field MODE_KEY Ljava/lang/String;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V

@@ -1,0 +1,17 @@
+# Rule: CND-5
+# Mutant: the pipeline lets a condition read its API key header when a compiler was not told about it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.HttpAttributesTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
+index a001c05d..89ea844d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
+@@ -52,7 +52,7 @@ class HttpAttributes(
+ 
+     override fun string(attribute: Attribute): String? = when (attribute.kind) {
+         Attribute.Kind.HTTP_HEADER -> {
+-            if (attribute.name == credentialHeader) throw CredentialHeaderException(attribute.name)
++            if (false && attribute.name == credentialHeader) throw CredentialHeaderException(attribute.name)
+             header(attribute.name)
+         }
+         Attribute.Kind.HTTP_ORIGIN -> header(ORIGIN)

@@ -31,12 +31,11 @@
     }
   },
   "authentication": {
-    "result": "token",
-    "token": {
+    "result": "jwt",
+    "jwt": {
       "jti": "t1",
-      "tenant": "(platform)",
-      "id": "cosec",
-      "issuedAt": "2026-10-01T00:00:00Z"
+      "sub": "cosec",
+      "tenantId": "(platform)"
     }
   },
   "listeners": [
