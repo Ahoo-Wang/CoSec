@@ -37,6 +37,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -236,7 +237,7 @@ class ExternalAttributesPipelineTest {
         }
         val provider = MembershipProvider { _, _ ->
             membershipsStarted.complete(Unit)
-            Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
+            MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
         }
         val (outcome, _) = evaluate(
             listOf(BlacklistAttributeProvider(source)),

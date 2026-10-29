@@ -36,19 +36,19 @@ class InMemoryMembershipProviderTest {
 
     @Test
     fun putReplaceAndRemove() {
-        now { provider.memberships(tenant, alice) }.assert().isNull()
+        now { provider.memberships(tenant, alice) }.assert().isSameAs(MembershipAnswer.Unknown)
 
         val admin = memberships("admin")
         provider.put(tenant, alice, admin)
-        now { provider.memberships(tenant, alice) }.assert().isSameAs(admin)
-        now { provider.memberships(TenantId("other"), alice) }.assert().isNull()
+        (now { provider.memberships(tenant, alice) } as MembershipAnswer.Known).memberships.assert().isSameAs(admin)
+        now { provider.memberships(TenantId("other"), alice) }.assert().isSameAs(MembershipAnswer.Unknown)
 
         val viewer = memberships("viewer")
         provider.put(tenant, alice, viewer)
-        now { provider.memberships(tenant, alice) }.assert().isSameAs(viewer)
+        (now { provider.memberships(tenant, alice) } as MembershipAnswer.Known).memberships.assert().isSameAs(viewer)
 
         provider.remove(tenant, alice)
-        now { provider.memberships(tenant, alice) }.assert().isNull()
+        now { provider.memberships(tenant, alice) }.assert().isSameAs(MembershipAnswer.Unknown)
     }
 
     @Test
@@ -71,7 +71,7 @@ class InMemoryMembershipProviderTest {
                         val principal = principals[(thread + round) % PRINCIPALS]
                         provider.put(tenant, principal, memberships("r$thread"))
                         // whatever another thread wrote, a lookup sees a complete value from the provider
-                        now { provider.memberships(tenant, principal) }!!.source
+                        (now { provider.memberships(tenant, principal) } as MembershipAnswer.Known).memberships.source
                             .assert().isEqualTo(Memberships.Source.PROVIDER)
                     }
                 }
@@ -82,7 +82,14 @@ class InMemoryMembershipProviderTest {
             executor.shutdownNow()
         }
         principals.forEach { principal ->
-            now { provider.memberships(tenant, principal) }!!.roles[SpaceId.DEFAULT].assert().hasSize(1)
+            (
+                now {
+                    provider.memberships(
+                        tenant,
+                        principal
+                    )
+                } as MembershipAnswer.Known
+                ).memberships.roles[SpaceId.DEFAULT].assert().hasSize(1)
         }
     }
 

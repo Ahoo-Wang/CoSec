@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.cache
 
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.model.Memberships
@@ -23,6 +24,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.test.asserts.assert
@@ -34,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * RFC 0006 §5.5.2, `MEM-2`: the memberships cache is not the store of record, so its entries expire, but nothing that
@@ -58,10 +61,10 @@ class MembershipCacheFailureTest {
     private val loads = AtomicInteger()
     private val loader = MembershipLoader { _, _ ->
         loads.incrementAndGet()
-        stored
+        MembershipAnswer.Known(stored)
     }
-    private val providerA = CoCacheMembershipProvider(instanceA.membershipCache, loader)
-    private val providerB = CoCacheMembershipProvider(instanceB.membershipCache, loader)
+    private val providerA = CoCacheMembershipProvider(instanceA.membershipCache, loader = loader)
+    private val providerB = CoCacheMembershipProvider(instanceB.membershipCache, loader = loader)
 
     @AfterEach
     fun close() {
@@ -69,6 +72,8 @@ class MembershipCacheFailureTest {
         instanceB.close()
         redis.close()
     }
+
+    private fun MembershipAnswer.known(): Memberships = (this as MembershipAnswer.Known).memberships
 
     private fun Memberships.assertSameAs(expected: Memberships) {
         source.assert().isEqualTo(expected.source)
@@ -78,11 +83,11 @@ class MembershipCacheFailureTest {
 
     @Test
     fun aMissLoadsOnceAndEveryInstanceReadsTheCachedAnswer() = runBlocking<Unit> {
-        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
-        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerA.memberships(tenant, alice).known().assertSameAs(stored)
+        providerA.memberships(tenant, alice).known().assertSameAs(stored)
         instanceA.clearLocal(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
-        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
-        providerB.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerA.memberships(tenant, alice).known().assertSameAs(stored)
+        providerB.memberships(tenant, alice).known().assertSameAs(stored)
         loads.get().assert().isEqualTo(1)
     }
 
@@ -133,9 +138,9 @@ class MembershipCacheFailureTest {
     @Test
     fun aFillRedisCannotStoreAnswersTheLoadedMemberships() = runBlocking<Unit> {
         backend.failFill = true
-        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerA.memberships(tenant, alice).known().assertSameAs(stored)
         backend.failFill = false
-        providerB.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerB.memberships(tenant, alice).known().assertSameAs(stored)
         loads.get().assert().isEqualTo(2)
     }
 
@@ -145,49 +150,74 @@ class MembershipCacheFailureTest {
      */
     @Test
     fun theRequestAfterAFillIsALocalHit() = runBlocking<Unit> {
-        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
-        val next = CompletableFuture<Memberships?>()
-        val call: suspend () -> Memberships? = { providerA.memberships(tenant, alice) }
+        providerA.memberships(tenant, alice).known().assertSameAs(stored)
+        val next = CompletableFuture<MembershipAnswer>()
+        val call: suspend () -> MembershipAnswer = { providerA.memberships(tenant, alice) }
         call.startCoroutine(Continuation(EmptyCoroutineContext) { next.complete(it.getOrThrow()) })
         next.isDone.assert().describedAs("the request after the fill suspended").isTrue()
         loads.get().assert().isEqualTo(1)
     }
 
-    /** RFC 0009 §4.2: an unknown principal is null, never "no memberships", and is asked again rather than cached. */
+    /**
+     * RFC 0009 §4.2: an unknown principal is [MembershipAnswer.Unknown], never "no memberships", and is asked again
+     * rather than cached. Through real Redis and CoCache's async view: the fill's failure for it comes out of the cache
+     * as an unknown principal (a 401 in the pipeline), never as a failed lookup (a 503).
+     */
     @Test
-    fun anUnknownPrincipalIsNullAndNotCached() = runBlocking<Unit> {
+    fun anUnknownPrincipalIsUnknownAndNotCached() = runBlocking<Unit> {
         val asked = AtomicInteger()
         val unknown = CoCacheMembershipProvider(instanceA.membershipCache) { _, _ ->
             asked.incrementAndGet()
-            null
+            MembershipAnswer.Unknown
         }
-        unknown.memberships(tenant, alice).assert().isNull()
-        unknown.memberships(tenant, alice).assert().isNull()
+        unknown.memberships(tenant, alice).assert().isSameAs(MembershipAnswer.Unknown)
+        unknown.memberships(tenant, alice).assert().isSameAs(MembershipAnswer.Unknown)
         asked.get().assert().isEqualTo(2)
+        // As the pipeline resolves it: an unknown principal refuses the credential (null), it does not fail (503).
+        MembershipResolver(unknown).resolve(tenant, alice, MembershipSource.Provider.UNCAPPED).assert().isNull()
+    }
+
+    /**
+     * A loader that never answers fails its fill within the fill timeout, so the principal is not unavailable on this
+     * instance for good: the next request starts a new fill, which can answer.
+     */
+    @Test
+    fun aLoaderThatNeverAnswersFailsItsFillAndTheNextRequestRetries() = runBlocking<Unit> {
+        val hang = java.util.concurrent.atomic.AtomicBoolean(true)
+        val provider = CoCacheMembershipProvider(instanceA.membershipCache, 100.milliseconds) { _, _ ->
+            if (hang.get()) awaitCancellation()
+            loads.incrementAndGet()
+            MembershipAnswer.Known(stored)
+        }
+        val failure = assertThrows<Exception> { runBlocking { provider.memberships(tenant, alice) } }
+        generateSequence<Throwable>(failure) { it.cause }.any { it.message.orEmpty().contains("did not answer within") }
+            .assert().isTrue()
+        hang.set(false)
+        provider.memberships(tenant, alice).known().assertSameAs(stored)
     }
 
     /** A deactivated principal is cached like any other answer, and every instance reads it as inactive. */
     @Test
     fun anInactivePrincipalIsCachedAsInactive() = runBlocking<Unit> {
         val inactive = Memberships(Memberships.Source.PROVIDER, stored.roles, stored.attachments, active = false)
-        CoCacheMembershipProvider(instanceA.membershipCache) { _, _ -> inactive }.memberships(tenant, alice)!!
-            .active.assert().isFalse()
-        CoCacheMembershipProvider(instanceB.membershipCache) { _, _ -> error("not asked") }.memberships(tenant, alice)!!
-            .active.assert().isFalse()
+        CoCacheMembershipProvider(instanceA.membershipCache) { _, _ -> MembershipAnswer.Known(inactive) }
+            .memberships(tenant, alice).known().active.assert().isFalse()
+        CoCacheMembershipProvider(instanceB.membershipCache) { _, _ -> error("not asked") }.memberships(tenant, alice)
+            .known().active.assert().isFalse()
     }
 
     @Test
     fun aFailingLoaderThrowsAndCachesNothing() = runBlocking<Unit> {
         val failing = CoCacheMembershipProvider(instanceA.membershipCache) { _, _ -> error("directory down") }
         assertThrows<IllegalStateException> { runBlocking { failing.memberships(tenant, alice) } }
-        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        providerA.memberships(tenant, alice).known().assertSameAs(stored)
         loads.get().assert().isEqualTo(1)
     }
 
     @Test
     fun aLoaderAnsweringClaimsIsRefused() = runBlocking<Unit> {
         val wrong = CoCacheMembershipProvider(instanceA.membershipCache) { _, _ ->
-            MembershipClaims.parse(listOf("admin"), emptyList())
+            MembershipAnswer.Known(MembershipClaims.parse(listOf("admin"), emptyList()))
         }
         assertThrows<IllegalStateException> { runBlocking { wrong.memberships(tenant, alice) } }
     }

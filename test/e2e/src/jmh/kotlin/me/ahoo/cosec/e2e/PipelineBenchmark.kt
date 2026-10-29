@@ -32,6 +32,7 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeys
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import org.openjdk.jmh.annotations.Benchmark
@@ -90,11 +91,11 @@ open class PipelineBenchmark {
             val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", setOf("viewer", "admin")))
             // The token's memberships, now the principal's: the cap keeps both roles and drops the attachments.
             val loader = MembershipLoader { _, _ ->
-                Memberships(
+                MembershipAnswer.Known(Memberships(
                     Memberships.Source.PROVIDER,
                     mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"), RoleId("admin"))),
                     listOf(PolicyId("principal-a"), PolicyId("principal-b")),
-                )
+                ))
             }
             Slice(
                 options = SnapshotOptions(),

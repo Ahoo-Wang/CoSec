@@ -49,6 +49,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -298,7 +299,7 @@ class PipelineTest {
         val provider = MembershipProvider { tenant, principal ->
             tenant.assert().isEqualTo(TENANT)
             principal.assert().isEqualTo(PRINCIPAL)
-            provided
+            MembershipAnswer.Known(provided)
         }
         pipeline(
             authenticator(authenticated(null)),
@@ -321,7 +322,7 @@ class PipelineTest {
         val providers = listOf(
             MembershipProvider { _, _ -> throw IllegalStateException("down") },
             MembershipProvider { _, _ -> awaitCancellation() },
-            MembershipProvider { _, _ -> claims() },
+            MembershipProvider { _, _ -> MembershipAnswer.Known(claims()) },
         )
         providers.forEach { provider ->
             val engine = StubEngine(PERMIT)
@@ -355,7 +356,10 @@ class PipelineTest {
     @Test
     fun aKeyOfAnUnknownOrInactivePrincipalIsRefused() = runTest {
         val inactive = Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList(), active = false)
-        listOf(MembershipProvider { _, _ -> null }, MembershipProvider { _, _ -> inactive }).forEach { provider ->
+        listOf(
+            MembershipProvider { _, _ -> MembershipAnswer.Unknown },
+            MembershipProvider { _, _ -> MembershipAnswer.Known(inactive) },
+        ).forEach { provider ->
             val engine = StubEngine(IMPLICIT_DENY)
             val outcome = pipeline(authenticator(keyOf()), engine) { it.copy(membershipProvider = provider) }
                 .evaluate(facts())
@@ -371,7 +375,7 @@ class PipelineTest {
     fun aTokenOfAnUnknownPrincipalIsRefused() = runTest {
         val engine = StubEngine(IMPLICIT_DENY)
         pipeline(authenticator(authenticated(null)), engine) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> null })
+            it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Unknown })
         }.evaluate(facts()).assertProblem(ProblemType.TOKEN_INVALID)
         engine.requests.single().request.subject.authenticated.assert().isFalse()
     }
@@ -381,7 +385,7 @@ class PipelineTest {
     fun aRefusedKeyMayStillDoWhatAnonymousCallersMay() = runTest {
         val engine = StubEngine(PERMIT)
         val outcome = pipeline(authenticator(keyOf()), engine) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> null })
+            it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Unknown })
         }.evaluate(facts())
         outcome.proceed.assert().isTrue()
         outcome.security!!.principal.assert().isNull()
@@ -397,7 +401,7 @@ class PipelineTest {
         )
         val engine = StubEngine(PERMIT)
         pipeline(authenticator(keyOf(MembershipSource.Provider.capped(listOf("viewer")))), engine) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> provided })
+            it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Known(provided) })
         }.evaluate(facts()).proceed.assert().isTrue()
         val memberships = engine.requests.single().memberships
         memberships.roles.assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"))))
@@ -418,7 +422,7 @@ class PipelineTest {
         var asked = false
         val provider = MembershipProvider { _, _ ->
             asked = true
-            Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
+            MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
         }
         val unusable = AuthnResult.Authenticated(
             AuthenticatedPrincipal(PRINCIPAL, TENANT, MembershipSource.Unusable("marker and claims")),

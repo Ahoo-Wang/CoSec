@@ -34,6 +34,7 @@ import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -120,7 +121,9 @@ class SliceBlockHoundTest {
         val key = ApiKeys.generate()
         val keys = InMemoryApiKeyStore(mapOf(ApiKeys.hash(key) to ApiKey("k1", "svc", "acme", setOf("reader")))).reader
         val loader = MembershipLoader { _, _ ->
-            Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))), emptyList())
+            MembershipAnswer.Known(
+                Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))), emptyList())
+            )
         }
         Slice(authenticator = ApiKeyAuthenticator(keys), membershipLoader = loader).use { slice ->
             slice.publish(

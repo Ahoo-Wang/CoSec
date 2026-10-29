@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
@@ -95,7 +96,9 @@ class MembershipResolverTest {
     @Test
     fun anInactivePrincipalIsRefused() = runTest {
         val inactive = Memberships(Memberships.Source.PROVIDER, providerMemberships.roles, emptyList(), active = false)
-        MembershipResolver(MembershipProvider { _, _ -> inactive }).resolve(marked()).assert().isNull()
+        MembershipResolver(
+            MembershipProvider { _, _ -> MembershipAnswer.Known(inactive) }
+        ).resolve(marked()).assert().isNull()
     }
 
     @Test
@@ -113,7 +116,9 @@ class MembershipResolverTest {
     )
 
     private suspend fun capped(source: MembershipSource): Memberships =
-        MembershipResolver(MembershipProvider { _, _ -> wide }).resolve(tenant, PrincipalId("svc"), source)!!
+        MembershipResolver(
+            MembershipProvider { _, _ -> MembershipAnswer.Known(wide) }
+        ).resolve(tenant, PrincipalId("svc"), source)!!
 
     /** `IDN-2`: a cap keeps only the roles it names, in the same space, and never an attached policy. */
     @Test
@@ -183,7 +188,16 @@ class MembershipResolverTest {
     @Test
     fun providerAnswersClaimsSourcedMemberships() = runTest {
         val claims = MembershipClaims.parse(listOf("admin"), emptyList())
-        MembershipResolver(MembershipProvider { _, _ -> claims }).failure().message.assert().contains("[CLAIMS]")
+        MembershipResolver(
+            MembershipProvider { _, _ -> MembershipAnswer.Known(claims) }
+        ).failure().message.assert().contains("[CLAIMS]")
+    }
+
+    /** A provider written in Java can answer null: that is no answer, so it fails, as before RFC 0009. */
+    @Test
+    fun providerReturnsNull() = runTest {
+        MembershipResolver(MembershipProvider { _, _ -> uncheckedNull() }).failure()
+            .message.assert().contains("answered nothing")
     }
 
     @Test
@@ -195,5 +209,10 @@ class MembershipResolverTest {
     @Test
     fun timeoutMustBePositive() {
         assertThrows<IllegalArgumentException> { MembershipResolver(provider, Duration.ZERO) }
+    }
+
+    private companion object {
+        @Suppress("UNCHECKED_CAST")
+        fun <T> uncheckedNull(): T = null as T
     }
 }

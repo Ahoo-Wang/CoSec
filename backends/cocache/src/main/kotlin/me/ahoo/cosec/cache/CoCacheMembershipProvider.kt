@@ -19,21 +19,26 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.future.future
+import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.MembershipResolver
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipUnavailableException
+import kotlin.time.Duration
 
 /**
  * Where the application's memberships come from: CoSec does not say where they are stored (RFC 0006 §5.5.2).
  *
  * Like every SPI of the pipeline, it must not block the calling thread: an implementation over a blocking client (JDBC,
- * say) moves the call to its own bounded executor (RFC 0006 §7.7). Answer null for a principal you do not know, which
- * refuses its credentials, and [Memberships.active] false for one that is deactivated (RFC 0009 §4.2); report a failed
- * lookup by throwing.
+ * say) moves the call to its own bounded executor (RFC 0006 §7.7). Answer [MembershipAnswer.Unknown] for a principal
+ * you do not know, which refuses its credentials, and memberships with [Memberships.active] false for one that is
+ * deactivated (RFC 0009 §4.2); report a failed lookup by throwing.
  */
 fun interface MembershipLoader {
-    suspend fun load(tenant: TenantId, principal: PrincipalId): Memberships?
+    suspend fun load(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }
 
 /**
@@ -56,30 +61,58 @@ fun interface MembershipLoader {
  */
 class CoCacheMembershipProvider(
     private val cache: MembershipCache,
+    /**
+     * How long one fill may take. Requests on this instance that miss the same key wait for the same fill, which no
+     * single request owns: without its own bound, a loader that never answers would make that principal unavailable
+     * here until a restart. When it passes, the fill fails, and the next request starts a new one. No longer than
+     * `cosec.authorization.membership.timeout`, which each request still waits at most.
+     */
+    private val fillTimeout: Duration = MembershipResolver.DEFAULT_TIMEOUT,
     private val loader: MembershipLoader,
 ) : MembershipProvider {
-    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships? {
+    init {
+        require(fillTimeout.isPositive()) { "The fill timeout must be positive, not $fillTimeout." }
+    }
+
+    // Whatever the cache wraps the fill's failure in, an unknown principal is found by its sentinel; anything else rethrows.
+    @Suppress("TooGenericExceptionCaught")
+    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer {
         val key = MembershipCache.key(tenant, principal)
         // The load runs in this request's context but not as its child: a fill other requests wait for is not cancelled
         // when this one gives up. Started undispatched, a loader that answers at once fills on the caller's thread.
         val context = currentCoroutineContext().minusKey(Job)
-        return try {
+        val memberships = try {
             cache.async().get(key) { _ ->
                 CoroutineScope(context).future(start = CoroutineStart.UNDISPATCHED) { load(tenant, principal) }
             }.await()
-        } catch (_: UnknownPrincipal) {
-            null
+        } catch (e: Exception) {
+            if (e.causes().any { it === UnknownPrincipal }) return MembershipAnswer.Unknown
+            throw e
         }
+        // A read-through answers what the fill loaded or found; nothing at all would be a broken cache, never "unknown".
+        checkNotNull(memberships) { "The membership cache answered nothing for principal [${principal.value}]." }
+        return MembershipAnswer.Known(memberships)
     }
 
-    /** What [loader] answers; an unknown principal fails the fill, so that it is not cached as missing. */
+    /** What [loader] answers within [fillTimeout]; an unknown principal fails the fill, so it is not cached as missing. */
     private suspend fun load(tenant: TenantId, principal: PrincipalId): Memberships {
-        val loaded = loader.load(tenant, principal) ?: throw UnknownPrincipal
+        val answer = withTimeoutOrNull(fillTimeout) { loader.load(tenant, principal) }
+            ?: throw MembershipUnavailableException(
+                "The membership loader did not answer within $fillTimeout for principal [${principal.value}]."
+            )
+        val loaded = when (answer) {
+            MembershipAnswer.Unknown -> throw UnknownPrincipal
+            is MembershipAnswer.Known -> answer.memberships
+        }
         check(loaded.source == Memberships.Source.PROVIDER) {
             "The membership loader answered memberships from [${loaded.source}] for principal [${principal.value}]."
         }
         return loaded
     }
+
+    private fun Throwable.causes(): Sequence<Throwable> = generateSequence(
+        this
+    ) { it.cause.takeIf { cause -> cause !== it } }
 
     /** The loader does not know the principal: never cached, so a principal added later is known at once. */
     private object UnknownPrincipal : RuntimeException() {

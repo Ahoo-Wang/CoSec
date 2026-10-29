@@ -21,6 +21,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import java.util.Collections
@@ -75,16 +76,16 @@ class MembershipResolver(
     }
 
     /**
-     * The provider's answer, or null when it did not answer in time. The provider's own null, an unknown principal, is
-     * [UNKNOWN] here, as [withLazyTimeoutOrNull]'s null means the timeout. An external cancellation
-     * propagates; any other exception, a CancellationException the provider throws while this request is active
-     * included, is a failure.
+     * The provider's answer, or null when it did not answer in time. A provider written in Java may answer null, which is
+     * no answer at all: [NOTHING] stands for it, as [withLazyTimeoutOrNull]'s own null means the timeout, and it fails.
+     * An external cancellation propagates; any other exception, a CancellationException the provider throws while this
+     * request is active included, is a failure.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun ask(provider: MembershipProvider, tenant: TenantId, principal: PrincipalId): Memberships? =
+    private suspend fun ask(provider: MembershipProvider, tenant: TenantId, principal: PrincipalId): MembershipAnswer? =
         try {
             withLazyTimeoutOrNull(timeout) {
-                resumeOffIo { provider.memberships(tenant, principal) ?: UNKNOWN }
+                resumeOffIo { provider.memberships(tenant, principal) as MembershipAnswer? ?: NOTHING }
             }
         } catch (e: CancellationException) {
             // Rethrows when the request itself was cancelled.
@@ -94,17 +95,24 @@ class MembershipResolver(
             throw failure(principal, e)
         }
 
-    /** [answer], or null when the principal is unknown or not active. */
-    private fun checked(answer: Memberships, principal: PrincipalId): Memberships? {
-        if (answer === UNKNOWN) {
-            return null
-        }
-        if (answer.source != Memberships.Source.PROVIDER) {
+    /** The memberships [answer] gives, or null when the principal is unknown or not active. */
+    private fun checked(answer: MembershipAnswer, principal: PrincipalId): Memberships? {
+        if (answer === NOTHING) {
             throw MembershipUnavailableException(
-                "The membership provider answered memberships from [${answer.source}] for principal [${principal.value}]."
+                "The membership provider answered nothing for principal [${principal.value}]."
             )
         }
-        return answer.takeIf { it.active }
+        val memberships = when (answer) {
+            MembershipAnswer.Unknown -> return null
+            is MembershipAnswer.Known -> answer.memberships
+        }
+        if (memberships.source != Memberships.Source.PROVIDER) {
+            throw MembershipUnavailableException(
+                "The membership provider answered memberships from [${memberships.source}] for principal " +
+                    "[${principal.value}]."
+            )
+        }
+        return memberships.takeIf { it.active }
     }
 
     /**
@@ -136,7 +144,7 @@ class MembershipResolver(
     companion object {
         val DEFAULT_TIMEOUT: Duration = 500.milliseconds
 
-        /** Stands for the provider's null, an unknown principal: compared by identity only. */
-        private val UNKNOWN = Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
+        /** Stands for a provider's null, which is no answer: compared by identity only. */
+        private val NOTHING = MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
     }
 }

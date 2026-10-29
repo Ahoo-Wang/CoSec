@@ -32,10 +32,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import kotlin.time.toKotlinDuration
 
 /**
  * Memberships from the application's [MembershipLoader], cached in Redis for every instance (RFC 0006 §5.5.2), whenever
- * `cosec-cocache` is present: the pipeline asks it for tokens that carry `cosec.membership: "provider"`. Entries expire
+ * `cosec-cocache` is present: the pipeline asks it for API keys and for tokens that carry
+ * `cosec.membership: "provider"`. Entries expire
  * after one minute ([CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL]); `cocache.caches.MembershipCache.ttl` changes that.
  */
 @AutoConfiguration(before = [CoSecPipelineAutoConfiguration::class], afterName = [COCACHE_AUTO_CONFIGURATION])
@@ -43,7 +45,7 @@ import org.springframework.context.annotation.Bean
 @ConditionalOnEnforceMode
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.CoCacheMembershipProvider"])
 @ConditionalOnBean(CacheRuntime::class, MembershipLoader::class)
-@EnableConfigurationProperties(CacheProperties::class)
+@EnableConfigurationProperties(CacheProperties::class, RuntimeAuthorizationProperties::class)
 class CoSecMembershipAutoConfiguration {
     @Bean(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
     @ConditionalOnMissingBean
@@ -57,6 +59,11 @@ class CoSecMembershipAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(MembershipProvider::class)
-    fun cosecMembershipProvider(cache: MembershipCache, loader: MembershipLoader): CoCacheMembershipProvider =
-        CoCacheMembershipProvider(cache, loader)
+    fun cosecMembershipProvider(
+        cache: MembershipCache,
+        loader: MembershipLoader,
+        authorization: RuntimeAuthorizationProperties,
+    ): CoCacheMembershipProvider =
+        // A fill takes no longer than a request waits for it (cosec.authorization.membership.timeout).
+        CoCacheMembershipProvider(cache, authorization.membership.timeout.toKotlinDuration(), loader)
 }

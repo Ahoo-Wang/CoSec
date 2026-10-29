@@ -30,12 +30,13 @@ import me.ahoo.cosec.model.TenantId
  */
 fun interface MembershipProvider {
     /**
-     * The memberships of [principal] in [tenant], with [Memberships.Source.PROVIDER]; null when the provider does not
-     * know the principal, which is not the same as knowing it with no memberships: its credential is then refused, as
-     * when [Memberships.active] is false (`IDN-3`).
+     * What the provider knows of [principal] in [tenant]: [MembershipAnswer.Known] with memberships whose source is
+     * [Memberships.Source.PROVIDER], or [MembershipAnswer.Unknown], which is not the same as knowing it with no
+     * memberships. An unknown principal's credential is refused, as is one whose [Memberships.active] is false
+     * (`IDN-3`).
      *
      * Must not block the calling thread, which may be an event loop: an implementation that needs a blocking client
      * moves the call to its own bounded executor (RFC 0006 §7.7). Report a failed lookup by throwing.
      */
-    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships?
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): MembershipAnswer
 }
