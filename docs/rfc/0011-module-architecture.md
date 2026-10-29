@@ -158,6 +158,20 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 | D4 | **ABI 校验与 API 分级**：Kotlin Gradle 插件的 `abiValidation` 进入 `check`，每个发布模块保存转储文件；`@InternalCoSecApi`（opt-in 为 ERROR，不进转储）、`@ExperimentalCoSecApi`（WARNING，进转储） | 核心模型的稳定靠构建守住，不靠评审（Wow D216、D282）。RC 时开启，GA 时冻结：此后转储的删除或签名改变即破坏性变更，PR 标题带 `!` |
 | D5 | **`gateway-server` 移到 `platform/`** | 它是给用户直接部署的产品（Docker 镜像），不是示例，也不是库：它是 CoSec 模块的一个应用，只依赖发布的模块，与 Wow 的 `platform/` 服务同一种定位。Maven 不发布它 |
 
+> **2026-10-29 补充（D4 的落地，#1155）**：
+> - 用 Kotlin Gradle 插件内置的 `abiValidation`（不另加插件），转储在各模块的 `api/<project>.api`，`checkKotlinAbi` 随 `check` 运行，`updateKotlinAbi` 重写转储。
+>   `cosec-migrate` 不做 ABI 校验：它的契约是命令行，类不是库 API。
+> - `@CoSecSpi` 是纯文档标记（不用 `@SubclassOptInRequired`：这些接口本来就是给应用实现的，强制 opt-in 会让最常用的扩展点看起来不稳定）；
+>   `SpiMarkerTest` 要求 `cosec-spi` 的每个可实现公共接口与 `extending.md` 扩展点表中的每个类型都带它。
+> - `@ExperimentalCoSecApi` 目前只用于 testkit 的场景 API 与控制面分析结果的类型；GA 后删除或改变一行转储是破坏性变更（PR 标题带 `!`），
+>   `@ExperimentalCoSecApi` 声明的行除外。
+> - `RequestGate` 带 `@SubclassOptInRequired(InternalCoSecApi::class)`：只有 CoSec 能实现（以后放开是新增，以后收紧才是破坏）。
+> - 控制面的执法组件不可替换：`ControlAuthorizer`、`DocumentConfirmation`、`ChangeAuthority`、`Changes`、`ControlPlane`、`ControlHttp`
+>   不是 `@ConditionalOnMissingBean`，第二个同类 bean 让启动失败；`ControlStore`、变更监听器、`ChangeOptions` 与维护调度仍可替换。
+> - 原则：GA 前把公共面收到最小（改成 `internal` 现在零成本，GA 后就是破坏）。RC 前还要把 `cosec-engine`、`cosec-runtime` 的每个公共声明归为
+>   "文档化的 API"或 `@InternalCoSecApi`，在此之前 `cosec-testkit` 提供公开的 Pipeline 夹具（路线图 §7）。
+> - CosId（#1170）：只有 `extensions/cosid` 与 `host/spring-boot` 可以引用 `me.ahoo.cosid` 或解析 CosId 构件（`DependencyRules.COSID_OWNERS`）。
+
 RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保留为薄契约模块）不变，内容按 §3 收窄。
 
 ## 7. 交付
