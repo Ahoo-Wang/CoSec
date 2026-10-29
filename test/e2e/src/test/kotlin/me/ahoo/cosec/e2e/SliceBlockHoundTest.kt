@@ -37,7 +37,6 @@ import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.Continuation
@@ -141,34 +140,16 @@ class SliceBlockHoundTest {
         // Warm the source: the documents are compiled and installed before the measured call.
         val warm = runBlocking { slice.evaluate(request) }
         warm.proceed.assert().describedAs(warm.toString()).isTrue()
-        // A cache the first request filled can be invalidated once more by its own write's message, arriving later: wait
-        // until a request completes on its thread, so the measured one is warm. One that never does fails here.
-        val deadline = System.nanoTime() + WARM_TIMEOUT.toNanos()
-        while (!start(slice, request).isDone) {
-            check(System.nanoTime() < deadline) { "The request never completed on its thread within $WARM_TIMEOUT." }
-            Thread.sleep(WARM_POLL_MILLIS)
-        }
         BlockHoundWatch.clear()
         val outcome = BlockHoundWatch.onNonBlockingThread {
-            val result = start(slice, request)
+            val result = CompletableFuture<Outcome>()
+            val evaluate: suspend () -> Outcome = { slice.evaluate(request) }
+            evaluate.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
             // Completed before startCoroutine returned: nothing suspended, nothing was dispatched.
             check(result.isDone) { "The warm request suspended." }
             result.join()
         }
         outcome.proceed.assert().isTrue()
         BlockHoundWatch.violations.assert().isEmpty()
-    }
-
-    /** Starts [request] on the calling thread: done on return exactly when nothing suspended. */
-    private fun start(slice: Slice, request: HttpFacts): CompletableFuture<Outcome> {
-        val result = CompletableFuture<Outcome>()
-        val evaluate: suspend () -> Outcome = { slice.evaluate(request) }
-        evaluate.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
-        return result
-    }
-
-    private companion object {
-        val WARM_TIMEOUT: Duration = Duration.ofSeconds(5)
-        const val WARM_POLL_MILLIS = 20L
     }
 }

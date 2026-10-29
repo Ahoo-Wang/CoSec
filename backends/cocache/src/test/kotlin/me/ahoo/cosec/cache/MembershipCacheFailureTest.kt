@@ -29,7 +29,11 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 /**
  * RFC 0006 §5.5.2, `MEM-2`: the memberships cache is not the store of record, so its entries expire, but nothing that
@@ -122,10 +126,31 @@ class MembershipCacheFailureTest {
         loads.get().assert().isEqualTo(1)
     }
 
+    /**
+     * A fill Redis cannot store still answers what the loader said, the truth, and keeps it on this instance only: other
+     * instances load for themselves, and an invalidation still reaches every instance. Never a value nobody loaded.
+     */
     @Test
-    fun aFailedWriteThrows() = runBlocking<Unit> {
-        backend.failWrites = true
-        assertThrows<Exception> { runBlocking { providerA.memberships(tenant, alice) } }
+    fun aFillRedisCannotStoreAnswersTheLoadedMemberships() = runBlocking<Unit> {
+        backend.failFill = true
+        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        backend.failFill = false
+        providerB.memberships(tenant, alice)!!.assertSameAs(stored)
+        loads.get().assert().isEqualTo(2)
+    }
+
+    /**
+     * RFC 0006 §5.5.2: the request after a fill is a local hit, answered on the caller's thread. A `put` in place of the
+     * read-through fill is a write, after which the next request read Redis once more (found by `SliceBlockHoundTest`).
+     */
+    @Test
+    fun theRequestAfterAFillIsALocalHit() = runBlocking<Unit> {
+        providerA.memberships(tenant, alice)!!.assertSameAs(stored)
+        val next = CompletableFuture<Memberships?>()
+        val call: suspend () -> Memberships? = { providerA.memberships(tenant, alice) }
+        call.startCoroutine(Continuation(EmptyCoroutineContext) { next.complete(it.getOrThrow()) })
+        next.isDone.assert().describedAs("the request after the fill suspended").isTrue()
+        loads.get().assert().isEqualTo(1)
     }
 
     /** RFC 0009 §4.2: an unknown principal is null, never "no memberships", and is asked again rather than cached. */

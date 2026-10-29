@@ -13,7 +13,12 @@
 
 package me.ahoo.cosec.cache
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.future.future
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -37,11 +42,14 @@ fun interface MembershipLoader {
  *
  * - a hit, local or in Redis, answers without asking [loader]; a local hit answers on the caller's thread without
  *   suspending, and a Redis read does not block (CoCache's async view);
- * - a miss asks [loader] and writes its answer to [cache], where it expires after the cache's TTL
- *   ([CoSecCacheSpecs.membership]): the TTL bounds how long a change takes to apply when its invalidation is lost. An
- *   unknown principal (null) is not cached: each request for it asks [loader] again;
- * - a failed cache read or write throws, as does [loader], so the pipeline fails closed with 503 and never treats the
- *   principal as having no memberships (`MembershipCacheFailureTest`).
+ * - a miss asks [loader] through the cache's read-through fill, which stores its answer locally and in Redis, where it
+ *   expires after the cache's TTL ([CoSecCacheSpecs.membership]): the TTL bounds how long a change takes to apply when
+ *   its invalidation is lost. A fill, unlike a `put`, is not a write: the next request on this instance is a local hit,
+ *   where a `put` would leave it to read Redis once more. An unknown principal (null) is not cached: each request for
+ *   it asks [loader] again;
+ * - a failed cache read throws, as does [loader], so the pipeline fails closed with 503 and never treats the
+ *   principal as having no memberships (`MembershipCacheFailureTest`). A fill Redis cannot store still answers what
+ *   [loader] said, kept on this instance only: the answer is the loader's own, never a guess.
  *
  * Call [invalidate] when a principal's memberships change. An invalidation that arrives while another request is
  * loading the old memberships can be overwritten by them; the TTL still bounds that.
@@ -52,13 +60,32 @@ class CoCacheMembershipProvider(
 ) : MembershipProvider {
     override suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships? {
         val key = MembershipCache.key(tenant, principal)
-        cache.async().get(key).await()?.let { return it }
-        val loaded = loader.load(tenant, principal) ?: return null
+        // The load runs in this request's context but not as its child: a fill other requests wait for is not cancelled
+        // when this one gives up. Started undispatched, a loader that answers at once fills on the caller's thread.
+        val context = currentCoroutineContext().minusKey(Job)
+        return try {
+            cache.async().get(key) { _ ->
+                CoroutineScope(context).future(start = CoroutineStart.UNDISPATCHED) { load(tenant, principal) }
+            }.await()
+        } catch (_: UnknownPrincipal) {
+            null
+        }
+    }
+
+    /** What [loader] answers; an unknown principal fails the fill, so that it is not cached as missing. */
+    private suspend fun load(tenant: TenantId, principal: PrincipalId): Memberships {
+        val loaded = loader.load(tenant, principal) ?: throw UnknownPrincipal
         check(loaded.source == Memberships.Source.PROVIDER) {
             "The membership loader answered memberships from [${loaded.source}] for principal [${principal.value}]."
         }
-        cache.async().put(key, loaded).await()
         return loaded
+    }
+
+    /** The loader does not know the principal: never cached, so a principal added later is known at once. */
+    private object UnknownPrincipal : RuntimeException() {
+        private fun readResolve(): Any = UnknownPrincipal
+
+        override fun fillInStackTrace(): Throwable = this
     }
 
     /** Drops the cached memberships of [principal] in [tenant] on every instance; the next request loads them. */
