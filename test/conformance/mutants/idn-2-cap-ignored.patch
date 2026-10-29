@@ -1,0 +1,17 @@
+# Rule: IDN-2
+# Mutant: the key's cap is not applied, so a key holds every role and attachment of its principal
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+index c46e355f..6b677806 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+@@ -61,7 +61,7 @@ class MembershipResolver(
+         when (source) {
+             is MembershipSource.Claims -> source.memberships
+             is MembershipSource.Unusable -> throw MembershipUnavailableException(source.reason)
+-            is MembershipSource.Provider -> provided(tenant, principal)?.let { capped(it, source.cap) }
++            is MembershipSource.Provider -> provided(tenant, principal)
+         }
+ 
+     private suspend fun provided(tenant: TenantId, principal: PrincipalId): Memberships? {

@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "SNP-5"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "Tenant beta is not configured to fail closed: as stale, it is decided and permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "snapshot": {
+    "failClosed": {
+      "tenants": [
+        "acme"
+      ],
+      "maxLagSeconds": 300
+    },
+    "lagSeconds": 301
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "beta"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

@@ -14,7 +14,7 @@
 # Manual property stress (RFC 0008 §3.5/§3.9): the property tests the rule registry names, with `iterations` random
 # cases each (default 1,000,000), one job per module that registers the `propertyStress` task. Run it here, never
 # on a developer machine: a million cases per property takes far too long and loads the machine. The modules come
-# from conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
+# from test/conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
 # the tasks from, so a new registered property needs no change to this file.
 name: Property stress
 on:
@@ -29,7 +29,7 @@ on:
         required: true
         default: '1000000'
       modules:
-        description: 'Optional comma-separated module filter, e.g. engine,model (directory or Gradle name); empty = all'
+        description: 'Optional comma-separated module filter, e.g. engine,model (project name or directory, e.g. core/engine); empty = all'
         required: false
         default: ''
 
@@ -61,21 +61,26 @@ jobs:
           if not re.fullmatch(r"[1-9][0-9]{0,11}", os.environ["ITERATIONS"]):
               sys.exit("::error::iterations must be a positive integer")
           dirs = set()
-          for path in glob.glob("conformance/src/test/resources/rules/*.json"):
+          for path in glob.glob("test/conformance/src/test/resources/rules/*.json"):
               if path.endswith("_meta.json"):
                   continue
               for rule in json.load(open(path))["rules"]:
                   for prop in rule.get("properties", []):
                       dirs.add(prop.split(":")[0])  # module:Class#test
-          # Same naming as settings.gradle.kts: directories are the project name, or without the cosec- prefix.
-          mods = {d: ":" + (d if d.startswith("cosec-") else "cosec-" + d) for d in dirs}
+          # Guards name the project (settings.gradle.kts: `:<name>` in `<group>/<name>`); find its directory.
+          mods = {}
+          for name in dirs:
+              found = glob.glob(f"*/{name}/build.gradle.kts")
+              if len(found) != 1:
+                  sys.exit(f"::error::cannot find the directory of project :{name} ({found})")
+              mods[name] = os.path.dirname(found[0])
           want = {m.strip().lstrip(":") for m in os.environ["MODULES"].split(",") if m.strip()}
           if want:
-              unknown = {w for w in want if w.lstrip(":") not in {*mods, *(v.lstrip(":") for v in mods.values())}}
+              unknown = want - {*mods, *mods.values()}
               if unknown:
                   sys.exit("::error::unknown modules (no registered property tests): " + ", ".join(sorted(unknown)))
-              mods = {d: p for d, p in mods.items() if d in want or p.lstrip(":") in want}
-          include = [{"dir": d, "project": p} for d, p in sorted(mods.items())]
+              mods = {n: d for n, d in mods.items() if n in want or d in want}
+          include = [{"name": n, "dir": d, "project": ":" + n} for n, d in sorted(mods.items())]
           if not include:
               sys.exit("::error::no module registers propertyStress")
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
@@ -107,14 +112,15 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.sha }}
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v6
+      # The tested ref may predate the shared setup action: take it from this workflow's own commit.
+      - name: Checkout the setup action
+        uses: actions/checkout@v7
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          path: .ci-actions
+          sparse-checkout: .github/actions
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+      - name: Set up Java and Gradle
+        uses: ./.ci-actions/.github/actions/setup-java-gradle
 
       - name: Run property stress
         run: |
@@ -144,7 +150,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: property-stress-${{ matrix.dir }}-${{ github.run_id }}
+          name: property-stress-${{ matrix.name }}-${{ github.run_id }}
           path: |
             ${{ matrix.dir }}/build/reports/tests/propertyStress
             ${{ matrix.dir }}/build/test-results/propertyStress
@@ -154,6 +160,6 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: property-stress-dumps-${{ matrix.dir }}-${{ github.run_id }}
+          name: property-stress-dumps-${{ matrix.name }}-${{ github.run_id }}
           path: stress-dumps
           if-no-files-found: ignore

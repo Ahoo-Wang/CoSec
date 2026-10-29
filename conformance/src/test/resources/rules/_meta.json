@@ -1,3 +1,0 @@
-{
-  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch (RFC 0008 S1) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist. A build, startup or timing rule is covered by those tests instead of scenarios: each must be one enabled test listed for its level in GuardAllowlist (conformance/src/test/kotlin), and a timing rule needs a property test that reads cosec.property.iterations."
-}

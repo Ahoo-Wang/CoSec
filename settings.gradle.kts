@@ -13,36 +13,27 @@
 
 rootProject.name = "CoSec"
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-model")
-include(":cosec-engine")
-include(":cosec-runtime")
-include(":cosec-control")
-include(":cosec-migrate")
-// New modules use short directories; project paths and artifact ids keep the cosec- prefix.
-project(":cosec-model").projectDir = file("model")
-project(":cosec-engine").projectDir = file("engine")
-project(":cosec-runtime").projectDir = file("runtime")
-project(":cosec-control").projectDir = file("control")
-project(":cosec-migrate").projectDir = file("migrate")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-cocache")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-micrometer")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-openapi")
-include(":cosec-kafka")
-// Test-only (RFC 0008 §3.1): never published, so no cosec- prefix.
-include(":conformance")
-// Test-only (RFC 0008 §4.4.3): the end-to-end slice of the 8.0 path, against real Redis.
-include(":e2e")
+/*
+ * Modules by group (RFC 0011 §3). A project is named after its directory, without the cosec- prefix; the root build
+ * gives every published one the artifact id cosec-<name>. test/architecture's ProjectList keeps this list and the
+ * groups in step (G6).
+ */
+val groups = linkedMapOf(
+    "api" to listOf("annotations", "api"),
+    "core" to listOf("model", "engine", "spi", "runtime", "control"),
+    "backends" to listOf("cocache", "kafka"),
+    "edge" to listOf("webflux", "webmvc", "gateway", "openapi"),
+    "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry"),
+    "host" to listOf("spring-boot"),
+    "migration" to listOf("migrate"),
+    "test" to listOf("testkit", "conformance", "architecture", "e2e", "code-coverage-report"),
+    "bom" to listOf("bom", "dependencies"),
+    "platform" to listOf("gateway-server"),
+)
+
+for ((group, names) in groups) {
+    for (name in names) {
+        include(":$name")
+        project(":$name").projectDir = file("$group/$name")
+    }
+}

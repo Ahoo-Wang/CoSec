@@ -1,0 +1,18 @@
+# Rule: TNT-1
+# Mutant: principal bindings of a principal with the same id in another tenant apply
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index 92f28f92..09755c3e 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -172,7 +172,8 @@ class CompiledDocument private constructor(
+ 
+     internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? = breakGlass[tenant]?.get(principal)
+ 
+-    internal fun principal(tenant: String, principal: String): Array<BoundEntry>? = principals[tenant]?.get(principal)
++    internal fun principal(tenant: String, principal: String): Array<BoundEntry>? =
++        principals.values.firstNotNullOfOrNull { it[principal] }
+ 
+     internal fun role(role: String): Array<BoundEntry>? = roles[role]
+ 

@@ -1,0 +1,29 @@
+# Rule: STA-1
+# Mutant: a Spring Cloud Gateway host starts without cosec-gateway, passing a client's CoSec-Identity to every backend
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+index f257618f..37eac54f 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+@@ -64,20 +64,6 @@ class CoSecModuleCheckAutoConfiguration {
+             )
+     }
+ 
+-    /** Whether or not CoSec is enabled: a gateway strips the client's identity header always (PIP-10). */
+-    @Configuration(proxyBeanMethods = false)
+-    @ConditionalOnClass(name = [GATEWAY_GLOBAL_FILTER])
+-    class Gateway {
+-        @Bean
+-        fun cosecGatewayModuleCheck(context: ApplicationContext): InitializingBean =
+-            requireModule(
+-                context,
+-                "me.ahoo.cosec.gateway.IdentityStripFilter",
+-                "cosec-gateway",
+-                "A Spring Cloud Gateway host",
+-            )
+-    }
+-
+     @Configuration(proxyBeanMethods = false)
+     @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
+     @ConditionalOnProperty(value = [ApiKeyProperties.STORE_KEY], havingValue = "redis")

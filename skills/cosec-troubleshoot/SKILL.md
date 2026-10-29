@@ -1,144 +1,264 @@
 ---
 name: cosec-troubleshoot
-description: Diagnose CoSec authentication and authorization failures, including unexpected 401/403/429 responses, policy loading, JWT rejection, matcher mismatches, rate limit rules, and unexplained access decisions. Do not change behavior unless the user asks for a fix.
+description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
 ---
 
 # CoSec Troubleshooting
 
 The human-facing guide is https://cosec.ahoo.me/operations/troubleshooting; this skill adds the agent workflow.
 
-Find the first incorrect transition from request parsing to authentication, policy loading, matching, and response mapping. Gather evidence before proposing a policy or code change.
+Find the first incorrect step: startup, authentication, scope, snapshot (documents), evaluation, rate limiting, response.
+Gather evidence before proposing a document or code change.
 
 ## Start with observable facts
 
-Capture the request method/path, response status and CoSec JSON reason, principal ID/authenticated state, app/space/tenant IDs, effective configuration, loaded policy IDs, and relevant startup/request logs. Redact tokens and secrets.
+Capture: method and path, status, the problem+json body (`type`, `title`, `status`, `requestId`, optional `traceId`)
+and the `CoSec-Request-Id` header; the principal's tenant, id, roles and attached policies (token claims, never the
+token itself); `CoSec-App-Id` / `CoSec-Space-Id` and the host's `cosec.authorization.scope.app-id`; the route map entry
+(which action and resource the request gets); the revisions of the platform, app and tenant documents; startup and
+request logs. Redact tokens, API keys and secrets.
 
-Enable focused logging:
+Bodies never say which policy decided (so a caller cannot probe for DENYs). The audit log does:
 
 ```yaml
 logging:
   level:
-    me.ahoo.cosec.authorization.SimpleAuthorization: DEBUG
-    me.ahoo.cosec.audit: DEBUG
+    me.ahoo.cosec.audit: DEBUG   # denies, 429 and 503 at WARN, errors at ERROR, allows at DEBUG
 ```
 
-`SimpleAuthorization` identifies the matched policy/statement or role/permission. When `AuditingAuthorization` is active, the default sink emits structured deny events at WARN and allow events at DEBUG, including principal, request, decision, and matched rule when available. A custom `Authorization` bean is not wrapped automatically.
+Each audit event names the deciding policy and statement, the binding it applied through, and the snapshot revisions.
+To see why without reproducing traffic, use the control plane (needs `cosec-control` and an operator allowed to):
+`POST /cosec/control/v1/explain` with
+`{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "policies": [], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42", "remoteIp": "10.0.0.1"}}`
+returns the decision and its trace; `POST /analyze` with a `query` (`tenant`, `app`, `space`, `action`, `resource`)
+lists the bindings that could permit or deny. External attributes are not fetched there, so a statement reading one is
+Indeterminate in an explanation.
 
-When `cosec.explain.enabled=true`, prefer explaining the decision over reading logs: inject `AuthorizationExplainer` (or call `POST /actuator/cosecExplain` with `principal` and `request` objects) to get the real status, the deciding rule (omit `principal` and pass the caller's `Authorization` token or `X-API-Key` in `request.headers` to explain a real credential; rejected credentials add a `TOKEN_INVALID` warning), every statement's and permission's outcome (`MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED`, `ERROR`), overridden allows, matching rate limit rules, and warnings such as `MISSING_POLICY`, `NO_APP_PERMISSION` or `NO_ROLE_IN_SPACE` (the principal has roles, but none written for the request's space). It spends no rate-limit permits. Treat `TRACE_INCONSISTENT` as a CoSec bug and trust the reported decision.
+## Interpret the status
 
-## Interpret the status first
+| Status | Problem `type` slug | Meaning |
+|---|---|---|
+| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query), or a route-map capture that cannot be a resource id segment. The engine never saw it. |
+| 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
+| 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
+| 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
+| 403 | `scope-rejected` | `CoSec-App-Id` differs from the host's app (or is not a valid app id), or `CoSec-Space-Id` names a space where the principal has no role. |
+| 429 | `too-many-requests` | Permitted, but a rate limit rule's bucket is exhausted; `Retry-After` and `RateLimit-*` headers. |
+| 503 | `unavailable` | No decision could be made (Indeterminate), the authenticator's dependency failed, or `cosec.pipeline.timeout` passed. Never retried by a `Retry-After`. |
+| 500 | `internal-error` | An exception nothing modelled: a CoSec defect. Read the server log. |
 
-| HTTP status | CoSec meaning |
-|---|---|
-| 400 | Invalid normalized request path |
-| 401 | Authorization denied (or a regex matcher timed out) while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
-| 403 | An authenticated principal was denied, or a regex matcher timed out for one and failed closed |
-| 429 | An allowed request exceeded a rate limit rule (`RateLimitingAuthorization`) |
-| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed) a principal listing a policy id the repository does not have, and a global policy index entry without content (both `MissingPolicyException`); inspect the server exception |
-
-The authorization result alone does not choose 401 versus 403; the filter maps a denied anonymous principal to 401 and a denied authenticated principal to 403.
+A 401 always means "authenticate (again)"; a 403 means the identity is known and denied.
 
 ## Decision order
 
-`SimpleAuthorization` evaluates:
+1. Built-in blacklist DENY (`cosec:blacklist`), then every DENY of every candidate: platform `*` bindings, tenant `*`
+   bindings, the principal's attachments (`policies` claim) and principal bindings, role bindings of the app document
+   then the tenant document (only roles held in the request's space), break-glass bindings. Any match denies.
+2. No DENY matched, but a DENY errored, a needed document failed or is missing, a needed policy is missing or
+   ambiguous, external attributes or memberships were unavailable: Indeterminate (503).
+3. First matching ALLOW permits; an erroring ALLOW is no match. Nothing matched: implicit deny (401/403).
+4. A permit is held to the tenant's platform boundary; then rate limits spend permits.
 
-1. Blacklist → explicit deny (applies to root too).
-2. Root principal → allow, only when `cosec.authorization.root-enabled=true` (default `false`) and the principal is in the platform tenant (`(platform)`) with the root ID (`cosec` by default, overridden by JVM system property `cosec.root`), unless a custom `RootPrincipalMatcher` bean decides otherwise.
-3. Global policies.
-4. Principal-attached policies.
-5. Role permissions: only the principal's roles in `request.spaceId` (`role@space`; unsuffixed roles only in the default space), with their grants in `request.appId`.
-6. No match → implicit deny.
+Full model: https://cosec.ahoo.me/guide/security-model.
 
-Each policy tier evaluates matched policy-level conditions once, pools all statements, and checks every deny before any allow. Tiers are combined deny-first (CoSec 6+): an explicit deny in any tier wins over an allow from any other tier, so a principal or role deny overrides a global allow. Only if no tier denies does a matched allow grant access.
+## Startup failures
 
-## Symptom guide
+- **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by `<key> -> <replacement>` lines:
+  a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
+  `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
+  at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
+  logs the list; do not suggest it to hide a real typo.
+- **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
+  (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
+  `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
+  `cosec.enabled=false`: its filter strips a client's `CoSec-Identity`), `cosec.api-key.store=redis` `cosec-cocache`,
+  `cosec.audit.kafka.delivery=required` `cosec-kafka`. Add the named artifact next to `cosec-spring-boot`; 8.0 has no
+  starter capabilities (`requireCapability("me.ahoo.cosec:...-support")` from 7.x no longer resolves). Do not suggest
+  turning the feature off unless the user does not want it.
+- **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
+  but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
+  `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
+- **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
+  Redis; without it no snapshot is read and rate limits would count per instance.
+- **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
+  the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
+- **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `cosec-kafka`, a
+  `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
+- **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
+  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG
+  GET maxmemory-policy failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a
+  managed Redis that hides `CONFIG GET`, or a wrapped CoCache backend. If the operator has set `noeviction`, set
+  `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
+  (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
+  tenant document reads as absent, and its DENYs silently stop applying.
+- **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
+  is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
+  `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+- **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
+- **`The route map [classpath:cosec-routes.json] (cosec.authorization.routes.location) does not exist`**: add the route
+  map, or set the property empty to run without one. A `RouteMapException` names the location and route: malformed
+  route, a resource variable the path does not capture, or two routes for one method that may match the same request.
+- **`API keys are enabled, but no ApiKeyReader is available`**: `cosec.api-key.store=redis` needs a
+  `ReactiveStringRedisTemplate`.
+- **`cosec.api-key.enabled=true needs a MembershipProvider bean`** (IDN-6): a key's memberships are its principal's.
+  Add `cosec-cocache` and a `MembershipLoader` bean (the starter then wires `CoCacheMembershipProvider`), or declare a
+  `MembershipProvider`. Checked only in `cosec.pipeline.mode=enforce`, where keys are read.
+- **`API key [<id>] needs exactly one of roles ... and uncapped: true`**: a configured key states its cap (`roles`,
+  `[]` for none) or `uncapped: true`, never neither or both. **`cosec.api-key.enabled=[x] is neither true nor false`**:
+  write `true` or `false`.
+- **`API key [<id>] needs a tenant-id`**, or a binding error on `cosec.api-key.keys[n].policies`/`.attributes`: keys
+  carry only a tenant, a principal and a role cap (`roles`) now; grant roles to the principal through the provider.
+- **Shadow instance id**: `cosec.authorization.shadow.instance-id` may hold only letters, digits, `.`, `_`, `-`.
+- **`Decision listener <name> is registered twice`** / **`External attribute <path> is declared twice`**: two beans
+  share a listener name or an attribute path.
+
+## Symptoms
+
+### Every request is 503, or the instance is not ready
+
+- No platform document is published yet (the first one comes from `cosec-migrate publish`; `cosec-migrate bootstrap`
+  writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request
+  closed. Readiness refuses traffic until the platform document and every `prewarm-apps`/`prewarm-tenants` document is
+  installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `failed`, `absent`, `loading`) and
+  `prewarmed`.
+- A document the request needs does not decode or compile: its new revision is installed as failed
+  (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
+  JSON paths), and every request that needs it fails closed; the previous revision is not kept. Compile the stored
+  document yourself (see "Reproduce narrowly") to see the errors. Documents compile against the platform's `limits` and
+  `attributes`, so a platform change can make an app or tenant document stop compiling.
+- Redis is unreachable for a document not yet held locally (`cold-load-timeout`, default 2s), or the snapshot lags
+  beyond `fail-closed.max-lag` for a tenant in `cosec.authorization.snapshot.fail-closed.tenants`.
+
+### One principal, tenant or route gets 503
+
+- **Memberships unavailable**: the token carries `cosec.membership: "provider"` and no `MembershipProvider` bean
+  exists, or it failed or exceeded `cosec.authorization.membership.timeout`; or the token has the marker together with
+  `roles`/`policies` claims, or an unknown marker.
+- **Missing or ambiguous policy**: the token's `policies` claim names a policy that does not exist or is not
+  `attachable`; a tenant binding names a platform policy that was removed; or a tenant defines a policy id the platform
+  also defines.
+- **External attribute unavailable**: a statement reads `ext.<provider>.<name>` with `onMissing: indeterminate`
+  (default) and the provider failed, timed out (`cosec.authorization.attributes.timeout`) or is not registered on this
+  instance. A blacklist source failure makes every request 503 unless a DENY matches.
+- **A DENY's condition errored**, or the tenant's boundary statement errored. A DENY on `http.header.<name>` errors when
+  the request sent that header more than once with different values (`Header [<name>] arrived with different
+  values`); an ALLOW on it then does not match. One value repeated reads as that value.
+- **Rate limiter cannot count** and the matching rule has `strictFailure: true`.
+- **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
+- **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
+  fails answers "not revoked" instead (the documented exception to fail closed).
+- **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
+  the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
+  it again without `--dry-run`).
 
 ### Unexpected 401
 
-- Check whether the request actually carried a bearer token and whether parsing produced an authenticated principal. Tokens are read from the `Authorization` header or `authorization` cookie; the `authorization` query parameter is ignored unless `cosec.authorization.allow-query-token=true` (default `false` since CoSec 6).
-- Match `cosec.jwt.algorithm` and secret to the issuer; only HMAC256/384/512 are supported.
-- Check expiration and the response reason (`Token Expired` versus `Token Invalid`).
-- If revocation is enabled, verify the cache capability supplied a real Redis-backed `TokenStore`; otherwise the starter warns that logout is ineffective.
-- If the token is valid but the request remains anonymous, inspect the active `SecurityContextParser` and transport filter.
+- Did the request carry credentials? Tokens come from `Authorization`, then the `authorization` cookie; the query
+  parameter only with `cosec.pipeline.allow-query-token=true`. API keys from `X-API-Key`
+  (`cosec.pipeline.api-key-header`).
+- `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
+  `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
+  delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4).
+- `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the
+  `MembershipProvider` does not know (answers `MembershipAnswer.Unknown`) or knows as deactivated (`active = false`),
+  IDN-3: the decision
+  event's `subject.rejected` is `API_KEY_INVALID` or `TOKEN_INVALID`.
+- An API key that is valid but holds fewer roles than expected: its `roles` cap keeps only the principal's roles it
+  names, exactly by space, and drops attached policies and principal bindings (IDN-2, BND-9); a key grants nothing its
+  principal does not hold (IDN-1), and no API key ever gets break-glass (BRK-8). `roles: []` leaves only `Anyone`.
+- Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
+  `subject.authenticated`.
 
 ### Unexpected 403 or missing allow
 
-- Read the debug/audit match. An explicit deny is a matched deny; an implicit deny means no rule in any tier matched.
-- Confirm a global policy loaded and its policy-level condition matched.
-- Check the action's HTTP method, path, trailing slash, and captured variables.
-- Check condition parts and the actual principal roles/attributes/tenant.
-- Remember that `inTenant.value` is `default`, `user`, or `platform`, not a tenant ID.
-- For role permissions (CoSec 7+): grants are keyed by app, role and space (`<prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]`) and apply only in their own app. With `CoSec-Space-Id: x`, only token roles written `role@x` count; without it, only unsuffixed roles. A grant under the 6.x key `<prefix>:role:permission:<roleId>` is never read: migrate it to its app with `RolePermissionKeyMigration.migrate(appId)` (see the upgrading guide).
+- Which action and resource did the request get? With a route map, a mapped request is `service:verb` on
+  `type/id`; **`http:*` statements never apply to it**. Unmapped requests are `http:<METHOD>` on `http:path:<path>`.
+- Is the policy bound in the right document, with the right app and space? `space: ""` is the default space only;
+  roles count only in the request's space (`role@space` claims; unsuffixed roles in the default space).
+- Is the binding expired (`expiresAt`)? Is the tenant held by a boundary that does not cover the request?
+- Conditions: literals keep their JSON type (`true` vs `"true"`). `http.header.<name>`, `http.origin`, `http.referer`
+  and `request.attributes.<name>` come from the request; `http.origin.host` and `http.referer.host` are lower case and
+  absent when the value is not a URI with a host. The gateway's route id is `request.attributes.cosec.audit.routeId`.
+- A condition or rate limit `key` on a credential header (`authorization`, `proxy-authorization`, `cookie`,
+  `set-cookie`, `x-api-key`, `cosec-identity`) does not compile:
+  `` `<path>` is a credential header, which no attribute reference may read ``. A header name that is not an ASCII
+  token (RFC 9110) does not compile either: `` `<path>` is not a header name ``.
+- `scope-rejected`: the client's `CoSec-App-Id` or `CoSec-Space-Id` (see the table).
 
 ### Request allowed unexpectedly
 
-- Follow the decision order: the blacklist runs first (had it matched, the request would be denied), then root. Check whether `cosec.authorization.root-enabled=true` and the principal is the platform tenant's root id; root is off by default.
-- Find which tier matched an allow (the debug log and audit event name the policy statement or role permission). If you expected a deny, check that the deny's action and condition both match: a matched deny in any tier would have won.
-- Verify the deny action and condition both match; array order cannot make an allow beat a same-tier deny.
-- Confirm the intended policy was loaded (local files no longer get skipped, and duplicate IDs fail startup, in 7.0; Redis-stored policies are what authorization reads).
+- Find the deciding statement in the audit event or with `explain`. Any matching DENY would have won, so the expected
+  DENY did not match: check its action namespace (`http:*` vs mapped `service:verb`), resource pattern, condition
+  (an absent attribute makes `eq`/`in`/`prefix`/`cidr` false), binding scope, and `onMissing: nomatch` (lapses
+  while its provider fails).
+- Is the instance on the expected revision? Compare the audit event's snapshot versions with the published head.
+- A break-glass binding permits as `cosec:root` until it expires; audit marks such permits.
 
-### Form POST body empty after CoSec on Spring MVC
+### Service behind a gateway (`cosec.pipeline.mode=gateway`)
 
-- Before 8.0, the WebMvc adapter read query parameters (`CoSec-App-Id`, `CoSec-Space-Id`, `CoSec-Device-Id` fallbacks, the `authorization` query token, `getQuery` in OGNL or custom matchers) with `HttpServletRequest.getParameter`. For an `application/x-www-form-urlencoded` POST the container then parsed and consumed the body inside CoSec's filter: the application read an empty body, some containers failed the request, and a form field could set the app or space id.
-- Since 8.0 every adapter reads the URL query string only, never the body. After upgrading, a client that sent those values as form fields must send them as headers or in the query string; a condition that matched a form field no longer matches (an allow stops allowing, a deny stops denying). Move such checks into the application.
+The service reads the caller from `CoSec-Identity`, which only the CoSec gateway sets (it strips the client's own). No
+header: anonymous. Otherwise never anonymous:
 
-### Policy file has no effect
+- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, over
+  `cosec.pipeline.gateway.max-size` (8KB), sent more than once, or a scope that does not resolve here.
+- 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
+  `cosec.authentication.revocation.skew`).
+- 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.gateway.max-age` (60s)
+  plus the skew. Check clocks.
+- On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
+  key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
+  (at most 1024 characters), number or boolean. Route metadata `cosec-identity: false` opts a route out.
+- A backend that verifies tokens itself gets no `Authorization` header unless
+  `cosec.gateway.identity.forward-authorization=true`. A gateway-mode service that issues no tokens should set
+  `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
 
-- Confirm `cosec.authorization.local-policy.enabled=true` and the file matches `local-policy.locations`.
-- Since 7.0, `LocalPolicyLoader` fails startup with `Failed to load policy [<file>]` on any malformed JSON, missing required field, unknown matcher type, or constructor-time configuration error (before 7.0 it logged and skipped the file, which could drop a deny). It also fails startup with `Policy id [<id>] is declared more than once` (before 7.0 one copy was silently dropped) and with `Policy location [<location>] matches no file` for a configured location that does not exist or matches nothing, usually a path typo (before 7.0 only a warning); only the default `classpath:cosec-policy/*-policy.json` may match nothing.
-- Since 7.0 rate limit rule files (`cosec.limiter.locations`) and shadow candidates (`cosec.shadow.locations`, `cosec.shadow.app-permission-locations`) fail startup the same way: `Rate limit rule location [<location>] matches no file`, `Shadow policy location [...]`, `Shadow app permission location [...]` for a configured location that does not exist or matches nothing (before 7.0 it loaded nothing, silently, dropping every quota or candidate it held), and `... id [<id>] is declared more than once` for a duplicate id. Only the defaults `classpath:cosec-rate-limit/*-rate-limit.json`, `classpath:cosec-shadow/*-policy.json` and `classpath:cosec-shadow/*-app-permission.json` may match nothing.
-- Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
-- Local policy files are deduplicated by file after location expansion (a file matched by two locations loads once); two files with the same ID fail startup. Assert that the expected ID and content loaded.
-- `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
+### Change not visible / snapshot lag
 
-### Policies or permissions missing after upgrading to 7.0
+- Instances revalidate every `cosec.authorization.snapshot.revalidate-interval` (10s) and serve local copies up to
+  `local-max-age` (30s). Logs: `Snapshot document [<key>] revision <n> has not been confirmed for <lag>` (WARN, over
+  `lag-warn`, 60s) and `... is stale` (ERROR, over `lag-escalate`, 5m). `Reloading snapshot document [<key>] failed;
+  keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
+  `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
+  failover).
+- The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports how many of the recently reporting instances (those with `cosec.authorization.shadow.enabled`) have installed it.
 
-- CoCache 6 cannot read what CoSec 6.x (CoCache 5) stored in Redis. Until the data is migrated, every read of it fails (`CacheReadException` caused by `ForeignFormatException`) and requests get 500. Migrate with `CoSecCoCache5Migration` (policies, global index, app permissions, revoked tokens) and `RolePermissionKeyMigration` (role grants, per app); see the upgrading guide, "6.1 to 7.0".
-- Startup fails while initializing local policies (`init-repository` with `force-refresh=false`, the default): the initializer reads each id's stored copy first, so an unmigrated copy (`ForeignFormatException`) or a migrated one that now violates path variable scope (`PathVariableScopeException`) stops startup even when the local file is valid. Migrate or fix the stored policy; after the migration, starting once with `force-refresh=true` overwrites the stored copies without reading them. Warn that `force-refresh=true` also overwrites every change administrators made to those policies through the repository, and that it fails before the migration (every publish does); turn it off again afterwards.
-- Startup fails with `CoSecSchemaException` naming `<prefix>:meta:schema`: CoSec data exists (under the 6.x `legacy-key-prefix` or the current prefix) without the 7.0 schema marker, so it is 6.x data or data rolled back to 6.x that 7.0 would read as missing (typically a key prefix ending in `:` or a changed prefix). Stop every writer and run `CoSecCoCache5Migration.migrate()`, which writes the marker, from a job with `cosec.authorization.cache.migration.check-schema=false`; never set that on serving instances, and never write the marker by hand while 6.x data may exist.
-- `CoSecCoCache5Migration.rollback()` fails with `KeysWithoutBackupException`: 7.0 created those keys (policies, app permissions, revocations) and 6.x would overwrite them with a cached miss on first read, silently dropping denies and un-revoking tokens. Review the keys, call `rollback(allowKeysWithoutBackup = true)`, and write those policies and revoke those tokens again through 6.x before it serves traffic.
-- `Policy id [history:...] must not start with [history:]` on `setPolicy` (7.0+): ids starting with `history:` would share a key with the policy history (`{prefix}:policy:history:<id>`). Rename the policy.
-- Publishing a policy before the migration (`setPolicy`, or local policies with `force-refresh=true`) fails with `CacheWriteException` caused by `ForeignFormatException` on the global policy index key (`{prefix}:global:policy`): CoCache 6 does not overwrite the 6.x native SET. The index is untouched and still migrates; run the migration, then repeat the publish. Do not delete the key or set `foreign-format=reclaim`: it is the only copy of the global policy ids. Puts of app permissions are not checked and replace the 6.x value without a backup (role grants go to new keys and show up as `conflicts` in `RolePermissionKeyMigration`), so stop every writer until the migration has finished.
-- A global policy id in the index without content fails every request with `MissingPolicyException` (500) since 7.0, instead of being skipped; rewrite the policy, or save it with a non-`global` type to drop it from the index. Indexed ids whose content is not `global` are ignored.
-- Values written straight to Redis (`SET`, `SADD`) are not read in 7.0: every value carries a binary header. Write app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans, and policies through `PolicyRepository.setPolicy`.
+### Rate limiting
 
-### One principal always gets 500
+- Without a `ReactiveStringRedisTemplate`, the limiter is per JVM: N instances allow N times the limit.
+- Denied requests never spend permits. A rule that never applies has a non-matching action (namespace), resource or
+  condition. Rules count per document: an app's or tenant's rule has its own buckets.
+- A limiter failure skips the rule unless `strictFailure: true` (then 503, not 429).
 
-- `MissingPolicyException` (`source = PRINCIPAL`, "The principal lists policies ...") names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. With `source = GLOBAL_POLICY_INDEX` ("The global policy index lists policies ... that have no content") every request fails instead: the Redis global index lists a policy whose content is gone; write the policy again. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
-- Check whether the policy was deleted, never initialized (`init-repository` off, or skipped at load), or lost from Redis. Fix by writing the policy or removing the id from the principal; do not suggest catching the exception.
+### Control-plane errors
 
-### Matcher mismatch
+Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
+document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);
+404 no such document, change or route; 409 the change's `base` revision is stale, the document is staged by another
+change, or the change is in another state; 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
+does not match; 422 the candidate does not compile, refers to a missing policy, or uses a reserved id prefix
+(`cosec:`, `g:`, `r:`); 428 a DENY with `onMissing: nomatch` needs a confirmation; 503 the decision or store could not
+be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebMvc a body over
+`cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
+first one with `cosec-migrate publish`.
 
-- Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.
-- `PathVariableScopeException` at startup or on a policy read/write (7.0+): a policy or app permission condition, or a statement, permission or rate limit rule whose action is not `path`, reads `request.path.var.*` (or an expression mentions `PATH_VARIABLES`). Variables belong only to the statement whose own `path` action captured them; move the reference there. Local policy files with this error stop startup instead of being skipped; Redis-stored ones fail reads with 500.
-- Path SpEL templates use `#{principal.id}`. SpEL condition expressions use root properties such as `context.principal.id`; they are different evaluation roots.
-- A templated `path` action (`/users/#{principal.id}/**`) works for most principals but not for one (6.1.2, 7.0.1, 8.0+): the template value is rejected because it is empty or missing, `.`, `..`, or contains `*`, `?`, `{`, `}`, `\` or the path separator (or `%`/`;` with `decodeAndParseSegments: false`). A rejected value never matches in an allow (`Implicit Deny`); in a deny or rate limit rule, or a matcher built in code outside a statement, it throws `RejectedTemplateValueException` (500, fail closed, no permit spent). Such principals cannot be served by templated statements. Fix with a static pattern plus `eq`: `"action": "/users/{userId}/**"` and `{"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`. Do not suggest escaping or loosening the check.
-- Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts fail loading with `Condition [<type>] part [<part>] is not a supported part` (7.0+); a policy stored by an earlier version fails its reads with 500.
-- Regex timeouts fail closed as a deny: 401 for anonymous callers, 403 for authenticated ones (7.0+; always 403 before). Simplify or bound the pattern instead of increasing exposure to ReDoS.
-
-### Rate limiting differs across instances
-
-- Without the cache capability and a `StringRedisTemplate` bean, the `RateLimiter` is `LocalRateLimiter`: per JVM, so N instances allow N times the limit. Check which `RateLimiter` bean is active.
-- Counter-store outages skip a rule by default. Set the rule's `strictFailure: true` only when availability loss should return 429.
-- Denied requests (401/403) never spend permits. A rule that never applies usually has a non-matching `action`/`condition`, or its file is outside `cosec.limiter.locations`.
-- A rule without `key` shares one bucket among all matching requests; requests whose `key` part is empty also share one bucket. Quotas belong to the rule `id`.
-- On 6.1.0 to 7.0.0, a Spring Cloud Gateway application with the cache capability fails to start with `The bean 'redisRateLimiter' ... could not be registered ... GatewayRedisAutoConfiguration`: both register a bean named `redisRateLimiter`. Fixed in 7.0.1 (CoSec's bean is `cosecRedisRateLimiter`). Before that, declare your own CoSec `RateLimiter` bean (`RedisRateLimiter(stringRedisTemplate, limiterProperties.keyPrefix)`); never enable bean overriding, which makes Spring Cloud Gateway fail instead.
-- After upgrading to 6.1, policies using `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter`, or `redisGroupedRateLimiter` fail to parse: migrate them to rate limit rules.
+A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
+it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
+declared types must match on every instance and the control host; the change is never published while blocked.
 
 ## Reproduce narrowly
 
-Prefer the smallest existing test layer that crosses the failing boundary:
-
-- matcher behavior: create the real factory with `mapOf(...).asConfiguration()` and test `match`;
-- policy parsing: load the exact resource with `LocalPolicyLoader`, assert its ID, then run `DefaultPolicyEvaluator.evaluate`;
-- decision order: test `SimpleAuthorization` with the smallest repositories needed;
-- transport mapping: use the WebFlux, WebMVC, or Gateway filter tests for 401/403/429 behavior;
-- Redis behavior: run the cache integration test with Redis.
+- Document problems: decode and compile the exact document
+  (`PolicyDocumentCompiler.forPlatform(platform).compile(PolicyDocumentCodec.decode(kind, owner, bytes))`); the
+  exception lists every error with its JSON path.
+- Decisions: `simulate` / `explain` on the control plane, or an engine-level conformance scenario
+  (`test/conformance/src/test/resources/scenarios/`) in a CoSec checkout.
+- Transport mapping: `WebAdapterParityTest`, `PipelineTest` (`runtime`).
 
 In this repository, run a focused class first, for example:
 
 ```bash
-./gradlew :cosec-core:test --tests "me.ahoo.cosec.policy.DefaultPolicyEvaluatorTest"
+./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.PipelineTest"
 ```
 
-Use `$cosec-policy-author` to rewrite a confirmed-bad policy and `$cosec-integration` to change confirmed-bad Spring configuration. For diagnosis-only requests, report the root cause and evidence without modifying files.
+Use `$cosec-policy-author` to rewrite a confirmed-bad document and `$cosec-integration` to change confirmed-bad Spring
+configuration. For diagnosis-only requests, report the root cause and evidence without modifying files.

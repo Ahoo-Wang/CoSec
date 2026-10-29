@@ -1,8 +1,0 @@
-{
-  "id": "login-by-ip",
-  "action": "/auth/login",
-  "key": "request.remoteIp",
-  "permitsPerSecond": 0.1,
-  "windowSeconds": 60,
-  "strictFailure": true
-}

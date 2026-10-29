@@ -8,32 +8,6 @@
         "deny"
       ],
       "type": "string"
-    },
-    "pathOptions": {
-      "additionalProperties": false,
-      "description": "How a path pattern is parsed and matched.",
-      "properties": {
-        "caseSensitive": {
-          "default": true,
-          "type": "boolean"
-        },
-        "decodeAndParseSegments": {
-          "default": true,
-          "type": "boolean"
-        },
-        "separator": {
-          "default": "/",
-          "examples": [
-            "/",
-            "."
-          ],
-          "maxLength": 1,
-          "minLength": 1,
-          "pattern": "^\\S$",
-          "type": "string"
-        }
-      },
-      "type": "object"
     }
   },
   "description": "Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",

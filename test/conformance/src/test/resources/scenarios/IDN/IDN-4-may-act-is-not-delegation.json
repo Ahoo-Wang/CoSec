@@ -1,0 +1,62 @@
+{
+  "rules": [
+    "IDN-4"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same token naming only who may act for alice (may_act) is alice's own: alice reads her orders.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "claims": {
+        "may_act": {
+          "sub": "agent"
+        }
+      }
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

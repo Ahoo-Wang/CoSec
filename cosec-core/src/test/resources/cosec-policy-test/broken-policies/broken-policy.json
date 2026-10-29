@@ -1,9 +1,0 @@
-{
-  "id": "broken",
-  "name": "Broken",
-  "type": "global",
-  "tenantId": "(platform)",
-  "statements": [
-    { "name": "bad-expression", "action": "/broken/**", "condition": { "spel": { "expression": "1 / 0 == 1" } } }
-  ]
-}

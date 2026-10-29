@@ -61,25 +61,25 @@ description. They are listed under 💥 Breaking Changes and require a major ver
   formatting locally, so commit the corrected files.
 - Every source file starts with the Apache-2.0 license header in
   [config/detekt/license.template](config/detekt/license.template). Detekt fails the build otherwise.
-- Public APIs are interfaces in `cosec-api`; implementations live in `cosec-core` and the integration
-  modules. See the [architecture overview](https://cosec.ahoo.me/architecture/overview).
+- Public contracts are interfaces in `cosec-api`, extension points (ports) in `cosec-spi`; the pipeline, documents
+  and snapshots live in `cosec-runtime`, and each technology in its own module. See the [architecture overview](https://cosec.ahoo.me/architecture/overview).
 
 ## 5. Tests and coverage
 
 ```bash
 ./gradlew check                                   # tests + detekt for all modules
-./gradlew :cosec-core:test --tests "me.ahoo.cosec.policy.*"
+./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.document.*"
 ./gradlew :code-coverage-report:codeCoverageReport
 ```
 
 - **Unit tests**: JUnit 5, MockK, Hamcrest and FluentAssert, next to the code they cover.
 - **Integration tests** run against real infrastructure. The Redis-backed modules (`cosec-cocache`,
-  `cosec-spring-boot-starter`) expect Redis on `localhost:6379`:
+  `cosec-spring-boot`) expect Redis on `localhost:6379`:
   `docker run -d --name cosec-redis -p 6379:6379 redis:7`.
 - **Coverage gates** (Codecov): changed lines need **≥ 80 %** coverage, and overall project coverage
   must not drop by more than 1 %.
 - **Performance claims** come with a JMH benchmark (`src/jmh`), e.g.
-  `./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark`.
+  `./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark`.
   That task runs one short iteration; for a before/after comparison run the benchmark jar as described in
   [Measuring](https://cosec.ahoo.me/architecture/overview#measuring), including
   `-jvmArgsAppend -Dlogback.configurationFile=…`, or the forked JVMs log at DEBUG and skew the results.
@@ -87,7 +87,8 @@ description. They are listed under 💥 Breaking Changes and require a major ver
 ## 6. Pull requests and code review
 
 - Fill in the pull request template: linked issue, what changed, and how it was tested.
-- All CI checks must pass: per-module tests and detekt, Codecov, CodeQL, and the semantic title check.
+- All CI checks must pass: `CI` (tests and detekt for every project group, and the workflow lint), Codecov, CodeQL,
+  and the semantic title check.
 - Approving reviews are not required: only maintainers can merge, and [CODEOWNERS](.github/CODEOWNERS) are
   requested as reviewers automatically. Review conversations must be resolved before merging.
 - Reviewers check correctness (including fail-closed behavior for security decisions), tests, public API

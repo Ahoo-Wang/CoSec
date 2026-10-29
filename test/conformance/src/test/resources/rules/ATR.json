@@ -1,0 +1,82 @@
+{
+  "rules": [
+    {
+      "id": "ATR-1",
+      "source": "RFC 0006 §5.4.3",
+      "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9'), except a DENY whose onMissing nomatch the control plane confirmed (ATR-6), which lapses by design.",
+      "level": "pipeline",
+      "properties": [
+        "engine:ExternalAttributesPropertyTest#unavailableAttributesNeverPermitAndThePlanIsComplete"
+      ],
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-2",
+      "source": "RFC 0006 §5.4.3 (K12, Q12)",
+      "statement": "An ALLOW skipped because an external attribute it reads cannot be fetched makes what would be the implicit deny Indeterminate (503); another matching ALLOW still permits, and onMissing nomatch makes it a plain miss.",
+      "level": "pipeline",
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-3",
+      "source": "RFC 0006 §5.4.3 (Q13)",
+      "statement": "A DENY may say onMissing nomatch only in the platform document, where it lapses while its attribute cannot be fetched; elsewhere the document does not compile.",
+      "level": "pipeline",
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "runtime:ExternalAttributeDocumentTest"
+      ],
+      "pending": null,
+      "superseded": "ATR-6"
+    },
+    {
+      "id": "ATR-4",
+      "source": "RFC 0006 §5.4.1",
+      "statement": "A policy that reads an external attribute no registered AttributeProvider declares does not compile.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:ExternalAttributeDocumentTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-5",
+      "source": "RFC 0006 §5.4.2; RFC 0004 Q6",
+      "statement": "A provider that fails or times out makes only its own attributes unavailable; the other providers' attributes are still read, so their DENY still matches.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-6",
+      "source": "RFC 0007 §9.5, Q13 (N6)",
+      "statement": "A DENY with onMissing nomatch compiles, in any document, only with the confirmation the control plane records (onMissingConfirmed); it then lapses while its attribute cannot be fetched.",
+      "level": "pipeline",
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "runtime:ExternalAttributeDocumentTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-7",
+      "source": "RFC 0006 §8.1, §5.4.3; RFC 0007 N6",
+      "statement": "A rate limit rule may say onMissing nomatch only in the platform document, where the rule does not count a request while its attribute cannot be fetched; in an app or tenant document it does not compile. Rate limit rules have no confirmation flow (ATR-6 covers policy statements).",
+      "level": "pipeline",
+      "guards": [
+        "engine:RateLimitObligationTest"
+      ],
+      "pending": null
+    }
+  ]
+}

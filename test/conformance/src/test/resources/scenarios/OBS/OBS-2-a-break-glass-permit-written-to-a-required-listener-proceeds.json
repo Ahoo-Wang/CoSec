@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "OBS-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The root break-glass binding permits, and the REQUIRED audit listener records it: the request proceeds.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2099-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "(platform)",
+      "id": "cosec",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

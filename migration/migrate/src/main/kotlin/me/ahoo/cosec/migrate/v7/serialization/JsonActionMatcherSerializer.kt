@@ -1,0 +1,66 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.migrate.v7.serialization
+
+import me.ahoo.cosec.migrate.v7.api.policy.ActionMatcher
+import me.ahoo.cosec.migrate.v7.configuration.JsonConfiguration
+import me.ahoo.cosec.migrate.v7.policy.action.ActionMatcherFactoryProvider
+import me.ahoo.cosec.migrate.v7.policy.action.AllActionMatcher
+import me.ahoo.cosec.migrate.v7.policy.action.AllActionMatcherFactory
+import me.ahoo.cosec.migrate.v7.policy.action.CompositeActionMatcherFactory
+import me.ahoo.cosec.migrate.v7.policy.action.PathActionMatcherFactory
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
+
+internal object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
+    override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializationContext) {
+        if (value.configuration.isString || value.configuration.isArray) {
+            gen.writePOJO(value.configuration)
+            return
+        }
+        gen.writeStartObject()
+        gen.writePOJOProperty(value.type, value.configuration)
+        gen.writeEndObject()
+    }
+}
+
+internal object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
+        val actionConfiguration = p.objectReadContext().readValue(p, JsonConfiguration::class.java)
+
+        if (actionConfiguration.isString) {
+            if (actionConfiguration.asString() == AllActionMatcherFactory.ALL) {
+                return AllActionMatcher.INSTANCE
+            }
+            return PathActionMatcherFactory.INSTANCE.create(actionConfiguration)
+        }
+
+        if (actionConfiguration.isArray) {
+            return CompositeActionMatcherFactory.INSTANCE.create(actionConfiguration)
+        }
+
+        require(actionConfiguration.isObject)
+        /**
+         * isObject
+         */
+        val field = actionConfiguration.delegate.properties().first()
+        val conditionConfiguration =
+            field.value.traverse(p.objectReadContext()).readValueAs(JsonConfiguration::class.java)
+        return ActionMatcherFactoryProvider.getRequired(field.key).create(conditionConfiguration)
+    }
+}

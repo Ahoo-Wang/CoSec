@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "PIP-9"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "X-Debug sent twice with different values has no single value: the DENY that reads it is indeterminate (503), not decided by whichever value comes first.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        },
+        {
+          "id": "no-debug",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "http.header.x-debug",
+                  "1"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "no-debug",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-debug"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Debug": [
+        "0",
+        "1"
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

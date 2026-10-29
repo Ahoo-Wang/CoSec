@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "PIP-9"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same ALLOW does not permit a request of another route.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "by-route",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "request.attributes.cosec.audit.routeId",
+                  "orders"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "by-route",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "by-route"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "requestAttributes": {
+      "cosec.audit.routeId": "billing"
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "rules": [
+    "PIP-8"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A valid key authenticates its service principal, which the membership provider knows, and whose binding permits.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:svc:read",
+            "subject": {
+              "principal": "svc"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "p:alice:read",
+            "subject": {
+              "principal": "alice"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "headers": {
+      "X-API-Key": "k-valid"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-valid",
+        "id": "valid",
+        "principalId": "svc",
+        "tenantId": "acme"
+      },
+      {
+        "key": "k-disabled",
+        "id": "disabled",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "enabled": false
+      },
+      {
+        "key": "k-expired",
+        "id": "expired",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "expiresAt": "2026-11-01T00:00:00Z"
+      }
+    ],
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc"
+      }
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

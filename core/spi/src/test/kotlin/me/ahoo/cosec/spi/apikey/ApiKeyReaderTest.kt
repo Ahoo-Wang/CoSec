@@ -1,0 +1,63 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.spi.apikey
+
+import me.ahoo.cosec.spi.now
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.time.Instant
+
+class ApiKeyReaderTest {
+    private val expiresAt: Instant = Instant.parse("2026-11-01T00:00:00Z")
+
+    @Test
+    fun usableWhileEnabledAndBeforeExpiry() {
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null, expiresAt = expiresAt)
+        key.usableAt(expiresAt.minusMillis(1)).assert().isTrue()
+        key.usableAt(expiresAt).assert().isFalse()
+        ApiKey("k", "svc", "acme", null, expiresAt = expiresAt, enabled = false).usableAt(expiresAt.minusSeconds(60))
+            .assert().isFalse()
+        ApiKey("k", "svc", "acme", emptySet()).usableAt(Instant.MAX).assert().isTrue()
+    }
+
+    @Test
+    fun aKeyBelongsToATenantAndAPrincipal() {
+        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "", null) }
+        assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme", null) }
+        assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme", null) }
+    }
+
+    /**
+     * Stored keys are looked up by this hash: it must never change. SHA-256 of the key's UTF-8 bytes, lower-case hex,
+     * pinned against vectors computed elsewhere (Python's hashlib).
+     */
+    @Test
+    fun theHashIsPinned() {
+        ApiKeys.hash("cosec_4fJx9QzR2mT7wLp0VbN6sY1cE8uK3aHd5gZiXoWrMnq")
+            .assert().isEqualTo("7da72e8ca9aaec182271e30eea65aae5273d2d8d8332b8c60c1c20b961cec4df")
+        ApiKeys.hash("").assert().isEqualTo("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        ApiKeys.hash("\u5bc6\u94a5-\u00e9")
+            .assert().isEqualTo("fdb61048550f995fcca222cfd2240fa07155d5c662e985a179357a3eb889777a")
+        ApiKeys.hash(ApiKeys.generate()).assert().matches("[0-9a-f]{64}")
+    }
+
+    @Test
+    fun theInMemoryStoreReadsWithoutBlocking() {
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null)
+        val reader = InMemoryApiKeyStore(mapOf("hash" to key)).reader
+        now { reader.findByHash("hash") }.assert().isEqualTo(key)
+        now { reader.findByHash("other") }.assert().isNull()
+    }
+}

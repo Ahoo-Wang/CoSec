@@ -1,0 +1,156 @@
+{
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-identity.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted request: who the caller is and the scope the gateway decided in. Never a credential, policy or attribute value. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
+  "properties": {
+    "auth": {
+      "additionalProperties": false,
+      "properties": {
+        "exp": {
+          "description": "When the credential expires.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "jti": {
+          "description": "The token or API key id.",
+          "examples": [
+            "0TEC7Hw00001zR0"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
+        "method": {
+          "description": "How the principal authenticated: `jwt` and `api-key` are CoSec's own, and an authenticator of another credential names its own.",
+          "examples": [
+            "jwt",
+            "api-key"
+          ],
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "jti",
+        "exp"
+      ],
+      "type": "object"
+    },
+    "claims": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "examples": [
+              "Alice",
+              "alice@example.com"
+            ],
+            "maxLength": 1024,
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "description": "The token claims `cosec.gateway.identity.claims` names.",
+      "propertyNames": {
+        "examples": [
+          "name",
+          "email"
+        ],
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "iat": {
+      "description": "When the gateway made the header.",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rid": {
+      "description": "The gateway's CoSec-Request-Id.",
+      "examples": [
+        "0TEC7Hw00001zR0"
+      ],
+      "minLength": 1,
+      "type": "string"
+    },
+    "roles": {
+      "description": "The roles effective in that scope after membership resolution.",
+      "items": {
+        "examples": [
+          "clerk",
+          "admin"
+        ],
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "scope": {
+      "additionalProperties": false,
+      "description": "The scope the gateway decided in, resolved; empty strings for no app and the default space.",
+      "properties": {
+        "app": {
+          "examples": [
+            "order",
+            ""
+          ],
+          "type": "string"
+        },
+        "space": {
+          "examples": [
+            "",
+            "team-a"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "app",
+        "space"
+      ],
+      "type": "object"
+    },
+    "sub": {
+      "description": "The principal's id.",
+      "examples": [
+        "alice",
+        "svc-billing"
+      ],
+      "minLength": 1,
+      "type": "string"
+    },
+    "tenant": {
+      "examples": [
+        "acme",
+        "(platform)"
+      ],
+      "minLength": 1,
+      "type": "string"
+    },
+    "v": {
+      "const": 1,
+      "description": "The format version.",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "v",
+    "tenant",
+    "sub",
+    "scope",
+    "roles",
+    "auth",
+    "iat",
+    "rid"
+  ],
+  "title": "CoSec Identity Schema",
+  "type": "object"
+}

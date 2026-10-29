@@ -91,13 +91,13 @@
 
 - 不进 `cosec-bom`，不应用 `maven-publish`；与 `cosec-core` 的 `verifyTestFixturesUnpublished` 同样做法，`check` 中的一个任务断言它不在任何发布物里。
 - 只有 `src/test`：依赖 `model/`、`engine/`、`runtime/`、`control/`、`cosec-core`（文档编解码与编译器），各自 PR 合入后再加上对应依赖。
-- 规则登记表与场景语料放在 `conformance/src/test/resources/`；已经存在的性质测试**不搬家**，留在各自的模块里（§3.5），登记表只引用它们。
+- 规则登记表与场景语料放在 `test/conformance/src/test/resources/`；已经存在的性质测试**不搬家**，留在各自的模块里（§3.5），登记表只引用它们。
 
 不用 `testFixtures`：场景要跨 `engine/`、`runtime/`、`control/` 三层运行，放进任何一个模块的测试夹具都会让它依赖上层模块。
 
 ### 3.2 规则登记表
 
-`conformance/src/test/resources/rules.json` 是 8.0 规范性规则的唯一索引。每一条：
+`test/conformance/src/test/resources/rules.json` 是 8.0 规范性规则的唯一索引。每一条：
 
 ```jsonc
 {
@@ -197,13 +197,13 @@ RFC 正文与登记表不一致时按 AGENTS.md "以代码为准"的原则修 RF
 RFC 0004 §5.3 的 C1–C6、RFC 0005 §8 的 D1–D3、RFC 0006 §11.4 的 R1–R3 不再是"差异类别"，而是上表中的规则（例如 C1a → `ALG-4`、C3 → `SCP-1`、
 R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`（§4.4）。
 
-> **实现说明（2026-10-27，#1093）**：登记表已按族拆成 `conformance/src/test/resources/rules/<FAMILY>.json`（每个文件 `{"rules": [...]}`，规则按族内原来的顺序），登记表范围的 `$comment` 在 `rules/_meta.json`；本节与全文中所有"`rules.json`"、"把规则加进 `rules.json`"都指规则所属族的文件。`Corpus.rules()` 读取 `_meta.json` 和全部族文件（按文件名排序），规则出现在别族的文件里、或族文件除 `rules` 之外还有别的内容时失败。拆分时共 96 条规则，每条与原来逐字节相同；原来族与族之间交错的顺序不保留。仍然修改 `rules.json` 的分支会因文件被删除而冲突，要把规则条目重新加到族文件里。
+> **实现说明（2026-10-27，#1093）**：登记表已按族拆成 `test/conformance/src/test/resources/rules/<FAMILY>.json`（每个文件 `{"rules": [...]}`，规则按族内原来的顺序），登记表范围的 `$comment` 在 `rules/_meta.json`；本节与全文中所有"`rules.json`"、"把规则加进 `rules.json`"都指规则所属族的文件。`Corpus.rules()` 读取 `_meta.json` 和全部族文件（按文件名排序），规则出现在别族的文件里、或族文件除 `rules` 之外还有别的内容时失败。拆分时共 96 条规则，每条与原来逐字节相同；原来族与族之间交错的顺序不保留。仍然修改 `rules.json` 的分支会因文件被删除而冲突，要把规则条目重新加到族文件里。
 >
 > **实现说明（2026-10-27，#1097）**：登记表新增 `startup` 级别：与 `build` 一样，它的规则由所列的测试守护，没有场景在该级别运行（`RuleCoverageTest`）。`SNP-3`（启动时检查 `noeviction`）改为 `startup`，不再 `pending`。
 
 ### 3.3 场景语料
 
-每个场景是 `conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：
+每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：
 
 ```jsonc
 {
@@ -267,7 +267,7 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 | A3、A4 | 规范化不改变语义；求值访问的节点数不超过上限 | `model/`：`condition/ConditionPropertyTest` | 已合入（#1022） |
 | Q 规则 | 按决定编号写成的规则用例，例如 RFC 0005 Q7（不存在不等于任何值） | `model/`：`condition/ConditionEvaluationTest` | 已合入（#1022）；登记为 `CND-1` 的守护 |
 | P6 | 安装单调 | `cosec-core`：`snapshot/SnapshotInstallOrderPropertyTest` | 已合入（#988） |
-| P7 | 一次评估只用每份文档的一个修订 | `cosec-core`：`authorization/SnapshotConsistencyPropertyTest` | 已合入（#998）；随 RFC 0004 PR-4 改到 8.0 的文档上 |
+| P7 | 一次评估只用每份文档的一个修订 | `cosec-core`：`snapshot/SnapshotConsistencyPropertyTest` | 已合入（#998）；#1114 改到 8.0 的快照路径（平台与租户文档经 8.0 编译器、扁平引擎）；视图由测试内的 `DocumentSnapshotViews` 副本拼装，生产拼装在并发重新发布下的变体是后续项 |
 
 随后续 PR 加入（登记表中先为 `pending`）：
 
@@ -287,7 +287,7 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 （`engine/` 的 `EnginePropertyTest`，随按层引擎删除）。
 
 **百万例运行**：每个随机性质读取系统属性 `cosec.property.iterations`（缺省为该测试的固定例数）；根项目新增 `propertyStress` 任务，
-以 `-PpropertyIterations=1000000` 运行全部随机性质，不挂到 `check`。它取代 `:cosec-core:engineParity` 与 `:cosec-cocache:snapshotParity`。
+以 `-PpropertyIterations=1000000` 运行全部随机性质，不挂到 `check`。它取代 `:core:engineParity` 与 `:cocache:snapshotParity`。
 
 ### 3.6 安全不变量作为性质
 
@@ -306,7 +306,7 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 性质与场景能通过，不代表它们能发现缺陷。沿用 #1029 的做法（在 PR 中手写变异体，例如"DENY 扫描在第一个错误处停止""丢掉租户的 `*` 绑定"，
 确认有性质因此失败），并把它变成可重复执行的检查：
 
-- `conformance/mutants/<名字>.patch`：每个变异体是对生产代码的一个小补丁，文件头注明它针对的规则 id 和预期失败的测试。
+- `test/conformance/mutants/<名字>.patch`：每个变异体是对生产代码的一个小补丁，文件头注明它针对的规则 id 和预期失败的测试。
   每个安全不变量（§3.6）至少一个变异体；初始一组：DENY 扫描在第一个错误处停止（`ALG-1`）、ALLOW 出错按命中（`ALG-4`）、跳过 `unresolved` 检查（`ALG-3`）、
   `ScopeResolver` 不检查成员关系（`SCP-1`）、`bindingsFor` 返回其他租户的绑定（`TNT-1`）、`implies` 对 `or` 的一个分支返回 `YES`（`ANA-2`）、
   `StatusMapping` 把 `Indeterminate` 映射为放行（`PIP-2`）、授出分析忽略授权者的 DENY（`GRT-1`）。
@@ -462,16 +462,16 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 
 | 项 | 路径 | 为什么存在 |
 |---|---|---|
-| 7.x 授权实现与按层的引擎适配 | `cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/`：`SimpleAuthorization.kt`、`EngineAuthorization.kt`、`SnapshotEngineAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`AuthorizationDecision.kt` | 7.x 路径；第 2、3 阶段的候选实现 |
-| 按层引擎的适配层 | `cosec-core/.../authorization/engine/`：`LegacyRules.kt`、`LegacyFacts.kt`、`StatementScopedContext.kt`、`PolicySetLoader.kt`、`LayerReads.kt`、`EngineDecisionFlow.kt`、`Decisions.kt`、`EvaluationObserver.kt` | 把 7.x 数据和匹配器喂给按层引擎 |
-| 7.0 形状的快照 | `cosec-core/.../authorization/engine/`：`PolicySnapshotCompiler.kt`、`CompiledSnapshot.kt`（`CompiledPolicies`、`CompiledApp`）、`SnapshotPolicySetLoader.kt`；`cosec-core/.../snapshot/SnapshotKey.kt` 中的 `Policies` 与 7.0 内容的 `App`（RFC 0004 的 `Platform`/`App`/`Tenant` 取代）；`cosec-cocache/.../cache/snapshot/SnapshotContent.kt` 与 `SnapshotDocumentCodec.kt` 中 7.0 格式的部分。RFC 0004 PR-4 起两种格式并存，切换时一并删除 schema 1：`SnapshotDocument.CURRENT_SCHEMA` 与 `SCHEMAS`（只留 `DOCUMENT_SCHEMA = 2`）、`SnapshotDocumentCodec` 对 schema 1 的接受、`SnapshotKey.Policies` 与 `SnapshotKind.POLICIES`、`SnapshotKeyEncoder.POLICIES`、格式描述 `cosec-snapshot-document` 中的 `policiesDocument` 与 `legacyAppDocument`（连同 `cosec-policy`、`condition`、`action`、`cosec-app-permission` 等 7.x 描述，由 8.0 的描述接替这些文件名，RFC 0007 §10.4）、`SnapshotSource` 中拒绝 `Platform`/`Tenant` 的分支（由 RFC 0004 PR-4 之后的三文档源取代） | RFC 0003 的中间文档 |
-| 按层引擎 | `engine/src/main/kotlin/me/ahoo/cosec/engine/`：`Engine.kt`、`CoSecEngine.kt`、`Evaluator.kt`、`TracingEvaluator.kt`、`PolicySet.kt`（其中的 `Rule`/`Guard`/`RuleMatch` 在 RFC 0005 PR-4 之后不再被 `flat/` 使用）、`Trace.kt`；`model/`：`LayerKind.kt`、`Decision.kt`（按层的 `StatementRef`/`Decision`/`Cause`）、`AuthzRequest.kt` 中的 `HostFacts`；测试 `engine/.../EnginePropertyTest.kt` | RFC 0002 §4 的按层顺序只为与 7.0 逐条等价 |
-| 决策比较与回放 | `cosec-core/src/testFixtures/kotlin/me/ahoo/cosec/parity/`：`DecisionParity.kt`、`DecisionReplay.kt`、`PolicySetParity.kt`、`ReplayInputs.kt`、`ReplayMain.kt`、`ReplayReport.kt`（含 `ReplayGate`）、`ReplaySide.kt`、`RepositorySnapshotAuthorization.kt`、`SnapshotAuthorizationFixture.kt`；`.../testkit/PolicyTestKitParity.kt`；`cosec-core/src/testFixtures/resources/cosec-replay/`；`cosec-core/build.gradle.kts` 中的 `engineReplay`、`engineParity` 任务（测试夹具源码集与 `verifyTestFixturesUnpublished` 在没有其他使用者时一并删除） | RFC 0002 PR-4（#997） |
-| 快照的比较、回放与测量工具 | `cosec-cocache/src/test/kotlin/me/ahoo/cosec/cache/snapshot/`：`SnapshotReplay.kt`、`SnapshotDecisionParityPropertyTest.kt`、`SnapshotMeasure.kt`、`SnapshotConvert.kt`；`cosec-cocache/.../cache/SnapshotRepositoryParityTest.kt`；`cosec-cocache/build.gradle.kts` 中的 `snapshotReplay`、`snapshotParity`、`snapshotMeasure`、`snapshotConvert` 任务。`CoSec7xReader` 读取 7.x 原始数据的部分已由 RFC 0004 PR-5 搬进 `migrate/`（#1067）；生成 7.0 形状快照的部分留在测试源码集，改名 `CoSec7xSnapshotReader.kt`（及其测试），随本行删除 | RFC 0003 PR-4（#1030） |
-| 等价性质 | `cosec-core/src/test/.../authorization/engine/EngineParityPropertyTest.kt`、`SnapshotPolicySetPropertyTest.kt`；`.../explain/ExplainerConsistencyTest.kt`；`.../parity/DecisionParityTest.kt`、`DecisionReplayTest.kt`；`.../testkit/PolicyTestKitParityTest.kt` | P3、P5 与比较器自身的测试 |
-| 每请求读仓库的路径 | `cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/`：`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt` 以及四个缓存与它们的属性（RFC 0003 PR-6 的清单） | 7.x 路径 |
-| 7.x 的写入与历史 | `cosec-core/.../snapshot/SnapshotPublisher.kt`、`cosec-cocache/.../cache/snapshot/RedisSnapshotPublisher.kt`（条件写入的做法由 `CoCacheControlStore` 复用，§4.3）、`cosec-core/.../policy/history/PolicyHistory.kt`、`cosec-cocache/.../cache/RedisPolicyRevisionStore.kt`、`cosec-core/.../policy/LocalPolicyInitializer.kt` 与 `cosec-spring-boot-starter/.../policy/LocalPolicyInitializerLifecycle.kt` 的写库模式 | RFC 0007 Q17、Q25 |
-| 7.x 的解释与影子 | `cosec-core/.../explain/AuthorizationExplainer.kt`（叙述与 `explainFromTrace`）、`cosec-core/.../shadow/ShadowAuthorization.kt`、`ShadowPolicyProvider.kt` | RFC 0006 §9.5.4、RFC 0007 Q22 |
+| 7.x 授权实现与按层的引擎适配 | `core/core/src/main/kotlin/me/ahoo/cosec/authorization/`：`SimpleAuthorization.kt`、`EngineAuthorization.kt`、`SnapshotEngineAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`AuthorizationDecision.kt` | 7.x 路径；第 2、3 阶段的候选实现 |
+| 按层引擎的适配层 | `core/.../authorization/engine/`：`LegacyRules.kt`、`LegacyFacts.kt`、`StatementScopedContext.kt`、`PolicySetLoader.kt`、`LayerReads.kt`、`EngineDecisionFlow.kt`、`Decisions.kt`、`EvaluationObserver.kt` | 把 7.x 数据和匹配器喂给按层引擎 |
+| 7.0 形状的快照 | `core/.../authorization/engine/`：`PolicySnapshotCompiler.kt`、`CompiledSnapshot.kt`（`CompiledPolicies`、`CompiledApp`）、`SnapshotPolicySetLoader.kt`；`core/.../snapshot/SnapshotKey.kt` 中的 `Policies` 与 7.0 内容的 `App`（RFC 0004 的 `Platform`/`App`/`Tenant` 取代）；`cocache/.../cache/snapshot/SnapshotContent.kt` 与 `SnapshotDocumentCodec.kt` 中 7.0 格式的部分。RFC 0004 PR-4 起两种格式并存，切换时一并删除 schema 1：`SnapshotDocument.CURRENT_SCHEMA` 与 `SCHEMAS`（只留 `DOCUMENT_SCHEMA = 2`）、`SnapshotDocumentCodec` 对 schema 1 的接受、`SnapshotKey.Policies` 与 `SnapshotKind.POLICIES`、`SnapshotKeyEncoder.POLICIES`、格式描述 `cosec-snapshot-document` 中的 `policiesDocument` 与 `legacyAppDocument`（连同 `cosec-policy`、`condition`、`action`、`cosec-app-permission` 等 7.x 描述，由 8.0 的描述接替这些文件名，RFC 0007 §10.4）、`SnapshotSource` 中拒绝 `Platform`/`Tenant` 的分支（由 RFC 0004 PR-4 之后的三文档源取代） | RFC 0003 的中间文档 |
+| 按层引擎 | `core/engine/src/main/kotlin/me/ahoo/cosec/engine/`：`Engine.kt`、`CoSecEngine.kt`、`Evaluator.kt`、`TracingEvaluator.kt`、`PolicySet.kt`（其中的 `Rule`/`Guard`/`RuleMatch` 在 RFC 0005 PR-4 之后不再被 `flat/` 使用）、`Trace.kt`；`model/`：`LayerKind.kt`、`Decision.kt`（按层的 `StatementRef`/`Decision`/`Cause`）、`AuthzRequest.kt` 中的 `HostFacts`；测试 `engine/.../EnginePropertyTest.kt` | RFC 0002 §4 的按层顺序只为与 7.0 逐条等价 |
+| 决策比较与回放 | `core/core/src/testFixtures/kotlin/me/ahoo/cosec/parity/`：`DecisionParity.kt`、`DecisionReplay.kt`、`PolicySetParity.kt`、`ReplayInputs.kt`、`ReplayMain.kt`、`ReplayReport.kt`（含 `ReplayGate`）、`ReplaySide.kt`、`RepositorySnapshotAuthorization.kt`、`SnapshotAuthorizationFixture.kt`；`.../testkit/PolicyTestKitParity.kt`；`core/core/src/testFixtures/resources/cosec-replay/`；`core/core/build.gradle.kts` 中的 `engineReplay`、`engineParity` 任务（测试夹具源码集与 `verifyTestFixturesUnpublished` 在没有其他使用者时一并删除） | RFC 0002 PR-4（#997） |
+| 快照的比较、回放与测量工具 | `backends/cocache/src/test/kotlin/me/ahoo/cosec/cache/snapshot/`：`SnapshotReplay.kt`、`SnapshotDecisionParityPropertyTest.kt`、`SnapshotMeasure.kt`、`SnapshotConvert.kt`；`cocache/.../cache/SnapshotRepositoryParityTest.kt`；`backends/cocache/build.gradle.kts` 中的 `snapshotReplay`、`snapshotParity`、`snapshotMeasure`、`snapshotConvert` 任务。`CoSec7xReader` 读取 7.x 原始数据的部分已由 RFC 0004 PR-5 搬进 `migrate/`（#1067）；生成 7.0 形状快照的部分留在测试源码集，改名 `CoSec7xSnapshotReader.kt`（及其测试），随本行删除 | RFC 0003 PR-4（#1030） |
+| 等价性质 | `core/core/src/test/.../authorization/engine/EngineParityPropertyTest.kt`、`SnapshotPolicySetPropertyTest.kt`；`.../explain/ExplainerConsistencyTest.kt`；`.../parity/DecisionParityTest.kt`、`DecisionReplayTest.kt`；`.../testkit/PolicyTestKitParityTest.kt` | P3、P5 与比较器自身的测试 |
+| 每请求读仓库的路径 | `backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/`：`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt` 以及四个缓存与它们的属性（RFC 0003 PR-6 的清单） | 7.x 路径 |
+| 7.x 的写入与历史 | `core/.../snapshot/SnapshotPublisher.kt`、`cocache/.../cache/snapshot/RedisSnapshotPublisher.kt`（条件写入的做法由 `CoCacheControlStore` 复用，§4.3）、`core/.../policy/history/PolicyHistory.kt`、`cocache/.../cache/RedisPolicyRevisionStore.kt`、`core/.../policy/LocalPolicyInitializer.kt` 与 `spring-boot-starter/.../policy/LocalPolicyInitializerLifecycle.kt` 的写库模式 | RFC 0007 Q17、Q25 |
+| 7.x 的解释与影子 | `core/.../explain/AuthorizationExplainer.kt`（叙述与 `explainFromTrace`）、`core/.../shadow/ShadowAuthorization.kt`、`ShadowPolicyProvider.kt` | RFC 0006 §9.5.4、RFC 0007 Q22 |
 
 另外，RFC 0004 PR-8、RFC 0005 PR-9、RFC 0006 PR-10、RFC 0007 §15 X1–X3 的删除清单（`cosec-api` 的 `AppRolePermission`、`RolePermission`、`ActionMatcher`、
 `ConditionMatcher`、响应式授权契约，OGNL/SpEL 与全部内置匹配器，装饰器链、`BlockingAware`、`SecurityPipeline` 等）原样并入切换 PR；`legacy` 节点从未实现，无需删除。
@@ -483,13 +483,13 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 
 | 机制 | 路径 | 用在哪里 |
 |---|---|---|
-| `SnapshotSource`（单飞、有序安装、条件读重新校验、陈旧度、LRU、预热）、`SnapshotDocumentStore`、`InMemorySnapshotDocumentStore`、`SnapshotDocument`、`SnapshotOptions`、`SnapshotMetrics`、快照异常 | `cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/` | RFC 0004 §7.4 只换 key 与文档类型；RFC 0006 的挂起包装 |
-| `RedisSnapshotDocumentStore`、`PolicySnapshotCache`、`SnapshotRuntimeHints` | `cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/` | 数据面读取；控制面的头 |
+| `SnapshotSource`（单飞、有序安装、条件读重新校验、陈旧度、LRU、预热）、`SnapshotDocumentStore`、`InMemorySnapshotDocumentStore`、`SnapshotDocument`、`SnapshotOptions`、`SnapshotMetrics`、快照异常 | `core/core/src/main/kotlin/me/ahoo/cosec/snapshot/` | RFC 0004 §7.4 只换 key 与文档类型；RFC 0006 的挂起包装 |
+| `RedisSnapshotDocumentStore`、`PolicySnapshotCache`、`SnapshotRuntimeHints` | `backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/` | 数据面读取；控制面的头 |
 | `RedisSnapshotPublisher` 的条件写入（`putIfMatch`、冲突时重新读取、不加 `WAIT`） | 同上 | RFC 0007 PR-4 的 `CoCacheControlStore`；`SnapshotPublisher` 接口本身随切换删除（RFC 0007 Q25） |
 | CoCache 6.7 的条件写入与条件读 | `gradle/libs.versions.toml` | 不变 |
-| 扁平引擎、绑定索引、候选顺序、扁平 trace | `engine/src/main/kotlin/me/ahoo/cosec/engine/flat/` | 目标引擎；RFC 0005 PR-4 换掉 7.x 匹配器的适配 |
-| 租户、绑定、成员关系、`ScopeResolver`、条件 AST、索引键、`implies` | `model/src/main/kotlin/me/ahoo/cosec/model/` | 目标模型 |
-| 成员关系解析与按主体吊销 | `cosec-core/src/main/kotlin/me/ahoo/cosec/membership/`、`cosec-core/.../token/` | RFC 0006 PR-3 改为挂起 |
+| 扁平引擎、绑定索引、候选顺序、扁平 trace | `core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/` | 目标引擎；RFC 0005 PR-4 换掉 7.x 匹配器的适配 |
+| 租户、绑定、成员关系、`ScopeResolver`、条件 AST、索引键、`implies` | `core/model/src/main/kotlin/me/ahoo/cosec/model/` | 目标模型 |
+| 成员关系解析与按主体吊销 | `core/core/src/main/kotlin/me/ahoo/cosec/membership/`、`core/.../token/` | RFC 0006 PR-3 改为挂起 |
 | `runtime/` 模块与 `RuntimeBoundaryTest` | `runtime/` | RFC 0006 |
 
 ### 4.4 切换 PR
@@ -726,48 +726,48 @@ RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L1 | 6.x → 7.0 的 CoCache 5 数据迁移与 schema 标记 | `cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/`：`CoSecCoCache5Migration.kt`、`CoSecSchemaMarker.kt`。<br>`cosec-spring-boot-starter/.../authorization/cache/`：`CoSecCacheMigrationAutoConfiguration.kt`、`CoSecCacheSchemaAutoConfiguration.kt`；`CacheProperties.kt` 中的 `MigrationConfiguration` 与 `legacyKeyPrefix`（属性 `cosec.authorization.cache.migration.*`）；`META-INF/spring/...AutoConfiguration.imports` 中对应的两行。<br>测试：`CoSecCoCache5MigrationTest`、`CoSecSchemaMarkerTest`、`CoCache5DataFixture`、`UnmigratedCoCache5DataFailsClosedTest`、`UnmigratedGlobalPolicyIndexWriteTest`、`CoSecCacheMigrationAutoConfigurationTest`、`CoSecCacheSchemaAutoConfigurationTest` | 一次性把 6.x（CoCache 5）的数据转成 7.0 的格式。它写的策略、全局索引、应用权限缓存在切换时删除。8.0 的数据入口是 `cosec-migrate convert`（输入是 7.x 的数据），快照文档自带 `schema`（`DOC-3`）。6.x 的部署先升级到 7.x | 切换 PR | 删除即守护；G4、G7 |
-| L2 | 6.x 角色授权的 key 迁移 | `cosec-cocache/.../cache/RolePermissionKeyMigration.kt`；`CoSecPermissionCacheAutoConfiguration.kt` 中的 bean；`CacheProperties.legacyRolePermissionKeyPrefix`；测试 `RolePermissionKeyMigrationTest` | 把 6.x 不带应用的角色授权搬到 7.0 的应用级 key。它写入的 `RolePermissionCache` 随切换删除；8.0 的角色授权是 `App` 文档里的绑定 | 切换 PR | 同上 |
+| L1 | 6.x → 7.0 的 CoCache 5 数据迁移与 schema 标记 | `backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/`：`CoSecCoCache5Migration.kt`、`CoSecSchemaMarker.kt`。<br>`spring-boot-starter/.../authorization/cache/`：`CoSecCacheMigrationAutoConfiguration.kt`、`CoSecCacheSchemaAutoConfiguration.kt`；`CacheProperties.kt` 中的 `MigrationConfiguration` 与 `legacyKeyPrefix`（属性 `cosec.authorization.cache.migration.*`）；`META-INF/spring/...AutoConfiguration.imports` 中对应的两行。<br>测试：`CoSecCoCache5MigrationTest`、`CoSecSchemaMarkerTest`、`CoCache5DataFixture`、`UnmigratedCoCache5DataFailsClosedTest`、`UnmigratedGlobalPolicyIndexWriteTest`、`CoSecCacheMigrationAutoConfigurationTest`、`CoSecCacheSchemaAutoConfigurationTest` | 一次性把 6.x（CoCache 5）的数据转成 7.0 的格式。它写的策略、全局索引、应用权限缓存在切换时删除。8.0 的数据入口是 `cosec-migrate convert`（输入是 7.x 的数据），快照文档自带 `schema`（`DOC-3`）。6.x 的部署先升级到 7.x | 切换 PR | 删除即守护；G4、G7 |
+| L2 | 6.x 角色授权的 key 迁移 | `cocache/.../cache/RolePermissionKeyMigration.kt`；`CoSecPermissionCacheAutoConfiguration.kt` 中的 bean；`CacheProperties.legacyRolePermissionKeyPrefix`；测试 `RolePermissionKeyMigrationTest` | 把 6.x 不带应用的角色授权搬到 7.0 的应用级 key。它写入的 `RolePermissionCache` 随切换删除；8.0 的角色授权是 `App` 文档里的绑定 | 切换 PR | 同上 |
 
 **(b) 兼容 API 与旧属性**
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L3 | `@Deprecated` 的 `concurrency-level` | `cosec-spring-boot-starter/.../authorization/cache/CacheProperties.kt` 的 `CacheConfiguration.concurrencyLevel` | 从 CoCache 5 起就被忽略；它是 `main` 中唯一的 `@Deprecated` | 清理 PR | G1 |
+| L3 | `@Deprecated` 的 `concurrency-level` | `spring-boot-starter/.../authorization/cache/CacheProperties.kt` 的 `CacheConfiguration.concurrencyLevel` | 从 CoCache 5 起就被忽略；它是 `main` 中唯一的 `@Deprecated` | 清理 PR | G1 |
 | L4 | Caffeine 时代的本地缓存属性名 | `CacheConfiguration` 的 `expire-after-write`（实际含义是 CoCache 的 `localMaxAge`）、`expire-unit`、`expire-after-access`、`initial-capacity`。切换后只有 `cosec.authorization.cache.token.*` 还用它们（`policy`、`role` 两组随 RFC 0003 PR-6 的清单删除） | 名字沿用 CoCache 5 / Caffeine 的概念，与 `cosec.authorization.snapshot.local-max-age` 不一致 | 清理 PR：改成 `Duration` 类型的 `local-max-age` 等；写进 `configuration.md`、`upgrading.md` | `configuration.md` 的属性表 |
 | L5 | 策略历史的属性 | `CacheProperties.kt` 的 `PolicyHistoryConfiguration`（`cosec.authorization.cache.history.*`）与 `policyHistoryKeyPrefix` | 只为 `PolicyHistory` 服务。RFC 0007 X1 删除 `PolicyHistory`，但没有单独列出这组属性 | 切换 PR | 删除即守护 |
-| L6 | 接受 `Authorization` 的旧构造器 | `cosec-webflux/.../ReactiveSecurityFilter.kt`、`ReactiveAuthorizationFilter.kt`；`cosec-webmvc/.../servlet/AbstractAuthorizationInterceptor.kt`、`AuthorizationFilter.kt`；`cosec-gateway/.../AuthorizationGatewayFilter.kt` 的次构造器；测试中的 `LegacyFilter`、`LegacyInterceptor`（注释写的是 "pre-pipeline constructor"） | 为 `SecurityPipeline` 之前写的第三方子类保留。starter 仍在调用后三个 | 切换 PR（与 `SecurityPipeline` 一起删除，RFC 0006 PR-10） | 删除即守护 |
+| L6 | 接受 `Authorization` 的旧构造器 | `webflux/.../ReactiveSecurityFilter.kt`、`ReactiveAuthorizationFilter.kt`；`webmvc/.../servlet/AbstractAuthorizationInterceptor.kt`、`AuthorizationFilter.kt`；`gateway/.../AuthorizationGatewayFilter.kt` 的次构造器；测试中的 `LegacyFilter`、`LegacyInterceptor`（注释写的是 "pre-pipeline constructor"） | 为 `SecurityPipeline` 之前写的第三方子类保留。starter 仍在调用后三个 | 切换 PR（与 `SecurityPipeline` 一起删除，RFC 0006 PR-10） | 删除即守护 |
 
 **(c) `cosec-api` 与 `cosec-core` 中没有列入任何删除清单的 7.x 契约**
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L7 | 7.x 的策略与应用权限模型 | `cosec-api/.../policy/`：`Policy.kt`、`Statement.kt`、`Effect.kt`、`PolicyType.kt`、`PolicyEvaluator.kt`、`PermissionVerifier.kt`（RFC 0002 Q5 已决定删除，§4.2 没有单列）。<br>`cosec-api/.../permission/`：`AppPermission.kt`、`AppPermissionEvaluator.kt`、`Permission.kt`、`PermissionGroup.kt`、`MissingPermissionException.kt`。<br>`cosec-api/.../principal/RequestMatcher.kt`、`.../configuration/Configuration.kt`。<br>`cosec-core/.../policy/DefaultPolicyEvaluator.kt`、`.../permission/DefaultAppPermissionEvaluator.kt` | 7.x 的数据形状。8.0 用 RFC 0004 的 `Platform`/`App`/`Tenant` 文档与 `Catalog`、RFC 0007 的严格编译取代它们。RFC 0004 PR-8 与 RFC 0005 PR-9 只删除了其中与评估有关的字段 | 切换 PR。RFC 0004 PR-5 的 `CoSec7xReader` 需要的部分随它搬进 `migrate/` | G5 |
-| L8 | 7.x JSON 格式的 Jackson 序列化器 | `cosec-core/.../serialization/`：`CoSecModule.kt`、`AbstractJsonStatementSerializer.kt` 与各个 `Json*Serializer.kt`（策略、语句、应用权限、权限组、匹配器、限流规则）；`cosec-core/src/main/resources/META-INF/services/tools.jackson.databind.JacksonModule` | 读写 7.x 的策略与应用权限 JSON。8.0 的文档由 `DocumentFormats` 描述的编解码器处理 | 切换 PR：`migrate/` 需要的读取部分搬进 `migrate/`，其余删除 | `verifySchemas`（`schema/` 只剩 8.0 格式） |
-| L9 | 建立在 7.x 数据模型上的访问分析 | `cosec-core/.../analysis/AccessAnalyzer.kt` | RFC 0007 §10.3 在 `control/` 中基于编译后的快照重写 `analyze`。旧实现建立在 `RequestMatcher` 上，`main` 中没有调用者 | 切换 PR | — |
-| L10 | `InternalIds` | `cosec-api/.../internal/InternalIds.kt` | `main` 中没有任何引用，只有 `cosec-core` 的 `InternalIdsTest` 用它 | 清理 PR（`cosec-api` 变更，见 §6 Q9） | G5 |
-| L11 | `cosec-api` 模块本身 | `cosec-api/` | RFC 0001 §4 设想由 `cosec-model` 取代"`cosec-api` 大部分"；RFC 0006 Q5 决定不改名现有模块。切换后还剩主体、token、认证、`SecurityContext`、审计事件、租户 | 保留（§6 Q9，2026-10-26 批准）：作为 8.0 的薄契约模块；PR-5 删除切换后在 `cosec-api` 之外没有 `main` 引用的类型 | G5 |
+| L7 | 7.x 的策略与应用权限模型 | `api/.../policy/`：`Policy.kt`、`Statement.kt`、`Effect.kt`、`PolicyType.kt`、`PolicyEvaluator.kt`、`PermissionVerifier.kt`（RFC 0002 Q5 已决定删除，§4.2 没有单列）。<br>`api/.../permission/`：`AppPermission.kt`、`AppPermissionEvaluator.kt`、`Permission.kt`、`PermissionGroup.kt`、`MissingPermissionException.kt`。<br>`api/.../principal/RequestMatcher.kt`、`.../configuration/Configuration.kt`。<br>`core/.../policy/DefaultPolicyEvaluator.kt`、`.../permission/DefaultAppPermissionEvaluator.kt` | 7.x 的数据形状。8.0 用 RFC 0004 的 `Platform`/`App`/`Tenant` 文档与 `Catalog`、RFC 0007 的严格编译取代它们。RFC 0004 PR-8 与 RFC 0005 PR-9 只删除了其中与评估有关的字段 | 切换 PR。RFC 0004 PR-5 的 `CoSec7xReader` 需要的部分随它搬进 `migrate/` | G5 |
+| L8 | 7.x JSON 格式的 Jackson 序列化器 | `core/.../serialization/`：`CoSecModule.kt`、`AbstractJsonStatementSerializer.kt` 与各个 `Json*Serializer.kt`（策略、语句、应用权限、权限组、匹配器、限流规则）；`core/core/src/main/resources/META-INF/services/tools.jackson.databind.JacksonModule` | 读写 7.x 的策略与应用权限 JSON。8.0 的文档由 `DocumentFormats` 描述的编解码器处理 | 切换 PR：`migrate/` 需要的读取部分搬进 `migrate/`，其余删除 | `verifySchemas`（`schema/` 只剩 8.0 格式） |
+| L9 | 建立在 7.x 数据模型上的访问分析 | `core/.../analysis/AccessAnalyzer.kt` | RFC 0007 §10.3 在 `control/` 中基于编译后的快照重写 `analyze`。旧实现建立在 `RequestMatcher` 上，`main` 中没有调用者 | 切换 PR | — |
+| L10 | `InternalIds` | `api/.../internal/InternalIds.kt` | `main` 中没有任何引用，只有 `cosec-core` 的 `InternalIdsTest` 用它 | 清理 PR（`cosec-api` 变更，见 §6 Q9） | G5 |
+| L11 | `cosec-api` 模块本身 | `api/` | RFC 0001 §4 设想由 `cosec-model` 取代"`cosec-api` 大部分"；RFC 0006 Q5 决定不改名现有模块。切换后还剩主体、token、认证、`SecurityContext`、审计事件、租户 | 保留（§6 Q9，2026-10-26 批准）：作为 8.0 的薄契约模块；PR-5 删除切换后在 `cosec-api` 之外没有 `main` 引用的类型 | G5 |
 
 **(d) 死代码、只供测试的代码与过渡注释**
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L12 | 切换租户的认证 | `cosec-core/.../authentication/token/AbstractSwitchTenantAuthentication.kt`（含 `SwitchTenantCredentials`） | `main` 和测试里都没有使用者，`wiki/integration/authentication.md`、`wiki/architecture/extending.md` 却把它写成扩展点 | 清理 PR（§6 Q10，2026-10-26 批准）：保留，PR-5 补上测试；没有测试不能留到 RC | — |
-| L13 | 只供测试使用的 `main` 代码 | `cosec-cocache/.../cache/CoSecCacheSpecs.kt` 的 `CacheRuntime.createCache(spec)` | 只有 `cosec-cocache` 的测试与 JMH 在用 | 清理 PR：移到测试源码集 | G5 |
-| L14 | 过渡阶段的注释 | 描述 6.x、7.0 行为或"直到某个 PR"的 KDoc：<br>`cosec-cocache/.../CoSecCacheSpecs.kt`（6.x 的 key；`POLICY_SNAPSHOT_CACHE_NAME` 的"before RFC 0003 PR-5"，该 PR 已取消）；<br>`cosec-spring-boot-starter/.../CoSecCacheAssembler.kt`；<br>`cosec-core/.../membership/MembershipClaims.kt`、`MembershipResolver.kt`；<br>`cosec-jwt/.../JwtTokenConverter.kt`（"until RFC 0004 PR-7"）；<br>`cosec-core/.../snapshot/SnapshotSource.kt`、`.../testkit/PolicyTestKit.kt`；<br>`model/` 的 `AuthzRequest.kt`、`Binding.kt`、`Decision.kt`、`Memberships.kt`、`decision/StatementRef.kt`、`scope/Scope.kt`、`scope/ScopeResolver.kt`、`condition/Condition.kt`、`CheckedCondition.kt`、`ConditionChecker.kt`、`Time.kt`、`TimeChecker.kt`；<br>`engine/.../flat/` 的 `FlatEngine.kt`、`FlatTrace.kt`、`CompiledPolicy.kt`、`CompiledDocument.kt`、`CandidateOrder.kt` | 这些注释解释的是代码与已删除的实现或已取消的 PR 之间的关系，切换之后不再成立 | 切换 PR 改掉它所删除对象的引用，其余由清理 PR 改写 | G2 |
-| L15 | 7.x 形式的 `PolicyTestKit` | `cosec-core/.../testkit/PolicyTestKit.kt`、`cosec-core/src/test/resources/cosec-policy-test/`；`wiki/policies/testing.md` | 面向用户的测试工具，读的是 7.x 的策略文件。RFC 0001 §4 规划了 `cosec-testkit`，但 RFC 0004–0008 都没有定下它在 8.0 的形态 | 切换 PR（§6 Q11，2026-10-26 批准）：基于 8.0 文档重写，复用 §3.3 的场景格式；7.x 的形式删除 | — |
-| L16 | `MembershipClaims` 读取 `roles`/`policies` 声明 | `cosec-core/.../membership/MembershipClaims.kt` | 注释给出的理由是"不需要重新签发 token" | 保留：`roles`/`policies` 是 RFC 0004 §4.5.1 定下的 8.0 声明格式，不是兼容读取；只按 L14 改写注释 | `MEM-1` |
+| L12 | 切换租户的认证 | `core/.../authentication/token/AbstractSwitchTenantAuthentication.kt`（含 `SwitchTenantCredentials`） | `main` 和测试里都没有使用者，`wiki/integration/authentication.md`、`wiki/architecture/extending.md` 却把它写成扩展点 | 清理 PR（§6 Q10，2026-10-26 批准）：保留，PR-5 补上测试；没有测试不能留到 RC | — |
+| L13 | 只供测试使用的 `main` 代码 | `cocache/.../cache/CoSecCacheSpecs.kt` 的 `CacheRuntime.createCache(spec)` | 只有 `cosec-cocache` 的测试与 JMH 在用 | 清理 PR：移到测试源码集 | G5 |
+| L14 | 过渡阶段的注释 | 描述 6.x、7.0 行为或"直到某个 PR"的 KDoc：<br>`cocache/.../CoSecCacheSpecs.kt`（6.x 的 key；`POLICY_SNAPSHOT_CACHE_NAME` 的"before RFC 0003 PR-5"，该 PR 已取消）；<br>`spring-boot-starter/.../CoSecCacheAssembler.kt`；<br>`core/.../membership/MembershipClaims.kt`、`MembershipResolver.kt`；<br>`jwt/.../JwtTokenConverter.kt`（"until RFC 0004 PR-7"）；<br>`core/.../snapshot/SnapshotSource.kt`、`.../testkit/PolicyTestKit.kt`；<br>`model/` 的 `AuthzRequest.kt`、`Binding.kt`、`Decision.kt`、`Memberships.kt`、`decision/StatementRef.kt`、`scope/Scope.kt`、`scope/ScopeResolver.kt`、`condition/Condition.kt`、`CheckedCondition.kt`、`ConditionChecker.kt`、`Time.kt`、`TimeChecker.kt`；<br>`engine/.../flat/` 的 `FlatEngine.kt`、`FlatTrace.kt`、`CompiledPolicy.kt`、`CompiledDocument.kt`、`CandidateOrder.kt` | 这些注释解释的是代码与已删除的实现或已取消的 PR 之间的关系，切换之后不再成立 | 切换 PR 改掉它所删除对象的引用，其余由清理 PR 改写 | G2 |
+| L15 | 7.x 形式的 `PolicyTestKit` | `core/.../testkit/PolicyTestKit.kt`、`core/core/src/test/resources/cosec-policy-test/`；`wiki/policies/testing.md` | 面向用户的测试工具，读的是 7.x 的策略文件。RFC 0001 §4 规划了 `cosec-testkit`，但 RFC 0004–0008 都没有定下它在 8.0 的形态 | 切换 PR（§6 Q11，2026-10-26 批准）：基于 8.0 文档重写，复用 §3.3 的场景格式；7.x 的形式删除 | — |
+| L16 | `MembershipClaims` 读取 `roles`/`policies` 声明 | `core/.../membership/MembershipClaims.kt` | 注释给出的理由是"不需要重新签发 token" | 保留：`roles`/`policies` 是 RFC 0004 §4.5.1 定下的 8.0 声明格式，不是兼容读取；只按 L14 改写注释 | `MEM-1` |
 
 **(e) 构建与依赖**
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
 | L17 | 没有使用者的版本目录条目 | `gradle/libs.versions.toml`：`testcontainers` 版本与 `testcontainers-bom`（没有任何构建脚本引用）；插件别名 `kotlin-kapt`（模块用 `kotlin("kapt")` 应用） | 遗留条目 | 清理 PR；不依赖切换，可以提前做（§4.6.3） | G3 |
-| L18 | `ognl` 的版本与约束 | `gradle/libs.versions.toml`；`cosec-dependencies/build.gradle.kts` 的 `constraints` | RFC 0005 PR-9 删除 OGNL，但清单里没有版本目录和约束 | 切换 PR | G3 |
+| L18 | `ognl` 的版本与约束 | `gradle/libs.versions.toml`；`bom/dependencies/build.gradle.kts` 的 `constraints` | RFC 0005 PR-9 删除 OGNL，但清单里没有版本目录和约束 | 切换 PR | G3 |
 | L19 | `hamcrest` | 根 `build.gradle.kts` 的 `testImplementation`、`cosec-dependencies` 的约束、版本目录；61 个测试文件在用 | AGENTS.md 约定用 FluentAssert（已有 195 个测试文件在用），hamcrest 是早期的写法 | 清理 PR：切换后剩下的测试改用 FluentAssert，再删除依赖（§6 Q12） | G3 |
-| L20 | 默认的 `guava` 依赖 | 根 `build.gradle.kts` 给每个非纯模块加 `implementation("com.google.guava:guava")`。`main` 中只有 `cosec-core/.../limiter/LocalRateLimiter.kt`、`cosec-core/.../policy/action/PathActionMatcher.kt`（切换时删除）和 `cosec-social/.../justauth/JustAuthProvider.kt`（`MoreObjects`）用到它 | 早期的全局默认 | 清理 PR：只在用到的模块里显式声明（§6 Q12） | G3 |
-| L21 | 回放用的日志配置 | `config/logback-parity.xml`；`cosec-core/build.gradle.kts`、`cosec-cocache/build.gradle.kts` 中引用它的 `jvmArgs` | 只给 §4.2 的回放与比较任务使用 | 切换 PR | 删除即守护 |
-| L22 | `cosec-gateway-server` 的遗留构建配置 | `cosec-gateway-server/build.gradle.kts`：应用了 `kotlin("kapt")`，但没有任何 `kapt` 依赖；`-Dspring.cloud.bootstrap.enabled=true` 加上 `src/main/resources/bootstrap.yaml`、`src/dist/config/bootstrap.yaml`，而 bootstrap 里只有 `spring.application.name` | kapt 什么也不做；bootstrap 上下文是 Spring Cloud 2020 起不再推荐的旧机制 | 清理 PR：删除 kapt；bootstrap 的内容并入 `application.yaml`，`k8s/cosec-gateway-config.yaml` 同步修改 | — |
+| L20 | 默认的 `guava` 依赖 | 根 `build.gradle.kts` 给每个非纯模块加 `implementation("com.google.guava:guava")`。`main` 中只有 `core/.../limiter/LocalRateLimiter.kt`、`core/.../policy/action/PathActionMatcher.kt`（切换时删除）和 `social/.../justauth/JustAuthProvider.kt`（`MoreObjects`）用到它 | 早期的全局默认 | 清理 PR：只在用到的模块里显式声明（§6 Q12） | G3 |
+| L21 | 回放用的日志配置 | `config/logback-parity.xml`；`core/core/build.gradle.kts`、`backends/cocache/build.gradle.kts` 中引用它的 `jvmArgs` | 只给 §4.2 的回放与比较任务使用 | 切换 PR | 删除即守护 |
+| L22 | `cosec-gateway-server` 的遗留构建配置 | `platform/gateway-server/build.gradle.kts`：应用了 `kotlin("kapt")`，但没有任何 `kapt` 依赖；`-Dspring.cloud.bootstrap.enabled=true` 加上 `src/main/resources/bootstrap.yaml`、`src/dist/config/bootstrap.yaml`，而 bootstrap 里只有 `spring.application.name` | kapt 什么也不做；bootstrap 上下文是 Spring Cloud 2020 起不再推荐的旧机制 | 清理 PR：删除 kapt；bootstrap 的内容并入 `application.yaml`，`k8s/cosec-gateway-config.yaml` 同步修改 | — |
 
 **(f) 文档与 skills**
 
@@ -794,12 +794,12 @@ RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为
 
 | # | 项 | 路径 | 判断 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L34 | `cosec-ip2region` | `cosec-ip2region/` | RFC 0001 §4 与 RFC 0006 §5.4.5 把它定为 `AttributeProvider` | 保留 | — |
+| L34 | `cosec-ip2region` | `ip2region/` | RFC 0001 §4 与 RFC 0006 §5.4.5 把它定为 `AttributeProvider` | 保留 | — |
 | L35 | `cosec-opentelemetry`、`cosec-micrometer`、`cosec-kafka` | 各自目录 | RFC 0001 §4 中的 `cosec-observability-*`；RFC 0006 §9.5 把它们改为监听器 | 保留 | — |
-| L36 | `cosec-openapi` | `cosec-openapi/` | RFC 0005 PR-5 用它生成路由映射 | 保留 | — |
-| L37 | `cosec-gateway-server` | `cosec-gateway-server/` | §3.8 的端到端预算和 RFC 0001 §3.10 的 native image 都以它为对象；它不发布（AGENTS.md） | 保留 | — |
+| L36 | `cosec-openapi` | `openapi/` | RFC 0005 PR-5 用它生成路由映射 | 保留 | — |
+| L37 | `cosec-gateway-server` | `gateway-server/` | §3.8 的端到端预算和 RFC 0001 §3.10 的 native image 都以它为对象；它不发布（AGENTS.md） | 保留 | — |
 | L38 | RFC 0001 §4 的新模块名（`cosec-http-*`、`cosec-store-redis`、`cosec-authn-*`、`cosec-observability-*`） | — | RFC 0006 Q5 已决定不改名 | 保留现有名字 | — |
-| L39 | `cosec-social` | `cosec-social/`（12 个 `main` 文件，依赖 JustAuth `1.16.7`）；starter 的 `.../authentication/social/CoSecSocialAuthenticationAutoConfiguration.kt` | RFC 0001 §4 列为 `cosec-authn-social`。但 RFC 0006 的 `Authenticator`（§5.3）没有涉及它：它在登录时用 OAuth 换取 token，不做请求认证 | 保留（§6 Q14，2026-10-26 批准）：8.0 不改造 | — |
+| L39 | `cosec-social` | `social/`（12 个 `main` 文件，依赖 JustAuth `1.16.7`）；starter 的 `.../authentication/social/CoSecSocialAuthenticationAutoConfiguration.kt` | RFC 0001 §4 列为 `cosec-authn-social`。但 RFC 0006 的 `Authenticator`（§5.3）没有涉及它：它在登录时用 OAuth 换取 token，不做请求认证 | 保留（§6 Q14，2026-10-26 批准）：8.0 不改造 | — |
 
 #### 4.6.2 守护
 
@@ -814,6 +814,8 @@ RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为
 | G5 | `main` 中没有只被测试使用的类型 | 不做成自动检查：公开 API 的使用者在用户代码里，静态的"无引用"判断误报太多。每个清理 PR 与 RC 之前，按本节的方法人工复核一次（`git grep -w` 统计 `main` 之外的引用），结果附在 PR 上 | — |
 | G6 | CI 与模板的模块清单与 `settings.gradle.kts` 一致 | 根项目新增 `verifyRepositoryMetadata` 任务，挂在 `check` 上。它从 `settings.gradle.kts` 取模块集，断言 `labeler.yml`、`bug_report.yml`、`integration-test.yml` 覆盖每个模块（豁免：`cosec-bom`、`cosec-dependencies`、`code-coverage-report`、`conformance`）；还断言这三个文件与 `codecov.yml` 中的每个 glob 至少匹配一个已跟踪的文件 | 无 |
 | G7 | 不再出现迁移与兼容代码 | `conformance/` 中的 ArchUnit 规则：除 `migrate/` 外，`main` 中不得有名字含 `Migration`、`Legacy`、`Compat` 的类 | 无 |
+
+> **2026-10-28 修订**（#1147）：G6 不再检查 CI 的模块清单，CI 已没有清单。`ci.yml` 的矩阵由 `scripts/ci/plan.py` 从 `settings.gradle.kts` 推导，`ProjectListTest` 运行该脚本，断言除豁免项外每个项目恰好在其所在组的一个任务里；`integration-test.yml` 与 `codecov.yml` 工作流已删除。`labeler.yml` 与 `bug_report.yml` 的检查不变。
 
 #### 4.6.3 PR
 
@@ -894,6 +896,8 @@ RFC 0002–0007 中"并入 RFC 0008 的切换 PR"的标注不逐一改写，它�
 | Q13 | **`main` 的版本号**（§4.6 L30） | **已决定**（维护者 2026-10-26 更正）：PR-5 把 `gradle.properties` 改为 `8.0.0-alpha.1`。这只是版本字符串，不发布任何版本（RFC 0001 §6 不变）；RC 的版本号仍由发布 PR 按 CONTRIBUTING.md §7 设置 | `main` 是 8.0 线，`version=7.0.0` 会让本地构建与文档示例看起来像 7.0 |
 | Q14 | **`cosec-social`**（§4.6 L39） | **已决定**：保留，8.0 不改造：它在登录时用 OAuth 换取 token，不在请求路径上，RFC 0006 的 `Authenticator` 不涉及它。PR-5 只清理注释 | RFC 0001 §4 把它列为 `cosec-authn-social`，所以它属于目标架构。但如果维护者不打算继续维护 JustAuth 集成，8.0 是删除它的唯一窗口 |
 | Q15 | **守护的实现方式**（§4.6.2） | **已决定**：不引入新依赖：G1、G7 用 ArchUnit（已有），放在 `conformance/`；G2 用 detekt 内置的 `ForbiddenComment`；G3、G6 用根项目的 Gradle 任务；G4 用 `wiki/scripts/` 下的 Node 脚本 | 都是几十行的检查，现有工具链已经够用；版本目录检查插件之类的工具是新依赖，收益不抵维护成本 |
+
+> **2026-10-28 修订（维护者授权协调者决定）**：8.0 的测试工具作为独立发布的 `cosec-testkit` 模块（依赖 `cosec-core`，`junit-jupiter-api` 为 `api` 依赖），`conformance/` 依赖它；核心模块不引入 JUnit。第一版只做引擎级场景（用户文档 + 请求 → 决策与 `by`），API 为按路由映射解析请求留出扩展；Pipeline、控制面与存储的运行器留在 `conformance/`。
 
 以下 Q16 由 2026-10-26 修订（路线图审查）提出，按推荐执行，维护者可以否决。
 

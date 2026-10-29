@@ -90,8 +90,8 @@ flowchart LR
 | 模块 | 依赖 | 对外暴露 | 不允许 |
 |---|---|---|---|
 | `cosec-model` | 仅 `kotlin-stdlib` | §3.1 的全部类型：`AuthzRequest`、`Subject`、`Scope`、`Action`、`Resource`、`Environment`、`HostFacts`、`Effect`、`Decision`、`StatementRef`、`Cause`、`LayerKind` | 依赖 `cosec-api`、Reactor、Jackson、Guava、日志库 |
-| `cosec-engine` | `api(project(":cosec-model"))` | `Engine`、`CoSecEngine`（默认实现，无状态单例）、引擎输入 `PolicySet`/`LayerInput`/`RuleGroup`/`Rule`/`Guard`/`RuleVisitor`/`RuleMatch`、`Evaluation`、`Trace` 及其子类型、`TraceLevel` | 同上，另外不允许 I/O、线程、时钟、协程 |
-| `cosec-core` | 新增 `api(project(":cosec-engine"))` | 现有 API 不变；适配层放在 `me.ahoo.cosec.authorization.engine` 包，`internal` 为主 | — |
+| `cosec-engine` | `api(project(":model"))` | `Engine`、`CoSecEngine`（默认实现，无状态单例）、引擎输入 `PolicySet`/`LayerInput`/`RuleGroup`/`Rule`/`Guard`/`RuleVisitor`/`RuleMatch`、`Evaluation`、`Trace` 及其子类型、`TraceLevel` | 同上，另外不允许 I/O、线程、时钟、协程 |
+| `cosec-core` | 新增 `api(project(":engine"))` | 现有 API 不变；适配层放在 `me.ahoo.cosec.authorization.engine` 包，`internal` 为主 | — |
 
 `cosec-model` 不依赖 `cosec-api`：`cosec-api` 的 `Authorization` 返回 `Mono`，依赖它就等于把 Reactor 带进引擎的编译类路径。
 两套类型之间的转换只出现在 `cosec-core` 的适配层。`cosec-model` 里的 `Effect` 因此与 `cosec-api` 的 `Effect` 暂时并存，第 4 阶段
@@ -102,7 +102,7 @@ flowchart LR
 ### 2.2 Gradle 层面
 
 根 `build.gradle.kts` 的 `configure(libraryProjects)` 给每个库模块加了 `implementation("com.google.guava:guava")` 和
-`implementation("org.slf4j:slf4j-api")`。新模块要从这一块排除（例如定义 `pureProjects = setOf(project(":cosec-model"), project(":cosec-engine"))`，
+`implementation("org.slf4j:slf4j-api")`。新模块要从这一块排除（例如定义 `pureProjects = setOf(project(":model"), project(":engine"))`，
 对它们跳过这两行），否则它们的运行时类路径里就有 Guava。
 
 另加一个 `verifyPureClasspath` 任务，挂到两个模块的 `check` 上：解析 `runtimeClasspath`，除 `cosec-model`、`kotlin-stdlib`、
@@ -110,7 +110,7 @@ flowchart LR
 
 ### 2.3 ArchUnit 规则
 
-放在 `engine/src/test`（它的测试类路径同时包含两个模块），白名单优先：
+放在 `core/engine/src/test`（它的测试类路径同时包含两个模块），白名单优先：
 
 ```kotlin
 @AnalyzeClasses(packages = ["me.ahoo.cosec.model", "me.ahoo.cosec.engine"], importOptions = [DoNotIncludeTests::class])
@@ -503,7 +503,7 @@ trace 只是在同一个循环里加记录（§5.1）：`OFF` 时不记录、不
 
 ### 4.2 与现在的 `SimpleAuthorization` 逐条对照
 
-| # | 现在的行为（`cosec-core/.../authorization/SimpleAuthorization.kt` 等） | 引擎中的对应 | 是否一致 |
+| # | 现在的行为（`core/.../authorization/SimpleAuthorization.kt` 等） | 引擎中的对应 | 是否一致 |
 |---|---|---|---|
 | S1 | `decide` 先调用 `blacklistChecker.check`；`false` 时返回 `BLACKLIST_DECISION`，不检查 root，不读仓库；检查本身出错 → 错误信号 | 检查仍在适配层最先执行（它返回 `Mono`），结果进 `environment.blocked`；引擎第一步返回 `Deny(Blacklist)`；`requiresPolicies` 为 false，不读仓库；检查出错时适配层还没调用引擎，错误照常传播 | 一致 |
 | S2 | 未被拉黑时 `rootPrincipalMatcher.isRoot(principal)` 为真 → `ROOT_DECISION`，跳过全部三层；默认 `RootPrincipalMatcher.NONE` | `subject.root` 由同一个 `RootPrincipalMatcher` 判定，引擎第二步返回 `Permit(Root)`，不读仓库 | 一致 |
@@ -670,7 +670,7 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
 
 ### 7.1 目标
 
-以 `cosec-core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（场景 `global`、`role`、`none`）为基线：
+以 `core/core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（场景 `global`、`role`、`none`）为基线：
 
 | 指标 | 目标 |
 |---|---|
@@ -694,7 +694,7 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
 2. **固定命令**（前后对比都用它）：
 
    ```bash
-   ./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark,EngineBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
+   ./gradlew :core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark,EngineBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
    ```
 
    （`EngineBenchmark` 放在 `cosec-engine` 中时，对该模块执行同样的命令。）每次迭代使用 JMH 默认的 10 秒。
@@ -765,8 +765,8 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | `SimpleAuthorizationTest`、`InRoleSpaceTest`、`PathVariableScopeTest`、`ResourceCheckTest`、`RootPrincipalIdentityTest`、`AuthorizationCheckerTest`、`ShadowAuthorizationTest`、`ShadowAppPermissionTest`、`AuthorizationDecisionTest` 改为 JUnit 参数化测试，对 `SimpleAuthorization` 和 `EngineAuthorization` 各跑一遍；`cosec-cocache` 的 `MissingPolicyFailClosedTest`、`RolePermissionScopeTest` 和 starter 的 `StrictCacheFailureTest`、`WebAdapterParityTest` 分别用旧实现和（由测试配置换入的）`EngineAuthorization` 各跑一遍 | 每次 `check` |
-| `PolicyTestKit` 套件 | 仓库内 `cosec-core/src/test/resources/cosec-policy-test/` 下的套件（`orders`、`spaces`，以及预期失败的 `broken`、`failing`），经 `PolicyTestKit.parity`（测试夹具中的扩展函数）；维护者指定的部署可以用 `main` 的本地构建经同一入口、以 `file:` 位置跑自己的套件 | 每次 `check`；下游自愿 |
-| 随机生成 | 扩展 `ExplainerConsistencyTest` 的生成器（删除前把它挪到 `EngineParityPropertyTest`）：动作覆盖 `path`（含 `{var}`、`#{...}` 模板）、`all`、`composite`；条件覆盖 `all`、`bool`、`eq`/`in`/`startsWith`（含 `request.path.var.*`）、`inRole`（带与不带 `@space`）、`authenticated`、`negate`、一个按概率抛异常的测试匹配器、一个 `BlockingAware` 测试匹配器；数据覆盖缺失的主体策略、按层抛错的仓库、空 `Mono`、`*` 授予、授予不存在的权限 id（S10a）、带后缀的角色和非默认空间、黑名单、root | `check` 跑固定种子 2,000 例；`./gradlew :cosec-core:engineParity -PparityIterations=1000000` 手动跑百万例（不挂到 `check`），PR-6 前必须跑过一次并附结果 |
+| `PolicyTestKit` 套件 | 仓库内 `core/core/src/test/resources/cosec-policy-test/` 下的套件（`orders`、`spaces`，以及预期失败的 `broken`、`failing`），经 `PolicyTestKit.parity`（测试夹具中的扩展函数）；维护者指定的部署可以用 `main` 的本地构建经同一入口、以 `file:` 位置跑自己的套件 | 每次 `check`；下游自愿 |
+| 随机生成 | 扩展 `ExplainerConsistencyTest` 的生成器（删除前把它挪到 `EngineParityPropertyTest`）：动作覆盖 `path`（含 `{var}`、`#{...}` 模板）、`all`、`composite`；条件覆盖 `all`、`bool`、`eq`/`in`/`startsWith`（含 `request.path.var.*`）、`inRole`（带与不带 `@space`）、`authenticated`、`negate`、一个按概率抛异常的测试匹配器、一个 `BlockingAware` 测试匹配器；数据覆盖缺失的主体策略、按层抛错的仓库、空 `Mono`、`*` 授予、授予不存在的权限 id（S10a）、带后缀的角色和非默认空间、黑名单、root | `check` 跑固定种子 2,000 例；`./gradlew :core:engineParity -PparityIterations=1000000` 手动跑百万例（不挂到 `check`），PR-6 前必须跑过一次并附结果 |
 | 真实数据离线回放 | 从维护者指定的真实部署（§10 Q7）导出的策略、角色权限和请求样本，用回放工具在本地比较（§8.2.1） | PR-4 合入之后、PR-6 合入之前；发现差异并修复后重跑 |
 
 #### 8.2.1 离线回放（2026-10-21 新增）
@@ -782,13 +782,13 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 "与样本中记录的决策一致的比例"也是门槛的一部分（2026-10-25 修订，原为只作参考）：漏导了策略或应用权限的导出数据里，两个实现同样地
 隐式拒绝一切，彼此一致却什么也没有证明，只有与记录的决策对照才看得出来。门槛要求这个比例不低于 90%（§8.3），期间策略的正常变动应远小于这个余量。
 
-**请求样本的来源**：审计事件（[`AuditEvent`](../../cosec-api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt)，由
-[`AuditEventExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/audit/AuditEventExtractor.kt) 构造，经 Kafka 或日志 sink 收集）在 `main` 上
+**请求样本的来源**：审计事件（[`AuditEvent`](../../api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt)，由
+[`AuditEventExtractor`](../../core/src/main/kotlin/me/ahoo/cosec/audit/AuditEventExtractor.kt) 构造，经 Kafka 或日志 sink 收集）在 `main` 上
 已经带有回放所需的大部分字段：`tenantId`；主体的 `id`、`authenticated`、`roles`（原样，含 `@space` 后缀）、`policies`；请求的 `id`、`appId`、
 `spaceId`（空值记为 `null`，回放还原为空串）、`remoteIp`、`method`、`path`、`device.id`、`routeId`；`timestamp`；授权结果的 `decision`、
 `reasonCode` 和 `source`（含 `BLACKLIST`、`ROOT` 以及做出决策的策略语句或角色权限）。
 
-决策可能读到、而审计事件**没有**的输入（以 [`PartExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/PartExtractor.kt)
+决策可能读到、而审计事件**没有**的输入（以 [`PartExtractor`](../../core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/PartExtractor.kt)
 和各条件匹配器为准）：
 
 | 输入 | 谁会读 | 回放时 |
@@ -809,7 +809,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
   没有应用权限的应用写成 `{ "appId": "..." }`，缺项的应用按缺失处理，门槛不满足）、`requests.jsonl`（每行一条请求：
   上面列出的审计事件字段，另加可选的 `principal.attributes`、`request.headers`、`request.attributes`；记录的应用、空间、设备与请求 id 优先于导出的同名请求头），
   以及可选的 `replay.json`（该部署的 root 配置）。
-- 运行：`./gradlew :cosec-core:engineReplay -PreplayDir=<目录>`（PR-6 起改名为 `decisionReplay`，见 §8.1）。这是一个 `JavaExec` 任务，主类在 `cosec-core` 的测试夹具中，不进发布的 jar，
+- 运行：`./gradlew :core:engineReplay -PreplayDir=<目录>`（PR-6 起改名为 `decisionReplay`，见 §8.1）。这是一个 `JavaExec` 任务，主类在 `cosec-core` 的测试夹具中，不进发布的 jar，
   不挂到 `check`。策略和角色权限装进内存仓库，两个实现读同一份；每条请求构造纯数据的 `Request` 和主体，交给 `DecisionParity`。
 - 输出：控制台摘要和 `<目录>/replay-report.json`：样本数、时间跨度、`same`/`mismatch`/`candidate_error` 计数、两边同样出错的计数
   （其中原因不同的另计）、按状态和按决策层的分布、两边各自的异常类计数、与记录决策一致的比例、读取了未记录输入的策略清单、各输入文件
@@ -893,7 +893,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 |---|---|---|---|---|---|
 | PR-1 | `build: add cosec-model and cosec-engine modules` | 8.0 线（已合入，#974） | 两个空模块与 BOM；§2.2 的依赖排除和 `verifyPureClasspath`；ArchUnit 依赖与 §2.3 的规则；§7.2 的 JMH 属性；在 JDK 25 上录 `SimpleAuthorizationBenchmark` 基线 | — | 两个模块 `check` 通过；临时加一个引用 `java.io.File` 的类能让 ArchUnit 失败（在 PR 描述里给出输出，不提交）；基线 JSON 附在 PR 上 |
 | PR-2 | `feat(engine): add the decision model and the single combining algorithm` | 8.0 线 | §3.1、§3.2 的全部类型；§4.1 的算法与三级 trace；用测试替身（不依赖 `cosec-core`）写的单元测试、P1、P2、P4；`EngineBenchmark` | PR-1 | 两个模块 `check` 通过，变更行覆盖率 ≥ 80%；`EngineBenchmark` 满足 §7.1 的分配目标 |
-| PR-3 | `feat(core): add EngineAuthorization backed by the engine` | 8.0 线 | §3.3、§3.4、§3.5 的适配层；§6.2 的语句作用域上下文；`EngineAuthorization`；`ShadowAuthorization` 的候选实现工厂参数（§5.3）；`SimpleAuthorizationBenchmark` 的 `impl` 参数；§8.2 第一行的参数化测试；P3（固定种子）。`SimpleAuthorization` 不改 | PR-2，以及 7.0 中 S10a 的修复 | `:cosec-core:check`、`:cosec-cocache:check`、`:cosec-spring-boot-starter:check` 及其他依赖 `cosec-core` 的模块通过；两个实现在全部参数化测试上结果相同；JMH 对比满足 §7.1 |
+| PR-3 | `feat(core): add EngineAuthorization backed by the engine` | 8.0 线 | §3.3、§3.4、§3.5 的适配层；§6.2 的语句作用域上下文；`EngineAuthorization`；`ShadowAuthorization` 的候选实现工厂参数（§5.3）；`SimpleAuthorizationBenchmark` 的 `impl` 参数；§8.2 第一行的参数化测试；P3（固定种子）。`SimpleAuthorization` 不改 | PR-2，以及 7.0 中 S10a 的修复 | `:core:check`、`:cocache:check`、`:spring-boot:check` 及其他依赖 `cosec-core` 的模块通过；两个实现在全部参数化测试上结果相同；JMH 对比满足 §7.1 |
 | PR-4 | `feat(core): add the engine parity comparator and offline replay` | 8.0 线 | 比较器 `DecisionParity`（§8.1，通用，放在 `cosec-core` 的测试夹具中，不发布；含把 `SecurityPipeline` 的 `toDecision`/`toErrorDecision` 改为 `internal`）；`PolicyTestKit.parity`（测试夹具中的扩展函数）；百万例的手动任务；离线回放工具（§8.2.1：输入格式、`engineReplay` Gradle 任务、报告）。不新增 `cosec.*` 属性，不改 starter，不新增 `ShadowDiffKind` 取值（2026-10-21 修订，取代原来的开关与陪跑影子） | PR-3 | starter 的装配与现在完全相同；一个人为制造差异的测试能让比较器报告 `MISMATCH`，同样的差异经回放工具出现在报告和明细中；用仓库内的合成数据（不含真实数据）跑通回放工具；百万例跑通 |
 | PR-5 | `feat(core): explain decisions from the engine trace` | 8.0 线 | §5.2 的基于 trace 的解释路径，只在测试中装配，starter 不使用；`Explanation` 结构不变；旧叙述、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT` 保留 | PR-3（可与 PR-4 并行） | `AuthorizationExplainerTest`、`PolicyTestKitTest`、`CoSecExplainAutoConfigurationTest` 不改即通过；用 trace 解释路径（测试中装配）再跑一遍时，除 X6 涉及的断言外通过，X6 涉及的断言逐条在 PR 描述中说明 |
 | ~~PR-6~~ | ~~`refactor!: remove the legacy authorization path`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）**：删除旧实现并入 RFC 0008 的切换 PR，回放门槛取消 | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；`engineReplay` 改名为 `decisionReplay` 并用参数选择两边的实现（`DecisionParity` 与回放工具 PR-4 起已在测试夹具中且是通用的，§8.1，不删除）；删除 `PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；按 §7.2 第 4 步重新测量 JMH（第 2 阶段对 §7.1 的豁免见 §7.2 第 8 步：差距最多约 7 % 可接受，任一门槛场景低于 90 % 时停止并交回协调者）；文档全部更新 |
@@ -954,21 +954,21 @@ PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开
 
 本文对现有行为的描述，以 `0436acb4` 时的下列代码为准：
 
-- 决策：`cosec-core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、
+- 决策：`core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、
   `AuthorizationDecision.kt`、`MissingPolicyException.kt`、`blacklist/BlacklistChecker.kt`、`policy/BlockingAware.kt`
 - 路径变量：`policy/PathVariableScope.kt`、`policy/action/PathActionMatcher.kt`（`PATH_VARIABLES_KEY`、`ReplaceablePathActionMatcher`、
   路径解析缓存）、`policy/condition/part/PartExtractor.kt`、`limiter/RateLimitRule.kt`
 - 匹配器：`policy/condition/context/InRoleConditionMatcher.kt`、`policy/action/CompositeActionMatcher.kt`、
   `policy/action/AbstractActionMatcher.kt`、`policy/condition/AbstractConditionMatcher.kt`、`policy/condition/part/BoundedRegex.kt`
-- 第二、第三份算法：`cosec-api/.../policy/Policy.kt`、`Statement.kt`、`PermissionVerifier.kt`；
-  `cosec-core/.../explain/AuthorizationExplainer.kt`、`Explanation.kt`、`SnapshotRepositories.kt`、`DecisionRefs.kt`；
-  `cosec-core/src/test/.../explain/ExplainerConsistencyTest.kt`
+- 第二、第三份算法：`api/.../policy/Policy.kt`、`Statement.kt`、`PermissionVerifier.kt`；
+  `core/.../explain/AuthorizationExplainer.kt`、`Explanation.kt`、`SnapshotRepositories.kt`、`DecisionRefs.kt`；
+  `core/core/src/test/.../explain/ExplainerConsistencyTest.kt`
 - 间接使用者：`shadow/ShadowAuthorization.kt`、`ShadowDiff.kt`、`authorization/AuthorizationChecker.kt`、`analysis/AccessAnalyzer.kt`、
   `testkit/PolicyTestKit.kt`、`policy/DefaultPolicyEvaluator.kt`、`permission/DefaultAppPermissionEvaluator.kt`
 - 状态码：`pipeline/SecurityPipeline.kt`、`pipeline/SecurityDecision.kt`
 - 数据类：`policy/PolicyData.kt`、`permission/AppPermissionData.kt`（惰性 `permissionIndexer`、预先计算的 `requiresBlocking`）、
   `context/SimpleSecurityContext.kt`（`ConcurrentHashMap` 属性）
 - 构建：根 `build.gradle.kts`（库模块默认依赖、JMH 配置、`jvmToolchain(17)`）、`gradle/libs.versions.toml`、
-  `cosec-core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`
-- starter：`cosec-spring-boot-starter/.../authorization/CoSecAuthorizationAutoConfiguration.kt`（影子包在 `SimpleAuthorization` 外、
+  `core/core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`
+- starter：`spring-boot-starter/.../authorization/CoSecAuthorizationAutoConfiguration.kt`（影子包在 `SimpleAuthorization` 外、
   限流之内）、`AuthorizationProperties.kt`（`cosec.authorization.*`）

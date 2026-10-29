@@ -36,6 +36,7 @@ If you cannot use GitHub, email **ahoowang@qq.com** with the subject `[CoSec Sec
 
 ## Scope
 
-In scope: authorization decisions (policy evaluation, deny-first semantics, root principal handling),
-token verification and revocation, request parsing (path traversal, remote IP resolution), expression
-conditions (OGNL/SpEL sandboxing, ReDoS guards), and caching behavior that could fail open.
+In scope: authorization decisions (policy evaluation, deny-first semantics, boundaries and break-glass),
+token verification and revocation, request parsing (path traversal, remote IP resolution, `CoSec-*` scope
+parameters), condition compilation (type checks, cost and size limits), the control plane's authorization of
+changes, and snapshot or caching behavior that could fail open.

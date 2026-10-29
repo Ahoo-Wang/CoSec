@@ -7,7 +7,6 @@ spring-cloud = "2025.1.4"
 cosid = "4.0.2"
 cocache = "6.7.0"
 opentelemetry = "2.32.0"
-testcontainers = "2.0.5"
 guava = "33.7.2-jre"
 kotlin-logging = "8.0.4"
 ognl = "3.4.16"
@@ -19,7 +18,6 @@ springdoc = "3.1.1"
 # testing
 junit = "6.1.3"
 fluent-assert = "1.2.1"
-hamcrest = "3.0"
 mockk = "1.14.11"
 jmh = "1.37"
 archunit = "1.5.1"
@@ -38,7 +36,6 @@ spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-d
 cosid-bom = { module = "me.ahoo.cosid:cosid-bom", version.ref = "cosid" }
 cocache-bom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" }
 opentelemetry-instrumentation-bom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
-testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 ognl = { module = "ognl:ognl", version.ref = "ognl" }
@@ -49,7 +46,6 @@ swagger = { module = "io.swagger.core.v3:swagger-core-jakarta", version.ref = "s
 springdoc-bom = { module = "org.springdoc:springdoc-openapi-bom", version.ref = "springdoc" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 fluent-assert-bom = { module = "me.ahoo.test:fluent-assert-bom", version.ref = "fluent-assert" }
-hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
@@ -62,7 +58,6 @@ detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
-kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 publish = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "publish-plugin" }
 jmh = { id = "me.champeau.jmh", version.ref = "jmh-plugin" }
 

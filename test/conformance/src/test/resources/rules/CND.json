@@ -1,0 +1,61 @@
+{
+  "rules": [
+    {
+      "id": "CND-1",
+      "source": "RFC 0005 §3.4, Q7",
+      "statement": "An absent attribute equals no value, not another absent one and not the empty string; exists is false for it.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionEvaluationTest#absent is equal to nothing",
+        "model:ConditionEvaluationTest#exists sees present values, empty ones included"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-2",
+      "source": "RFC 0005 §3.5",
+      "statement": "A condition over a cost bound (nodes, depth, in values, CIDR blocks, literal length, total weight) does not compile.",
+      "level": "engine",
+      "properties": [
+        "model:ConditionPropertyTest#A4 evaluation visits at most the node limit"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-3",
+      "source": "RFC 0005 §3.4",
+      "statement": "Evaluation is two-valued: not negates its operand, so not over a comparison with an absent attribute is true.",
+      "level": "engine",
+      "properties": [
+        "model:ConditionPropertyTest#A3 normalizing does not change decisions"
+      ],
+      "guards": [
+        "model:ConditionEvaluationTest#absent makes every comparison false and not negates it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-4",
+      "source": "RFC 0005 §3.2",
+      "statement": "Attributes are typed statically: a path outside the catalog, an operand of the wrong type, or a string literal for a Bool does not compile.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionCheckerTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-5",
+      "source": "RFC 0005 §3.2",
+      "statement": "No attribute reference may read a credential header: `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`, whether in a condition or a rate limit rule's `key`. A header name is an ASCII token (RFC 9110 tchar), matched case-insensitively with the ASCII fold on both the document and the request side, so no Unicode case mapping can reach a credential header; any other name does not compile. `ConditionChecker.attribute` refuses both, so every reference is checked in one place. A document with such a reference does not compile, through the control plane and cosec-migrate alike.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionCheckerTest#credential headers are refused",
+        "model:ConditionCheckerTest#no attribute reference resolves a credential header",
+        "model:AttributeTest#a header name that is not an ASCII token does not parse",
+        "runtime:HttpAttributesTest#header names fold ASCII letters only"
+      ],
+      "pending": null
+    }
+  ]
+}
