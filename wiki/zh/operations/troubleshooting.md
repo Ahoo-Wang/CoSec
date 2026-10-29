@@ -239,6 +239,11 @@ Remove or rename them; cosec.unknown-properties=warn only logs this.
 CoSec 的任何模块都不读取的 `cosec.*` key：拼写错误，或 7.x 的 key，`->` 之后是替代它的配置（[7.x key](./upgrading.md#removed-and-renamed-properties)）。
 改名或删除它。[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) 只记录这份列表。
 
+在 Kubernetes 上，`cosec.gateway.service.host`、`cosec.gateway.port` 这类 key 来自 Service 链接：命名空间中每个名字以 `cosec-`
+开头的 Service，都会让 Kubernetes 在此后启动的 pod 中设置 `COSEC_GATEWAY_SERVICE_HOST`、`COSEC_GATEWAY_PORT` 这类变量，
+Spring 把它们读作 `cosec.*` key。在 pod spec 中设置 `enableServiceLinks: false`，`k8s/` 中的清单就是这样做的
+（[清单设置了什么](./deployment.md#what-the-manifests-set)）。
+
 ### 管道模式导致启动失败 {#startup-fails-on-the-pipeline-mode}
 
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。

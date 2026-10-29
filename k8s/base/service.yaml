@@ -3,12 +3,12 @@ kind: Service
 metadata:
   name: cosec-gateway
   labels:
-    app: cosec-gateway
+    app.kubernetes.io/name: cosec-gateway
 spec:
   selector:
-    app: cosec-gateway
+    app.kubernetes.io/name: cosec-gateway
   ports:
     - name: http
       port: 80
+      targetPort: http
       protocol: TCP
-      targetPort: 8080

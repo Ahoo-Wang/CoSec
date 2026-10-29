@@ -1,0 +1,75 @@
+# The gateway's configuration, mounted over the image's /opt/cosec-gateway-server/config/. Every property is in
+# https://cosec.ahoo.me/operations/configuration; the Redis address comes from the overlay's cosec-gateway-redis
+# ConfigMap, the JWT secret from the Secret cosec-jwt-secret.
+server:
+  port: 8080
+  compression:
+    enabled: true
+    min-response-size: 1KB
+spring:
+  application:
+    name: ${service.name:cosec-gateway}
+  web:
+    error:
+      whitelabel:
+        enabled: false
+  cloud:
+    # The image has no Kubernetes discovery client, so an lb:// route resolves through this list: here, the
+    # Service cosec-auth in the gateway's namespace.
+    discovery:
+      client:
+        simple:
+          instances:
+            cosec-auth:
+              - uri: http://cosec-auth:80
+    gateway:
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"
+                exposed-headers: "*"
+                max-age: 1800000
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+          routes:
+            - id: cosec-auth
+              uri: lb://cosec-auth
+              predicates:
+                - Path=/cosec-auth/**
+              filters:
+                - StripPrefix=1
+cosec:
+  audit:
+    kafka:
+      enabled: false
+  authentication:
+    login:
+      enabled: false
+  jwt:
+    algorithm: hmac256
+    secret: ${COSEC_JWT_SECRET} # no fallback: startup fails if the secret is missing
+  ip2region:
+    enabled: false
+
+logging:
+  level:
+    root: info
+management:
+  endpoint:
+    health:
+      # /actuator/health/liveness and /readiness for the probes. Readiness stays REFUSING_TRAFFIC until the platform
+      # document is installed.
+      probes:
+        enabled: true
+    # The gateway endpoint can read and change routes. Off, so exposing it by mistake exposes nothing.
+    gateway:
+      access: none
+  endpoints:
+    web:
+      exposure:
+        # Health only. CoSec authorizes the gateway's routes, not its actuator endpoints.
+        include: health

@@ -67,7 +67,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
   `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
   at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
-  logs the list; do not suggest it to hide a real typo.
+  logs the list; do not suggest it to hide a real typo. On Kubernetes, keys such as `cosec.gateway.service.host` or
+  `cosec.gateway.port` are service links (`COSEC_GATEWAY_SERVICE_HOST`, ... for a Service named `cosec-*` in the
+  namespace): set `enableServiceLinks: false` on the pod, as `k8s/` does.
 - **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
