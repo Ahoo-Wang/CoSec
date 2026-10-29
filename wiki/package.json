@@ -11,7 +11,8 @@
     "preview": "vitepress preview",
     "fix:mermaid": "node scripts/fix-mermaid.mjs",
     "check:mermaid": "node scripts/check-mermaid.mjs",
-    "check:docs": "node .vitepress/check-docs.mjs"
+    "check:legacy": "node scripts/check-legacy.mjs",
+    "check:docs": "node .vitepress/check-docs.mjs && node scripts/check-legacy.mjs"
   },
   "devDependencies": {
     "mermaid": "^12.2.0",
