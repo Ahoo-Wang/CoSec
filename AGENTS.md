@@ -56,7 +56,8 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   keeps it out of the dump); if it was, run `updateKotlinAbi` for that module and commit the dump with the change.
   From GA on, a removed or changed dump line is a breaking change: `!` in the PR title (`CONTRIBUTING.md` §3).
   `updateKotlinAbi` dumps what is in `build/`: after moving or deleting classes, run `clean` first, or a stale class
-  lands in the dump and CI, which builds from scratch, fails the check.
+  lands in the dump and CI, which builds from scratch, fails the check. Adding an opt-in marker to a declaration does
+  not recompile its users incrementally: compile them with `--rerun-tasks` to see the opt-ins they now need.
 - `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
   failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
   mutants the change kills in the PR.

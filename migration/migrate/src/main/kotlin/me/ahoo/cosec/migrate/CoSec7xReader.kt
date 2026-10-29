@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cocache.api.Cache
@@ -19,6 +21,7 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
