@@ -16,4 +16,6 @@
 // guards what the code references, not the classpath (RFC 0007 §3 M12, Q20).
 dependencies {
     api(project(":runtime"))
+    // The control API and the change records are JSON (RFC 0007 §9); Jackson stays internal (RFC 0011 D3).
+    implementation("tools.jackson.core:jackson-databind")
 }

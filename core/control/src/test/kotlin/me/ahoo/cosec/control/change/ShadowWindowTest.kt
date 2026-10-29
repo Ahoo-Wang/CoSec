@@ -43,9 +43,9 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.ShadowListener
 import me.ahoo.cosec.runtime.http.Cookies
@@ -60,10 +60,10 @@ import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -116,7 +116,7 @@ class ShadowWindowTest {
     /** A data-plane instance: its own pipeline over the current heads, its own candidate source and recorder. */
     private inner class Instance(
         name: String,
-        compile: (SnapshotKey, me.ahoo.cosec.snapshot.SnapshotDocument) -> CompiledDocument = COMPILER::compile
+        compile: (SnapshotKey, me.ahoo.cosec.spi.snapshot.SnapshotDocument) -> CompiledDocument = COMPILER::compile
     ) {
         val recorder = ShadowRecorder(name, clock)
         private val listeners = DecisionListeners(

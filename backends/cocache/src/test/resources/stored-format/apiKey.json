@@ -1,0 +1,1 @@
+{"id":"k1","principalId":"alice","tenantId":"acme","roles":["admin"],"policies":["p1"],"attributes":{"team":"a"},"expiresAt":"2026-11-01T00:00:00Z","enabled":true}

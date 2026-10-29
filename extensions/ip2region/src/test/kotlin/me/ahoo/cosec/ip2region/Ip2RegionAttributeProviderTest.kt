@@ -19,7 +19,7 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

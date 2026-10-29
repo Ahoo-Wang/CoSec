@@ -14,23 +14,26 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
+import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.token.RefreshTokenMismatchException
-import me.ahoo.cosec.token.SimpleAccessToken
-import me.ahoo.cosec.token.SimpleCompositeToken
-import me.ahoo.cosec.token.TokenExpiredException
-import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.login.token.RefreshTokenMismatchException
+import me.ahoo.cosec.runtime.token.SimpleAccessToken
+import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.spi.token.DelegationUnsupportedException
+import me.ahoo.cosec.spi.token.TokenExpiredException
+import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class JwtTokenVerifierTest {
@@ -52,6 +55,57 @@ class JwtTokenVerifierTest {
         }
         // Missing exp is an invalid token, not an expired one — pin the mapping.
         assertFalse(thrown is TokenExpiredException)
+    }
+
+    private fun signed(builder: JWTCreator.Builder.() -> Unit): String = JWT.create()
+        .withJWTId("t1")
+        .withSubject("alice")
+        .withExpiresAt(Instant.now().plusSeconds(3600))
+        .apply(builder)
+        .sign(JwtFixture.ALGORITHM)
+
+    /** `IDN-4`: a delegation token never becomes a principal, whatever else about it is valid. */
+    @Test
+    fun aDelegationTokenIsRefused() {
+        val delegated = signed { withClaim("act", mapOf("sub" to "agent")) }
+        assertThrownBy<DelegationUnsupportedException> {
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(delegated))
+        }
+        // Any value counts: an actor CoSec cannot read is still an actor.
+        assertThrownBy<DelegationUnsupportedException> {
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(signed { withNullClaim("act") }))
+        }
+        assertThrownBy<DelegationUnsupportedException> {
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(signed { withClaim("act", "agent") }))
+        }
+    }
+
+    @Test
+    fun refreshingADelegationTokenIsRefused() {
+        val access = signed { withClaim("act", mapOf("sub" to "agent")) }
+        val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
+            .sign(JwtFixture.ALGORITHM)
+        assertThrownBy<DelegationUnsupportedException> {
+            jwtTokenVerifier.refresh<TokenPrincipal>(SimpleCompositeToken(access, refresh))
+        }
+    }
+
+    /** A malformed access token is an invalid token, not an unmodelled error. */
+    @Test
+    fun refreshingAMalformedAccessTokenIsInvalid() {
+        val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
+            .sign(JwtFixture.ALGORITHM)
+        val thrown = assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.refresh<TokenPrincipal>(SimpleCompositeToken("not-a-jwt", refresh))
+        }
+        assertFalse(thrown is TokenExpiredException)
+    }
+
+    /** `may_act` only says who may act for the subject; the token is still the subject's own. */
+    @Test
+    fun mayActIsIgnored() {
+        val token = signed { withClaim("may_act", mapOf("sub" to "agent")) }
+        jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token)).id.assert().isEqualTo("alice")
     }
 
     @Test

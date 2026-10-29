@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
@@ -36,15 +39,15 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Catalog
-import me.ahoo.cosec.snapshot.document.CatalogGroup
-import me.ahoo.cosec.snapshot.document.CatalogPermission
-import me.ahoo.cosec.snapshot.document.DocumentCompileException
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.Catalog
+import me.ahoo.cosec.runtime.document.CatalogGroup
+import me.ahoo.cosec.runtime.document.CatalogPermission
+import me.ahoo.cosec.runtime.document.DocumentCompileException
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
@@ -133,7 +136,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         translator,
         conditions
     ) { kind, location, message -> reject(kind, location, message) }
-    val treeReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    val treeReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     /** The policies and bindings of each document, in the order they are written. */
     val policies = LinkedHashMap<SnapshotKey, MutableList<PolicyDefinition>>()

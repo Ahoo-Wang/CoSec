@@ -18,7 +18,6 @@ import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.TenantId
@@ -41,11 +40,12 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
-import me.ahoo.cosec.runtime.authn.Credentials
-import me.ahoo.cosec.runtime.authn.MembershipSource
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -111,7 +111,10 @@ class PipelineTest {
         val expected = when (reason) {
             AuthnResult.RejectReason.TOKEN_EXPIRED -> ProblemType.TOKEN_EXPIRED
             AuthnResult.RejectReason.TOKEN_REVOKED -> ProblemType.TOKEN_REVOKED
-            AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> ProblemType.TOKEN_INVALID
+            AuthnResult.RejectReason.TOKEN_INVALID,
+            AuthnResult.RejectReason.API_KEY_INVALID,
+            AuthnResult.RejectReason.DELEGATION_UNSUPPORTED,
+            -> ProblemType.TOKEN_INVALID
         }
         outcome.assertProblem(expected)
     }

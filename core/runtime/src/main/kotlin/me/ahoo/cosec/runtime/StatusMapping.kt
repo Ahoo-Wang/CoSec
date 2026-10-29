@@ -13,13 +13,13 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.identity.Identity
-import me.ahoo.cosec.identity.IdentityCodec
-import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.http.CoSecParameters
+import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 
 /**
  * The one place status codes and problem bodies are defined (RFC 0006 §6.1, §6.3; `PIP-1`, `PIP-2`), and the only
@@ -101,8 +101,11 @@ internal object StatusMapping {
         is AuthnResult.Rejected -> when (authn.reason) {
             AuthnResult.RejectReason.TOKEN_EXPIRED -> ProblemType.TOKEN_EXPIRED
             AuthnResult.RejectReason.TOKEN_REVOKED -> ProblemType.TOKEN_REVOKED
-            // An API key is a token to the client: the remedy is the same.
-            AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> ProblemType.TOKEN_INVALID
+            // An API key is a token to the client, and so is a delegation token CoSec cannot use: the remedy is the same.
+            AuthnResult.RejectReason.TOKEN_INVALID,
+            AuthnResult.RejectReason.API_KEY_INVALID,
+            AuthnResult.RejectReason.DELEGATION_UNSUPPORTED,
+            -> ProblemType.TOKEN_INVALID
         }
 
         is AuthnResult.Authenticated ->

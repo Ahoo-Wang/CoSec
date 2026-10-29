@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.apikey
 
-import me.ahoo.cosec.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -26,7 +26,7 @@ import java.time.Instant
 data class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
-     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cache-support`).
+     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`).
      */
     @DefaultValue("memory") var store: Store = Store.MEMORY,
     /**

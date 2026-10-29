@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication.social
 
-import me.ahoo.cosec.api.authentication.AuthenticationProvider
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialProviderManager

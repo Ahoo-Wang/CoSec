@@ -13,6 +13,10 @@
 
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+
 /**
  * The built-in authenticator (RFC 0006 §5.3.2): a request that carries an API key is judged by [apiKey] alone, as on
  * the 7.x path; any other request by [token]. A rejected key never falls back to the token, so presenting a bad key

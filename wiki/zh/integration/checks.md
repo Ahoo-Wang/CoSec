@@ -100,7 +100,7 @@ if (!allowed) throw AccessDeniedException()
 
 ## 解释一个决策 {#explaining-a-decision}
 
-要在不发送真实请求的情况下了解某个主体对某个请求为什么得到某个决策，请使用控制面的 `explain`。它需要 `control-support` 和 `cache-support`，在宿主上以 `POST <base-path>/explain` 提供（默认 `/cosec/control/v1/explain`；见[控制面路由](./web.md#control-plane-routes)）。
+要在不发送真实请求的情况下了解某个主体对某个请求为什么得到某个决策，请使用控制面的 `explain`。它需要 `cosec-control` 和 `cosec-cocache`，在宿主上以 `POST <base-path>/explain` 提供（默认 `/cosec/control/v1/explain`；见[控制面路由](./web.md#control-plane-routes)）。
 
 它与强制执行使用相同的作用域解析、文档编译器和引擎，以完整追踪级别，基于已发布的文档求值：文档的最新版本，或你指定的修订。不会消耗或改变任何东西。
 

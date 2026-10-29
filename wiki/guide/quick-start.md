@@ -27,23 +27,22 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
     implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter")
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // or webmvc-support, gateway-support
-    }
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // documents and revocations in Redis
-    }
+    implementation("me.ahoo.cosec:cosec-spring-boot")
+    implementation("me.ahoo.cosec:cosec-webflux")                      // or cosec-webmvc, cosec-gateway
+    implementation("me.ahoo.cosec:cosec-cocache")                      // documents and revocations in Redis
+    implementation("org.springframework.boot:spring-boot-data-redis")
+    implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
 
-Declare the starter three times: once on its own, which brings the CoSec API onto your compile classpath, and
-once per capability. A capability adds only its own module; a single block that requires two capabilities does
-not resolve. Which capability adds what is listed in [Modules](./introduction.md#modules).
+`cosec-spring-boot` is the auto-configuration; it wires every CoSec module it finds on the classpath, so add the
+modules you need next to it. Which module adds what, and what each needs with it, is listed in
+[Modules](./introduction.md#modules). The web adapter is not optional: a WebFlux application without `cosec-webflux`
+fails at startup with a message naming the artifact (STA-1).
 
-`cache-support` is not optional here: with JWT on, which is the default, the application does not start without a
-store for [token revocation](../integration/authentication.md#logout-and-revocation), and `cache-support` provides
-it.
+`cosec-cocache` is not optional here either: with JWT on, which is the default, the application does not start
+without a store for [token revocation](../integration/authentication.md#logout-and-revocation), and `cosec-cocache`
+provides it.
 
 ## Configure
 
@@ -189,8 +188,8 @@ class DemoController(private val tokenConverter: TokenConverter) {
 }
 ```
 
-The starter configures `TokenConverter` (`me.ahoo.cosec.token`) from `cosec.jwt`. `SimplePrincipal` is in
-`me.ahoo.cosec.principal`, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
+The starter configures `TokenConverter` (`me.ahoo.cosec.login.token`) from `cosec.jwt`. `SimplePrincipal` is in
+`me.ahoo.cosec.api.principal`, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
 `accessToken` and a `refreshToken`. A real login endpoint checks credentials before it issues a token; see
 [Logging in](../integration/authentication.md#logging-in).
 

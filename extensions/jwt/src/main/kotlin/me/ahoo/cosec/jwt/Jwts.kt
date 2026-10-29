@@ -17,14 +17,15 @@ import com.auth0.jwt.interfaces.DecodedJWT
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.membership.MembershipClaims
-import me.ahoo.cosec.membership.MembershipMarkedPrincipal
-import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.SimpleTokenPrincipal
-import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
+import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 
 /**
  * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its
@@ -33,6 +34,9 @@ import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
  */
 internal object Jwts {
     const val TOKEN_PREFIX = "Bearer "
+
+    /** The RFC 8693 actor claim. `may_act` only says who may act for the subject, and does not change it. */
+    const val ACTOR_CLAIM = "act"
     private val jwtParser = JWT()
 
     fun String.removeBearerPrefix(): String =
@@ -47,8 +51,16 @@ internal object Jwts {
         return jwtParser.decodeJwt(jwtToken)
     }
 
-    /** [decodedAccessToken] as a principal; the caller has verified its signature. */
+    /**
+     * [decodedAccessToken] as a principal; the caller has verified its signature. A delegation token (an `act` claim)
+     * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+     */
     fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
+        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
+            throw DelegationUnsupportedException(
+                "The token delegates (it carries an `act` claim), which CoSec does not support."
+            )
+        }
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
         val policyClaim = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY)

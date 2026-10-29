@@ -15,7 +15,7 @@
       "pending": null,
       "guards": [
         "runtime:PipelineRoutesTest#an unmapped request stays in the http namespace",
-        "core:RouteMapTest#a request no route matches stays unmapped, never a wildcard"
+        "runtime:RouteMapTest#a request no route matches stays unmapped, never a wildcard"
       ]
     }
   ]

@@ -5,7 +5,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![GitHub release](https://img.shields.io/github/release/Ahoo-Wang/CoSec.svg)](https://github.com/Ahoo-Wang/CoSec/releases)
-[![Maven Central Version](https://img.shields.io/maven-central/v/me.ahoo.cosec/cosec-core)](https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-core)
+[![Maven Central Version](https://img.shields.io/maven-central/v/me.ahoo.cosec/cosec-api)](https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-api)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/b3133cf684a74192a55abbefe2a0759a)](https://www.codacy.com/gh/Ahoo-Wang/CoSec/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Ahoo-Wang/CoSec&amp;utm_campaign=Badge_Grade)
 [![codecov](https://codecov.io/gh/Ahoo-Wang/CoSec/branch/main/graph/badge.svg?token=AL0RyJbMZv)](https://codecov.io/gh/Ahoo-Wang/CoSec)
 [![CI](https://github.com/Ahoo-Wang/CoSec/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahoo-Wang/CoSec/actions/workflows/ci.yml)
@@ -53,12 +53,11 @@ flowchart LR
 ```kotlin
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // 或 webmvc-support / gateway-support
-    }
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // Redis：快照、吊销、限流
-    }
+    implementation("me.ahoo.cosec:cosec-spring-boot")
+    implementation("me.ahoo.cosec:cosec-webflux")                      // 或 cosec-webmvc / cosec-gateway
+    implementation("me.ahoo.cosec:cosec-cocache")                      // Redis：快照、吊销、限流
+    implementation("org.springframework.boot:spring-boot-data-redis")
+    implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
 
@@ -99,8 +98,8 @@ Redis 必须使用 `maxmemory-policy noeviction`。发布一份平台文档（�
 
 ## 模块
 
-starter 自带核心、请求处理流程、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、控制面、OAuth、OpenTelemetry、
-Micrometer、OpenAPI、ip2region、Kafka）都是按需启用的 Gradle 能力。`cosec-migrate` 用于转换 7.x 数据并发布文档。
+`cosec-spring-boot` 自带请求处理流程、登录、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、控制面、OAuth、
+OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka）都是在它旁边按需添加的模块，starter 装配它在类路径上找到的模块。`cosec-migrate` 用于转换 7.x 数据并发布文档。
 完整列表见[模块](https://cosec.ahoo.me/zh/guide/introduction#modules)。开箱即用的网关以容器镜像 `ahoowang/cosec-gateway` 发布。
 
 ## 文档

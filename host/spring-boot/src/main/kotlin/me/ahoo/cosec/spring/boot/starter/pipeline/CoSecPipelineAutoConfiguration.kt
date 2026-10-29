@@ -15,37 +15,40 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.audit.AuditEventSink
-import me.ahoo.cosec.apikey.ApiKeyReader
-import me.ahoo.cosec.apikey.ApiKeyStore
-import me.ahoo.cosec.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.jwt.JwtTokenVerifier
-import me.ahoo.cosec.membership.MembershipProvider
-import me.ahoo.cosec.route.RouteMap
-import me.ahoo.cosec.route.RouteMapCodec
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
-import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.audit.AuditListener
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.runtime.route.RouteMap
+import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
+import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.apikey.ApiKeyStore
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.attribute.AttributeProvider
+import me.ahoo.cosec.spi.audit.AuditEventSink
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.token.RevocationReader
-import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosid.StringIdGenerator
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
@@ -95,6 +98,8 @@ class CoSecPipelineAutoConfiguration {
      * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
      * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
      * On shutdown, delivers what is queued for up to `cosec.observability.listener.drain-timeout`, then drops the rest.
+     * `cosec.audit.kafka.delivery=required` asks for a REQUIRED Kafka record of every decision: startup fails when that
+     * listener was not created, rather than deciding without it (STA-1).
      */
     @Bean(destroyMethod = "drain")
     @ConditionalOnMissingBean
@@ -104,6 +109,7 @@ class CoSecPipelineAutoConfiguration {
         beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
         listenerProperties: ListenerProperties,
+        environment: Environment,
     ): DecisionListeners {
         val names = IdentityHashMap<AuditEventSink, String>()
         beans.getBeansOfType(AuditEventSink::class.java).forEach { (name, sink) -> names[sink] = name }
@@ -112,6 +118,15 @@ class CoSecPipelineAutoConfiguration {
             sinks.orderedStream().toList().filter { it !is DecisionListener }
                 .map { it to AuditListener.of(it, names.getValue(it)) }
         val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
+        val requiredKafka = kafkaAuditDelivery(environment) == Delivery.REQUIRED
+        check(
+            !requiredKafka ||
+                ordered.any { it.second.name == KAFKA_AUDIT_LISTENER && it.second.delivery == Delivery.REQUIRED }
+        ) {
+            "${KafkaAuditProperties.DELIVERY_KEY}=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
+                "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
+                "cosec.audit.kafka.enabled=true (STA-1)."
+        }
         return DecisionListeners(
             ordered.map { it.second },
             requiredListenerProperties.timeout.toKotlinDuration(),
@@ -227,6 +242,9 @@ class CoSecPipelineAutoConfiguration {
     fun cosecAuthorizationChecker(pipeline: Pipeline): AuthorizationChecker = AuthorizationChecker(pipeline)
 
     companion object {
+        /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
+        private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
+
         /** No token verifier: a request without a token is anonymous, one with a token is rejected. */
         private val NO_TOKEN = Authenticator { credentials ->
             if (credentials.token == null) {
@@ -246,8 +264,8 @@ class CoSecPipelineAutoConfiguration {
         ): RevocationReader {
             reader.ifAvailable?.let { return it }
             return checkNotNull(CoCacheRevocation.readerOf(tokenStore.ifAvailable)) {
-                "Tokens are verified, but no revocation reader is available: add cosec-cocache (the starter's " +
-                    "cacheSupport feature) or a RevocationReader bean, or set ${JwtProperties.PREFIX}.enabled=false."
+                "Tokens are verified, but no revocation reader is available: add cosec-cocache " +
+                    "or a RevocationReader bean, or set ${JwtProperties.PREFIX}.enabled=false."
             }
         }
 

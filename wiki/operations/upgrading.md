@@ -26,7 +26,7 @@ What is different, in short:
 - **One decision path.** The 7.x `Authorization` chain is gone. Each adapter (WebFlux, Spring MVC, Gateway) hands the
   request to one coroutine pipeline that authenticates, resolves the scope, decides and maps the outcome to a status.
 - **Changes go through a control plane.** Writing, validating, simulating, shadowing, approving, explaining and rolling
-  back policies are control-plane operations (`controlSupport`), not application code or local files.
+  back policies are control-plane operations (`cosec-control`), not application code or local files.
 - **Conditions are data.** A small condition language replaces the matcher factories, OGNL and SpEL. Nothing in a
   policy runs code.
 - **Errors are `application/problem+json`.** A response no longer tells a client whether a DENY exists.
@@ -42,12 +42,13 @@ What is different, in short:
    [Converting](#migrating-the-data) reports every policy that cannot be translated.
 3. **Convert the data** with `cosec-migrate convert` and fix every rejection until the conversion is accepted. Read
    the semantic changes in `report.json` against [What 8.0 decides differently](#what-8-0-decides-differently).
-4. **Update the code**: remove the uses of [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension
-   beans instead.
+4. **Update the dependencies and the code**: replace the starter's capabilities with the modules themselves and move
+   imports to the new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses
+   of [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
 5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
    new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
    common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring
-   MVC host (set `cosec.authorization.routes.location` to a map, or empty), JWT without `cache-support` and without a
+   MVC host (set `cosec.authorization.routes.location` to a map, or empty), JWT without `cosec-cocache` and without a
    revocation store of your own ([Token revocation is always on](#token-revocation-is-always-on)), and a Redis whose
    eviction policy is not `noeviction` or cannot be read
    ([Startup fails when Redis's eviction policy cannot be read](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)).
@@ -313,8 +314,8 @@ or in the query string.
 #### Token revocation is always on {#token-revocation-is-always-on}
 
 `cosec.jwt.token-revocation.enabled` is gone. With JWT enabled, every token is checked for revocation, and startup
-fails when nothing can answer that check: add `cache-support`, which brings the Redis revocation store, or register a
-`TokenStore` and a `RevocationReader` bean of your own. In 7.x, without `cache-support` the starter used a store that
+fails when nothing can answer that check: add `cosec-cocache`, which brings the Redis revocation store, or register a
+`TokenStore` and a `RevocationReader` bean of your own. In 7.x, without `cosec-cocache` the starter used a store that
 records nothing, so logout silently did nothing. A service that only issues tokens and never verifies them can set
 `cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
 Revocations written by 7.x stay in force: 8.0 reads them under the same keys (`<prefix>:token:revoked:*`). An error
@@ -324,6 +325,12 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 
 - Tokens issued by 7.x keep working: 8.0 reads the same claims (`roles`, `policies`, `attributes`, `tenantId`), and
   role claims as 7.x did (`role` in the default space, `role@space` in that space only, rule `MEM-3`).
+- **A token with an `act` claim is now refused** as `token-invalid` (`IDN-4`). 7.x ignored the claim, so an RFC 8693
+  delegation token was read as its `sub` and the actor got the subject's permissions. CoSec never issues such
+  tokens; a verifier that accepts tokens from another issuer must not pass them on until delegation is supported
+  ([Authentication](../integration/authentication.md#tokens)). A deny is audited with the reason code
+  `DELEGATION_UNSUPPORTED`; on a permit the audit records `ALLOW`, and the reason appears only in the decision event's
+  `subject.rejected`. Refreshing or revoking such a token fails too.
 - `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`).
   `cosec.api-key.store-blocking` is gone: the Redis key reader never blocks. A request that carries an API key is
   judged by the key alone, even if it also carries a token (`PIP-8`).
@@ -389,13 +396,92 @@ goes on and logs a warning that starts with `!!!`.
   The first request for an app that is not loaded compiles its whole document; list busy apps in `prewarm-apps`.
 - **A missing platform document fails closed.** Every request CoSec has to decide is `503` until the platform document
   is published.
-- **Without `cache-support`** the starter uses an in-memory store that starts empty, so every request is `503` until
+- **Without `cosec-cocache`** the starter uses an in-memory store that starts empty, so every request is `503` until
   the application puts documents into it. Local policy files are not loaded any more
   (`cosec.authorization.local-policy.*` is gone).
 - A read failure surfaces as `SnapshotUnavailableException` (its cause the original exception) and a `503`, instead of
   7.x's `CacheReadException` and a `500`.
 
 See [Storage](./storage.md) for publishing, rollback of documents and behavior when Redis is unavailable.
+
+### Modules, artifacts and packages
+
+**The starter is `cosec-spring-boot`, and it has no capabilities.** 7.x's `cosec-spring-boot-starter` offered each
+integration as a Gradle capability (`webflux-support`, `cache-support`, ...). In 8.0 the artifact is
+`me.ahoo.cosec:cosec-spring-boot`, and an application adds the modules it needs next to it, the same way with Gradle
+and Maven. The starter wires every module it finds on the classpath.
+
+```kotlin
+// 7.x
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities { requireCapability("me.ahoo.cosec:webflux-support") }
+}
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities { requireCapability("me.ahoo.cosec:cache-support") }
+}
+// 8.0
+implementation("me.ahoo.cosec:cosec-spring-boot")
+implementation("me.ahoo.cosec:cosec-webflux")
+implementation("me.ahoo.cosec:cosec-cocache")
+implementation("org.springframework.boot:spring-boot-data-redis")
+implementation("me.ahoo.cocache:cocache-spring-boot-starter")
+```
+
+| 7.x capability | 8.0 module |
+|---|---|
+| `webflux-support`, `webmvc-support`, `gateway-support` | `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` |
+| `cache-support` | `cosec-cocache`, with `spring-boot-data-redis` and `cocache-spring-boot-starter` |
+| `oauth-support` | `cosec-social` |
+| `opentelemetry-support`, `ip2region-support` | `cosec-opentelemetry`, `cosec-ip2region` |
+| `micrometer-support` | `cosec-micrometer`, with `micrometer-core` |
+| `openapi-support` | `cosec-openapi`, with `spring-boot-starter-actuator` and `springdoc-openapi-starter-common` |
+| `kafka-support` | `cosec-kafka`, with `spring-boot-starter-kafka` |
+| (new in 8.0) | `cosec-control`, the control plane, with `cosec-cocache` |
+
+The full list is in [Modules](../guide/introduction.md#modules). A module a turned-on feature needs is checked at
+startup: a web host without its adapter module, a gateway without `cosec-gateway`, `cosec.api-key.store=redis` without
+`cosec-cocache` or `cosec.audit.kafka.delivery=required` without `cosec-kafka` fails and names the artifact
+([Startup fails on a missing module](./troubleshooting.md#startup-fails-on-a-missing-module)).
+
+**`cosec-core` is gone.** Its code is split by what it is: the ports an application implements are in `cosec-spi`
+(`me.ahoo.cosec.spi.*`); the documents, snapshots, token verification and the logging audit sink in `cosec-runtime`
+(`me.ahoo.cosec.runtime.*`); login and token issuing in `cosec-login` (`me.ahoo.cosec.login`). The starter brings all
+three. A library that only implements a port depends on `cosec-spi`. The packages that moved:
+
+| 7.x package | 8.0 package (module) | Types |
+|---|---|---|
+| `me.ahoo.cosec.api.authentication`, `me.ahoo.cosec.authentication` | `me.ahoo.cosec.login` (`cosec-login`) | `Authentication`, `AuthenticationProvider`, `Credentials`, `CompositeAuthentication`, `DefaultAuthenticationProvider` |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractRefreshTokenAuthentication`, `AbstractSwitchTenantAuthentication` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleAccessToken`, `SimpleCompositeToken`, `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`, `RevocableTokenVerifier` |
+| `me.ahoo.cosec.principal` | `me.ahoo.cosec.api.principal` (`cosec-api`) | `SimplePrincipal`, `SimpleTenantPrincipal` |
+| `me.ahoo.cosec.tenant` | `me.ahoo.cosec.api.tenant` (`cosec-api`) | `SimpleTenant` |
+| `me.ahoo.cosec.context` | `me.ahoo.cosec.runtime.context` (`cosec-runtime`) | `SimpleSecurityContext` |
+| `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet` (`cosec-webmvc`) | `SecurityContextHolder` |
+| `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
+| `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
+| `me.ahoo.cosec.audit` | `me.ahoo.cosec.runtime.audit` (`cosec-runtime`) | `LoggingAuditEventSink`, `AuditEventData` |
+| `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `ApiKeyStore`, `InMemoryApiKeyStore` |
+| `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
+| `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
+| `me.ahoo.cosec` | `me.ahoo.cosec.api` (`cosec-api`) | `Delegated` |
+
+The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
+`SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
+`me.ahoo.cosec.spi.attribute`, `Authenticator` in `me.ahoo.cosec.spi.authn`; `SnapshotSource` is in
+`me.ahoo.cosec.runtime.snapshot`, the document codec and compiler in `me.ahoo.cosec.runtime.document` and route maps
+in `me.ahoo.cosec.runtime.route` ([Extending](../architecture/extending.md#extension-points)).
+
+**`CoSecJsonSerializer` is gone.** CoSec's Jackson mapper is internal to CoSec, and no public signature of the core modules
+carries a Jackson type. Serialize your own types with your own mapper; read and write policy documents with
+`PolicyDocumentCodec`. The mapper's configuration did not change, so documents, tokens and records already stored in
+Redis or sent to Kafka read as before. A declaration marked `@InternalCoSecApi` is public only so CoSec's modules can
+call each other: it has no compatibility promise and can change in any release, and the compiler refuses a call to it
+without an explicit opt-in. Do not opt in from an application.
+
+**`KafkaAuditEventSink` takes an `Executor`.** Its third parameter was a Reactor `Scheduler`; it is now a
+`java.util.concurrent.Executor` (by default its own single thread with a bounded queue).
 
 ### Removed and replaced APIs
 
@@ -420,7 +506,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `PolicyTestKit` (`cosec-core`) | `PolicyTestKit` in the `cosec-testkit` module ([Policy test suites](#policy-test-suites)). |
 | The 7.x request model of `cosec-api`: `Request`, `Attributes`, `AppIdCapable`, `DeviceIdCapable`, `RequestIdCapable` (with their `AppId`, `DeviceId`, `RequestId` aliases), `COSEC_EXTEND_KEY_PREFIX`, `SpaceIdCapable.SPACE_ID_KEY`; `RequestSecurityContexts` and `InvalidRequestPathException` (`cosec-core`) | None: adapters read `HttpFacts`, and the security context carries the checked `scope`. `SpaceIdCapable` and `SpaceId` remain for `SpacedRoleId`. |
 | `InternalIds` (`cosec-api`) | None. |
-| `me.ahoo.cosec.limiter.RateLimiter` and its `LocalRateLimiter`, `RedisRateLimiter` (`cosec-cocache`) | `me.ahoo.cosec.runtime.ratelimit.RateLimiter`, a suspending SPI; the starter registers its `LocalRateLimiter` or `ReactiveRedisRateLimiter` ([Rate limiting](../policies/rate-limiting.md)). `RateLimit` and `RateLimitResult` remain. |
+| `me.ahoo.cosec.limiter.RateLimiter` and its `LocalRateLimiter`, `RedisRateLimiter` (`cosec-cocache`) | `me.ahoo.cosec.spi.ratelimit.RateLimiter`, a suspending SPI; the starter registers its `LocalRateLimiter` or `ReactiveRedisRateLimiter` ([Rate limiting](../policies/rate-limiting.md)). `RateLimit` and `RateLimitResult` remain. |
 | `Jwts.toPrincipal(String)`, `Jwts.decode`, `Jwts.verifyTimeClaims` | None: `Jwts` is internal to `cosec-jwt`. Turn a token into a principal with `TokenVerifier.verify`, which checks the signature. |
 | `PrincipalConverter`, `TokenVerifier.toPrincipal` | `TokenVerifier.verify`. |
 | `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
@@ -431,7 +517,8 @@ Code that uses any of these no longer compiles or is no longer called.
 
 Still available: `SecurityContext` (now with `scope`, the validated app, space and roles; read it rather than the
 `CoSec-*` headers, which are what the client declared), `getSecurityContext()` on `ServerWebExchange`, Reactor
-`ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types.
+`ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types, some of them
+in new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)).
 
 #### Policy test suites
 
@@ -478,7 +565,7 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.authorization.cache.token.concurrency-level` | Removed: ignored since CoCache 5. |
 | `cosec.authorization.cache.token.expire-after-write` | `cosec.authorization.cache.token.local-max-age`, a duration (`30s`). |
 | `cosec.authorization.cache.token.expire-unit` | Removed: the durations carry their unit. `expire-after-access` is a duration too; a bare number is still seconds. |
-| `cosec.authorization.gateway.enabled` | Removed: the gateway filter comes with `gatewaySupport`. |
+| `cosec.authorization.gateway.enabled` | Removed: the gateway filter comes with `cosec-gateway`. |
 | `cosec.limiter.` | Removed: rate limit rules are in the platform document ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)); a different limiter key prefix needs a `RateLimiter` bean of your own. |
 | `cosec.shadow.` | Removed: shadow windows are control-plane operations; each instance's part is `cosec.authorization.shadow.*`. |
 | `cosec.explain.enabled` | Removed: use the control plane's `explain`. |

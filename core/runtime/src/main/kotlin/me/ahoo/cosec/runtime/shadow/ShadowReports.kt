@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.runtime.shadow
 
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant

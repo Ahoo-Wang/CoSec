@@ -20,12 +20,8 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.snapshot.DocumentState
-import me.ahoo.cosec.snapshot.SnapshotEntry
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.SnapshotSet
-import me.ahoo.cosec.snapshot.SnapshotSource
-import me.ahoo.cosec.snapshot.SnapshotStaleException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
 import java.util.concurrent.CompletableFuture
 
 /**

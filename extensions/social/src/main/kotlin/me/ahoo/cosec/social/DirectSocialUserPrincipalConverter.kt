@@ -13,7 +13,7 @@
 package me.ahoo.cosec.social
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 

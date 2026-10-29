@@ -39,6 +39,14 @@ policies decide what anonymous callers may do: a public path still works. If the
 is `401` with the problem type `token-expired`, `token-revoked` or `token-invalid` instead of `unauthorized`
 ([Responses and status codes](./web.md#responses-and-status-codes)).
 
+**Delegation tokens are refused.** A token with an `act` claim (an [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)
+delegation token: `sub` is the party acted for, `act` the one acting) is rejected as `token-invalid`, even when its
+signature and expiry are valid (`IDN-4`). A deny is audited with the reason code `DELEGATION_UNSUPPORTED`; on a permit,
+such as a path anonymous callers may use, the audit records `ALLOW`, and the reason appears only in the decision
+event's `subject.rejected`. Read as its `sub`,
+such a token would give the actor everything the subject may do, and 8.0 does not evaluate delegation. CoSec never
+issues one. A `may_act` claim only says who may act for the subject, so it is ignored.
+
 ## Authenticators
 
 The pipeline reads the request's credentials, then asks one `Authenticator` who the caller is. The starter's is a
@@ -159,7 +167,9 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.api.authentication`, not the pipeline's.
+`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
+and `TokenConverter` are in `me.ahoo.cosec.login.token`), from `cosec-login`, which the starter brings; they are not
+the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`).
 `cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
 and social login included; requests are authenticated by the pipeline either way. The login path must be reachable by
 anonymous callers, so it needs an `Anyone` binding that permits it, as in the
@@ -177,7 +187,8 @@ A client whose access token expired sends both tokens back. `TokenVerifier.refre
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
 throws its subclass `RefreshTokenMismatchException`. It returns the principal from the old access token; issue new
-tokens for it with `TokenConverter.toToken`. The starter registers no refresh endpoint.
+tokens for it with `TokenConverter.toToken`. Refreshing a [delegation token](#tokens) (one with an `act` claim) fails
+too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 `SimpleRefreshTokenAuthentication` does the check above as an `Authentication`, so with it declared as a bean, a
 refresh is a login with credentials that implement `RefreshTokenCredentials`:
 
@@ -204,7 +215,7 @@ Two things a refresh does not do:
 ## Logout and revocation
 
 JWTs are stateless: without extra work a token stays valid until it expires. So that logout takes effect at once,
-revocation is always on, with no switch. It needs `cache-support`, or a `TokenStore` and a `RevocationReader` bean of
+revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenStore` and a `RevocationReader` bean of
 your own. With JWT enabled and neither, startup fails: a logout that silently does nothing is not an option. A
 service that only verifies tokens it never revokes still needs the reader; one that issues no tokens and reads none
 can set `cosec.jwt.enabled=false`.
@@ -212,7 +223,8 @@ can set `cosec.jwt.enabled=false`.
 From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, then records its `jti`
 in Redis for the refresh token's lifetime. From then on every instance rejects the access token as `token-revoked`,
 and refreshing it fails. Revoke before the access token expires: an expired token cannot be revoked, and its refresh
-token then stays usable. `TokenRevoker` is synchronous: call it off the event loop.
+token then stays usable. Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
+revoke. `TokenRevoker` is synchronous: call it off the event loop.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 
@@ -283,7 +295,7 @@ identity of a credential that never expires ([Forwarding the identity](./web.md#
 key by adding the new one, moving the client over, then removing the old one.
 
 **In Redis**, shared by every instance and changeable at runtime: set `cosec.api-key.store: redis` (needs
-`cache-support`; keys live under `cosec.api-key.key-prefix`, default `cosec:api-key`). The pipeline reads them with
+`cosec-cocache`; keys live under `cosec.api-key.key-prefix`, default `cosec:api-key`). The pipeline reads them with
 the non-blocking `RedisApiKeyReader`. Manage keys through the `RedisApiKeyStore` bean:
 
 | Call | Effect |
@@ -317,7 +329,7 @@ cannot influence.
 
 ## Social login
 
-With `oauth-support`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
+With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 

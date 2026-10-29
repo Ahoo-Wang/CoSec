@@ -45,6 +45,9 @@ enum class AuditReasonCode {
 
     /** A Permit outside the tenant's platform boundary (RFC 0007 §7.6); the response says only `forbidden`. */
     BOUNDARY,
+
+    /** A token that delegates (an `act` claim), which 8.0 refuses (RFC 0009 §6); the response says `token-invalid`. */
+    DELEGATION_UNSUPPORTED,
 }
 
 enum class AuditSourceType {
@@ -156,14 +159,4 @@ interface AuditEvent {
 
     /** What the event records: `DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR`. */
     val kind: String get() = "DECIDED"
-}
-
-/**
- * SPI for consuming audit events.
- *
- * Implementations must be non-blocking; thrown exceptions are
- * swallowed by [me.ahoo.cosec.audit.AuditingAuthorization] and never affect authorization.
- */
-fun interface AuditEventSink {
-    fun publish(event: AuditEvent)
 }

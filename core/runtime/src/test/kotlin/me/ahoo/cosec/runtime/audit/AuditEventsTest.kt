@@ -33,8 +33,6 @@ import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
@@ -43,6 +41,8 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.slf4j.MDC
@@ -136,6 +136,10 @@ class AuditEventsTest {
         audit(Decision.Deny(null), expired).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_EXPIRED)
         val invalid = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID))
         audit(Decision.Deny(null), invalid).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_INVALID)
+        // RFC 0009 §6: the client reads token-invalid, audit names the delegation.
+        val delegated = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED))
+        audit(Decision.Deny(null), delegated).authorization.reasonCode
+            .assert().isEqualTo(AuditReasonCode.DELEGATION_UNSUPPORTED)
     }
 
     @Test

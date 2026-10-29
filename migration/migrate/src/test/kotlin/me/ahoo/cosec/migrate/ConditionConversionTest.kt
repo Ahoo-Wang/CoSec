@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.Fixtures7x.app
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
@@ -21,9 +24,9 @@ import me.ahoo.cosec.migrate.Fixtures7x.source
 import me.ahoo.cosec.migrate.Fixtures7x.statement
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Condition
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -187,7 +190,7 @@ class ConditionConversionTest {
         val out = temp.resolve("out")
         ConvertedDirectory.write(conversion, out)
         // In the platform document, which compiles with them (RFC 0006 §8.1).
-        val platform = CoSecJsonSerializer.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.PLATFORM_FILE)))
+        val platform = CoSecJson.mapper.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.PLATFORM_FILE)))
         val written = platform.get("rateLimits")
         written.size().assert().isEqualTo(2)
         written.get(0).let { rule ->

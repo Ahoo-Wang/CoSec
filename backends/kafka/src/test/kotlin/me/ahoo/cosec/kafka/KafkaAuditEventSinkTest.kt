@@ -11,40 +11,44 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.kafka
 
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.audit.AuditAuthorizationData
-import me.ahoo.cosec.audit.AuditDeviceData
-import me.ahoo.cosec.audit.AuditEventData
-import me.ahoo.cosec.audit.AuditPolicyData
-import me.ahoo.cosec.audit.AuditPrincipalData
-import me.ahoo.cosec.audit.AuditRequestData
-import me.ahoo.cosec.audit.AuditSourceData
-import me.ahoo.cosec.audit.AuditStatementData
-import me.ahoo.cosec.audit.AuditTraceData
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.audit.AuditAuthorizationData
+import me.ahoo.cosec.runtime.audit.AuditDeviceData
+import me.ahoo.cosec.runtime.audit.AuditEventData
+import me.ahoo.cosec.runtime.audit.AuditPolicyData
+import me.ahoo.cosec.runtime.audit.AuditPrincipalData
+import me.ahoo.cosec.runtime.audit.AuditRequestData
+import me.ahoo.cosec.runtime.audit.AuditSourceData
+import me.ahoo.cosec.runtime.audit.AuditStatementData
+import me.ahoo.cosec.runtime.audit.AuditTraceData
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.context.support.GenericApplicationContext
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.kafka.support.SendResult
-import reactor.core.scheduler.Scheduler
-import reactor.core.scheduler.Schedulers
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.function.Supplier
 
 class KafkaAuditEventSinkTest {
     private val sinks = mutableListOf<KafkaAuditEventSink>()
@@ -93,9 +97,9 @@ class KafkaAuditEventSinkTest {
 
     private fun sink(
         kafkaOperations: KafkaOperations<String, String>,
-        scheduler: Scheduler = Schedulers.immediate(),
+        executor: Executor = Executor(Runnable::run),
     ): KafkaAuditEventSink {
-        return KafkaAuditEventSink(kafkaOperations, "cosec-audit", scheduler).also(sinks::add)
+        return KafkaAuditEventSink(kafkaOperations, "cosec-audit", executor).also(sinks::add)
     }
 
     @Test
@@ -105,8 +109,7 @@ class KafkaAuditEventSinkTest {
             every { send(any(), any(), any()) } returns result
         }
         var scheduledTask: Runnable? = null
-        val scheduler = Schedulers.fromExecutor(Executor { scheduledTask = it })
-        val sink = sink(kafkaOperations, scheduler)
+        val sink = sink(kafkaOperations, Executor { scheduledTask = it })
 
         sink.publish(event)
 
@@ -116,7 +119,7 @@ class KafkaAuditEventSinkTest {
             kafkaOperations.send(
                 "cosec-audit",
                 "[\"tenant-1\",\"principal-1\"]",
-                CoSecJsonSerializer.writeValueAsString(event),
+                CoSecJson.mapper.writeValueAsString(event),
             )
         }
         result.complete(mockk())
@@ -140,7 +143,7 @@ class KafkaAuditEventSinkTest {
 
     @Test
     fun serializesFieldsByOwner() {
-        val json = CoSecJsonSerializer.readTree(CoSecJsonSerializer.writeValueAsString(event))
+        val json = CoSecJson.mapper.readTree(CoSecJson.mapper.writeValueAsString(event))
 
         json.has("principalId").assert().isFalse()
         json.has("requestId").assert().isFalse()
@@ -150,6 +153,17 @@ class KafkaAuditEventSinkTest {
         json.get("authorization").get("source").get("policy").get("id").asString().assert()
             .isEqualTo("orders")
         json.get("trace").get("traceId").asString().assert().isEqualTo("trace-1")
+    }
+
+    /**
+     * The record value consumers read, pinned: a mapper or Jackson change that alters it fails here (RFC 0011 D3). The
+     * fixture is what `main`'s `CoSecJsonSerializer` wrote for this event before RFC 0011 PR-2 (`origin/main` at
+     * da58e780).
+     */
+    @Test
+    fun recordValueIsPinned() {
+        val pinned = checkNotNull(javaClass.getResource("/stored-format/audit.json")).readText()
+        CoSecJson.mapper.writeValueAsString(event).assert().isEqualTo(pinned)
     }
 
     @Test
@@ -180,7 +194,7 @@ class KafkaAuditEventSinkTest {
     }
 
     @Test
-    fun serialSchedulerPreservesSendOrder() {
+    fun serialExecutorPreservesSendOrder() {
         val values = mutableListOf<String>()
         val sent = CountDownLatch(2)
         val kafkaOperations = mockk<KafkaOperations<String, String>> {
@@ -197,17 +211,15 @@ class KafkaAuditEventSinkTest {
         sink.publish(second)
 
         sent.await(5, TimeUnit.SECONDS).assert().isTrue()
-        values[0].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(first))
-        values[1].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(second))
+        values[0].assert().isEqualTo(CoSecJson.mapper.writeValueAsString(first))
+        values[1].assert().isEqualTo(CoSecJson.mapper.writeValueAsString(second))
     }
 
     @Test
     fun rejectedTasksAreDropped() {
-        val scheduler = mockk<Scheduler>(relaxed = true) {
-            every { schedule(any<Runnable>()) } throws RejectedExecutionException("Queue full")
-        }
+        val executor = Executor { throw RejectedExecutionException("Queue full") }
         val kafkaOperations = mockk<KafkaOperations<String, String>>(relaxed = true)
-        val sink = sink(kafkaOperations, scheduler)
+        val sink = sink(kafkaOperations, executor)
 
         sink.publish(event)
         sink.publish(event)
@@ -216,14 +228,14 @@ class KafkaAuditEventSinkTest {
     }
 
     @Test
-    fun destroyDoesNotDisposeCallerScheduler() {
-        val scheduler = mockk<Scheduler>(relaxed = true)
-        val sink = KafkaAuditEventSink(mockk(), "cosec-audit", scheduler)
+    fun destroyDoesNotShutDownCallerExecutor() {
+        val executor = mockk<ExecutorService>(relaxed = true)
+        val sink = KafkaAuditEventSink(mockk(), "cosec-audit", executor)
 
         sink.destroy()
 
-        verify(exactly = 0) { scheduler.disposeGracefully() }
-        verify(exactly = 0) { scheduler.dispose() }
+        verify(exactly = 0) { executor.shutdown() }
+        verify(exactly = 0) { executor.shutdownNow() }
     }
 
     @Test
@@ -277,5 +289,35 @@ class KafkaAuditEventSinkTest {
         started.await(5, TimeUnit.SECONDS).assert().isTrue()
         sink.destroy()
         release.countDown()
+    }
+
+    /** The owned thread is a daemon, so closing the context is what sends the events still queued. */
+    @Test
+    fun closingTheContextSendsTheQueuedEvents() {
+        val release = CountDownLatch(1)
+        val sent = CountDownLatch(3)
+        val kafkaOperations = mockk<KafkaOperations<String, String>> {
+            every { send(any(), any(), any()) } answers {
+                release.await(5, TimeUnit.SECONDS)
+                sent.countDown()
+                CompletableFuture.completedFuture(mockk())
+            }
+        }
+        val context = GenericApplicationContext()
+        context.registerBean(
+            "kafkaAuditEventSink",
+            KafkaAuditEventSink::class.java,
+            Supplier { KafkaAuditEventSink(kafkaOperations, "cosec-audit") },
+        )
+        context.refresh()
+        val sink = context.getBean(KafkaAuditEventSink::class.java)
+        repeat(3) { sink.publish(event.copy(request = event.request.copy(id = "request-$it"))) }
+
+        val closed = CompletableFuture.runAsync(context::close)
+        release.countDown()
+
+        closed.get(5, TimeUnit.SECONDS)
+        sent.count.assert().isEqualTo(0L)
+        verify(exactly = 3) { kafkaOperations.send(any(), any(), any()) }
     }
 }

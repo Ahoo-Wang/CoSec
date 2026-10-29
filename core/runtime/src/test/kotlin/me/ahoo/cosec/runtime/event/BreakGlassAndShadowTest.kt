@@ -30,18 +30,18 @@ import me.ahoo.cosec.runtime.Basis
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.Unavailability
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -138,7 +138,7 @@ class BreakGlassAndShadowTest {
     /** Review R1: a 7.x audit sink cannot acknowledge a write, so it never counts as the REQUIRED audit. */
     @Test
     fun aBreakGlassPermitAuditedOnlyByASinkIs503() {
-        val sink = me.ahoo.cosec.api.audit.AuditEventSink { }
+        val sink = me.ahoo.cosec.spi.audit.AuditEventSink { }
         val audit = me.ahoo.cosec.runtime.audit.AuditListener.of(sink, "audit")
         audit.delivery.assert().isEqualTo(Delivery.BEST_EFFORT)
         evaluate(breakGlass, audit).status.assert().isEqualTo(503)

@@ -16,15 +16,15 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 
 | 存储 | 模块 | 适用场景 |
 |---|---|---|
-| Redis，通过 [CoCache](https://cocache.ahoo.me) | `cosec-cocache`（`cache-support`） | 生产环境。多个实例读取同样的文档，控制面在运行时发布变更。本页其余部分讲的都是这种存储。 |
-| `InMemorySnapshotDocumentStore` | `cosec-core` | 测试和本地开发。没有 `cache-support` 时 starter 创建一个空的存储；应用用 `put` 把文档放进去。 |
-| 你自己的 `SnapshotDocumentStore` bean，且没有 `cache-support` | 你的代码 | 文档存放在其他系统中。每个方法都必须不阻塞地返回（[扩展](../architecture/extending.md)）。 |
+| Redis，通过 [CoCache](https://cocache.ahoo.me) | `cosec-cocache` | 生产环境。多个实例读取同样的文档，控制面在运行时发布变更。本页其余部分讲的都是这种存储。 |
+| `InMemorySnapshotDocumentStore` | `cosec-spi` | 测试和本地开发。没有 `cosec-cocache` 时 starter 创建一个空的存储；应用用 `put` 把文档放进去。 |
+| 你自己的 `SnapshotDocumentStore` bean，且没有 `cosec-cocache` | 你的代码 | 文档存放在其他系统中。每个方法都必须不阻塞地返回（[扩展](../architecture/extending.md)）。 |
 
 在存入平台文档之前，每个请求都得到 `503` `unavailable`，每个实例都报告自己未就绪（[最初的文档](#the-first-documents)）。
 
 ## Redis {#redis}
 
-有 `cache-support` 时，Redis 保存文档以及控制面关于它们的一切记录，还保存已吊销的令牌、影子窗口报告和限流计数器。每个
+有 `cosec-cocache` 时，Redis 保存文档以及控制面关于它们的一切记录，还保存已吊销的令牌、影子窗口报告和限流计数器。每个
 实例通过 CoCache 保留一份进程内副本。
 
 ### Redis 是权威存储 {#redis-is-the-store-of-record}
@@ -178,7 +178,7 @@ sequenceDiagram
 
 数据面实例从不写入文档。有两个写入者，都经过控制面的存储，因此每个文档的修订链都从它们的第一次写入开始：
 
-- **控制面**（`control-support` 加 `cache-support`），在运行时通过变更请求写入；
+- **控制面**（`cosec-control` 加 `cosec-cocache`），在运行时通过变更请求写入；
 - **`cosec-migrate`**，用于部署的最初文档以及从 7.x 迁移。
 
 两者都写入实例读取的那个 Redis，并使用同一个 `cosec.authorization.snapshot.key-prefix`。一次发布先写修订记录，再以

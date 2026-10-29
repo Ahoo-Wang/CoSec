@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.event
 
 import kotlinx.coroutines.CompletableDeferred
@@ -19,6 +21,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.Basis
@@ -35,10 +38,10 @@ import me.ahoo.cosec.runtime.ThreadingFixtures.singleThread
 import me.ahoo.cosec.runtime.ThreadingFixtures.startOn
 import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.audit.AuditEvents
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -343,7 +346,7 @@ class ListenerIsolationTest {
                 )
         }
         val event = recording.await(1).single()
-        val audit = CoSecJsonSerializer.writeValueAsString(AuditEvents.from(event))
+        val audit = CoSecJson.mapper.writeValueAsString(AuditEvents.from(event))
         audit.assert().doesNotContain("secret-token").doesNotContain("hush")
         event.toString().assert().doesNotContain("secret-token")
     }

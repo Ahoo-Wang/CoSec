@@ -16,23 +16,31 @@
 // where each project sits, by name.
 /** The library modules the rules analyze: the classpath the starter's tests had, where these rules lived before. */
 val analyzed = listOf(
-    "api", "model", "engine", "runtime", "control", "core",
+    "annotations", "api", "model", "engine", "spi", "runtime", "control",
     "cocache", "kafka", "webflux", "webmvc", "gateway", "openapi",
-    "jwt", "social", "ip2region", "micrometer", "opentelemetry", "spring-boot",
+    "jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "spring-boot",
 )
 
 dependencies {
     testImplementation("com.tngtech.archunit:archunit-junit5")
+    // The Jackson rule reads Kotlin visibility, which the bytecode does not carry for internal members.
+    testImplementation("org.jetbrains.kotlin:kotlin-reflect")
     analyzed.forEach { testImplementation(project(":$it")) }
 }
 
 val projectDirectories = rootProject.subprojects.joinToString(";") { "${it.name}=${it.projectDir.absolutePath}" }
+// Each project's declared and resolved dependencies (the root build's architectureFacts), for the dependency rules.
+val projectFacts = rootProject.subprojects.joinToString(";") {
+    "${it.name}=${it.layout.buildDirectory.file("architecture/facts.txt").get().asFile.absolutePath}"
+}
 
 @Suppress("UNCHECKED_CAST")
 val coveredProjects = (rootProject.ext.get("libraryProjects") as Iterable<Project>).joinToString(";") { it.name }
 
 tasks.named<Test>("test") {
     systemProperty("cosec.projects", projectDirectories)
+    systemProperty("cosec.facts", projectFacts)
+    dependsOn(provider { rootProject.subprojects.mapNotNull { it.tasks.findByName("architectureFacts") } })
     systemProperty("cosec.coverage.projects", coveredProjects)
     systemProperty("cosec.repository.root", rootProject.layout.projectDirectory.asFile.absolutePath)
     // The rules read build scripts, the catalog, settings and CI files, and run CI's plan: they are inputs.

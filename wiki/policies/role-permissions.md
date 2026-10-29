@@ -176,7 +176,7 @@ see [Testing policies](./testing.md) and [Storage](../operations/storage.md).
 
 ## Generating a catalog from OpenAPI
 
-With `openapiSupport`, the `cosecServiceGenerator` actuator endpoint generates both halves of a service's setup from
+With `cosec-openapi`, the `cosecServiceGenerator` actuator endpoint generates both halves of a service's setup from
 its OpenAPI document:
 
 - `cosecServiceGenerator/routes`: the [route map](./language.md#route-maps).

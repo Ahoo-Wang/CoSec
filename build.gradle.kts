@@ -45,20 +45,19 @@ val testOnlyProjects = setOf(
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
 val libraryProjects = publishProjects - bomProjects
 
-// Modules of the decision engine (RFC 0002 §2): they depend on the Kotlin standard library only.
+// The contracts and the decision engine (RFC 0002 §2, RFC 0011 §5): the Kotlin standard library only.
 val pureProjects = setOf(
+    project(":annotations"),
+    project(":api"),
     project(":model"),
     project(":engine"),
 )
 
-/**
- * RFC 0011 D1: a project is named after its directory, and its artifact keeps the cosec- prefix. The starter keeps its
- * published name until RFC 0011 PR-2 renames it with the move to classpath-driven configuration (D2).
- */
-fun artifactIdOf(project: Project): String = when (project.name) {
-    "spring-boot" -> "cosec-spring-boot-starter"
-    else -> "cosec-${project.name}"
-}
+// The ports (RFC 0011 §3): what a third party implements, so no logging facade forced on it.
+val spiProject = project(":spi")
+
+/** RFC 0011 D1: a project is named after its directory, and its artifact keeps the cosec- prefix. */
+fun artifactIdOf(project: Project): String = "cosec-${project.name}"
 
 ext.set("libraryProjects", libraryProjects)
 
@@ -114,7 +113,9 @@ configure(libraryProjects) {
             testImplementation(platform(dependenciesProject))
         } else {
             api(platform(dependenciesProject))
-            implementation("org.slf4j:slf4j-api")
+            if (this@configure != spiProject) {
+                implementation("org.slf4j:slf4j-api")
+            }
         }
         jmh(platform(dependenciesProject))
         jmh("org.openjdk.jmh:jmh-core")
@@ -141,37 +142,43 @@ project(":e2e") {
     }
 }
 
-configure(pureProjects) {
-    // ArchUnit (EnginePurityTest) checks what the code references; this catches a dependency added to the build
-    // before any code uses it.
-    val allowedModules = setOf("org.jetbrains.kotlin:kotlin-stdlib", "org.jetbrains:annotations")
-    val allowedProjects = pureProjects.map { it.path }.toSet()
-    val projectPath = path
-    val verifyPureClasspath = tasks.register("verifyPureClasspath") {
-        group = "verification"
-        description = "Fails if a classpath holds anything but the Kotlin standard library and the pure modules."
-        val classpaths = listOf("compileClasspath", "runtimeClasspath").associateWith { name ->
-            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }
-        }
-        doLast {
-            val violations = classpaths.flatMap { (name, artifacts) ->
-                artifacts.get().mapNotNull { artifact ->
-                    val allowed = when (val id = artifact.id.componentIdentifier) {
-                        is ProjectComponentIdentifier -> id.projectPath in allowedProjects
-                        is ModuleComponentIdentifier -> "${id.group}:${id.module}" in allowedModules
-                        else -> false
+// RFC 0011 §5: what each project declares in its main configurations and what its classpaths resolve to, written for
+// test/architecture, which holds the dependency rules as data. A project's own task resolves its own configurations.
+subprojects {
+    pluginManager.withPlugin("java") {
+        val declared = provider {
+            listOf("api", "implementation", "compileOnly", "runtimeOnly").flatMap { name ->
+                configurations.findByName(name)?.dependencies.orEmpty().map { dependency ->
+                    when (dependency) {
+                        is ProjectDependency -> "declared $name project ${dependency.path.removePrefix(":")}"
+                        else -> "declared $name module ${dependency.group}:${dependency.name}"
                     }
-                    if (allowed) null else "$name: ${artifact.id.componentIdentifier.displayName}"
                 }
             }
-            check(violations.isEmpty()) {
-                "Pure module $projectPath must depend on the Kotlin standard library only, found:\n" +
-                    violations.joinToString("\n")
+        }
+        val resolved = listOf("compileClasspath", "runtimeClasspath").map { name ->
+            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }.map { artifacts ->
+                artifacts.map { artifact ->
+                    when (val id = artifact.id.componentIdentifier) {
+                        is ProjectComponentIdentifier -> "resolved $name project ${id.projectPath.removePrefix(":")}"
+                        is ModuleComponentIdentifier -> "resolved $name module ${id.group}:${id.module}"
+                        else -> "resolved $name other ${id.displayName}"
+                    }
+                }
             }
         }
-    }
-    tasks.named("check") {
-        dependsOn(verifyPureClasspath)
+        val facts = layout.buildDirectory.file("architecture/facts.txt")
+        tasks.register("architectureFacts") {
+            group = "verification"
+            description = "Writes the project's declared and resolved dependencies for test/architecture."
+            inputs.property("declared", declared)
+            resolved.forEachIndexed { index, lines -> inputs.property("resolved$index", lines) }
+            outputs.file(facts)
+            doLast {
+                val lines = declared.get() + resolved.flatMap { it.get() }
+                facts.get().asFile.apply { parentFile.mkdirs() }.writeText(lines.distinct().joinToString("\n"))
+            }
+        }
     }
 }
 

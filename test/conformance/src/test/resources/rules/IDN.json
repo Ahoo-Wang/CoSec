@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "id": "IDN-4",
+      "source": "RFC 0009 §6",
+      "statement": "A token that delegates (it carries an `act` claim, RFC 8693) never becomes a principal, however valid it is otherwise: the token is rejected as invalid, so the request is evaluated as anonymous and a deny answers 401 `token-invalid`. `may_act` does not delegate.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenVerifierTest#aDelegationTokenIsRefused",
+        "jwt:JwtTokenVerifierTest#refreshingADelegationTokenIsRefused",
+        "runtime:TokenAuthenticatorTest#rejectedTokensNameWhy"
+      ]
+    }
+  ]
+}

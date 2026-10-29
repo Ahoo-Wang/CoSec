@@ -22,7 +22,7 @@ CI 在每次推送时用 [`platform/gateway-server/Dockerfile`](https://github.c
   `SPRING_DATA_REDIS_URL`。
 - **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
   `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数。
-- **包含什么。** 网关过滤器、Redis 快照存储（`cache-support`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
+- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
   （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
   （`cosec.ip2region.enabled: false`）。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
 

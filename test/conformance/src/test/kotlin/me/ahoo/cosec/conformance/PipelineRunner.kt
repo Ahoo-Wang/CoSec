@@ -11,32 +11,32 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.conformance
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeyReader
-import me.ahoo.cosec.apikey.ApiKeys
-import me.ahoo.cosec.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
-import me.ahoo.cosec.identity.IdentityCodec
-import me.ahoo.cosec.limiter.RateLimitResult
-import me.ahoo.cosec.membership.InMemoryMembershipProvider
-import me.ahoo.cosec.membership.MembershipClaims
-import me.ahoo.cosec.membership.MembershipMarkedPrincipal
-import me.ahoo.cosec.membership.MembershipProvider
+import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -49,26 +49,15 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.route.RouteMap
-import me.ahoo.cosec.route.RouteMapCodec
-import me.ahoo.cosec.route.RouteMapException
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
-import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
-import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.attribute.AttributeRequest
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionEvent
@@ -78,20 +67,44 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.runtime.route.RouteMap
+import me.ahoo.cosec.runtime.route.RouteMapCodec
+import me.ahoo.cosec.runtime.route.RouteMapException
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.DocumentSnapshots
-import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.SnapshotOptions
-import me.ahoo.cosec.tenant.SimpleTenant
+import me.ahoo.cosec.runtime.token.SimpleAccessToken
+import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.attribute.AttributeDeclaration
+import me.ahoo.cosec.spi.attribute.AttributeProvider
+import me.ahoo.cosec.spi.attribute.AttributeRequest
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.ratelimit.RateLimitResult
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenExpiredException
+import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.testkit.CompiledSnapshot
 import me.ahoo.cosec.testkit.DocumentException
 import me.ahoo.cosec.testkit.DocumentSnapshotCompiler
@@ -105,11 +118,6 @@ import me.ahoo.cosec.testkit.required
 import me.ahoo.cosec.testkit.strings
 import me.ahoo.cosec.testkit.text
 import me.ahoo.cosec.testkit.textOrNull
-import me.ahoo.cosec.token.RevocationReader
-import me.ahoo.cosec.token.SimpleTokenPrincipal
-import me.ahoo.cosec.token.TokenExpiredException
-import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import org.springframework.cloud.gateway.filter.headers.HttpHeadersFilter
 import org.springframework.cloud.gateway.route.Route
@@ -154,6 +162,9 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
+ *                       // "jwt": the real TokenAuthenticator over the real JwtTokenVerifier, given a token signed from
+ *                       // these claims (valid for an hour from now) in place of the request's Authorization header
+ *                       "jwt": { "jti": "t1", "sub": "alice", "tenantId": "acme", "claims": { "act": { "sub": "agent" } } },
  *                       // "composite": the CompositeAuthenticator, the API key one over "apiKeys" at 2026-11-01
  *                       // ("apiKeysFail": "message" makes the store throw), the token one over "token" if any
  *                       "apiKeys": [{ "key": "k", "id": "billing", "principalId": "svc", "tenantId": "acme", "roles": [...],
@@ -333,7 +344,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val headers = sent
         if (headers == null) {
             val body = exchange.response.bodyAsString.block(java.time.Duration.ofSeconds(5)).orEmpty()
-            val type = CoSecJsonSerializer.readTree(body).get("type")?.text()?.substringAfterLast('/')
+            val type = CoSecJson.mapper.readTree(body).get("type")?.text()?.substringAfterLast('/')
             return Outcome.Answered(exchange.response.statusCode?.value() ?: 0, false, type)
         }
         return Outcome.Answered(200, true, null, true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode))
@@ -343,9 +354,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug, forwarded(outcome))
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
-        node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "apiKeys", "apiKeysFail")
-        return when (val result = node.get("result")?.text() ?: "authenticated") {
+        node.only(
+            "result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
+        )
+        return when (val result = resultOf(node)) {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
+            "jwt" -> TokenAuthenticator(ScenarioJwtVerifier(node.required("jwt")), revocations(revocations))
             "composite" -> CompositeAuthenticator(
                 token = node.get("token")?.let { TokenAuthenticator(ScenarioTokenVerifier(it), revocations(revocations)) }
                     ?: Authenticator { AuthnResult.Anonymous },
@@ -371,6 +385,15 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
             else -> throw ScenarioFormatException("Unknown authentication result $result")
         }
+    }
+
+    /** The authentication result; `jwt` claims under another result would be silently ignored, so they fail. */
+    private fun resultOf(node: JsonNode): String {
+        val result = node.get("result")?.text() ?: "authenticated"
+        if (result != "jwt" && node.has("jwt")) {
+            throw ScenarioFormatException("\"jwt\" is read only with \"result\": \"jwt\", not with $result.")
+        }
+        return result
     }
 
     private fun authenticated(node: JsonNode): AuthnResult {
@@ -457,6 +480,40 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
 
         override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+    }
+
+    /** Signs the scenario's claims and verifies that token with the real [JwtTokenVerifier], whatever the request sent. */
+    private class ScenarioJwtVerifier(node: JsonNode) : TokenVerifier {
+        private val token: String
+
+        init {
+            node.only("jti", "sub", "tenantId", "claims")
+            val builder = JWT.create()
+                .withJWTId(node.get("jti")?.text() ?: "t1")
+                .withSubject(node.get("sub")?.text() ?: "alice")
+                .withExpiresAt(Instant.now().plusSeconds(3600))
+            node.get("tenantId")?.let { builder.withClaim(Tenant.TENANT_ID_KEY, it.text()) }
+            node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
+                @Suppress("UNCHECKED_CAST")
+                when (val claim = CoSecJson.mapper.treeToValue(value, Any::class.java)) {
+                    null -> builder.withNullClaim(name)
+                    is String -> builder.withClaim(name, claim)
+                    is Map<*, *> -> builder.withClaim(name, claim as Map<String, Any?>)
+                    else -> throw ScenarioFormatException("Claim $name must be a string, an object or null.")
+                }
+            }
+            token = builder.sign(ALGORITHM)
+        }
+
+        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T =
+            VERIFIER.verify(SimpleAccessToken(token))
+
+        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+
+        companion object {
+            private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
+            private val VERIFIER = JwtTokenVerifier(ALGORITHM)
+        }
     }
 
     private fun provider(authentication: JsonNode, node: JsonNode, reached: () -> Unit): MembershipProvider {

@@ -20,20 +20,22 @@ body:
       label: Affected module(s)
       multiple: true
       options:
+        - cosec-annotations
         - cosec-api
         - cosec-model
         - cosec-engine
         - cosec-runtime
         - cosec-control
         - cosec-testkit
-        - cosec-core
+        - cosec-spi
         - cosec-jwt
+        - cosec-login
         - cosec-cocache
         - cosec-social
         - cosec-webflux
         - cosec-webmvc
         - cosec-gateway
-        - cosec-spring-boot-starter
+        - cosec-spring-boot
         - cosec-opentelemetry
         - cosec-openapi
         - cosec-ip2region

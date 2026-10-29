@@ -10,11 +10,14 @@ most needs (use `$cosec-policy-author`). CoSec 7.x custom action and condition m
 `ConditionMatcherFactory`) have no 8.0 equivalent: conditions are a fixed AST, and new facts enter evaluation as
 external attributes.
 
-Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the SPIs live in
-`core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`attribute/`, `event/`, `ratelimit/`, `authn/`) and
-`core/core/src/main/kotlin/me/ahoo/cosec/membership/`; the starter wires them in
-`spring-boot-starter/.../pipeline/CoSecPipelineAutoConfiguration.kt` and
-`CoSecPipelineIntegrationAutoConfiguration.kt`. Inspect the target version's interfaces before writing code.
+Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the ports live in
+`core/spi/src/main/kotlin/me/ahoo/cosec/spi/` (`attribute/`, `authn/`, `membership/`, `ratelimit/`, `token/`,
+`apikey/`, `snapshot/`, `audit/`; module `cosec-spi`, which depends only on the model, the contracts and coroutines), and
+the ones that carry runtime types in `core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`event/`, `attribute/` for
+`BlacklistSource`); the starter wires them in
+`host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt` and
+`CoSecPipelineIntegrationAutoConfiguration.kt`. A library that only implements a `cosec-spi` port depends on
+`cosec-spi` alone. Never opt in to `@InternalCoSecApi` declarations: they are CoSec-internal. Inspect the target version's interfaces before writing code.
 
 ## Rules for every extension
 
@@ -32,14 +35,14 @@ The starter collects these beans:
 
 | SPI | Package | Beans | Effect |
 |---|---|---|---|
-| `AttributeProvider` | `me.ahoo.cosec.runtime.attribute` | any number (ordered) | adds `ext.*` attributes to the catalog and fetches them |
+| `AttributeProvider` | `me.ahoo.cosec.spi.attribute` | any number (ordered) | adds `ext.*` attributes to the catalog and fetches them |
 | `DecisionListener` | `me.ahoo.cosec.runtime.event` | any number, unique `name` | hears every decision event |
-| `MembershipProvider` | `me.ahoo.cosec.membership` | at most one | answers memberships for tokens marked `cosec.membership: "provider"` |
-| `RateLimiter` | `me.ahoo.cosec.runtime.ratelimit` | one; yours replaces the Redis or local limiter | counts rate-limit permits |
-| `Authenticator` | `me.ahoo.cosec.runtime.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
+| `MembershipProvider` | `me.ahoo.cosec.spi.membership` | at most one | answers memberships for tokens marked `cosec.membership: "provider"` |
+| `RateLimiter` | `me.ahoo.cosec.spi.ratelimit` | one; yours replaces the Redis or local limiter | counts rate-limit permits |
+| `Authenticator` | `me.ahoo.cosec.spi.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
 | `BlacklistSource` | `me.ahoo.cosec.runtime.attribute` | one; the starter wraps it in `BlacklistAttributeProvider` | says who and what is blocked |
-| `AuditEventSink` | `me.ahoo.cosec.api.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | 7.x-style audit events |
-| `ControlStore` | `me.ahoo.cosec.control.store` | one, with `control-support`; replaces `CoCacheControlStore` | where the control plane keeps its records |
+| `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | 7.x-style audit events |
+| `ControlStore` | `me.ahoo.cosec.control.store` | one, with `cosec-control`; replaces `CoCacheControlStore` | where the control plane keeps its records |
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
 
@@ -86,7 +89,7 @@ fun riskAttributeProvider(risk: RiskClient): AttributeProvider = RiskAttributePr
   the candidate, reports `CANDIDATE_ERROR` and blocks the shadow window, and a change published without a window makes
   that instance answer 503 for the document.
 - Built-in providers: `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`, `.city`, `.isp`, with
-  `ip2region-support`) and `BlacklistAttributeProvider(source)` (`ext.blacklist.principal`, `.ip`, `.device`; the starter
+  `cosec-ip2region`) and `BlacklistAttributeProvider(source)` (`ext.blacklist.principal`, `.ip`, `.device`; the starter
   registers it when you declare a `BlacklistSource` bean, such as `InMemoryBlacklistSource`, and logs an INFO line
   when there is none). A blocked request meets the built-in DENY;
   a failing blacklist source is 503, never "not blocked".
@@ -133,7 +136,7 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
   subject, scope, action, resource, request summary, attribute statuses (never values), trace ids. They carry no
   token, header or external attribute value. `event.evaluationTrace` holds the engine's trace at
   `cosec.pipeline.trace-level` (null at `off`, the default).
-- Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`kafka-support`), Micrometer, OpenTelemetry,
+- Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`cosec-kafka`), Micrometer, OpenTelemetry,
   shadow. A 7.x `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
 - BEST_EFFORT queues hold `cosec.observability.listener.queue-capacity` (1024) events each; on shutdown they drain for
   up to `cosec.observability.listener.drain-timeout` (5s). A service in gateway mode registers no listeners.
@@ -146,7 +149,7 @@ fun interface RateLimiter {
 }
 ```
 
-Implement `me.ahoo.cosec.runtime.ratelimit.RateLimiter`. The rules
+Implement `me.ahoo.cosec.spi.ratelimit.RateLimiter`. The rules
 stay in the documents; the limiter only counts. Return `RateLimitResult(allowed, limit, remaining, resetAfter)`; use
 `RateLimiter.window(limit)` for the same sliding window as the built-in limiters. Throw when the store fails: the
 rule's `strictFailure` then decides (skip, or 503). The built-ins are `ReactiveRedisRateLimiter` (with a

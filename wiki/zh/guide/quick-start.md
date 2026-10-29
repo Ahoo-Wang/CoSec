@@ -25,19 +25,17 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
     implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter")
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // 或 webmvc-support、gateway-support
-    }
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // 文档与吊销记录存放在 Redis 中
-    }
+    implementation("me.ahoo.cosec:cosec-spring-boot")
+    implementation("me.ahoo.cosec:cosec-webflux")                      // 或 cosec-webmvc、cosec-gateway
+    implementation("me.ahoo.cosec:cosec-cocache")                      // 文档与吊销记录存放在 Redis 中
+    implementation("org.springframework.boot:spring-boot-data-redis")
+    implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
 
-starter 要声明三次：一次单独声明，把 CoSec 的 API 放到编译类路径上；每个 capability 各声明一次。capability 只添加它自己的模块；在同一个声明块里要求两个 capability 无法解析。各 capability 添加了什么，见[模块](./introduction.md#modules)。
+`cosec-spring-boot` 是自动配置，它会装配在类路径上找到的每个 CoSec 模块，所以在它旁边添加你需要的模块即可。各模块添加了什么、各自还需要什么，见[模块](./introduction.md#modules)。Web 适配器不是可选的：缺少 `cosec-webflux` 的 WebFlux 应用会在启动时失败，报错信息给出制品名（STA-1）。
 
-这里 `cache-support` 不是可选的：JWT 默认开启，而没有[令牌吊销](../integration/authentication.md#logout-and-revocation)存储时应用无法启动，`cache-support` 提供了这个存储。
+这里 `cosec-cocache` 同样不是可选的：JWT 默认开启，而没有[令牌吊销](../integration/authentication.md#logout-and-revocation)存储时应用无法启动，`cosec-cocache` 提供了这个存储。
 
 ## 配置 {#configure}
 
@@ -165,7 +163,7 @@ class DemoController(private val tokenConverter: TokenConverter) {
 }
 ```
 
-starter 根据 `cosec.jwt` 配置 `TokenConverter`（`me.ahoo.cosec.token`）。`SimplePrincipal` 位于 `me.ahoo.cosec.principal`，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真实的登录端点会先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
+starter 根据 `cosec.jwt` 配置 `TokenConverter`（`me.ahoo.cosec.login.token`）。`SimplePrincipal` 位于 `me.ahoo.cosec.api.principal`，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真实的登录端点会先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
 
 ## 发送请求 {#send-requests}
 

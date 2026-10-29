@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
 import io.mockk.mockk
@@ -18,11 +20,12 @@ import me.ahoo.cocache.api.CacheLoader
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.control.ControlCacheSpecs
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -54,7 +57,7 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.CANDIDATE_CACHE_NAME to me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(policy = weakened).policy,
     )
 
-    private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJsonSerializer)
+    private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJson.mapper)
 
     @Test
     fun storeOfRecordCachesNeverExpireAndFailClosed() {
@@ -155,7 +158,7 @@ class CacheTtlPolicyTest {
 
     @Test
     fun revokedSubjectCacheIsConfiguredLikeRevokedTokens() {
-        val spec = CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer))
+        val spec = CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper))
         spec.policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
         spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
         spec.policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)

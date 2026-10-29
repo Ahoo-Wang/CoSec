@@ -15,7 +15,7 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Scope

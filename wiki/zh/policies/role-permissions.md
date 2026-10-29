@@ -148,7 +148,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 
 ## 从 OpenAPI 生成目录 {#generating-a-catalog-from-openapi}
 
-启用 `openapiSupport` 后，`cosecServiceGenerator` actuator 端点从服务的 OpenAPI 文档生成两部分配置：
+启用 `cosec-openapi` 后，`cosecServiceGenerator` actuator 端点从服务的 OpenAPI 文档生成两部分配置：
 
 - `cosecServiceGenerator/routes`：[路由映射](./language.md#route-maps)。
 - `cosecServiceGenerator/app`：应用文档。

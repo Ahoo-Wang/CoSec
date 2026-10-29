@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
@@ -84,7 +87,7 @@ class UnknownProperties(
             "cosec.authorization.cache.token.expire-after-write" to
                 "cosec.authorization.cache.token.local-max-age, a duration (30s)",
             "cosec.authorization.cache.token.expire-unit" to "removed: the durations carry their unit",
-            "cosec.authorization.gateway.enabled" to "removed: the gateway filter comes with gatewaySupport",
+            "cosec.authorization.gateway.enabled" to "removed: the gateway filter comes with cosec-gateway",
             "cosec.limiter." to "removed: rate limit rules are in the platform document",
             "cosec.shadow." to "removed: shadow windows are control-plane operations; see cosec.authorization.shadow.*",
             "cosec.explain.enabled" to "removed: use the control plane's explain",
@@ -103,7 +106,7 @@ class UnknownProperties(
             val resolver = PathMatchingResourcePatternResolver(classLoader)
             for (pattern in METADATA) {
                 resolver.getResources(pattern).forEach { resource ->
-                    val properties = resource.inputStream.use { CoSecJsonSerializer.readTree(it) }.get("properties")
+                    val properties = resource.inputStream.use { CoSecJson.mapper.readTree(it) }.get("properties")
                     properties?.values()?.forEach { property ->
                         val name = property.get("name")?.asString() ?: return@forEach
                         known += name

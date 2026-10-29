@@ -14,11 +14,11 @@
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.test.runTest
-import me.ahoo.cosec.route.RouteMapCodec
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
+import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

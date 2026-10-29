@@ -59,6 +59,7 @@ class AuditEventTest {
                 "RATE_LIMITER_UNAVAILABLE",
                 "TOKEN_REVOKED",
                 "BOUNDARY",
+                "DELEGATION_UNSUPPORTED",
             ),
         )
     }

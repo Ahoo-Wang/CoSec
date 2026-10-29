@@ -13,19 +13,19 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
+import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.token.TokenCompositeAuthentication
+import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.spi.token.DefaultTokenRevoker
+import me.ahoo.cosec.spi.token.TokenRevoker
+import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
-import me.ahoo.cosec.token.DefaultTokenRevoker
-import me.ahoo.cosec.token.RevocableTokenVerifier
-import me.ahoo.cosec.token.TokenCompositeAuthentication
-import me.ahoo.cosec.token.TokenConverter
-import me.ahoo.cosec.token.TokenRevoker
-import me.ahoo.cosec.token.TokenStore
-import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.beans.factory.ObjectProvider
@@ -97,8 +97,8 @@ class CoSecJwtAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenStore(): TokenStore = throw IllegalStateException(
-        "JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache (the starter's cacheSupport " +
-            "feature) or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
+        "JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache " +
+            "or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
     )
 
     /** Refresh reads subject revocations with the pipeline's skew (`cosec.authentication.revocation.skew`). */

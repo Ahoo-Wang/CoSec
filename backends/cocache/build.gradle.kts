@@ -12,7 +12,7 @@
  */
 
 dependencies {
-    api(project(":core"))
+    api(project(":spi"))
     api("me.ahoo.cocache:cocache-core")
     api("me.ahoo.cocache:cocache-codec-jackson")
     api("me.ahoo.cocache:cocache-redis")
@@ -23,13 +23,12 @@ dependencies {
     // CoCacheControlStore implements the control plane's ControlStore (RFC 0007 §5.1). Compile-only, so an application
     // that reads snapshots without the control plane does not pull it in; the control plane brings it with it.
     compileOnly(project(":control"))
-    // ReactiveRedisRateLimiter implements the pipeline's suspending RateLimiter (RFC 0006 §8.4), and the shadow window
-    // SPIs (RFC 0007 §6.4) its candidates and reports. Compile-only, as above: a data plane has cosec-runtime already.
-    compileOnly(project(":runtime"))
+    // The shadow stores implement runtime's shadow ports (RFC 0007 §6.4), and the stored formats are written with
+    // runtime's one mapper (CoSecJson, RFC 0011 D3), which cocache calls at run time: implementation, not compile-only.
+    implementation(project(":runtime"))
     testImplementation(project(":control"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
-    testImplementation(project(":runtime"))
     testImplementation("io.lettuce:lettuce-core")
     testImplementation("me.ahoo.cosid:cosid-core")
     testImplementation("me.ahoo.cosid:cosid-test")

@@ -59,11 +59,9 @@ dependencies {
     implementation(project(":webflux"))
     implementation(project(":gateway"))
     implementation(project(":opentelemetry"))
-    implementation(project(":spring-boot")) {
-        capabilities {
-            requireCapability("me.ahoo.cosec:kafka-support")
-        }
-    }
+    implementation(project(":spring-boot"))
+    implementation(project(":kafka"))
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation(project(":ip2region"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("com.github.ben-manes.caffeine:caffeine")

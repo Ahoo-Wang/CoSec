@@ -24,7 +24,7 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}

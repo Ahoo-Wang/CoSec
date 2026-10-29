@@ -25,13 +25,13 @@ import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.audit.LoggingAuditListener
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
-import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionProperties
 import me.ahoo.cosec.spring.boot.starter.micrometer.MetricsProperties
 import org.springframework.beans.factory.ObjectProvider
@@ -47,7 +47,7 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
 
 /**
- * What the starter's optional features add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
+ * What the optional modules add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
  * (audit log, Kafka audit, metrics, tracing), bridge context contributors, the blacklist and the ip2region attribute
  * providers.
  */
@@ -129,7 +129,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         ): KafkaAuditListener = KafkaAuditListener(
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
-            environment.getProperty(KAFKA_DELIVERY_KEY, Delivery::class.java, Delivery.BEST_EFFORT),
+            kafkaAuditDelivery(environment),
         )
     }
 
@@ -164,7 +164,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         fun cosecOpenTelemetryContextContributor(): BridgeContextContributor = OpenTelemetryContextContributor
     }
 
-    /** `ext.ip2region.*` attributes, when `cosec.ip2region.enabled` (default on with the feature). */
+    /** `ext.ip2region.*` attributes, when `cosec.ip2region.enabled` (default on with `cosec-ip2region`). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider"])
     @ConditionalOnProperty(value = ["cosec.ip2region.enabled"], havingValue = "true", matchIfMissing = true)

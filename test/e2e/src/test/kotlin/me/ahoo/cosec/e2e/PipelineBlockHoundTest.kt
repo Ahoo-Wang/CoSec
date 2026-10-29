@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.e2e
 
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
