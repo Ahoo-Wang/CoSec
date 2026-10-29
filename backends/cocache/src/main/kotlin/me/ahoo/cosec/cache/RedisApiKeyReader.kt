@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate

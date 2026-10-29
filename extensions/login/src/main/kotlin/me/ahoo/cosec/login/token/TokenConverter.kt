@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.login.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -25,6 +26,7 @@ import java.time.Duration
  *
  * @see TokenVerifier
  */
+@CoSecSpi
 interface TokenConverter {
     /**
      * Converts a principal to a token with default validity periods.

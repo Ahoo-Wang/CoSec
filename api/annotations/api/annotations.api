@@ -1,0 +1,9 @@
+public abstract interface annotation class me/ahoo/cosec/annotations/CoSecSpi : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class me/ahoo/cosec/annotations/ExperimentalCoSecApi : java/lang/annotation/Annotation {
+}
+
+public abstract interface annotation class me/ahoo/cosec/annotations/InternalCoSecApi : java/lang/annotation/Annotation {
+}
+

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.control
 
 import kotlinx.coroutines.future.await
@@ -22,6 +24,7 @@ import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.api.spi.Envelope
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
@@ -58,7 +61,7 @@ import java.time.Instant
  * read throws ([ControlCacheSpecs] pins `ReadFailureMode.THROW`). Nothing here blocks the caller: it awaits CoCache's
  * async view.
  */
-class CoCacheControlStore(
+class CoCacheControlStore internal constructor(
     private val heads: Cache<SnapshotKey, SnapshotDocument>,
     private val records: Cache<RevisionRecordKey, SnapshotDocument>,
     private val indexes: Cache<SnapshotKey, RevisionIndex>,

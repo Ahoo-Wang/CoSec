@@ -43,11 +43,12 @@ tasks.named<Test>("test") {
     dependsOn(provider { rootProject.subprojects.mapNotNull { it.tasks.findByName("architectureFacts") } })
     systemProperty("cosec.coverage.projects", coveredProjects)
     systemProperty("cosec.repository.root", rootProject.layout.projectDirectory.asFile.absolutePath)
-    // The rules read build scripts, the catalog, settings and CI files, and run CI's plan: they are inputs.
+    // The rules read build scripts, the catalog, settings, CI files and the extension points page, and run CI's plan:
+    // they are inputs.
     inputs.files(rootProject.fileTree(rootProject.layout.projectDirectory) {
         include(
             "settings.gradle.kts", "**/build.gradle.kts", "gradle/libs.versions.toml", ".github/**/*.yml",
-            "scripts/ci/**", "codecov.yml",
+            "scripts/ci/**", "codecov.yml", "wiki/architecture/extending.md",
         )
         exclude("**/build/**", "**/node_modules/**")
     })

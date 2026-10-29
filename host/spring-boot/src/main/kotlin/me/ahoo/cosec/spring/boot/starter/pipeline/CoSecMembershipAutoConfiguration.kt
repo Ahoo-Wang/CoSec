@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheProperties
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.MembershipCache

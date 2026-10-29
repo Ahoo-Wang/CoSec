@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.event
 
 import kotlinx.coroutines.slf4j.MDCContext
+import me.ahoo.cosec.annotations.CoSecSpi
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
@@ -23,6 +24,7 @@ import kotlin.coroutines.EmptyCoroutineContext
  * calling thread; a REQUIRED one should also be idempotent by [DecisionEvent.id], as a write that timed out may still
  * have succeeded.
  */
+@CoSecSpi
 interface DecisionListener {
     /** Unique among the registered listeners; names metrics and logs. */
     val name: String
@@ -52,6 +54,7 @@ enum class Delivery {
  * on the thread that received it. It lets the bridge stay in the adapters while they depend on neither OpenTelemetry
  * nor SLF4J (K16).
  */
+@CoSecSpi
 fun interface BridgeContextContributor {
     fun capture(): CoroutineContext
 

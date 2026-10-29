@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
@@ -30,6 +33,7 @@ import java.net.URI
  * scenario. The engine answers most attributes from its own request; [host] answers the rest (`http.*`,
  * `request.attributes.*`) and injects `"fault"`s.
  */
+@ExperimentalCoSecApi
 class RequestFacts(
     val authenticated: Boolean,
     val principal: String,

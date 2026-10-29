@@ -1,0 +1,20 @@
+public final class me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider : me/ahoo/cosec/spi/attribute/AttributeProvider {
+	public static final field CITY Ljava/lang/String;
+	public static final field COUNTRY Ljava/lang/String;
+	public static final field Companion Lme/ahoo/cosec/ip2region/Ip2RegionAttributeProvider$Companion;
+	public static final field IP2REGION_DB_RESOURCE Ljava/lang/String;
+	public static final field ISP Ljava/lang/String;
+	public static final field PROVINCE Ljava/lang/String;
+	public fun <init> ()V
+	public fun <init> ([BLorg/lionsoul/ip2region/xdb/Version;)V
+	public synthetic fun <init> ([BLorg/lionsoul/ip2region/xdb/Version;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun fetch (Lme/ahoo/cosec/spi/attribute/AttributeRequest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getAttributes ()Ljava/util/List;
+	public fun getTimeout-FghU774 ()Lkotlin/time/Duration;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider$Companion {
+	public final fun loadDefaultIp2RegionDb ()[B
+}
+

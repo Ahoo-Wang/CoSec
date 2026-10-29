@@ -1,0 +1,76 @@
+public final class me/ahoo/cosec/webflux/HttpFactsReader {
+	public static final field INSTANCE Lme/ahoo/cosec/webflux/HttpFactsReader;
+	public final fun getNO_HOST ()Lme/ahoo/cosec/model/scope/HostScope;
+	public final fun read (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;Ljava/util/Map;)Lme/ahoo/cosec/runtime/http/HttpFacts;
+	public static synthetic fun read$default (Lme/ahoo/cosec/webflux/HttpFactsReader;Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/http/HttpFacts;
+}
+
+public final class me/ahoo/cosec/webflux/OrderedCorsWebFilter : org/springframework/web/cors/reactive/CorsWebFilter, org/springframework/core/Ordered {
+	public static final field Companion Lme/ahoo/cosec/webflux/OrderedCorsWebFilter$Companion;
+	public static final field DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER I
+	public fun <init> (Lorg/springframework/web/cors/reactive/CorsConfigurationSource;Lorg/springframework/web/cors/reactive/CorsProcessor;I)V
+	public synthetic fun <init> (Lorg/springframework/web/cors/reactive/CorsConfigurationSource;Lorg/springframework/web/cors/reactive/CorsProcessor;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getOrder ()I
+}
+
+public final class me/ahoo/cosec/webflux/OrderedCorsWebFilter$Companion {
+}
+
+public final class me/ahoo/cosec/webflux/PipelineWebFilter : me/ahoo/cosec/webflux/ReactivePipelineBridge, org/springframework/core/Ordered, org/springframework/web/server/WebFilter {
+	public static final field Companion Lme/ahoo/cosec/webflux/PipelineWebFilter$Companion;
+	public static final field REACTIVE_AUTHORIZATION_FILTER_ORDER I
+	public fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun filter (Lorg/springframework/web/server/ServerWebExchange;Lorg/springframework/web/server/WebFilterChain;)Lreactor/core/publisher/Mono;
+	public fun getOrder ()I
+}
+
+public final class me/ahoo/cosec/webflux/PipelineWebFilter$Companion {
+}
+
+public final class me/ahoo/cosec/webflux/PipelineWebFilterKt {
+	public static final fun checkMono (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Lreactor/core/publisher/Mono;
+}
+
+public abstract class me/ahoo/cosec/webflux/ReactivePipelineBridge {
+	public fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun filterInternal (Lorg/springframework/web/server/ServerWebExchange;Lkotlin/jvm/functions/Function2;)Lreactor/core/publisher/Mono;
+	public final fun getPipeline ()Lme/ahoo/cosec/runtime/RequestGate;
+	protected fun read (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/runtime/http/HttpFacts;
+}
+
+public final class me/ahoo/cosec/webflux/ReactiveRemoteIpResolver : me/ahoo/cosec/runtime/http/RemoteIpResolver {
+	public static final field INSTANCE Lme/ahoo/cosec/webflux/ReactiveRemoteIpResolver;
+	public synthetic fun resolve (Ljava/lang/Object;)Ljava/lang/String;
+	public fun resolve (Lorg/springframework/web/server/ServerWebExchange;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/webflux/ReactiveSecurityContexts {
+	public static final field INSTANCE Lme/ahoo/cosec/webflux/ReactiveSecurityContexts;
+	public final fun getSecurityContext (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public final fun getSecurityContextOrEmpty (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public final fun setSecurityContext (Lreactor/util/context/Context;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/util/context/Context;
+	public final fun writeSecurityContext (Lreactor/core/publisher/Mono;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
+}
+
+public final class me/ahoo/cosec/webflux/ReactiveXForwardedRemoteIpResolver : me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver {
+	public static final field Companion Lme/ahoo/cosec/webflux/ReactiveXForwardedRemoteIpResolver$Companion;
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun extractXForwardedHeaderValues (Ljava/lang/Object;)Ljava/util/List;
+	public fun extractXForwardedHeaderValues (Lorg/springframework/web/server/ServerWebExchange;)Ljava/util/List;
+	public fun getMaxTrustedIndex ()I
+}
+
+public final class me/ahoo/cosec/webflux/ReactiveXForwardedRemoteIpResolver$Companion {
+	public final fun getTRUST_ALL ()Lme/ahoo/cosec/webflux/ReactiveXForwardedRemoteIpResolver;
+}
+
+public final class me/ahoo/cosec/webflux/ServerWebExchanges {
+	public static final field INSTANCE Lme/ahoo/cosec/webflux/ServerWebExchanges;
+	public static final fun getSecurityContext (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun setSecurityContext (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/api/context/SecurityContext;)V
+}
+

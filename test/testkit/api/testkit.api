@@ -1,0 +1,126 @@
+public final class me/ahoo/cosec/testkit/CompiledSnapshot {
+	public fun <init> (Lme/ahoo/cosec/engine/flat/CompiledDocument;Ljava/util/Map;Ljava/util/Map;)V
+	public final fun getApps ()Ljava/util/Map;
+	public final fun getPlatform ()Lme/ahoo/cosec/engine/flat/CompiledDocument;
+	public final fun getTenants ()Ljava/util/Map;
+}
+
+public final class me/ahoo/cosec/testkit/DocumentException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class me/ahoo/cosec/testkit/DocumentSnapshotCompiler : me/ahoo/cosec/testkit/SnapshotCompiler {
+	public static final field INSTANCE Lme/ahoo/cosec/testkit/DocumentSnapshotCompiler;
+	public fun compile (Lme/ahoo/cosec/testkit/ScenarioDocuments;)Lme/ahoo/cosec/testkit/CompiledSnapshot;
+	public final fun getStored ()Lme/ahoo/cosec/testkit/SnapshotCompiler;
+	public final fun with (Lme/ahoo/cosec/model/condition/AttributeCatalog;)Lme/ahoo/cosec/testkit/SnapshotCompiler;
+}
+
+public final class me/ahoo/cosec/testkit/EngineExpectations {
+	public static final field INSTANCE Lme/ahoo/cosec/testkit/EngineExpectations;
+	public final fun check (Ljava/lang/String;Ltools/jackson/databind/JsonNode;Lme/ahoo/cosec/testkit/EngineOutcome;Z)V
+	public final fun ref (Lme/ahoo/cosec/model/decision/StatementRef;)Ltools/jackson/databind/JsonNode;
+	public final fun render (Lme/ahoo/cosec/model/decision/Decision;)Ltools/jackson/databind/JsonNode;
+	public final fun render (Lme/ahoo/cosec/testkit/EngineOutcome;)Ltools/jackson/databind/JsonNode;
+}
+
+public abstract interface class me/ahoo/cosec/testkit/EngineOutcome {
+}
+
+public final class me/ahoo/cosec/testkit/EngineOutcome$Decided : me/ahoo/cosec/testkit/EngineOutcome {
+	public fun <init> (Lme/ahoo/cosec/model/decision/Decision;)V
+	public final fun getDecision ()Lme/ahoo/cosec/model/decision/Decision;
+}
+
+public final class me/ahoo/cosec/testkit/EngineOutcome$NotCompiled : me/ahoo/cosec/testkit/EngineOutcome {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getError ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/testkit/EngineOutcome$Rejected : me/ahoo/cosec/testkit/EngineOutcome {
+	public fun <init> (Lme/ahoo/cosec/model/scope/ScopeResolution$Rejected$Reason;)V
+	public final fun getReason ()Lme/ahoo/cosec/model/scope/ScopeResolution$Rejected$Reason;
+}
+
+public final class me/ahoo/cosec/testkit/EngineScenarios {
+	public fun <init> ()V
+	public fun <init> (Lme/ahoo/cosec/testkit/SnapshotCompiler;Lme/ahoo/cosec/engine/flat/FlatEngine;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/testkit/SnapshotCompiler;Lme/ahoo/cosec/engine/flat/FlatEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun run (Ltools/jackson/databind/JsonNode;Ljava/util/Set;)Lme/ahoo/cosec/testkit/EngineOutcome;
+	public final fun run (Ltools/jackson/databind/JsonNode;Ljava/util/Set;Lme/ahoo/cosec/testkit/CompiledSnapshot;)Lme/ahoo/cosec/testkit/EngineOutcome;
+}
+
+public final class me/ahoo/cosec/testkit/PolicyTestKit {
+	public static final field APPS_DIRECTORY Ljava/lang/String;
+	public static final field Companion Lme/ahoo/cosec/testkit/PolicyTestKit$Companion;
+	public static final field PLATFORM_FILE Ljava/lang/String;
+	public static final field TENANTS_DIRECTORY Ljava/lang/String;
+	public final fun check (Ljava/lang/String;Ltools/jackson/databind/JsonNode;)V
+	public final fun check (Ljava/nio/file/Path;)V
+	public final fun evaluate (Ljava/lang/String;)Lme/ahoo/cosec/testkit/EngineOutcome;
+	public final fun evaluate (Ltools/jackson/databind/JsonNode;)Lme/ahoo/cosec/testkit/EngineOutcome;
+	public final fun tests (Ljava/nio/file/Path;)Ljava/util/List;
+}
+
+public final class me/ahoo/cosec/testkit/PolicyTestKit$Companion {
+	public final fun load (Ljava/nio/file/Path;)Lme/ahoo/cosec/testkit/PolicyTestKit;
+	public final fun of (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;)Lme/ahoo/cosec/testkit/PolicyTestKit;
+	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/PolicyTestKit$Companion;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PolicyTestKit;
+}
+
+public final class me/ahoo/cosec/testkit/RequestFacts {
+	public fun <init> (ZLjava/lang/String;Lme/ahoo/cosec/model/scope/Scope;Lme/ahoo/cosec/model/Memberships;Ljava/util/Map;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/model/condition/IpAddress;JLjava/lang/String;ZLjava/util/Map;Ljava/util/Map;)V
+	public final fun getAction ()Lme/ahoo/cosec/model/Action;
+	public final fun getAuthenticated ()Z
+	public final fun getBlocked ()Z
+	public final fun getDevice ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getHost ()Lme/ahoo/cosec/model/condition/ConditionInput;
+	public final fun getIp ()Lme/ahoo/cosec/model/condition/IpAddress;
+	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
+	public final fun getPrincipal ()Ljava/lang/String;
+	public final fun getRequestAttributes ()Ljava/util/Map;
+	public final fun getResource ()Lme/ahoo/cosec/model/Resource;
+	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
+	public final fun getSubjectAttributes ()Ljava/util/Map;
+	public final fun getTime ()J
+	public final fun input (Lme/ahoo/cosec/engine/pattern/Captures;)Lme/ahoo/cosec/model/condition/ConditionInput;
+}
+
+public final class me/ahoo/cosec/testkit/ScenarioDocuments {
+	public fun <init> (Ltools/jackson/databind/JsonNode;Ljava/util/Map;Ljava/util/Map;)V
+	public final fun getApps ()Ljava/util/Map;
+	public final fun getPlatform ()Ltools/jackson/databind/JsonNode;
+	public final fun getTenants ()Ljava/util/Map;
+}
+
+public final class me/ahoo/cosec/testkit/ScenarioFault : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class me/ahoo/cosec/testkit/ScenarioFormatException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class me/ahoo/cosec/testkit/ScenarioJson {
+	public static final field INSTANCE Lme/ahoo/cosec/testkit/ScenarioJson;
+	public final fun parse (Ljava/lang/String;)Ltools/jackson/databind/JsonNode;
+	public final fun read (Ljava/nio/file/Path;)Ltools/jackson/databind/JsonNode;
+}
+
+public final class me/ahoo/cosec/testkit/ScenarioJsonKt {
+	public static final fun bool (Ltools/jackson/databind/JsonNode;)Z
+	public static final fun fields (Ltools/jackson/databind/JsonNode;)Ljava/util/Map;
+	public static final fun instant (Ltools/jackson/databind/JsonNode;)J
+	public static final fun only (Ltools/jackson/databind/JsonNode;[Ljava/lang/String;)V
+	public static final fun required (Ltools/jackson/databind/JsonNode;Ljava/lang/String;)Ltools/jackson/databind/JsonNode;
+	public static final fun strings (Ltools/jackson/databind/JsonNode;)Ljava/util/List;
+	public static final fun text (Ltools/jackson/databind/JsonNode;)Ljava/lang/String;
+	public static final fun textOrNull (Ltools/jackson/databind/JsonNode;)Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/testkit/SnapshotCompiler {
+	public abstract fun compile (Lme/ahoo/cosec/testkit/ScenarioDocuments;)Lme/ahoo/cosec/testkit/CompiledSnapshot;
+}
+

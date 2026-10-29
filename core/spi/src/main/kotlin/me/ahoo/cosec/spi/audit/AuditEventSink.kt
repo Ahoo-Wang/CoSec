@@ -13,11 +13,13 @@
 
 package me.ahoo.cosec.spi.audit
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.audit.AuditEvent
 
 /**
  * SPI for consuming audit events. Implementations must not block; an exception they throw never affects the decision.
  */
+@CoSecSpi
 fun interface AuditEventSink {
     fun publish(event: AuditEvent)
 }

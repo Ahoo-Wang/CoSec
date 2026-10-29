@@ -1,0 +1,35 @@
+public final class me/ahoo/cosec/gateway/IdentityHeadersFilter : org/springframework/cloud/gateway/filter/headers/HttpHeadersFilter {
+	public static final field Companion Lme/ahoo/cosec/gateway/IdentityHeadersFilter$Companion;
+	public static final field FORWARDED_ATTRIBUTE Ljava/lang/String;
+	public fun <init> ()V
+	public fun filter (Lorg/springframework/http/HttpHeaders;Lorg/springframework/web/server/ServerWebExchange;)Lorg/springframework/http/HttpHeaders;
+	public fun supports (Lorg/springframework/cloud/gateway/filter/headers/HttpHeadersFilter$Type;)Z
+}
+
+public final class me/ahoo/cosec/gateway/IdentityHeadersFilter$Companion {
+}
+
+public final class me/ahoo/cosec/gateway/IdentityStripFilter : org/springframework/cloud/gateway/filter/GlobalFilter, org/springframework/core/Ordered {
+	public static final field Companion Lme/ahoo/cosec/gateway/IdentityStripFilter$Companion;
+	public static final field ORDER I
+	public fun <init> ()V
+	public fun filter (Lorg/springframework/web/server/ServerWebExchange;Lorg/springframework/cloud/gateway/filter/GatewayFilterChain;)Lreactor/core/publisher/Mono;
+	public fun getOrder ()I
+}
+
+public final class me/ahoo/cosec/gateway/IdentityStripFilter$Companion {
+}
+
+public final class me/ahoo/cosec/gateway/PipelineGatewayFilter : me/ahoo/cosec/webflux/ReactivePipelineBridge, org/springframework/cloud/gateway/filter/GlobalFilter, org/springframework/core/Ordered {
+	public static final field AUTHORIZATION_GATEWAY_FILTER_ORDER I
+	public static final field Companion Lme/ahoo/cosec/gateway/PipelineGatewayFilter$Companion;
+	public static final field IDENTITY_METADATA Ljava/lang/String;
+	public fun <init> (Lme/ahoo/cosec/runtime/Pipeline;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;Z)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/Pipeline;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun filter (Lorg/springframework/web/server/ServerWebExchange;Lorg/springframework/cloud/gateway/filter/GatewayFilterChain;)Lreactor/core/publisher/Mono;
+	public fun getOrder ()I
+}
+
+public final class me/ahoo/cosec/gateway/PipelineGatewayFilter$Companion {
+}
+

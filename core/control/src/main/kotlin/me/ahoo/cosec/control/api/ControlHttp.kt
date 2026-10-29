@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
@@ -49,6 +50,7 @@ import kotlin.coroutines.cancellation.CancellationException
 private val log = KotlinLogging.logger {}
 
 /** A control API request (RFC 0007 §10.2), as an adapter reads it: [path] is relative to `cosec.control.http.base-path`. */
+@InternalCoSecApi
 class ControlHttpRequest(
     val method: String,
     val path: String,
@@ -57,6 +59,7 @@ class ControlHttpRequest(
 )
 
 /** What an adapter writes back: [status], `Content-Type` [contentType] and [body]. */
+@InternalCoSecApi
 class ControlHttpResponse(val status: Int, val contentType: String, val body: ByteArray) {
     override fun toString(): String = "ControlHttpResponse($status, ${body.decodeToString()})"
 }
@@ -86,6 +89,7 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  *
  * A document key is written `platform`, `app:order` or `tenant:acme`.
  */
+@InternalCoSecApi
 class ControlHttp(private val plane: ControlPlane) {
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 

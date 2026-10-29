@@ -54,6 +54,13 @@ this because the title drives labels, release notes, and the next version number
 Mark breaking changes with `!` after the type (`feat!: ...`) or a `BREAKING CHANGE:` paragraph in the
 description. They are listed under 💥 Breaking Changes and require a major version.
 
+**ABI dumps and `!`.** Every published library module keeps its public ABI in `api/<project>.api` (see section 4).
+From 8.0 GA on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`.
+The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
+and needs no `!`; the description names the experimental declarations it changes. A dump change that only adds lines
+needs no `!` either. Before GA, through the release candidates, the dumps already show every change, and the rule does
+not apply yet. Nothing checks the title against the dumps: the author and the reviewer do.
+
 ## 4. Coding conventions
 
 - Kotlin 2.x targeting Java 17; formatting follows [.editorconfig](.editorconfig).
@@ -63,6 +70,12 @@ description. They are listed under 💥 Breaking Changes and require a major ver
   [config/detekt/license.template](config/detekt/license.template). Detekt fails the build otherwise.
 - Public contracts are interfaces in `cosec-api`, extension points (ports) in `cosec-spi`; the pipeline, documents
   and snapshots live in `cosec-runtime`, and each technology in its own module. See the [architecture overview](https://cosec.ahoo.me/architecture/overview).
+- Each public declaration has a [stability level](https://cosec.ahoo.me/architecture/extending#stability-levels): an
+  interface applications implement carries `@CoSecSpi`, API that may still change in a minor release
+  `@ExperimentalCoSecApi`, and what only CoSec's own modules call `@InternalCoSecApi`.
+- `check` fails when a module's public ABI no longer matches its dump, `api/<project>.api`. When the change is
+  intended, regenerate the dump with `./gradlew :<project>:updateKotlinAbi` and commit it with the change, so the
+  reviewer sees every signature that changed.
 
 ## 5. Tests and coverage
 
@@ -92,7 +105,7 @@ description. They are listed under 💥 Breaking Changes and require a major ver
 - Approving reviews are not required: only maintainers can merge, and [CODEOWNERS](.github/CODEOWNERS) are
   requested as reviewers automatically. Review conversations must be resolved before merging.
 - Reviewers check correctness (including fail-closed behavior for security decisions), tests, public API
-  compatibility, and documentation.
+  compatibility (the diff of the `api/*.api` dumps), and documentation.
 - Labels are applied automatically from changed paths and the PR title.
 
 ## 7. Releases and semantic versioning

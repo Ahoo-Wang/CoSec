@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Binding
@@ -23,6 +24,7 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.StatementRef
 
 /** Who a fragment is granted to (RFC 0007 §7.4.1). */
+@ExperimentalCoSecApi
 sealed interface Grantee {
     /** The subject of a binding, in its scope. */
     class Bound(val binding: Binding) : Grantee {
@@ -39,6 +41,7 @@ sealed interface Grantee {
  * One granted statement fragment (RFC 0007 §7.4.1): one action and one resource of an ALLOW statement, with the
  * statement's condition and its policy's, granted to [grantee] in [scope] of [tenant].
  */
+@ExperimentalCoSecApi
 class GrantFragment(
     val tenant: TenantId,
     val policy: PolicyId,
@@ -54,6 +57,7 @@ class GrantFragment(
 }
 
 /** Why a fragment is [GrantVerdict.Unknown]. */
+@ExperimentalCoSecApi
 enum class UnknownReason {
     /** The grantor is not in the tenant of the document. */
     CROSS_TENANT,
@@ -66,6 +70,7 @@ enum class UnknownReason {
 }
 
 /** How far the closest of the grantor's ALLOWs got, in the order the analysis checks (RFC 0007 §7.4.3). */
+@ExperimentalCoSecApi
 enum class Shortfall {
     /** The grantor holds no ALLOW at all. */
     NO_ALLOW,
@@ -80,6 +85,7 @@ enum class Shortfall {
 }
 
 /** What the analysis concluded about one fragment. Only [Unknown] needs approval (RFC 0007 §7.5). */
+@ExperimentalCoSecApi
 sealed interface GrantVerdict {
     /** The grantor holds `cosec:approve` on the document: it is the trust root, and its changes are not analyzed. */
     object TrustRoot : GrantVerdict
@@ -99,6 +105,7 @@ sealed interface GrantVerdict {
 }
 
 /** An entry whose change needs `cosec:unprotect` (RFC 0007 §7.4.4). */
+@ExperimentalCoSecApi
 sealed interface ProtectedEntry {
     data class Policy(val id: PolicyId) : ProtectedEntry
 
@@ -106,6 +113,7 @@ sealed interface ProtectedEntry {
 }
 
 /** The analysis of one change: a verdict for each fragment, and the protected entries it changes or removes. */
+@ExperimentalCoSecApi
 class GrantAnalysis(val verdicts: List<Pair<GrantFragment, GrantVerdict>>, val unprotect: List<ProtectedEntry>) {
     /** Whether a platform administrator must approve the change (RFC 0007 §7.5). */
     val needsApproval: Boolean get() = verdicts.any { it.second is GrantVerdict.Unknown }

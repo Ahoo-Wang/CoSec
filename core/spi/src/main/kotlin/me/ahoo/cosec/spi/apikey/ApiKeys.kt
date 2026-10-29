@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.apikey
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -62,6 +63,7 @@ class ApiKey(
  * Looks up API keys by hash, synchronously: the store keys are provisioned into (`InMemoryApiKeyStore`, and
  * `RedisApiKeyStore` in `cosec-cocache`). Requests never read it: the pipeline reads keys through [ApiKeyReader].
  */
+@CoSecSpi
 fun interface ApiKeyStore {
     fun findByHash(hash: String): ApiKey?
 }
@@ -70,6 +72,7 @@ fun interface ApiKeyStore {
  * The read side of an API key store for the coroutine pipeline (RFC 0006 §5.3.2): never blocks the calling thread, which
  * may be an event loop. A lookup that fails throws: the request is answered 503.
  */
+@CoSecSpi
 fun interface ApiKeyReader {
     suspend fun findByHash(hash: String): ApiKey?
 }

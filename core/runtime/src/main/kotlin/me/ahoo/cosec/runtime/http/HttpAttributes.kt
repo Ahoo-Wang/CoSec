@@ -83,5 +83,5 @@ class HttpAttributes(
 }
 
 /** Header [header] arrived more than once with different values: a condition on it cannot tell which one to read. */
-class AmbiguousHeaderException(val header: String) :
+internal class AmbiguousHeaderException(val header: String) :
     IllegalArgumentException("Header [$header] arrived with different values; a condition on it cannot decide.")

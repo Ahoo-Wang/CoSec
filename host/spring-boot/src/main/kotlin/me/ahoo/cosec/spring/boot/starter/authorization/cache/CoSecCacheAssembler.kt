@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.api.Cache
@@ -20,6 +22,7 @@ import me.ahoo.cocache.core.SetCacheSpec
 import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheProperties
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import org.springframework.beans.factory.ObjectProvider
 

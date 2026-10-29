@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Codec
@@ -20,6 +22,7 @@ import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
@@ -41,6 +44,7 @@ import java.time.Duration
  * Snapshot and control-plane caches have no loader: Redis is the store of record. [pinnedPolicy] must therefore be the
  * last change to every cache's policy, after any customizer or configuration property.
  */
+@InternalCoSecApi
 object CoSecCacheSpecs {
     const val REVOKED_TOKEN_CACHE_NAME = "RevokedTokenCache"
 

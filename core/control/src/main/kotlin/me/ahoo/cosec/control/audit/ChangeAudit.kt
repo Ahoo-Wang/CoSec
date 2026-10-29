@@ -25,6 +25,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.Confirmation
@@ -89,6 +90,7 @@ class ChangeEvent(
 }
 
 /** The control plane's audit SPI (RFC 0007 §10.5); delivery as in RFC 0006 §9.4. */
+@CoSecSpi
 interface ChangeListener {
     val name: String
 

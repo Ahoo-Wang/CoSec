@@ -12,10 +12,12 @@
  */
 
 // RFC 0011 §3: the ports a request or a store calls, with their value types and in-memory implementations. Third parties
-// implement them against this module alone. Kotlin standard library, the model, the contracts and coroutines only (§5).
+// implement them against this module alone. Kotlin standard library, the model, the contracts, the stability markers
+// (`@CoSecSpi`, D4) and coroutines only (§5).
 dependencies {
     api(project(":model"))
     api(project(":api"))
+    api(project(":annotations"))
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }

@@ -66,7 +66,8 @@ What is different, in short:
 ### Migrating the data
 
 `cosec-migrate` is a one-time command-line tool in the `migration/migrate/` module. No application depends on it, and the starter
-never does. Build it from the CoSec sources of the version you deploy:
+never does. Its contract is the command line: its classes are not a library API, and may change in any release. Build it
+from the CoSec sources of the version you deploy:
 
 ```bash
 ./gradlew :migrate:installDist
@@ -584,11 +585,20 @@ Code that uses any of these no longer compiles or is no longer called.
 | `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |
 | Path variables left in the caller's security context after authorization | None. Read path variables from your web framework. |
 | `cosecPolicyGenerator`, `cosecAppPermissionGenerator` actuator endpoints | `cosecServiceGenerator/routes` (a route map) and `cosecServiceGenerator/app` (an app document). |
+| `SocialUserConverter` (`cosec-social`) | None: it is internal to `cosec-social`. Turn a provider's user into your principal with a `SocialUserPrincipalConverter` bean ([Social login](../integration/authentication.md#social-login)). |
 
 Still available: `SecurityContext` (now with `scope`, the validated app, space and roles; read it rather than the
 `CoSec-*` headers, which are what the client declared), `getSecurityContext()` on `ServerWebExchange`, Reactor
 `ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types, some of them
 in new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)).
+
+During the 8.0 previews an application could replace, with beans of its own, the parts that enforce the control plane's
+authorization and approvals: `ControlAuthorizer`, `ChangeAuthority`, `Changes`, `ControlPlane` and `ControlHttp`. It no
+longer can: a second bean of one of these types fails startup (for `ControlHttp`, where the control routes are served).
+`ControlAuthorizer`, `DocumentConfirmation`, `PipelineControlAuthorizer`, `ChangeAuthority`, `Changes`,
+`DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`: call the
+control plane through the `ControlPlane` bean or its HTTP API. `ControlStore`, `ChangeOptions`, the change listeners,
+`Revisions`, `ControlSnapshot` and the maintenance beans stay replaceable.
 
 #### Policy test suites
 

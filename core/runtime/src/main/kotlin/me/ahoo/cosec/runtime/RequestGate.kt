@@ -13,13 +13,17 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.HttpFacts
 
 /**
  * What the adapters call for every request (RFC 0006 §6.3): an [Outcome] they write, from the facts they read. The
  * [Pipeline] decides with policies; `IdentityGate` reads the identity a gateway verified, for the services behind it.
- * Either way only `StatusMapping` makes the outcome, so the adapters answer alike.
+ * Either way only `StatusMapping` makes the outcome, so the adapters answer alike. Only CoSec implements it: a gate of an
+ * application's own would be a second decision path, so implementing it needs the internal API opt-in (RFC 0011 D4).
+ * Not a `fun interface`, which a lambda could implement without the opt-in.
  */
-fun interface RequestGate {
+@SubclassOptInRequired(InternalCoSecApi::class)
+interface RequestGate {
     suspend fun evaluate(facts: HttpFacts): Outcome
 }

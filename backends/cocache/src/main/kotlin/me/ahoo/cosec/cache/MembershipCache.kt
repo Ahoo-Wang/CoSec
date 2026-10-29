@@ -46,7 +46,7 @@ interface MembershipCache : Cache<String, Memberships> {
  * cached before `active` existed read as active, as they were. Only [Memberships.Source.PROVIDER] memberships are
  * cached; anything else fails, on encoding and on decoding.
  */
-object MembershipsCodec : Codec<Memberships> {
+internal object MembershipsCodec : Codec<Memberships> {
     private const val ROLES = "roles"
     private const val ATTACHMENTS = "attachments"
     private const val ACTIVE = "active"

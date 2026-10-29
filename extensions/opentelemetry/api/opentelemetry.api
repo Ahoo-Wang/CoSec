@@ -1,0 +1,32 @@
+public final class me/ahoo/cosec/opentelemetry/OpenTelemetryContextContributor : me/ahoo/cosec/runtime/event/BridgeContextContributor {
+	public static final field INSTANCE Lme/ahoo/cosec/opentelemetry/OpenTelemetryContextContributor;
+	public fun capture ()Lkotlin/coroutines/CoroutineContext;
+}
+
+public final class me/ahoo/cosec/opentelemetry/TracingListener : me/ahoo/cosec/runtime/event/DecisionListener {
+	public static final field Companion Lme/ahoo/cosec/opentelemetry/TracingListener$Companion;
+	public static final field NAME Ljava/lang/String;
+	public static final field SPAN_NAME Ljava/lang/String;
+	public fun <init> ()V
+	public fun <init> (Lio/opentelemetry/api/OpenTelemetry;)V
+	public synthetic fun <init> (Lio/opentelemetry/api/OpenTelemetry;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
+	public fun getName ()Ljava/lang/String;
+	public fun onDecision (Lme/ahoo/cosec/runtime/event/DecisionEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/opentelemetry/TracingListener$Companion {
+	public final fun getAPP_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getBINDING_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getDEVICE_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getPOLICY_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getREQUEST_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getRESULT ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getSNAPSHOT_VERSION ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getSPACE_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getSTATEMENT_INDEX ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getSTATEMENT_NAME ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getTENANT_ID ()Lio/opentelemetry/api/common/AttributeKey;
+	public final fun getUSER_ID ()Lio/opentelemetry/api/common/AttributeKey;
+}
+

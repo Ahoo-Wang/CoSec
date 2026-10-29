@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.attribute
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
@@ -24,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
  * is never "not blocked", so the request is a 503 unless a DENY matches. Like every SPI of the pipeline, it must not
  * block the calling thread.
  */
+@CoSecSpi
 fun interface BlacklistSource {
     suspend fun contains(kind: BlacklistKind, value: String): Boolean
 }

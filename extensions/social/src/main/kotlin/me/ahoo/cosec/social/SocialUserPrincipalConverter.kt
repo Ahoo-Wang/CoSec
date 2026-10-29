@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.social
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 
@@ -21,6 +22,7 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 
+@CoSecSpi
 fun interface SocialUserPrincipalConverter {
     fun convert(provider: String, authUser: SocialUser): Mono<CoSecPrincipal>
 

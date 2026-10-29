@@ -13,11 +13,13 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import java.time.Instant
 
 /**
  * A token principal that knows when its token was issued (the JWT `iat` claim).
  */
+@CoSecSpi
 interface IssuedAtCapable {
     /** When the token was issued, or `null` if it does not say. */
     val issuedAt: Instant?

@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListeners
@@ -75,6 +79,7 @@ class ChangeRejectedException(
  *   against; [shadowed] closes the window from their reports, and [publish] needs the publisher to acknowledge the
  *   numbers whenever anything changed or the evidence was insufficient.
  */
+@InternalCoSecApi
 class Changes(
     private val store: ControlStore,
     private val revisions: Revisions,

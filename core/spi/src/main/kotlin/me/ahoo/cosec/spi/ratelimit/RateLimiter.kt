@@ -13,12 +13,14 @@
 
 package me.ahoo.cosec.spi.ratelimit
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.decision.RateLimitSpec
 
 /**
  * SPI (RFC 0006 §8.4): counts permits per bucket of a rate limit rule. Like every SPI of the pipeline it must not block
  * the calling thread. A failure is reported by throwing; the rule's `strictFailure` decides what it means (§8.3).
  */
+@CoSecSpi
 fun interface RateLimiter {
     /** Acquires one permit of [limit] from [bucket] of rule [ruleId]. */
     suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult

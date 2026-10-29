@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate.v7.cache
 
 import me.ahoo.cocache.core.CacheRuntime
@@ -18,6 +20,7 @@ import me.ahoo.cocache.core.SetCacheSpec
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.proxy.CacheProxies
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 

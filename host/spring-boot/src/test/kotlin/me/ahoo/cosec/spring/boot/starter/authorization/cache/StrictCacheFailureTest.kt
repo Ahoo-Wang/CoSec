@@ -10,6 +10,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.api.CacheReadException
@@ -18,6 +20,7 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cocache.test.HookedBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.snapshot
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
@@ -27,6 +28,7 @@ import java.util.concurrent.CompletableFuture
  * the read itself failed (the store is unreachable), and `SnapshotSource` keeps an installed document in that case
  * (RFC 0003 §4.4 F6) while it installs the failure for an undecodable one (F3, F5).
  */
+@CoSecSpi
 interface SnapshotDocumentStore {
     /**
      * Reads [key], possibly from a local copy. Completes with [SnapshotRead.Present] or [SnapshotRead.Absent], never

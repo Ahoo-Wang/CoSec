@@ -34,6 +34,7 @@ import java.time.Instant
  * the format before 8.0 (no `format`; `policies`, `attributes`, an optional `tenantId`) is refused, never read as a key
  * without a cap, which would give it all of its principal's memberships: `cosec-migrate api-keys` converts it.
  */
+@InternalCoSecApi
 object ApiKeyCodec {
     /** The format this codec reads and writes. */
     const val FORMAT: Int = 2

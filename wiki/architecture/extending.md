@@ -22,6 +22,7 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `TokenStore`, `RevocationReader` | `cosec-spi`, `spi.token` | Keep revoked tokens somewhere other than Redis. | one bean of each |
 | `ApiKeyReader` | `cosec-spi`, `spi.apikey` | Look API keys up somewhere other than memory or Redis. | one bean |
 | `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
+| `MembershipLoader` | `cosec-cocache`, `cache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
 | `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
@@ -35,18 +36,53 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 
 Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
 `cosec-spi`, with their value types and in-memory implementations (`InMemorySnapshotDocumentStore`,
-`InMemoryMembershipProvider`, `InMemoryApiKeyStore`); it depends on `cosec-model`, `cosec-api` and
-kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. A port whose signature
+`InMemoryMembershipProvider`, `InMemoryApiKeyStore`); it depends on `cosec-model`, `cosec-api`, `cosec-annotations`
+and kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. A port whose signature
 carries a layer's own types stays with that layer: `DecisionListener` takes the runtime's `DecisionEvent`, the shadow
 window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`) the runtime's candidates and reports, and
 `ControlStore` and `ChangeListener` the control plane's records and events.
 
-Changing one of these interfaces (rather than implementing it) is a breaking change for every application that
-implements it.
+Each of these interfaces carries `@CoSecSpi`: changing one, rather than implementing it, breaks every application that
+implements it ([Stability levels](#stability-levels)).
 
 The adapters themselves call a `RequestGate` (`cosec-runtime`): the `Pipeline`, or, on a service behind a CoSec
 gateway (`cosec.pipeline.mode=gateway`), `IdentityGate`. It is not an extension point: both build every outcome through
-`StatusMapping`, and a gate of your own would be a second decision path.
+`StatusMapping`, and a gate of your own would be a second decision path. The compiler holds this: implementing
+`RequestGate` requires the `@InternalCoSecApi` opt-in (`@SubclassOptInRequired`), which applications never give.
+
+## Stability levels
+
+Every public declaration of a published module is in one of four levels. The markers are in `cosec-annotations`
+(`me.ahoo.cosec.annotations`):
+
+| Marker | What it promises | What you do |
+|---|---|---|
+| none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
+| `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: every public declaration of `cosec-testkit`, and the control plane's access and grant analysis (`AccessQuery`, `AccessEntry`, `AccessReport`, `ControlPlane.analyze`; `GrantAnalyzer`, `GrantAnalysis`, `GrantVerdict`, `GrantFragment`, `Grantee`, `ProtectedEntry`, `Shortfall`, `UnknownReason`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
+
+The build keeps these promises. Every published library module stores its public ABI in a dump file,
+`api/<project>.api` in its directory (`core/spi/api/spi.api` for `cosec-spi`), and `check` runs the Kotlin Gradle
+plugin's `checkKotlinAbi`, which fails when the compiled module no longer matches its dump. `cosec-migrate` keeps no
+dump: it is a command-line tool, its contract is the command line, and its classes are not a library API. `@InternalCoSecApi` declarations are
+left out of the dumps; experimental ones are in them, so their changes show in review too. A dump lists signatures, not
+annotations, so which interfaces are SPIs is read from the sources, the API docs and this page, and `SpiMarkerTest`
+(`test/architecture`) fails when a public interface of `cosec-spi`, or a type the table above names, lacks
+`@CoSecSpi`.
+
+To change a public signature on purpose, regenerate the module's dump and commit it with the change:
+
+```bash
+./gradlew :spi:updateKotlinAbi
+```
+
+Review the dump's diff like code: an added line is a new API; a removed or changed line breaks the callers or the
+implementations of that declaration. From 8.0 GA on, a pull request that removes or changes a line of a dump is a
+breaking change and its title carries `!`
+([`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md#3-commits-and-pull-request-titles)).
+The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
+and needs no `!`, and the pull request description says which experimental declarations it changes.
 
 ## Rules every extension follows
 

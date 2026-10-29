@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
@@ -59,6 +63,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * An operator holding `cosec:approve` on the document is the trust root (§7.3): its changes are not analyzed, unless
  * [ChangeOptions.fourEyes] is on. A new or changed break-glass binding always needs a second person (§8).
  */
+@InternalCoSecApi
 class ChangeAuthority(
     private val authorizer: ControlAuthorizer,
     private val options: ChangeOptions = ChangeOptions(),

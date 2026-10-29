@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document.format
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.io.File
 import kotlin.system.exitProcess
 

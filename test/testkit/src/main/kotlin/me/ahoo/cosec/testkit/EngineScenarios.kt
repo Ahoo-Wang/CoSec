@@ -14,6 +14,7 @@
 package me.ahoo.cosec.testkit
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.engine.TraceLevel
@@ -56,6 +57,7 @@ import java.time.Instant
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /** What evaluating an engine scenario produced, compared with its `expect` by [EngineExpectations]. */
+@ExperimentalCoSecApi
 sealed interface EngineOutcome {
     /** The engine decided. */
     class Decided(val decision: Decision) : EngineOutcome
@@ -95,6 +97,7 @@ sealed interface EngineOutcome {
  *                 "device": "...", "blocked": false, "headers": {}, "attributes": {} }
  * ```
  */
+@ExperimentalCoSecApi
 class EngineScenarios(
     private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
     private val engine: FlatEngine = CoSecFlatEngine,

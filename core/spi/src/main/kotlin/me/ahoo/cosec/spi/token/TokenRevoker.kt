@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
@@ -31,6 +32,7 @@ import java.time.Instant
  * @see DefaultTokenRevoker
  * @see TokenStore
  */
+@CoSecSpi
 interface TokenRevoker {
 
     /**

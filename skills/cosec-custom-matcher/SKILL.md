@@ -12,12 +12,15 @@ external attributes.
 
 Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the ports live in
 `core/spi/src/main/kotlin/me/ahoo/cosec/spi/` (`attribute/`, `authn/`, `membership/`, `ratelimit/`, `token/`,
-`apikey/`, `snapshot/`, `audit/`; module `cosec-spi`, which depends only on the model, the contracts and coroutines), and
+`apikey/`, `snapshot/`, `audit/`; module `cosec-spi`, which depends only on the model, the contracts, the stability
+markers and coroutines), and
 the ones that carry runtime types in `core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`event/`, `attribute/` for
 `BlacklistSource`); the starter wires them in
 `host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt` and
 `CoSecPipelineIntegrationAutoConfiguration.kt`. A library that only implements a `cosec-spi` port depends on
-`cosec-spi` alone. Never opt in to `@InternalCoSecApi` declarations: they are CoSec-internal. Inspect the target version's interfaces before writing code.
+`cosec-spi` alone. Never opt in to `@InternalCoSecApi` declarations: they are CoSec-internal. The interfaces meant to be implemented carry
+`@CoSecSpi`; an `@ExperimentalCoSecApi` one may still change in a minor release. Inspect the target version's interfaces
+before writing code.
 
 ## Rules for every extension
 

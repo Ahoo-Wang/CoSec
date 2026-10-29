@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.control.grant.GrantFixtures.ACME
 import me.ahoo.cosec.control.grant.GrantFixtures.TENANT_ADMIN
 import me.ahoo.cosec.control.grant.GrantFixtures.allow

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.shadow
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
@@ -100,6 +101,7 @@ data class InstalledDocument(val revision: Long, val lag: Duration)
 data class InstanceStatus(val instance: String, val at: Instant, val documents: Map<SnapshotKey, InstalledDocument>)
 
 /** Where each instance writes its shadow reports and its status (RFC 0007 §6.4, §6.5). */
+@CoSecSpi
 interface ShadowReportSink {
     suspend fun write(report: ShadowReport)
 
@@ -107,6 +109,7 @@ interface ShadowReportSink {
 }
 
 /** What the control plane reads back: every instance's report of a window, and the statuses written recently. */
+@CoSecSpi
 interface ShadowReportReader {
     suspend fun reports(window: String): List<ShadowReport>
 

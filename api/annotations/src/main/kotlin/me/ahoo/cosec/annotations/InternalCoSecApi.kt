@@ -15,7 +15,8 @@ package me.ahoo.cosec.annotations
 
 /**
  * Public only so that other CoSec modules can call it: no compatibility promise, and it may change in any release.
- * Opting in is an error outside CoSec's own modules, which `test/architecture` checks (RFC 0011 D3, D4).
+ * Opting in is an error outside CoSec's own modules, which `test/architecture` checks, and its declarations are left out
+ * of the ABI dumps (RFC 0011 D3, D4).
  */
 @RequiresOptIn(
     message = "Internal CoSec API: it may change in any release. Only CoSec's own modules opt in.",

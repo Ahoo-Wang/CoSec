@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.store
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
@@ -38,6 +39,7 @@ import java.time.Instant
  * Digests are the store's own ([digestOf]); the head's digest is also the address of its revision record, which is
  * what a document's `provenance.parent` points to (RFC 0007 §5.3).
  */
+@CoSecSpi
 interface ControlStore : CandidateStore {
     /** The digest this store computes for [document]: the same for the head and for its revision record. */
     fun digestOf(document: SnapshotDocument): SnapshotDigest

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -185,7 +188,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      *
      * @throws IllegalArgumentException when a key belongs to no family of this source.
      */
-    fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
+    internal fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
         val families = keys.map(::familyOf)
         if (closed) {
             return null
@@ -242,6 +245,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      *
      * @throws IllegalArgumentException when a key belongs to no family of this source.
      */
+    @InternalCoSecApi
     fun loadAll(keys: List<SnapshotKey>): CompletableFuture<SnapshotSet<P, A>> {
         keys.forEach(::familyOf)
         if (closed) {
@@ -274,7 +278,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     /** [checkFresh] for the documents of one evaluation of the 8.0 source: the oldest of them decides. */
-    fun checkFresh(snapshot: SnapshotSet<*, *>, tenantId: String) {
+    internal fun checkFresh(snapshot: SnapshotSet<*, *>, tenantId: String) {
         checkFresh(tenantId) { snapshot.lagAt(it) }
     }
 

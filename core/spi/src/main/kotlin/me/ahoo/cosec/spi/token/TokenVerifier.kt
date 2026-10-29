@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
@@ -26,6 +27,7 @@ import me.ahoo.cosec.api.token.TokenPrincipal
  * - Refreshing tokens using refresh tokens
  *
  */
+@CoSecSpi
 interface TokenVerifier {
     /**
      * Verifies an access token and returns the principal.

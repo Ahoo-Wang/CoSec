@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document.format
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The shape of one JSON value in a document format (RFC 0007 §10.4): plain data that [JsonSchemaWriter] turns into
@@ -20,6 +24,7 @@ package me.ahoo.cosec.runtime.document.format
  * Only what the formats use is modelled; a new keyword is added here, in [JsonSchemaWriter] and in the test's document
  * generator together.
  */
+@InternalCoSecApi
 sealed interface FormatType {
     val description: String?
 }
@@ -30,6 +35,7 @@ sealed interface FormatType {
  * [counterExamples] are not written: they are values the compiler rejects, and the conformance test checks that the
  * schema rejects each of them too. A string with a [pattern] lists at least one.
  */
+@InternalCoSecApi
 class StringType(
     val enum: List<String> = emptyList(),
     val pattern: String? = null,
@@ -41,19 +47,23 @@ class StringType(
     override val description: String? = null,
 ) : FormatType
 
+@InternalCoSecApi
 class BooleanType(override val description: String? = null) : FormatType
 
+@InternalCoSecApi
 class IntegerType(
     val minimum: Long? = null,
     val const: Long? = null,
     override val description: String? = null,
 ) : FormatType
 
+@InternalCoSecApi
 class NumberType(
     val exclusiveMinimum: Long? = null,
     override val description: String? = null,
 ) : FormatType
 
+@InternalCoSecApi
 class ArrayType(
     val items: FormatType,
     val minItems: Int? = null,
@@ -62,6 +72,7 @@ class ArrayType(
 ) : FormatType
 
 /** An array of exactly [items].size values, each of its own type: the `[attribute, value]` operands of a condition. */
+@InternalCoSecApi
 class TupleType(val items: List<FormatType>, override val description: String? = null) : FormatType {
     init {
         require(items.isNotEmpty()) { "A tuple has at least one item." }
@@ -69,6 +80,7 @@ class TupleType(val items: List<FormatType>, override val description: String? =
 }
 
 /** An object whose keys are data, such as the grants of an app document keyed by role. */
+@InternalCoSecApi
 class MapType(
     val keys: StringType,
     val values: FormatType,
@@ -79,6 +91,7 @@ class MapType(
  * An object with named [fields]. [extension] is null for a closed object (no unknown fields); otherwise it describes
  * what the other keys are, as for matcher types a factory registers at run time.
  */
+@InternalCoSecApi
 class ObjectType(
     val fields: List<Field>,
     val extension: String? = null,
@@ -104,6 +117,7 @@ class ObjectType(
     fun field(name: String): Field? = fields.firstOrNull { it.name == name }
 }
 
+@InternalCoSecApi
 class Field(
     val name: String,
     val type: FormatType,
@@ -114,9 +128,11 @@ class Field(
 )
 
 /** Any one of [variants]; the first is the one the test generator falls back to when it bounds recursion. */
+@InternalCoSecApi
 class AnyOf(val variants: List<FormatType>, override val description: String? = null) : FormatType
 
 /** A reference to the root ([definition] null) or a definition of the schema file [file]. */
+@InternalCoSecApi
 class Ref(val file: String, val definition: String? = null) : FormatType {
     override val description: String? get() = null
 
@@ -124,6 +140,7 @@ class Ref(val file: String, val definition: String? = null) : FormatType {
 }
 
 /** One generated `schema/<name>.schema.json`. */
+@InternalCoSecApi
 class SchemaFile(
     val name: String,
     val title: String,
