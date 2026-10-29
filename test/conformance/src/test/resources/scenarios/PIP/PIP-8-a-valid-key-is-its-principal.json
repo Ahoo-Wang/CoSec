@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "A valid key authenticates its service principal, whose binding permits.",
+  "description": "A valid key authenticates its service principal, which the membership provider knows, and whose binding permits.",
   "documents": {
     "tenants": {
       "acme": {
@@ -77,6 +77,14 @@
       "id": "alice",
       "issuedAt": "2026-10-01T00:00:00Z"
     }
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc"
+      }
+    ]
   },
   "expect": {
     "status": 200,

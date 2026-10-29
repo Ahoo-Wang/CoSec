@@ -157,13 +157,15 @@ class EngineScenarios(
         }
         val resolver = MembershipResolver(provider?.let { provider(credential, it) })
         val principal = credential.principal()
-        return runBlocking {
+        val resolved = runBlocking {
             resolver.resolve(
                 credential.tenant,
                 PrincipalId(principal.id),
                 MembershipSource.of(principal)
             )
         }
+        // The scenario's provider always knows its credential's principal, so only a pipeline scenario is refused.
+        return checkNotNull(resolved) { "The scenario's membership provider does not know [${principal.id}]." }
     }
 
     private fun provider(credential: Credential, node: JsonNode): MembershipProvider {

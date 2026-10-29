@@ -163,7 +163,10 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                                     "policies": [...], "enabled": true, "expiresAt": "..." }],
  * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
  *                       | { "fails": "message" },                       // the check reports an error
- * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
+ * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true }
+ *                       // knows the authentication's principal; or, by tenant and id, exactly these principals
+ *                       // ("active": false deactivates one; any other is unknown, RFC 0009 §4.2)
+ *                       | { "principals": [{ "tenant": "acme", "id": "svc", "roles": {...}, "attachments": [...], "active": false }] },
  * "snapshot":           { "fails": "message" } | { "hangs": true }       // otherwise every document is installed
  *                       | { "failClosed": { "tenants": ["acme"], "maxLagSeconds": 300 }, "lagSeconds": 301 },
  *                       // the host's DocumentSnapshotViews over a SnapshotSource that loaded the documents
@@ -393,13 +396,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private fun apiKeys(node: JsonNode): ApiKeyReader {
         node.get("apiKeysFail")?.let { fails -> return ApiKeyReader { throw IllegalStateException(fails.text()) } }
         val keys = node.get("apiKeys")?.values().orEmpty().associate { key ->
-            key.only("key", "id", "principalId", "tenantId", "roles", "policies", "enabled", "expiresAt")
+            key.only("key", "id", "principalId", "tenantId", "roles", "enabled", "expiresAt")
             ApiKeys.hash(key.required("key").text()) to ApiKey(
                 id = key.get("id")?.text() ?: "key",
                 principalId = key.required("principalId").text(),
-                tenantId = key.get("tenantId")?.text(),
-                roles = key.get("roles")?.strings().orEmpty().toSet(),
-                policies = key.get("policies")?.strings().orEmpty().toSet(),
+                tenantId = key.required("tenantId").text(),
+                // Absent: no cap. A key carries no policies (RFC 0009 §4.1).
+                roles = key.get("roles")?.strings()?.toSet(),
                 enabled = key.get("enabled")?.bool() ?: true,
                 expiresAt = key.get("expiresAt")?.text()?.let(Instant::parse),
             )
@@ -463,7 +466,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun provider(authentication: JsonNode, node: JsonNode, reached: () -> Unit): MembershipProvider {
-        node.only("roles", "attachments", "fails", "hangs")
+        node.only("roles", "attachments", "fails", "hangs", "principals")
         node.get("fails")?.let { fails ->
             return MembershipProvider { _, _ -> throw IllegalStateException(fails.text()) }
         }
@@ -473,17 +476,30 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 awaitCancellation()
             }
         }
+        node.get("principals")?.let { principals ->
+            require(!node.has("roles") && !node.has("attachments")) { "principals or roles and attachments, not both" }
+            return InMemoryMembershipProvider().apply {
+                principals.values().forEach { principal ->
+                    principal.only("tenant", "id", "roles", "attachments", "active")
+                    put(
+                        TenantId(principal.required("tenant").text()),
+                        PrincipalId(principal.required("id").text()),
+                        provided(principal),
+                    )
+                }
+            }
+        }
+        return InMemoryMembershipProvider().apply {
+            put(TenantId(authentication.tenant()), PrincipalId(authentication.id()), provided(node))
+        }
+    }
+
+    private fun provided(node: JsonNode): Memberships {
         val roles = node.get("roles")?.fields().orEmpty().map { (space, ids) ->
             SpaceId(space) to ids.strings().mapTo(LinkedHashSet(), ::RoleId)
         }.toMap()
         val attachments = node.get("attachments")?.strings().orEmpty().map(::PolicyId)
-        return InMemoryMembershipProvider().apply {
-            put(
-                TenantId(authentication.tenant()),
-                PrincipalId(authentication.id()),
-                Memberships(Memberships.Source.PROVIDER, roles, attachments),
-            )
-        }
+        return Memberships(Memberships.Source.PROVIDER, roles, attachments, active = node.get("active")?.bool() ?: true)
     }
 
     /** Every document installed, unless the scenario's snapshot source fails or hangs on load. */
