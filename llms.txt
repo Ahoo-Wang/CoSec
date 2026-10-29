@@ -1,6 +1,6 @@
 # CoSec
 
-> Multi-tenant, non-blocking authorization framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). Policies are JSON documents (platform, app and tenant) with bindings, compiled into a snapshot every instance reads from Redis; decisions are deny-first and fail closed. JWT and API key authentication with always-on token revocation, rate limits as document rules, and a control plane for reviewed changes, simulation and rollback. Kotlin, Java 17, Spring Boot 4.
+> Multi-tenant, non-blocking authorization framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). Policies are JSON documents (platform, app and tenant) with bindings, compiled into a snapshot every instance reads from Redis; decisions are deny-first and fail closed. JWT and API key authentication with always-on token revocation, rate limits as document rules, and a control plane for reviewed changes, simulation and rollback. Kotlin, Java 21, Spring Boot 4.
 
 Key facts: any matching DENY overrides every ALLOW; a request nothing allows is denied; a request that cannot be decided (a document that does not compile or cannot be read, an unavailable attribute or membership source) is answered 503. Denied anonymous callers get 401, authenticated ones 403, exceeded rate limit rules 429; every error body is `application/problem+json`. Statements use `service:verb` actions (from a route map) or `http:<METHOD>`, typed or `http:path:` resources, and condition ASTs such as `{"eq": ["subject.authenticated", true]}`.
 

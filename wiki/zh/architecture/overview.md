@@ -239,7 +239,7 @@ sequenceDiagram
 ./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark      # 需要 localhost:6379 上的 Redis
 ```
 
-这些运行只用一个 fork、一次预热迭代和一次测量迭代（根 `build.gradle.kts` 中的默认值）：足以确认基准测试能运行，不足以比较版本。可以用 Gradle 属性覆盖默认值：`-PjmhWarmupIterations`、`-PjmhIterations`、`-PjmhFork`、`-PjmhProfilers`（逗号分隔，例如 `gc`）和 `-PjmhJavaVersion`（基准 JVM 运行所用的 JDK 工具链；代码仍按 17 编译）。
+这些运行只用一个 fork、一次预热迭代和一次测量迭代（根 `build.gradle.kts` 中的默认值）：足以确认基准测试能运行，不足以比较版本。可以用 Gradle 属性覆盖默认值：`-PjmhWarmupIterations`、`-PjmhIterations`、`-PjmhFork`、`-PjmhProfilers`（逗号分隔，例如 `gc`）和 `-PjmhJavaVersion`（基准 JVM 运行所用的 JDK 工具链；代码仍按 21 编译）。
 
 要比较版本，构建 jar 并用正式的参数运行：
 

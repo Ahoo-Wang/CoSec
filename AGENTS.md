@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 17, Spring Boot 4, Kotlin coroutines (Project
+CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 21, Spring Boot 4, Kotlin coroutines (Project
 Reactor only at the edges, in the extensions and in `cosec-login`'s API), built with Gradle (Kotlin DSL). This file is
 for agents and contributors **changing** CoSec. To **use** CoSec, see `skills/` and https://cosec.ahoo.me.
 Branching, reviews and releases: `CONTRIBUTING.md`.
