@@ -111,8 +111,11 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 ```
 
 Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier`: revocation is
-checked through the suspending `RevocationReader`. How tokens, claims and memberships work for users is in
-[Authentication](../integration/authentication.md).
+checked through the suspending `RevocationReader`. A token with an `act` claim must never become a principal
+(`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
+turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns
+`AuthnResult.Rejected(DELEGATION_UNSUPPORTED)` instead of a principal for its `sub`. How tokens, claims and memberships work for
+users is in [Authentication](../integration/authentication.md).
 
 ## Credentials and revocation
 

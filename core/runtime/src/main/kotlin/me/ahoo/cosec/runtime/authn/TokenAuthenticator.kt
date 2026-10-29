@@ -25,6 +25,7 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.ExpiresAtCapable
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
@@ -39,9 +40,10 @@ import java.time.Duration
  * then [revocations] says whether it, or every token of its principal (RFC 0004 §4.5.3, `MEM-4`), was revoked.
  *
  * - No token: [AuthnResult.Anonymous]. An API key alone is not read here; the request goes on as anonymous.
- * - An expired token: [AuthnResult.RejectReason.TOKEN_EXPIRED]; a revoked one: `TOKEN_REVOKED`; any other
- *   [TokenVerificationException]: `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with
- *   the matching `token-*` problem (RFC 0006 K2).
+ * - An expired token: [AuthnResult.RejectReason.TOKEN_EXPIRED]; a revoked one: `TOKEN_REVOKED`; a delegation token
+ *   ([DelegationUnsupportedException], `IDN-4`): `DELEGATION_UNSUPPORTED`; any other [TokenVerificationException]:
+ *   `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with the matching `token-*` problem
+ *   (RFC 0006 K2); a delegation token answers `token-invalid`.
  * - The memberships come from the token as [MembershipSource.of] reads them.
  *
  * Give it the plain verifier (such as `JwtTokenVerifier`), not a [RevocableTokenVerifier]: that one reads the
@@ -72,6 +74,8 @@ class TokenAuthenticator(
             return EXPIRED
         } catch (_: TokenRevokedException) {
             return REVOKED
+        } catch (_: DelegationUnsupportedException) {
+            return DELEGATION_UNSUPPORTED
         } catch (_: TokenVerificationException) {
             return INVALID
         }
@@ -102,5 +106,6 @@ class TokenAuthenticator(
         private val EXPIRED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED)
         private val REVOKED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)
         private val INVALID = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)
+        private val DELEGATION_UNSUPPORTED = AuthnResult.Rejected(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED)
     }
 }

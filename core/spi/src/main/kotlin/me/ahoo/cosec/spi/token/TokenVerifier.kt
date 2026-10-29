@@ -33,7 +33,8 @@ interface TokenVerifier {
      * @param T The type of token principal
      * @param accessToken The access token to verify
      * @return The verified token principal
-     * @throws TokenVerificationException if verification fails
+     * @throws TokenVerificationException if verification fails; [DelegationUnsupportedException] for a token that
+     *   delegates (an `act` claim), which must never become a principal (`IDN-4`)
      */
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> verify(accessToken: AccessToken): T

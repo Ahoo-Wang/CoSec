@@ -101,8 +101,11 @@ internal object StatusMapping {
         is AuthnResult.Rejected -> when (authn.reason) {
             AuthnResult.RejectReason.TOKEN_EXPIRED -> ProblemType.TOKEN_EXPIRED
             AuthnResult.RejectReason.TOKEN_REVOKED -> ProblemType.TOKEN_REVOKED
-            // An API key is a token to the client: the remedy is the same.
-            AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> ProblemType.TOKEN_INVALID
+            // An API key is a token to the client, and so is a delegation token CoSec cannot use: the remedy is the same.
+            AuthnResult.RejectReason.TOKEN_INVALID,
+            AuthnResult.RejectReason.API_KEY_INVALID,
+            AuthnResult.RejectReason.DELEGATION_UNSUPPORTED,
+            -> ProblemType.TOKEN_INVALID
         }
 
         is AuthnResult.Authenticated ->
