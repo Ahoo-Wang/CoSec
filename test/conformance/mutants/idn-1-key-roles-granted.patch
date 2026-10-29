@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
-index aec7512d..13362708 100644
+index 275c5db2..1642bf9b 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
-@@ -55,7 +55,7 @@ class ApiKeyAuthenticator(
+@@ -61,7 +61,7 @@ class ApiKeyAuthenticator(
          val principal = AuthenticatedPrincipal(
              id = PrincipalId(apiKey.principalId),
              tenant = TenantId(apiKey.tenantId),
 -            membershipSource = apiKey.roles?.let(MembershipSource.Provider::capped) ?: MembershipSource.Provider.UNCAPPED,
 +            membershipSource = MembershipSource.Claims(me.ahoo.cosec.spi.membership.MembershipClaims.parse(apiKey.roles.orEmpty(), emptyList())),
              attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to apiKey.id),
-             credential = Identity.Credential(Identity.Method.API_KEY, apiKey.id, apiKey.expiresAt),
-         )
+             credential = Identity.Credential(
+                 Identity.Method.API_KEY,
