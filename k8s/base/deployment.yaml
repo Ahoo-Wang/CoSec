@@ -16,8 +16,8 @@ spec:
         app.kubernetes.io/name: cosec-gateway
     spec:
       # Service links would put COSEC_GATEWAY_SERVICE_HOST, COSEC_GATEWAY_PORT_80_TCP_* and the like, from the
-      # Service cosec-gateway, into the environment. Spring reads them as cosec.gateway.* properties, and the gateway
-      # refuses to start on cosec.* keys it does not read. Services are found by DNS instead.
+      # Service cosec-gateway, into the environment. Spring reads them as cosec.gateway.* properties, which
+      # 8.0.0-alpha.1 refused at startup (alpha.2 skips exactly these variables). Services are found by DNS instead.
       enableServiceLinks: false
       # The gateway never calls the Kubernetes API.
       automountServiceAccountToken: false
