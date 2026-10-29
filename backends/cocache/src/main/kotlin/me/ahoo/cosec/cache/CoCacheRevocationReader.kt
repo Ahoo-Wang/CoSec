@@ -28,7 +28,7 @@ import java.time.Instant
  * moves on (T2). The caches keep CoCache's degraded read mode: a failed read is a miss, so the token counts as not
  * revoked, the documented exception to failing closed ([CoSecCacheSpecs.revokedToken]).
  */
-class CoCacheRevocationReader @JvmOverloads constructor(
+internal class CoCacheRevocationReader @JvmOverloads constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null,
 ) : RevocationReader {

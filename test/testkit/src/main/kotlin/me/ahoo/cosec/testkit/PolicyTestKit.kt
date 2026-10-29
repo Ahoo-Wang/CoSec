@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.testkit
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import org.junit.jupiter.api.DynamicTest
 import tools.jackson.databind.JsonNode
 import java.net.URLDecoder
@@ -61,6 +62,7 @@ import kotlin.io.path.relativeTo
  *
  * Requests name their action and resource; the test kit does not evaluate HTTP requests through a route map.
  */
+@ExperimentalCoSecApi
 class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) {
     private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored)
 

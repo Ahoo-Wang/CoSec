@@ -250,7 +250,7 @@ class ControllableStore : SnapshotDocumentStore {
 }
 
 /** Throws from every callback, to prove that a failing meter changes nothing. */
-class ThrowingMetrics : SnapshotMetrics {
+internal class ThrowingMetrics : SnapshotMetrics {
     private fun fail(): Nothing = throw IllegalStateException("meter down")
 
     override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = fail()
@@ -267,7 +267,7 @@ class ThrowingMetrics : SnapshotMetrics {
 }
 
 /** Records every [SnapshotMetrics] event. */
-class RecordingMetrics : SnapshotMetrics {
+internal class RecordingMetrics : SnapshotMetrics {
     val loads: MutableList<Pair<SnapshotKind, LoadOutcome>> = CopyOnWriteArrayList()
     val installs: MutableList<SnapshotEntry<*>> = CopyOnWriteArrayList()
     val regressions: MutableList<Triple<SnapshotKey, Long, Long>> = CopyOnWriteArrayList()
@@ -304,7 +304,7 @@ class RecordingMetrics : SnapshotMetrics {
 val directExecutor: Executor = Executor { it.run() }
 
 /** A source with no periodic revalidation: tests call [SnapshotSource.revalidate] or [SnapshotSource.tick] instead. */
-fun testSource(
+internal fun testSource(
     store: SnapshotDocumentStore,
     compiler: FakeCompiler = FakeCompiler(),
     options: SnapshotOptions = SnapshotOptions(revalidateInterval = Duration.ZERO),
@@ -329,7 +329,7 @@ fun testSource(
  * The source shape most tests use: the shared platform document and one family of app documents, so a test reads
  * "the shared document" and "an app" without the tenant family. The guarantees hold for every key of every family.
  */
-fun <P : Any, A : Any> appSource(
+internal fun <P : Any, A : Any> appSource(
     store: SnapshotDocumentStore,
     sharedCompiler: SnapshotCompiler<P>,
     appCompiler: SnapshotCompiler<A>,

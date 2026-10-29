@@ -54,11 +54,12 @@ this because the title drives labels, release notes, and the next version number
 Mark breaking changes with `!` after the type (`feat!: ...`) or a `BREAKING CHANGE:` paragraph in the
 description. They are listed under 💥 Breaking Changes and require a major version.
 
-**ABI dumps and `!`.** Every published module keeps its public ABI in `api/<project>.api` (see section 4). From 8.0 GA
-on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`, unless the
-line belongs to an `@ExperimentalCoSecApi` declaration (say so in the description). A dump change that only adds lines
-needs no `!`. Before GA, through the release candidates, the dumps already show every change, and the rule does not
-apply yet. Nothing checks the title against the dumps: the author and the reviewer do.
+**ABI dumps and `!`.** Every published library module keeps its public ABI in `api/<project>.api` (see section 4).
+From 8.0 GA on, a pull request that removes or changes a line of a dump is a breaking change and its title carries `!`.
+The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
+and needs no `!`; the description names the experimental declarations it changes. A dump change that only adds lines
+needs no `!` either. Before GA, through the release candidates, the dumps already show every change, and the rule does
+not apply yet. Nothing checks the title against the dumps: the author and the reviewer do.
 
 ## 4. Coding conventions
 

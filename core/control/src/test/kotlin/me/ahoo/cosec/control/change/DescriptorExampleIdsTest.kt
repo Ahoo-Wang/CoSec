@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.document.format.AnyOf
 import me.ahoo.cosec.runtime.document.format.ArrayType
 import me.ahoo.cosec.runtime.document.format.DocumentFormats

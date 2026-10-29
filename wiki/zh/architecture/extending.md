@@ -35,7 +35,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 
 适配器本身调用的是 `RequestGate`（`cosec-runtime`）：`Pipeline`，或者在 CoSec 网关后面的服务上
 （`cosec.pipeline.mode=gateway`）是 `IdentityGate`。它不是扩展点：两者都通过 `StatusMapping` 构造每个结果，自己写的
-gate 会成为第二条决策路径。
+gate 会成为第二条决策路径。编译器守住这一点：实现 `RequestGate` 需要 `@InternalCoSecApi` 的 opt-in（`@SubclassOptInRequired`），而应用从不这样做。
 
 ## 稳定性等级 {#stability-levels}
 
@@ -45,11 +45,12 @@ gate 会成为第二条决策路径。
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点，以及主体声明的能力（`ExpiresAtCapable`、`IssuedAtCapable`、`MembershipMarkerCapable`）。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的所有公共声明，以及控制面的访问分析与授权分析（`AccessQuery`、`AccessEntry`、`AccessReport`、`ControlPlane.analyze`；`GrantAnalyzer`、`GrantAnalysis`、`GrantVerdict`、`GrantFragment`、`Grantee`、`ProtectedEntry`、`Shortfall`、`UnknownReason`）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
-这些承诺由构建守住。每个发布模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
+这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
 （`cosec-spi` 的是 `core/spi/api/spi.api`）；`check` 运行 Kotlin Gradle 插件的 `checkKotlinAbi`，编译出的模块与转储不一致时失败。
+`cosec-migrate` 没有转储：它是命令行工具，契约是命令行，它的类不是库 API。
 `@InternalCoSecApi` 声明不进转储；实验性声明在转储里，所以它们的变化同样会出现在评审中。转储只列签名、不列注解，所以哪些接口是
 SPI 要从源码、API 文档和本页看；`test/architecture` 的 `SpiMarkerTest` 在 `cosec-spi` 的公共接口或上表列出的类型缺少
 `@CoSecSpi` 时失败。
@@ -61,8 +62,9 @@ SPI 要从源码、API 文档和本页看；`test/architecture` 的 `SpiMarkerTe
 ```
 
 像评审代码一样评审转储的 diff：新增一行是新的 API；删除或修改一行会破坏该声明的调用方或实现。从 8.0 GA 起，删除或修改转储中任何一行的
-PR 都是破坏性变更，标题要带 `!`，除非该声明是 `@ExperimentalCoSecApi`
+PR 都是破坏性变更，标题要带 `!`
 （[`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md#3-commits-and-pull-request-titles)）。
+唯一的例外是 `@ExperimentalCoSecApi` 声明的行：删除或修改它不是破坏性变更，不需要 `!`，PR 描述要写明改了哪些实验性声明。
 
 ## 每个扩展都遵守的规则 {#rules-every-extension-follows}
 

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document.format
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.util.TreeMap
 
 /**
@@ -20,7 +23,7 @@ import java.util.TreeMap
  * the same descriptor always gives the same bytes. Hand-written rather than through Jackson so the output does not
  * depend on a mapper's configuration.
  */
-object JsonSchemaWriter {
+internal object JsonSchemaWriter {
     const val DRAFT_07 = "http://json-schema.org/draft-07/schema#"
 
     /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns.NOT_EXPRESSED]). */

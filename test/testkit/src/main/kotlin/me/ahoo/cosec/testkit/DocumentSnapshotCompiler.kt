@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.testkit
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.CoSecException
@@ -29,9 +30,11 @@ import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 
 /** The documents of a scenario, as written. */
+@ExperimentalCoSecApi
 class ScenarioDocuments(val platform: JsonNode?, val apps: Map<String, JsonNode>, val tenants: Map<String, JsonNode>)
 
 /** Every document of a scenario, compiled. */
+@ExperimentalCoSecApi
 class CompiledSnapshot(
     val platform: CompiledDocument,
     val apps: Map<String, CompiledDocument>,
@@ -39,6 +42,7 @@ class CompiledSnapshot(
 )
 
 /** Turns scenario documents into what the engine evaluates. */
+@ExperimentalCoSecApi
 fun interface SnapshotCompiler {
     /** Throws [DocumentException] when a document does not compile. */
     fun compile(documents: ScenarioDocuments): CompiledSnapshot
@@ -56,6 +60,7 @@ fun interface SnapshotCompiler {
  * [RequestFacts.host] answers by throwing [ScenarioFault]; the codec itself has no such field. [stored] leaves it out,
  * so a user's documents compile exactly as they do when published.
  */
+@ExperimentalCoSecApi
 object DocumentSnapshotCompiler : SnapshotCompiler {
     private val factory = JsonNodeFactory.instance
 
@@ -146,6 +151,7 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
 }
 
 /** A failure injected by `"fault"`. */
+@ExperimentalCoSecApi
 class ScenarioFault(message: String) : RuntimeException(message)
 
 /** The prefix of the request attribute a `"fault"` reads. */

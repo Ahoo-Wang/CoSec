@@ -139,9 +139,9 @@ The rules behind the picture:
 - `SpiMarkerTest`: every public interface of `cosec-spi` that an application can implement, and every extension point
   [Extending](./extending.md#extension-points) lists, carries `@CoSecSpi`, and the marker is on nothing else.
 
-The public API itself is held by the build, not by review (RFC 0011 D4): every published module keeps its ABI in a dump,
-`api/<project>.api` in its directory, and its `check` runs the Kotlin Gradle plugin's `checkKotlinAbi`, which fails
-when a public signature changed without the dump. `@InternalCoSecApi` declarations are not in the dumps. From 8.0 GA
+The public API itself is held by the build, not by review (RFC 0011 D4): every published library module but
+`cosec-migrate` (a command-line tool) keeps its ABI in a dump, `api/<project>.api` in its directory, and its `check`
+runs the Kotlin Gradle plugin's `checkKotlinAbi`, which fails when a public signature changed without the dump. `@InternalCoSecApi` declarations are not in the dumps. From 8.0 GA
 on, a removed or changed line of a dump is a breaking change.
 
 ## Request path

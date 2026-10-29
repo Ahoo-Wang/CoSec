@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.snapshot
 
 import me.ahoo.cocache.api.Cache
@@ -18,6 +20,7 @@ import me.ahoo.cocache.api.spi.InvalidationChannel
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
@@ -58,6 +61,7 @@ class PolicySnapshotCache internal constructor(
  * Explicit key encoding (RFC 0003 §10, RFC 0004 §7.1): `platform`, `app:<appId>` and `tenant:<tenantId>`.
  * `KeyEncoder.ofToString()` would need a reflection hint, and would tie the Redis layout to [SnapshotKey.toString].
  */
+@InternalCoSecApi
 object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
     const val PLATFORM = "platform"
     const val APP_PREFIX = "app:"

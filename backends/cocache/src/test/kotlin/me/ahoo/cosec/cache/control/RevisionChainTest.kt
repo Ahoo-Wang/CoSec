@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.control
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.snapshot.RedisTarget
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.cache.snapshot.newKeyPrefix

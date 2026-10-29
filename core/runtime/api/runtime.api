@@ -689,155 +689,6 @@ public final class me/ahoo/cosec/runtime/document/ShadowWindow {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/runtime/document/format/AnyOf : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> (Ljava/util/List;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getVariants ()Ljava/util/List;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/ArrayType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> (Lme/ahoo/cosec/runtime/document/format/FormatType;Ljava/lang/Integer;ZLjava/lang/String;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/document/format/FormatType;Ljava/lang/Integer;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getItems ()Lme/ahoo/cosec/runtime/document/format/FormatType;
-	public final fun getMinItems ()Ljava/lang/Integer;
-	public final fun getUniqueItems ()Z
-}
-
-public final class me/ahoo/cosec/runtime/document/format/BooleanType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getDescription ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/DocumentFormats {
-	public static final field BASE_URI Ljava/lang/String;
-	public static final field BINDING Ljava/lang/String;
-	public static final field CATALOG Ljava/lang/String;
-	public static final field DEFINITIONS Ljava/lang/String;
-	public static final field IDENTITY Ljava/lang/String;
-	public static final field INSTANCE Lme/ahoo/cosec/runtime/document/format/DocumentFormats;
-	public static final field PROBLEM Ljava/lang/String;
-	public static final field PROBLEM_TYPE_PREFIX Ljava/lang/String;
-	public static final field SNAPSHOT_DOCUMENT Ljava/lang/String;
-	public final fun file (Ljava/lang/String;)Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun getBindingSchema ()Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun getCatalogSchema ()Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun getDefinitionsSchema ()Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun getFiles ()Ljava/util/List;
-	public final fun getIdentitySchema ()Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun getProblemSchema ()Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun getProblemTypes ()Ljava/util/List;
-	public final fun getSnapshotDocumentSchema ()Lme/ahoo/cosec/runtime/document/format/SchemaFile;
-	public final fun resolve (Lme/ahoo/cosec/runtime/document/format/Ref;)Lme/ahoo/cosec/runtime/document/format/FormatType;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/Field {
-	public fun <init> (Ljava/lang/String;Lme/ahoo/cosec/runtime/document/format/FormatType;ZLjava/lang/String;Ljava/lang/Object;)V
-	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/runtime/document/format/FormatType;ZLjava/lang/String;Ljava/lang/Object;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getDefault ()Ljava/lang/Object;
-	public final fun getDescription ()Ljava/lang/String;
-	public final fun getName ()Ljava/lang/String;
-	public final fun getRequired ()Z
-	public final fun getType ()Lme/ahoo/cosec/runtime/document/format/FormatType;
-}
-
-public abstract interface class me/ahoo/cosec/runtime/document/format/FormatType {
-	public abstract fun getDescription ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/IntegerType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> ()V
-	public fun <init> (Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getConst ()Ljava/lang/Long;
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getMinimum ()Ljava/lang/Long;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/JsonSchemaWriter {
-	public static final field DRAFT_07 Ljava/lang/String;
-	public static final field INSTANCE Lme/ahoo/cosec/runtime/document/format/JsonSchemaWriter;
-	public static final field NOT_SUFFICIENT Ljava/lang/String;
-	public final fun write (Lme/ahoo/cosec/runtime/document/format/SchemaFile;Ljava/lang/String;)Ljava/lang/String;
-	public static synthetic fun write$default (Lme/ahoo/cosec/runtime/document/format/JsonSchemaWriter;Lme/ahoo/cosec/runtime/document/format/SchemaFile;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/MapType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> (Lme/ahoo/cosec/runtime/document/format/StringType;Lme/ahoo/cosec/runtime/document/format/FormatType;Ljava/lang/String;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/document/format/StringType;Lme/ahoo/cosec/runtime/document/format/FormatType;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getKeys ()Lme/ahoo/cosec/runtime/document/format/StringType;
-	public final fun getValues ()Lme/ahoo/cosec/runtime/document/format/FormatType;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/NumberType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> ()V
-	public fun <init> (Ljava/lang/Long;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/Long;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getExclusiveMinimum ()Ljava/lang/Long;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/ObjectType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/util/List;Ljava/util/Map;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/util/List;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun field (Ljava/lang/String;)Lme/ahoo/cosec/runtime/document/format/Field;
-	public final fun getClosed ()Z
-	public final fun getDependencies ()Ljava/util/Map;
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getExtension ()Ljava/lang/String;
-	public final fun getFields ()Ljava/util/List;
-	public final fun getMaxProperties ()Ljava/lang/Integer;
-	public final fun getMinProperties ()Ljava/lang/Integer;
-	public final fun getRequireAnyOf ()Ljava/util/List;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/Ref : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getDefinition ()Ljava/lang/String;
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getFile ()Ljava/lang/String;
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/SchemaFile {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/format/FormatType;Ljava/util/Map;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/format/FormatType;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getDefinitions ()Ljava/util/Map;
-	public final fun getDescription ()Ljava/lang/String;
-	public final fun getFileName ()Ljava/lang/String;
-	public final fun getName ()Ljava/lang/String;
-	public final fun getRoot ()Lme/ahoo/cosec/runtime/document/format/FormatType;
-	public final fun getTitle ()Ljava/lang/String;
-	public final fun ref (Ljava/lang/String;)Lme/ahoo/cosec/runtime/document/format/Ref;
-	public static synthetic fun ref$default (Lme/ahoo/cosec/runtime/document/format/SchemaFile;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/format/Ref;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/StringType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> ()V
-	public fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getCounterExamples ()Ljava/util/List;
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getEnum ()Ljava/util/List;
-	public final fun getExamples ()Ljava/util/List;
-	public final fun getFormat ()Ljava/lang/String;
-	public final fun getMaxLength ()Ljava/lang/Integer;
-	public final fun getMinLength ()Ljava/lang/Integer;
-	public final fun getPattern ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/format/TupleType : me/ahoo/cosec/runtime/document/format/FormatType {
-	public fun <init> (Ljava/util/List;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getDescription ()Ljava/lang/String;
-	public final fun getItems ()Ljava/util/List;
-}
-
 public abstract interface class me/ahoo/cosec/runtime/event/BridgeContextContributor {
 	public static final field Companion Lme/ahoo/cosec/runtime/event/BridgeContextContributor$Companion;
 	public abstract fun capture ()Lkotlin/coroutines/CoroutineContext;
@@ -999,11 +850,6 @@ public final class me/ahoo/cosec/runtime/event/TraceContext : kotlin/coroutines/
 }
 
 public final class me/ahoo/cosec/runtime/event/TraceContext$Key : kotlin/coroutines/CoroutineContext$Key {
-}
-
-public final class me/ahoo/cosec/runtime/http/AmbiguousHeaderException : java/lang/IllegalArgumentException {
-	public fun <init> (Ljava/lang/String;)V
-	public final fun getHeader ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/runtime/http/CoSecParameters {
@@ -1408,8 +1254,8 @@ public final class me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews : me/aho
 
 public final class me/ahoo/cosec/runtime/snapshot/DocumentSnapshots {
 	public static final field INSTANCE Lme/ahoo/cosec/runtime/snapshot/DocumentSnapshots;
-	public final fun source (Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/snapshot/SnapshotCompiler;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;Ljava/time/Clock;Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;)Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
-	public static synthetic fun source$default (Lme/ahoo/cosec/runtime/snapshot/DocumentSnapshots;Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/snapshot/SnapshotCompiler;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;Ljava/time/Clock;Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
+	public final fun source (Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/snapshot/SnapshotCompiler;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;Ljava/time/Clock;)Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
+	public static synthetic fun source$default (Lme/ahoo/cosec/runtime/snapshot/DocumentSnapshots;Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/snapshot/SnapshotCompiler;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;Ljava/time/Clock;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;
 }
 
 public abstract interface class me/ahoo/cosec/runtime/snapshot/DocumentState {
@@ -1442,16 +1288,6 @@ public final class me/ahoo/cosec/runtime/snapshot/DocumentState$Present : me/aho
 	public final fun getCompiled ()Ljava/lang/Object;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/LoadOutcome : java/lang/Enum {
-	public static final field COLD Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;
-	public static final field FAILED Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;
-	public static final field HIT Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;
-	public static final field TIMEOUT Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;
-	public static fun values ()[Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;
 }
 
 public final class me/ahoo/cosec/runtime/snapshot/MissingPlatformException : java/lang/IllegalStateException {
@@ -1489,36 +1325,6 @@ public final class me/ahoo/cosec/runtime/snapshot/SnapshotEntry {
 	public final fun getState ()Lme/ahoo/cosec/runtime/snapshot/DocumentState;
 	public final fun lagAt (Ljava/time/Instant;)Ljava/time/Duration;
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SnapshotFamily {
-	public fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKind;Lme/ahoo/cosec/runtime/snapshot/SnapshotCompiler;I)V
-	public final fun getCompiler ()Lme/ahoo/cosec/runtime/snapshot/SnapshotCompiler;
-	public final fun getKind ()Lme/ahoo/cosec/spi/snapshot/SnapshotKind;
-	public final fun getMaxEntries ()I
-}
-
-public abstract interface class me/ahoo/cosec/runtime/snapshot/SnapshotMetrics {
-	public static final field Companion Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics$Companion;
-	public fun onCompile (Lme/ahoo/cosec/spi/snapshot/SnapshotKind;Ljava/time/Duration;Z)V
-	public fun onDocumentLost (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;J)V
-	public fun onInstall (Lme/ahoo/cosec/runtime/snapshot/SnapshotEntry;)V
-	public fun onLagExceeded (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/time/Duration;Z)V
-	public fun onLoad (Lme/ahoo/cosec/spi/snapshot/SnapshotKind;Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;)V
-	public fun onRegression (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJ)V
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SnapshotMetrics$Companion {
-	public final fun getNOOP ()Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SnapshotMetrics$DefaultImpls {
-	public static fun onCompile (Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;Lme/ahoo/cosec/spi/snapshot/SnapshotKind;Ljava/time/Duration;Z)V
-	public static fun onDocumentLost (Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;J)V
-	public static fun onInstall (Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;Lme/ahoo/cosec/runtime/snapshot/SnapshotEntry;)V
-	public static fun onLagExceeded (Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/time/Duration;Z)V
-	public static fun onLoad (Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;Lme/ahoo/cosec/spi/snapshot/SnapshotKind;Lme/ahoo/cosec/runtime/snapshot/LoadOutcome;)V
-	public static fun onRegression (Lme/ahoo/cosec/runtime/snapshot/SnapshotMetrics;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JJ)V
 }
 
 public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions {
@@ -1564,26 +1370,15 @@ public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/runtime/snapshot/SnapshotSet {
-	public final fun entry (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cosec/runtime/snapshot/SnapshotEntry;
-	public final fun getScoped ()Ljava/util/List;
-	public final fun getShared ()Lme/ahoo/cosec/runtime/snapshot/SnapshotEntry;
-	public final fun lagAt (Ljava/time/Instant;)Ljava/time/Duration;
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class me/ahoo/cosec/runtime/snapshot/SnapshotSource : java/lang/AutoCloseable {
 	public final fun checkFresh (Lme/ahoo/cosec/runtime/snapshot/Snapshot;Ljava/lang/String;)V
-	public final fun checkFresh (Lme/ahoo/cosec/runtime/snapshot/SnapshotSet;Ljava/lang/String;)V
 	public fun close ()V
 	public final fun entries ()Ljava/util/List;
 	public final fun isPrewarmed ()Z
 	public final fun load (Ljava/lang/String;)Ljava/util/concurrent/CompletableFuture;
 	public static synthetic fun load$default (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/concurrent/CompletableFuture;
-	public final fun loadAll (Ljava/util/List;)Ljava/util/concurrent/CompletableFuture;
 	public final fun peek (Ljava/lang/String;)Lme/ahoo/cosec/runtime/snapshot/Snapshot;
 	public static synthetic fun peek$default (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/snapshot/Snapshot;
-	public final fun peekAll (Ljava/util/List;)Lme/ahoo/cosec/runtime/snapshot/SnapshotSet;
 	public final fun prewarm (Ljava/util/Collection;)Ljava/util/concurrent/CompletableFuture;
 	public final fun recompile ()Ljava/util/concurrent/CompletableFuture;
 	public final fun reload (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/util/concurrent/CompletableFuture;

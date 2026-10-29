@@ -11,8 +11,9 @@
  * limitations under the License.
  */
 
-// The one-time 7.x to 8.0 data converter (RFC 0004 §8, RFC 0008 §4.1): `convert` and `publish`, as a library and as a
-// jar with a main class. No application depends on it; the starter never does.
+// The one-time 7.x to 8.0 data converter (RFC 0004 §8, RFC 0008 §4.1): `convert` and `publish`, a jar with a main class.
+// No application depends on it; the starter never does. Its contract is the command line: its classes are not a library
+// API, so it keeps no ABI dump (RFC 0011 D4).
 plugins {
     application
 }

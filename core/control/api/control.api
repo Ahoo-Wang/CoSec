@@ -489,15 +489,6 @@ public final class me/ahoo/cosec/control/authz/ControlActions {
 	public final fun getWRITE ()Lme/ahoo/cosec/model/Action;
 }
 
-public abstract interface class me/ahoo/cosec/control/authz/ControlAuthorizer {
-	public abstract fun decide (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun decideAs (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;Lme/ahoo/cosec/model/Memberships;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
-public final class me/ahoo/cosec/control/authz/ControlAuthorizer$DefaultImpls {
-	public static fun decideAs (Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;Lme/ahoo/cosec/model/Memberships;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
 public final class me/ahoo/cosec/control/authz/ControlDecision : java/lang/Enum {
 	public static final field DENY Lme/ahoo/cosec/control/authz/ControlDecision;
 	public static final field INDETERMINATE Lme/ahoo/cosec/control/authz/ControlDecision;
@@ -513,11 +504,6 @@ public final class me/ahoo/cosec/control/authz/ControlResources {
 	public final fun document (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cosec/model/Resource;
 	public final fun entry (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/model/Resource;
 	public final fun scope--51HrH8 (Ljava/lang/String;Lme/ahoo/cosec/model/Match;Lme/ahoo/cosec/model/Match;)Lme/ahoo/cosec/model/Resource;
-}
-
-public abstract interface class me/ahoo/cosec/control/authz/DocumentConfirmation {
-	public static final field Companion Lme/ahoo/cosec/control/authz/DocumentConfirmation$Companion;
-	public abstract fun confirm (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/authz/DocumentConfirmation$Companion {
@@ -541,14 +527,6 @@ public final class me/ahoo/cosec/control/authz/Operator {
 
 public final class me/ahoo/cosec/control/authz/Operator$Companion {
 	public final fun of (Lme/ahoo/cosec/runtime/RequestSecurity;)Lme/ahoo/cosec/control/authz/Operator;
-}
-
-public final class me/ahoo/cosec/control/authz/PipelineControlAuthorizer : me/ahoo/cosec/control/authz/ControlAuthorizer {
-	public static final field Companion Lme/ahoo/cosec/control/authz/PipelineControlAuthorizer$Companion;
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/control/authz/DocumentConfirmation;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/control/authz/DocumentConfirmation;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun decide (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun decideAs (Lme/ahoo/cosec/control/authz/Operator;Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;Lme/ahoo/cosec/model/Memberships;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/authz/PipelineControlAuthorizer$Companion {

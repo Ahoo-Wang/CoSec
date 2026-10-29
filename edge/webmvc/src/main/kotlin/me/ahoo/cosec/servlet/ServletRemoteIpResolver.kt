@@ -16,7 +16,7 @@ package me.ahoo.cosec.servlet
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 
-object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
+internal object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
     /**
      * Uses `remoteAddr` rather than `remoteHost`, which may resolve (via reverse DNS) to a host name instead of the IP.
      */

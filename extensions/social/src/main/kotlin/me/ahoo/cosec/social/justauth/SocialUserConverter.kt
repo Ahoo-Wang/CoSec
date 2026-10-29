@@ -17,7 +17,7 @@ import me.ahoo.cosec.social.SocialUser
 import me.zhyd.oauth.enums.AuthUserGender
 import me.zhyd.oauth.model.AuthUser
 
-object SocialUserConverter {
+internal object SocialUserConverter {
     fun AuthUserGender.toSocialUserGender(): SocialUser.Gender {
         return when (this) {
             AuthUserGender.MALE -> SocialUser.Gender.MALE

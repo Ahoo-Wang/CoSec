@@ -29,7 +29,15 @@ object DocumentSnapshots {
         compiler: SnapshotCompiler<T>,
         options: SnapshotOptions = SnapshotOptions(),
         clock: Clock = Clock.systemUTC(),
-        metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
+    ): SnapshotSource<T, T> = source(store, compiler, options, clock, SnapshotMetrics.NOOP)
+
+    /** [source] with [metrics]: nothing outside this module observes a source yet. */
+    internal fun <T : Any> source(
+        store: SnapshotDocumentStore,
+        compiler: SnapshotCompiler<T>,
+        options: SnapshotOptions,
+        clock: Clock,
+        metrics: SnapshotMetrics,
     ): SnapshotSource<T, T> =
         SnapshotSource(
             store,

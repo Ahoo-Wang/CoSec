@@ -25,7 +25,7 @@ import java.time.Duration
  * [onLoad] runs on the request path, on whatever thread calls [SnapshotSource.peek], so implementations must be cheap
  * and must not block. Tag by [SnapshotKind], never by app id: app ids are unbounded.
  */
-interface SnapshotMetrics {
+internal interface SnapshotMetrics {
     /** One document a request needed: already installed ([LoadOutcome.HIT]) or loaded for it. */
     fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = Unit
 
@@ -52,7 +52,7 @@ interface SnapshotMetrics {
     }
 }
 
-enum class LoadOutcome {
+internal enum class LoadOutcome {
     /** Already installed. */
     HIT,
 

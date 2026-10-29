@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -129,7 +132,7 @@ class Snapshot<out P : Any, out A : Any> internal constructor(
  * One kind of scoped document a [SnapshotSource] holds, by id: app documents by app id, tenant documents by tenant id.
  * Each family keeps at most [maxEntries] documents and evicts the least recently used idle one beyond it.
  */
-class SnapshotFamily<out A : Any>(
+internal class SnapshotFamily<out A : Any>(
     val kind: SnapshotKind,
     val compiler: SnapshotCompiler<A>,
     val maxEntries: Int,
@@ -153,6 +156,7 @@ class SnapshotFamily<out A : Any>(
  * The documents one evaluation reads from a source with several families: the [shared] document and the [scoped] ones
  * it asked for, in that order. Every entry is immutable, so the evaluation sees one revision of each (RFC 0003 §8.4 P7).
  */
+@InternalCoSecApi
 class SnapshotSet<out P : Any, out A : Any> internal constructor(
     val shared: SnapshotEntry<P>,
     val scoped: List<SnapshotEntry<A>>,

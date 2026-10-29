@@ -49,7 +49,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ### 迁移数据 {#migrating-the-data}
 
-`cosec-migrate` 是 `migration/migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。用你要部署的版本的 CoSec 源码构建它：
+`cosec-migrate` 是 `migration/migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。它的契约是命令行：它的类不是库 API，任何版本都可能改变。用你要部署的版本的 CoSec 源码构建它：
 
 ```bash
 ./gradlew :migrate:installDist
@@ -467,9 +467,12 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | CoSec 网关之后的 `cosec.pipeline.mode=gateway`（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。8.0 的过滤器在每个放行的请求上放入安全上下文。 |
 | 授权之后留在调用方安全上下文中的路径变量 | 无。从你的 Web 框架读取路径变量。 |
 | `cosecPolicyGenerator`、`cosecAppPermissionGenerator` actuator 端点 | `cosecServiceGenerator/routes`（路由映射）和 `cosecServiceGenerator/app`（应用文档）。 |
+| `SocialUserConverter`（`cosec-social`） | 无：它是 `cosec-social` 的内部实现。用 `SocialUserPrincipalConverter` bean 把提供方的用户变成你的主体（[社交登录](../integration/authentication.md#social-login)）。 |
 
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
 Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型，其中一些换了包（[模块、制品与包](#modules-artifacts-and-packages)）。
+
+8.0 预览版中，应用可以用自己的 bean 替换控制面的 `ControlAuthorizer`。现在不行了：控制面通过 Pipeline 授权自己的操作，第二个 `ControlAuthorizer` bean 会让启动失败。`ControlAuthorizer`、`DocumentConfirmation` 和 `PipelineControlAuthorizer` 是 `@InternalCoSecApi`。
 
 #### 策略测试套件 {#policy-test-suites}
 

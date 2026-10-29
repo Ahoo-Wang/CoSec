@@ -19,6 +19,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -83,6 +84,7 @@ private val log = KotlinLogging.logger {}
  * outcome at all (§7.4, `PIP-3`). Every SPI call goes through [resumeOffIo], so a request that never really suspends
  * finishes on its calling thread without a dispatch (§7.2).
  */
+@OptIn(InternalCoSecApi::class)
 class Pipeline(components: PipelineComponents) : RequestGate {
     private val authenticator = components.authenticator
     private val snapshots = components.snapshots

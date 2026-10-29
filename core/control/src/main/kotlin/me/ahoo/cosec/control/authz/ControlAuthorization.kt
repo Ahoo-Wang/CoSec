@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.authz
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Match
@@ -80,6 +83,7 @@ enum class ControlDecision {
  * Decides one control-plane action (RFC 0007 §7.2): [action] is a `cosec:verb` of [ControlActions], [resource] one of
  * [ControlResources]. An implementation evaluates on documents it has confirmed current, and fails closed.
  */
+@InternalCoSecApi
 fun interface ControlAuthorizer {
     suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision
 
@@ -102,6 +106,7 @@ fun interface ControlAuthorizer {
  * of each, so that a just-revoked administrator gets no lag window. The host wires it to the checker's own
  * `SnapshotSource` (one apart from the data plane's); a failure is an indeterminate decision.
  */
+@InternalCoSecApi
 fun interface DocumentConfirmation {
     suspend fun confirm(keys: Set<SnapshotKey>)
 
@@ -116,6 +121,7 @@ fun interface DocumentConfirmation {
  * RFC 0006 §7.6, in the default space of [app] (`cosec.control.app-id`), after [confirmation] has confirmed the
  * documents the evaluation reads: the platform's, the operator's tenant's and [app]'s.
  */
+@InternalCoSecApi
 class PipelineControlAuthorizer(
     private val checker: AuthorizationChecker,
     private val confirmation: DocumentConfirmation,

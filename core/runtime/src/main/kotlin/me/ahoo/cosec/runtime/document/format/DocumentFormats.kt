@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document.format
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The document formats CoSec reads, one [SchemaFile] per generated file in `schema/` (RFC 0007 §10.4, Q19).
@@ -26,6 +30,7 @@ package me.ahoo.cosec.runtime.document.format
  * The descriptor is closed (no unknown fields) where the codecs merely ignore what they do not read: the codecs'
  * known leniencies are listed in `SchemaConformanceTest`, and editors should flag a typo rather than drop it silently.
  */
+@InternalCoSecApi
 object DocumentFormats {
     const val DEFINITIONS = "definitions"
     const val SNAPSHOT_DOCUMENT = "cosec-snapshot-document"

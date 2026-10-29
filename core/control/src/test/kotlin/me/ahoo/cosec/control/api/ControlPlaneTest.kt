@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.change.ChangeAuthority

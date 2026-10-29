@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourceContainment
 import me.ahoo.cosec.engine.pattern.ResourcePattern
@@ -60,6 +61,7 @@ import me.ahoo.cosec.model.decision.StatementRef
  * Conditions come as written. Both sides are checked with the same [zones], within limits twice the document's
  * ([limits]): a statement's condition and its policy's are combined.
  */
+@ExperimentalCoSecApi
 class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionLimits = ConditionLimits.DEFAULT) {
     private val checker = ConditionChecker(
         ConditionLimits(

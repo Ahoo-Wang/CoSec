@@ -11,10 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.control
 
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
@@ -133,8 +137,8 @@ class CoSecControlAutoConfiguration {
         )
     }
 
+    /** Not replaceable: the control plane's own authorization never comes from an application bean. */
     @Bean
-    @ConditionalOnMissingBean
     fun cosecControlAuthorizer(
         snapshot: ControlSnapshot,
         authenticator: Authenticator,

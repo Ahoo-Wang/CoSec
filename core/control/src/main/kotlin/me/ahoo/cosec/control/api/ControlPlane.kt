@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
@@ -75,6 +78,7 @@ data class Simulation(
 data class Explanation(val version: SnapshotVersion, val decision: DecisionView, val trace: TraceView?)
 
 /** Which bindings could permit, and which DENYs could deny, [action] on [resource] in a scope of [tenant] (§10.3). */
+@ExperimentalCoSecApi
 data class AccessQuery(
     val tenant: TenantId,
     val app: String?,
@@ -84,6 +88,7 @@ data class AccessQuery(
 )
 
 /** A binding whose policy has a statement matching the query; its condition, if any, is not evaluated. */
+@ExperimentalCoSecApi
 data class AccessEntry(
     val document: String,
     val binding: String,
@@ -100,6 +105,7 @@ data class AccessEntry(
  * [opaque] the bindings of readable documents whose policy is in one of those: their content is not shown, nor whether
  * they match.
  */
+@ExperimentalCoSecApi
 data class AccessReport(val allows: List<AccessEntry>, val denies: List<AccessEntry>, val hidden: Int, val opaque: Int)
 
 /**
@@ -154,6 +160,7 @@ interface ControlPlane {
 
     suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion? = null): Explanation
 
+    @ExperimentalCoSecApi
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport
 
     suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation
@@ -316,6 +323,7 @@ class DefaultControlPlane(
         return Explanation(version, redaction.decision(evaluation.decision), redaction.trace(evaluation))
     }
 
+    @ExperimentalCoSecApi
     override suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport {
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)

@@ -57,6 +57,10 @@ val pureProjects = setOf(
 // The ports (RFC 0011 §3): what a third party implements, so no logging facade forced on it.
 val spiProject = project(":spi")
 
+// The modules whose public ABI is kept in a dump (RFC 0011 D4). cosec-migrate is a command-line tool: its contract is
+// the command line, and its classes are not a library API.
+val abiProjects = libraryProjects - project(":migrate")
+
 /** RFC 0011 D1: a project is named after its directory, and its artifact keeps the cosec- prefix. */
 fun artifactIdOf(project: Project): String = "cosec-${project.name}"
 
@@ -104,7 +108,9 @@ configure(libraryProjects) {
         archivesName.set(artifactIdOf(project))
     }
     kotlinJvm()
-    abiValidation()
+    if (this@configure in abiProjects) {
+        abiValidation()
+    }
     jmhBenchmarks()
     junitTests()
     coverageReport()

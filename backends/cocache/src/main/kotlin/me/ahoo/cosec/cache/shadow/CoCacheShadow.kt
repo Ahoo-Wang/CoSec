@@ -58,7 +58,7 @@ import java.time.Duration
  * as "no samples" or "no instance". Each instance writes only its own report key (round-2 review R1), so that one
  * instance can never replace another's numbers, and an ACL can confine each instance to its own keys.
  */
-object ShadowCacheSpecs {
+internal object ShadowCacheSpecs {
     /** Longer than the longest window (24 hours) and the week a change may stay unpublished. */
     val REPORT_TTL: Duration = Duration.ofDays(8)
 
@@ -107,20 +107,20 @@ object ShadowCacheSpecs {
             .build()
 }
 
-object StoredCandidateCodec : Codec<StoredCandidate> {
+internal object StoredCandidateCodec : Codec<StoredCandidate> {
     override fun encode(value: StoredCandidate): ByteArray = ShadowCodec.encode(value)
 
     override fun decode(bytes: ByteArray): StoredCandidate = ShadowCodec.decodeCandidate(bytes)
 }
 
-object ShadowReportCodec : Codec<ShadowReport> {
+internal object ShadowReportCodec : Codec<ShadowReport> {
     override fun encode(value: ShadowReport): ByteArray = ShadowCodec.encodeReport(value)
 
     override fun decode(bytes: ByteArray): ShadowReport = ShadowCodec.decodeReport(bytes)
 }
 
 /** The instances that reported on a window, as a sorted JSON array of their ids. */
-object ReportersCodec : Codec<Set<String>> {
+internal object ReportersCodec : Codec<Set<String>> {
     override fun encode(value: Set<String>): ByteArray = CoSecJson.mapper.writeValueAsBytes(value.sorted())
 
     override fun decode(bytes: ByteArray): Set<String> {
@@ -132,7 +132,7 @@ object ReportersCodec : Codec<Set<String>> {
     }
 }
 
-object InstanceStatusesCodec : Codec<Map<String, InstanceStatus>> {
+internal object InstanceStatusesCodec : Codec<Map<String, InstanceStatus>> {
     override fun encode(value: Map<String, InstanceStatus>): ByteArray = ShadowCodec.encodeStatuses(value)
 
     override fun decode(bytes: ByteArray): Map<String, InstanceStatus> = ShadowCodec.decodeStatuses(bytes)

@@ -39,7 +39,7 @@ import java.time.format.DateTimeParseException
  *
  * A failure throws [SnapshotFormatException]; CoCache reports it as unreadable content (`ForeignFormatException`).
  */
-object SnapshotDocumentCodec : Codec<SnapshotDocument> {
+internal object SnapshotDocumentCodec : Codec<SnapshotDocument> {
     const val SCHEMA = "schema"
     const val REVISION = "revision"
     const val PUBLISHED_AT = "publishedAt"

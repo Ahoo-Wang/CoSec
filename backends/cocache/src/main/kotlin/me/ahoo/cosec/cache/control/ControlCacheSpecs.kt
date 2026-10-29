@@ -47,10 +47,10 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 
 /** A revision record: a document's digest under its document's key (RFC 0007 §5.2). */
-data class RevisionRecordKey(val document: SnapshotKey, val digest: SnapshotDigest)
+internal data class RevisionRecordKey(val document: SnapshotKey, val digest: SnapshotDigest)
 
 /** The referrers of one policy of one document (RFC 0007 §5.8). */
-data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
+internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
 
 /**
  * The caches of `CoCacheControlStore` (RFC 0007 §5.2), next to the snapshot heads of [CoSecCacheSpecs.policySnapshot]:
@@ -69,7 +69,7 @@ data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * policy data, but reading a failure as "absent" would let the control plane publish on a wrong base (RFC 0007 §5.2).
  * Leases expire through the lifetime of each write instead. Keys and values are encoded explicitly, without reflection.
  */
-object ControlCacheSpecs {
+internal object ControlCacheSpecs {
     fun revisionRecord(
         keyPrefix: String = CoSec.COSEC,
         policy: CachePolicy = CachePolicy.DEFAULT,
@@ -151,12 +151,12 @@ object ControlCacheSpecs {
 }
 
 /** `<docKey>:<digest>`. Document keys never contain a second `:`, so the encoding is injective. */
-object RevisionRecordKeyEncoder : KeyEncoder<RevisionRecordKey> {
+internal object RevisionRecordKeyEncoder : KeyEncoder<RevisionRecordKey> {
     override fun encode(key: RevisionRecordKey): String = "${SnapshotKeyEncoder.encode(key.document)}:${key.digest}"
 }
 
 /** `<docKey>:<policyId>`: the document key ends before the first `:` after its kind, so policy ids may contain `:`. */
-object ReferenceKeyEncoder : KeyEncoder<ReferenceKey> {
+internal object ReferenceKeyEncoder : KeyEncoder<ReferenceKey> {
     override fun encode(key: ReferenceKey): String = "${SnapshotKeyEncoder.encode(key.target)}:${key.policy.value}"
 }
 
@@ -211,7 +211,7 @@ private val DIGEST = Regex("^[0-9a-f]{40}$")
 private const val HEX = 16
 
 /** A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`. */
-object RevisionIndexCodec : Codec<RevisionIndex> {
+internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
 
     override fun encode(value: RevisionIndex): ByteArray {
@@ -261,21 +261,21 @@ object RevisionIndexCodec : Codec<RevisionIndex> {
 }
 
 /** A change request as [ChangeRequestCodec] writes it. */
-object ChangeRequestCacheCodec : Codec<ChangeRequest> {
+internal object ChangeRequestCacheCodec : Codec<ChangeRequest> {
     override fun encode(value: ChangeRequest): ByteArray = ChangeRequestCodec.encode(value)
 
     override fun decode(bytes: ByteArray): ChangeRequest = ChangeRequestCodec.decode(bytes)
 }
 
 /** A staging slot as [ChangeRequestCodec] writes it. */
-object StageSlotCodec : Codec<StageSlot> {
+internal object StageSlotCodec : Codec<StageSlot> {
     override fun encode(value: StageSlot): ByteArray = ChangeRequestCodec.encode(value)
 
     override fun decode(bytes: ByteArray): StageSlot = ChangeRequestCodec.decodeSlot(bytes)
 }
 
 /** A set of document keys as a sorted JSON array of their encodings, so equal sets have equal bytes and digests. */
-object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
+internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
     private const val WHAT = "back-reference set"
 
     override fun encode(value: Set<SnapshotKey>): ByteArray {
@@ -292,7 +292,7 @@ object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
 }
 
 /** Listed entries and when each was listed, as a JSON object sorted by entry, so equal lists have equal digests. */
-object ListedCodec : Codec<Map<String, Instant>> {
+internal object ListedCodec : Codec<Map<String, Instant>> {
     private const val WHAT = "control list"
 
     override fun encode(value: Map<String, Instant>): ByteArray {

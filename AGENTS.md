@@ -49,8 +49,9 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   `runtime/document/format/`): `./gradlew :runtime:generateSchemas` writes it, `verifySchemas` (part of `check`)
   fails when it is stale, and `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that
   changes a document format changes the descriptor.
-- Every published module (the root build's `libraryProjects`) keeps its public ABI in `api/<project>.api`, and its
-  `check` runs `checkKotlinAbi` (RFC 0011 D4). **A failing ABI check means a public signature changed.** If that was
+- Every published library module (the root build's `abiProjects`: `libraryProjects` without `cosec-migrate`, whose
+  contract is the command line) keeps its public ABI in `api/<project>.api`, and its `check` runs `checkKotlinAbi`
+  (RFC 0011 D4). **A failing ABI check means a public signature changed.** If that was
   not the intent, make the declaration `internal` (or `@InternalCoSecApi` when another CoSec module needs it, which
   keeps it out of the dump); if it was, run `updateKotlinAbi` for that module and commit the dump with the change.
   From GA on, a removed or changed dump line is a breaking change: `!` in the PR title (`CONTRIBUTING.md` §3).

@@ -36,7 +36,7 @@ import reactor.core.scheduler.Schedulers
 import java.util.Collections
 
 /** Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once. */
-object ServletHttpFactsReader {
+internal object ServletHttpFactsReader {
     fun read(
         request: HttpServletRequest,
         remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,

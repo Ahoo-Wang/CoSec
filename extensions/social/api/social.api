@@ -110,9 +110,3 @@ public final class me/ahoo/cosec/social/justauth/RedisAuthStateCache : me/zhyd/o
 public final class me/ahoo/cosec/social/justauth/RedisAuthStateCache$Companion {
 }
 
-public final class me/ahoo/cosec/social/justauth/SocialUserConverter {
-	public static final field INSTANCE Lme/ahoo/cosec/social/justauth/SocialUserConverter;
-	public final fun toSocialUser (Lme/zhyd/oauth/model/AuthUser;Ljava/lang/String;)Lme/ahoo/cosec/social/SocialUser;
-	public final fun toSocialUserGender (Lme/zhyd/oauth/enums/AuthUserGender;)Lme/ahoo/cosec/social/SocialUser$Gender;
-}
-
