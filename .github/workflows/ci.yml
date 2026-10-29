@@ -12,8 +12,8 @@
 #
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
-# new project needs no change here. Each job uploads its own coverage to Codecov. The `CI` job is the one required
-# check: it passes only when every other job here passed.
+# new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
+# the `docs` job. The `CI` job is the one required check: it passes only when every other job here passed.
 name: CI
 on:
   push:
@@ -118,10 +118,44 @@ jobs:
       - name: Lint the workflows
         run: docker run --rm --volume "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
 
+  # Links, anchors, en/zh parity and the legacy-API guard (G4) read wiki/, skills/, k8s/ and the root documents, and
+  # a skipped job fails the gate, so this runs on every pull request with no path filter. deploy-wiki.yml deploys.
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    defaults:
+      run:
+        working-directory: wiki
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.28.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.21.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check links, anchors, en/zh parity and removed APIs
+        run: pnpm run check:docs
+
+      - name: Build with VitePress
+        run: pnpm build
+
   ci:
     name: CI
     if: always()
-    needs: [ plan, test, actionlint ]
+    needs: [ plan, test, actionlint, docs ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

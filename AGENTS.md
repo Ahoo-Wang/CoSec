@@ -31,8 +31,9 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   that is not your change breaking them.
 - CI (`.github/workflows/ci.yml`) runs `<project>:check` in one job per group of `settings.gradle.kts`, as
   `scripts/ci/plan.py` derives them, and each job uploads the JaCoCo XML that `check` writes to Codecov. On CI, tests
-  never come from the build cache. The `CI` job passes only when every other job passed; it is the required check. A
-  project whose tests need Redis goes in the script's `REDIS`.
+  never come from the build cache. A `docs` job runs `pnpm check:docs` and `pnpm build` in `wiki/`. The `CI` job passes
+  only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
+  `REDIS`.
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
   (`FlatAuthorizationBenchmark`, `FlatEngineBenchmark`, `CompiledEngineBenchmark`) and the whole pipeline's
   (`:e2e` `PipelineBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
@@ -65,7 +66,8 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
-  (needs Chrome), `pnpm check:docs`, `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).
+  (needs Chrome), `pnpm check:docs` (also fails when `wiki/`, `skills/`, the READMEs, `llms.txt`, `SECURITY.md` or
+  `k8s/` mention an API removed in 8.0), `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 A change is done when `check` passes for every module it touches and for its dependents (e.g. a
 `cosec-runtime` change also runs `:spring-boot:check` and `:e2e:check`), and the docs below are updated.
