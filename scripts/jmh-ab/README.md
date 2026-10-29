@@ -25,7 +25,8 @@ gh workflow run jmh-ab.yml -f base=main -f head=<branch-or-sha> -f module=cosec-
 | `forks`, `warmup`, `iterations` | `1`, `2`, `3` | `-f`, `-wi`, `-i` |
 | `warmup-time`, `measurement-time` | `1s`, `1s` | `-w`, `-r` |
 
-Both refs are checked out as worktrees and built once (`:<module>:jmhJar`, compiled for 17). Each round runs the jar
+Both refs are checked out as worktrees and built once (`:<module>:jmhJar`, each with its own toolchain: 21, or 17 for
+a ref from before the Java 21 baseline). Each round runs the jar
 of base and then of head on JDK 25 with `-prof gc` and the WARN-level `config/logback-jmh.xml` of that ref.
 
 ## Keeping it short

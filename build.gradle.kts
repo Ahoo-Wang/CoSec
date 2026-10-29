@@ -336,11 +336,11 @@ nexusPublishing {
 
 fun getPropertyOf(name: String) = project.properties[name]?.toString()
 
-/** Kotlin on Java 17, as every module compiles. */
+/** Kotlin on Java 21, as every module compiles: the toolchain, and with it Kotlin's and Java's target. */
 fun Project.kotlinJvm() {
     apply(plugin = "org.jetbrains.kotlin.jvm")
     configure<KotlinJvmProjectExtension> {
-        jvmToolchain(17)
+        jvmToolchain(21)
     }
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         compilerOptions {
@@ -446,7 +446,7 @@ fun Project.jmhBenchmarks() {
         if (project.hasProperty(jmhProfilersKey)) {
             profilers.set(project.properties[jmhProfilersKey].toString().split(delimiter))
         }
-        // Benchmarks are compiled for 17 like everything else; this only picks the JDK the forked benchmark JVMs run on.
+        // Benchmarks are compiled for 21 like everything else; this only picks the JDK the forked benchmark JVMs run on.
         if (project.hasProperty(jmhJavaVersionKey)) {
             val launcher = project.the<JavaToolchainService>().launcherFor {
                 languageVersion.set(JavaLanguageVersion.of(project.properties[jmhJavaVersionKey].toString()))

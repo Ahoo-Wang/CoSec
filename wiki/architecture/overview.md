@@ -432,7 +432,7 @@ Run a benchmark through Gradle:
 These runs use one fork with one warm-up and one measurement iteration (the defaults in the root `build.gradle.kts`):
 enough to see that a benchmark runs, not to compare versions. Gradle properties override the defaults:
 `-PjmhWarmupIterations`, `-PjmhIterations`, `-PjmhFork`, `-PjmhProfilers` (comma-separated, such as `gc`) and
-`-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still compiled for 17).
+`-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still compiled for 21).
 
 To compare versions, build the jar and run it with real settings:
 

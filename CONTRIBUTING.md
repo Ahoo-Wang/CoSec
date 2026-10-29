@@ -63,7 +63,7 @@ not apply yet. Nothing checks the title against the dumps: the author and the re
 
 ## 4. Coding conventions
 
-- Kotlin 2.x targeting Java 17; formatting follows [.editorconfig](.editorconfig).
+- Kotlin 2.x targeting Java 21; formatting follows [.editorconfig](.editorconfig).
 - [Detekt](config/detekt/detekt.yml) with `detekt-formatting` runs as part of `check`. It auto-corrects
   formatting locally, so commit the corrected files.
 - Every source file starts with the Apache-2.0 license header in

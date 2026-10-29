@@ -105,14 +105,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Both sides compile for 17 (Gradle toolchain); the benchmark JVMs run on 25 (RFC 0008 §3.8). 17 is listed last so it
-      # is JAVA_HOME.
-      - name: Set up JDK 25 and 17, and Gradle
+      # Each side compiles with its own Gradle toolchain, 7.x for 17 and 8.0 for 21; the benchmark JVMs run on 25
+      # (RFC 0008 §3.8). 21 is listed last so it is JAVA_HOME, the JDK Gradle runs on.
+      - name: Set up JDK 17, 25 and 21, and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
           java-version: |
-            25
             17
+            25
+            21
 
       - name: Check out both refs
         run: |
@@ -136,12 +137,12 @@ jobs:
 
       - name: Build the 7.x benchmark jar
         working-directory: ${{ runner.temp }}/v7
-        run: ./gradlew :cosec-core:jmhJar --no-daemon
+        run: ./gradlew :cosec-core:jmhJar -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 --no-daemon
 
       # `cosec-core` on 8.0 still carries the 7.x authorization path; it is not measured, the engine's is.
       - name: Build the 8.0 benchmark jars
         working-directory: ${{ runner.temp }}/v8
-        run: ./gradlew :e2e:jmhJar :engine:jmhJar --no-daemon
+        run: ./gradlew :e2e:jmhJar :engine:jmhJar -Porg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64 --no-daemon
 
       - name: Run settings
         run: |

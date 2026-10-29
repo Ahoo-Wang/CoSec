@@ -9,7 +9,7 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
 
 ## Prerequisites
 
-- JDK 17 or later, and a Spring Boot 4 project built with Gradle.
+- JDK 21 or later, and a Spring Boot 4 project built with Gradle.
 - A Redis server on `localhost:6379` whose `maxmemory-policy` is `noeviction`, Redis's default. CoSec keeps its
   policy documents in Redis and refuses to start when Redis may evict them. For example:
 
