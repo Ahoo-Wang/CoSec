@@ -74,7 +74,7 @@ The candidates are the policies that bindings and attachments make applicable to
 A binding applies only when its app and space match the scope exactly (`*` matches any), when a role binding that
 names a tenant names the principal's, and when it has not expired. An anonymous principal has no attachments, no
 principal or role bindings and no break-glass: only `Anyone` bindings apply to it. A credential with a role cap (an
-API key with `roles`) has no principal bindings, and an API key never has break-glass (`BND-9`, `BRK-8`;
+API key with `roles`) has no principal bindings, and only CoSec's own token has break-glass (`BND-9`, `BRK-8`;
 [API keys](../integration/authentication.md#api-keys)): `roles: []` leaves only what `Anyone` bindings give.
 
 The order never changes the kind of decision, only which statement is reported when several match: the DENY pass
@@ -224,8 +224,10 @@ Break-glass grants a named principal a policy for a bounded time, for emergencie
 - is created only through the control plane: one person requests it, a second approves it, and its lifetime is at
   most `cosec.control.break-glass.max-duration` ([Testing policies](../policies/testing.md));
 - is the last candidate. It permits only what nothing else permits, and every DENY still applies to the principal;
-- never applies to an API key, capped or not: it is a time-limited grant to a person, not to a long-lived credential
-  (`BRK-8`). A gateway forwards the credential's method, so a service behind it does not apply it either.
+- applies only to a principal that presented CoSec's own token (credential method `jwt`): never to an API key, capped
+  or not, nor to a principal that a custom authenticator accepted some other way. It is a time-limited grant to a
+  person, not to a long-lived credential (`BRK-8`). A gateway forwards the credential's method, so a service behind it
+  applies the same rule.
 
 Every request that break-glass permits must be written to a REQUIRED decision listener first. Without one, or when
 it fails, the request is `503`. A permission check in code (`AuthorizationChecker`) that only break-glass permits is

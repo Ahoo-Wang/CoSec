@@ -58,6 +58,8 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 `AuthenticatedPrincipal` 包含 id、租户、成员关系来源（令牌的声明，或[成员关系提供者](#memberships)）、属性和 `credential`。条件以 `subject.attributes.<name>` 读取这些属性。`credential`（`Identity.Credential`：方法 `JWT` 或 `API_KEY`、凭证的 id 及其过期时间，从不包含凭证的值）是网关随身份一起转发的内容：在网关上，没有它的主体会被放行，但不会以已认证身份转发给任何后端；凭证没有过期时间的主体会让请求以 `500` 失败。
 
+凭证的方式还决定 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用：只有 `JWT` 能得到它。你的认证器返回的主体如果没有凭证，或使用自己的方式（例如 `Identity.Method("ldap")`），永远得不到 break-glass。只对你按 CoSec 令牌验证过的令牌使用 `JWT`。
+
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
 starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切。** 要接受另一种令牌格式并保留内置认证，自己构建内置认证器并委托给它们：

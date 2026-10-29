@@ -180,7 +180,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 | `roles: [billing, auditor@team-a]` | 只有主体角色中的这些，按空间精确匹配（`role` 是默认空间，`role@space` 是该空间）。附加的策略和主体绑定都不作用于它：上限用角色表达。上限中有、主体却没有的角色不带来任何东西。 |
 | `roles: []` | 只有 `Anyone` 绑定给予的：没有角色、附加的策略或主体绑定 |
 
-`Anyone` 绑定对每个 key 都适用。**API key 永远得不到 break-glass**，无论是否有上限：break-glass 是给人的、有时限的紧急授予，而不是给长期凭证的（`BRK-8`）。key 也不携带其主体令牌的属性，只有 `apiKeyId`：条件读取 `subject.attributes.<name>` 且 `onMissing: nomatch` 的 DENY 不作用于 key，因此要为 key 写这类 DENY，请用角色或 `apiKeyId`。
+`Anyone` 绑定对每个 key 都适用。**API key 永远得不到 break-glass**，无论是否有上限：break-glass 是给人的、有时限的紧急授予，而不是给长期凭证的，只有 CoSec 自己的令牌才能得到它（`BRK-8`；[break-glass](../guide/security-model.md#break-glass)）。key 也不携带其主体令牌的属性，只有 `apiKeyId`：条件读取 `subject.attributes.<name>` 且 `onMissing: nomatch` 的 DENY 不作用于 key，因此要为 key 写这类 DENY，请用角色或 `apiKeyId`。
 
 携带 key 的请求只依据该 key 判定（[认证器](#authenticators)）。未知、已停用或已过期的 key 让请求成为匿名请求；随后被拒绝时返回 `401` `token-invalid`。提供者不认识或认为已停用其主体的 key 也是如此（`IDN-3`）：停用一个服务账号，就停用了它的每一个 key。主体会得到属性 `apiKeyId`，指明所用的 key，key 不再带来其他属性。CoSec 从不存储或记录 key 本身，只保存它的 SHA-256 哈希（`ApiKeys.hash`）。key 不能代表他人行事：任何凭证的委托都会被[拒绝](#tokens)。
 

@@ -84,6 +84,10 @@ its expiry, never its value) is what a gateway forwards with the identity: on a 
 permitted but forwarded to no backend as authenticated, and one whose credential has no expiry fails the request with
 `500`.
 
+The credential's method also decides whether [break-glass](../guide/security-model.md#break-glass) bindings apply: only
+`JWT` gets them. A principal your authenticator returns without a credential, or with a method of its own (such as
+`Identity.Method("ldap")`), never gets break-glass. Use `JWT` only for a CoSec token you verified as one.
+
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
 parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
 (`cosec.pipeline.api-key-header`).

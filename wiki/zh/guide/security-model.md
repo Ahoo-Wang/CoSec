@@ -54,7 +54,7 @@ flowchart TD
 4. 应用文档的角色绑定，然后是租户文档的角色绑定，按主体在请求空间中拥有的每个角色、按声明顺序；
 5. 主体的 [break-glass](#break-glass) 绑定，排在最后。
 
-绑定只在以下条件都满足时适用：它的应用和空间与作用域完全一致（`*` 匹配任意值）；指定了租户的角色绑定指定的是主体所在租户；绑定尚未过期。匿名主体没有附加策略，也不匹配主体绑定、角色绑定和 break-glass：对它只有 `Anyone` 绑定生效。带角色上限的凭证（带 `roles` 的 API key）不匹配主体绑定，API key 永远不匹配 break-glass（`BND-9`、`BRK-8`；[API key](../integration/authentication.md#api-keys)）：`roles: []` 只留下 `Anyone` 绑定给予的。
+绑定只在以下条件都满足时适用：它的应用和空间与作用域完全一致（`*` 匹配任意值）；指定了租户的角色绑定指定的是主体所在租户；绑定尚未过期。匿名主体没有附加策略，也不匹配主体绑定、角色绑定和 break-glass：对它只有 `Anyone` 绑定生效。带角色上限的凭证（带 `roles` 的 API key）不匹配主体绑定，只有 CoSec 自己的令牌才匹配 break-glass（`BND-9`、`BRK-8`；[API key](../integration/authentication.md#api-keys)）：`roles: []` 只留下 `Anyone` 绑定给予的。
 
 顺序不会改变决策的类型，只影响多条语句同时命中时报告的是哪一条：DENY 轮总是先遍历完所有候选，ALLOW 轮才开始。
 
@@ -159,7 +159,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 绑定 `cosec:root` 时，只对平台租户 `(platform)` 的主体生效；
 - 只能通过控制面创建：一人申请，另一人批准，有效期最长为 `cosec.control.break-glass.max-duration`（[策略测试](../policies/testing.md)）；
 - 是最后一个候选。它只放行别处都不放行的请求，所有 DENY 对该主体照常生效；
-- 永远不作用于 API key，无论是否有上限：它是给人的、有时限的授予，而不是给长期凭证的（`BRK-8`）。网关会转发凭证的方式，因此网关之后的服务也不会让它生效。
+- 只作用于出示了 CoSec 自己令牌（凭证方式 `jwt`）的主体：从不作用于 API key（无论是否有上限），也不作用于自定义认证器以其他方式认可的主体。它是给人的、有时限的授予，而不是给长期凭证的（`BRK-8`）。网关会转发凭证的方式，因此网关之后的服务按同一规则处理。
 
 每个由 break-glass 放行的请求都必须先写入一个 REQUIRED 决策监听器。没有这样的监听器，或它失败时，请求返回 `503`。代码中的权限检查（`AuthorizationChecker`）如果只有 break-glass 放行，结果为 `false`，因为检查不写审计事件（[代码中的权限检查](../integration/checks.md)）。
 

@@ -83,6 +83,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `action` | 必填，`service:verb`（未映射的 HTTP 请求为 `http:GET`）。 |
 | `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。 |
 | `remoteIp`、`time` | 客户端地址，以及 ISO 时刻（默认：当前）。 |
+| `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`。只接受布尔值。 |
 
 响应包含 `enforced`、要求时的 `candidate`，以及 `differs`。每个决策为 `Permit`、`Deny`、`Indeterminate`（带 `cause`）或 `Rejected`（作用域被拒绝），并给出做出决策的语句（`by`）和完整的候选追踪。来自你无权读取的文档的语句会被省略，并计入 `redacted`。
 
@@ -191,6 +192,8 @@ flowchart LR
 | `NOT_ANALYZED` | 非信任根所做的平台或应用文档变更，或租户边界变更。 |
 | `BREAK_GLASS` | 新增或修改的 break-glass 绑定：总是需要第二个人。 |
 
+作者的权限是本次请求所带凭证的权限。带角色上限的凭证（带 `roles` 的 API key）不计入点名作者的绑定，只计入上限内的角色和 `Anyone` 绑定，与数据面一致。break-glass 绑定从不计入任何人可以授予的范围。
+
 删除条目和收窄 ALLOW 不授予任何东西。对文档持有 `cosec:approve` 的人是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。
 
 有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。
@@ -203,7 +206,7 @@ flowchart LR
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }
 ```
 
-窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。随后发布会以发布者身份在当前文档上重新检查一切：发布者对每个条目的权限、授权分析，以及审批。审批必须覆盖此时发现的升级、未过期、针对此候选、既不来自作者也不来自发布者，且审批人仍持有 `cosec:approve`。审批不再成立时，变更回到 `AWAITING_APPROVAL`，不发布任何内容。文档已变化时，变更为 `CONFLICTED`；候选无法针对当前文档编译时，变更为带有检查结果的 `DRAFT`。
+窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。随后发布会以发布者身份在当前文档上重新检查一切：发布者对每个条目的权限、授权分析，以及审批。审批必须覆盖此时发现的升级、未过期、针对此候选、既不来自作者也不来自发布者，且审批人仍持有 `cosec:approve`。审批人按其审批时所用的凭证重新检查：用带上限的 key 给出的审批，在发布时不计入审批人自己的绑定；不是用 CoSec 自己的令牌给出的审批，不计入其 break-glass 绑定。审批不再成立时，变更回到 `AWAITING_APPROVAL`，不发布任何内容。文档已变化时，变更为 `CONFLICTED`；候选无法针对当前文档编译时，变更为带有检查结果的 `DRAFT`。
 
 要撤销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
 

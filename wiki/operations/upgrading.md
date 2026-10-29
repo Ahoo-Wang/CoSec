@@ -394,8 +394,15 @@ A key is rejected, and then the command exits `1` and writes no key, when it has
 them), malformed roles, an id with `@`, `*` or a blank, a role that starts with the role prefix, a per-key role a
 document already binds, or an attached policy that does not resolve exactly: missing, not attachable, or defined by
 both the tenant and the platform with different content. Such an attachment made every request of the key
-indeterminate in 8.0, and dropping it could drop a DENY: fix the documents or the key first. A key without a tenant
-goes to the default tenant (`defaultTenant`).
+indeterminate in 8.0, and dropping it could drop a DENY: fix the documents or the key first. 7.x did not keep key
+ids unique, so a key is also rejected when another key of its tenant has the same id (both would become one principal,
+or share one per-key role), and an `own-principal` key when its `apikey:<key id>` principal already exists: a document
+binds it by name, or `--memberships` lists it. The key would gain what that principal holds. A `--memberships` file
+that lists a principal twice is refused. A key without a tenant goes to the default tenant (`defaultTenant`).
+
+An `own-principal` key with no roles is still listed in `memberships`, with `roles: []`. Its principal must exist in
+your `MembershipProvider` all the same, with no roles: a principal the provider does not know is refused, so every
+request with the key would be `401`.
 
 1. Run with `--dry-run` and read the report.
 2. Grant the `memberships` in your `MembershipProvider`'s source, and add the `principalBindings` and `roleBindings`

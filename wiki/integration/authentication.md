@@ -293,7 +293,8 @@ the key. A key may only narrow them, with `roles`, its **cap** (`IDN-2`), or say
 | `roles: []` | only what `Anyone` bindings give: no roles, attached policies or principal bindings |
 
 `Anyone` bindings apply to every key. **An API key never gets break-glass**, capped or not: break-glass is a
-time-limited emergency grant to a person, not to a long-lived credential (`BRK-8`). A key carries no attributes of
+time-limited emergency grant to a person, not to a long-lived credential, and only CoSec's own token gets it (`BRK-8`;
+[Break-glass](../guide/security-model.md#break-glass)). A key carries no attributes of
 its principal's token either, only `apiKeyId`: a DENY whose condition reads `subject.attributes.<name>` with
 `onMissing: nomatch` does not apply to a key, so write such a DENY for keys with a role or `apiKeyId`.
 

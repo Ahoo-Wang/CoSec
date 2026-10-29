@@ -318,7 +318,9 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。key 失去的东西按 key 列出：`lost` 是 key 不再能用到的其主体的主体绑定和 break-glass 绑定；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、`subject.id` 上的条件、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
 
-以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。没有租户的 key 归入默认租户（`defaultTenant`）。
+以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
+
+没有角色的 `own-principal` key 也会列在 `memberships` 中，`roles: []`。它的主体同样必须在你的 `MembershipProvider` 中存在，只是没有角色：提供者不认识的主体会被拒绝，带该 key 的每个请求都会得到 `401`。
 
 1. 带 `--dry-run` 运行并阅读报告。
 2. 在你的 `MembershipProvider` 的数据源中授予 `memberships`，并通过控制面（变更请求）添加 `principalBindings` 和 `roleBindings`。
