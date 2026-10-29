@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cosec-gateway
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: cosec-gateway
+      containers:
+        - name: cosec-gateway
+          env:
+            # A 1 GB heap for a 2Gi limit (the memory model is in the deployment docs). Change both together.
+            - name: JVM_MEMORY_OPTS
+              value: -Xms1g -Xmx1g -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m
+            # From the Secret cosec-redis-secret, which you create: password is required, username is for a Redis
+            # ACL user and may be left out.
+            - name: SPRING_DATA_REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: cosec-redis-secret
+                  key: username
+                  optional: true
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cosec-redis-secret
+                  key: password
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi

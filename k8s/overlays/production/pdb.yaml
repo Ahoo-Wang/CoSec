@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cosec-gateway
+spec:
+  maxUnavailable: 1
+  # A gateway that is not ready (it has no platform document yet) serves nothing, so evicting it never blocks a
+  # node drain.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cosec-gateway

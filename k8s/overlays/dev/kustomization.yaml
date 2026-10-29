@@ -1,0 +1,25 @@
+# For trying CoSec out on any cluster, kind and minikube included: one gateway with the base's small resources
+# (768Mi, a 256 MB heap) and a single Redis in the same namespace. Not for production.
+#
+#   kubectl create namespace cosec-dev
+#   kubectl -n cosec-dev create secret generic cosec-jwt-secret --from-literal=secret="$(openssl rand -base64 48)"
+#   kubectl apply -k k8s/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cosec-dev
+
+resources:
+  - ../../base
+  - redis.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: cosec
+    includeTemplates: true
+
+configMapGenerator:
+  - name: cosec-gateway-redis
+    literals:
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
