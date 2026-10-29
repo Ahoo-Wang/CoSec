@@ -216,6 +216,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
+- RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
