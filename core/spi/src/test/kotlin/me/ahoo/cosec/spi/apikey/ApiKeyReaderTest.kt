@@ -24,24 +24,24 @@ class ApiKeyReaderTest {
 
     @Test
     fun usableWhileEnabledAndBeforeExpiry() {
-        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", expiresAt = expiresAt)
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null, expiresAt = expiresAt)
         key.usableAt(expiresAt.minusMillis(1)).assert().isTrue()
         key.usableAt(expiresAt).assert().isFalse()
-        ApiKey("k", "svc", "acme", expiresAt = expiresAt, enabled = false).usableAt(expiresAt.minusSeconds(60))
+        ApiKey("k", "svc", "acme", null, expiresAt = expiresAt, enabled = false).usableAt(expiresAt.minusSeconds(60))
             .assert().isFalse()
-        ApiKey("k", "svc", "acme").usableAt(Instant.MAX).assert().isTrue()
+        ApiKey("k", "svc", "acme", emptySet()).usableAt(Instant.MAX).assert().isTrue()
     }
 
     @Test
     fun aKeyBelongsToATenantAndAPrincipal() {
-        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "") }
-        assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme") }
-        assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme") }
+        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "", null) }
+        assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme", null) }
+        assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme", null) }
     }
 
     @Test
     fun theInMemoryStoreReadsWithoutBlocking() {
-        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme")
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null)
         val reader = InMemoryApiKeyStore(mapOf("hash" to key)).reader
         now { reader.findByHash("hash") }.assert().isEqualTo(key)
         now { reader.findByHash("other") }.assert().isNull()

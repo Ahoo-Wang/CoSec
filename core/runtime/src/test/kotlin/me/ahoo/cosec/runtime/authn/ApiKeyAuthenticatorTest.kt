@@ -45,6 +45,7 @@ class ApiKeyAuthenticatorTest {
     private val keys = mapOf(
         "valid" to key("billing"),
         "uncapped" to key("uncapped", roles = null),
+        "empty" to key("empty", roles = emptySet()),
         "disabled" to key("disabled", enabled = false),
         "expired" to key("expired", expiresAt = now),
     )
@@ -74,6 +75,13 @@ class ApiKeyAuthenticatorTest {
         source.cap.assert().isEqualTo(
             mapOf(SpaceId.DEFAULT to setOf(RoleId("billing")), SpaceId("team-a") to setOf(RoleId("auditor"))),
         )
+    }
+
+    /** `IDN-2`: an empty cap is a cap that leaves nothing, never no cap. */
+    @Test
+    fun anEmptyCapIsNotUncapped() = runTest {
+        val principal = (authenticate("empty") as AuthnResult.Authenticated).principal
+        (principal.membershipSource as MembershipSource.Provider).cap.assert().isNotNull().isEmpty()
     }
 
     @Test

@@ -140,6 +140,58 @@ internal class CoSecApiKeyAutoConfigurationTest {
         }
     }
 
+    private fun keyed(vararg more: String) = contextRunner.withPropertyValues(
+        "cosec.api-key.enabled=true",
+        "cosec.api-key.keys[0].id=billing",
+        "cosec.api-key.keys[0].hash=${ApiKeys.hash(key)}",
+        "cosec.api-key.keys[0].principal-id=svc-billing",
+        "cosec.api-key.keys[0].tenant-id=acme",
+        *more,
+    )
+
+    private fun capOf(context: org.springframework.context.ApplicationContext): Map<SpaceId, Set<me.ahoo.cosec.model.RoleId>>? {
+        val result = runBlocking { context.getBean(Authenticator::class.java).authenticate(Credentials(null, key)) }
+        return ((result as AuthnResult.Authenticated).principal.membershipSource as MembershipSource.Provider).cap
+    }
+
+    /** RFC 0009 §4.1: a configured key states its cap, or that it has none; leaving `roles` out never uncaps it. */
+    @Test
+    fun aKeyStatesItsCapOrThatItHasNone() {
+        keyed().run { context ->
+            context.startupFailure!!.stackTraceToString().assert().contains("not neither")
+        }
+        keyed("cosec.api-key.keys[0].roles=billing", "cosec.api-key.keys[0].uncapped=true").run { context ->
+            context.startupFailure!!.stackTraceToString().assert().contains("not both")
+        }
+        keyed("cosec.api-key.keys[0].uncapped=true").run { context -> capOf(context).assert().isNull() }
+        keyed("cosec.api-key.keys[0].roles=billing").run { context ->
+            capOf(context).assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(me.ahoo.cosec.model.RoleId("billing"))))
+        }
+    }
+
+    /** `IDN-2`: an empty cap binds as empty, never as absent, in properties form and in YAML (which flattens `[]`). */
+    @Test
+    fun anEmptyCapBindsAsEmpty() {
+        keyed("cosec.api-key.keys[0].roles=").run { context -> capOf(context).assert().isNotNull().isEmpty() }
+        val yaml = """
+            cosec:
+              api-key:
+                keys:
+                  - id: billing
+                    hash: ${ApiKeys.hash(key)}
+                    principal-id: svc-billing
+                    tenant-id: acme
+                    roles: []
+        """.trimIndent()
+        contextRunner.withPropertyValues("cosec.api-key.enabled=true")
+            .withInitializer { context ->
+                org.springframework.boot.env.YamlPropertySourceLoader()
+                    .load("keys", org.springframework.core.io.ByteArrayResource(yaml.encodeToByteArray()))
+                    .forEach { context.environment.propertySources.addFirst(it) }
+            }
+            .run { context -> capOf(context).assert().isNotNull().isEmpty() }
+    }
+
     @Test
     fun rejectsPlainKeysInConfiguration() {
         contextRunner

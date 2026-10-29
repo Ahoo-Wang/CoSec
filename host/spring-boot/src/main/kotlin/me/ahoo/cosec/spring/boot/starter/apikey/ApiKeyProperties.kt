@@ -63,10 +63,15 @@ data class ApiKeyProperties(
         /** The principal's tenant: required. */
         var tenantId: String = "",
         /**
-         * The cap, as `role` or `role@space`: the key's memberships are its principal's, narrowed to these. Unset does
-         * not narrow; set it empty for a key with no roles.
+         * The cap, as `role` or `role@space`: the key's memberships are its principal's, narrowed to these; empty, it
+         * has no roles. Set it, or [uncapped]: never both, never neither.
          */
         var roles: Set<String>? = null,
+        /**
+         * True for a key that holds everything its principal holds. Said explicitly, so that a key whose `roles` were
+         * left out by mistake never gets that silently.
+         */
+        var uncapped: Boolean = false,
         var expiresAt: Instant? = null,
         @DefaultValue("true") var enabled: Boolean = true,
     ) {
@@ -75,6 +80,10 @@ data class ApiKeyProperties(
             require(HASH.matches(hash)) { "API key [$id] needs the SHA-256 hex of the key as hash." }
             require(principalId.isNotBlank()) { "API key [$id] needs a principal-id." }
             require(tenantId.isNotBlank()) { "API key [$id] needs a tenant-id." }
+            require((roles != null) != uncapped) {
+                "API key [$id] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, " +
+                    "not ${if (uncapped) "both" else "neither"}."
+            }
             return ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)
         }
 

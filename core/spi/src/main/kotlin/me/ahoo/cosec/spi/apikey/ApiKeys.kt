@@ -27,14 +27,15 @@ import java.util.Base64
  * Only the key's hash is ever stored (see [ApiKeys.hash]); the key itself is shown once, when it is created. A plain
  * class, not a data class, so that a field can be added later without breaking callers (RFC 0010 §1).
  *
- * @param roles the cap, as `role` or `role@space`: null does not narrow, an empty set leaves no roles (`IDN-2`)
+ * @param roles the cap, as `role` or `role@space`: null does not narrow, an empty set leaves no roles (`IDN-2`). No
+ *   default: whoever creates a key says which, so that a key never ends up without a cap by omission.
  * @param expiresAt when the key stops working; null never expires
  */
 class ApiKey(
     val id: String,
     val principalId: String,
     val tenantId: String,
-    val roles: Set<String>? = null,
+    val roles: Set<String>?,
     val expiresAt: Instant? = null,
     val enabled: Boolean = true,
 ) {

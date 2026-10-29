@@ -317,7 +317,9 @@ class StarterWiringTest {
         .withBean(MembershipLoader::class.java, {
             MembershipLoader { _, principal ->
                 val roles = if (principal.value == "alice") setOf(RoleId("clerk")) else emptySet()
-                MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId("") to roles), emptyList()))
+                MembershipAnswer.Known(
+                    Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId("") to roles), emptyList())
+                )
             }
         })
 

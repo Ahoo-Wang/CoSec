@@ -72,7 +72,7 @@ class StoredFormatTest {
 
     /**
      * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline (except
-     * `apiKey`, `apiKey-uncapped` and `memberships-inactive`, the formats of RFC 0009 PR-3): each was
+     * `apiKey`, `apiKey-uncapped`, `apiKey-empty-cap` and `memberships-inactive`, the formats of RFC 0009 PR-3): each was
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
      * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780.
      */
@@ -105,6 +105,15 @@ class StoredFormatTest {
             fixture("apiKey-uncapped"),
         )
         ApiKeyCodec.decode(fixture("apiKey-uncapped")).roles.assert().isNull()
+        // IDN-2: an empty cap is written and read as empty, never as absent.
+        pinned(
+            "apiKey-empty-cap",
+            ApiKey("k3", "svc", "acme", emptySet(), null, true),
+            { ApiKeyCodec.encode(it).encodeToByteArray() },
+            { ApiKeyCodec.decode(it.decodeToString()) },
+            fixture("apiKey-empty-cap"),
+        )
+        ApiKeyCodec.decode(fixture("apiKey-empty-cap")).roles.assert().isNotNull().isEmpty()
     }
 
     /**
@@ -119,7 +128,7 @@ class StoredFormatTest {
 
     @Test
     fun `a stored api key has exactly its fields`() {
-        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme"))
+        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null))
         assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":2", "\"format\":3")) }
         assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
         assertThrows<IllegalArgumentException> {
