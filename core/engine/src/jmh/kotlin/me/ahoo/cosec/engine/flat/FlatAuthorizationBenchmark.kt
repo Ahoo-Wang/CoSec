@@ -157,7 +157,17 @@ open class FlatAuthorizationBenchmark {
             else -> error("Unknown scenario $scenario")
         }
         authz = AuthzRequest(
-            subject = Subject("user", "acme", true, emptySet(), emptySet(), emptyMap(), root = false, principalBindings = true, breakGlass = true),
+            subject = Subject(
+                "user",
+                "acme",
+                true,
+                emptySet(),
+                emptySet(),
+                emptyMap(),
+                root = false,
+                principalBindings = true,
+                breakGlass = true,
+            ),
             scope = Scope.declared("acme", "app", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),
