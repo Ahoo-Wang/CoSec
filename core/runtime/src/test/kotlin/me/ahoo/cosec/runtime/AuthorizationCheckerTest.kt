@@ -13,9 +13,16 @@
 
 package me.ahoo.cosec.runtime
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.flat.FlatEngine
+import me.ahoo.cosec.engine.flat.FlatEvaluation
+import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -24,6 +31,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
@@ -42,6 +50,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.cancellation.CancellationException
 
 /** RFC 0006 §7.6: checks evaluate as the permitted request's principal and scope, and fail closed. */
 class AuthorizationCheckerTest {
@@ -140,6 +149,58 @@ class AuthorizationCheckerTest {
                 checker.check(context, action, resource).assert().isEqualTo(decision is Decision.Permit)
             }
         }
+    }
+
+    /** Fails on the `fail:*` actions, as a defect or a cancellation from inside the check would; decides the rest. */
+    private object FailingEngine : FlatEngine by CoSecFlatEngine {
+        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
+            when (request.request.action.verb.takeIf { request.request.action.namespace == "fail" }) {
+                "throw" -> throw IllegalStateException("broken")
+                "cancel" -> throw CancellationException("cancelled inside the check")
+                else -> CoSecFlatEngine.evaluate(request, snapshot, trace)
+            }
+    }
+
+    private fun failingChecker(): Pair<AuthorizationChecker, RequestSecurity> {
+        val pipeline = PipelineFixtures.pipeline(
+            authenticator = authenticator(authenticated(claims())),
+            engine = FailingEngine,
+            views = views,
+        )
+        val security = runBlocking { pipeline.evaluate(facts("/orders/1")) }.security!!
+        return AuthorizationChecker(pipeline) to security
+    }
+
+    @Test
+    fun aFailingCheckIsIndeterminateNeverAPermit() = runBlocking<Unit> {
+        val (checker, security) = failingChecker()
+        val failed = checker.decide(security.securityContext, "fail:throw", "fail/1")
+        failed.assert().isInstanceOf(Decision.Indeterminate::class.java)
+        ((failed as Decision.Indeterminate).cause as Cause.SourceUnavailable).error
+            .assert().isInstanceOf(IllegalStateException::class.java)
+        checker.check(security.securityContext, "fail:throw", "fail/1").assert().isFalse()
+        // A cancellation from inside the check, while the caller still runs, is a failure of the check.
+        checker.decide(security.securityContext, "fail:cancel", "fail/1")
+            .assert().isInstanceOf(Decision.Indeterminate::class.java)
+        checker.check(security.securityContext, "fail:cancel", "fail/1").assert().isFalse()
+    }
+
+    @Test
+    fun theCallersOwnCancellationPropagates() = runBlocking<Unit> {
+        val (checker, security) = failingChecker()
+        var propagated = false
+        val job = launch {
+            try {
+                currentCoroutineContext().cancel()
+                checker.decide(security.securityContext, "fail:cancel", "fail/1")
+            } catch (e: CancellationException) {
+                propagated = true
+                throw e
+            }
+        }
+        job.join()
+        job.isCancelled.assert().isTrue()
+        propagated.assert().isTrue()
     }
 
     @Test
