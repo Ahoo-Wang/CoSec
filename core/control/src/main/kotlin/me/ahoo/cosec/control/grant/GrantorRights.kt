@@ -124,8 +124,10 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
             val scope = ScopeSet.of(binding.scope.app, binding.scope.space)
             return when (val subject = binding.subject) {
                 SubjectRef.Anyone -> scope
-                is SubjectRef.Principal ->
-                    scope.takeIf { subject.tenant == grantor.tenant && subject.id == grantor.id }
+                // A capped credential holds nothing bound to its principal by name (RFC 0009 §4.2): it cannot lend it.
+                is SubjectRef.Principal -> scope.takeIf {
+                    grantor.principalBindings && subject.tenant == grantor.tenant && subject.id == grantor.id
+                }
 
                 is SubjectRef.Role -> {
                     if (subject.tenant != null && subject.tenant != grantor.tenant) {

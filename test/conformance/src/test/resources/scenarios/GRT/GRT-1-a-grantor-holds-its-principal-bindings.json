@@ -1,0 +1,92 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same grant made with gina's token: the binding that names her is hers, and covers it.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "policy-editor"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "p:gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "editor-orders",
+          "subject": {
+            "role": "policy-editor"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "orders",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/*",
+        "verdict": "YES"
+      }
+    ]
+  }
+}

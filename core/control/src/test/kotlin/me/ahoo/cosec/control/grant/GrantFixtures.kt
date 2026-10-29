@@ -74,6 +74,7 @@ internal object GrantFixtures {
         attachments: List<String> = emptyList(),
         attributes: Map<String, String> = emptyMap(),
         tenant: TenantId = ACME,
+        principalBindings: Boolean = true,
     ) = Grantor(
         tenant = tenant,
         id = PrincipalId(id),
@@ -83,6 +84,7 @@ internal object GrantFixtures {
             attachments.map(::PolicyId),
         ),
         attributes = attributes,
+        principalBindings = principalBindings,
     )
 
     fun snapshot(platform: GrantDocument = GrantDocument.EMPTY, tenant: GrantDocument = GrantDocument.EMPTY) =

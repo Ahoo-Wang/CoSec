@@ -99,7 +99,7 @@ object GrantRunner : ScenarioRunner {
     }
 
     private fun grantor(node: JsonNode): Grantor {
-        node.only("tenant", "id", "roles", "policies", "attributes")
+        node.only("tenant", "id", "roles", "policies", "attributes", "principalBindings")
         return Grantor(
             tenant = TenantId(node.required("tenant").text()),
             id = PrincipalId(node.required("id").text()),
@@ -108,6 +108,8 @@ object GrantRunner : ScenarioRunner {
                 node.get("policies")?.strings().orEmpty()
             ),
             attributes = node.get("attributes")?.fields().orEmpty().mapValues { it.value.text() },
+            // False for a grantor whose credential has a role cap (RFC 0009 §4.2).
+            principalBindings = node.get("principalBindings")?.bool() ?: true,
         )
     }
 

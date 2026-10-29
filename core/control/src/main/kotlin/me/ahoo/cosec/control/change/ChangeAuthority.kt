@@ -200,7 +200,13 @@ class ChangeAuthority(
                 tenants = mapOf(tenant to base),
                 now = now.toEpochMilli(),
             )
-            val grantor = Grantor(operator.tenant, operator.actor.principal, operator.memberships, operator.attributes)
+            val grantor = Grantor(
+                operator.tenant,
+                operator.actor.principal,
+                operator.memberships,
+                operator.attributes,
+                operator.principalBindings,
+            )
             analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
         } catch (e: CancellationException) {
             throw e

@@ -165,6 +165,28 @@ class GrantAnalyzerTest {
         verdicts(grantor(), snapshot(tenant = published), candidate).assertUnknown(UnknownReason.DENY_OVERLAP)
     }
 
+    /**
+     * RFC 0009 §4.2, review N1: a grantor with a capped credential (a CI key) holds nothing bound to its principal by
+     * name, so it cannot lend it: binding it to a role the principal holds would hand the key what its cap withholds.
+     */
+    @Test
+    fun `a capped grantor does not hold its principal bindings`() {
+        val published = GrantDocument(
+            policies = listOf(policy("orders", allow("order:*"))),
+            bindings = listOf(bind("p:gina", principal("gina"), "orders")),
+        )
+        val candidate = GrantDocument(
+            policies = published.policies,
+            bindings = published.bindings + bind("editor-orders", role("policy-editor"), "orders"),
+        )
+        val token = grantor(roles = mapOf("" to listOf("policy-editor")))
+        verdicts(token, snapshot(tenant = published), candidate).assertContained()
+        val key = grantor(roles = mapOf("" to listOf("policy-editor")), principalBindings = false)
+        val analysis = analyzer.analyze(key, snapshot(tenant = published), GrantChange(ACME, candidate))
+        analysis.verdicts.map { it.second }.assertUnknown(UnknownReason.NOT_COVERED, Shortfall.NO_ALLOW)
+        analysis.needsApproval.assert().isTrue()
+    }
+
     @Test
     fun `row 8 - an anyone deny binds the grantee just as the grantor and does not count`() {
         val platform = GrantDocument(

@@ -1,0 +1,95 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "gina holds order:* only through a binding that names her; her capped key holds none of it, so it cannot bind it to a role she has.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "policy-editor"
+    ],
+    "principalBindings": false
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "p:gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "editor-orders",
+          "subject": {
+            "role": "policy-editor"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "orders",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/*",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "NO_ALLOW"
+      }
+    ]
+  }
+}
