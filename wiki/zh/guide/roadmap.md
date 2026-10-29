@@ -64,7 +64,7 @@ flowchart LR
 
 ## 发布策略 {#release-policy}
 
-- **`8.0.0-alpha.1` 是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
+- **8.0 的 alpha 版（最新为 `8.0.0-alpha.2`）是预览版，不承诺兼容性。** 公共 API、`cosec.*` 属性、文档与线上格式（`schema: 2`、`CoSec-Identity`）
   以及授权语义，在之后的任何 alpha 或 RC 中都可能改变，预览版之间不提供迁移路径。请在生产以外试用，暂时不要在它上面构建。
 - RC 与 GA 等 M7 完成：对整个系统的两轮审查（RC 安全审查，然后按模块审查）及其发现全部修复、ABI 校验（GA 时冻结公共 API，RFC 0011 D4）。此后 8.0 才遵循语义化版本。
 - **8.0 不比 7.0 慢。** 性能预算以 7.0 的实测数字设定：编译执行的授权吞吐与 Pipeline 吞吐不低于 7.0 的 100 %，分配不高于 7.0
@@ -78,7 +78,7 @@ flowchart LR
   （未知字段、应为列表处写了标量、重复键），不再把它们编译成范围更大的策略。升级前先读它的升级说明：已存入 Redis 的策略在重新发布之前，可能让请求失败。
 - 最新的安全公告是
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8)，已在 7.0.1 与 6.1.2 中修复。
-- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用 `8.0.0-alpha.1`，配合[升级](../operations/upgrading.md)；
+- 现在该做的：生产环境继续用 7.0.2，即最新的 7.0.x。想评估 8.0，在测试环境中试用最新的 alpha（`8.0.0-alpha.2`，需要 Java 21），配合[升级](../operations/upgrading.md)；
   RC 之前还会有改动。
 
 ## 如何跟进 {#how-to-follow}
