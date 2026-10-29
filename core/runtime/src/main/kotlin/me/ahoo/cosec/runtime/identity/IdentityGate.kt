@@ -171,7 +171,7 @@ class IdentityGate(
             facts.host,
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return null
-        // The gateway's credential decides here too: a capped one has no principal bindings, an API key no break-glass.
+        // The gateway's credential decides here too: a capped one is granted nothing by name, an API key no break-glass.
         val subject = Subject(
             identity.subject,
             identity.tenant,

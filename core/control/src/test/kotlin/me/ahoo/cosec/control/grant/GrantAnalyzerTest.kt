@@ -169,7 +169,7 @@ class GrantAnalyzerTest {
     }
 
     /**
-     * RFC 0009 §4.2, review N1: a grantor with a capped credential (a CI key) holds nothing bound to its principal by
+     * RFC 0009 §4.2, review N1: a grantor with a capped credential (a CI key) holds no ALLOW bound to its principal by
      * name, so it cannot lend it: binding it to a role the principal holds would hand the key what its cap withholds.
      */
     @Test
