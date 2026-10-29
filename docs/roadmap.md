@@ -200,8 +200,9 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1138 | RFC 0010 C1–C3：义务按穷尽 `when` 分派（`OBL-3`，构建级）；控制面 API 在 `{base-path}/v1`；`CoSec-Identity` 接受任何认证方式名 | ✅ 已合入 |
 | #1139 | RFC 0011 PR-1：模块分组目录，项目名去掉 `cosec-` 前缀 | ✅ 已合入 |
 | #1146、#1147 | CI：Codecov 自 #1139 起读到 0 %（上传路径过期，上传器转而搜到配置缓存文件）；CI 重构为一个按目录组推导的矩阵（`scripts/ci/plan.py`）、单一门禁 `CI`、覆盖率由各组上传合并、CI 上测试不走构建缓存；每次推送的 runner 时间 4384 s → 1141 s。必需检查改为 `CI`、`Analyze (java-kotlin)`、`Semantic PR Title`（此前 Architecture、Conformance 等守护测试不是必需检查） | ✅ 已合入 |
-| #1141 | RFC 0011 PR-2：`spi` 模块、拆散 `core/`、starter 按类路径装配（STA-1：缺 Redis 模板或 REQUIRED 的 Kafka 审计即启动失败）、§5 的例外规则 | 审查通过，合入 main 后等 CI，自动合并 |
-| #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | 独立审查通过，叠在 #1141 上，之后改指向 `main` |
+| #1141 | RFC 0011 PR-2：`spi` 模块、拆散 `core/`、starter 按类路径装配（STA-1：缺 Redis 模板或 REQUIRED 的 Kafka 审计即启动失败）、§5 的例外规则 | ✅ 已合入 |
+| #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | ✅ 已合入 |
+| #1149 | RFC 0009 PR-3（`feat!`）：API Key 只有角色上限、成员关系决定权限、`migrate api-keys`；顺带修复成员关系缓存用写入填充、下一次请求不是本地命中 | 修安全审查发现（高危：上限不收窄主体绑定与 break-glass；迁移丢弃附加策略会让 key 获得权限） |
 
 #1141、#1144 合入后：RFC 0009 PR-3 → RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
 
@@ -214,6 +215,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
+- 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
@@ -264,6 +266,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **身份与凭据分层**：主体 / 凭据 / 委托；API Key 不携带授予、只能收窄；`principal.type`、`auth.method` 为属性；拒绝带 `act` 的 token；委托放到 8.1 | 2026-10-28 | [RFC 0009](rfc/0009-identity-and-credentials.md) |
 | **GA 前只做"不做会静默放行"和"几乎零成本"的改动**，不为未来功能预先抽象公共 SPI；企业网关场景逐项检查后只剩三项（未知义务即拒绝、控制面 API 版本独立于 `base-path`、`auth.method` 开放取值） | 2026-10-28 | [RFC 0010](rfc/0010-ga-extension-points.md) |
 | **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`platform` 分组（`platform/gateway-server` 是给用户直接部署的网关服务）；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
+| **API Key 上限只留角色，迁移不扩大任何凭据**（#1149 安全审查）：有上限时不取主体绑定，API Key 不取 break-glass，上限必须显式写出，`MembershipProvider` 的未知主体是显式分支；迁移默认原地转换或每把 key 一个专用工作负载主体，并集授予原主体须显式选择 | 2026-10-29 | [RFC 0009](rfc/0009-identity-and-credentials.md) 修订、Q6、Q7 |
 
 ## 10. 尚未派发的下一步
 
