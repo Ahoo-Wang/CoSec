@@ -70,7 +70,7 @@ flowchart LR
 
 ## Release policy
 
-- **`8.0.0-alpha.1` is a preview with no compatibility promise.** Public APIs, `cosec.*` properties, the document
+- **The 8.0 alphas (latest `8.0.0-alpha.2`) are previews with no compatibility promise.** Public APIs, `cosec.*` properties, the document
   and wire formats (`schema: 2`, `CoSec-Identity`) and authorization semantics may change in any later alpha or RC,
   without a migration path between previews. Try it outside production; do not build on it yet.
 - RC and GA wait for M7: two review rounds of the whole system (the RC security review, then a review of each module) with their findings fixed, and ABI validation,
@@ -90,7 +90,7 @@ flowchart LR
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try `8.0.0-alpha.1` in a test
+- What to do now: stay on 7.0.2, the latest 7.0.x, in production. To evaluate 8.0, try the latest alpha (`8.0.0-alpha.2`, Java 21) in a test
   environment with [Upgrading](../operations/upgrading.md); expect changes before the RC.
 
 ## How to follow

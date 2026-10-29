@@ -208,7 +208,15 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1155 | RFC 0011 PR-3：ABI 校验（KGP 内置 `abiValidation`，22 个库模块的转储），`@ExperimentalCoSecApi`、`@CoSecSpi`、`SpiMarkerTest`；收窄公共面（cocache 编解码器、快照内部、`RequestGate` 只能由 CoSec 实现、控制面的执法 bean 不可替换） | ✅ 已合入 |
 | v8.0.0-alpha.1 | 预览版，不承诺兼容性：GitHub prerelease、Maven Central、GitHub Packages、Docker 只推 `8.0.0-alpha.1`；`main` 回到 `8.0.0-SNAPSHOT`（#1156、#1157） | ✅ 2026-10-29 发布 |
 
-接下来：RC 审查第 1 轮（RC 安全审查，进行中，发现公开修复：维护者 2026-10-29 "Fix in public"）→ 修复 → 第 2 轮（按模块）→ 修复 → `cosec-engine`/`cosec-runtime` 公共 API 归类 → RC。
+| #1159、#1164 | RC 审查第 1 轮（`docs/security/8.0-rc-review.md`，49 项，4 项高危）与修复批次 A：上限只去掉 ALLOW（RC1-1）、break-glass 按来源、认证加固 | ✅ 已合入 |
+| #1167 | `k8s/` 改为 Kustomize（`base` + `dev`/`production` overlay），pod 加固，CI 校验清单 | ✅ 已合入 |
+| #1169 | `build!`：Java 21 基线（镜像仍运行在 JDK 25） | ✅ 已合入 |
+| #1170 | `refactor!`：CoSec 自己的 `IdGenerator`，CosId 移到可选扩展 `cosec-cosid`（CosId 5.0.0-alpha.2） | ✅ 已合入 |
+| #1171 | `AuthorizationChecker.decide` 返回决定 | ✅ 已合入 |
+| #1172、#1173 | 未知属性检查忽略 Kubernetes 服务链接变量 | ✅ 已合入 |
+| v8.0.0-alpha.2 | 预览版，不承诺兼容性（#1174）：GitHub prerelease、Maven Central（含 `cosec-cosid`）、GitHub Packages、Docker 只推 `8.0.0-alpha.2`；发布后 `main` 保持 `8.0.0-alpha.2`，不回到 SNAPSHOT（维护者 2026-10-29） | ✅ 2026-10-29 发布 |
+
+接下来：RC 修复批次 B（授出分析与控制面，RC1-2/3/4 高危）→ 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
