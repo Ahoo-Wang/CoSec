@@ -76,6 +76,13 @@ class KubernetesServiceLinksTest {
     }
 
     @Test
+    fun `a link variable needs a URL value`() {
+        // The environment map holds Any: a value that is not a string is not the URL Kubernetes writes.
+        KubernetesServiceLinks.isServiceLink("COSEC_GATEWAY_PORT", null).assert().isFalse()
+        KubernetesServiceLinks.isServiceLink("COSEC_GATEWAY_PORT", 80).assert().isFalse()
+    }
+
+    @Test
     fun `only the process environment loses its service links`() {
         val variables = mapOf("COSEC_GATEWAY_SERVICE_HOST" to "10.96.12.34", "COSEC_JWT_SECRT" to "x", "HOME" to "/")
 
