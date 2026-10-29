@@ -1,0 +1,105 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package me.ahoo.cosec.jwt
+
+import com.auth0.jwt.JWT
+import com.auth0.jwt.interfaces.DecodedJWT
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.PolicyCapable
+import me.ahoo.cosec.api.principal.RoleCapable
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.token.DelegationUnsupportedException
+
+/**
+ * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its
+ * signature, and reading the claims of a token. Internal: only the verifier, after it verified the signature, may turn
+ * a token into a principal (`PIP-11`, `UnverifiedTokenTest`).
+ */
+internal object Jwts {
+    const val TOKEN_PREFIX = "Bearer "
+
+    /** The RFC 8693 actor claim. `may_act` only says who may act for the subject, and does not change it. */
+    const val ACTOR_CLAIM = "act"
+    private val jwtParser = JWT()
+
+    fun String.removeBearerPrefix(): String =
+        if (this.startsWith(TOKEN_PREFIX)) {
+            this.substring(TOKEN_PREFIX.length)
+        } else {
+            this
+        }
+
+    fun decode(token: String): DecodedJWT {
+        val jwtToken = token.removeBearerPrefix()
+        return jwtParser.decodeJwt(jwtToken)
+    }
+
+    /**
+     * [decodedAccessToken] as a principal; the caller has verified its signature. A delegation token (an `act` claim)
+     * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+     */
+    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
+        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
+            throw DelegationUnsupportedException(
+                "The token delegates (it carries an `act` claim), which CoSec does not support."
+            )
+        }
+        val accessTokenId = decodedAccessToken.id
+        val principalId = decodedAccessToken.subject
+        val policyClaim = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY)
+        val policies = if (policyClaim.isMissing) emptySet() else policyClaim.asList(String::class.java).toSet()
+        val rolesClaim = decodedAccessToken.getClaim(RoleCapable.ROLE_KEY)
+        val roles = if (rolesClaim.isMissing) emptySet() else rolesClaim.asList(String::class.java).toSet()
+        val attributesClaim = decodedAccessToken.getClaim(CoSecPrincipal::attributes.name)
+        val attributes = if (attributesClaim.isMissing) emptyMap<String, Any>() else attributesClaim.asMap()
+        val principal =
+            withMembershipMarker(SimplePrincipal(principalId, policies, roles, attributes), decodedAccessToken)
+        val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
+        val tokenPrincipal = SimpleTokenPrincipal(
+            accessTokenId,
+            principal,
+            decodedAccessToken.issuedAtAsInstant,
+            decodedAccessToken.expiresAtAsInstant,
+        )
+        if (tenantId.isNullOrEmpty()) {
+            @Suppress("UNCHECKED_CAST")
+            return tokenPrincipal as T
+        }
+        @Suppress("UNCHECKED_CAST")
+        return SimpleTokenTenantPrincipal(delegate = tokenPrincipal, tenant = SimpleTenant(tenantId)) as T
+    }
+
+    /**
+     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so tokens
+     * without it parse exactly as before. Any value is kept, including one that is not a string, for
+     * the pipeline to refuse (`MembershipSource.Unusable` in `cosec-runtime`).
+     */
+    private fun withMembershipMarker(principal: CoSecPrincipal, decodedAccessToken: DecodedJWT): CoSecPrincipal {
+        val markerClaim = decodedAccessToken.getClaim(MembershipClaims.MARKER_KEY)
+        if (markerClaim.isMissing) {
+            return principal
+        }
+        val marker = when {
+            markerClaim.isNull -> "null"
+            else -> markerClaim.asString() ?: markerClaim.toString()
+        }
+        return MembershipMarkedPrincipal(principal, marker)
+    }
+}

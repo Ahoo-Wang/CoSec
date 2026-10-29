@@ -23,7 +23,7 @@
     <logger name="me.ahoo.cosec.pipeline.SecurityPipeline" level="OFF"/>
     <!-- The snapshot property tests inject store failures on purpose; each one is a WARN with a stack trace, and a
          million cases filled the CI runner's disk. The tests assert the outcome, not the log. -->
-    <logger name="me.ahoo.cosec.snapshot.SnapshotSource" level="OFF"/>
+    <logger name="me.ahoo.cosec.runtime.snapshot.SnapshotSource" level="OFF"/>
 
     <root level="WARN">
         <appender-ref ref="CONSOLE"/>

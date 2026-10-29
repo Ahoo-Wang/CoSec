@@ -1,0 +1,35 @@
+{
+  "rules": [
+    "BRK-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The root binding names cosec, but a credential without break-glass (an API key) is not reached by it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "(platform)",
+    "id": "cosec",
+    "breakGlass": false
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

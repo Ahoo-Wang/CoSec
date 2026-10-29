@@ -1,0 +1,108 @@
+{
+  "rules": [
+    "IDN-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A cap is expressed in roles, so the principal's directly attached policy does not reach the key.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/**"
+              }
+            ]
+          },
+          {
+            "id": "attached",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/reports/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/reports/q3",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": [
+          "billing"
+        ]
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc",
+        "roles": {
+          "": [
+            "billing"
+          ]
+        },
+        "attachments": [
+          "attached"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

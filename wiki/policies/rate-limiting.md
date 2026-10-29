@@ -1,158 +1,168 @@
 ---
 title: "Rate Limiting"
-description: "Limit how often allowed requests may run, per caller, path or any other key."
+description: "Limit how often permitted requests may run, per caller, path or any other key, with rules in the policy documents."
 ---
 
 # Rate Limiting
 
-For policy authors and operators protecting APIs from overuse. Rate limiting runs after authorization and spends
-permits only for allowed requests; this page covers writing rules, choosing a counter backend, and what clients see
+For policy authors and operators protecting APIs from overuse. Rate limit rules live in the policy documents and run
+only after a request is permitted; this page covers writing rules, choosing a counter backend, and what clients see
 when a limit is hit.
 
-A policy decides whether a request is allowed; a rate limit rule decides how often allowed requests may pass. A
-denied request is already rejected and never uses up the quota of legitimate callers, and
-[checks in code](../integration/checks.md) never spend permits.
+A policy decides whether a request is allowed; a rate limit rule decides how often permitted requests may pass. The
+rules are *obligations* of a permit: a request that is denied or cannot be decided spends nothing, so it never uses up
+the quota of legitimate callers. [Checks in code](../integration/checks.md), `simulate`, `explain` and shadow
+evaluations spend nothing either.
 
 ```mermaid
 flowchart LR
-    A[Request] --> B[Authorization]
-    B -->|denied| D[401 / 403]
-    B -->|allowed| C{Matching<br>rate limit rules}
+    A[Request] --> B[Decision]
+    B -->|Deny| D[401 / 403]
+    B -->|Indeterminate| U[503]
+    B -->|Permit| C{Matching<br>rate limit rules}
     C -->|none| E[Allowed]
     C -->|permits left| E
     C -->|a rule exhausted| F[429]
+    C -->|strict rule cannot count| U
 ```
 
 ## Rules
 
-Rules are JSON files, by default every `classpath:cosec-rate-limit/*-rate-limit.json`
-([`cosec.limiter.*`](../operations/configuration.md#rate-limiting)). A file holds one rule or an array of rules.
-
-```json
-[
-  {
-    "id": "login-by-ip",
-    "action": { "path": { "pattern": "/auth/login", "method": "POST" } },
-    "key": "request.remoteIp",
-    "permitsPerSecond": 0.1,
-    "windowSeconds": 60,
-    "strictFailure": true
-  },
-  {
-    "id": "export-free-tier",
-    "action": "/export/**",
-    "condition": { "inRole": { "value": "free" } },
-    "key": "context.principal.id",
-    "permitsPerSecond": 0.2,
-    "windowSeconds": 60
-  }
-]
-```
-
-| Field | Required | Default | Meaning |
-|---|---|---|---|
-| `id` | yes | | Names the quota: letters, digits, `_`, `.` and `-`. Counters belong to the id, never to the settings, so two rules never share a quota by accident. Unique across all rules. |
-| `action` | yes | | Which requests the rule applies to, written as a statement's [action](./language.md#actions). |
-| `condition` | no | always | Narrows the rule, written as a statement's [condition](./language.md#conditions). |
-| `key` | no | one shared bucket | What the quota is counted by ([Keys](#keys)). |
-| `permitsPerSecond` | yes | | The rate, greater than `0`. |
-| `windowSeconds` | no | `1` | Window length, an integer of at least `1`. A window allows `permitsPerSecond × windowSeconds` requests, and at least one. |
-| `strictFailure` | no | `false` | What a backend failure means ([Failure behavior](#failure-behavior)). |
-
-Use a longer window for low rates: `0.1` per second over `60` seconds is 6 requests a minute, while over the
-default one-second window the limit (`0.1`) is below one request and the counting gets coarse.
-
-For an allowed request, every matching rule spends one permit, in file order. The first exhausted rule rejects the
-request with `429`; the rules after it spend nothing, the rules before it have already spent theirs.
-
-[`schema/rate-limit-rule.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/rate-limit-rule.schema.json)
-describes the file for editors ([JSON Schema](./language.md#json-schema)).
-
-## Keys
-
-`key` is a [part](./language.md#parts) that splits the quota into one bucket per value:
-
-| `key` | One bucket per |
-|---|---|
-| none | rule: all matching requests share one bucket |
-| `request.remoteIp` | client IP |
-| `context.principal.id` | principal (anonymous callers share one) |
-| `context.tenantId` | tenant |
-| `request.header.X-Api-Client` | header value |
-| `request.path.var.<name>` | value of a variable the rule's own `path` action captures |
-
-Requests whose part is empty share one bucket, so leaving out a header does not get around the limit. The key is
-checked when the rule loads: a blank key or a part outside the [list](./language.md#parts) fails.
-
-A rule reads `request.path.var.<name>`, in its key or its condition, only from the variables its own `path` action
-captured, never from a policy or another rule that matched the same request. A rule whose action is not a `path`
-action and that reads path variables fails to load with `PathVariableScopeException`
-([Path variables](./language.md#path-variables)):
+Every document can hold rules in `rateLimits` ([fields](./language.md#rate-limit-rules)):
 
 ```json
 {
-  "id": "orders-per-order",
-  "action": { "path": { "pattern": "/orders/{orderId}/**", "method": "POST" } },
-  "key": "request.path.var.orderId",
-  "permitsPerSecond": 1,
-  "windowSeconds": 10
+  "schema": 2,
+  "revision": 7,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "policies": [],
+  "bindings": [],
+  "rateLimits": [
+    {
+      "id": "login-per-ip",
+      "action": "http:POST",
+      "resource": "http:path:/auth/login",
+      "key": "environment.ip",
+      "permitsPerSecond": 0.1,
+      "windowSeconds": 60,
+      "strictFailure": true
+    },
+    {
+      "id": "export-free-tier",
+      "action": "http:GET",
+      "resource": "http:path:/export/**",
+      "condition": { "in": ["free", "scope.roles"] },
+      "key": "subject.id",
+      "permitsPerSecond": 0.2,
+      "windowSeconds": 60
+    }
+  ]
 }
 ```
 
+A rule matches a permitted request the way a DENY statement would: one of its action patterns, one of its resource
+patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one.
+
+Which rules a request is held to:
+
+- the platform document's rules, for every permitted request;
+- the app document's rules, when the request read that document: it has an app and the principal holds a role in the
+  request's space ([Role permissions](./role-permissions.md#app-documents));
+- the tenant document's rules, for requests of that tenant.
+
+They run in that order, and in document order within a document. Each matching rule spends one permit. The first rule
+whose bucket is exhausted answers `429`; the rules after it spend nothing, and the rules before it keep what they
+spent. Rules add up: a tenant or app rule never replaces or relaxes a platform rule, even one with the same id, so a
+request passes only while every rule it matches has permits left.
+
+## Keys
+
+`key` names the attribute whose value picks the bucket: a String or Ip attribute of the
+[catalog](./language.md#attributes), such as `environment.ip`, `subject.id`, `scope.tenant`,
+`subject.attributes.plan` or `resource.var.orderId`. A `resource.var.<name>` key must be captured by every resource
+pattern of the rule.
+
+| `key` | Buckets |
+|---|---|
+| absent | One bucket shared by every request the rule matches. |
+| present | One bucket per value. Requests where the value is absent share one bucket of their own. |
+
+Rules of different documents never share buckets: a platform rule counts under its own id, an app rule under
+`app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`
+([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
+A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
+the platform's quotas.
+
+A key that reads `subject.id` gives anonymous callers one shared bucket; key them by `environment.ip` in a separate
+rule. A key or condition that reads an [external attribute](./language.md#external-attributes-and-onmissing) which
+cannot be fetched leaves the rule without a bucket: with `onMissing: "nomatch"` (platform rules only) it is skipped,
+otherwise `strictFailure` decides as for a [failing limiter](#failure-behavior).
+
 ## Counting and backends
 
-Both backends count with the same sliding window: the estimate is the previous window's count, weighted by how much
+Both limiters count with the same sliding window: the estimate is the previous window's count, weighted by how much
 of it still overlaps, plus the current window's count. A request is allowed while the estimate is below the limit;
-rejected requests are not counted.
+refused requests are not counted.
 
-| Backend | Used when | Scope |
+| Limiter | Used when | Scope |
 |---|---|---|
-| `RedisRateLimiter` | `cosec-cocache` is on the classpath and a `StringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, off the event loop. Counters live under `<key-prefix>:<id>:<bucket>:<window>` (`cosec.limiter.key-prefix`, default `cosec:rate-limiter`) and expire after two windows. |
+| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `cosec:rate-limiter:<rule>:<bucket>:<window>` and expire after two windows. |
 | `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. Keeps at most 100,000 buckets and drops buckets idle for an hour; a dropped bucket starts again from zero. |
 
-Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)).
+Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has
+`cosec.authorization.rate-limit.timeout` (default `500ms`, [Configuration](../operations/configuration.md)); a call
+that takes longer counts as a failure.
 
 ## Responses and headers
 
-A request that exceeds a rule is answered with `429 Too Many Requests` ([status codes](../integration/web.md#responses-and-status-codes)).
-When at least one rule matched, the response carries these headers, whether the request was allowed or rejected:
+A request stopped by a rule is answered `429 Too Many Requests` with the `too-many-requests` problem
+([status codes](../integration/web.md)). A permitted request that spent at least one permit carries the headers of the
+rule with the fewest permits left; a `429` carries those of the exhausted rule:
 
 | Header | Value |
 |---|---|
-| `RateLimit-Limit` | Permits per window of the rule with the fewest permits left (the rejecting rule on `429`), rounded up. |
+| `RateLimit-Limit` | Permits per window of that rule, rounded up. |
 | `RateLimit-Remaining` | Permits left in its current window. |
 | `RateLimit-Reset` | Seconds until its current window ends, at least `1`. |
 | `Retry-After` | Only on `429`: the same as `RateLimit-Reset`. |
 
-Rejections are audited and traced with the decision `TOO_MANY_REQUESTS`, together with the policy or permission that
-allowed the request ([Observability](../operations/observability.md)).
+A request that matched no rule, or whose rules were all skipped, has none of these headers.
 
 ## Failure behavior
 
-When the backend fails (Redis unreachable, a script error), `strictFailure` decides:
+A rule cannot be counted when the limiter fails (Redis unreachable, a script error), times out, is not configured, or
+the rule's bucket cannot be read. Its `strictFailure` decides:
 
 | `strictFailure` | The request |
 |---|---|
-| `false` (default) | The rule is skipped; the request continues to the next rule. Logged at `WARN`. |
-| `true` | Rejected with `429` and `Retry-After`. Logged at `ERROR`. |
+| `false` (default) | The rule is skipped; the next rule runs. Logged at `WARN`. |
+| `true` | Refused with `503 Service Unavailable` (`unavailable` problem, no `Retry-After`). Logged at `ERROR`. |
 
-Failure logs are throttled to one per ten seconds. Skipping a lenient rule is one of the documented exceptions to
-[fail closed](../guide/security-model.md#fail-closed); set `strictFailure` on rules that protect against abuse, such
+A bucket that cannot be read for any reason other than a missing external attribute refuses the request even without
+`strictFailure`. Failure logs are throttled to one per ten seconds. Skipping a lenient rule is one of the documented
+exceptions to [fail closed](../guide/security-model.md); set `strictFailure` on rules that protect against abuse, such
 as login attempts, and leave it off on rules that only smooth load.
 
-## Loading rules
+## Publishing rules
 
-Rule files load as strictly as [policy files](./language.md#loading-policy-files), because a rule that is
-silently dropped removes a protection without anyone noticing. The application does not start when:
+Rules are part of their documents, so they are checked and compiled with them: an invalid id, a duplicate id in one
+document, `permitsPerSecond` not above `0`, `windowSeconds` below `1`, a `key` that is not a String or Ip attribute,
+or a variable a pattern does not capture fails the whole document ([Testing policies](./testing.md#validating-policies)).
 
-- a file cannot be read or a rule cannot be built (invalid JSON, a missing field, an invalid id, `permitsPerSecond`
-  not above `0`, `windowSeconds` below `1`, an unsupported `key`, path variables read out of scope);
-- a rule id is declared twice, in one file or in two;
-- a configured location does not exist or matches no file. Only the default location
-  `classpath:cosec-rate-limit/*-rate-limit.json` may match nothing, so applications without rules need no setting.
+Change rules through the control plane like any other entry ([Changes](./testing.md#changes)):
 
-A file matched by two locations is loaded once. To load rules from somewhere else, such as a database, declare a
-`RateLimitRuleProvider` bean. It is called on every allowed request, so it must answer from memory;
-`RateLimitRuleProvider.of(rules)` rejects duplicate ids.
+- `putRateLimit` (`rateLimit`, optional `ifMatch`) adds a rule, or replaces the one with its id where it stands;
+  `removeRateLimit` (`id`, optional `ifMatch`) removes one;
+- `POST /documents/{key}:apply` proposes them from a whole document: `MERGE` puts new and changed rules, `REPLACE` also
+  removes the rules the document leaves out. Order is part of the rules (the first exhausted rule answers), so a
+  rule out of place is removed and put again; a rollback restores the rules of its revision the same way.
+
+Each operation needs `cosec:write` on the entry `doc/<document>/rateLimit/<id>`, such as
+`doc/tenant/acme/rateLimit/export-per-user`. A tenant's rule changes, tightening or loosening, need no second person:
+its rules count in its own buckets, and every platform and app rule still applies to its requests. A rule change to the
+platform or app document, removals included, needs [approval](./testing.md#approval) as any other change there does.
+
+A shadow window compares decisions, and a rule never changes a decision, so a change that touches only rate limit rules
+shows no difference in its window: the window tells you nothing about the quota.
 
 **Next:** catch mistakes before they reach production, in [Testing policies](./testing.md).

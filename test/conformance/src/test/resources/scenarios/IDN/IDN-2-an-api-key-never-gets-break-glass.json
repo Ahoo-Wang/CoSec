@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "IDN-2",
+    "BRK-8"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A break-glass binding names the platform administrator; an uncapped API key of that administrator still gets no break-glass.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2099-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "X-API-Key": "k-root"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-root",
+        "id": "root-key",
+        "principalId": "cosec",
+        "tenantId": "(platform)"
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "(platform)",
+        "id": "cosec"
+      }
+    ]
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

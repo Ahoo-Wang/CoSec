@@ -1,0 +1,66 @@
+{
+  "rules": [
+    "CTL-19"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "An :apply that replaces acme's document with one whose only rule is `new` publishes `new`, and `old` is gone.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [],
+        "bindings": [],
+        "rateLimits": [
+          {
+            "id": "old",
+            "action": "*",
+            "permitsPerSecond": 10
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "mode": "REPLACE",
+        "desired": {
+          "policies": [],
+          "bindings": [],
+          "rateLimits": [
+            {
+              "id": "new",
+              "action": "order:read",
+              "permitsPerSecond": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "rateLimits": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "rateLimits [new]"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

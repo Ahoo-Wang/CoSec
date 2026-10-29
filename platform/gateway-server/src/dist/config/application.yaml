@@ -1,0 +1,19 @@
+server:
+  port: 8080
+  compression:
+    enabled: true
+    min-response-size: 1KB
+spring:
+  application:
+    name: ${service.name:cosec-gateway}
+  web:
+    error:
+      whitelabel:
+        enabled: false
+cosec:
+  audit:
+    kafka:
+      enabled: false
+  authentication:
+    login:
+      enabled: false

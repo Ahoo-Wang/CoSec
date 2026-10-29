@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "BRK-8"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The root binding names cosec, but cosec authenticated by another authenticator, without CoSec's own token, is not reached by it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "tenant": "(platform)",
+    "id": "cosec"
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

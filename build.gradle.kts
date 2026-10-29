@@ -26,29 +26,38 @@ plugins {
     alias(libs.plugins.jmh)
     jacoco
 }
-val dependenciesProject = project(":cosec-dependencies")
+val dependenciesProject = project(":dependencies")
 val bomProjects = setOf(
-    project(":cosec-bom"),
+    project(":bom"),
     dependenciesProject,
 )
 
 val serverProjects = setOf(
-    project(":cosec-gateway-server"),
+    project(":gateway-server"),
 )
 val codeCoverageReportProject = project(":code-coverage-report")
 // Test-only modules (RFC 0008 §3.1): never published, so neither in the BOM nor in any publication.
 val testOnlyProjects = setOf(
     project(":conformance"),
+    project(":architecture"),
     project(":e2e"),
 )
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
 val libraryProjects = publishProjects - bomProjects
 
-// Modules of the decision engine (RFC 0002 §2): they depend on the Kotlin standard library only.
+// The contracts and the decision engine (RFC 0002 §2, RFC 0011 §5): the Kotlin standard library only.
 val pureProjects = setOf(
-    project(":cosec-model"),
-    project(":cosec-engine"),
+    project(":annotations"),
+    project(":api"),
+    project(":model"),
+    project(":engine"),
 )
+
+// The ports (RFC 0011 §3): what a third party implements, so no logging facade forced on it.
+val spiProject = project(":spi")
+
+/** RFC 0011 D1: a project is named after its directory, and its artifact keeps the cosec- prefix. */
+fun artifactIdOf(project: Project): String = "cosec-${project.name}"
 
 ext.set("libraryProjects", libraryProjects)
 
@@ -90,9 +99,13 @@ configure(libraryProjects) {
         withJavadocJar()
         withSourcesJar()
     }
+    configure<BasePluginExtension> {
+        archivesName.set(artifactIdOf(project))
+    }
     kotlinJvm()
     jmhBenchmarks()
     junitTests()
+    coverageReport()
 
     dependencies {
         if (this@configure in pureProjects) {
@@ -100,8 +113,9 @@ configure(libraryProjects) {
             testImplementation(platform(dependenciesProject))
         } else {
             api(platform(dependenciesProject))
-            implementation("com.google.guava:guava")
-            implementation("org.slf4j:slf4j-api")
+            if (this@configure != spiProject) {
+                implementation("org.slf4j:slf4j-api")
+            }
         }
         jmh(platform(dependenciesProject))
         jmh("org.openjdk.jmh:jmh-core")
@@ -128,42 +142,48 @@ project(":e2e") {
     }
 }
 
-configure(pureProjects) {
-    // ArchUnit (EnginePurityTest) checks what the code references; this catches a dependency added to the build
-    // before any code uses it.
-    val allowedModules = setOf("org.jetbrains.kotlin:kotlin-stdlib", "org.jetbrains:annotations")
-    val allowedProjects = pureProjects.map { it.path }.toSet()
-    val projectPath = path
-    val verifyPureClasspath = tasks.register("verifyPureClasspath") {
-        group = "verification"
-        description = "Fails if a classpath holds anything but the Kotlin standard library and the pure modules."
-        val classpaths = listOf("compileClasspath", "runtimeClasspath").associateWith { name ->
-            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }
-        }
-        doLast {
-            val violations = classpaths.flatMap { (name, artifacts) ->
-                artifacts.get().mapNotNull { artifact ->
-                    val allowed = when (val id = artifact.id.componentIdentifier) {
-                        is ProjectComponentIdentifier -> id.projectPath in allowedProjects
-                        is ModuleComponentIdentifier -> "${id.group}:${id.module}" in allowedModules
-                        else -> false
+// RFC 0011 §5: what each project declares in its main configurations and what its classpaths resolve to, written for
+// test/architecture, which holds the dependency rules as data. A project's own task resolves its own configurations.
+subprojects {
+    pluginManager.withPlugin("java") {
+        val declared = provider {
+            listOf("api", "implementation", "compileOnly", "runtimeOnly").flatMap { name ->
+                configurations.findByName(name)?.dependencies.orEmpty().map { dependency ->
+                    when (dependency) {
+                        is ProjectDependency -> "declared $name project ${dependency.path.removePrefix(":")}"
+                        else -> "declared $name module ${dependency.group}:${dependency.name}"
                     }
-                    if (allowed) null else "$name: ${artifact.id.componentIdentifier.displayName}"
                 }
             }
-            check(violations.isEmpty()) {
-                "Pure module $projectPath must depend on the Kotlin standard library only, found:\n" +
-                    violations.joinToString("\n")
+        }
+        val resolved = listOf("compileClasspath", "runtimeClasspath").map { name ->
+            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }.map { artifacts ->
+                artifacts.map { artifact ->
+                    when (val id = artifact.id.componentIdentifier) {
+                        is ProjectComponentIdentifier -> "resolved $name project ${id.projectPath.removePrefix(":")}"
+                        is ModuleComponentIdentifier -> "resolved $name module ${id.group}:${id.module}"
+                        else -> "resolved $name other ${id.displayName}"
+                    }
+                }
             }
         }
-    }
-    tasks.named("check") {
-        dependsOn(verifyPureClasspath)
+        val facts = layout.buildDirectory.file("architecture/facts.txt")
+        tasks.register("architectureFacts") {
+            group = "verification"
+            description = "Writes the project's declared and resolved dependencies for test/architecture."
+            inputs.property("declared", declared)
+            resolved.forEachIndexed { index, lines -> inputs.property("resolved$index", lines) }
+            outputs.file(facts)
+            doLast {
+                val lines = declared.get() + resolved.flatMap { it.get() }
+                facts.get().asFile.apply { parentFile.mkdirs() }.writeText(lines.distinct().joinToString("\n"))
+            }
+        }
     }
 }
 
 /*
- * RFC 0008 §3.5: the property tests the rule registry (conformance/src/test/resources/rules/<FAMILY>.json) names, with
+ * RFC 0008 §3.5: the property tests the rule registry (test/conformance/src/test/resources/rules/<FAMILY>.json) names, with
  * -PpropertyIterations random cases each (default 1,000,000). Not part of check, which runs them with their own fixed
  * counts. A test reads the count from the system property cosec.property.iterations.
  */
@@ -172,7 +192,7 @@ val propertyStress = tasks.register("propertyStress") {
     description = "Runs the registered property tests with -PpropertyIterations random cases (default 1,000,000)."
 }
 
-val ruleRegistry = layout.projectDirectory.dir("conformance/src/test/resources/rules")
+val ruleRegistry = project(":conformance").layout.projectDirectory.dir("src/test/resources/rules")
 
 @Suppress("UNCHECKED_CAST")
 val registeredProperties = ruleRegistry.asFile.listFiles().orEmpty()
@@ -185,10 +205,10 @@ val registeredProperties = ruleRegistry.asFile.listFiles().orEmpty()
     }
 registeredProperties
     .flatMap { (it["properties"] as List<String>?).orEmpty() }
-    // module:Class#test name
+    // project:Class#test name
     .groupBy({ it.substringBefore(':') }, { it.substringAfter(':').substringBefore('#') })
-    .forEach { (directory, classes) ->
-        val target = subprojects.single { it.projectDir.name == directory }
+    .forEach { (name, classes) ->
+        val target = project(":$name")
         val test = target.the<SourceSetContainer>()["test"]
         val stress = target.tasks.register<Test>("propertyStress") {
             group = "verification"
@@ -204,7 +224,7 @@ registeredProperties
             )
             outputs.upToDateWhen { false }
             maxHeapSize = "2g"
-            // As for engineParity: TRACE logging over a million cases would write gigabytes.
+            // TRACE logging over a million cases would write gigabytes.
             val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
             doFirst {
                 jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
@@ -246,6 +266,7 @@ configure(publishProjects) {
             val publishComponentName = if (isBom) "javaPlatform" else "java"
             create<MavenPublication>(publishName) {
                 from(components[publishComponentName])
+                artifactId = artifactIdOf(project)
                 pom {
                     name.set(rootProject.name)
                     description.set(getPropertyOf("description"))
@@ -326,6 +347,7 @@ fun Project.kotlinJvm() {
 
 /** JUnit 5 with the test libraries every module shares. */
 fun Project.junitTests() {
+    val onCi = providers.environmentVariable("CI").isPresent
     tasks.withType<Test> {
         useJUnitPlatform()
         testLogging {
@@ -333,12 +355,13 @@ fun Project.junitTests() {
         }
         // fix logging missing code for JacocoPlugin
         jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
+        // A cache hit would pass CI on another build's results, and give Codecov another build's coverage.
+        outputs.doNotCacheIf("CI runs every test") { onCi }
     }
     dependencies {
         testImplementation(platform(rootProject.libs.junit.bom))
         testImplementation("ch.qos.logback:logback-classic")
         testImplementation("me.ahoo.test:fluent-assert-core")
-        testImplementation("org.hamcrest:hamcrest")
         testImplementation("io.mockk:mockk") {
             exclude(group = "org.slf4j", module = "slf4j-api")
         }
@@ -346,6 +369,26 @@ fun Project.junitTests() {
         testImplementation("org.junit.jupiter:junit-jupiter-params")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    }
+}
+
+/**
+ * `check` writes the module's JaCoCo XML, which CI uploads to Codecov (scripts/ci/plan.py). It holds the module's tests
+ * against its own classes and those of the projects on its test runtime classpath, as the aggregated report does, so
+ * Codecov's merge of the uploads gives the same coverage.
+ */
+fun Project.coverageReport() {
+    val selfPath = path
+    val report = tasks.named<JacocoReport>("jacocoTestReport") {
+        reports.xml.required.set(true)
+        classDirectories.from(
+            configurations["testRuntimeClasspath"].incoming.artifactView {
+                componentFilter { it is ProjectComponentIdentifier && it.projectPath != selfPath }
+            }.files
+        )
+    }
+    tasks.named("check") {
+        dependsOn(report)
     }
 }
 

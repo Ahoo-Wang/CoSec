@@ -1,0 +1,17 @@
+# Rule: PIP-9
+# Mutant: a check of a permitted request evaluates without the request's host attributes
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.HostAttributesPipelineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 0c032821..06b1e32c 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -203,7 +203,7 @@ class Pipeline(components: PipelineComponents) {
+             )
+         }
+         val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
+-        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
++        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
+         val decision = evaluate(request, view, fetchedAttributes(), null)
+         // A check writes no audit, and every use of break-glass is written to a REQUIRED one (§9.4.3): a check that
+         // only break-glass permits is refused (review A1).

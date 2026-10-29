@@ -5,68 +5,89 @@
 
 'module: api':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-api/**'
-'module: core':
+      - any-glob-to-any-file: 'api/api/**'
+'module: annotations':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-core/**'
+      - any-glob-to-any-file: 'api/annotations/**'
+'module: spi':
+  - changed-files:
+      - any-glob-to-any-file: 'core/spi/**'
+'module: login':
+  - changed-files:
+      - any-glob-to-any-file: 'extensions/login/**'
 'module: jwt':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-jwt/**'
+      - any-glob-to-any-file: 'extensions/jwt/**'
 'module: cocache':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-cocache/**'
+      - any-glob-to-any-file: 'backends/cocache/**'
 'module: social':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-social/**'
+      - any-glob-to-any-file: 'extensions/social/**'
 'module: webmvc':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-webmvc/**'
+      - any-glob-to-any-file: 'edge/webmvc/**'
 'module: webflux':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-webflux/**'
+      - any-glob-to-any-file: 'edge/webflux/**'
 'module: gateway':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-gateway/**'
+      - any-glob-to-any-file: 'edge/gateway/**'
 'module: gateway-server':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-gateway-server/**'
+      - any-glob-to-any-file: 'platform/gateway-server/**'
 'module: opentelemetry':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-opentelemetry/**'
+      - any-glob-to-any-file: 'extensions/opentelemetry/**'
 'module: ip2region':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-ip2region/**'
+      - any-glob-to-any-file: 'extensions/ip2region/**'
 'module: openapi':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-openapi/**'
+      - any-glob-to-any-file: 'edge/openapi/**'
+'module: micrometer':
+  - changed-files:
+      - any-glob-to-any-file: 'extensions/micrometer/**'
+'module: migrate':
+  - changed-files:
+      - any-glob-to-any-file: 'migration/migrate/**'
+'module: e2e':
+  - changed-files:
+      - any-glob-to-any-file: 'test/e2e/**'
 'module: kafka':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-kafka/**'
+      - any-glob-to-any-file: 'backends/kafka/**'
 'module: engine':
   - changed-files:
-      - any-glob-to-any-file: ['model/**', 'engine/**']
+      - any-glob-to-any-file: ['core/model/**', 'core/engine/**']
 'module: runtime':
   - changed-files:
-      - any-glob-to-any-file: 'runtime/**'
+      - any-glob-to-any-file: 'core/runtime/**'
 'module: control':
   - changed-files:
-      - any-glob-to-any-file: 'control/**'
+      - any-glob-to-any-file: 'core/control/**'
+'module: testkit':
+  - changed-files:
+      - any-glob-to-any-file: 'test/testkit/**'
 'module: conformance':
   - changed-files:
-      - any-glob-to-any-file: 'conformance/**'
-'module: spring-boot-starter':
+      - any-glob-to-any-file: 'test/conformance/**'
+'module: spring-boot':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-spring-boot-starter/**'
+      - any-glob-to-any-file: 'host/spring-boot/**'
+'module: architecture':
+  - changed-files:
+      - any-glob-to-any-file: 'test/architecture/**'
 'module: bom':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-bom/**'
+      - any-glob-to-any-file: 'bom/bom/**'
 'module: dependencies':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-dependencies/**'
+      - any-glob-to-any-file: 'bom/dependencies/**'
 
 'area: docs':
   - changed-files:
-      - any-glob-to-any-file: ['wiki/**', 'document/**', '**/*.md', 'llms.txt']
+      - any-glob-to-any-file: ['wiki/**', '**/*.md', 'llms.txt']
 
 'area: ci':
   - changed-files:

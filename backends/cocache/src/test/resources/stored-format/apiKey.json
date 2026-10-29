@@ -1,0 +1,1 @@
+{"format":2,"id":"k1","principalId":"alice","tenantId":"acme","roles":["admin","viewer@sales"],"expiresAt":"2026-11-01T00:00:00Z","enabled":true}

@@ -1,9 +1,0 @@
-{
-  "id": "own-path",
-  "name": "Own path",
-  "type": "global",
-  "tenantId": "(platform)",
-  "statements": [
-    { "name": "own", "action": "/users/#{principal.id}/**" }
-  ]
-}

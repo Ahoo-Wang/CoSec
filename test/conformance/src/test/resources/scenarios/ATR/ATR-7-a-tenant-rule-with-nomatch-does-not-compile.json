@@ -1,0 +1,65 @@
+{
+  "rules": [
+    "ATR-7"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A tenant document's rate limit rule says onMissing nomatch: it does not compile, since only the platform may let a rule lapse.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [],
+        "bindings": [],
+        "rateLimits": [
+          {
+            "id": "zone",
+            "action": "*",
+            "condition": {
+              "eq": [
+                "ext.geo.zone",
+                "eu"
+              ]
+            },
+            "onMissing": "nomatch",
+            "permitsPerSecond": 10
+          }
+        ]
+      }
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.zone": "string"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "needs the control plane's confirmation"
+  }
+}

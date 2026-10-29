@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "id": "ACT-1",
+      "source": "RFC 0005 §2 J9; GHSA-2293-jx8h-56m8",
+      "statement": "A value substituted for a path template variable never changes the pattern.",
+      "level": "pipeline",
+      "pending": null
+    },
+    {
+      "id": "ACT-2",
+      "source": "RFC 0005 Q10",
+      "statement": "An unmapped route falls into the http namespace; an ALLOW on service:verb does not cover unmapped routes.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:PipelineRoutesTest#an unmapped request stays in the http namespace",
+        "runtime:RouteMapTest#a request no route matches stays unmapped, never a wildcard"
+      ]
+    }
+  ]
+}

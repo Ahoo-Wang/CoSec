@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "PIP-9"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A DENY on the X-Debug header wins over the global ALLOW when the request sends it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        },
+        {
+          "id": "no-debug",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "http.header.x-debug",
+                  "1"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "no-debug",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-debug"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Debug": "1"
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

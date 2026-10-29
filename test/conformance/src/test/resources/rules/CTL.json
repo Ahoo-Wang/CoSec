@@ -1,0 +1,214 @@
+{
+  "rules": [
+    {
+      "id": "CTL-1",
+      "source": "RFC 0007 §6.3",
+      "statement": "A candidate containing any Broken entry is not published, and the head does not move.",
+      "level": "control",
+      "guards": [
+        "control:PublishCompileTest",
+        "control:ControlFailClosedTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-2",
+      "source": "RFC 0007 §5.4",
+      "statement": "The revision record is written before the head, and the head carries its parent.",
+      "level": "control",
+      "guards": [
+        "control:RevisionsTest",
+        "cocache:RevisionChainTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-3",
+      "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998)",
+      "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlPlaneTest#simulate decides with the enforcing flow and shows only what the caller may read",
+        "control:ControlPlaneTest#explain decides at the revisions an audit event recorded"
+      ]
+    },
+    {
+      "id": "CTL-4",
+      "source": "RFC 0007 §5.4, §5.5",
+      "statement": "A head is replaced only over the digest of the base it was published on; a stale base conflicts, nothing is overwritten and the change is not rebased automatically.",
+      "level": "control",
+      "guards": [
+        "control:RevisionsTest",
+        "cocache:RevisionChainTest#two instances publishing on the same base never overwrite each other"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-5",
+      "source": "RFC 0007 §5.8",
+      "statement": "A platform or app candidate that removes a policy another document's binding refers to is not published; the back-reference index is added to before a head moves and removed from only after.",
+      "level": "control",
+      "guards": [
+        "control:RevisionsTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-6",
+      "source": "RFC 0007 §5.5",
+      "statement": "A document has at most one staged change; another stages only once it is published, abandoned or expired.",
+      "level": "control",
+      "guards": [
+        "control:ControlFailClosedTest#one staged change per document",
+        "cocache:RevisionChainTest#changes stage one at a time across instances and publish once"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-7",
+      "source": "RFC 0007 §5.5, §6.1",
+      "statement": "Every check of a change is bound to its base: a change whose base moved never publishes, and a rebase runs every check again on the new head.",
+      "level": "control",
+      "guards": [
+        "control:ControlFailClosedTest#a moved base conflicts and publishes nothing, a rebase checks again"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-8",
+      "source": "RFC 0007 §7.1, §7.2",
+      "statement": "Every control-plane write is checked target by target with the control plane's own policies, through the same engine, before anything is recorded: cosec:write on each entry, cosec:grant on each scope a binding grants in, and the step's own action on the document. Anything but a permit refuses it: 403, or 503 when it cannot be decided.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#nobody writes without the right, and nothing is recorded",
+        "control:ControlAuthorizationTest#an undecidable check, a failed confirmation and a failing analysis all refuse"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-9",
+      "source": "RFC 0007 §6.1, §7.2, §7.5",
+      "statement": "Publishing checks the publisher again on the current heads: their authorization of every target and the grant analysis. What they cannot publish alone waits for approval, and nothing is written.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#publishing checks the publisher again on the current heads"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-10",
+      "source": "RFC 0007 §6.4, Q1",
+      "statement": "A staged change's shadow window closes only when the instances' samples that compared (not BASE_MISMATCH) reach the minimum after the minimum duration, or at the maximum duration as insufficient; a change still shadowing never publishes.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#two instances sample a window that closes from their reports, and the publisher acknowledges it",
+        "control:ShadowWindowTest#a window without enough samples closes at its longest as insufficient"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-11",
+      "source": "RFC 0007 §6.4",
+      "statement": "A window that saw WIDENED, NARROWED or BECAME_INDETERMINATE requests, or closed with insufficient samples, publishes only when the publisher acknowledges exactly its window and counts.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#two instances sample a window that closes from their reports, and the publisher acknowledges it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-12",
+      "source": "RFC 0007 §6.3, §6.4",
+      "statement": "A candidate that an instance cannot compile or evaluate (CANDIDATE_ERROR) closes the window at once, and the change never publishes.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#a candidate an instance cannot compile closes the window at once and never publishes"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-13",
+      "source": "RFC 0007 §6.4, Q1, Q12",
+      "statement": "Creating or revoking a break-glass binding has no shadow window; any other change skips its window only with cosec:skip-shadow and a recorded reason.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#break-glass has no window, and skipping one needs a reason that is recorded"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-14",
+      "source": "RFC 0007 §3.1 N2, §9.2, Q15",
+      "statement": "The control plane refuses a tenant policy whose id the platform document already uses (422); the data plane would read such an id as ambiguous unless both contents are the same.",
+      "level": "control",
+      "guards": [
+        "control:PublishCompileTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-15",
+      "source": "RFC 0007 §10.2; round-1 review K2",
+      "statement": "Every step that names a change answers a caller who may not read its document exactly as it answers for a change that does not exist (404), before the change's state is looked at.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlReviewFixesTest#a change another tenant may not read is the same 404 at every step, before its state",
+        "control:ControlHttpTest#a body kind is refused, and another tenant's change answers like a missing one"
+      ]
+    },
+    {
+      "id": "CTL-16",
+      "source": "RFC 0007 §6.4; round-2 review R1 and its review",
+      "statement": "A shadow window's numbers are the sum of one report per instance, each that instance's latest cumulative report: an instance's report replaces only its own. A second report of one instance, a report of another window, a negative count, or no report from an instance seen reporting on the window keeps it open instead of being counted, and one instance's CANDIDATE_ERROR blocks the window by itself.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a window sums one report per instance, and anything else keeps it open",
+        "cocache:CoCacheShadowTest#each instance's report has its own key, and one under another's key is not counted",
+        "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes"
+      ]
+    },
+    {
+      "id": "CTL-17",
+      "source": "RFC 0007 §7.2, §10.2; round-2 review R6",
+      "statement": "When whether the caller may read a change cannot be decided (a store or snapshot read fails), every step that names it is a 503, for a change that exists and for one that does not; 404 stays for a change that does not exist or that the caller may not read.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a change whose readability cannot be decided is a 503 at every step, whether or not it exists"
+      ]
+    },
+    {
+      "id": "CTL-18",
+      "source": "RFC 0007 §5.6; round-2 review R5",
+      "statement": "A rollback needs cosec:read on its document before it says whether a revision exists or shows its entries.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlRoundTwoFixesTest#a rollback needs cosec read before it says which revisions exist"
+      ]
+    },
+    {
+      "id": "CTL-19",
+      "source": "RFC 0007 §6.7, §10.1",
+      "statement": "A document's rate limit rules change only through a change: putRateLimit and removeRateLimit operations, or an :apply whose desired document sets them (all of them with REPLACE). A change that names no rate limit keeps the head's rules as they are.",
+      "level": "control",
+      "guards": [
+        "control:OperationsTest#rate limits are put, removed and diffed"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-20",
+      "source": "RFC 0007 §3.1 N3, §6.2",
+      "statement": "The control plane checks a candidate's conditions against the external attributes the platform declares and, after them, those the host's attribute providers declare, as an instance compiles it: a condition on a provider's attribute is checked clean, one on an attribute neither declares does not compile.",
+      "level": "control",
+      "guards": [
+        "control:ProviderAttributesTest#a candidate compiles against the platform's and the providers' attributes"
+      ],
+      "pending": null
+    }
+  ]
+}

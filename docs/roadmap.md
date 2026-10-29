@@ -3,7 +3,7 @@
 > 目标架构见 [RFC 0001](rfc/0001-target-architecture.md)，各阶段的细化设计见各自的 RFC。本文只记录**进度**：每个阶段走到了哪一步、
 > 还差什么、在等谁的决定。决策和理由以 RFC 为准；本文与 RFC 不一致时，以 RFC 为准并修正本文。
 >
-> 更新于 2026-10-27，基线 `main` @ `7467cc18`（#1104，S1b）。
+> 更新于 2026-10-28，基线 `main` @ `7bc9fa88`（#1123）。
 >
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
@@ -169,8 +169,8 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 | ~~RFC 0008 PR-4~~ | ~~切换~~：2026-10-26 拆成 S1–S5（RFC 0008 §4.4.1） | — | — |
 | S1a | `feat(starter): add the 8.0 auto-configuration`（RFC 0008 §4.4 的 S1 拆分，2026-10-27 批准）：加法，可以 revert；8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，由测试与端到端切片显式加载；没有开关，也没有 7.x 脚手架 | 其余全部实现 PR、端到端切片 | ✅ 已合入（#1097） |
 | S1b | `refactor!: wire the 8.0 path in the starter`：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0；`aot-smoke` 作业；不可回退点，带 RFC 0008 §3.9 第 1–5 条的证据 | S1a ✓；§3.9 第 1–5 条 | ✅ 已合入（#1104，`7467cc18`，2026-10-27）。§3.9 证据（head `c2753727`）：CI 全绿；没有 `pending` 规则（`SNP-1`/`SNP-2`/`SNP-4` 为 `timing`）；百万例 `property-stress.yml` [40640041416](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640041416) 全部通过；`mutationCheck` 21/21；`jmh-v7-v8.yml` [40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212) 7 个场景全部 PASS（授权 364–601 %，Pipeline 126–219 %） |
-| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | 进行中（2026-10-27 派发） |
-| S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | 删除 PR 合入后写完并合入 | 未开工 |
+| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | ✅ 已合入（#1114，`04c9f65e`，2026-10-28）：删除 42,080 行、新增 1,400 行；`migrate/` 需要的 7.x 解码搬进 `migrate.v7`（内部，`ognl` 为 `compileOnly`，缺失时 `convert` 给出原因而不是崩溃）；8.0 代码用到的常量与函数搬进 8.0 的类，行为不变；`CoSecModule` 只剩 `PolicyType` 序列化与 `Scope` 拒绝（`SCP-5`）；`mutationCheck` 21/21；完成 §4.6 的 L1、L2（`cosec-cocache` 部分）、L6、L7、L8（`migrate/` 之外）、L9、L15、L18（目录条目保留给 `migrate` 的 `compileOnly`） |
+| S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | 删除 PR 合入后写完并合入 | 进行中（2026-10-28 派发） |
 | RFC 0008 PR-5、PR-6 | RC 前清理：按 RFC 0008 §4.6 的清单删除遗留代码、构建配置与文档中的版本沿革，加入守护 G1–G7；清单清空（"保留"项除外）是 RC 前提 | S5；RFC 0008 §6 Q9–Q15 ✓（2026-10-26 批准） | 等 S5（L17、L31 可以提前） |
 | RC 安全审查 | 集成系统的威胁模型审查：多租户隔离、控制面越权与授出分析、break-glass、快照与缓存投毒、problem+json 泄露、DoS；发现全部在 RC 前修复（RFC 0008 §3.9） | S1 后开始；PR-5、PR-6 后做最后一遍 | 未开工 |
 
@@ -191,13 +191,31 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 7. 进行中
 
+**2026-10-28 状态**（S1b 之后的修复批 #1118–#1125 与 S5 文档 #1131 均已合入）：
+
+| PR | 内容 | 状态 |
+|---|---|---|
+| #1127–#1130 | 快照就绪与监听器排空（RFC 0003 X6、RFC 0006 X8）、8.0 策略测试工具、CND-5 对所有属性引用拒绝凭据类请求头（含 Unicode 折叠绕过）、testkit 按平台的限制与属性目录编译 | ✅ 已合入 |
+| #1136、#1137 | RFC 0008 PR-5：删除 8.0 路径不再使用的代码（扩大范围）；去掉无用依赖 | ✅ 已合入 |
+| #1138 | RFC 0010 C1–C3：义务按穷尽 `when` 分派（`OBL-3`，构建级）；控制面 API 在 `{base-path}/v1`；`CoSec-Identity` 接受任何认证方式名 | ✅ 已合入 |
+| #1139 | RFC 0011 PR-1：模块分组目录，项目名去掉 `cosec-` 前缀 | ✅ 已合入 |
+| #1146、#1147 | CI：Codecov 自 #1139 起读到 0 %（上传路径过期，上传器转而搜到配置缓存文件）；CI 重构为一个按目录组推导的矩阵（`scripts/ci/plan.py`）、单一门禁 `CI`、覆盖率由各组上传合并、CI 上测试不走构建缓存；每次推送的 runner 时间 4384 s → 1141 s。必需检查改为 `CI`、`Analyze (java-kotlin)`、`Semantic PR Title`（此前 Architecture、Conformance 等守护测试不是必需检查） | ✅ 已合入 |
+| #1141 | RFC 0011 PR-2：`spi` 模块、拆散 `core/`、starter 按类路径装配（STA-1：缺 Redis 模板或 REQUIRED 的 Kafka 审计即启动失败）、§5 的例外规则 | ✅ 已合入 |
+| #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | ✅ 已合入 |
+| #1149 | RFC 0009 PR-3（`feat!`）：API Key 只有角色上限、成员关系决定权限、`migrate api-keys`；顺带修复成员关系缓存用写入填充、下一次请求不是本地命中 | 修安全审查发现（高危：上限不收窄主体绑定与 break-glass；迁移丢弃附加策略会让 key 获得权限） |
+
+#1141、#1144 合入后：RFC 0009 PR-3 → RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
+
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
 - **百万例 `property-stress.yml` 在 `main` 上全部通过**：`model`、`engine`、`runtime`、`control`（[40628433863](https://github.com/Ahoo-Wang/CoSec/actions/runs/40628433863)），`cosec-core`（#1111 之后重跑，[40635399876](https://github.com/Ahoo-Wang/CoSec/actions/runs/40635399876)）。S1b 的证据在它自己的最终 head 上再跑一次。
 - #1108（`fix(runtime)`，N3 重新编译覆盖加载中的槽位，审查发现 S4）：按旧平台编译的加载不安装，无法重新编译即 fail closed 并按退避重试；新规则 `SNP-4`（`pending`，S1b 把它移到 `timing`）；变异体拆成 4 个，全部被杀死。已合入。
-- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。下一步是 S2–S4 的删除 PR（进行中），然后 S5 文档，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
+- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。S2–S4 的删除 PR 已合入（#1114，见 §6）。S5 文档进行中，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
+- 后续项（#1114 审查）：`SnapshotConsistencyPropertyTest`（SNP-1）的视图由测试内的副本拼装，补一个经生产 `DocumentSnapshotViews`、在并发重新发布下的 runtime 级变体；`migrate/` 改用不需要匹配器的读取器，去掉 `OgnlSandbox` 与 `ognl`（L8 余项）。
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
+- 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
+- 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
@@ -205,7 +223,11 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 8. 等待维护者的决定
 
-无。离线回放用的真实数据导出不再需要（RFC 0008）。RFC 0008 §6 的待决问题按推荐执行，维护者可以否决。
+| 事项 | 背景 | 协调者的建议 |
+|---|---|---|
+| #1116 Renovate：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4 | 运行时库的升级按常设规则等维护者 | patch 级，CI 通过即合入 |
+| #1115 Renovate：`ognl` 3.4.x 补丁升级 | #1114 后 `ognl` 只剩 `migrate` 的 `compileOnly`（读取 7.x 数据用） | 合入；L8 余项（无匹配器的读取器）完成后整个删除 |
+| 何时发 8.0 RC / GA | RFC 0001 §6：由维护者决定 | 等 RC 前提全部满足后再议 |
 
 ## 9. 维护者决定（2026-10-26 起）
 
@@ -234,12 +256,24 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **影子报告索引**先用"控制面持久化见过的实例"的方案，不为只增 SET 改动 S1b；信任模型写进 `wiki/operations/storage.md` | 2026-10-27 | #1110、RFC 0007 §6.4 |
 | **S1b 合入授权**：证据（#1104 CI 全绿、`mutationCheck` 全部杀死、S1b head 上的百万例 `property-stress.yml`、`jmh-v7-v8.yml` 每个场景 v8 ≥ v7）齐备即由协调者合入；任何一项不满足就停下报告 | 2026-10-27 | #1104 |
 | **S2–S4 合并为一个删除 PR**，按提交分组审查；S5 独立，在它之后 | 2026-10-27 | [RFC 0008 §4.4.1](rfc/0008-conformance-and-direct-build.md) |
+| **8.0 发布前 SPI 与公共 API 不考虑兼容**，不需要维护者确认；以完美目标架构为先：高内聚、低耦合、代码清洁、可扩展、高性能、安全、易用。仍需确认：运行时依赖版本与发版 | 2026-10-28 | 仅记在本文 |
+| **默认按协调者推荐推进并合入**；需要维护者的事项登记在 §8 | 2026-10-28 | 仅记在本文 |
+| **网关身份传递取代 7.x 注入模式**：下游在可信内网，不复制密钥；`CoSec-Identity` v1 只含 `v`、`tenant`、`sub`、`scope`、当前作用域的生效 `roles`、`auth{method,jti,exp}`、`iat`、`rid` 与白名单 `claims`；匿名不发；网关始终清理入站的同名头；`forwardAuthorization` 默认 false | 2026-10-28 | #1124 |
+| **`cosec-testkit` 作为独立发布模块**（部分推翻 RFC 0008 Q11：核心不依赖 JUnit），第一版只做引擎级场景 | 2026-10-28 | [RFC 0008 §6 Q11](rfc/0008-conformance-and-direct-build.md) |
+| **租户文档的限流变更不需要额外审批**：计数器按文档隔离（`OBL-2`），平台规则叠加生效，租户只影响自己 | 2026-10-28 | #1122 |
+| **模块目录统一去掉 `cosec-` 前缀**，与 `model/`、`engine/` 一致；Gradle 项目名与 Maven 坐标保持 `cosec-*` | 2026-10-28 | #1132、AGENTS.md |
+| **死代码清理按引用判断**：8.0 路径上没有 `main` 引用、不是扩展点、文档不教的代码一律删除，G 系列守卫防回潮（RFC 0008 PR-5 扩大范围） | 2026-10-28 | [RFC 0008](rfc/0008-conformance-and-direct-build.md) PR-5 |
+| **身份与凭据分层**：主体 / 凭据 / 委托；API Key 不携带授予、只能收窄；`principal.type`、`auth.method` 为属性；拒绝带 `act` 的 token；委托放到 8.1 | 2026-10-28 | [RFC 0009](rfc/0009-identity-and-credentials.md) |
+| **GA 前只做"不做会静默放行"和"几乎零成本"的改动**，不为未来功能预先抽象公共 SPI；企业网关场景逐项检查后只剩三项（未知义务即拒绝、控制面 API 版本独立于 `base-path`、`auth.method` 开放取值） | 2026-10-28 | [RFC 0010](rfc/0010-ga-extension-points.md) |
+| **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`platform` 分组（`platform/gateway-server` 是给用户直接部署的网关服务）；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
+| **API Key 上限只留角色，迁移不扩大任何凭据**（#1149 安全审查）：有上限时不取主体绑定，API Key 不取 break-glass，上限必须显式写出，`MembershipProvider` 的未知主体是显式分支；迁移默认原地转换或每把 key 一个专用工作负载主体，并集授予原主体须显式选择 | 2026-10-29 | [RFC 0009](rfc/0009-identity-and-credentials.md) 修订、Q6、Q7 |
 
 ## 10. 尚未派发的下一步
 
-可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
+- **2026-10-28 起的顺序**：RFC 0008 PR-5（死代码清理，扩大范围）→ [RFC 0010](rfc/0010-ga-extension-points.md) 的 C1–C3（一个 PR）→ [RFC 0011](rfc/0011-module-architecture.md) PR-1、PR-2 → [RFC 0009](rfc/0009-identity-and-credentials.md) PR-1、PR-3（PR-2 移到 8.1）→ RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
 
-- S1b 的前置：#1103 合入（变异体与线程修复）；在 CI 上跑 `property-stress.yml` 与 `jmh-v7-v8.yml`（v8 ≥ v7）；随后 S1b 本身（草稿 #1104）（`refactor!`，注册 8.0 的自动配置、删除 7.x 的自动配置，带 §3.9 的证据）。S1b 同时处理 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`，并在 AGENTS.md 的 Mental model 开头加过渡说明。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
+可以穿插进行（不在主线上）：
+
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0005 PR-5（#1079）、RFC 0006 PR-5（#1078）的第 1 轮，RFC 0007 PR-3 至 PR-9 的第 1 轮（#1095 已修复 PR-4 至 PR-9 的第 1 轮发现，其中 K1 为高危），之前合入、只做过第 1 轮的 PR 的第 2 轮，#1097 的审查；各表中"—"表示尚无已合入的修复 PR。

@@ -1,337 +1,450 @@
 ---
 title: "Architecture Overview"
-description: "How CoSec is built: modules, the request path, the authorization chain, invariants and performance."
+description: "How CoSec 8.0 is built: modules and their dependency rule, the request pipeline, the flat engine, policy snapshots, the control plane, invariants and performance."
 ---
 
 # Architecture Overview
 
-For contributors changing CoSec and integrators who want to know how it works inside. This page explains the
-module layering, how a request travels through the pipeline, how the authorization decorators fit together, and
-the invariants every change must keep. What a decision *means* (evaluation order, deny-first, fail closed) is in
-the [security model](../guide/security-model.md); this page explains how the code keeps those promises.
+For contributors changing CoSec and integrators who want to know how it works inside. This page explains how the
+modules depend on each other, how a request travels through the coroutine pipeline, how the engine finds and evaluates
+policies, how policy snapshots reach every instance, how the control plane publishes them, and which invariants every
+change must keep. What a decision *means* (deny first, default deny, fail closed, break-glass) is in the
+[security model](../guide/security-model.md); this page explains how the code keeps those promises.
 
 ## Design goals
 
 - **One decision, many transports.** WebFlux, WebMvc and Spring Cloud Gateway must answer the same request
-  identically, so every decision is made once, in transport-independent code.
-- **Deny wins, errors deny.** Adding a policy can never widen access past a matching deny, and an outage never
-  opens the gate.
-- **Fast on the event loop.** Authorization runs on every request, often on a Netty thread. The hot path does no
-  I/O and no thread hop when the data is in the local cache.
-- **Policies are data.** Policies and permissions are JSON documents. New matcher types plug in through factories;
-  nothing in the engine changes.
+  identically, so every decision and every status code is made once, in transport-independent code.
+- **A pure decision.** The engine is a synchronous function over a request and an immutable snapshot: no I/O, no
+  clock, no threads. Everything that needs I/O (credentials, memberships, attributes, rate limits, audit) happens around
+  it, in the pipeline.
+- **Deny wins, errors deny.** Adding a policy can never widen access past a matching deny, and data that cannot be
+  read never permits.
+- **Fast on the event loop.** A request whose data is already in memory finishes on the thread that received it,
+  without a dispatch or a timer. A request that must wait for I/O suspends, and never blocks a thread.
+- **One writer.** Policy documents change only through the control plane (or `cosec-migrate`, which writes through the
+  same store), as revisions that are checked, compiled and optionally shadowed before they go live.
 - **Pay for what you use.** An application pulls in only the integrations it asks for.
 
 ## Module layering
 
+Modules sit in group directories: `api/` (annotations, api), `core/` (model, engine, spi, runtime, control),
+`backends/` (cocache, kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, login,
+ip2region, micrometer, opentelemetry), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
+(gateway-server). A Gradle project is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the
+`cosec-` prefix.
+
 ```mermaid
 flowchart BT
+    annotations[cosec-annotations]
     api[cosec-api]
-    core[cosec-core] --> api
-    jwt[cosec-jwt] --> core
-    cocache[cosec-cocache] --> core
-    social[cosec-social] --> core
-    otel[cosec-opentelemetry] --> core
-    micrometer[cosec-micrometer] --> core
-    openapi[cosec-openapi] --> core
-    ip2r[cosec-ip2region] --> core
-    kafka[cosec-kafka] --> core
-    webflux[cosec-webflux] --> jwt
-    webmvc[cosec-webmvc] --> jwt
-    gateway[cosec-gateway] --> webflux
-    starter[cosec-spring-boot-starter] --> jwt
-    starter -. feature variants .-> webflux & webmvc & gateway & cocache & social & otel & micrometer & openapi & ip2r & kafka
-    server[cosec-gateway-server] --> starter
     model[cosec-model]
     engine[cosec-engine] --> model
-    runtime[cosec-runtime] --> engine & core
+    spi[cosec-spi] --> model & api
+    runtime[cosec-runtime] --> engine & spi & annotations
     control[cosec-control] --> runtime
+    cocache[cosec-cocache] --> spi
+    kafka[cosec-kafka] --> spi & runtime
+    login[cosec-login] --> runtime
+    jwt[cosec-jwt] --> login
+    social[cosec-social] --> login
+    openapi[cosec-openapi] --> runtime
+    listeners[cosec-opentelemetry<br>cosec-micrometer<br>cosec-ip2region] --> runtime
+    webflux[cosec-webflux] --> runtime
+    webmvc[cosec-webmvc] --> runtime
+    gateway[cosec-gateway] --> webflux
+    starter[cosec-spring-boot] --> runtime & login & jwt
+    starter -. on the classpath .-> webflux & webmvc & gateway & cocache & control & kafka & social & listeners & openapi
+    migrate[cosec-migrate] --> cocache & control
+    testkit[cosec-testkit] --> runtime
+    server[cosec-gateway-server] --> starter
 ```
 
-Arrows point at what a module depends on. The rules behind the picture:
+Arrows point at what a module depends on; the dotted ones are modules the starter wires when the application adds them.
+The rules behind the picture:
 
-- **`cosec-api`** holds the public contracts only (`CoSecPrincipal`, `Policy`, `Statement`, `ActionMatcher`,
-  `ConditionMatcher`, `Authorization`, `Request`, `SecurityContext`, `AuditEventSink`) and depends on Reactor
-  alone. Downstream code compiles against it, so changing it is a breaking change.
-- **`cosec-core`** holds every algorithm (the policy engine and its matchers, `SimpleAuthorization`, the
-  `SecurityPipeline`, the authorization decorators for auditing, rate limiting and shadow mode, token
-  abstractions, local loading, JSON serialization) and the SPIs that other modules and applications implement
-  (see [Extending CoSec](./extending.md)).
-- **`cosec-model` and `cosec-engine`** (directories `model/` and `engine/`) will hold the pure decision engine new in 8.0
-  ([RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md), Chinese). They depend on the Kotlin standard library only: `EnginePurityTest` (ArchUnit) fails on
-  any reference to Reactor, Spring, logging, I/O, threads or clocks, and the `verifyPureClasspath` task, part of
-  `check`, fails on any other dependency. Nothing uses them yet.
-- **`cosec-runtime`** (directory `runtime/`) will hold the coroutine request pipeline new in 8.0
-  ([RFC 0006](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0006-coroutine-pipeline.md), Chinese). It depends on
-  `cosec-engine` and `cosec-core`. Coroutines stay in this module and the web adapters, and Reactor only at the adapter
-  bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or `model/` references `reactor.*`,
-  when a data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API or a
-  coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or `Dispatchers.IO`, or when it calls
-  `runCatching`, which swallows cancellation. `cosec-core` still brings Reactor onto its classpath, so the test checks references, not dependencies.
-  The module is empty so far.
-- **`cosec-control`** (directory `control/`) will hold the control plane new in 8.0: revisions, the publish flow and the
-  authorization of control-plane writes ([RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md), Chinese).
-  It depends on `cosec-runtime`. It is a library that adapters wire in: `ControlBoundaryTest` (ArchUnit) imports the
-  module's own compiled classes, whatever their package, and fails when one of them is outside `me.ahoo.cosec.control`,
-  references Spring, `reactor.*`, the coroutine or Reactive Streams bridges to it or a Redis client, or calls
-  `runBlocking`, `Dispatchers.IO` or `GlobalScope`. Like `RuntimeBoundaryTest`, it checks references, not dependencies.
-  The module is empty so far.
-- **Every other library module adapts exactly one technology**: JWT, Redis through CoCache, OAuth, OpenTelemetry,
-  Micrometer, OpenAPI, ip2region, Kafka, or one web stack. An adapter module never contains a decision.
-- **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
-  [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts):
-  the adapter module is a dependency of that variant only, and its auto-configuration is guarded by
-  `@ConditionalOnClass`, so it is active only when the application requests the capability. A new integration
-  is a new module plus a new variant, never a new hard dependency of the starter. The capabilities and the modules
-  behind them are listed in the [introduction](../guide/introduction.md#modules).
-- **`cosec-gateway-server`** is a ready-to-run application built from the starter. It is never published.
+- **`cosec-model` and `cosec-engine`** (directories `core/model/` and `core/engine/`) are the pure core: ids, bindings,
+  memberships, the condition AST, scopes and decisions in the model; action and resource patterns, the policy compiler
+  and the flat engine in the engine. They depend on the Kotlin standard library only. `EnginePurityTest` (ArchUnit)
+  fails on any reference to Reactor, Spring, logging, I/O, threads or clocks, and `DependencyRulesTest` fails on any
+  other resolved dependency. `ScopeConstructionTest` checks that only `ScopeResolver` constructs a resolved `Scope`.
+- **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`,
+  tokens, `SecurityContext`, `AuditEvent`, and their simple implementations (`SimplePrincipal`, `SimpleTenant`). It
+  depends on the Kotlin standard library alone. Changing it is a breaking change.
+- **`cosec-annotations`** (directory `api/annotations/`) holds `@InternalCoSecApi`, an opt-in marker at error level: a
+  declaration carrying it is public only so CoSec's own modules can reach it, and has no compatibility promise.
+  Applications do not opt in; `SourceRulesTest` fails when an opt-in appears outside CoSec's own Kotlin sources.
+- **`cosec-spi`** (directory `core/spi/`) holds the ports a request or a store calls, with their values and in-memory
+  implementations, under `me.ahoo.cosec.spi.*`: the snapshot store (`SnapshotDocumentStore`), memberships, token
+  verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
+  limiters, attribute providers, authenticators, the forwarded identity and the audit sink. It depends on
+  `cosec-model`, `cosec-api` and kotlinx-coroutines only, so a third party implements a port against it alone. A port
+  whose signature needs a layer's types stays with that layer: `DecisionListener`, `RequestGate`, the shadow window
+  ports in `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
+  ([Extending](./extending.md)).
+- **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
+  `AuthorizationChecker`, the snapshot documents and their codec, compiler and format descriptors (which generate
+  `schema/*.schema.json`), `SnapshotSource`, route maps, token verification, the built-in authenticators and the
+  logging audit sink. Its one Jackson mapper, `CoSecJson`, is internal (`@InternalCoSecApi`), and no Jackson type
+  appears in a public signature of `api/` or `core/` (`JacksonSignatureTest`). Coroutines stay in this module and the adapters,
+  Reactor only at the adapter bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or
+  `model/` references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` references
+  Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
+  `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
+- **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
+  approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
+  (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
+  references Spring, `reactor.*`, the coroutine or Reactive Streams bridges or a Redis client, or calls `runBlocking`,
+  `Dispatchers.IO` or `GlobalScope`.
+- **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
+  `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
+  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, which keeps the 7.x Reactor login
+  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, or an observer of decisions
+  (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
+- **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
+  and `cosec-jwt`; every other module is `compileOnly` in
+  [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts),
+  and its auto-configuration is guarded by `@ConditionalOnClass`, so it is active only when the application adds the
+  module. A module that a turned-on feature needs is checked at startup (STA-1,
+  [`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt)):
+  a forgotten adapter would otherwise leave a web host without a filter, so startup fails and names the artifact.
+  The modules and what each needs are listed in the [introduction](../guide/introduction.md#modules).
+- **`cosec-testkit`** (directory `test/testkit/`) runs scenarios against an application's own documents in JUnit 5. It
+  depends on `cosec-runtime` and `junit-jupiter-api` (both part of its API). It holds the engine level of the scenario
+  format, which `conformance` runs too, so the suite and the applications' tests evaluate scenarios one way.
+- **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
+  **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
+  **`architecture`** and **`e2e`** are test-only modules and are never published either.
+
+`architecture` (directory `test/architecture/`) holds the structural rules that scan several modules (RFC 0011 §5):
+
+- `DependencyRulesTest` reads the declared and resolved main dependencies of every project, which the root build's
+  `architectureFacts` task writes, and fails when a declared dependency points outwards (the reviewed exceptions, such
+  as `cosec-kafka` on `cosec-runtime` for `DecisionListener`, are listed with their reason in `DependencyRules`), when
+  `cosec-annotations`, `cosec-api`, `cosec-model` or `cosec-engine` resolves anything but the Kotlin standard library
+  (`cosec-spi` adds coroutines), or when `cosec-runtime` or `cosec-control` resolves Reactor, Spring, the Servlet API or
+  a Redis client.
+- `SourceRulesTest` scans the compiled classes: Reactor only in the edge, the extensions and the host (and
+  `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
+  `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
+  `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; a package belongs to one module;
+  opt-ins to the internal API only in CoSec's own sources.
+- `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
+  `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
+  (`ProjectListTest`) and the version catalog.
 
 ## Request path
+
+`Pipeline.evaluate` in
+[`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt)
+is one suspend function from the request's facts to an `Outcome`. The adapters (`PipelineWebFilter`,
+`PipelineServletFilter`, `PipelineGatewayFilter`) only read the request into `HttpFacts`, call it, and write what it
+returns. They depend on `RequestGate`, the interface `Pipeline` implements. The other `RequestGate` is `IdentityGate`,
+which a service behind a CoSec gateway uses instead (`cosec.pipeline.mode=gateway`): it reads the caller from the
+`CoSec-Identity` header the gateway forwarded, with no authenticator, snapshot, engine or listeners, and builds its
+outcomes through `StatusMapping` too, so both gates answer alike on every adapter. Why that needs a network boundary is
+in [Trust boundaries](../guide/security-model.md#trust-boundaries).
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant A as Web adapter<br>(WebFlux / WebMvc / Gateway)
-    participant P as SecurityPipeline
-    participant Z as Authorization<br>(decorator chain)
-    participant R as Policy / permission<br>repositories
-    A->>P: evaluate(exchange or servlet request)
-    P->>P: RequestParser: path safety, remote IP, request id, attributes
-    P->>P: SecurityContextParser: credential → principal
-    P->>Z: decide(request, context)
-    Z->>R: global policies, principal policies, role permissions
-    R-->>Z: local cache first, Redis on a miss
-    Z-->>P: AuthorizationDecision(result, verifyContext, rateLimit)
-    P-->>A: SecurityDecision(status, result, request, context, rateLimit)
-    A->>A: write the response, or continue the chain with the security context
+    participant A as Web adapter
+    participant P as Pipeline
+    participant N as Authenticator
+    participant X as Attribute providers
+    participant M as MembershipProvider
+    participant S as Snapshot source
+    participant E as Flat engine
+    participant R as RateLimiter
+    participant L as Decision listeners
+    A->>P: evaluate(HttpFacts)
+    P->>P: normalize the path, read CoSec-* parameters, resolve the route
+    P->>N: authenticate(credentials)
+    par stage A
+        P->>X: stage-A attributes, such as the blacklist
+    and memberships
+        P->>M: memberships, only when the token asks for the provider
+    end
+    P->>P: ScopeResolver, tenant, app, space and roles
+    P->>S: view(scope), from memory or loaded on a miss
+    P->>E: plan(request, view)
+    P->>X: stage-B attributes the plan names
+    P->>E: evaluate(request, view)
+    P->>R: rate limit obligations of a Permit
+    P->>L: REQUIRED listeners
+    P-->>A: Outcome from StatusMapping
+    A->>A: write the problem, or continue with the security context
+    P-)L: BEST_EFFORT listeners, off the request path
 ```
 
-What a contributor needs to know about this path:
+- **Read.** The adapter reads the method, raw path, query, headers, cookies, client address (through the configured
+  `X-Forwarded-For` depth) and host once, and starts the pipeline (step 1). On WebFlux and Gateway the request starts on
+  the event loop without a dispatch; after a real suspension it continues on `Dispatchers.Default`, never on a client
+  library's I/O thread. On WebMvc the bridge is `runBlocking` on the servlet thread.
+- **Route.** A path that does not normalize, or an ambiguous `CoSec-*` parameter, is a `400` (step 2). A
+  [route map](./extending.md#route-maps) turns a mapped request into a `service:verb` action on a typed resource; any
+  other request is `http:<METHOD>` on `http:path:<path>`.
+- **Authenticate.** The `Authenticator` turns the token or API key into a principal (step 3). A rejected credential is
+  evaluated as anonymous; an authenticator that fails or times out is a `503`.
+- **Memberships and stage A.** Stage-A attributes, those that decide what is loaded such as the blacklist, are fetched
+  together with the memberships (steps 4 and 5). Memberships come from the token's claims, or from the
+  `MembershipProvider` for an API key and for a token that carries the provider marker, narrowed to a key's cap. A
+  principal the provider does not know or knows as deactivated refuses the credential, and the request is decided as
+  anonymous. A membership source that fails, times out or answers the wrong kind of memberships is a `503`, never "no
+  roles".
+- **Scope.** `ScopeResolver` turns the declared app and space into a checked scope (step 6): the tenant is the
+  principal's (the default tenant when anonymous); a service bound to an app (`cosec.authorization.scope.app-id`) uses
+  that app and rejects a request that declares another; a space other than the default needs a role in it. A rejected
+  scope is a deny ([trust boundaries](../guide/security-model.md#trust-boundaries)).
+- **Snapshot view.** The snapshot source answers the view (platform, app and tenant documents) from memory, or loads
+  what is missing (step 7). A blocked request loads only the platform document.
+- **Stage B.** When a provider declares stage-B attributes, the engine's `plan` names the external attributes this
+  request could read, and only those are fetched, each provider in parallel with its own timeout (steps 8 and 9). A
+  provider that fails makes only its own attributes unavailable.
+- **Decide.** The engine answers `Permit` (with obligations), `Deny` or `Indeterminate` (step 10).
+- **Obligations.** A permit's rate limit obligations run in order (step 11). The first exhausted rule is a `429`; a rule
+  that cannot be counted is a `503` when it is strict and is skipped otherwise.
+- **REQUIRED listeners.** They see the outcome before it is returned (step 12); a failure turns only a permit into a
+  `503`. A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
+- **Status mapping.** `StatusMapping` is the only place that builds an `Outcome`: status, headers and the
+  `application/problem+json` body (step 13). At a gateway the outcome also names the headers to forward: the verified
+  `CoSec-Identity` on a permit for an authenticated principal, and otherwise none, so the adapter removes any the
+  client sent. The adapter writes it, or lets a permitted request continue with its
+  security context (step 14). The status of each outcome and the `CoSec-*` parameters are documented in
+  [Web integration](../integration/web.md).
+- **BEST_EFFORT listeners.** The audit log, metrics, tracing, the shadow listener and, by default, Kafka get the final
+  event through their own bounded queues, off the request path (step 15).
 
-- [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt)
-  owns every transport-independent step, **including all status and error mapping**. The adapters
-  ([`ReactiveSecurityFilter`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)
-  for WebFlux and Gateway,
-  [`AbstractAuthorizationInterceptor`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt)
-  for WebMvc) only turn a `SecurityDecision` into a response. A change that makes an adapter decide something
-  breaks parity; put it in the pipeline instead.
-- Every outcome, including an exception thrown synchronously by an `Authorization`, becomes a `SecurityDecision`.
-  Nothing escapes the pipeline as an error.
-- `SecurityContextParser.parse` is synchronous. It runs on the caller's thread unless parsing may block (token
-  revocation enabled, or an API key store that does I/O), in which case the starter moves it to `boundedElastic`.
-  A `TokenVerificationException` makes the caller anonymous and is reported in the denial; any other exception is
-  an error.
-- The status codes and response headers the adapters write, and how application code reads the security context,
-  are documented for users in [Web integration](../integration/web.md#responses-and-status-codes).
+Every SPI call goes through one wrapper: it applies the call's timeout (`cosec.pipeline.*` and
+`cosec.authorization.*`, see [Configuration](../operations/configuration.md); a snapshot load is bounded by
+`cold-load-timeout` instead), turns any failure into a value, and lets only an external cancellation through. The whole evaluation has a deadline too; past it the request is a `503`. Timers are armed lazily: a request
+that never suspends arms none. An exception nothing modelled is a `500`. A client that goes away cancels the coroutine,
+and nothing is written.
 
-## Authorization chain
+`AuthorizationChecker` reuses the second half of this path (view, attributes, engine) to
+[check further actions in code](../integration/checks.md) as the principal of a permitted request. A check runs no
+obligation and no listener, so it is neither rate limited nor audited, and a permit that only break-glass gives is not a
+permit there.
 
-The `Authorization` bean is a chain of decorators around `SimpleAuthorization`, built by the starter:
+## The flat engine
+
+The engine
+([`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt))
+evaluates one request against one `SnapshotView`: the compiled platform document, plus the tenant's document and, when
+the scope has roles in an app, that app's document. It reads no clock (the request carries its time) and does no I/O
+(external attributes arrive with the request). The view must belong to the request's tenant and app; the engine refuses
+any other.
+
+### Candidate order
+
+The engine first enumerates the policies that apply to the request, the *candidates*
+([`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt)):
+
+| # | Candidates |
+|---|---|
+| 0 | The built-in blacklist rule `cosec:blacklist`, which denies a blocked request. |
+| 1 | Platform bindings to anyone, by policy id. |
+| 2 | Tenant bindings to anyone, by policy id. |
+| 3 | For an authenticated principal: its attachments in claim order, then its principal bindings in the platform and the tenant document, by binding id. |
+| 4 | Role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a role in document order. |
+| 5 | For an authenticated principal: its break-glass bindings, last. |
+
+A binding is a candidate only in its app and space, and only before it expires. An attachment or binding that names a
+policy the snapshot does not have, or one that both the tenant and the platform define with different content, is
+recorded as missing or ambiguous; it does not silently disappear.
+
+### Evaluation
+
+The decision depends on the set of candidates, never on their order; the order only decides which statement is reported
+when several match. At a high level:
+
+1. Every candidate's DENY statements are checked first. The first match is the decision.
+2. Without a matching DENY, anything that could hide one (a DENY that failed, a missing or ambiguous policy, a document
+   or attribute that could not be read) makes the decision `Indeterminate`.
+3. Only then are the ALLOW statements checked; the first match is a `Permit`. Nothing matched is a `Deny` with no
+   statement (the implicit deny).
+4. A permit for a tenant held by a platform boundary stays a permit only if a boundary statement also matches.
+
+The exact rules, including break-glass and the boundary, are in the
+[security model](../guide/security-model.md). A policy with many statements is indexed by action, resource and condition keys, so a candidate
+costs only the statements that could match. Untraced evaluation records nothing and allocates almost nothing; the traced
+evaluator, used for decision events at `cosec.pipeline.trace-level` and for `explain`, is a separate class so the hot
+path carries no trace code.
+
+## Policy snapshots
+
+Policies reach the engine as **snapshot documents**, one per key: the platform document, one document per app and one per
+tenant. They are stored as JSON (schema 2), compiled once per revision, and held in memory as immutable compiled
+documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
+(`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
+
+[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt)
+holds them:
+
+- **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
+  goes to `load`.
+- **Single flight.** Concurrent loads of one key share one read and one compilation. Compilation runs on a small
+  bounded pool (`compile-threads`); a full queue fails the load closed. Installs of one key happen in the order their
+  loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
+- **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
+  demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed.
+- **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
+  conditional read of the store of record, which transfers no body when the digest is unchanged. Change notifications
+  from the store trigger a reload sooner. A cold key is read once (possibly from a local copy) and then confirmed by a
+  conditional read at once.
+- **Fail closed.** A read that fails while a document is installed keeps the installed revision, and the lag is
+  reported. A document that is present but cannot be decoded or compiled is installed as *failed*. A cold read that
+  fails or does not finish within `cold-load-timeout` is answered as failed. A key that once had a document and then
+  reads as absent is a failure, not "no policies". A failed document is left out of the view as *unresolved*, and the
+  decision is `Indeterminate` unless a DENY matches. With the starter, a missing platform document is unresolved too,
+  so every request fails closed until one is published.
+
+The store is an SPI, `SnapshotDocumentStore`. With `cosec-cocache` it is
+[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
+Redis is the store of record, CoCache keeps a local copy for at most `local-max-age`, conditional reads bypass every
+local copy, and CoCache's invalidation channel carries the change notifications. Without it, the starter uses an
+in-memory store. Redis keys, the `noeviction` requirement and behavior when Redis is unavailable are in
+[Storage](../operations/storage.md); the `cosec.authorization.snapshot.*` properties are in
+[Configuration](../operations/configuration.md).
+
+## Control plane
+
+The control plane (`cosec-control`) is the only component that writes policy documents. Data-plane instances only read
+them. It runs inside a host application, behind the same pipeline as every other request, and exposes its API under
+`cosec.control.http.base-path`.
 
 ```mermaid
-flowchart LR
-    T[TracingAuthorization<br>cosec-opentelemetry] --> A[AuditingAuthorization<br>cosec-core]
-    A --> M[MeteredAuthorization<br>cosec-micrometer]
-    M --> L[RateLimitingAuthorization<br>cosec-core]
-    L --> S[ShadowAuthorization<br>cosec-core]
-    S --> Z[SimpleAuthorization<br>cosec-core]
+sequenceDiagram
+    autonumber
+    participant O as Operator
+    participant C as Control plane
+    participant R as Redis
+    participant D as Data-plane instances
+    O->>C: propose a change on revision n
+    C->>C: authorize, analyze grants, check and compile the candidate
+    O->>C: start the shadow window
+    C->>R: stage the candidate
+    D->>R: read the candidate
+    D->>D: evaluate sampled requests on it too
+    D->>R: report outcome counts
+    C->>R: read the reports, close the window
+    O->>C: approve, when the change needs it
+    O->>C: publish, acknowledging the shadow numbers
+    C->>C: check and compile again on the current heads
+    C->>R: write revision n+1, then move the head if it is still n
+    R-)D: change notification
+    D->>R: conditional read, install revision n+1
 ```
 
-| Decorator | Does |
-|---|---|
-| `TracingAuthorization` | Opens a span per decision. |
-| `AuditingAuthorization` | Publishes an `AuditEvent` to the `AuditEventSink`. |
-| `MeteredAuthorization` | Records decision metrics. It is a `CoSecAuthorizationCustomizer`, the same hook applications use. |
-| `RateLimitingAuthorization` | Spends one permit per matching rule, for allowed requests only; an exhausted rule turns the decision into `TOO_MANY_REQUESTS`. |
-| `ShadowAuthorization` | Re-evaluates sampled requests against candidate policies and reports the difference. The enforced decision is unchanged. |
-| `SimpleAuthorization` | The decision itself. Its evaluation order is described in the [security model](../guide/security-model.md#evaluation-order). |
+What makes it safe:
 
-Which decorators are present, and the properties that turn them on, are listed in
-[The decision chain](../operations/observability.md#the-decision-chain).
+- **Revisions.** Every publish writes an immutable revision record first, then moves the document's head with one
+  conditional write that succeeds only if the head is still the change's base. Two concurrent publishes cannot both win,
+  and a reader sees the old head or the new one, never a mix. History, diff and rollback read the revision chain.
+- **Changes.** A change request is a base revision plus entry-level operations, checked and compiled with the data
+  plane's compiler. A moved head makes it `CONFLICTED` until it is rebased. Each document has one staging slot.
+- **Authorization.** Every control-plane action is authorized again as the operator, with `cosec:*` actions on document
+  resources, against a snapshot that is confirmed current from the store before each check. A grant the analysis cannot
+  prove contained is an escalation and needs an approval by another person.
+- **Shadow windows.** Instances sample requests (`cosec.authorization.shadow.sample-rate`), evaluate them on the staged
+  candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). An instance that cannot
+  compile or evaluate the candidate blocks the window, and a blocked change never publishes. Documents compile against
+  the platform's attribute declarations and the host's `AttributeProvider`s, so the control host and every instance
+  must register the same providers: a candidate only the control host can compile blocks its window. Publishing requires the
+  operator to acknowledge the numbers whenever anything changed or the evidence was insufficient.
+- **Break-glass** bindings are created only through the control plane, with a second approver, an expiry and a
+  REQUIRED change listener.
+- **Maintenance.** Every control-plane instance periodically reclaims old revision records and closes shadow windows
+  (`ControlMaintenanceScheduler`). The `ControlStore` lists what those passes visit (`documents()`,
+  `openChanges()`), and a lease (`acquireLease`, `releaseLease`) lets one instance at a time do each piece of work
+  ([Revisions, history and rollback](../operations/storage.md#revisions-history-and-rollback)).
 
-Why this order:
-
-- Rate limiting sits **inside** auditing and tracing, so `429`s are audited and traced like any other decision.
-- Shadow mode wraps `SimpleAuthorization` **directly**, inside rate limiting, because it compares pure decisions:
-  a shadow evaluation must never spend permits.
-- Customizers (`CoSecAuthorizationCustomizer`, applied in `@Order` order) wrap the result of rate limiting and
-  sit inside auditing and tracing.
-
-Every decorator implements
-[`DecisionAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/AuthorizationDecision.kt)
-and forwards `decide(...)`. The result is an `AuthorizationDecision` that carries the matched `VerifyContext` (which
-policy and statement decided) as a value, so auditing, tracing and explanation see what matched without
-re-evaluating. A decorator that only implements `authorize(...)` would drop that context.
-
-`AuthorizationChecker`, which applications use to [check permissions in code](../integration/checks.md), uses a
-plain `SimpleAuthorization` outside the chain: checks are not audited and not rate limited.
+How to use changes, simulation, shadow windows and approvals is in [Testing policies](../policies/testing.md); the
+`cosec.control.*` properties are in [Configuration](../operations/configuration.md).
 
 ## Invariants
 
-Each invariant exists for a reason, and most have a test guarding it. Never weaken the guard to make a change pass.
+Each invariant exists for a reason, and each has tests guarding it. Never weaken a guard to make a change pass. The
+normative rules behind them are in
+[`test/conformance/src/test/resources/rules/`](https://github.com/Ahoo-Wang/CoSec/tree/main/test/conformance/src/test/resources/rules),
+each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks the rules on purpose
+([`test/conformance/mutants/`](https://github.com/Ahoo-Wang/CoSec/tree/main/test/conformance/mutants)) to prove a test fails.
 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md) holds the same list for coding agents.
 
 | Invariant | Why | Guard |
 |---|---|---|
-| **Deny-first.** No `ALLOW` wins over a matched `DENY`, within a layer or across layers. | Otherwise adding a policy can widen access. | `SimpleAuthorizationTest` |
-| **Fail closed.** Errors deny, apart from the documented exceptions listed in the [security model](../guide/security-model.md#fail-closed). | An outage must not open the gate. | `SecurityPipelineTest`, `RateLimitingAuthorizationTest`, `RedisRateLimitingOffEventLoopTest` |
-| **One decision path.** Status codes and error mapping live only in `SecurityPipeline`. | Three adapters must answer identically. | `WebAdapterParityTest` |
-| **No blocking on the event loop.** Blocking calls run on `boundedElastic`. Cache reads not answered locally read Redis without blocking and continue on `boundedElastic`. A blocking custom condition matcher implements `BlockingAware`; only layers containing one hop threads. | Blocking a Netty thread stalls every request on it. | `RedisRateLimitingOffEventLoopTest`, `LocalCacheFastPathTest`, `SecurityContextParseSchedulersTest`; `BlockingAwareTest` covers how the flag propagates |
-| **Authorization is a pure decision.** Built-in matchers do no I/O and keep no state. Rate limiting is a separate decorator that spends permits only for allowed requests. | Keeps evaluation fast, predictable and explainable; denied requests never use up quotas. | review, `RateLimitingAuthorizationTest` |
-| **Policy and permission caches never expire and throw on failed reads** (`ttl = null`, `ReadFailureMode.THROW`), applied after any CoCache customizer or property. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
-| **The explainer narrates the real algorithm.** `AuthorizationExplainer` describes the same order and combination as `SimpleAuthorization`. | An explanation that disagrees with the decision misleads whoever debugs an access problem. | `ExplainerConsistencyTest` |
-| **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `SimpleAuthorizationBenchmark` (review) |
-
-Two of these need care when you add code:
-
-- `BlockingAwareTest` checks that the `requiresBlocking` flag is computed and propagated (through `bool`, policies
-  and app permissions). No test asserts that `SimpleAuthorization` then evaluates the layer on `boundedElastic`; a
-  change to that hop is caught only in review.
-- Purity is guarded by review. A built-in matcher that performs I/O or keeps state compiles and passes the tests.
-
-## Data and caching
-
-The repositories are interfaces in `cosec-core` (`PolicyRepository`, `AppRolePermissionRepository`). The Redis
-implementations in `cosec-cocache` are built on [CoCache 6](https://cocache.ahoo.me). The design decisions:
-
-- **Redis is the store of record; the local cache is a view of it.**
-  [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)
-  declares every cache. Policy and permission caches never expire and throw on a failed Redis read. The starter
-  applies this after any CoCache customizer or property, so configuration cannot loosen it.
-- **Local hits cost no thread hop.** Repositories read through CoCache's async view. A local hit is an already
-  completed future, so the repository answers on the caller's thread; a miss reads Redis without blocking and the
-  request continues on `boundedElastic`.
-- **Missing data fails, it is not skipped.** A principal policy the repository does not return fails authorization
-  with `MissingPolicyException` (the pipeline answers `500`). The global policy index is read the same way: an
-  indexed id without content fails, because the missing policy might be a global `DENY`. A role grant naming a
-  permission id its app does not define fails the same way, with `MissingPermissionException`.
-- **Concurrent publishes cannot widen access.** The global policy index is a CoCache `SetCache` updated with atomic
-  `add` / `remove`, and the content is written before the index entry. Readers apply only indexed policies whose
-  content is of type `global` (`GlobalPolicyConsistencyTest`, `GlobalPolicyIndexConcurrencyIntegrationTest`).
-- **Local files load strictly.** Policies, rate limit rules, shadow candidates and test inputs are resolved by
-  `JsonResources`: a configured location that matches no file, a file that cannot be read and an id declared twice
-  fail loading. Only the built-in default locations may match nothing.
-
-How to choose a store, run Redis, behave during an outage, and publish or roll back changes is operational
-knowledge and lives in [Storage](../operations/storage.md).
-
-## Startup schema check
-
-CoSec 7.0 stores its Redis data in the CoCache 6 layout. Unmigrated 6.x data is not always where 7.0 looks: a key
-prefix ending in `:`, a changed prefix or a rolled-back migration leaves it elsewhere. 7.0 would then read every
-policy, global `DENY` and revocation as *missing*, which fails open, and no read error would ever reveal it.
-
-So before any CoSec cache is created, the starter runs
-[`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt)
-against the marker key `<p>:meta:schema`: while CoSec data exists in Redis without the 7.0 marker, startup stops
-with `CoSecSchemaException`. The migration writes the marker last, so a half-finished migration still stops startup.
-Each state and its outcome is in [Schema marker](../operations/storage.md#schema-marker), and running the migration
-in [Migrating the data](../operations/upgrading.md#migrating-the-data). The check is guarded by
-`CoSecSchemaMarkerTest` and `CoSecCacheSchemaAutoConfigurationTest`.
+| **Deny first.** No ALLOW wins over a matched DENY, whatever document, binding or order it comes from. | Otherwise adding a policy can widen access. | `FlatEnginePropertyTest` (`P1' adding a matching deny always denies`, `the decision is that of the pseudocode`), `ALG-1` scenarios |
+| **Fail closed.** Missing or unreadable data never permits; an error is a `503` or `500`, never a `200`. The documented exceptions are in the [security model](../guide/security-model.md). | An outage must not open the gate. | `FlatEnginePropertyTest` (`P9 missing and unavailable data never permit`), `PipelineTest` (`indeterminateDecisionIs503`, `unmodelledExceptionIs500`, `failingLateOrWrongMembershipsAre503`, `snapshotSourceFailureIs503`) |
+| **One decision path.** Status codes and problem bodies are made only in `StatusMapping`; adapters never see a decision. | Three adapters must answer identically. | `OneDecisionPathTest`, `WebAdapterParityTest` |
+| **No blocking on the event loop.** SPIs suspend instead of blocking; store reads and digests run off the caller's thread. | Blocking a Netty thread stalls every request on it. | `SnapshotStoreBlockHoundTest`, `RedisSnapshotDocumentStoreTest` (`computesTheDigestOfALocalCopyOffTheCallersThread`), `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
+| **Authorization is a pure decision.** The engine does no I/O and keeps no state; rate limits are obligations of a permit, so a denied request never spends a permit. | Keeps evaluation fast, predictable and explainable; denied requests never use up quotas. | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime) |
+| **Snapshot caches never expire and throw on failed reads**, whatever a CoCache customizer or property says. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
+| **One revision per document per evaluation**, installed in load order. | A decision must never mix two revisions of one document. | `SnapshotConsistencyPropertyTest`, `SnapshotInstallOrderPropertyTest` |
+| **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `FlatAuthorizationBenchmark`, `PipelineBenchmark` (review) |
 
 ## Performance
 
-`SimpleAuthorizationBenchmark` (`cosec-core/src/jmh`) measures the hot path with in-memory repositories: three
-global policies (25 statements), two principal policies (20 statements) and an app permission with 51 permissions.
-Throughput is decisions per second on one thread; time is its inverse; allocation is bytes allocated per decision
-(`gc.alloc.rate.norm`).
+Two benchmarks measure the hot path:
 
-| Scenario | Throughput | Time | Allocated |
-|---|---|---|---|
-| Matched by a global allow (`global`) | 474,816 ± 7,769 ops/s | 2.1 µs | 5,997 B |
-| Matched by a role permission (`role`) | 438,331 ± 5,376 ops/s | 2.3 µs | 6,488 B |
-| No match (`none`) | 508,364 ± 4,057 ops/s | 2.0 µs | 1,640 B |
+- **`FlatAuthorizationBenchmark`** (`core/engine/src/jmh`) measures the engine alone: three global policies, two attached
+  principal policies and an app with 50 permissions granted to roles, in the scenarios `global` (a global ALLOW
+  matches), `role` (a permission near the end of the app's list), `none` (nothing matches) and `role-heavy`, each with
+  no platform boundary or a boundary of 1 or 8 statements.
+- **`PipelineBenchmark`** (`test/e2e/src/jmh`) measures `Pipeline.evaluate` end to end, with the same data published to
+  Redis and read through CoCache, a warm snapshot, and the scenarios `global`, `role`, `none`, `anonymous`,
+  `blacklist`, `blocked` and `listener`.
 
-`RateLimitingAuthorizationBenchmark` measures what rate limiting adds on top of an authorization that always allows
-(16 ns, `plain`): about 20 ns with no rules (`noRules`), 45 ns when no rule matches (`unmatched`), and 240 ns for one
-matching per-IP rule counted in memory (`local`). A Redis-counted rule adds a Redis round trip. Shadow mode adds one
-more `SimpleAuthorization` evaluation to each sampled request.
+8.0 must be at least as fast as 7.x in every comparable scenario. That gate is the manual CI workflow
+[`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml): on one runner it
+alternates 7.x's `SimpleAuthorizationBenchmark` and `SecurityPipelineBenchmark` with 8.0's `FlatAuthorizationBenchmark`
+(no boundary) and `PipelineBenchmark`, and fails when any scenario's median 8.0/7.x speed ratio is below 100 %. The run
+that admitted the 8.0 path ([40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212)) passed every
+scenario: the engine at 364 to 601 % of 7.x, the pipeline at 126 to 219 %.
 
-Two decisions dominate the hot path: each request parses its path once and shares it across all path matchers, and
-deny-first evaluation loops over the source lists without per-item wrappers. Any change to authorization, matchers
-or repositories should come with a before/after comparison.
-
-### What the 7.0 fixes cost
-
-7.0 is 6 to 9 % slower than 6.1.0 in `SimpleAuthorizationBenchmark`; a decision matched by a global allow went from
-about 1.9 µs to 2.1 µs. Allocation grew by 34 to 56 bytes per decision. Rate limiting did not change beyond noise.
-
-| Benchmark | Scenario | 6.1.0 (ops/s) | 7.0 (ops/s) | Change | B/op 6.1.0 → 7.0 |
-|---|---|---|---|---|---|
-| `SimpleAuthorizationBenchmark` | `global` | 522,486 ± 6,807 | 474,816 ± 7,769 | −9.1 % | 5,963 → 5,997 |
-| `SimpleAuthorizationBenchmark` | `none` | 541,901 ± 8,984 | 508,364 ± 4,057 | −6.2 % | 1,584 → 1,640 |
-| `SimpleAuthorizationBenchmark` | `role` | 466,934 ± 3,601 | 438,331 ± 5,376 | −6.1 % | 6,432 → 6,488 |
-| `RateLimitingAuthorizationBenchmark` | `local` | 3,857,082 ± 34,161 | 3,928,012 ± 15,368 | +1.8 % | 1,168 → 1,208 |
-| `RateLimitingAuthorizationBenchmark` | `noRules` | 28,791,080 ± 224,392 | 27,880,383 ± 127,124 | −3.2 % | 352 → 352 |
-| `RateLimitingAuthorizationBenchmark` | `plain` | 62,553,549 ± 618,196 | 61,807,452 ± 727,007 | −1.2 % | 152 → 152 |
-| `RateLimitingAuthorizationBenchmark` | `unmatched` | 16,863,776 ± 459,156 | 16,466,577 ± 99,516 | −2.4 % | 376 → 376 |
-
-The cost comes from five security fixes on the decision path, which together account for the 6 to 9 %
-([what each one changes](../operations/upgrading.md#authorization-and-loading-changes)):
-
-- **The blacklist is checked first**, before root, so a blacklisted root principal is denied.
-- **Missing principal policies fail**: the policies the repository returns are checked against every id the
-  principal lists, so a missing deny cannot be skipped.
-- **Role grants are scoped to a space**: the principal's roles are filtered to the request's space before the grants
-  are read.
-- **Path variables are cleared** before each policy's conditions and before every statement, so a condition sees
-  only the variables its own statement captured.
-- **Missing role permissions fail**: every permission id a role is granted is checked against the app's catalog.
-
-The project accepted this cost for 7.0. The pure decision engine planned for 8.0
-([RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md), Chinese) targets at least
-95 % of the current `SimpleAuthorization`'s throughput in every `SimpleAuthorizationBenchmark` scenario, with no
-more allocation. The
-trimmed JMH results for both versions are in
-[`docs/perf/7.0-vs-6.1.0`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/7.0-vs-6.1.0), for later changes to
-compare against.
+On an Apple M4, one thread, a warm request through the whole pipeline takes under 2 µs and allocates 3 to 5 kB in the
+`global`, `role`, `none` and `anonymous` scenarios.
+The rounds, conditions and per-scenario numbers are in
+[`docs/perf/e2e-slice`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/e2e-slice); other reference results
+(engine baselines, the platform boundary, the control plane, the gateway's AOT cache) are in
+[`docs/perf/`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf).
 
 ### Measuring
 
-The numbers above were taken in October 2026 on one Apple M4 (10 cores, macOS 27) with JDK 17.0.20.1: 3 forks,
-5 warm-up and 10 measurement iterations of 2 s each, one thread, `-prof gc`, and the WARN-level
-`config/logback-jmh.xml`. Both versions ran one after the other on the same machine, with a load average of 2.3 to
-3.3 (a Docker VM was running). 6.1.0 is the `v6.1.0` tag; 7.0 is `main` at `580809a2`.
-
-Build the benchmark jar and run it with the same settings:
+Run a benchmark through Gradle:
 
 ```bash
-./gradlew :cosec-core:jmhJar
-java -jar cosec-core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
+./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark
+./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark      # needs Redis on localhost:6379
+```
+
+These runs use one fork with one warm-up and one measurement iteration (the defaults in the root `build.gradle.kts`):
+enough to see that a benchmark runs, not to compare versions. Gradle properties override the defaults:
+`-PjmhWarmupIterations`, `-PjmhIterations`, `-PjmhFork`, `-PjmhProfilers` (comma-separated, such as `gc`) and
+`-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still compiled for 17).
+
+To compare versions, build the jar and run it with real settings:
+
+```bash
+./gradlew :e2e:jmhJar
+java -jar test/e2e/build/libs/e2e-*-jmh.jar 'PipelineBenchmark.evaluate' \
   -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh.json \
   -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
 ```
 
-**Pass `-jvmArgsAppend -Dlogback.configurationFile=…` when you run the jar yourself.** The jar contains Logback but no
-configuration, so without it every forked JVM logs at DEBUG, including the per-decision `log.debug` lines, and the
-results measure logging as much as authorization. `./gradlew :cosec-core:jmh` passes the file already, but runs one
-fork with one warm-up and one measurement iteration (the defaults in the root `build.gradle.kts`): enough to see that
-a benchmark runs, not to compare versions.
+**Pass `-jvmArgsAppend -Dlogback.configurationFile=…` when you run a jar yourself.** The jar contains Logback but no
+configuration, so without it every forked JVM logs at DEBUG and the results measure logging as much as authorization.
+The Gradle `jmh` task passes the file already.
 
-Gradle properties override those defaults: `-PjmhWarmupIterations`, `-PjmhIterations`, `-PjmhFork`, `-PjmhProfilers`
-(comma-separated, such as `gc`) and `-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still
-compiled for 17). RFC 0002 compares the engine with the current `SimpleAuthorization` using this command, which adds
-the `global-deny` scenario (denied by a global policy while the other layers have data); the baseline is in
-[`docs/perf/rfc-0002-baseline`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/rfc-0002-baseline):
-
-```bash
-./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark -PjmhJavaVersion=25 \
-  -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
-```
+For a routine change, `jmh-ab.yml` compares two refs on one CI runner as head/base ratios (see
+[`scripts/jmh-ab/README.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/scripts/jmh-ab/README.md)), and
+`jmh-v7-v8.yml` compares 8.0 with a 7.x tag.
 
 How much to trust the numbers:
 
 - **Numbers taken on a busy machine are not reliable.** Other processes (builds, IDEs, Docker, other benchmarks)
-  steal CPU and change JIT and GC timing. Compare before and after on the same machine, one right after the other,
-  and treat differences smaller than the error columns as noise. The 7.0 comparison was taken under load, so an idle
-  machine may give higher absolute numbers; what the comparison shows is the relative change.
-- Compare throughput with the same JDK on both sides: a different JDK changes JIT decisions more than most code
-  changes do.
+  steal CPU and change JIT and GC timing. Compare before and after on the same machine, one right after the other, and
+  treat differences smaller than the error columns as noise. On a shared CI runner, only ratios from the same job mean
+  anything.
+- Compare with the same JDK on both sides: a different JDK changes JIT decisions more than most code changes do.
 
-## Where the architecture is going
-
-[RFC 0001: target architecture](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)
-(Chinese) describes the planned redesign: a pure model and synchronous engine, snapshot-based distribution,
-listeners instead of decorators, and the migration path from the structure described here.
-
-**Next:** add your own conditions, repositories and hooks, in [Extending CoSec](./extending.md).
+**Next:** add your own authenticators, attribute providers, listeners and stores, in [Extending CoSec](./extending.md).

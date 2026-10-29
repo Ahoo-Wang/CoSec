@@ -1,0 +1,15 @@
+# Rule: BND-6
+# Mutant: a role binding that names a tenant applies to principals of any tenant
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+index d5e9eca0..a6db685d 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+@@ -173,5 +173,5 @@ internal object CandidateOrder {
+     private fun inScope(entry: BoundEntry, tenant: String, app: String, space: String): Boolean =
+         (entry.app == null || entry.app == app) &&
+             (entry.space == null || entry.space == space) &&
+-            (entry.roleTenant == null || entry.roleTenant == tenant)
++            (entry.roleTenant == null || entry.roleTenant == tenant || true)
+ }
