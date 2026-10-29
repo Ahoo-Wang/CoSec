@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "CND-5"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "Where API keys come in the default header, X-Acme-Key is an ordinary header: the same rate limit rule compiles and the request proceeds.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "per-key",
+          "action": "*",
+          "permitsPerSecond": 10,
+          "key": "http.header.x-acme-key"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Acme-Key": "team-a"
+    }
+  },
+  "rateLimiter": {
+    "exhausted": []
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

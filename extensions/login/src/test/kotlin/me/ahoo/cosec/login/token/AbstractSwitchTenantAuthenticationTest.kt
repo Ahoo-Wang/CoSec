@@ -15,9 +15,7 @@ package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.principal.TenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -25,18 +23,16 @@ import reactor.kotlin.test.test
 
 /** The documented extension point for switching tenants (`wiki/integration/authentication.md`). */
 class AbstractSwitchTenantAuthenticationTest {
-    /** Lets a principal into the tenants it may enter, and nowhere else. */
-    private class Switching(private val allowed: Set<String>) : AbstractSwitchTenantAuthentication() {
+    /** Lets a principal into the tenants it is a member of, with what it holds there, and nowhere else. */
+    private class Switching(private val members: Map<String, TenantMembership>) : AbstractSwitchTenantAuthentication() {
         override fun switchTenant(
             targetTenantId: String,
             previousPrincipal: CoSecPrincipal
-        ): Mono<out TenantPrincipal> {
-            if (targetTenantId !in allowed) {
-                return Mono.error(
-                    IllegalArgumentException("[${previousPrincipal.id}] may not enter [$targetTenantId].")
-                )
-            }
-            return Mono.just(SimpleTenantPrincipal(previousPrincipal, SimpleTenant(targetTenantId)))
+        ): Mono<TenantMembership> {
+            val membership = members[targetTenantId] ?: return Mono.error(
+                IllegalArgumentException("[${previousPrincipal.id}] may not enter [$targetTenantId].")
+            )
+            return Mono.just(membership)
         }
     }
 
@@ -45,27 +41,53 @@ class AbstractSwitchTenantAuthenticationTest {
         override val principal: CoSecPrincipal,
     ) : SwitchTenantCredentials
 
-    private val alice = SimplePrincipal("alice")
+    /** An administrator of the tenant it switches from, with a policy and an attribute of that tenant. */
+    private val alice = SimplePrincipal(
+        "alice",
+        policies = setOf("acme-export"),
+        roles = setOf("admin"),
+        attributes = mapOf("department" to "acme-finance"),
+    )
 
     @Test
     fun `it supports switch-tenant credentials`() {
-        Switching(emptySet()).supportCredentials.assert().isEqualTo(SwitchTenantCredentials::class.java)
+        Switching(emptyMap()).supportCredentials.assert().isEqualTo(SwitchTenantCredentials::class.java)
+    }
+
+    /** RC1-23: the new token holds the target tenant's memberships only, never the previous tenant's. */
+    @Test
+    fun `the principal is switched into the target tenant with that tenant's memberships only`() {
+        val viewer = TenantMembership(roles = setOf("viewer"), attributes = mapOf("department" to "globex-sales"))
+        Switching(mapOf("globex" to viewer)).authenticate(Credentials("globex", alice))
+            .test()
+            .consumeNextWith {
+                it.tenant.tenantId.assert().isEqualTo("globex")
+                it.id.assert().isEqualTo("alice")
+                it.roles.assert().containsExactly("viewer")
+                it.policies.assert().isEmpty()
+                it.attributes.assert().isEqualTo(mapOf("department" to "globex-sales"))
+                MembershipClaims.markerOf(it).assert().isNull()
+            }
+            .verifyComplete()
     }
 
     @Test
-    fun `the principal is switched into the target tenant`() {
-        Switching(setOf("acme")).authenticate(Credentials("acme", alice))
+    fun `a switch to the provider's memberships claims none`() {
+        Switching(mapOf("globex" to TenantMembership.fromProvider())).authenticate(Credentials("globex", alice))
             .test()
             .consumeNextWith {
-                it.tenant.tenantId.assert().isEqualTo("acme")
-                it.id.assert().isEqualTo("alice")
+                it.tenant.tenantId.assert().isEqualTo("globex")
+                it.roles.assert().isEmpty()
+                it.policies.assert().isEmpty()
+                it.attributes.assert().isEmpty()
+                MembershipClaims.markerOf(it).assert().isEqualTo(MembershipClaims.PROVIDER)
             }
             .verifyComplete()
     }
 
     @Test
     fun `a switch the implementation refuses is an error`() {
-        Switching(setOf("acme")).authenticate(Credentials("globex", alice))
+        Switching(mapOf("acme" to TenantMembership())).authenticate(Credentials("globex", alice))
             .test()
             .expectError(IllegalArgumentException::class.java)
             .verify()

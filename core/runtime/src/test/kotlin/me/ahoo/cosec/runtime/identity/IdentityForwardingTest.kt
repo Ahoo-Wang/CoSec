@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.identity
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
@@ -24,6 +27,7 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -42,9 +46,10 @@ class IdentityForwardingTest {
         AuthenticatedPrincipal(
             PipelineFixtures.PRINCIPAL,
             PipelineFixtures.TENANT,
-            PipelineFixtures.claims("" to "clerk"),
+            MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
             mapOf("name" to "Alice", "secret" to "never forwarded"),
             credential,
+            breakGlass = true,
         ),
         "token",
     )
@@ -146,8 +151,10 @@ class IdentityForwardingTest {
             AuthenticatedPrincipal(
                 PipelineFixtures.PRINCIPAL,
                 PipelineFixtures.TENANT,
-                PipelineFixtures.claims("" to "clerk"),
-                credential = credential.copy(expiresAt = null),
+                MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
+                emptyMap(),
+                credential.copy(expiresAt = null),
+                breakGlass = true,
             ),
             "apikey",
         )

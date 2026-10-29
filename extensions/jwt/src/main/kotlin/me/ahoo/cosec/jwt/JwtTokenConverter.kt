@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosid.StringIdGenerator
@@ -89,6 +90,12 @@ class JwtTokenConverter(
                 .withIssuedAt(now)
                 .withExpiresAt(accessTokenExp)
         writeMemberships(accessTokenBuilder, principal)
+        // A token with one would be refused when it is presented (RC1-25): fail where it is issued instead.
+        val reserved = principal.attributes.keys.filter { it in TokenAuthenticator.RESERVED_ATTRIBUTES }
+        require(reserved.isEmpty()) {
+            "Principal [${principal.id}] has attributes $reserved, which CoSec sets for other credentials: a token " +
+                "cannot carry them."
+        }
         if (principal.attributes.isNotEmpty()) {
             accessTokenBuilder.withClaim(CoSecPrincipal::attributes.name, principal.attributes)
         }

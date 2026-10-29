@@ -567,13 +567,14 @@ public final class me/ahoo/cosec/model/condition/Condition$Time : me/ahoo/cosec/
 public final class me/ahoo/cosec/model/condition/ConditionChecker {
 	public static final field Companion Lme/ahoo/cosec/model/condition/ConditionChecker$Companion;
 	public fun <init> ()V
-	public fun <init> (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/ZoneResolver;Lme/ahoo/cosec/model/condition/AttributeCatalog;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/ZoneResolver;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/ZoneResolver;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/ZoneResolver;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun attribute (Ljava/lang/String;)Lme/ahoo/cosec/model/condition/Attribute;
 	public final fun check (Lme/ahoo/cosec/model/condition/Condition;)Lme/ahoo/cosec/model/condition/CheckResult;
 	public final fun getCatalog ()Lme/ahoo/cosec/model/condition/AttributeCatalog;
 	public final fun getLimits ()Lme/ahoo/cosec/model/condition/ConditionLimits;
 	public final fun getZones ()Lme/ahoo/cosec/model/condition/ZoneResolver;
+	public final fun isCredential (Lme/ahoo/cosec/model/condition/Attribute;)Z
 	public final fun unresolved (Ljava/lang/String;)Ljava/lang/String;
 }
 

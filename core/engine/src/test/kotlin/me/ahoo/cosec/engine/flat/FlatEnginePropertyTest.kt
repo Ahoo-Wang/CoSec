@@ -15,6 +15,7 @@ package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
@@ -71,13 +72,15 @@ class FlatEnginePropertyTest {
     @Test
     fun `P10 the binding index agrees with a scan of every binding`() {
         forEachCase(seed = 10) { case, _ ->
-            val expected = Oracle.enumerate(case)
-            val collector = Collector()
-            CandidateOrder.forEach(case.request, case.view(), collector)
-            collector.candidates.assert().isEqualTo(expected.candidates)
-            collector.expired.assert().isEqualTo(expected.expired)
-            collector.missing.assert().isEqualTo(expected.missing)
-            collector.ambiguous.assert().isEqualTo(expected.ambiguous)
+            for (effect in Effect.entries) {
+                val expected = Oracle.enumerate(case, effect)
+                val collector = Collector()
+                CandidateOrder.forEach(case.request, case.view(), effect, collector)
+                collector.candidates.assert().describedAs("$effect").isEqualTo(expected.candidates)
+                collector.expired.assert().describedAs("$effect").isEqualTo(expected.expired)
+                collector.missing.assert().describedAs("$effect").isEqualTo(expected.missing)
+                collector.ambiguous.assert().describedAs("$effect").isEqualTo(expected.ambiguous)
+            }
         }
     }
 
@@ -130,11 +133,20 @@ class FlatEnginePropertyTest {
         forEachCase(seed = 8) { case, random ->
             val expected = case.evaluate().decision.javaClass
             val enumeration = Oracle.enumerate(case)
+            val allows = Oracle.enumerate(case, Effect.ALLOW).candidates
             repeat(3) {
                 val candidates = enumeration.candidates.shuffled(random)
                 val missing = enumeration.missing.shuffled(random)
                 val ambiguous = enumeration.ambiguous.shuffled(random)
-                val shuffled = ShuffledEvaluator(case.request, case.view(), candidates, missing, ambiguous)
+                val shuffled =
+                    ShuffledEvaluator(
+                        case.request,
+                        case.view(),
+                        candidates,
+                        allows.shuffled(random),
+                        missing,
+                        ambiguous
+                    )
                 shuffled.evaluate().javaClass.assert().isEqualTo(expected)
             }
         }
@@ -191,15 +203,38 @@ class FlatEnginePropertyTest {
             val bounded = case.copy(boundaries = listOf(boundary), defaultBoundary = boundary.id, tenantBoundary = null)
             val expected = bounded.evaluate().decision.javaClass
             val enumeration = Oracle.enumerate(bounded)
+            val allows = Oracle.enumerate(bounded, Effect.ALLOW).candidates
             repeat(3) {
                 val shuffled = ShuffledEvaluator(
                     bounded.request,
                     bounded.view(),
                     enumeration.candidates.shuffled(random),
+                    allows.shuffled(random),
                     enumeration.missing.shuffled(random),
                     enumeration.ambiguous.shuffled(random),
                 )
                 shuffled.evaluate().javaClass.assert().isEqualTo(expected)
+            }
+        }
+    }
+
+    /**
+     * RC1-1 (RFC 0009 §4.2, `BND-9`, `IDN-2`): a cap only narrows. A capped credential is permitted only what its
+     * principal is, and the DENY pass decides the same for both, a matching DENY bound to the principal or attached
+     * included: a cap removes ALLOW candidates, never DENYs.
+     */
+    @Test
+    fun `P-cap a cap removes allows only`() {
+        forEachCase(seed = 91) { case, random ->
+            for (subject in listOf(case, case.withMatchingDeny(random))) {
+                val capped = subject.capped()
+                DenyPass(capped.request, capped.view()).run().assert()
+                    .isEqualTo(DenyPass(subject.request, subject.view()).run())
+                val decision = capped.evaluate().decision
+                if (decision is Decision.Permit) {
+                    // Possibly by a candidate the cap removed, which comes earlier.
+                    subject.evaluate().decision.assert().isInstanceOf(Decision.Permit::class.java)
+                }
             }
         }
     }
@@ -273,17 +308,23 @@ class FlatEnginePropertyTest {
         }
     }
 
+    /** The DENY pass alone: its decision, or null when the ALLOW pass would decide. */
+    private class DenyPass(request: FlatRequest, view: SnapshotView) : FlatEvaluator(request, view) {
+        fun run(): Decision? = denyPass()
+    }
+
     private class ShuffledEvaluator(
         request: FlatRequest,
         view: SnapshotView,
-        private val candidates: List<Candidate>,
+        private val denies: List<Candidate>,
+        private val allows: List<Candidate>,
         private val missingIds: List<String>,
         private val ambiguousIds: List<String>,
     ) : FlatEvaluator(request, view) {
         override fun enumerate(): Boolean {
             missingIds.forEach(::missing)
             ambiguousIds.forEach(::ambiguous)
-            return candidates.any { candidate(it.policy, it.via) }
+            return (if (pass == Effect.DENY) denies else allows).any { candidate(it.policy, it.via) }
         }
     }
 }

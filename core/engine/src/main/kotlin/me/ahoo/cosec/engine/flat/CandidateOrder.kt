@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.BindingRef
 
 /** Receives the candidates of one request, in [CandidateOrder]. */
@@ -44,12 +45,16 @@ internal interface CandidateVisitor {
  * statement 7.x reports, as the 7.x layers are in this order. Break-glass comes last (review A2 of #1070): it bypasses a
  * *missing* ALLOW (RFC 0004 §4.8), so it reports a permit only when nothing else permits, and a request another binding
  * permits is never a use of break-glass, which would need a REQUIRED audit (RFC 0006 §9.4.3). Visits allocate nothing: the arrays are the index's own.
- * An anonymous principal has no principal bindings, break-glass bindings or attachments. A subject without
- * [me.ahoo.cosec.model.Subject.principalBindings] has no principal bindings either, and one without
- * [me.ahoo.cosec.model.Subject.breakGlass] no break-glass bindings (RFC 0009 §4.2): a capped credential, an API key.
+ * An anonymous principal has no principal bindings, break-glass bindings or attachments. One without
+ * [me.ahoo.cosec.model.Subject.breakGlass] has no break-glass bindings (RFC 0009 §4.2): an API key.
+ *
+ * The candidates are those of the pass that reads [effect]'s statements. They are the same for both passes, except for
+ * a subject without [me.ahoo.cosec.model.Subject.principalBindings], a capped credential: its attachments and principal
+ * bindings are DENY candidates only. A cap narrows what the credential is granted, never what restricts its principal,
+ * so a key is never more than its principal (`BND-9`, `IDN-2`, RC1-1).
  */
 internal object CandidateOrder {
-    fun forEach(request: FlatRequest, view: SnapshotView, visitor: CandidateVisitor): Boolean {
+    fun forEach(request: FlatRequest, view: SnapshotView, effect: Effect, visitor: CandidateVisitor): Boolean {
         if (visitor.candidate(BuiltinPolicies.blacklist, BindingRef.Builtin)) {
             return true
         }
@@ -65,7 +70,7 @@ internal object CandidateOrder {
         if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor)) {
             return true
         }
-        if (principal != null && principal(principal, request, platform, tenantDocument, visitor, app)) {
+        if (principal != null && principal(principal, request, platform, tenantDocument, effect, visitor, app)) {
             return true
         }
         if (app != null && roles(app, request, platform, visitor)) {
@@ -78,20 +83,24 @@ internal object CandidateOrder {
             visit(platform.breakGlass(tenant, principal), request, platform, visitor)
     }
 
-    /** Attachments, then the principal bindings of the platform and the tenant. */
+    /**
+     * Attachments, then the principal bindings of the platform and the tenant. For a subject without principal bindings,
+     * DENY candidates only: a cap removes what is bound to the principal by name from the ALLOW pass, never its DENYs.
+     */
     private fun principal(
         principal: String,
         request: FlatRequest,
         platform: CompiledDocument,
         tenant: CompiledDocument?,
+        effect: Effect,
         visitor: CandidateVisitor,
         app: CompiledDocument?,
     ): Boolean {
+        if (effect === Effect.ALLOW && !request.request.subject.principalBindings) {
+            return false
+        }
         if (attachments(request, platform, tenant, visitor)) {
             return true
-        }
-        if (!request.request.subject.principalBindings) {
-            return false
         }
         val tenantId = request.scope.tenant.value
         if (visit(platform.principal(tenantId, principal), request, platform, visitor)) {

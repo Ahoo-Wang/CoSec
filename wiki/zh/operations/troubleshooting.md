@@ -67,6 +67,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 - **令牌：** 签发方和本服务必须使用相同的 [`cosec.jwt.secret` 和 `cosec.jwt.algorithm`](./configuration.md#jwt)。
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
+- **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key
+  设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -98,7 +100,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 `reasonCode`（`EXPLICIT_DENY`、`IMPLICIT_DENY` 或 `BOUNDARY`）和做出决定的语句，然后对请求做 explain
 （[找出是谁做的决定](#find-out-what-decided)）。
 
-- **`EXPLICIT_DENY`：** 拒绝优先于所有允许（[安全模型](../guide/security-model.md)）。收窄这条拒绝，或者改变请求。
+- **`EXPLICIT_DENY`：** 拒绝优先于所有允许（[安全模型](../guide/security-model.md)）。收窄这条拒绝，或者改变请求。带上限的 API key
+  会被拒绝其主体被拒绝的请求：绑定到主体或主体附加的 DENY 作用于该主体的每个 key，无论上限如何（[API key](../integration/authentication.md#api-keys)）。
 - **`IMPLICIT_DENY`：** 检查你期望允许它的那条语句：它的动作和资源（有路由映射时，是路由的动作和资源，而不是原始
   路径）、它的条件，以及应把它应用到这个主体、应用和空间的绑定（[策略语言](../policies/language.md)、
   [角色权限](../policies/role-permissions.md)）。角色和附加策略来自令牌的成员关系声明或 `MembershipProvider`，因此变更
@@ -144,6 +147,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | `strictFailure: true` 的规则无法计数（以 `ERROR` 记录 `Rate limiter unavailable: rule [<id>] refuses the request.`）。 | 恢复 Redis，或去掉 `strictFailure`。 |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | `REQUIRED` 决策监听器在一次放行上失败或超时（`REQUIRED decision listener [<name>] failed on request [<id>].`），或者放行来自 break-glass 绑定而没有 `REQUIRED` 监听器（`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`）。 | 修复监听器的存储，或在使用 break-glass 之前注册 `REQUIRED` 监听器（[决策监听器](./observability.md#decision-listeners)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过 [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline)：例如 Redis API key 存储无法访问。 | 恢复存储。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，某个认证器的每个请求 | 你自己的 `Authenticator` 把凭证的方式命名为 `jwt`，而它保留给 CoSec 的令牌（`The authentication method [jwt] is CoSec's own token's ...`）。 | 按你的凭证命名方式，例如 `Identity.Method("ldap")`（[扩展](../architecture/extending.md#authenticators)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以 8.0 之前的格式存储，读取时被拒绝（`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`）。 | 转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
@@ -214,7 +218,8 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 ## 条件无法编译 {#a-condition-does-not-compile}
 
 - `` `<path>` is a credential header, which no attribute reference may read ``：条件或限流规则的 `key` 读取了
-  `http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 或 `cosec-identity`。任何策略都不能读取凭证。
+  `http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key`、`cosec-identity`，或
+  [`cosec.pipeline.api-key-header`](./configuration.md#pipeline) 指定的请求头。任何策略都不能读取凭证。
   改用主体属性或作用域作为条件或 `key`（[策略语言](../policies/language.md#headers)）。
 - `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``：`http.header.` 之后的名称含有 ASCII
   字母、数字和 ``!#$%&'*+-.^_`|~`` 之外的字符，例如空格或形似字母。
@@ -299,6 +304,10 @@ Tokens are verified, but no revocation reader is available: add cosec-cocache or
 
 `Property [cosec.jwt.secret] must not be blank when JWT is enabled.` 把 [`cosec.jwt.secret`](./configuration.md#jwt)
 设置为来自密钥存储的长随机值，或者设置 `cosec.jwt.enabled=false`。
+
+`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32 (RFC 7518 §3.2).` 密钥短于算法的哈希长度：
+`hmac256` 需要 32 字节（按 UTF-8 计），`hmac384` 需要 48 字节，`hmac512` 需要 64 字节。在签发方和每个校验其令牌的服务上设置更长的随机密钥；
+用旧密钥签名的令牌随之失效。
 
 ### 路由映射导致启动失败 {#startup-fails-on-the-route-map}
 

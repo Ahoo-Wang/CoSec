@@ -106,6 +106,34 @@ class CoSecJwtAutoConfigurationTest {
             }
     }
 
+    /** RC1-24: a secret shorter than the algorithm's hash fails startup, counted in UTF-8 bytes (RFC 7518 §3.2). */
+    @Test
+    fun aSecretShorterThanTheAlgorithmNeedsFailsStartup() {
+        fun run(algorithm: String, secret: String, check: (AssertableApplicationContext) -> Unit) = contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.algorithm=$algorithm",
+                "${JwtProperties.PREFIX}.secret=$secret"
+            )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run(check)
+        val refused = { context: AssertableApplicationContext ->
+            context.startupFailure!!.stackTraceToString().assert().contains("needs at least")
+            Unit
+        }
+        val started = { context: AssertableApplicationContext ->
+            AssertionsForInterfaceTypes.assertThat(context).hasNotFailed().hasSingleBean(Algorithm::class.java)
+            Unit
+        }
+        for ((algorithm, bytes) in listOf("hmac256" to 32, "hmac384" to 48, "hmac512" to 64)) {
+            run(algorithm, "s".repeat(bytes - 1), refused)
+            run(algorithm, "s".repeat(bytes), started)
+        }
+        // Bytes, not characters: 16 two-byte characters are 32 bytes.
+        run("hmac256", "é".repeat(16), started)
+        run("hmac256", "é".repeat(15), refused)
+    }
+
     @Test
     fun contextLoadsTokenRevocationDefaults() {
         val refreshValidity = Duration.ofHours(72)

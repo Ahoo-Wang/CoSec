@@ -26,6 +26,7 @@ import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
+import me.ahoo.cosec.spi.token.TokenVerificationException
 
 /**
  * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its
@@ -71,7 +72,7 @@ internal object Jwts {
         val attributes = if (attributesClaim.isMissing) emptyMap<String, Any>() else attributesClaim.asMap()
         val principal =
             withMembershipMarker(SimplePrincipal(principalId, policies, roles, attributes), decodedAccessToken)
-        val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
+        val tenantId = tenantOf(decodedAccessToken)
         val tokenPrincipal = SimpleTokenPrincipal(
             accessTokenId,
             principal,
@@ -84,6 +85,19 @@ internal object Jwts {
         }
         @Suppress("UNCHECKED_CAST")
         return SimpleTokenTenantPrincipal(delegate = tokenPrincipal, tenant = SimpleTenant(tenantId)) as T
+    }
+
+    /**
+     * The token's `tenantId` claim, null when it has none. A claim that is there but not a string (a number, `null`,
+     * an object) is an invalid token (RC1-22): read as no tenant, it would put the principal in the default tenant `(0)`
+     * with the token's roles, and out of reach of a revocation of its real tenant.
+     */
+    private fun tenantOf(decodedAccessToken: DecodedJWT): String? {
+        val claim = decodedAccessToken.getClaim(TENANT_ID_KEY)
+        if (claim.isMissing) {
+            return null
+        }
+        return claim.asString() ?: throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is not a string.")
     }
 
     /**

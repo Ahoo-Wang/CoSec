@@ -3,14 +3,14 @@
 # Tests: :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 4048a866..eb98124f 100644
+index 060b4492..435f5166 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -295,7 +295,7 @@ class Pipeline(components: PipelineComponents) {
+@@ -335,7 +335,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                  blocked = blacklist.blocked,
              ),
          )
--        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts))
+-        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts, apiKeyHeader))
 +        val request = FlatRequest(authz, scope, memberships, clock.millis())
          val decision = evaluate(request, view, fetched, record)
          breakGlass(requestId, traceId, decision, view, record)?.let { return it }

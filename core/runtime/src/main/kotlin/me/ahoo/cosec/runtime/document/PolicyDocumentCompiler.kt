@@ -340,27 +340,40 @@ class PolicyDocumentCompiler(
          * The compiler every document compiles with when [platform] is the platform document (RFC 0007 §3.1 N3): its
          * condition limits, or the defaults, and the external attributes it declares ahead of those the host's providers
          * declare ([providers]). The data plane, `simulate` and the control plane's checks all compile with it, so what
-         * one accepts the others accept.
+         * one accepts the others accept. [credentialHeaders] are the headers the host reads credentials from besides
+         * the fixed ones, such as a renamed API key header (`CND-5`, RC1-21).
          */
         fun forPlatform(
             platform: PolicyDocument?,
             providers: AttributeCatalog = AttributeCatalog.NONE,
             principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+            credentialHeaders: Set<String> = emptySet(),
         ): PolicyDocumentCompiler {
             val limits = platform?.limits ?: ConditionLimits.DEFAULT
             // A platform that declares a path twice does not compile; until it does, the first declaration counts.
             val declared = platform?.attributes.orEmpty().distinctBy { it.path }.associateBy { it.path }
             val catalog = AttributeCatalog { path -> declared[path] ?: providers.external(path) }
-            return of(limits, catalog, principalBindingLimit)
+            return of(limits, catalog, principalBindingLimit, credentialHeaders)
         }
 
-        /** A compiler that checks conditions against [limits] and the external attributes of [catalog]. */
+        /**
+         * A compiler that checks conditions against [limits] and the external attributes of [catalog], refusing
+         * [credentialHeaders] as it refuses the fixed credential headers.
+         */
         fun of(
             limits: ConditionLimits,
             catalog: AttributeCatalog,
             principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+            credentialHeaders: Set<String> = emptySet(),
         ): PolicyDocumentCompiler = PolicyDocumentCompiler(
-            PolicyCompiler(ConditionChecker(limits = limits, zones = JavaZones.RESOLVER, catalog = catalog)),
+            PolicyCompiler(
+                ConditionChecker(
+                    limits = limits,
+                    zones = JavaZones.RESOLVER,
+                    catalog = catalog,
+                    credentialHeaders = credentialHeaders,
+                )
+            ),
             principalBindingLimit,
         )
 

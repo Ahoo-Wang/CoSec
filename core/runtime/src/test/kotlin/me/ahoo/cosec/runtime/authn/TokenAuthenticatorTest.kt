@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.authn
 
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
@@ -25,7 +28,9 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
@@ -40,6 +45,7 @@ import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -126,10 +132,28 @@ class TokenAuthenticatorTest {
         memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("editor"))
     }
 
-    /** RFC 0009 §4.2: break-glass reaches CoSec's own tokens only, never a principal some other way. */
+    /** Stands in for `cosec-jwt`'s `JwtTokenVerifier`, CoSec's own verifier, which this module cannot depend on. */
+    private class OwnVerifier(tokens: Map<String, () -> TokenPrincipal>) : CoSecTokenVerifier {
+        private val verifier = Verifier(tokens)
+
+        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T = verifier.verify(accessToken)
+
+        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = verifier.refresh(token)
+    }
+
+    /**
+     * RFC 0009 §4.2, `BRK-8`, RC1-26: break-glass reaches a token CoSec's own verifier verified, by provenance. A token
+     * another verifier accepted gets none and is not named `jwt`; nor does a principal some other way, and no other
+     * authenticator can name its credential `jwt` to pass for CoSec's token.
+     */
     @Test
-    fun onlyATokenMayUseBreakGlass() = runTest {
-        authenticate({ token() }).principal().breakGlass.assert().isTrue()
+    fun onlyCoSecsOwnVerifierMayUseBreakGlass() = runTest {
+        val own = TokenAuthenticator(OwnVerifier(mapOf("t" to { token() }))).authenticate(Credentials("t", null))
+        own.principal().breakGlass.assert().isTrue()
+        own.principal().credential!!.method.assert().isEqualTo(Identity.Method.JWT)
+        val other = authenticate({ token() }).principal()
+        other.breakGlass.assert().isFalse()
+        other.credential!!.method.assert().isEqualTo(Identity.Method(TokenAuthenticator.METHOD))
         AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), null).breakGlass.assert().isFalse()
         AuthenticatedPrincipal(
             PrincipalId("alice"),
@@ -137,6 +161,24 @@ class TokenAuthenticatorTest {
             null,
             credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
         ).breakGlass.assert().isFalse()
+        assertThrownBy<IllegalArgumentException> {
+            AuthenticatedPrincipal(
+                PrincipalId("alice"),
+                TenantId("acme"),
+                null,
+                credential = Identity.Credential(Identity.Method.JWT, "s1", null),
+            )
+        }
+        assertThrownBy<IllegalArgumentException> { TokenAuthenticator(Verifier(emptyMap()), method = "jwt") }
+    }
+
+    /** RC1-25: a token cannot pass for an API key by carrying the attribute CoSec sets for one. */
+    @Test
+    fun aTokenWithAReservedAttributeIsInvalid() = runTest {
+        val forged = SimplePrincipal("alice", attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "k1"))
+        authenticate({ token(forged) }).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
+        authenticate({ token(SimplePrincipal("alice", attributes = mapOf("department" to "sales"))) })
+            .principal().attributes.assert().containsEntry("department", "sales")
     }
 
     @Test

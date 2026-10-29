@@ -1,0 +1,17 @@
+# Rule: CND-5
+# Mutant: the checker ignores the host's renamed API key header (RC1-21), so a document can read or bucket raw API keys
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :conformance:test
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index 58db38bb..708cafaf 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -68,7 +68,7 @@ class ConditionChecker(
+     credentialHeaders: Set<String> = emptySet(),
+ ) {
+     private val credentialHeaders: Set<String> =
+-        if (credentialHeaders.isEmpty()) CREDENTIAL_HEADERS else CREDENTIAL_HEADERS + credentialHeaders.map(HttpNames::fold)
++        if (credentialHeaders.isEmpty()) CREDENTIAL_HEADERS else CREDENTIAL_HEADERS
+ 
+     /**
+      * The attribute [path] names, a declared external one included; null when there is none. Every attribute reference

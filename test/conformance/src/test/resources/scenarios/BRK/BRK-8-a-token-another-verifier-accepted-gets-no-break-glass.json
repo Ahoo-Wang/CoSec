@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "BRK-8"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RC1-26: the root binding names cosec, whose token a TokenVerifier other than CoSec's own accepted. Its credential is not CoSec's token, whatever it is called, and break-glass does not reach it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2099-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "(platform)",
+      "id": "cosec",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required"
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

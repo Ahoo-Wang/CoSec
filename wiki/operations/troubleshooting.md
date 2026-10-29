@@ -73,6 +73,9 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 
 - **Token:** the issuer and this service must share [`cosec.jwt.secret` and `cosec.jwt.algorithm`](./configuration.md#jwt).
   With `cosec.jwt.enabled=false` every token is rejected.
+- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), or an
+  `attributes` claim that names `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
+  rename the attribute ([Authentication](../integration/authentication.md#tokens)).
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
@@ -112,7 +115,8 @@ the tenant's boundary. Read `reasonCode` in the audit event (`EXPLICIT_DENY`, `I
 deciding statement, then explain the request ([Find out what decided](#find-out-what-decided)).
 
 - **`EXPLICIT_DENY`:** a deny wins over every allow ([Security model](../guide/security-model.md)). Narrow the deny or
-  change the request.
+  change the request. A capped API key is denied what its principal is denied: a DENY bound to the principal, or that
+  it attaches, applies to every key of the principal, whatever the cap ([API keys](../integration/authentication.md#api-keys)).
 - **`IMPLICIT_DENY`:** check the statement you expected to allow it: its action and resource (with a route map, the
   route's action and resource, not the raw path), its condition, and the binding that should apply it to this
   principal, app and space ([Policy language](../policies/language.md),
@@ -161,6 +165,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). | Restore Redis, or drop `strictFailure`. |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in the format before 8.0, which is refused when read (`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
@@ -245,7 +250,8 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
 ## A condition does not compile
 
 - `` `<path>` is a credential header, which no attribute reference may read ``: a condition or a rate limit `key`
-  reads `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`.
+  reads `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, `cosec-identity`, or
+  the header [`cosec.pipeline.api-key-header`](./configuration.md#pipeline) names.
   No policy may read a credential. Condition or key on a principal attribute or the scope instead
   ([Policy language](../policies/language.md#headers)).
 - `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``: the name after `http.header.` has
@@ -343,6 +349,10 @@ tokens.
 `Property [cosec.jwt.secret] must not be blank when JWT is enabled.` Set
 [`cosec.jwt.secret`](./configuration.md#jwt) to a long random value from a secret store, or set
 `cosec.jwt.enabled=false`.
+
+`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32 (RFC 7518 §3.2).` The secret is shorter than
+the algorithm's hash: 32 bytes (in UTF-8) for `hmac256`, 48 for `hmac384`, 64 for `hmac512`. Set a longer random
+secret on the issuer and on every service that verifies its tokens; the tokens signed with the old one stop working.
 
 ### Startup fails on the route map
 

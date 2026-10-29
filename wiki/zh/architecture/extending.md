@@ -88,7 +88,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 `AuthenticatedPrincipal` 包含 id、租户、成员关系来源（令牌的声明，或[成员关系提供者](#memberships)）、属性和 `credential`。条件以 `subject.attributes.<name>` 读取这些属性。`credential`（`Identity.Credential`：方法 `JWT` 或 `API_KEY`、凭证的 id 及其过期时间，从不包含凭证的值）是网关随身份一起转发的内容：在网关上，没有它的主体会被放行，但不会以已认证身份转发给任何后端；凭证没有过期时间的主体会让请求以 `500` 失败。
 
-凭证的方式还决定 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用：只有 `JWT` 能得到它。你的认证器返回的主体如果没有凭证，或使用自己的方式（例如 `Identity.Method("ldap")`），永远得不到 break-glass。只对你按 CoSec 令牌验证过的令牌使用 `JWT`。
+[break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -112,7 +112,7 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 }
 ```
 
-交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier`：吊销通过挂起式的 `RevocationReader` 检查。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
+交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier` 或其他包装：吊销通过挂起式的 `RevocationReader` 检查，而且只有普通校验器的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
 ## 凭证与吊销 {#credentials-and-revocation}
 

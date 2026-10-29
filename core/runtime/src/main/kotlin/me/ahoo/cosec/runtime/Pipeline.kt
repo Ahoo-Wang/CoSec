@@ -30,6 +30,7 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -92,6 +93,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     private val idGenerator = components.idGenerator
     private val clock = components.clock
     private val options = components.options
+
+    /** Folded once: no condition reads it ([HttpAttributes], `CND-5`). */
+    private val apiKeyHeader = HttpNames.fold(options.apiKeyHeader)
     private val attributes = components.attributes
     private val listeners = components.listeners
     private val rateLimiter = components.rateLimiter
@@ -331,7 +335,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                 blocked = blacklist.blocked,
             ),
         )
-        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts))
+        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts, apiKeyHeader))
         val decision = evaluate(request, view, fetched, record)
         breakGlass(requestId, traceId, decision, view, record)?.let { return it }
         return decided(requestId, traceId, decision, authn, security(requestId, principal, request, decision))

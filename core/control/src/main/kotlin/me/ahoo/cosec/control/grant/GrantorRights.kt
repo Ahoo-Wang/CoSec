@@ -45,6 +45,8 @@ class HeldStatement(
  *
  * - `Anyone` and principal bindings apply in the binding's `(app, space)`; attachments in `(*, *)`; a role binding
  *   `(app, space)` in `app` and those of its spaces where the grantor holds the role.
+ * - A capped grantor (no principal bindings, RFC 0009 §4.2) holds none of the ALLOWs of its attachments and principal
+ *   bindings, and is subject to all of their DENYs, as on the data plane (RC1-1): a cap removes ALLOWs only.
  * - An app document is loaded only for requests in its app, so its bindings apply only there.
  * - A binding or attachment whose policy does not resolve makes the data plane answer `Indeterminate` wherever it
  *   applies, so the grantor is not permitted there: it counts as a DENY of every action and resource. Through
@@ -85,7 +87,14 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
                 val via = BindingRef.Bound(binding.id, kind)
                 val anyone = binding.subject == SubjectRef.Anyone
                 val policy = resolve(document, kind, binding)
-                hold(policy, binding.policy, applicability, via, anyone)
+                hold(
+                    policy,
+                    binding.policy,
+                    applicability,
+                    via,
+                    anyone,
+                    byName = binding.subject is SubjectRef.Principal
+                )
             }
         }
 
@@ -93,11 +102,20 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
             for (id in grantor.memberships.attachments) {
                 val policy = (snapshot.tenant(grantor.tenant).policy(id) ?: snapshot.platform.policy(id))
                     ?.takeIf { it.attachable }
-                hold(policy, id, ScopeSet.EVERY, BindingRef.Attached(id), anyone = false)
+                hold(policy, id, ScopeSet.EVERY, BindingRef.Attached(id), anyone = false, byName = true)
             }
         }
 
-        private fun hold(policy: GrantPolicy?, id: PolicyId, applicability: ScopeSet, via: BindingRef, anyone: Boolean) {
+        /** [byName]: bound to the grantor by name, so a capped grantor holds only its DENYs. */
+        private fun hold(
+            policy: GrantPolicy?,
+            id: PolicyId,
+            applicability: ScopeSet,
+            via: BindingRef,
+            anyone: Boolean,
+            byName: Boolean,
+        ) {
+            val grants = !byName || grantor.principalBindings
             if (policy == null) {
                 if (!anyone) {
                     denies += HeldStatement(EVERYTHING, null, applicability, StatementRef.Policy(id, -1, "", via), false)
@@ -113,7 +131,7 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
                     anyone = anyone,
                 )
                 when {
-                    statement.effect == Effect.ALLOW -> allows += held
+                    statement.effect == Effect.ALLOW -> if (grants) allows += held
                     !anyone -> denies += held
                 }
             }
@@ -124,10 +142,7 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
             val scope = ScopeSet.of(binding.scope.app, binding.scope.space)
             return when (val subject = binding.subject) {
                 SubjectRef.Anyone -> scope
-                // A capped credential holds nothing bound to its principal by name (RFC 0009 §4.2): it cannot lend it.
-                is SubjectRef.Principal -> scope.takeIf {
-                    grantor.principalBindings && subject.tenant == grantor.tenant && subject.id == grantor.id
-                }
+                is SubjectRef.Principal -> scope.takeIf { subject.tenant == grantor.tenant && subject.id == grantor.id }
 
                 is SubjectRef.Role -> {
                     if (subject.tenant != null && subject.tenant != grantor.tenant) {
