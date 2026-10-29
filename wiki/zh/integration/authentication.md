@@ -236,6 +236,8 @@ cosec:
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。
 
+这两步都会阻塞所在线程。`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调中的 `authenticateAsToken` 通过 JustAuth 的阻塞 HTTP 调用提供方。请在事件循环之外调用它们：在 WebFlux 中使用 `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` 和回调的 `Mono`，并分别加上 `.subscribeOn(Schedulers.boundedElastic())`。
+
 ## 网关之后 {#behind-a-gateway}
 
 位于 `cosec-gateway-server` 或任何 CoSec 网关之后的服务，要么信任网关，要么再次决策。没有服务会不经校验就信任令牌。

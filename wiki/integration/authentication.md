@@ -407,6 +407,11 @@ providers. Configure each provider under `cosec.authentication.login.social.regi
    among them. To look the user up in your own system and give them roles, declare your own
    `SocialUserPrincipalConverter` bean.
 
+Both steps block their thread. `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache,
+and the callback's `authenticateAsToken` calls the provider over JustAuth's blocking HTTP. Call them off the event
+loop: in WebFlux, `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` and the callback's `Mono`, each
+with `.subscribeOn(Schedulers.boundedElastic())`.
+
 ## Behind a gateway
 
 A service behind `cosec-gateway-server`, or any CoSec gateway, either trusts the gateway or decides again. No service

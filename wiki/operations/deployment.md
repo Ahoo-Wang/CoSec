@@ -17,8 +17,9 @@ on every push and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/c
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
 
-- **JDK.** The image runs on Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`). The code is compiled for Java 21 like
-  every other CoSec module, so the JDK 21 baseline is unchanged.
+- **JDK.** The CoSec libraries target Java 21, which is what an application on them needs. The image is an
+  application of its own and runs on JDK 25, Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`), with a JDK 25
+  [AOT cache](#aot-cache): its runtime is 25, not 21.
 - **Required settings.** `COSEC_JWT_SECRET` (there is no default, see
   [Authentication](../integration/authentication.md)) and the Redis address, for example `SPRING_DATA_REDIS_URL`.
 - **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`. The

@@ -3,6 +3,7 @@
 ARG APP_NAME=cosec-gateway-server
 ARG WORK_HOME=/opt/${APP_NAME}
 
+# The image runs on JDK 25, for its AOT cache; the CoSec libraries in it are compiled for Java 21 like every module.
 FROM dragonwell-registry.cn-hangzhou.cr.aliyuncs.com/dragonwell/dragonwell:25-ubuntu AS base
 
 FROM base AS build
