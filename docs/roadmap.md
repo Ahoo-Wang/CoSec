@@ -223,6 +223,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
 - RC 前（Wow 的导入清单，2026-10-29）：Wow 用到的生产面（`SecurityContext`、`SecurityScope`、`CoSecPrincipal`、WebFlux 的上下文读取、`AuthorizationChecker`、`RouteMap` 与 `RouteMapCodec`、`CoSecParameters`、starter 的属性键）保持公开并有文档；测试面用到的内部类型（`PipelineComponents`、`SuspendingSnapshotSource`、`engine.flat.*`）在归类时多半转为 `@InternalCoSecApi`，在此之前 `cosec-testkit` 提供公开的夹具（从文档构建真实 Pipeline，给出 `evaluate` 与已放行的 `SecurityContext`，`@ExperimentalCoSecApi`）。
 - RC 前（Wow 集成时遇到的问题，2026-10-29）：`cosec-migrate` 的发行包（`application` 插件的 `distZip`）作为 release 资产发布，并写明以 Kubernetes Job 运行；手写文档的播种走 `bootstrap` 加控制面 `apply`（不给 `publish` 加 `--no-report`：报告证明字节的来源），文档给出这条路径；`HostScope` 的按路由 app 即 RC1-6（批次 C）；macOS 上 Lettuce 的 kqueue 扩展 keepalive 启动失败写进排障；网关镜像的内存预期（堆、直接内存、ZGC）写进运维文档，并在批次 C 重新评估 512M 直接内存的默认值。`CoSec-Identity` v1 的字节视为稳定：任何改动都升 `v`。
+- alpha.2 前：未知 `cosec.*` 属性检查把 Kubernetes 的服务链接环境变量（Service 名为 `cosec-gateway` 时的 `COSEC_GATEWAY_SERVICE_HOST`、`COSEC_GATEWAY_PORT_80_TCP_*` 等）当成 CoSec 属性，网关在 Kubernetes 中启动失败循环（Wow 的 GA E2E 发现）。修复：只在系统环境变量来源中忽略服务链接的形状，其余 `COSEC_*` 照常检查；`k8s/` 清单加 `enableServiceLinks: false`；排障文档。
+- **alpha.2 的内容**：RC 修复批次 A（#1164）、Java 21 基线、CoSec 自己的 `IdGenerator` 与 `cosec-cosid`（CosId 5.0.0-alpha.2）、`AuthorizationChecker` 返回决定、上面的 Kubernetes 启动修复。发布等维护者确认。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
