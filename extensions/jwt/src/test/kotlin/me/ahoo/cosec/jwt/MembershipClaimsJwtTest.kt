@@ -117,9 +117,9 @@ class MembershipClaimsJwtTest {
         parsed.innermost().assert().isEqualTo(SimplePrincipal("alice", policies, roles, attributes))
     }
 
-    /** Resolves [parsed] the way the pipeline does: its membership source, then the resolver. */
+    /** Resolves [parsed] the way the pipeline does: its membership source, then the resolver; every principal is known. */
     private fun resolve(provider: MembershipProvider?, parsed: TokenPrincipal): Memberships = runBlocking {
-        MembershipResolver(provider).resolve(tenant, PrincipalId(parsed.id), MembershipSource.of(parsed))
+        checkNotNull(MembershipResolver(provider).resolve(tenant, PrincipalId(parsed.id), MembershipSource.of(parsed)))
     }
 
     @Test
