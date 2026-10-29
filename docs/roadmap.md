@@ -202,9 +202,9 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1146、#1147 | CI：Codecov 自 #1139 起读到 0 %（上传路径过期，上传器转而搜到配置缓存文件）；CI 重构为一个按目录组推导的矩阵（`scripts/ci/plan.py`）、单一门禁 `CI`、覆盖率由各组上传合并、CI 上测试不走构建缓存；每次推送的 runner 时间 4384 s → 1141 s。必需检查改为 `CI`、`Analyze (java-kotlin)`、`Semantic PR Title`（此前 Architecture、Conformance 等守护测试不是必需检查） | ✅ 已合入 |
 | #1141 | RFC 0011 PR-2：`spi` 模块、拆散 `core/`、starter 按类路径装配（STA-1：缺 Redis 模板或 REQUIRED 的 Kafka 审计即启动失败）、§5 的例外规则 | ✅ 已合入 |
 | #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | ✅ 已合入 |
-| #1149 | RFC 0009 PR-3（`feat!`）：API Key 只有角色上限、成员关系决定权限、`migrate api-keys`；顺带修复成员关系缓存用写入填充、下一次请求不是本地命中 | 修安全审查发现（高危：上限不收窄主体绑定与 break-glass；迁移丢弃附加策略会让 key 获得权限） |
+| #1149 | RFC 0009 PR-3（`feat!`）：API Key 只有角色上限、成员关系决定权限（有上限时不取主体绑定，break-glass 只给 CoSec 自己的 token）、`migrate api-keys`（默认原地转换或每把 key 一个专用主体）；顺带修复成员关系缓存用写入填充、下一次请求不是本地命中；`ApiKeys.hash` 改用 `HexFormat`（API Key 吞吐 +84 %） | ✅ 已合入（两轮独立审查） |
 
-#1141、#1144 合入后：RFC 0009 PR-3 → RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
+接下来：RFC 0008 PR-6（文档守卫 G4，进行中）→ RFC 0011 PR-3（RC 前）→ RC 前提。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -225,8 +225,6 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 | 事项 | 背景 | 协调者的建议 |
 |---|---|---|
-| #1116 Renovate：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4 | 运行时库的升级按常设规则等维护者 | patch 级，CI 通过即合入 |
-| #1115 Renovate：`ognl` 3.4.x 补丁升级 | #1114 后 `ognl` 只剩 `migrate` 的 `compileOnly`（读取 7.x 数据用） | 合入；L8 余项（无匹配器的读取器）完成后整个删除 |
 | 何时发 8.0 RC / GA | RFC 0001 §6：由维护者决定 | 等 RC 前提全部满足后再议 |
 
 ## 9. 维护者决定（2026-10-26 起）
@@ -267,6 +265,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **GA 前只做"不做会静默放行"和"几乎零成本"的改动**，不为未来功能预先抽象公共 SPI；企业网关场景逐项检查后只剩三项（未知义务即拒绝、控制面 API 版本独立于 `base-path`、`auth.method` 开放取值） | 2026-10-28 | [RFC 0010](rfc/0010-ga-extension-points.md) |
 | **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`platform` 分组（`platform/gateway-server` 是给用户直接部署的网关服务）；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
 | **API Key 上限只留角色，迁移不扩大任何凭据**（#1149 安全审查）：有上限时不取主体绑定，API Key 不取 break-glass，上限必须显式写出，`MembershipProvider` 的未知主体是显式分支；迁移默认原地转换或每把 key 一个专用工作负载主体，并集授予原主体须显式选择 | 2026-10-29 | [RFC 0009](rfc/0009-identity-and-credentials.md) 修订、Q6、Q7 |
+| **运行时依赖的 patch 升级**：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4（#1116），`ognl` 3.4.16 → 3.4.17（#1115，只剩 `migrate` 的 `compileOnly`） | 2026-10-29 | 维护者："升级" |
 
 ## 10. 尚未派发的下一步
 
