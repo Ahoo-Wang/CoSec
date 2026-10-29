@@ -367,6 +367,42 @@ class FlatEngineTest {
             .isEqualTo(Decision.Permit(ref("a", 0, bound("everyone"))))
     }
 
+    /**
+     * RC1-1: a cap removes ALLOWs only. The DENYs bound to the principal by name, through the platform, the tenant or
+     * an attachment, still deny a capped credential the request its role would permit.
+     */
+    @Test
+    fun `a subject without principal bindings is still denied by its own denies`() {
+        val ops = tenant(
+            fixture.policy("ops", allow()),
+            fixture.policy("no-export", deny()),
+            bindings = listOf(role("ops", "ops", "ops"), principal("tenant-alice", "no-export")),
+        )
+        val capped = { attachments: List<String> ->
+            flatRequest(roles = listOf("ops"), attachments = attachments, principalBindings = false)
+        }
+        decide(capped(emptyList()), platform(), ops, app()).assert()
+            .isEqualTo(Decision.Deny(ref("no-export", 0, bound("tenant-alice", DocumentKind.TENANT))))
+        val platformDeny =
+            platform(fixture.policy("p-deny", deny()), bindings = listOf(principal("platform-alice", "p-deny")))
+        val roleOnly = tenant(fixture.policy("ops", allow()), bindings = listOf(role("ops", "ops", "ops")))
+        decide(capped(emptyList()), platformDeny, roleOnly, app()).assert()
+            .isEqualTo(Decision.Deny(ref("p-deny", 0, bound("platform-alice"))))
+        val attachable = tenant(
+            fixture.policy("ops", allow()),
+            fixture.policy("attached-deny", deny(), attachable = true),
+            bindings = listOf(role("ops", "ops", "ops")),
+        )
+        decide(capped(listOf("attached-deny")), platform(), attachable, app()).assert()
+            .isEqualTo(Decision.Deny(ref("attached-deny", 0, BindingRef.Attached(PolicyId("attached-deny")))))
+        // An attachment that does not resolve could be a DENY nobody can check, for a capped credential too.
+        decide(capped(listOf("gone")), platform(), roleOnly, app()).assert()
+            .isEqualTo(Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId("gone")))))
+        // The role still permits what nothing bound to the principal denies.
+        decide(capped(emptyList()), platform(), roleOnly, app()).assert()
+            .isEqualTo(Decision.Permit(ref("ops", 0, bound("ops", DocumentKind.TENANT))))
+    }
+
     /** `BRK-8` (RFC 0009 §4.2): a subject without break-glass, an API key, is reached by no break-glass binding. */
     @Test
     fun `a subject without break-glass matches no break-glass binding`() {

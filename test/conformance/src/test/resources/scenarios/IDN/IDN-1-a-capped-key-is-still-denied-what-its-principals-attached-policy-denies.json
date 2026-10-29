@@ -1,0 +1,89 @@
+{
+  "rules": [
+    "IDN-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RC1-1: svc attaches a policy that denies the export, and its role billing reads every order. Its key, capped to billing, is denied the export as svc is.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "no-export",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET",
+                "resource": "http:path:/orders/export"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/export",
+    "headers": {
+      "X-API-Key": "k-svc"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": [
+          "billing"
+        ]
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc",
+        "roles": {
+          "": [
+            "billing"
+          ]
+        },
+        "attachments": [
+          "no-export"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

@@ -491,6 +491,7 @@ public final class me/ahoo/cosec/runtime/authn/TokenAuthenticator : me/ahoo/cose
 }
 
 public final class me/ahoo/cosec/runtime/authn/TokenAuthenticator$Companion {
+	public final fun getRESERVED_ATTRIBUTES ()Ljava/util/Set;
 }
 
 public final class me/ahoo/cosec/runtime/context/SimpleSecurityContext : me/ahoo/cosec/api/context/SecurityContext {
@@ -635,10 +636,10 @@ public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler : me/ah
 }
 
 public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion {
-	public final fun forPlatform (Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;I)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-	public static synthetic fun forPlatform$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;IILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-	public final fun of (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;I)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;IILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public final fun forPlatform (Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public static synthetic fun forPlatform$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public final fun of (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
 	public final fun permissionPrefix (Ljava/lang/String;)Ljava/lang/String;
 }
 
@@ -888,9 +889,10 @@ public final class me/ahoo/cosec/runtime/http/Headers$Companion {
 }
 
 public final class me/ahoo/cosec/runtime/http/HttpAttributes : me/ahoo/cosec/model/condition/ConditionInput {
-	public fun <init> (Lme/ahoo/cosec/runtime/http/Headers;Ljava/util/Map;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/http/Headers;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun <init> (Lme/ahoo/cosec/runtime/http/HttpFacts;)V
+	public fun <init> (Lme/ahoo/cosec/runtime/http/Headers;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/http/Headers;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/runtime/http/HttpFacts;Ljava/lang/String;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/http/HttpFacts;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun bool (Lme/ahoo/cosec/model/condition/Attribute;)Ljava/lang/Boolean;
 	public fun ip (Lme/ahoo/cosec/model/condition/Attribute;)Lme/ahoo/cosec/model/condition/IpAddress;
 	public fun string (Lme/ahoo/cosec/model/condition/Attribute;)Ljava/lang/String;
@@ -1296,8 +1298,8 @@ public final class me/ahoo/cosec/runtime/snapshot/MissingPlatformException : jav
 
 public final class me/ahoo/cosec/runtime/snapshot/PlatformCompiler : me/ahoo/cosec/runtime/snapshot/SnapshotCompiler {
 	public fun <init> ()V
-	public fun <init> (Lme/ahoo/cosec/model/condition/AttributeCatalog;I)V
-	public synthetic fun <init> (Lme/ahoo/cosec/model/condition/AttributeCatalog;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun bind (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)V
 	public synthetic fun compile (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Ljava/lang/Object;
 	public fun compile (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/engine/flat/CompiledDocument;

@@ -1,0 +1,17 @@
+# Rule: CND-5
+# Mutant: the starter's data-plane compiler is not told the renamed API key header, so documents reading it compile
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.StarterWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+index d7514bf7..5754519f 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+@@ -204,7 +204,7 @@ class CoSecSnapshotAutoConfiguration {
+     @Bean
+     @ConditionalOnMissingBean
+     fun cosecPlatformCompiler(attributes: AttributeProviders, environment: Environment): PlatformCompiler =
+-        PlatformCompiler(attributes.catalog, credentialHeaders = credentialHeaders(environment))
++        PlatformCompiler(attributes.catalog)
+ 
+     /**
+      * The snapshot source. It loads the platform first, so that no app or tenant document compiles against default

@@ -400,12 +400,17 @@ class PipelineTest {
             listOf(PolicyId("p1")),
         )
         val engine = StubEngine(PERMIT)
-        pipeline(authenticator(keyOf(MembershipSource.Provider.capped(listOf("viewer")))), engine) {
+        val outcome = pipeline(authenticator(keyOf(MembershipSource.Provider.capped(listOf("viewer")))), engine) {
             it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Known(provided) })
-        }.evaluate(facts()).proceed.assert().isTrue()
-        val memberships = engine.requests.single().memberships
-        memberships.roles.assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"))))
-        memberships.attachments.assert().isEmpty()
+        }.evaluate(facts())
+        outcome.proceed.assert().isTrue()
+        // The key holds none of the attachments, so the security context lists none.
+        outcome.security!!.securityContext.principal.policies.assert().isEmpty()
+        val request = engine.requests.single()
+        request.memberships.roles.assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"))))
+        // The attachments reach the engine for their DENYs only (RC1-1): the subject has no principal bindings.
+        request.memberships.attachments.assert().containsExactly(PolicyId("p1"))
+        request.request.subject.principalBindings.assert().isFalse()
     }
 
     /** A provider that fails is a 503 for a key too: never "unknown", never refused. */

@@ -3,15 +3,15 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index f215de58..0bb4cb93 100644
+index df6510af..5838d5bd 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -149,7 +149,7 @@ class ChangeChecks(
+@@ -151,7 +151,7 @@ class ChangeChecks(
              }
          }
          try {
--            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit).compile(candidate)
-+            PolicyDocumentCompiler.forPlatform(platform, AttributeCatalog.NONE, options.principalBindingLimit).compile(candidate)
+-            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit, credentialHeaders)
++            PolicyDocumentCompiler.forPlatform(platform, AttributeCatalog.NONE, options.principalBindingLimit, credentialHeaders)
+                 .compile(candidate)
          } catch (error: DocumentCompileException) {
              error.errors.forEach { findings += Finding("COMPILE", it.path, it.message, UNPROCESSABLE) }
-         }

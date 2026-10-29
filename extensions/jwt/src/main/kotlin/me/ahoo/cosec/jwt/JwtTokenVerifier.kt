@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
@@ -18,11 +20,13 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.TokenExpiredException
 import com.auth0.jwt.interfaces.DecodedJWT
 import com.auth0.jwt.interfaces.JWTVerifier
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
+import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 
@@ -30,7 +34,8 @@ import me.ahoo.cosec.spi.token.TokenVerifier
  * JWT-based token verifier.
  *
  * This implementation uses the Auth0 JWT library to verify JWT tokens
- * and extract principal information from them.
+ * and extract principal information from them. It is CoSec's own verifier ([CoSecTokenVerifier]): only the tokens it
+ * verifies may use break-glass (RC1-26).
  *
  * @param algorithm The algorithm used to verify JWT signatures
  * @see TokenVerifier
@@ -38,7 +43,7 @@ import me.ahoo.cosec.spi.token.TokenVerifier
  */
 class JwtTokenVerifier(
     private val algorithm: Algorithm
-) : TokenVerifier {
+) : CoSecTokenVerifier {
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
         .withClaimPresence("exp")
         .build()

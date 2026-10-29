@@ -62,6 +62,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.spring.boot.starter.pipeline.credentialHeaders
 import me.ahoo.cosec.spring.boot.starter.pipeline.toOptions
 import me.ahoo.cosid.StringIdGenerator
 import org.springframework.beans.factory.ObjectProvider
@@ -73,6 +74,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import java.time.Instant
@@ -128,8 +130,9 @@ class CoSecControlAutoConfiguration {
         documents: RedisSnapshotDocumentStore,
         attributes: AttributeProviders,
         properties: RuntimeAuthorizationProperties,
+        environment: Environment,
     ): ControlSnapshot {
-        val compiler = PlatformCompiler(attributes.catalog)
+        val compiler = PlatformCompiler(attributes.catalog, credentialHeaders = credentialHeaders(environment))
         val clock = Clock.systemUTC()
         return ControlSnapshot(
             DocumentSnapshots.source(documents, compiler, properties.snapshot.toOptions(), clock).also(compiler::bind),
@@ -237,6 +240,7 @@ class CoSecControlAutoConfiguration {
         shadowReports: ObjectProvider<CoCacheShadowReports>,
         attributes: AttributeProviders,
         properties: RuntimeAuthorizationProperties,
+        environment: Environment,
     ): Changes {
         val ids = idGenerator.ifAvailable
         return Changes(
@@ -245,8 +249,9 @@ class CoSecControlAutoConfiguration {
             { ChangeId(ids?.generateAsString() ?: UUID.randomUUID().toString()) },
             authorizer,
             options = options,
-            // Candidates compile against the host's providers too, as enforcement compiles them.
+            // Candidates compile against the host's providers and credential headers, as enforcement compiles them.
             attributes = attributes.catalog,
+            credentialHeaders = credentialHeaders(environment),
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
@@ -282,9 +287,15 @@ class CoSecControlAutoConfiguration {
         revisions: Revisions,
         authority: ChangeAuthority,
         attributes: AttributeProviders,
+        environment: Environment,
     ): ControlPlane =
         // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
-        DefaultControlPlane(changes, revisions, authority, Simulator(attributes = attributes.catalog))
+        DefaultControlPlane(
+            changes,
+            revisions,
+            authority,
+            Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+        )
 
     /** Not replaceable: every route needs a request the host pipeline permitted. */
     @Bean

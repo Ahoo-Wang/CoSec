@@ -255,8 +255,8 @@ public final class me/ahoo/cosec/control/api/Simulation {
 public final class me/ahoo/cosec/control/api/Simulator {
 	public static final field Companion Lme/ahoo/cosec/control/api/Simulator$Companion;
 	public fun <init> ()V
-	public fun <init> (Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/model/condition/AttributeCatalog;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun evaluate (Lme/ahoo/cosec/control/api/SimulatedRequest;Lme/ahoo/cosec/model/scope/Scope;Lme/ahoo/cosec/control/api/Documents;)Lme/ahoo/cosec/engine/flat/FlatEvaluation;
 	public final fun keys (Lme/ahoo/cosec/model/scope/Scope;)Ljava/util/List;
 	public final fun scope (Lme/ahoo/cosec/control/api/SimulatedRequest;)Lme/ahoo/cosec/model/scope/ScopeResolution;
@@ -556,8 +556,8 @@ public final class me/ahoo/cosec/control/change/CandidateDigest {
 
 public final class me/ahoo/cosec/control/change/ChangeChecks {
 	public fun <init> ()V
-	public fun <init> (Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/model/condition/AttributeCatalog;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun check (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Ljava/util/List;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/change/ChangeChecks$Context;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

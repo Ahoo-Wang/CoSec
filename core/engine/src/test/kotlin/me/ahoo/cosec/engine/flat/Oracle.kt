@@ -115,7 +115,11 @@ object Oracle {
         }
     }
 
-    fun enumerate(case: FlatCase): Enumeration {
+    /**
+     * The candidates of the pass over [effect]'s statements. A capped credential (no principal bindings) has its
+     * attachments and principal bindings in the DENY pass only: a cap removes ALLOWs, never DENYs (RC1-1).
+     */
+    fun enumerate(case: FlatCase, effect: Effect = Effect.DENY): Enumeration {
         val request = case.request
         val tenant = case.tenant.takeIf { case.tenantLoaded }
         val platform = case.platform
@@ -124,7 +128,8 @@ object Oracle {
         with(Builder(case)) {
             add(platform, DocumentKind.PLATFORM, applying(platform, anyone).sortedWith(byPolicy))
             tenant?.let { add(it, DocumentKind.TENANT, applying(it, anyone).sortedWith(byPolicy)) }
-            if (request.request.subject.authenticated) {
+            val subject = request.request.subject
+            if (subject.authenticated && (effect == Effect.DENY || subject.principalBindings)) {
                 request.memberships.attachments.forEach { attach(tenant, it) }
                 add(platform, DocumentKind.PLATFORM, applying(platform, principal).sortedWith(byId))
                 tenant?.let { add(it, DocumentKind.TENANT, applying(it, principal).sortedWith(byId)) }
@@ -239,7 +244,7 @@ object Oracle {
         val enumeration = enumerate(case)
         denyPass(case, enumeration.candidates)?.let { return it }
         unresolved(case, enumeration.missing, enumeration.ambiguous)?.let { return Decision.Indeterminate(it) }
-        for (candidate in enumeration.candidates) {
+        for (candidate in enumerate(case, Effect.ALLOW).candidates) {
             val match = evaluate(case, candidate, Effect.ALLOW).filterIsInstance<Outcome.Matched>().firstOrNull()
             if (match != null) return withinBoundary(case, Decision.Permit(match.ref))
         }

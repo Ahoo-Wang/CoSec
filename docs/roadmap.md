@@ -204,7 +204,11 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1144 | RFC 0009 PR-1（`fix(jwt)!`）：拒绝带 `act` 的 token，验证与刷新两条路径（`IDN-4`，两个变异体） | ✅ 已合入 |
 | #1149 | RFC 0009 PR-3（`feat!`）：API Key 只有角色上限、成员关系决定权限（有上限时不取主体绑定，break-glass 只给 CoSec 自己的 token）、`migrate api-keys`（默认原地转换或每把 key 一个专用主体）；顺带修复成员关系缓存用写入填充、下一次请求不是本地命中；`ApiKeys.hash` 改用 `HexFormat`（API Key 吞吐 +84 %） | ✅ 已合入（两轮独立审查） |
 
-接下来：RFC 0008 PR-6（文档守卫 G4，进行中）→ RFC 0011 PR-3（RC 前）→ RC 前提。
+| #1151 | RFC 0008 PR-6：文档守卫 G4（`pnpm check:docs` 拒绝已删除的 API），文档检查进入 `CI` 门禁 | ✅ 已合入 |
+| #1155 | RFC 0011 PR-3：ABI 校验（KGP 内置 `abiValidation`，22 个库模块的转储），`@ExperimentalCoSecApi`、`@CoSecSpi`、`SpiMarkerTest`；收窄公共面（cocache 编解码器、快照内部、`RequestGate` 只能由 CoSec 实现、控制面的执法 bean 不可替换） | ✅ 已合入 |
+| v8.0.0-alpha.1 | 预览版，不承诺兼容性：GitHub prerelease、Maven Central、GitHub Packages、Docker 只推 `8.0.0-alpha.1`；`main` 回到 `8.0.0-SNAPSHOT`（#1156、#1157） | ✅ 2026-10-29 发布 |
+
+接下来：RC 审查第 1 轮（RC 安全审查，进行中，发现公开修复：维护者 2026-10-29 "Fix in public"）→ 修复 → 第 2 轮（按模块）→ 修复 → `cosec-engine`/`cosec-runtime` 公共 API 归类 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -217,6 +221,10 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
+- RC 前（Wow 的导入清单，2026-10-29）：Wow 用到的生产面（`SecurityContext`、`SecurityScope`、`CoSecPrincipal`、WebFlux 的上下文读取、`AuthorizationChecker`、`RouteMap` 与 `RouteMapCodec`、`CoSecParameters`、starter 的属性键）保持公开并有文档；测试面用到的内部类型（`PipelineComponents`、`SuspendingSnapshotSource`、`engine.flat.*`）在归类时多半转为 `@InternalCoSecApi`，在此之前 `cosec-testkit` 提供公开的夹具（从文档构建真实 Pipeline，给出 `evaluate` 与已放行的 `SecurityContext`，`@ExperimentalCoSecApi`）。
+- RC 前（Wow 集成时遇到的问题，2026-10-29）：`cosec-migrate` 的发行包（`application` 插件的 `distZip`）作为 release 资产发布，并写明以 Kubernetes Job 运行；手写文档的播种走 `bootstrap` 加控制面 `apply`（不给 `publish` 加 `--no-report`：报告证明字节的来源），文档给出这条路径；`HostScope` 的按路由 app 即 RC1-6（批次 C）；macOS 上 Lettuce 的 kqueue 扩展 keepalive 启动失败写进排障；网关镜像的内存预期（堆、直接内存、ZGC）写进运维文档，并在批次 C 重新评估 512M 直接内存的默认值。`CoSec-Identity` v1 的字节视为稳定：任何改动都升 `v`。
+- alpha.2 前：未知 `cosec.*` 属性检查把 Kubernetes 的服务链接环境变量（Service 名为 `cosec-gateway` 时的 `COSEC_GATEWAY_SERVICE_HOST`、`COSEC_GATEWAY_PORT_80_TCP_*` 等）当成 CoSec 属性，网关在 Kubernetes 中启动失败循环（Wow 的 GA E2E 发现）。修复：只在系统环境变量来源中忽略服务链接的形状，其余 `COSEC_*` 照常检查；`k8s/` 清单加 `enableServiceLinks: false`；排障文档。
+- **alpha.2 的内容**：RC 修复批次 A（#1164）、Java 21 基线、CoSec 自己的 `IdGenerator` 与 `cosec-cosid`（CosId 5.0.0-alpha.2）、`AuthorizationChecker` 返回决定、上面的 Kubernetes 启动修复。发布等维护者确认。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
@@ -269,6 +277,10 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **运行时依赖的 patch 升级**：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4（#1116），`ognl` 3.4.16 → 3.4.17（#1115，只剩 `migrate` 的 `compileOnly`） | 2026-10-29 | 维护者："升级" |
 | **先发布 `8.0.0-alpha.1` 预览版，不承诺兼容性**：RFC 0011 PR-3（ABI 校验）合入后发布；GitHub 上标为 prerelease，Docker 只推 `8.0.0-alpha.1` 标签（不推 `latest`）；发布后 `main` 回到 `8.0.0-SNAPSHOT`。RC/GA 的前提不变（取代 RFC 0001 §6 "RC 前不发布任何版本"） | 2026-10-29 | 维护者："完成后，保守一点，发布 -alpha.1 ，不承诺兼容性。" |
 | **RC 的两轮审查改为对 RC 候选提交做整体审查**：第 1 轮是 RC 安全审查，第 2 轮是按模块的正确性审查（每个模块一个只读审查者），不再逐个补做已合入 PR 的第二轮 | 2026-10-29 | [RFC 0008 §3.9](rfc/0008-conformance-and-direct-build.md) 修订；维护者："Go with that" |
+| **核心层不再依赖 CosId，CosId 作为扩展**：核心层只需要"生成唯一字符串"，改为 CoSec 自己的端口 `IdGenerator`（`cosec-spi`，`@CoSecSpi`）与默认实现 `RandomIdGenerator`；新增扩展模块 `cosec-cosid`（`extensions/cosid`），基于 CosId `5.0.0-alpha.2` 实现 `IdGenerator`，由 starter 按类路径装配；`me.ahoo.cosid` 只出现在 `extensions/cosid` 与 `host/spring-boot`（架构规则）；`cosec-dependencies` 不再导入 `cosid-bom`。社交登录的 OAuth `state` 与 API Key 密钥始终用 SecureRandom，不经 `IdGenerator`。起因：CosId 5 与 CosId 4 二进制不兼容，Wow 的服务在运行时 `NoClassDefFoundError` | 2026-10-29 | 维护者："核心层不再依赖 CosId"；"添加一个 SPI 给 IdGenerator，cosid 作为扩展。并且 cosid 依赖升级到最新版：v5.0.0-alpha.2" |
+| **CoSec 8.0 的基线升到 Java 21**（7.x 不变）：全部模块按 Java 21 编译，CI 与发布用 JDK 21；CosId 5 只支持 Java 21，`cosec-cosid` 因此是普通模块，RFC 0011 D2 不需要例外。破坏性变更，写进 `upgrading.md` | 2026-10-29 | 维护者："CoSec 基线升级到 JAVA 21 吧。" |
+| **`AuthorizationChecker` 返回决定**（RC 前）：与 `check` 同语义，`check` 即"决定为 Permit"；决定只到进程内的宿主代码，不进响应体 | 2026-10-29 | Wow 的请求 |
+| **网关身份转发改为按 scheme 选择加入**（RC1-49）：默认只转发给 `lb://` 路由，其他路由须写 `cosec-identity: true`；网关主机上暴露非 health 的 actuator 端点时启动失败（RC1-48） | 2026-10-29 | [RC 审查](security/8.0-rc-review.md) 的建议 |
 
 ## 10. 尚未派发的下一步
 

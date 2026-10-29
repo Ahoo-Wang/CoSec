@@ -256,7 +256,7 @@ The engine first enumerates the policies that apply to the request, the *candida
 | 0 | The built-in blacklist rule `cosec:blacklist`, which denies a blocked request. |
 | 1 | Platform bindings to anyone, by policy id. |
 | 2 | Tenant bindings to anyone, by policy id. |
-| 3 | For an authenticated principal: its attachments in claim order, then its principal bindings in the platform and the tenant document, by binding id. |
+| 3 | For an authenticated principal: its attachments in claim order, then its principal bindings in the platform and the tenant document, by binding id. For a credential with a role cap, DENY candidates only: a cap removes ALLOWs, never DENYs. |
 | 4 | Role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a role in document order. |
 | 5 | For an authenticated principal: its break-glass bindings, last. |
 

@@ -51,6 +51,19 @@ class HttpAttributesTest {
         string(Kind.SUBJECT_ID).assert().isNull()
     }
 
+    /** RC1-21: the host's API key header never reads, even through a document a compiler was not told about. */
+    @Test
+    fun theApiKeyHeaderIsNeverRead() {
+        val headers = Headers.of(mapOf("X-Acme-Key" to listOf("ak_secret"), "X-Debug" to listOf("1")))
+        val keyed = HttpAttributes(headers, credentialHeader = "X-Acme-Key")
+        val error = assertThrows<CredentialHeaderException> {
+            keyed.string(Attribute.of(Kind.HTTP_HEADER, "x-acme-key"))
+        }
+        error.message.assert().doesNotContain("ak_secret")
+        keyed.string(Attribute.of(Kind.HTTP_HEADER, "x-debug")).assert().isEqualTo("1")
+        HttpAttributes(headers).string(Attribute.of(Kind.HTTP_HEADER, "x-acme-key")).assert().isEqualTo("ak_secret")
+    }
+
     @Test
     fun aHeaderWithDifferentValuesHasNone() {
         val error = assertThrows<AmbiguousHeaderException> { string(Kind.HTTP_HEADER, "x-twice") }

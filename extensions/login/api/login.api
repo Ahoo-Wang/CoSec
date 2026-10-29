@@ -41,7 +41,7 @@ public abstract class me/ahoo/cosec/login/token/AbstractRefreshTokenAuthenticati
 public abstract class me/ahoo/cosec/login/token/AbstractSwitchTenantAuthentication : me/ahoo/cosec/login/Authentication {
 	public fun <init> ()V
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
-	public fun authenticate (Lme/ahoo/cosec/login/token/SwitchTenantCredentials;)Lreactor/core/publisher/Mono;
+	public final fun authenticate (Lme/ahoo/cosec/login/token/SwitchTenantCredentials;)Lreactor/core/publisher/Mono;
 	public fun getSupportCredentials ()Ljava/lang/Class;
 	protected abstract fun switchTenant (Ljava/lang/String;Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lreactor/core/publisher/Mono;
 }
@@ -62,6 +62,21 @@ public final class me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication : 
 public abstract interface class me/ahoo/cosec/login/token/SwitchTenantCredentials : me/ahoo/cosec/login/Credentials {
 	public abstract fun getPrincipal ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
 	public abstract fun getTargetTenantId ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/login/token/TenantMembership {
+	public static final field Companion Lme/ahoo/cosec/login/token/TenantMembership$Companion;
+	public fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getFromProvider ()Z
+	public final fun getPolicies ()Ljava/util/Set;
+	public final fun getRoles ()Ljava/util/Set;
+}
+
+public final class me/ahoo/cosec/login/token/TenantMembership$Companion {
+	public final fun fromProvider (Ljava/util/Map;)Lme/ahoo/cosec/login/token/TenantMembership;
+	public static synthetic fun fromProvider$default (Lme/ahoo/cosec/login/token/TenantMembership$Companion;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/TenantMembership;
 }
 
 public final class me/ahoo/cosec/login/token/TokenCompositeAuthentication : me/ahoo/cosec/login/Authentication {

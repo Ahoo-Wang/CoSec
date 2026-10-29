@@ -67,7 +67,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
   `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
   at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
-  logs the list; do not suggest it to hide a real typo.
+  logs the list; do not suggest it to hide a real typo. On Kubernetes, keys such as `cosec.gateway.service.host` or
+  `cosec.gateway.port` are service links (`COSEC_GATEWAY_SERVICE_HOST`, ... for a Service named `cosec-*` in the
+  namespace): set `enableServiceLinks: false` on the pod, as `k8s/` does.
 - **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
@@ -95,6 +97,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
   `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
+  **`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32`**: the secret must be at least 32, 48 or
+  64 UTF-8 bytes for `hmac256`, `hmac384`, `hmac512` (RFC 7518 §3.2); set a longer one on the issuer and every verifier.
 - **`The route map [classpath:cosec-routes.json] (cosec.authorization.routes.location) does not exist`**: add the route
   map, or set the property empty to run without one. A `RouteMapException` names the location and route: malformed
   route, a resource variable the path does not capture, or two routes for one method that may match the same request.
@@ -164,8 +168,14 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   IDN-3: the decision
   event's `subject.rejected` is `API_KEY_INVALID` or `TOKEN_INVALID`.
 - An API key that is valid but holds fewer roles than expected: its `roles` cap keeps only the principal's roles it
-  names, exactly by space, and drops attached policies and principal bindings (IDN-2, BND-9); a key grants nothing its
-  principal does not hold (IDN-1), and no API key ever gets break-glass (BRK-8). `roles: []` leaves only `Anyone`.
+  names, exactly by space; attached policies and principal bindings grant it nothing, but their DENYs still apply
+  (IDN-2, BND-9), so a capped key is denied what its principal is denied. A key grants nothing its principal does not
+  hold (IDN-1), and no API key ever gets break-glass (BRK-8). `roles: []` leaves only `Anyone`, less those DENYs.
+- Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified gets it (BRK-8), never a token
+  of a custom `TokenVerifier`, even through `TokenAuthenticator`. An authenticator naming its method `jwt` makes every
+  request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
+- `token-invalid` for a token whose `tenantId` claim is not a string, or whose `attributes` name `apiKeyId` (reserved
+  for API keys).
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 

@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 /**
@@ -65,6 +66,13 @@ internal class JwtTokenConverterTest {
         val token2 = jwtTokenConverter.toToken(verified)
         val verified2 = jwtTokenVerifier.verify<TokenPrincipal>(token2)
         verified2.id.assert().isEqualTo(principal.id)
+    }
+
+    /** RC1-25: a token never carries an attribute CoSec sets for another credential, such as `apiKeyId`. */
+    @Test
+    fun aReservedAttributeIsNotIssued() {
+        val principal = SimplePrincipal("id", attributes = mapOf("apiKeyId" to "k1"))
+        assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(principal) }
     }
 
     @Test

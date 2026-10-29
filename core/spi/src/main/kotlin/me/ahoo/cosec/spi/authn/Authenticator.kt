@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spi.authn
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -79,20 +80,51 @@ sealed interface AuthnResult {
     }
 }
 
-/** Who the credentials prove the caller is. */
-class AuthenticatedPrincipal(
+/**
+ * Who the credentials prove the caller is.
+ *
+ * [Identity.Method.JWT] names CoSec's own token and nothing else: a principal whose [credential] has that method is made
+ * only through the internal constructor, by CoSec's token authenticator, which also sets [breakGlass]. The public
+ * constructors refuse it, so no other authenticator can be taken for CoSec's token by its name (RC1-26).
+ */
+class AuthenticatedPrincipal @InternalCoSecApi constructor(
     val id: PrincipalId,
     val tenant: TenantId,
     /** Where the principal's memberships come from (RFC 0004 §4.5). */
     val membershipSource: MembershipSource,
-    val attributes: Map<String, Any> = emptyMap(),
+    val attributes: Map<String, Any>,
     /** The credential that proved it, by id and expiry, never its value: a gateway forwards it with the identity. */
-    val credential: Identity.Credential? = null,
+    val credential: Identity.Credential?,
+    /**
+     * Whether the principal's break-glass bindings may apply: only for a principal CoSec's own token verifier
+     * verified, by provenance, never by a name a credential carries. So an API key, a token another verifier accepted,
+     * a credential of another authenticator, whatever it is called, and a principal without a credential never get it
+     * (RFC 0009 §4.2, `BRK-8`). It goes with [Identity.Method.JWT], which a gateway forwards for CoSec's tokens only.
+     */
+    val breakGlass: Boolean,
 ) {
+    init {
+        require(breakGlass == (credential?.method == Identity.Method.JWT)) {
+            "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
+                "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+        }
+    }
+
+    /** A principal another authenticator proved: never break-glass. */
+    @OptIn(InternalCoSecApi::class)
+    constructor(
+        id: PrincipalId,
+        tenant: TenantId,
+        membershipSource: MembershipSource,
+        attributes: Map<String, Any> = emptyMap(),
+        credential: Identity.Credential? = null,
+    ) : this(id, tenant, membershipSource, attributes, credential, breakGlass = false)
+
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
      * `MembershipProvider` (§4.5.2).
      */
+    @OptIn(InternalCoSecApi::class)
     constructor(
         id: PrincipalId,
         tenant: TenantId,
@@ -105,24 +137,18 @@ class AuthenticatedPrincipal(
         memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider.UNCAPPED,
         attributes,
         credential,
+        breakGlass = false,
     )
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships
 
     /**
-     * Whether the principal's own bindings apply: not for a credential with a role cap (RFC 0009 §4.2), whose cap is in
-     * [membershipSource] or, behind a gateway, in [credential].
+     * Whether what is bound to the principal by name grants it anything: not for a credential with a role cap (RFC 0009
+     * §4.2), whose cap is in [membershipSource] or, behind a gateway, in [credential]. The DENYs bound to it still apply.
      */
     val principalBindings: Boolean
         get() = (membershipSource as? MembershipSource.Provider)?.cap == null && credential?.capped != true
-
-    /**
-     * Whether the principal's break-glass bindings may apply: only for CoSec's own tokens ([Identity.Method.JWT]), so an
-     * API key, a credential of another authenticator, whatever it is called, and a principal without a credential never
-     * get it (RFC 0009 §4.2).
-     */
-    val breakGlass: Boolean get() = credential?.method == Identity.Method.JWT
 }
 
 /** Where a principal's memberships come from (RFC 0004 §4.5). */
@@ -141,8 +167,9 @@ sealed interface MembershipSource {
      * The credential is refused when the provider does not know the principal or says it is not active (`IDN-3`).
      *
      * [cap], when not null, only narrows what the provider answers: the roles outside it are dropped, matched exactly
-     * by space and role, and so are the directly attached policies, since a cap is expressed in roles only (`IDN-2`).
-     * An empty cap leaves no roles; null leaves the memberships as they are.
+     * by space and role (`IDN-2`). An empty cap leaves no roles; null leaves the memberships as they are. The directly
+     * attached policies stay, for their DENYs: a cap is expressed in roles, so they grant a capped credential nothing,
+     * and restrict it as they restrict its principal (RC1-1).
      */
     class Provider(val cap: Map<SpaceId, Set<RoleId>>? = null) : MembershipSource {
         companion object {

@@ -1,0 +1,17 @@
+# Rule: IDN-1, IDN-2
+# Mutant: the cap drops the principal's attachments, so a capped key escapes the DENYs its principal attaches
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+index ca0746c9..c9e618ba 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+@@ -133,7 +133,7 @@ class MembershipResolver(
+         return Memberships(
+             Memberships.Source.PROVIDER,
+             Collections.unmodifiableMap(roles),
+-            memberships.attachments,
++            emptyList(),
+             memberships.malformed,
+             memberships.active,
+         )

@@ -1,0 +1,49 @@
+{
+  "rules": [
+    "CND-5"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RC1-21: the host reads API keys from X-Acme-Key, so a prefix condition on it, an oracle for the keys, does not compile, in any case.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "prefix": [
+                  "http.header.X-ACME-KEY",
+                  "ak_"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "options": {
+    "apiKeyHeader": "X-Acme-Key"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "credential header"
+  }
+}

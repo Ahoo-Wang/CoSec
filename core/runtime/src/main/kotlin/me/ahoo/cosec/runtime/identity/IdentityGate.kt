@@ -43,6 +43,7 @@ import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosid.StringIdGenerator
@@ -155,12 +156,14 @@ class IdentityGate(
         val tenant = TenantId(identity.tenant)
         val roles = identity.roles.mapTo(LinkedHashSet(), ::RoleId)
         val memberships = Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(identity.space) to roles), emptyList())
+        // The gateway names a credential `jwt` only for CoSec's own token, the one that may use break-glass (RC1-26).
         val principal = AuthenticatedPrincipal(
             PrincipalId(identity.subject),
             tenant,
-            memberships,
+            MembershipSource.Claims(memberships),
             identity.claims,
             identity.credential,
+            breakGlass = identity.credential.method == Identity.Method.JWT,
         )
         val resolution = ScopeResolver.resolve(
             ScopeSubject(tenant, true, memberships),
@@ -168,7 +171,7 @@ class IdentityGate(
             facts.host,
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return null
-        // The gateway's credential decides here too: a capped one has no principal bindings, an API key no break-glass.
+        // The gateway's credential decides here too: a capped one is granted nothing by name, an API key no break-glass.
         val subject = Subject(
             identity.subject,
             identity.tenant,

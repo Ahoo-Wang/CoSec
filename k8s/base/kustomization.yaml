@@ -1,0 +1,22 @@
+# cosec-gateway-server: the Deployment, its Service and its configuration, for the overlays in ../overlays to build
+# on. Not for applying alone: the overlay supplies the Redis address (the ConfigMap cosec-gateway-redis), the
+# namespace and any labels. Deploying: https://cosec.ahoo.me/operations/deployment#kubernetes
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+configMapGenerator:
+  # The generated name carries a hash of application.yaml, so a change to the file rolls the pods.
+  - name: cosec-gateway-config
+    files:
+      - application.yaml
+
+# Nothing secret is generated here. The JWT secret comes from the Secret cosec-jwt-secret, which you create
+# (deployment.yaml shows how).
+
+images:
+  - name: ghcr.io/ahoo-wang/cosec-gateway
+    newTag: 8.0.0-alpha.1

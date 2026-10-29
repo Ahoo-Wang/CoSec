@@ -9,7 +9,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 ## 令牌 {#tokens}
 
-一次登录产生一个**组合令牌**：一个短期有效的访问令牌和一个较长期有效的刷新令牌，都是用 `cosec.jwt.secret` 签名的 JWT（默认 HMAC-SHA256，也可用 HMAC-SHA384/512）。JWT 默认开启，开启时不设置密钥应用就无法启动。
+一次登录产生一个**组合令牌**：一个短期有效的访问令牌和一个较长期有效的刷新令牌，都是用 `cosec.jwt.secret` 签名的 JWT（默认 HMAC-SHA256，也可用 HMAC-SHA384/512）。JWT 默认开启，开启时不设置密钥，或密钥短于算法的哈希长度，应用就无法启动：HMAC-SHA256 至少 32 字节（按 UTF-8 计），HMAC-SHA384 至少 48 字节，HMAC-SHA512 至少 64 字节（RFC 7518 §3.2）。更短的密钥可以根据任何用它签发的令牌离线猜出。
 
 访问令牌携带主体信息，因此认证一个请求除了吊销检查之外不需要任何查找：
 
@@ -19,8 +19,8 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 | `sub` | 主体 id。 |
 | `roles` | 角色 id，写作 `role` 或 `role@space`（[角色与空间](#roles-and-spaces)）。为空时省略。 |
 | `policies` | 附加到主体的策略 id。为空时省略。 |
-| `attributes` | 任意的主体属性；条件通过 `subject.attributes.<name>` 读取。 |
-| `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。 |
+| `attributes` | 任意的主体属性；条件通过 `subject.attributes.<name>` 读取。`apiKeyId` 由 CoSec 为 [API key](#api-keys) 设置，是保留名：带它的令牌按 `token-invalid` 拒绝，`JwtTokenConverter` 也不会签发这样的令牌。 |
+| `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。值不是字符串时令牌无效。 |
 | `cosec.membership` | 成员关系来自 `MembershipProvider` 时，以 `"provider"` 代替 `roles` 和 `policies`（[成员关系](#memberships)）。其他情况省略。 |
 | `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。`iat` 决定[吊销主体](#revoking-every-token-of-a-principal)时拒绝哪些令牌。 |
 
@@ -34,7 +34,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 管道读取请求的凭证，然后询问一个 `Authenticator` 调用方是谁。starter 提供的是由两个认证器组成的 `CompositeAuthenticator`：
 
-- **`TokenAuthenticator`** 用 JWT 算法校验令牌，然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。
+- **`TokenAuthenticator`** 用 JWT 算法校验令牌，然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能使用 [break-glass](../guide/security-model.md#break-glass)：包装你自己校验器的 `TokenAuthenticator` 可以认证它的令牌，但永远不带 break-glass。
 - **`ApiKeyAuthenticator`**，仅在 `cosec.api-key.enabled=true` 时启用，查找 [API key](#api-keys)。
 
 携带 API key 的请求（且已启用 API key）只依据该 key 判定，即使它同时发送了令牌：被拒绝的 key 绝不会退而使用令牌。其他请求交给令牌认证器；完全不带凭证的请求是匿名的。
@@ -177,10 +177,10 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 | key 声明 | key 拥有的 |
 |---|---|
 | `uncapped: true` | 主体拥有的一切：它的角色、附加的策略和主体绑定 |
-| `roles: [billing, auditor@team-a]` | 只有主体角色中的这些，按空间精确匹配（`role` 是默认空间，`role@space` 是该空间）。附加的策略和主体绑定都不作用于它：上限用角色表达。上限中有、主体却没有的角色不带来任何东西。 |
-| `roles: []` | 只有 `Anyone` 绑定给予的：没有角色、附加的策略或主体绑定 |
+| `roles: [billing, auditor@team-a]` | 只有主体角色中的这些，按空间精确匹配（`role` 是默认空间，`role@space` 是该空间）。上限用角色表达，因此主体附加的策略和主体绑定不授予 key 任何东西；它们的 DENY 照样作用于 key，和作用于主体一样。上限中有、主体却没有的角色不带来任何东西。 |
+| `roles: []` | 只有 `Anyone` 绑定给予的，再减去主体自身的 DENY 所拒绝的：没有角色，附加的策略和主体绑定也不授予任何东西 |
 
-`Anyone` 绑定对每个 key 都适用。**API key 永远得不到 break-glass**，无论是否有上限：break-glass 是给人的、有时限的紧急授予，而不是给长期凭证的，只有 CoSec 自己的令牌才能得到它（`BRK-8`；[break-glass](../guide/security-model.md#break-glass)）。key 也不携带其主体令牌的属性，只有 `apiKeyId`：条件读取 `subject.attributes.<name>` 且 `onMissing: nomatch` 的 DENY 不作用于 key，因此要为 key 写这类 DENY，请用角色或 `apiKeyId`。
+`Anyone` 绑定对每个 key 都适用。**上限从不解除限制**（`BND-9`）：绑定到主体或主体附加的 DENY 作用于它的所有 key，无论是否有上限，因此 key 永远不会多于它的主体。**API key 永远得不到 break-glass**，无论是否有上限：break-glass 是给人的、有时限的紧急授予，而不是给长期凭证的，只有 CoSec 自己的令牌才能得到它（`BRK-8`；[break-glass](../guide/security-model.md#break-glass)）。key 也不携带其主体令牌的属性，只有 `apiKeyId`：条件读取 `subject.attributes.<name>` 且 `onMissing: nomatch` 的 DENY 不作用于 key，因此要为 key 写这类 DENY，请用角色或 `apiKeyId`。
 
 携带 key 的请求只依据该 key 判定（[认证器](#authenticators)）。未知、已停用或已过期的 key 让请求成为匿名请求；随后被拒绝时返回 `401` `token-invalid`。提供者不认识或认为已停用其主体的 key 也是如此（`IDN-3`）：停用一个服务账号，就停用了它的每一个 key。主体会得到属性 `apiKeyId`，指明所用的 key，key 不再带来其他属性。CoSec 从不存储或记录 key 本身，只保存它的 SHA-256 哈希（`ApiKeys.hash`）。key 不能代表他人行事：任何凭证的委托都会被[拒绝](#tokens)。
 
@@ -222,9 +222,9 @@ cosec:
 
 ## 租户 {#tenants}
 
-主体可以在某个租户内行事。由你的 `Authentication` 返回的主体决定：`TenantPrincipal`（例如 `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`）会把它的租户写入令牌的 `tenantId` 声明；没有该声明或该声明为空的令牌属于默认租户 `(0)`。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
+主体可以在某个租户内行事。由你的 `Authentication` 返回的主体决定：`TenantPrincipal`（例如 `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`）会把它的租户写入令牌的 `tenantId` 声明；没有该声明或该声明为空的令牌属于默认租户 `(0)`，该声明不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
-要让用户切换租户，继承 `AbstractSwitchTenantAuthentication`，实现 `switchTenant(targetTenantId, previousPrincipal)`（检查用户是否属于目标租户），并为它返回的主体签发新令牌。
+要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previousPrincipal)`：检查用户是否属于目标租户，并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。
 
 **平台租户 `(platform)` 享有特权**：只有它的主体能通过 break-glass 获得 `cosec:root`，也只有它的主体能在控制面中操作平台文档和应用文档（[break-glass](../guide/security-model.md#break-glass)）。请只从用户无法影响的来源签发 `(platform)` 的令牌。
 
@@ -234,7 +234,7 @@ cosec:
 
 1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`，应用有 `StringIdGenerator` Bean 时由它生成，否则由 `UuidGenerator` 生成。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
-3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，以提供方的原始用户信息作为属性，并且**没有角色、策略或租户**。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。
+3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。
 
 ## 网关之后 {#behind-a-gateway}
 

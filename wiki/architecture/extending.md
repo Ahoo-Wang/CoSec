@@ -120,9 +120,13 @@ its expiry, never its value) is what a gateway forwards with the identity: on a 
 permitted but forwarded to no backend as authenticated, and one whose credential has no expiry fails the request with
 `500`.
 
-The credential's method also decides whether [break-glass](../guide/security-model.md#break-glass) bindings apply: only
-`JWT` gets them. A principal your authenticator returns without a credential, or with a method of its own (such as
-`Identity.Method("ldap")`), never gets break-glass. Use `JWT` only for a CoSec token you verified as one.
+Whether [break-glass](../guide/security-model.md#break-glass) bindings apply is decided by provenance: only a token
+CoSec's own `JwtTokenVerifier` verified gets them, through `TokenAuthenticator`. A principal your authenticator
+returns, with a credential of its own method (such as `Identity.Method("ldap")`) or none, never gets break-glass, and
+nor does a token a `TokenVerifier` of your own accepts, even through `TokenAuthenticator` (its credential is then named
+after the authenticator's `method`, `token` by default). The method `JWT` is reserved for CoSec's token: an
+`AuthenticatedPrincipal` you construct with it is refused (`IllegalArgumentException`, a `503`), so no authenticator
+can pass for CoSec's token by its name (`BRK-8`).
 
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
 parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
@@ -150,8 +154,9 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 }
 ```
 
-Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier`: revocation is
-checked through the suspending `RevocationReader`. A token with an `act` claim must never become a principal
+Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier` or another wrapper:
+revocation is checked through the suspending `RevocationReader`, and only the plain verifier's tokens may use
+break-glass. A token with an `act` claim must never become a principal
 (`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
 turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns
 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)` instead of a principal for its `sub`. How tokens, claims and memberships work for
