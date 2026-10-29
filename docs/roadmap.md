@@ -266,6 +266,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`platform` 分组（`platform/gateway-server` 是给用户直接部署的网关服务）；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
 | **API Key 上限只留角色，迁移不扩大任何凭据**（#1149 安全审查）：有上限时不取主体绑定，API Key 不取 break-glass，上限必须显式写出，`MembershipProvider` 的未知主体是显式分支；迁移默认原地转换或每把 key 一个专用工作负载主体，并集授予原主体须显式选择 | 2026-10-29 | [RFC 0009](rfc/0009-identity-and-credentials.md) 修订、Q6、Q7 |
 | **运行时依赖的 patch 升级**：Spring Boot 4.1.1 → 4.1.2、Spring Cloud 2025.1.3 → 2025.1.4（#1116），`ognl` 3.4.16 → 3.4.17（#1115，只剩 `migrate` 的 `compileOnly`） | 2026-10-29 | 维护者："升级" |
+| **先发布 `8.0.0-alpha.1` 预览版，不承诺兼容性**：RFC 0011 PR-3（ABI 校验）合入后发布；GitHub 上标为 prerelease，Docker 只推 `8.0.0-alpha.1` 标签（不推 `latest`）；发布后 `main` 回到 `8.0.0-SNAPSHOT`。RC/GA 的前提不变（取代 RFC 0001 §6 "RC 前不发布任何版本"） | 2026-10-29 | 维护者："完成后，保守一点，发布 -alpha.1 ，不承诺兼容性。" |
 
 ## 10. 尚未派发的下一步
 
