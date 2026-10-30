@@ -30,7 +30,6 @@ import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
-import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.Versioned
@@ -40,7 +39,6 @@ import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.ShadowWindow
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
@@ -315,7 +313,7 @@ class Changes(
         requireState(change, setOf(ChangeState.CHECKED))
         val head = revisions.head(change.key)
         takeSlot(operator, change, head)
-        if (exempt(change, head)) {
+        if (PublishRules.exempt(change, head)) {
             return transition(
                 id,
                 setOf(ChangeState.CHECKED)
@@ -391,7 +389,7 @@ class Changes(
     suspend fun skipShadow(operator: Operator, id: ChangeId, reason: String): ChangeRequest {
         require(reason.isNotBlank()) { "Skipping the shadow window needs a reason." }
         val change = visible(operator, id)
-        if (exempt(change, revisions.head(change.key))) {
+        if (PublishRules.exempt(change, revisions.head(change.key))) {
             authority.require(operator, change.key, ControlActions.PUBLISH)
         } else {
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
@@ -414,13 +412,7 @@ class Changes(
         val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
         requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
-        if (operator.actor == change.author) {
-            throw ChangeRejectedException(FORBIDDEN, "the author of change ${id.value} cannot approve it")
-        }
-        authority.approvalRefusal(operator, change)?.let { throw ChangeRejectedException(FORBIDDEN, it) }
-        if (change.candidate != candidate) {
-            throw ChangeRejectedException(CONFLICT, "change ${id.value} is not candidate $candidate")
-        }
+        requireApprovable(operator, change, candidate)
         val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
         if (breakGlass) {
             requireAudit(true)
@@ -452,6 +444,16 @@ class Changes(
                 }
             )
         }.also { if (!breakGlass) audit(ChangeEvent.Kind.APPROVED, it, operator.actor) }
+    }
+
+    /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
+    private fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
+        val refusal = when {
+            operator.actor == change.author -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
+            else -> authority.approvalRefusal(operator, change)?.let { FORBIDDEN to it }
+                ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
+        }
+        refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
     }
 
     /** Rejects an `AWAITING_APPROVAL` change: [operator] holds `cosec:approve` on the document. Its slot is released. */
@@ -506,14 +508,14 @@ class Changes(
         val change = visible(publisher, id)
         authority.require(publisher, change.key, ControlActions.PUBLISH)
         requireState(change, setOf(ChangeState.READY))
-        acknowledged(change, ack)
+        PublishRules.acknowledged(change, ack)
         authority.authorize(publisher, change.key, change.operations, change.kind, touchesBreakGlass(change))
         val head = revisions.head(change.key)
         if (head?.digest != change.base.digest) {
-            if (publishedBy(change, head)) {
+            if (PublishRules.publishedBy(change, head)) {
                 // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
                 return settle(change, ChangeState.PUBLISHED, published = head!!.revision)
-                    .also { audit(outcomeOf(change, it), it, publisher.actor) }
+                    .also { audit(PublishRules.outcomeOf(change, it), it, publisher.actor) }
             }
             return settle(change, ChangeState.CONFLICTED)
         }
@@ -537,15 +539,20 @@ class Changes(
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
         var published: ChangeRequest? = null
-        val outcome = revisions.publish(change.key, head, candidate, publication(change, publisher, rechecked)) {
+        val outcome = revisions.publish(
+            change.key,
+            head,
+            candidate,
+            PublishRules.publication(change, publisher, rechecked)
+        ) {
             published = written(change, it, rechecked, head?.document, candidate, publisher)
         }
         val settled = when (outcome) {
             is PublishOutcome.Published -> return checkNotNull(published) { "[${change.key}] was written unsettled." }
             is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
-            is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, referenced(outcome))
+            is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
         }
-        audit(outcomeOf(change, settled), settled, publisher.actor)
+        audit(PublishRules.outcomeOf(change, settled), settled, publisher.actor)
         return settled
     }
 
@@ -565,30 +572,12 @@ class Changes(
         var settled: ChangeRequest? = null
         try {
             settled = settle(change, ChangeState.PUBLISHED, published = outcome.revision)
-            audit(outcomeOf(change, settled), settled, publisher.actor)
+            audit(PublishRules.outcomeOf(change, settled), settled, publisher.actor)
             return settled
         } finally {
             recordMoved(settled ?: change, rechecked, base, candidate, publisher)
         }
     }
-
-    /** Whether [head] is [change], published over its base: the head's provenance names the change and that base. */
-    private fun publishedBy(change: ChangeRequest, head: Head?): Boolean {
-        val provenance = head?.document?.provenance ?: return false
-        return provenance.change == change.id.value &&
-            provenance.parent?.digest == change.base.digest?.toString() &&
-            (provenance.parent?.revision ?: 0) == change.base.revision
-    }
-
-    private fun referenced(outcome: PublishOutcome.Referenced): List<Finding> =
-        outcome.referrers.map { (policy, referrers) ->
-            Finding(
-                "REFERENCES",
-                "$.policies",
-                "[${policy.value}] is referred to by ${referrers.map { it.toString() }.sorted()}",
-                UNPROCESSABLE
-            )
-        }
 
     /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
     private suspend fun recordMoved(
@@ -600,27 +589,6 @@ class Changes(
     ) = movedHeads.record(published, rechecked, base, candidate, publisher) { found ->
         val change = published.copy(escalations = found.escalations, note = found.note)
         audit(found.kind, change, publisher.actor, found.moved)
-    }
-
-    /** How a publish is recorded: who published, who approved what needed approval, and the shadow window. */
-    private fun publication(change: ChangeRequest, publisher: Operator, rechecked: ChangeRequest): Publication {
-        val approvedBy = listOfNotNull(
-            change.approval?.approver?.takeIf { rechecked.escalations.any { !it.informational } }
-        )
-        val window = when {
-            change.shadow != null -> ShadowWindow(change.shadow.window, skipped = false)
-            change.skipShadow != null -> ShadowWindow(null, skipped = true)
-            else -> null
-        }
-        return Publication(change.id.value, change.kind, publisher.actor, approvedBy, window)
-    }
-
-    private fun outcomeOf(change: ChangeRequest, settled: ChangeRequest): ChangeEvent.Kind = when {
-        settled.state != ChangeState.PUBLISHED -> ChangeEvent.Kind.FAILED
-        change.kind == ProvenanceKind.BREAK_GLASS && change.operations.all {
-            it is Operation.RemoveBinding
-        } -> ChangeEvent.Kind.REVOKED
-        else -> ChangeEvent.Kind.PUBLISHED
     }
 
     /**
@@ -684,40 +652,6 @@ class Changes(
             escalations = escalations,
             updatedAt = now,
         )
-    }
-
-    /**
-     * A change whose window closed blocked never publishes (409); one whose summary needs acknowledging publishes only
-     * with an [ack] of exactly that window and those counts (428): the publisher has seen the numbers that stand.
-     */
-    private fun acknowledged(change: ChangeRequest, ack: ShadowAck?) {
-        val state = change.shadow ?: return
-        val problem = when {
-            state.closed == null -> CONFLICT to "the window of change ${change.id.value} is open"
-            state.closed.blocked -> CONFLICT to "an instance could not compile or evaluate the candidate of change ${change.id.value}"
-            state.closed.needsAck && !matches(ack, state.window, state.closed) ->
-                PRECONDITION_REQUIRED to "publishing change ${change.id.value} needs an acknowledgement of window ${state.window}: ${state.closed.counts}"
-            else -> null
-        }
-        problem?.let { (status, message) -> throw ChangeRejectedException(status, message) }
-    }
-
-    /** Whether [ack] names [window] and exactly the counts of [summary]; zeros may be left out. */
-    private fun matches(ack: ShadowAck?, window: String, summary: ShadowSummary): Boolean =
-        ack != null && ack.window == window && ack.counts.filterValues { it != 0L } == summary.counts.filterValues { it != 0L }
-
-    /**
-     * Whether [change] only creates or revokes break-glass bindings (RFC 0007 Q12): such a change has no shadow window.
-     * A change of kind `BREAK_GLASS` always is one.
-     */
-    private fun exempt(change: ChangeRequest, head: Head?): Boolean {
-        if (change.kind == ProvenanceKind.BREAK_GLASS) {
-            return true
-        }
-        val glass = head?.document?.bindings.orEmpty().filter { it.breakGlass }.map { it.id }.toSet()
-        return change.operations.isNotEmpty() && change.operations.all {
-            (it is Operation.PutBinding && it.binding.breakGlass) || (it is Operation.RemoveBinding && it.id in glass)
-        }
     }
 
     /** Withdraws the candidate of [change]'s window, if it is still the staged one; a failure only leaves it to compare. */
