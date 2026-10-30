@@ -25,6 +25,8 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.grant.Dimension
+import me.ahoo.cosec.control.grant.GrantAnalysis
 import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
 import me.ahoo.cosec.control.grant.GrantDocuments
@@ -46,7 +48,12 @@ import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Who may do what to a change (RFC 0007 §7.2–§7.5), for [Changes]. Every step is checked in order, and anything but a
@@ -163,16 +170,16 @@ class ChangeAuthority(
 
     /**
      * What [operator] cannot publish alone when [candidate] replaces [base] as [key] (RFC 0007 §7.4, §7.5), read
-     * against the current heads [head] gives. Also requires `cosec:unprotect` on every protected entry it changes.
+     * against the current heads and back-references [documents] gives. Also requires `cosec:unprotect` on every
+     * protected entry it changes.
      */
-    @Suppress("TooGenericExceptionCaught")
     suspend fun escalations(
         operator: Operator,
         key: SnapshotKey,
         operations: List<Operation>,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        head: suspend (SnapshotKey) -> PolicyDocument?,
+        documents: ChangeChecks.Context,
         now: Instant,
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
@@ -182,12 +189,7 @@ class ChangeAuthority(
             return escalations
         }
         if (key !is SnapshotKey.Tenant) {
-            // The analysis reads tenant documents (§7.4.1); a platform or app change by anyone but the trust root, or
-            // by it under four-eyes, needs a second person for whatever it puts.
-            if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
-                escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
-            }
-            return escalations
+            return escalations + untenanted(key, operations, base, candidate, documents)
         }
         // A tenant's rate limit rules need no second person, tightened or loosened: they count in the tenant's own
         // buckets (OBL-2), so they never spend another document's, and every platform and app rule still applies to
@@ -197,28 +199,7 @@ class ChangeAuthority(
             // Removing or replacing a boundary can widen every permit of the tenant; the analysis does not see it.
             escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
         }
-        val analysis = try {
-            val tenant = TenantId(key.tenantId)
-            val apps = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
-            val snapshot = GrantDocuments.snapshot(
-                platform = head(SnapshotKey.Platform),
-                apps = apps.associateWith { head(SnapshotKey.App(it.value)) },
-                tenants = mapOf(tenant to base),
-                now = now.toEpochMilli(),
-            )
-            val grantor = Grantor(
-                operator.tenant,
-                operator.actor.principal,
-                operator.memberships,
-                operator.attributes,
-                operator.principalBindings,
-            )
-            analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            throw ChangeRejectedException(UNAVAILABLE, "the grant analysis of [$key] failed: ${e.message}", e)
-        }
+        val analysis = analyze(operator, key, base, candidate, documents, now)
         for (entry in analysis.unprotect) {
             val resource = when (entry) {
                 is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
@@ -235,11 +216,190 @@ class ChangeAuthority(
     }
 
     /**
-     * Why [approval] does not let [publisher] publish [change] now, needing [required]; null when it does or none is
-     * needed. Bound to the candidate digest, valid for [ChangeOptions.approvalExpireAfter], given by neither the author
-     * nor the publisher, and covering everything [required] names.
+     * The grant analysis of [candidate] replacing [base] as tenant [key], by [operator]; a failure is a 503. It reads
+     * every app document there is, not only the apps the change names (RC1-4): an app document binds roles, so the
+     * grantor may be denied something in any app. They are listed in the app list ([ChangeChecks.Context.apps]), which
+     * [me.ahoo.cosec.control.store.Revisions] keeps before any app head moves. One that cannot be read leaves the
+     * grantor's rights in its app unknown; a list that is not to be trusted ([listedApps]) leaves them unknown in every
+     * app not named.
      */
-    fun approvalProblem(change: ChangeRequest, required: List<Escalation>, publisher: Operator, now: Instant): String? {
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun analyze(
+        operator: Operator,
+        key: SnapshotKey.Tenant,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+        now: Instant,
+    ): GrantAnalysis = try {
+        val tenant = TenantId(key.tenantId)
+        val named = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
+        var listed = listedApps(documents)
+        val apps = LinkedHashMap<AppId, PolicyDocument?>()
+        val unread = HashSet<AppId>()
+        for (app in named + listed.orEmpty()) {
+            appHead(documents, app)?.let { apps[app] = it.document } ?: run { unread += app }
+        }
+        // An app the change names has a head the list does not name: the list misses apps, so it says nothing.
+        if (listed != null && named.any { it !in listed && apps[it] != null }) {
+            untrusted { "The app list misses an app document that exists; every app a grant reaches is unknown." }
+            listed = null
+        }
+        val snapshot = GrantDocuments.snapshot(
+            platform = documents.head(SnapshotKey.Platform)?.document,
+            apps = apps,
+            tenants = mapOf(tenant to base),
+            now = now.toEpochMilli(),
+            unreadApps = if (listed == null) Dimension.Every() else Dimension.Only(unread),
+        )
+        val grantor = Grantor(
+            operator.tenant,
+            operator.actor.principal,
+            operator.memberships,
+            operator.attributes,
+            operator.principalBindings,
+        )
+        analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "the grant analysis of [$key] failed: ${e.message}", e)
+    }
+
+    /**
+     * Every app document there is, from the app list; `null`, every app unknown, when the list is not there, is not
+     * complete, cannot be read, or has an entry that does not name an app document (RC1-4). An entry is never dropped:
+     * one the analysis cannot read could be an app document it would miss.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun listedApps(documents: ChangeChecks.Context): Set<AppId>? = try {
+        val list = documents.apps()?.value
+        when {
+            list == null || !list.complete -> null.also {
+                untrusted {
+                    "The app list is missing or incomplete: run cosec-migrate repair-references; until then every app a " +
+                        "grant reaches is unknown."
+                }
+            }
+
+            list.entries.any { !isAppId(it) } -> null.also {
+                untrusted {
+                    "The app list has an entry that names no app document: run cosec-migrate repair-references; until " +
+                        "then every app a grant reaches is unknown."
+                }
+            }
+
+            else -> list.entries.mapTo(LinkedHashSet(), ::AppId)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The app list could not be read; every app a grant reaches is unknown." }
+        null
+    }
+
+    /** Whether [entry] names an app document: a valid [SnapshotKey.App] id that is not the wildcard ([AppId]). */
+    private fun isAppId(entry: String): Boolean = SnapshotKey.App.isValidAppId(entry) && entry != Match.WILDCARD
+
+    /**
+     * A WARN that the app list is not to be trusted, at most once per [UNTRUSTED_WARN_INTERVAL]: until
+     * `repair-references` runs, every tenant change would log it.
+     */
+    private fun untrusted(message: () -> String) {
+        if (untrustedWarnings.ready()) {
+            log.warn(message)
+        }
+    }
+
+    private val untrustedWarnings = Throttle(UNTRUSTED_WARN_INTERVAL)
+
+    /** The head of [app]'s document, [AppHead.document] `null` when there is none; `null` when it cannot be read. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun appHead(documents: ChangeChecks.Context, app: AppId): AppHead? = try {
+        AppHead(documents.head(SnapshotKey.App(app.value))?.document)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of app [${app.value}] could not be read; grants that reach it are unknown." }
+        null
+    }
+
+    private class AppHead(val document: PolicyDocument?)
+
+    /**
+     * What a platform or app change needs (RFC 0007 §7.4.1): the analysis reads tenant documents, so one by anyone but
+     * the trust root, or by it under four-eyes, needs a second person for whatever it puts. For an app document, the
+     * approver also sees each tenant binding the change widens (RC1-34).
+     */
+    private suspend fun untenanted(
+        key: SnapshotKey,
+        operations: List<Operation>,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> {
+        val escalations = ArrayList<Escalation>()
+        if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
+            escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
+        }
+        if (key is SnapshotKey.App) {
+            escalations += referringBindings(key, base, candidate, documents)
+        }
+        return escalations
+    }
+
+    /**
+     * The tenant bindings that a change of app [key] widens (RC1-34): each binding of a tenant document the
+     * back-reference index names (RFC 0007 §5.8) to a permission policy whose ALLOWs the candidate adds or widens,
+     * scoped to the app (N1). The approver sees whom the change reaches in which tenant, not only the app document. An
+     * index or a head that cannot be read is a 503: an approval must not be asked for what cannot be shown.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun referringBindings(
+        key: SnapshotKey.App,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> = try {
+        val app = AppId(key.appId)
+        val widened = analyzer.widened(GrantDocuments.of(base), GrantDocuments.of(candidate))
+        val found = ArrayList<Escalation>()
+        for ((policy, statements) in widened) {
+            val referrers = documents.referrers(key, policy)
+            val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
+            for (tenant in tenants) {
+                val bindings = documents.head(tenant)?.document?.bindings.orEmpty().filter {
+                    it.policy == policy && it.scope.app == Match.Exactly(app)
+                }
+                for (binding in bindings) {
+                    // Only where the binding is: whom another tenant binds, and in which space, is not the author's.
+                    found += Escalation(
+                        "binding ${binding.id.value} of [$tenant]",
+                        Escalation.TENANT_BINDING,
+                        "[${policy.value}] statements $statements widen what this binding grants",
+                    )
+                }
+            }
+        }
+        found
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "the tenants referring to [$key] could not be read: ${e.message}", e)
+    }
+
+    /**
+     * Why [approval] does not let [publisher] publish [change] now, with [escalations]; null when it does or none needs
+     * it (informational ones never do). Bound to the candidate digest, valid for [ChangeOptions.approvalExpireAfter],
+     * given by neither the author nor the publisher, and covering every escalation that needs it.
+     */
+    fun approvalProblem(
+        change: ChangeRequest,
+        escalations: List<Escalation>,
+        publisher: Operator,
+        now: Instant
+    ): String? {
+        val required = escalations.filterNot { it.informational }
         if (required.isEmpty()) {
             return null
         }
@@ -255,13 +415,13 @@ class ChangeAuthority(
     }
 
     /**
-     * Why the approver of [change] no longer counts when [publisher] publishes it, needing [required]; null when it
+     * Why the approver of [change] no longer counts when [publisher] publishes it, with [escalations]; null when it
      * does, or none is needed (review K3). The approver is checked again as they approved (their memberships and
      * attributes), against the current documents, in [publisher]'s request: an approver who has since lost
      * `cosec:approve` on the document, or whose right cannot be decided, sends the change back for approval.
      */
-    suspend fun approverProblem(change: ChangeRequest, required: List<Escalation>, publisher: Operator): String? {
-        if (required.isEmpty()) {
+    suspend fun approverProblem(change: ChangeRequest, escalations: List<Escalation>, publisher: Operator): String? {
+        if (escalations.all { it.informational }) {
             return null
         }
         val approval = change.approval ?: return "it needs an approval"
@@ -294,7 +454,7 @@ class ChangeAuthority(
             ),
             breakGlass = approval.breakGlass,
         )
-        val approver = Operator(approval.approver, memberships, strings(approval.attributes))
+        val approver = Operator(approval.approver, memberships, approval.attributes)
         val permitted = TenantIsolation.allows(approver, change.key) &&
             decideAs(publisher, principal, memberships, ControlActions.APPROVE, ControlResources.document(change.key)) ==
             ControlDecision.PERMIT
@@ -318,10 +478,6 @@ class ChangeAuthority(
         }
         ControlDecision.INDETERMINATE
     }
-
-    /** The string-valued attributes, as the grant analysis and [Operator.attributes] read them. */
-    private fun strings(attributes: Map<String, Any>): Map<String, String> =
-        attributes.mapNotNull { (name, value) -> (value as? String)?.let { name to it } }.toMap()
 
     private suspend fun require(operator: Operator, action: Action, resource: Resource) {
         when (decide(operator, action, resource)) {
@@ -400,5 +556,18 @@ class ChangeAuthority(
         const val RATE_LIMIT = "rateLimit"
         const val NOT_ANALYZED = "NOT_ANALYZED"
         const val BREAK_GLASS = "BREAK_GLASS"
+
+        /** How often the WARN that the app list is not to be trusted may be logged (RC1-4). */
+        val UNTRUSTED_WARN_INTERVAL: Duration = 1.minutes
+    }
+}
+
+/** Says yes at most once per [interval] of [timeSource], first at once; safe across threads. */
+internal class Throttle(private val interval: Duration, private val timeSource: TimeSource = TimeSource.Monotonic) {
+    private val last = AtomicReference<TimeMark?>(null)
+
+    fun ready(): Boolean {
+        val mark = last.get()
+        return (mark == null || mark.elapsedNow() >= interval) && last.compareAndSet(mark, timeSource.markNow())
     }
 }

@@ -1,0 +1,81 @@
+{
+  "rules": [
+    "APR-6"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-34: narrowing perm:order/read to one order widens no tenant binding, so only the app document needs another person.",
+  "documents": {
+    "apps": {
+      "order": {
+        "policies": [
+          {
+            "id": "perm:order/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "readers",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/read"
+          }
+        ]
+      }
+    }
+  },
+  "options": {
+    "fourEyes": true
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:order",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "perm:order/read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "resource": "order/1"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "app:order": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

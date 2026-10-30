@@ -14,6 +14,8 @@
 package me.ahoo.cosec.control.store
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -30,6 +32,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 
 /** A head as the control plane works with it: decoded, with the store's digest. */
 class Head(val key: SnapshotKey, val document: PolicyDocument, val stored: StoredDocument) {
@@ -102,10 +105,14 @@ class RetentionPolicy(
  * [publish] writes in the order that never loses content and never lets the data plane see anything but the old or
  * the new head:
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
- * 2. the back-references the candidate adds are added (the index stays a superset of the true references);
+ * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
+ *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
  * 3. the head is replaced with `putIfMatch(expected = base digest)`: one key, one atomic step (P7). A conflict leaves
  *    the head as someone else wrote it and is reported, never retried on the new content (RFC 0007 §5.5);
- * 4. the index gains the revision, and back-references only the base had are removed.
+ * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
+ *    marks the app list complete when it names every app document the store lists.
+ *
+ * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged.
  *
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
@@ -128,12 +135,19 @@ class Revisions(
     /**
      * Publishes [candidate] over [base] (`null`: [key] has no document yet) for [publication]. The candidate's own
      * revision, time and provenance are replaced: the revision follows the base's, the parent is the base.
+     *
+     * Once the head is written, the rest does not respond to cancellation, and [afterWrite] runs in it: what the caller
+     * must do once the revision is in effect. A failure of this class's own steps after the write is only logged, and
+     * the revision is [PublishOutcome.Published]: the references it adds were indexed before the write, so a reference
+     * it fails to remove leaves the index a superset, and [history] rebuilds the revision index from the chain. What
+     * [afterWrite] throws is thrown.
      */
     suspend fun publish(
         key: SnapshotKey,
         base: Head?,
         candidate: PolicyDocument,
-        publication: Publication
+        publication: Publication,
+        afterWrite: suspend (PublishOutcome.Published) -> Unit = {},
     ): PublishOutcome {
         requireDocumentKey(key)
         require(base == null || base.key == key) { "The base of [$key] is a head of [$key], not of [${base?.key}]." }
@@ -156,19 +170,140 @@ class Revisions(
                 "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
             }
         }
-        when (val write = store.putHead(key, base?.digest, stored)) {
-            is HeadWrite.Conflict -> {
-                log.info { "[$key] changed since revision ${base?.revision ?: 0} was read; not published." }
-                return PublishOutcome.Conflicted(write.current)
+        if (key is SnapshotKey.App) {
+            // Before the head moves, whether this is its first revision or the list was lost: no app has a head the
+            // app list does not name (RC1-4).
+            check(updateApps { it.copy(entries = it.entries + key.appId) }) {
+                "[$key] could not be listed among the app documents; the head was not moved."
             }
-
-            is HeadWrite.Written -> check(
-                write.digest == digest
-            ) { "The store wrote the head of [$key] as another digest." }
         }
-        published(key, RevisionEntry(revision, digest, publishedAt), before - after)
-        return PublishOutcome.Published(revision, digest)
+        return withContext(NonCancellable) {
+            when (val write = store.putHead(key, base?.digest, stored)) {
+                is HeadWrite.Conflict -> {
+                    log.info { "[$key] changed since revision ${base?.revision ?: 0} was read; not published." }
+                    return@withContext PublishOutcome.Conflicted(write.current)
+                }
+
+                is HeadWrite.Written -> check(
+                    write.digest == digest
+                ) { "The store wrote the head of [$key] as another digest." }
+            }
+            settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
+            if (key == SnapshotKey.Platform && base == null) {
+                completeOnNewStore()
+            }
+            PublishOutcome.Published(revision, digest).also { afterWrite(it) }
+        }
     }
+
+    /** [published], after the head write: a failure is only logged ([publish] says why that is safe). */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+        try {
+            published(key, entry, dropped)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) {
+                "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
+                    "updated: history() rebuilds the index, and an extra reference blocks a removal at most."
+            }
+        }
+    }
+
+    /**
+     * Marks the app list complete once the platform's first revision is written (RC1-4): on a new store no app document
+     * exists before it. Only when the list names every app document [ControlStore.documents] lists that has a head, as
+     * `repair-references` leaves it: a platform head that was lost and is published again may find app documents a
+     * rebuilt list does not name. A listed app without a head is one whose first publish stopped before its head
+     * write; it does not count, since an app lists itself before its head is written. The head is written whatever this
+     * does, so a failure is only logged.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun completeOnNewStore() {
+        try {
+            val documents = store.documents()
+            repeat(maxAttempts) {
+                val current = store.apps()
+                val list = current?.value ?: AppList.EMPTY
+                val missing = missingApps(documents, list.entries)
+                if (missing.isNotEmpty()) {
+                    warn(
+                        "The platform's first revision found app documents $missing the app list does not name; it " +
+                            "stays incomplete until cosec-migrate repair-references runs"
+                    )
+                    return
+                }
+                if (list.complete || store.putApps(current?.digest, list.copy(complete = true))) {
+                    return
+                }
+            }
+            warn("The app list kept changing and was not marked complete; grants over every app wait for approval")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "The app list could not be marked complete; grants over every app wait for approval." }
+        }
+    }
+
+    /**
+     * Marks a complete app list incomplete again when [documents] names an app document with a head it does not (RC1-4):
+     * one published by an instance or a cosec-migrate that does not keep the list, during a rolling upgrade or after a
+     * downgrade. The apps it misses; empty when it misses none, is not complete, or is not there.
+     */
+    suspend fun reconcileApps(documents: Set<SnapshotKey>): Set<String> {
+        var marked: Set<String>? = null
+        repeat(maxAttempts) {
+            val current = store.apps() ?: return emptySet()
+            if (!current.value.complete) {
+                // A write whose reply was lost reads back as a conflict: what the earlier attempt found is still so.
+                marked?.let { incompleteAgain(it) }
+                return marked.orEmpty()
+            }
+            val missing = missingApps(documents, current.value.entries)
+            if (missing.isEmpty()) {
+                return emptySet()
+            }
+            marked = missing
+            if (store.putApps(current.digest, current.value.copy(complete = false))) {
+                incompleteAgain(missing)
+                return missing
+            }
+        }
+        throw IllegalStateException("The app list kept changing; gave up after $maxAttempts attempts.")
+    }
+
+    private fun incompleteAgain(missing: Set<String>) {
+        warn(
+            "The app list misses the app documents $missing; it is incomplete again, and grants over every app wait " +
+                "for approval until cosec-migrate repair-references runs"
+        )
+    }
+
+    /**
+     * The apps of [documents] that [listed] does not name and that have a head; one whose head cannot be read counts,
+     * since it may well have one.
+     */
+    private suspend fun missingApps(documents: Set<SnapshotKey>, listed: Set<String>): Set<String> =
+        documents.filterIsInstance<SnapshotKey.App>()
+            .filter { it.appId !in listed && hasHead(it) }
+            .mapTo(HashSet()) { it.appId }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun hasHead(key: SnapshotKey.App): Boolean = try {
+        store.head(key) != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The head of [$key] could not be read; it counts as an app document the app list misses." }
+        true
+    }
+
+    /**
+     * Lists [apps] among the app documents and marks the list complete (`repair-references`, RC1-4): the caller has
+     * listed every app document there is. `false` when the list kept changing.
+     */
+    suspend fun completeApps(apps: Set<String>): Boolean = updateApps { AppList(it.entries + apps, complete = true) }
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
     private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = PolicyDocument(
@@ -322,18 +457,28 @@ class Revisions(
 
     /**
      * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
-     * §5.8). It only adds: an extra entry blocks a deletion at most, a missing one would let it through.
+     * §5.8); the number of references it added. It only adds: an extra entry blocks a deletion at most, a missing one
+     * would let it through. A head that cannot be read throws.
      */
-    suspend fun repairReferences(key: SnapshotKey) {
-        val head = head(key) ?: return
+    suspend fun repairReferences(key: SnapshotKey): Int {
+        val head = head(key) ?: return 0
+        var added = 0
         for ((target, policy) in references(head.document)) {
+            if (store.referrers(target, policy)?.value?.contains(key) == true) {
+                continue
+            }
             check(
                 updateReferrers(target, policy) { it + key }
             ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
+            added++
         }
+        return added
     }
 
-    /** The removed policies of a platform or app candidate that other documents still refer to; `null` for none. */
+    /**
+     * The removed policies of a platform or app candidate that other documents still refer to; `null` for none. A
+     * tenant whose head defines the id itself does not refer to the platform's policy, and does not block (RC1-9).
+     */
     private suspend fun referenced(
         key: SnapshotKey,
         base: Head?,
@@ -344,9 +489,28 @@ class Revisions(
         }
         val kept = candidate.policies.map { it.id }.toSet()
         val blocked = base.document.policies.map { it.id }.filter { it !in kept }
-            .associateWith { referrers(key, it) - key }
+            .associateWith { policy ->
+                val referrers = referrers(key, policy) - key
+                referrers.filterNotTo(HashSet()) { definesItself(it, policy) }
+            }
             .filterValues { it.isNotEmpty() }
         return if (blocked.isEmpty()) null else PublishOutcome.Referenced(blocked)
+    }
+
+    /**
+     * Whether [referrer] is a tenant whose head, read, defines [policy] itself and does not name it as its boundary;
+     * one that cannot be read may refer.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean = try {
+        referrer is SnapshotKey.Tenant && head(referrer)?.document?.let { document ->
+            document.boundary != policy && document.policies.any { it.id == policy }
+        } == true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of [$referrer] could not be read; it counts as referring to [${policy.value}]." }
+        false
     }
 
     /**
@@ -354,6 +518,9 @@ class Revisions(
      * policy, and in a tenant document bound in one app, possibly that app's permission policy (RFC 0007 §3.1 N1).
      * Both are indexed: the index may hold more than the true references, never less. A tenant's boundary names a
      * platform boundary policy (RFC 0007 §7.6).
+     *
+     * A tenant's own policy ids are indexed as uses of the platform's id too (RC1-9), so that the platform cannot add
+     * a policy of an id a tenant already defines; readers tell the two apart by the tenant's head.
      */
     private fun references(document: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
         if (document.kind == DocumentKind.PLATFORM) {
@@ -361,6 +528,9 @@ class Revisions(
         }
         val own = document.policies.map { it.id }.toSet()
         val references = LinkedHashSet<Pair<SnapshotKey, PolicyId>>()
+        if (document.kind == DocumentKind.TENANT) {
+            own.forEach { references += SnapshotKey.Platform to it }
+        }
         for (binding in document.bindings) {
             if (binding.policy in own) continue
             references += SnapshotKey.Platform to binding.policy
@@ -377,6 +547,21 @@ class Revisions(
         repeat(maxAttempts) {
             val current = store.index(key)
             if (store.putIndex(key, current?.digest, change(current?.value ?: RevisionIndex.EMPTY))) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /** A conditional replace of the app list, retried while it changes; no write when [change] leaves it as it is. */
+    private suspend fun updateApps(change: (AppList) -> AppList): Boolean {
+        repeat(maxAttempts) {
+            val current = store.apps()
+            val next = change(current?.value ?: AppList.EMPTY)
+            if (next == (current?.value ?: AppList.EMPTY)) {
+                return true
+            }
+            if (store.putApps(current?.digest, next)) {
                 return true
             }
         }

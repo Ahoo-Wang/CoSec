@@ -35,6 +35,9 @@ import kotlin.random.Random
  * analyze as contained never lets anyone do what no grantor could (A8). The oracle is [GrantOracle], which shares no
  * code with the analysis; it reads statements with several matching resources in the way least favorable to the
  * analysis ([CaptureReading]).
+ *
+ * Requests are made at several times, now and after some bindings expired, as long as the granted fragment's own
+ * binding lives: what the grantor holds only until then cannot be granted for longer (RC1-3).
  */
 class GrantPropertyTest {
     private val iterations = maxOf(3_000, Integer.getInteger("cosec.property.iterations", 0))
@@ -52,16 +55,22 @@ class GrantPropertyTest {
         repeat(iterations) {
             val snapshot = generator.snapshot()
             val gina = generator.subject("gina")
-            val candidate = grant(generator, random, snapshot.tenant(ACME), gina, "g")
-            val analysis = analyzer.analyze(generator.grantor(gina), snapshot, GrantChange(ACME, candidate))
+            val candidate = grant(generator, random, snapshot, gina, "g")
+            // The oracle reads every document; the analysis may have failed to read one (RC1-4).
+            val analysis = analyzer.analyze(
+                generator.grantor(gina),
+                generator.unreadable(snapshot),
+                GrantChange(ACME, candidate)
+            )
             for ((fragment, verdict) in analysis.verdicts) {
                 if (verdict !is GrantVerdict.Contained) continue
                 contained++
                 repeat(SAMPLES) {
                     val request = premise(generator, random, fragment) ?: return@repeat
+                    val time = generator.time(until = fragment.expiresAt) ?: return@repeat
                     checked++
-                    strict.decide(snapshot, request.by(gina)).assert()
-                        .describedAs("$fragment is contained ($verdict), but gina is not permitted $request")
+                    strict.decide(snapshot.at(time), request.by(gina)).assert()
+                        .describedAs("$fragment is contained ($verdict), but gina is not permitted $request at $time")
                         .isEqualTo(OracleDecision.PERMIT)
                 }
             }
@@ -110,7 +119,10 @@ class GrantPropertyTest {
         // One reading on both sides: the analysis is sound for any, and a different one per side would make a
         // principal's unchanged rights look new.
         val first = GrantOracle(CaptureReading.FIRST, CaptureReading.FIRST, ignoreAnyone = false)
-        val firstIgnoringAnyone = GrantOracle(CaptureReading.FIRST, CaptureReading.FIRST, ignoreAnyone = true)
+        // What a grantor could do before is read with ambiguous ids left out: removing the tenant's own policy of an id
+        // the platform defines ends a failure without granting anything, and a failure only hides rights (RC1-9).
+        val firstIgnoringAnyone =
+            GrantOracle(CaptureReading.FIRST, CaptureReading.FIRST, ignoreAnyone = true, ambiguousFails = false)
         var published = 0
         var permitted = 0
         repeat(iterations / 6) { round ->
@@ -119,11 +131,11 @@ class GrantPropertyTest {
             var snapshot = initial
             repeat(STEPS) { step ->
                 val grantor = people.random(random)
-                val candidate = grant(generator, random, snapshot.tenant(ACME), grantor, "r${round}s$step")
+                val candidate = grant(generator, random, snapshot, grantor, "r${round}s$step")
                 val analysis = analyzer.analyze(generator.grantor(grantor), snapshot, GrantChange(ACME, candidate))
                 if (analysis.verdicts.all { it.second is GrantVerdict.Contained } && analysis.unprotect.isEmpty()) {
                     published++
-                    snapshot = GrantSnapshot(snapshot.platform, snapshot.apps, mapOf(ACME to candidate), snapshot.now)
+                    snapshot = GrantSnapshot(snapshot.platform, snapshot.apps, mapOf(ACME to candidate), snapshot.now, snapshot.unreadApps)
                 }
             }
             repeat(SAMPLES * 2) {
@@ -134,10 +146,15 @@ class GrantPropertyTest {
                     ActionPattern.ANY,
                     ResourcePattern.AnyResource
                 )
-                if (first.decide(snapshot, request) != OracleDecision.PERMIT) return@repeat
+                val time = generator.time()!!
+                if (first.decide(snapshot.at(time), request) != OracleDecision.PERMIT) return@repeat
                 permitted++
-                val before = (people + subject).any { firstIgnoringAnyone.decide(initial, request.by(it)) == OracleDecision.PERMIT }
-                before.assert().describedAs("${subject.id} is permitted $request, which no grantor was").isTrue()
+                val before = (people + subject).any {
+                    firstIgnoringAnyone.decide(initial.at(time), request.by(it)) == OracleDecision.PERMIT
+                }
+                before.assert().describedAs(
+                    "${subject.id} is permitted $request at $time, which no grantor was"
+                ).isTrue()
             }
         }
         published.assert().isGreaterThan(iterations / 6)
@@ -146,16 +163,24 @@ class GrantPropertyTest {
 
     /**
      * A candidate that adds one policy, built from a statement the document already has (narrowed, most of the time)
-     * and bound where that statement is bound to the grantor, or appends such a statement to an existing policy. It
-     * never removes anything: removing a DENY is allowed without analysis (Q9) and is not what A8 is about.
+     * and bound where that statement is bound to the grantor, until when that binding lasts or not, or appends such a
+     * statement to an existing policy. It removes nothing but, now and then, one of the tenant's own policies whose id
+     * the platform also defines, which re-points its bindings (RC1-9): removing a DENY is allowed without analysis (Q9)
+     * and is not what A8 is about.
      */
     private fun grant(
         generator: GrantGenerator,
         random: Random,
-        document: GrantDocument,
+        snapshot: GrantSnapshot,
         grantor: OracleSubject,
         name: String,
     ): GrantDocument {
+        val document = snapshot.tenant(ACME)
+        val shadowed = document.policies.filter { snapshot.platform.policy(it.id) != null }
+        if (shadowed.isNotEmpty() && random.nextInt(5) == 0) {
+            val removed = shadowed.random(random)
+            return GrantDocument(document.policies.filter { it !== removed }, document.bindings)
+        }
         val source = document.bindings.randomOrNull(random)
         val held = source?.let { binding -> document.policy(binding.policy)?.statements?.randomOrNull(random) }
         val statement = if (held != null && random.nextInt(5) != 0) {
@@ -173,7 +198,12 @@ class GrantPropertyTest {
         }
         val policy = GrantPolicy(PolicyId(name), listOf(statement), attachable = random.nextInt(8) == 0)
         val scope = source?.let { scopeFor(it, grantor, random) } ?: generator.scope()
-        val binding = Binding(BindingId("$name-b"), generator.subjectRef(), scope, policy.id)
+        val expiresAt = when (random.nextInt(8)) {
+            in 0..5 -> source?.expiresAt
+            6 -> generator.expiry()
+            else -> null
+        }
+        val binding = Binding(BindingId("$name-b"), generator.subjectRef(), scope, policy.id, expiresAt)
         return GrantDocument(document.policies + policy, document.bindings + binding)
     }
 
@@ -202,6 +232,8 @@ class GrantPropertyTest {
         )
         return request.takeIf { strict.matches(statement, fragment.condition, it, CaptureReading.ANY) }
     }
+
+    private fun GrantSnapshot.at(time: Long) = GrantSnapshot(platform, apps, tenants, time, unreadApps)
 
     private fun <T> pick(dimension: Dimension<T>, pool: List<T>, random: Random): T? = when (dimension) {
         is Dimension.Every -> pool.random(random)

@@ -21,17 +21,19 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListeners
-import me.ahoo.cosec.control.audit.RevisionRef
+import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.document.Actor
@@ -103,11 +105,13 @@ class Changes(
     private val context = object : ChangeChecks.Context {
         override suspend fun head(key: SnapshotKey): Head? = revisions.head(key)
 
-        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> = revisions.referrers(
-            target,
-            policy
-        )
+        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
+            revisions.referrers(target, policy)
+
+        override suspend fun apps(): Versioned<AppList>? = store.apps()
     }
+
+    private val movedHeads = MovedHeads(store, authority, context, clock)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -403,8 +407,8 @@ class Changes(
                 candidate,
                 current.escalations.map { it.subject },
                 operator.memberships,
-                // Every attribute, not only the strings the grant analysis reads (round-2 review R2).
-                operator.security?.principal?.attributes ?: operator.attributes,
+                // Every attribute, of every type (round-2 review R2, RC1-2).
+                operator.attributes,
                 principalBindings = operator.principalBindings,
                 breakGlass = operator.breakGlass,
             )
@@ -461,6 +465,10 @@ class Changes(
      * the grant analysis runs again as them on the current heads. When that finds escalations the change's approval
      * does not validly cover (missing, for another candidate, expired, the author's or the publisher's own), the change
      * goes back to `AWAITING_APPROVAL` with them, keeping its slot, and nothing is published.
+     *
+     * From the head write on, it does not respond to cancellation: the change is settled, its outcome audited and what
+     * moved meanwhile recorded, unless a store or a listener fails; what moved is recorded even then. The checks and
+     * the writes before the head's respond to it.
      */
     suspend fun publish(publisher: Operator, id: ChangeId, ack: ShadowAck? = null): ChangeRequest {
         val change = visible(publisher, id)
@@ -491,36 +499,69 @@ class Changes(
         val candidate = applied(change, head?.document).first!!
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
-        val settled = when (
-            val outcome = revisions.publish(
-                change.key,
-                head,
-                candidate,
-                publication(change, publisher, rechecked)
-            )
-        ) {
-            is PublishOutcome.Published -> settle(change, ChangeState.PUBLISHED, published = outcome.revision)
+        var published: ChangeRequest? = null
+        val outcome = revisions.publish(change.key, head, candidate, publication(change, publisher, rechecked)) {
+            published = written(change, it, rechecked, head?.document, candidate, publisher)
+        }
+        val settled = when (outcome) {
+            is PublishOutcome.Published -> return checkNotNull(published) { "[${change.key}] was written unsettled." }
             is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
-            is PublishOutcome.Referenced -> settle(
-                change,
-                ChangeState.DRAFT,
-                outcome.referrers.map { (policy, referrers) ->
-                    Finding(
-                        "REFERENCES",
-                        "$.policies",
-                        "[${policy.value}] is referred to by ${referrers.map { it.toString() }.sorted()}",
-                        UNPROCESSABLE
-                    )
-                },
-            )
+            is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, referenced(outcome))
         }
         audit(outcomeOf(change, settled), settled, publisher.actor)
         return settled
     }
 
+    /**
+     * What follows the head write of [change] as [outcome]: [Revisions.publish] runs it without responding to
+     * cancellation, so a client that goes away leaves the change settled and audited unless a store or listener fails.
+     * What moved meanwhile is recorded whatever happens to the rest: the head is written either way.
+     */
+    private suspend fun written(
+        change: ChangeRequest,
+        outcome: PublishOutcome.Published,
+        rechecked: ChangeRequest,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        publisher: Operator,
+    ): ChangeRequest {
+        var settled: ChangeRequest? = null
+        try {
+            settled = settle(change, ChangeState.PUBLISHED, published = outcome.revision)
+            audit(outcomeOf(change, settled), settled, publisher.actor)
+            return settled
+        } finally {
+            recordMoved(settled ?: change, rechecked, base, candidate, publisher)
+        }
+    }
+
+    private fun referenced(outcome: PublishOutcome.Referenced): List<Finding> =
+        outcome.referrers.map { (policy, referrers) ->
+            Finding(
+                "REFERENCES",
+                "$.policies",
+                "[${policy.value}] is referred to by ${referrers.map { it.toString() }.sorted()}",
+                UNPROCESSABLE
+            )
+        }
+
+    /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
+    private suspend fun recordMoved(
+        published: ChangeRequest,
+        rechecked: ChangeRequest,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        publisher: Operator,
+    ) = movedHeads.record(published, rechecked, base, candidate, publisher) { found ->
+        val change = published.copy(escalations = found.escalations, note = found.note)
+        audit(found.kind, change, publisher.actor, found.moved)
+    }
+
     /** How a publish is recorded: who published, who approved what needed approval, and the shadow window. */
     private fun publication(change: ChangeRequest, publisher: Operator, rechecked: ChangeRequest): Publication {
-        val approvedBy = listOfNotNull(change.approval?.approver?.takeIf { rechecked.escalations.isNotEmpty() })
+        val approvedBy = listOfNotNull(
+            change.approval?.approver?.takeIf { rechecked.escalations.any { !it.informational } }
+        )
         val window = when {
             change.shadow != null -> ShadowWindow(change.shadow.window, skipped = false)
             change.skipShadow != null -> ShadowWindow(null, skipped = true)
@@ -566,7 +607,15 @@ class Changes(
                 escalations = emptyList(),
                 updatedAt = now
             )
-        val checkedResult = checks.check(change.key, candidate, change.kind, change.operations, head?.document, context)
+        val recording = RecordingContext(context)
+        val checkedResult = checks.check(
+            change.key,
+            candidate,
+            change.kind,
+            change.operations,
+            head?.document,
+            recording
+        )
         val breakGlass = BreakGlassRules.findings(
             change.kind,
             change.operations,
@@ -577,9 +626,7 @@ class Changes(
         )
         val result = CheckResult(applyFindings + breakGlass + checkedResult.findings, checkedResult.checkedWith)
         val escalations = if (result.clean) {
-            authority.escalations(operator, change.key, change.operations, head?.document, candidate, {
-                revisions.head(it)?.document
-            }, now)
+            authority.escalations(operator, change.key, change.operations, head?.document, candidate, recording, now)
         } else {
             emptyList()
         }
@@ -587,7 +634,8 @@ class Changes(
             state = if (result.clean) ChangeState.CHECKED else ChangeState.DRAFT,
             findings = result.findings,
             candidate = if (result.clean) CandidateDigest.of(candidate) else null,
-            checkedWith = result.checkedWith,
+            checkedWith = result.checkedWith + recording.read.filterKeys { it != change.key && it !in result.checkedWith },
+            checkedApps = recording.apps,
             escalations = escalations,
             updatedAt = now,
         )
@@ -671,28 +719,14 @@ class Changes(
     }
 
     /** Tells the listeners (RFC 0007 §10.5); a REQUIRED one that cannot record a gated step stops it (503). */
-    private suspend fun audit(kind: ChangeEvent.Kind, change: ChangeRequest, operator: Actor) {
-        val event = ChangeEvent(
-            id = "${change.id.value}:${kind.name}:${clock.millis()}",
-            time = clock.instant(),
-            kind = kind,
-            operator = operator,
-            change = change.id,
-            document = change.key,
-            base = RevisionRef(change.base.revision, change.base.digest?.toString()),
-            candidate = change.candidate?.let {
-                RevisionRef(
-                    change.publishedRevision ?: (change.base.revision + 1),
-                    it
-                )
-            },
-            escalations = change.escalations,
-            confirmations = change.confirmations,
-            shadow = change.shadow?.closed,
-            note = change.note,
-        )
+    private suspend fun audit(
+        kind: ChangeEvent.Kind,
+        change: ChangeRequest,
+        operator: Actor,
+        moved: List<MovedHead> = emptyList(),
+    ) {
         try {
-            listeners.publish(event)
+            listeners.publish(change.event(kind, operator, clock, moved))
         } catch (e: ChangeAuditException) {
             throw ChangeRejectedException(UNAVAILABLE, e.message.orEmpty(), e)
         }
@@ -700,7 +734,7 @@ class Changes(
 
     /** Where a change goes when its window closes or is skipped (RFC 0007 §6.1). */
     private fun afterWindow(change: ChangeRequest): ChangeState =
-        if (change.escalations.isEmpty()) ChangeState.READY else ChangeState.AWAITING_APPROVAL
+        if (change.escalations.all { it.informational }) ChangeState.READY else ChangeState.AWAITING_APPROVAL
 
     private fun requireAuthor(operator: Operator, change: ChangeRequest) {
         if (operator.actor != change.author) {

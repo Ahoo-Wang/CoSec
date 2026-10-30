@@ -1,0 +1,17 @@
+# Rule: GRT-5
+# Mutant: the grant analysis drops the grantor's attributes that are not strings again, so a negated or exists condition over one counts as held
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
+index 5640fdcc..b030163c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
+@@ -510,7 +510,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+                     )
+ 
+                     // Exactly as the engine reads it: a value of any type is its toString() (RC1-2).
+-                    Kind.SUBJECT_ATTRIBUTE -> Constant.Str(SubjectAttributes.string(grantor.attributes, attribute.name))
++                    Kind.SUBJECT_ATTRIBUTE -> Constant.Str(grantor.attributes[attribute.name] as? String)
+                     Kind.SCOPE_ROLES -> scopeRoles?.let { Constant.Strings(it) }
+                     else -> null
+                 }

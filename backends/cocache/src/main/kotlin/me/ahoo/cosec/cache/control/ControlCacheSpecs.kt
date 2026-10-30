@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.StageSlot
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
@@ -62,6 +63,7 @@ internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
  * | leases | `<p>:control:lease:<name>` |
  * | lists | `<p>:control:list:documents`, `<p>:control:list:open-changes` |
+ * | app list | `<p>:control:apps:all` |
  * | change requests | `<p>:control:change:<changeId>` |
  * | staging slots | `<p>:control:stage:<docKey>` |
  *
@@ -137,6 +139,19 @@ internal object ControlCacheSpecs {
             .keyPrefix("")
             .keyEncoder { it }
             .codec(ListedCodec)
+            .policy(policy.storeOfRecord())
+            .build()
+
+    /** What [CoCacheControlStore.apps] reads: one value, under the key [CoCacheControlStore]'s `APP_LIST`. */
+    fun appList(
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT
+    ): CacheSpec<String, AppList> =
+        CacheSpec.builder<String, AppList>(CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME)
+            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder { it }
+            .codec(AppListCodec)
             .policy(policy.storeOfRecord())
             .build()
 
@@ -289,6 +304,32 @@ internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
             val text = item.text(WHAT)
             SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")
         }
+}
+
+/**
+ * The app list as `{"apps": [...sorted], "complete": true}`, so equal lists have equal digests. Entries are kept as
+ * written, whatever they are: the grant analysis refuses to trust a list with one that is not an app id, never drops it.
+ */
+internal object AppListCodec : Codec<AppList> {
+    private const val WHAT = "app list"
+
+    override fun encode(value: AppList): ByteArray {
+        val root = factory.objectNode()
+        root.putArray("apps").apply { value.entries.sorted().forEach(::add) }
+        root.put("complete", value.complete)
+        return CoSecJson.mapper.writeValueAsBytes(root)
+    }
+
+    override fun decode(bytes: ByteArray): AppList {
+        val root = read(bytes, WHAT)
+        root.only(WHAT, "apps", "complete")
+        val complete = root.field("complete", WHAT)
+        if (!complete.isBoolean) malformed(WHAT, "$complete is not a boolean")
+        return AppList(
+            root.field("apps", WHAT).items(WHAT).mapTo(LinkedHashSet()) { it.text(WHAT) },
+            complete.booleanValue()
+        )
+    }
 }
 
 /** Listed entries and when each was listed, as a JSON object sorted by entry, so equal lists have equal digests. */

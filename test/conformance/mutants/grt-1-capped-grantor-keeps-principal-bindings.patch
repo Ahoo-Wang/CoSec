@@ -3,12 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
-index 7e012378..812976b1 100644
+index 5c2f9de5..fd08241f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
-@@ -115,7 +115,7 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
-             anyone: Boolean,
+@@ -146,7 +146,7 @@ class GrantorRights(
              byName: Boolean,
+             expiresAt: Long? = null,
          ) {
 -            val grants = !byName || grantor.principalBindings
 +            val grants = true

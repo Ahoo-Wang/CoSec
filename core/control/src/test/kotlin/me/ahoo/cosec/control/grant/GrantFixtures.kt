@@ -61,8 +61,14 @@ internal object GrantFixtures {
     private fun <T> match(value: String, of: (String) -> T): Match<T> =
         if (value == Match.WILDCARD) Match.Any else Match.Exactly(of(value))
 
-    fun bind(id: String, subject: SubjectRef, policy: String, app: String = "*", space: String = "*") =
-        Binding(BindingId(id), subject, scope(app, space), PolicyId(policy))
+    fun bind(
+        id: String,
+        subject: SubjectRef,
+        policy: String,
+        app: String = "*",
+        space: String = "*",
+        expiresAt: Long? = null,
+    ) = Binding(BindingId(id), subject, scope(app, space), PolicyId(policy), expiresAt)
 
     fun role(id: String, tenant: TenantId? = ACME) = SubjectRef.Role(tenant, RoleId(id))
 
@@ -72,7 +78,7 @@ internal object GrantFixtures {
         id: String = "gina",
         roles: Map<String, List<String>> = emptyMap(),
         attachments: List<String> = emptyList(),
-        attributes: Map<String, String> = emptyMap(),
+        attributes: Map<String, Any> = emptyMap(),
         tenant: TenantId = ACME,
         principalBindings: Boolean = true,
     ) = Grantor(
@@ -88,7 +94,12 @@ internal object GrantFixtures {
     )
 
     fun snapshot(platform: GrantDocument = GrantDocument.EMPTY, tenant: GrantDocument = GrantDocument.EMPTY) =
-        GrantSnapshot(platform = platform, tenants = mapOf(ACME to tenant), now = NOW)
+        GrantSnapshot(
+            platform = platform,
+            tenants = mapOf(ACME to tenant),
+            now = NOW,
+            unreadApps = Dimension.Only(emptySet())
+        )
 
     fun eq(attribute: String, value: String) = Condition.Eq(attribute, Literal.Str(value))
 

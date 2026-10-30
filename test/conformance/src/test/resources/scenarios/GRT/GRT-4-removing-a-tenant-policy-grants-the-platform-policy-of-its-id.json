@@ -1,0 +1,124 @@
+{
+  "rules": [
+    "GRT-4"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-9: acme's own editor reads one order; the platform later defines a broader editor. Removing acme's leaves the staff binding naming the platform's, which grants order:* on every order: gina, who reads orders only, cannot grant it alone.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "editor",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "editor",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/{id}"
+              }
+            ]
+          },
+          {
+            "id": "reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "staff",
+            "subject": {
+              "role": "staff"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "editor"
+          },
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "reads"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "reads",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "staff",
+          "subject": {
+            "role": "staff"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "editor"
+        },
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "reads"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "editor",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "ACTION"
+      }
+    ]
+  }
+}

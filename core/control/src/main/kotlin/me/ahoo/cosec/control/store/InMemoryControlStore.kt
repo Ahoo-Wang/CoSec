@@ -42,6 +42,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val changes = HashMap<ChangeId, Pair<ChangeRequest, Long>>()
     private val stages = HashMap<SnapshotKey, Pair<StageSlot, Long>>()
     private val candidates = HashMap<SnapshotKey, StoredCandidate>()
+    private var apps: AppList? = null
     private var writes = 0L
 
     override fun digestOf(document: SnapshotDocument): SnapshotDigest = digest(document.bodyBytes())
@@ -86,6 +87,22 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         }
 
     override suspend fun documents(): Set<SnapshotKey> = synchronized(lock) { indexes.keys.toSet() }
+
+    override suspend fun apps(): Versioned<AppList>? =
+        synchronized(lock) { apps?.let { Versioned(it, appsDigest(it)) } }
+
+    override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean = synchronized(lock) {
+        if (this.apps?.let(::appsDigest) != expected) {
+            return false
+        }
+        this.apps = apps
+        true
+    }
+
+    /** Test access: removes the app list, as a lost key would. */
+    fun dropApps() {
+        synchronized(lock) { apps = null }
+    }
 
     override suspend fun openChanges(): Set<ChangeId> = synchronized(lock) {
         changes.filterValues { (change, _) -> !change.state.terminal }.keys.toSet()
@@ -167,6 +184,12 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     /** Test access: removes the index of [key], as a lost index key would. */
     fun dropIndex(key: SnapshotKey) {
         synchronized(lock) { indexes.remove(key) }
+    }
+
+    /** Each entry length-prefixed, since an entry may hold any character. */
+    private fun appsDigest(apps: AppList): SnapshotDigest {
+        val entries = apps.entries.sorted().joinToString("") { "${it.length}:$it" }
+        return digest("$entries|${apps.complete}".encodeToByteArray())
     }
 
     private fun setDigest(set: Set<SnapshotKey>): SnapshotDigest =

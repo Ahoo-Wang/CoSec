@@ -1,0 +1,109 @@
+{
+  "rules": [
+    "GRT-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-3: gina holds order:* on every order until 08:00. Granting it to bob until 08:00, or until 07:00, ends no later than her own binding, so both are contained.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders",
+            "expiresAt": "2026-11-01T08:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders",
+          "expiresAt": "2026-11-01T08:00:00Z"
+        },
+        {
+          "id": "bob-same",
+          "subject": {
+            "principal": "bob"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders",
+          "expiresAt": "2026-11-01T08:00:00Z"
+        },
+        {
+          "id": "bob-sooner",
+          "subject": {
+            "principal": "bob"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders",
+          "expiresAt": "2026-11-01T07:00:00Z"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "orders",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "orders",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/**",
+        "verdict": "YES"
+      }
+    ]
+  }
+}

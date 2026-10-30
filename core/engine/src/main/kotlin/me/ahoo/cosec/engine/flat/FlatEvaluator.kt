@@ -501,7 +501,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         when (attribute.kind) {
             Attribute.Kind.SUBJECT_ID -> if (authz.subject.authenticated) authz.subject.id else null
             Attribute.Kind.SUBJECT_TENANT, Attribute.Kind.SCOPE_TENANT -> request.scope.tenant.value
-            Attribute.Kind.SUBJECT_ATTRIBUTE -> authz.subject.attributes[attribute.name]?.toString()
+            Attribute.Kind.SUBJECT_ATTRIBUTE -> SubjectAttributes.string(authz.subject.attributes, attribute.name)
             Attribute.Kind.SCOPE_APP -> request.scope.app.value.takeUnless { it.isEmpty() }
             Attribute.Kind.SCOPE_SPACE -> request.scope.space.value
             Attribute.Kind.ENVIRONMENT_DEVICE -> authz.environment.deviceId.takeUnless { it.isEmpty() }

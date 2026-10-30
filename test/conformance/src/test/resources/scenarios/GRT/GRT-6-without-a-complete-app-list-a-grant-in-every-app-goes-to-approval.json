@@ -1,0 +1,119 @@
+{
+  "rules": [
+    "GRT-6"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-4: a store whose app list is not complete, as one upgraded from 8.0.0-alpha.2 before cosec-migrate repair-references runs: the analysis cannot tell which app documents there are, so alice's grant in every app waits for approval, whatever billing says.",
+  "documents": {
+    "apps": {
+      "billing": {
+        "policies": [
+          {
+            "id": "perm:billing/no-delete",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "order:delete"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "no-delete",
+            "subject": {
+              "role": "auditor"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm:billing/no-delete"
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "bob",
+              "subject": {
+                "principal": "bob"
+              },
+              "app": "*",
+              "space": "",
+              "policy": "orders"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "escalations": {
+      "c1": [
+        "UNREADABLE"
+      ]
+    }
+  }
+}

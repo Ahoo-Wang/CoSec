@@ -40,20 +40,47 @@ sealed interface Grantee {
 /**
  * One granted statement fragment (RFC 0007 §7.4.1): one action and one resource of an ALLOW statement, with the
  * statement's condition and its policy's, granted to [grantee] in [scope] of [tenant].
+ *
+ * A binding whose policy does not resolve is one fragment of every action and resource that is not [resolved]: what
+ * it grants cannot be told, so it is never contained (RC1-32).
  */
 @ExperimentalCoSecApi
 class GrantFragment(
     val tenant: TenantId,
     val policy: PolicyId,
-    /** The statement's index in the policy. */
+    /** The statement's index in the policy; -1 when the policy does not resolve. */
     val statement: Int,
     val action: ActionPattern,
     val resource: ResourcePattern,
     val condition: Condition?,
     val grantee: Grantee,
     val scope: ScopeSet,
+    /** Whether [policy] resolved: `false` for the fragment of a binding whose policy does not (RC1-32). */
+    val resolved: Boolean = true,
 ) {
-    override fun toString(): String = "${policy.value}[$statement] $action on $resource to $grantee in $scope"
+    /** When the grant ends (epoch milliseconds): its binding's `expiresAt`; `null` for one that does not end. */
+    val expiresAt: Long? get() = (grantee as? Grantee.Bound)?.binding?.expiresAt
+
+    override fun toString(): String = if (resolved) {
+        "${policy.value}[$statement] $action on $resource to $grantee in $scope"
+    } else {
+        "${policy.value} (does not resolve) to $grantee in $scope"
+    }
+
+    companion object {
+        /** The fragment of [binding] of [tenant], whose policy does not resolve (RC1-32). */
+        fun unresolved(tenant: TenantId, binding: Binding): GrantFragment = GrantFragment(
+            tenant = tenant,
+            policy = binding.policy,
+            statement = -1,
+            action = ActionPattern.ANY,
+            resource = ResourcePattern.AnyResource,
+            condition = null,
+            grantee = Grantee.Bound(binding),
+            scope = ScopeSet.of(binding.scope.app, binding.scope.space),
+            resolved = false,
+        )
+    }
 }
 
 /** Why a fragment is [GrantVerdict.Unknown]. */
@@ -67,6 +94,12 @@ enum class UnknownReason {
 
     /** A DENY that binds the grantor (other than through `Anyone`) may overlap the fragment. */
     DENY_OVERLAP,
+
+    /** The fragment's binding names a policy that does not resolve, so what it grants cannot be told (RC1-32). */
+    UNRESOLVED,
+
+    /** An app document the fragment reaches could not be read, so the grantor's rights there are not known (RC1-4). */
+    UNREADABLE,
 }
 
 /** How far the closest of the grantor's ALLOWs got, in the order the analysis checks (RFC 0007 §7.4.3). */
@@ -82,6 +115,12 @@ enum class Shortfall {
 
     /** The grantor's condition, specialized for the grantor, is not implied by the fragment's. */
     CONDITION,
+
+    /**
+     * The ALLOW contains the fragment, but the grantor holds it only until its binding expires, and the fragment's
+     * grant lasts longer or does not end (RC1-3).
+     */
+    EXPIRY,
 }
 
 /** What the analysis concluded about one fragment. Only [Unknown] needs approval (RFC 0007 §7.5). */

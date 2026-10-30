@@ -14,6 +14,7 @@
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourceContainment
 import me.ahoo.cosec.engine.pattern.ResourcePattern
@@ -21,6 +22,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
@@ -51,8 +53,10 @@ import me.ahoo.cosec.model.decision.StatementRef
  *    resource to capture it at the same position, and every other resource of the ALLOW to be disjoint from the
  *    fragment's, so the value is the same; one that reads an external attribute is never comparable;
  *
- * and no DENY that binds the grantor other than through `Anyone` (Q8) may overlap it. Everything else is
- * [GrantVerdict.Unknown], which goes to approval (§7.5): soundness over completeness (A5, A8).
+ * and, when the grantor holds that ALLOW through a binding with `expiresAt`, the fragment's own grant ends no later
+ * (RC1-3); and no DENY that binds the grantor other than through `Anyone` (Q8) may overlap it. Everything else is
+ * [GrantVerdict.Unknown], which goes to approval (§7.5): soundness over completeness (A5, A8). So is a binding whose
+ * policy does not resolve (RC1-32).
  *
  * Narrowing (§7.4.4) is [narrows]: a changed ALLOW that only narrows one of the policy's previous ALLOWs grants
  * nothing. Removing bindings and ALLOWs and adding or relaxing DENYs grant nothing either; changing or removing a
@@ -94,20 +98,81 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         return GrantAnalysis(fragments.map { it to verdict(grantor, rights, it) }, unprotect)
     }
 
-    /** The fragments [change] grants (§7.4.1). Policies resolve in the candidate. */
+    /**
+     * The fragments [change] grants (§7.4.1). Policies resolve in the candidate; a new or changed binding whose policy
+     * does not resolve is an [unresolved][GrantFragment.unresolved] fragment (RC1-32).
+     *
+     * Removing one of the tenant's own policies grants too when another document defines its id (RC1-9): the
+     * bindings and attachments that named the tenant's now name that one, which nobody analyzed for them.
+     */
     fun fragments(snapshot: GrantSnapshot, change: GrantChange): List<GrantFragment> {
         val before = snapshot.tenant(change.tenant)
         val after = change.candidate
         val fragments = ArrayList<GrantFragment>()
         val changed = after.bindings.filter { binding -> before.bindings.none { same(it, binding) } }
         for (binding in changed) {
-            val policy = resolve(snapshot, after, binding) ?: continue
+            val policy = resolve(snapshot, after, binding)
+            if (policy == null) {
+                fragments += GrantFragment.unresolved(change.tenant, binding)
+                continue
+            }
             policy.statements.indices.forEach { split(change.tenant, policy, it, Grantee.Bound(binding), fragments) }
         }
+        reresolved(snapshot, change, changed, fragments)
         for (policy in after.policies) {
             changedPolicy(snapshot, change, before.policy(policy.id), policy, changed, fragments)
         }
         return fragments
+    }
+
+    /**
+     * What re-resolves when the candidate removes one of the tenant's own policies whose id another document defines
+     * (RC1-9): every live binding left unchanged that named it grants all of the policy it names now, and so does
+     * every attachment of it, when that one is attachable. Nothing is granted when the other is the same policy.
+     */
+    private fun reresolved(
+        snapshot: GrantSnapshot,
+        change: GrantChange,
+        changed: List<Binding>,
+        into: MutableList<GrantFragment>,
+    ) {
+        val after = change.candidate
+        val before = snapshot.tenant(change.tenant)
+        val removed = before.policies.filter { after.policy(it.id) == null }.associateBy { it.id }
+        if (removed.isEmpty()) {
+            return
+        }
+        val live = after.bindings.filter { binding ->
+            binding.policy in removed && binding !in changed && binding.expiresAt.let { it == null || snapshot.now < it }
+        }
+        for (binding in live) {
+            val now = resolve(snapshot, after, binding)
+            when {
+                // It names nothing now: what it grants cannot be told (RC1-32).
+                now == null -> into += GrantFragment.unresolved(change.tenant, binding)
+                !samePolicy(removed.getValue(binding.policy), now) ->
+                    now.statements.indices.forEach { split(change.tenant, now, it, Grantee.Bound(binding), into) }
+            }
+        }
+        for (own in removed.values) {
+            val shared = snapshot.platform.policy(own.id)?.takeIf { it.attachable }
+            if (shared != null && !samePolicy(own, shared)) {
+                shared.statements.indices.forEach { split(change.tenant, shared, it, Grantee.Attaching, into) }
+            }
+        }
+    }
+
+    /**
+     * The ALLOWs of each policy of [after] that are new or widen what it had in [before] (§7.4.1, §7.4.4): what every
+     * binding of that policy is granted anew, wherever it is. A policy that only narrows is not listed.
+     */
+    fun widened(before: GrantDocument, after: GrantDocument): Map<PolicyId, List<Int>> =
+        after.policies.associate { it.id to granted(before.policy(it.id), it) }.filterValues { it.isNotEmpty() }
+
+    /** The indexes of the ALLOWs of [policy] that narrow none of [previous]'s. */
+    private fun granted(previous: GrantPolicy?, policy: GrantPolicy): List<Int> = policy.statements.indices.filter {
+        val statement = policy.statements[it]
+        statement.effect == Effect.ALLOW && (previous == null || !narrowsAny(policy, statement, previous))
     }
 
     /**
@@ -122,10 +187,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         changed: List<Binding>,
         into: MutableList<GrantFragment>,
     ) {
-        val granted = policy.statements.indices.filter { index ->
-            val statement = policy.statements[index]
-            statement.effect == Effect.ALLOW && (previous == null || !narrowsAny(policy, statement, previous))
-        }
+        val granted = granted(previous, policy)
         val bound = change.candidate.bindings.filter { binding ->
             binding.policy == policy.id && binding !in changed && binding.expiresAt.let { it == null || snapshot.now < it }
         }
@@ -215,9 +277,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
 
     /** The verdict for one fragment (§7.4.3, the loop body). */
     fun verdict(grantor: Grantor, rights: GrantorRights, fragment: GrantFragment): GrantVerdict {
-        if (grantor.tenant != fragment.tenant) {
-            return unknown(UnknownReason.CROSS_TENANT, null, "the grantor is in ${grantor.tenant.value}", null)
-        }
+        undecidable(grantor, fragment)?.let { return it }
         val tenant = fragment.tenant
         val granted = fragment.condition?.let { condition ->
             when (val folded = Specialization(checker, tenantConstants(tenant)).fold(condition)) {
@@ -230,9 +290,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
             }
         }
         val scope = refine(fragment.scope, granted)
-        if (scope.isEmpty) {
-            return GrantVerdict.Contained(null)
-        }
+        unreached(rights, scope)?.let { return it }
         val by = when (val found = holder(grantor, rights, fragment, scope, granted)) {
             null -> return notCovered(Shortfall.NO_ALLOW, "the grantor holds no ALLOW", null)
             is Search.Missed -> return notCovered(
@@ -247,6 +305,29 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
             return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
         }
         return GrantVerdict.Contained(by.ref)
+    }
+
+    /** Why [fragment] is not analyzed against what [grantor] holds at all, or `null`. */
+    private fun undecidable(grantor: Grantor, fragment: GrantFragment): GrantVerdict.Unknown? {
+        if (!fragment.resolved) {
+            return unknown(UnknownReason.UNRESOLVED, null, "[${fragment.policy.value}] does not resolve", null)
+        }
+        if (grantor.tenant != fragment.tenant) {
+            return unknown(UnknownReason.CROSS_TENANT, null, "the grantor is in ${grantor.tenant.value}", null)
+        }
+        return null
+    }
+
+    /**
+     * The verdict when [scope] (σ') settles it before any ALLOW is looked at, or `null`: contained when the fragment
+     * applies nowhere, UNKNOWN when it reaches an app whose document could not be read (RC1-4).
+     */
+    private fun unreached(rights: GrantorRights, scope: ScopeSet): GrantVerdict? = when {
+        scope.isEmpty -> GrantVerdict.Contained(null)
+        rights.unread(
+            scope
+        ) -> unknown(UnknownReason.UNREADABLE, null, "an app document it reaches could not be read", null)
+        else -> null
     }
 
     /** What the search for one containing ALLOW found: it, the one that got furthest, or nothing (`null`). */
@@ -271,7 +352,9 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
                 held.statement.actions.none { PatternContainment.contains(it, fragment.action) == Containment.YES } ->
                     Shortfall.ACTION
 
-                resourceAndCondition(grantor, scope, held, fragment, granted) -> return Search.Found(held)
+                resourceAndCondition(grantor, scope, held, fragment, granted) ->
+                    if (outlives(held, fragment)) return Search.Found(held) else Shortfall.EXPIRY
+
                 held.statement.resources.any { contained(it, fragment.resource) } -> Shortfall.CONDITION
                 else -> Shortfall.RESOURCE
             }
@@ -280,6 +363,16 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
             }
         }
         return closest
+    }
+
+    /**
+     * Whether the grantor holds [held] for as long as [fragment] is granted (RC1-3): through a binding without
+     * `expiresAt`, or one that expires no earlier than the fragment's. An attachment never expires.
+     */
+    private fun outlives(held: HeldStatement, fragment: GrantFragment): Boolean {
+        val until = held.expiresAt ?: return true
+        val granted = fragment.expiresAt ?: return false
+        return granted <= until
     }
 
     private fun contained(outer: ResourcePattern, inner: ResourcePattern): Boolean =
@@ -379,7 +472,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
 
     private fun sameStatement(a: GrantStatement, b: GrantStatement): Boolean =
         a.effect == b.effect && a.name == b.name && a.actions == b.actions && a.resources == b.resources &&
-            sameCondition(a.condition, b.condition)
+            a.onMissing == b.onMissing && sameCondition(a.condition, b.condition)
 
     /**
      * Conditions compare by their canonical rendering; one that does not check (an attribute outside the catalog)
@@ -429,7 +522,8 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
                         }
                     )
 
-                    Kind.SUBJECT_ATTRIBUTE -> Constant.Str(grantor.attributes[attribute.name])
+                    // Exactly as the engine reads it: a value of any type is its toString() (RC1-2).
+                    Kind.SUBJECT_ATTRIBUTE -> Constant.Str(SubjectAttributes.string(grantor.attributes, attribute.name))
                     Kind.SCOPE_ROLES -> scopeRoles?.let { Constant.Strings(it) }
                     else -> null
                 }

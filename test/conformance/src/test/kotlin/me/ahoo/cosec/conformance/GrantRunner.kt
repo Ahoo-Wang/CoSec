@@ -16,6 +16,7 @@
 package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
 import me.ahoo.cosec.control.grant.GrantDocument
@@ -57,7 +58,7 @@ import java.time.Instant
  *
  * ```jsonc
  * "documents": { "platform": {...}, "apps": {...}, "tenants": { "acme": {...} } },   // published, the engine syntax
- * "grantor": { "tenant": "acme", "id": "gina", "roles": ["ops@team-a"], "policies": [], "attributes": {} },
+ * "grantor": { "tenant": "acme", "id": "gina", "roles": ["ops@team-a"], "policies": [], "attributes": {"suspended": true} },
  * "candidate": { "tenant": "acme", "document": {...} },                             // replaces that tenant's document
  * "trustRoot": false,
  * "expect": { "fragments": [ { "policy": "p", "statement": 0, "action": "order:read", "resource": "order/{id}",
@@ -66,7 +67,8 @@ import java.time.Instant
  * ```
  *
  * A policy may also say `"protected": true`, and a binding `"protected": true`. Documents are read here from the
- * scenario syntax; the document codec of RFC 0004 PR-4 replaces this reader.
+ * scenario syntax; the document codec of RFC 0004 PR-4 replaces this reader. The grantor's attributes keep their JSON
+ * type, as a token's claims do (RC1-2).
  */
 object GrantRunner : ScenarioRunner {
     private val analyzer = GrantAnalyzer()
@@ -87,6 +89,8 @@ object GrantRunner : ScenarioRunner {
             tenants = documents?.get("tenants")?.fields().orEmpty().entries
                 .associate { (tenant, it) -> TenantId(tenant) to document(it, TenantId(tenant)) },
             now = NOW,
+            // The scenario names every app document there is.
+            unreadApps = Dimension.Only(emptySet()),
         )
         val candidate = node.required("candidate")
         candidate.only("tenant", "document")
@@ -110,7 +114,7 @@ object GrantRunner : ScenarioRunner {
                 node.get("roles")?.strings().orEmpty(),
                 node.get("policies")?.strings().orEmpty()
             ),
-            attributes = node.get("attributes")?.fields().orEmpty().mapValues { it.value.text() },
+            attributes = node.get("attributes")?.let(ChangeRunner::attributes).orEmpty(),
             // False for a grantor whose credential has a role cap (RFC 0009 §4.2).
             principalBindings = node.get("principalBindings")?.bool() ?: true,
         )

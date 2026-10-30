@@ -78,6 +78,9 @@ object CoSecCacheSpecs {
     /** What the control plane's periodic tasks visit: every indexed document and the changes that may be open. */
     const val CONTROL_LIST_CACHE_NAME = "ControlListCache"
 
+    /** The app documents there are, which the grant analysis reads on every tenant change (RC1-4). */
+    const val CONTROL_APP_LIST_CACHE_NAME = "ControlAppListCache"
+
     /** The control plane's change requests and each document's staging slot (RFC 0007 §5.2, §5.5). */
     const val CHANGE_REQUEST_CACHE_NAME = "ChangeRequestCache"
     const val STAGE_CACHE_NAME = "StageCache"
@@ -99,6 +102,7 @@ object CoSecCacheSpecs {
         REFERENCE_INDEX_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
         CONTROL_LIST_CACHE_NAME,
+        CONTROL_APP_LIST_CACHE_NAME,
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
         CANDIDATE_CACHE_NAME,
@@ -112,6 +116,7 @@ object CoSecCacheSpecs {
         REFERENCE_INDEX_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
         CONTROL_LIST_CACHE_NAME,
+        CONTROL_APP_LIST_CACHE_NAME,
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
         CANDIDATE_CACHE_NAME,
@@ -128,6 +133,7 @@ object CoSecCacheSpecs {
         REFERENCE_INDEX_CACHE_NAME to "control:refs",
         CONTROL_LEASE_CACHE_NAME to "control:lease",
         CONTROL_LIST_CACHE_NAME to "control:list",
+        CONTROL_APP_LIST_CACHE_NAME to "control:apps",
         CHANGE_REQUEST_CACHE_NAME to "control:change",
         STAGE_CACHE_NAME to "control:stage",
         CANDIDATE_CACHE_NAME to "candidate",

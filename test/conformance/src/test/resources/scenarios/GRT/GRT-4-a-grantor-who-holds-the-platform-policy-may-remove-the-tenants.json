@@ -1,0 +1,122 @@
+{
+  "rules": [
+    "GRT-4"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-9: the same removal by gina, who holds order:* on every order herself: what the staff binding now names is contained in what she holds.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "editor",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "editor",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/{id}"
+              }
+            ]
+          },
+          {
+            "id": "all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "staff",
+            "subject": {
+              "role": "staff"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "editor"
+          },
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "all"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "staff",
+          "subject": {
+            "role": "staff"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "editor"
+        },
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "editor",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/**",
+        "verdict": "YES"
+      }
+    ]
+  }
+}
