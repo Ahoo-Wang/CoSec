@@ -312,6 +312,190 @@ class ChangesB1Test {
         harness.memory.apps().assert().isNull()
     }
 
+    /**
+     * Review of #1181: the platform's first revision completes a list that names every app document with a head; an
+     * app listed without a head (a first publish that stopped before it) does not count, one whose head cannot be read
+     * does.
+     */
+    @Test
+    fun `the platform's first revision completes a list that names every app with a head - RC1-4`() =
+        runBlocking<Unit> {
+            val billing = SnapshotKey.App("billing")
+            val ghost = SnapshotKey.App("ghost")
+            harness.revisions.publish(billing, null, StoreFixtures.candidate(billing), StoreFixtures.publication())
+            harness.memory.putIndex(ghost, null, RevisionIndex()).assert().isTrue()
+            var failing = true
+            val store = object : ControlStore by harness.memory {
+                override suspend fun head(key: SnapshotKey): StoredDocument? {
+                    check(!(failing && key == ghost)) { "Redis is down" }
+                    return harness.memory.head(key)
+                }
+
+                override suspend fun putHead(
+                    key: SnapshotKey,
+                    expected: SnapshotDigest?,
+                    document: SnapshotDocument
+                ): HeadWrite {
+                    if (failing) {
+                        return HeadWrite.Conflict(null)
+                    }
+                    return harness.memory.putHead(key, expected, document)
+                }
+            }
+            val revisions = Revisions(store, harness.clock)
+            val platform = StoreFixtures.candidate(SnapshotKey.Platform)
+            // The ghost's head cannot be read: it may have one, so a first revision would not complete the list (this
+            // one conflicts, which marks nothing anyway).
+            revisions.publish(SnapshotKey.Platform, null, platform, StoreFixtures.publication())
+                .assert().isInstanceOf(PublishOutcome.Conflicted::class.java)
+            harness.memory.apps()!!.value.assert().isEqualTo(AppList(setOf("billing"), complete = false))
+            failing = false
+            revisions.publish(SnapshotKey.Platform, null, platform, StoreFixtures.publication())
+                .assert().isInstanceOf(PublishOutcome.Published::class.java)
+            harness.memory.apps()!!.value.assert().isEqualTo(AppList(setOf("billing"), complete = true))
+        }
+
+    /** The same, when the ghost's head cannot be read at the platform's first revision. */
+    @Test
+    fun `an app whose head cannot be read keeps the platform's first revision from completing the list - RC1-4`() =
+        runBlocking<Unit> {
+            val ghost = SnapshotKey.App("ghost")
+            harness.memory.putIndex(ghost, null, RevisionIndex()).assert().isTrue()
+            val store = object : ControlStore by harness.memory {
+                override suspend fun head(key: SnapshotKey): StoredDocument? {
+                    check(key != ghost) { "Redis is down" }
+                    return harness.memory.head(key)
+                }
+            }
+            Revisions(store, harness.clock).publish(
+                SnapshotKey.Platform,
+                null,
+                StoreFixtures.candidate(SnapshotKey.Platform),
+                StoreFixtures.publication()
+            ).assert().isInstanceOf(PublishOutcome.Published::class.java)
+            harness.memory.apps()?.value?.complete.assert().isNotEqualTo(true)
+        }
+
+    /** Review of #1181: Revisions' own steps after the head write, apart from what Changes does around them. */
+    @Test
+    fun `Revisions finishes what follows its head write when the caller is cancelled - RC1-33`() = runBlocking<Unit> {
+        val written = CompletableDeferred<Unit>()
+        val store = object : ControlStore by harness.memory {
+            override suspend fun putHead(
+                key: SnapshotKey,
+                expected: SnapshotDigest?,
+                document: SnapshotDocument
+            ): HeadWrite = harness.memory.putHead(key, expected, document).also {
+                written.complete(Unit)
+                delay(100)
+            }
+
+            override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+                yield()
+                return harness.memory.putIndex(key, expected, index)
+            }
+
+            override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean {
+                yield()
+                return harness.memory.putApps(expected, apps)
+            }
+        }
+        val after = CompletableDeferred<PublishOutcome.Published>()
+        val publishing = launch {
+            Revisions(store, harness.clock).publish(
+                SnapshotKey.Platform,
+                null,
+                StoreFixtures.candidate(SnapshotKey.Platform),
+                StoreFixtures.publication()
+            ) {
+                yield()
+                after.complete(it)
+            }
+        }
+        written.await()
+        publishing.cancelAndJoin()
+        harness.memory.index(SnapshotKey.Platform)!!.value.entries.map { it.revision }.assert().containsExactly(1L)
+        harness.memory.apps()!!.value.complete.assert().isTrue()
+        after.isCompleted.assert().isTrue()
+    }
+
+    /** Review of #1181 (F2): a revision in effect is published, whatever its index does afterwards. */
+    @Test
+    fun `a failure after the head write is logged and the revision is published - RC1-33`() = runBlocking<Unit> {
+        var written = false
+        val store = object : ControlStore by harness.memory {
+            override suspend fun putHead(
+                key: SnapshotKey,
+                expected: SnapshotDigest?,
+                document: SnapshotDocument
+            ): HeadWrite = harness.memory.putHead(key, expected, document).also { written = true }
+
+            override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+                check(!written) { "Redis is down" }
+                return harness.memory.putIndex(key, expected, index)
+            }
+
+            override suspend fun putReferrers(
+                target: SnapshotKey,
+                policy: PolicyId,
+                expected: SnapshotDigest?,
+                referrers: Set<SnapshotKey>
+            ): Boolean {
+                check(!written) { "Redis is down" }
+                return harness.memory.putReferrers(target, policy, expected, referrers)
+            }
+        }
+        val revisions = Revisions(store, harness.clock)
+        revisions.publish(ACME, null, StoreFixtures.candidate(ACME), StoreFixtures.publication())
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+        // The index missed the revision; history() finds it along the chain.
+        harness.memory.index(ACME)!!.value.entries.assert().isEmpty()
+        harness.revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+    }
+
+    /** Review of #1181 (F2): once the head is written, what moved is recorded even when the change cannot be settled. */
+    @Test
+    fun `what moved is recorded even when a written change cannot be settled - RC1-33`() = runBlocking<Unit> {
+        publish(SnapshotKey.Platform, Operation.PutPolicy(allow("platform-read")))
+        var written = false
+        val readAfter = java.util.Collections.synchronizedList(ArrayList<SnapshotKey>())
+        val store = object : ControlStore by harness.memory {
+            override suspend fun putHead(
+                key: SnapshotKey,
+                expected: SnapshotDigest?,
+                document: SnapshotDocument
+            ): HeadWrite = harness.memory.putHead(key, expected, document).also { written = key == ACME }
+
+            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+                check(!written) { "Redis is down" }
+                return harness.memory.putChange(expected, change)
+            }
+
+            override suspend fun head(key: SnapshotKey): StoredDocument? =
+                harness.memory.head(key).also { if (written) readAfter += key }
+        }
+        val changes = Changes(
+            store,
+            Revisions(store, harness.clock),
+            { ChangeId("unsettled") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        )
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("read"))), "c")
+        changes.skipShadow(ALICE_OP, change.id, "test")
+        val failure = try {
+            changes.publish(ALICE_OP, change.id)
+            null
+        } catch (e: IllegalStateException) {
+            e
+        }
+        failure?.message.assert().isEqualTo("Redis is down")
+        harness.revisions.head(ACME)!!.revision.assert().isEqualTo(1L)
+        // The detection compared the platform's head, which the publish was checked with.
+        readAfter.assert().contains(SnapshotKey.Platform)
+    }
+
     /** Review of #1181 (N1): a client that goes away after the head write leaves the change settled and audited. */
     @Test
     fun `a publish cancelled after its head write still settles as published - RC1-33`() = runBlocking<Unit> {

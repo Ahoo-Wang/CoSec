@@ -16,8 +16,6 @@
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
@@ -468,8 +466,9 @@ class Changes(
      * does not validly cover (missing, for another candidate, expired, the author's or the publisher's own), the change
      * goes back to `AWAITING_APPROVAL` with them, keeping its slot, and nothing is published.
      *
-     * Once the write starts, it runs to the end even when the caller is cancelled: the change is settled, its outcome
-     * audited and what moved meanwhile recorded.
+     * From the head write on, it does not respond to cancellation: the change is settled, its outcome audited and what
+     * moved meanwhile recorded, unless a store or a listener fails; what moved is recorded even then. The checks and
+     * the writes before the head's respond to it.
      */
     suspend fun publish(publisher: Operator, id: ChangeId, ack: ShadowAck? = null): ChangeRequest {
         val change = visible(publisher, id)
@@ -500,26 +499,39 @@ class Changes(
         val candidate = applied(change, head?.document).first!!
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
-        // From the write on, a client that goes away must not leave the change unsettled or unaudited: each step is
-        // bounded by its store's or listeners' own timeouts.
-        return withContext(NonCancellable) {
-            val settled = when (
-                val outcome = revisions.publish(
-                    change.key,
-                    head,
-                    candidate,
-                    publication(change, publisher, rechecked)
-                )
-            ) {
-                is PublishOutcome.Published -> settle(change, ChangeState.PUBLISHED, published = outcome.revision)
-                is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
-                is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, referenced(outcome))
-            }
+        var published: ChangeRequest? = null
+        val outcome = revisions.publish(change.key, head, candidate, publication(change, publisher, rechecked)) {
+            published = written(change, it, rechecked, head?.document, candidate, publisher)
+        }
+        val settled = when (outcome) {
+            is PublishOutcome.Published -> return checkNotNull(published) { "[${change.key}] was written unsettled." }
+            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
+            is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, referenced(outcome))
+        }
+        audit(outcomeOf(change, settled), settled, publisher.actor)
+        return settled
+    }
+
+    /**
+     * What follows the head write of [change] as [outcome]: [Revisions.publish] runs it without responding to
+     * cancellation, so a client that goes away leaves the change settled and audited unless a store or listener fails.
+     * What moved meanwhile is recorded whatever happens to the rest: the head is written either way.
+     */
+    private suspend fun written(
+        change: ChangeRequest,
+        outcome: PublishOutcome.Published,
+        rechecked: ChangeRequest,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        publisher: Operator,
+    ): ChangeRequest {
+        var settled: ChangeRequest? = null
+        try {
+            settled = settle(change, ChangeState.PUBLISHED, published = outcome.revision)
             audit(outcomeOf(change, settled), settled, publisher.actor)
-            if (settled.state == ChangeState.PUBLISHED) {
-                recordMoved(settled, rechecked, head?.document, candidate, publisher)
-            }
-            settled
+            return settled
+        } finally {
+            recordMoved(settled ?: change, rechecked, base, candidate, publisher)
         }
     }
 

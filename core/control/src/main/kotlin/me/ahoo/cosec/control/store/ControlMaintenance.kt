@@ -41,9 +41,10 @@ private val log = KotlinLogging.logger {}
  *
  * - [reclaim] removes the revision records retention no longer keeps (RFC 0007 §5.7), document by document, keeping
  *   what open changes rest on. [Revisions.reclaim] takes a lease per document, so one instance does each. A pass that
- *   cannot read every open change reclaims nothing: it would not know what they rest on. With the documents it reads,
- *   it marks a complete app list incomplete again when an app document is missing from it ([Revisions.reconcileApps],
- *   RC1-4);
+ *   cannot read every open change reclaims nothing: it would not know what they rest on. Each pass first runs
+ *   [reconcileApps], whatever the open changes;
+ * - [reconcileApps], also once at startup, marks a complete app list incomplete again when it misses an app document
+ *   (RC1-4);
  * - [closeShadowWindows] looks at every shadowing change ([Changes.shadowed], RFC 0007 §6.4) under the
  *   [SHADOW_LEASE], so one instance does it per period. The pass is bounded by [shadowInterval] and the lease lasts
  *   twice that, so it never outlives the lease; it is released when the pass ends.
@@ -68,6 +69,7 @@ class ControlMaintenance(
     /** One reclamation pass; what was removed, by document. Nothing when an open change cannot be read. */
     @Suppress("TooGenericExceptionCaught")
     suspend fun reclaim(): Map<SnapshotKey, Reclaimed> {
+        attempt("reconcile the app list with the documents") { reconcileApps() }
         val open = try {
             openChanges()
         } catch (e: CancellationException) {
@@ -79,9 +81,7 @@ class ControlMaintenance(
             return emptyMap()
         }
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
-        val documents = store.documents()
-        attempt("reconcile the app list with the documents") { revisions.reconcileApps(documents) }
-        for (key in documents) {
+        for (key in store.documents()) {
             val keep = open.filter { it.key == key }.flatMapTo(HashSet()) { it.restsOn() }
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.records.isNotEmpty() || it.orphans.isNotEmpty() }
@@ -89,6 +89,13 @@ class ControlMaintenance(
         }
         return reclaimed
     }
+
+    /**
+     * Marks a complete app list incomplete again when the store lists an app document it misses (RC1-4,
+     * [Revisions.reconcileApps]); the apps it misses. The host runs it at startup, so that a list a downgraded writer
+     * left stale is not trusted until the first reclamation pass, and every reclamation pass runs it first.
+     */
+    suspend fun reconcileApps(): Set<String> = revisions.reconcileApps(store.documents())
 
     /** One pass over the shadowing changes; the changes whose window closed or conflicted. Nothing without the lease. */
     suspend fun closeShadowWindows(): List<ChangeRequest> {

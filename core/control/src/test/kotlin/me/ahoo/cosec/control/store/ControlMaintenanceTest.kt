@@ -88,14 +88,7 @@ class ControlMaintenanceTest {
         maintenance.reclaim()
         store.apps()!!.value.assert().isEqualTo(AppList(setOf("billing"), complete = true))
 
-        val older = object : ControlStore by store {
-            override suspend fun apps(): Versioned<AppList>? = null
-
-            override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean = true
-        }
-        val legacy = SnapshotKey.App("legacy")
-        Revisions(older, clock).publish(legacy, null, candidate(legacy), publication())
-            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+        publishUnlisted(SnapshotKey.App("legacy"))
         store.apps()!!.value.complete.assert().isTrue()
 
         maintenance.reclaim()
@@ -105,6 +98,69 @@ class ControlMaintenanceTest {
         revisions.completeApps(setOf("billing", "legacy")).assert().isTrue()
         maintenance.reclaim()
         store.apps()!!.value.complete.assert().isTrue()
+    }
+
+    /** A publish by something that does not keep the app list: an older instance or cosec-migrate. */
+    private suspend fun publishUnlisted(app: SnapshotKey.App) {
+        val older = object : ControlStore by store {
+            override suspend fun apps(): Versioned<AppList>? = null
+
+            override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean = true
+        }
+        Revisions(older, clock).publish(app, null, candidate(app), publication())
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+    }
+
+    /** Review of #1181 (F3): the open changes say what a pass may reclaim, nothing about the app list. */
+    @Test
+    fun `a pass that cannot read an open change still reconciles the app list - RC1-4`() = runBlocking<Unit> {
+        revisions.publish(SnapshotKey.Platform, null, candidate(SnapshotKey.Platform), publication())
+        publishUnlisted(SnapshotKey.App("legacy"))
+        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("read"))), "open")
+        val failing = object : ControlStore by store {
+            override suspend fun change(id: ChangeId) = error("Redis is down")
+        }
+        val blindRevisions = Revisions(failing, clock, revisions.retention)
+        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blind = ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1))
+        blind.reclaim().assert().isEmpty()
+        store.apps()!!.value.assert().isEqualTo(AppList(emptySet(), complete = false))
+    }
+
+    /**
+     * Review of #1181 (F5): a listed app without a head stopped before its head write, so it misses nothing; one whose
+     * head cannot be read may have one.
+     */
+    @Test
+    fun `an app the store lists without a head misses nothing, one that cannot be read does - RC1-4`() =
+        runBlocking<Unit> {
+            revisions.publish(SnapshotKey.Platform, null, candidate(SnapshotKey.Platform), publication())
+            val ghost = SnapshotKey.App("ghost")
+            store.putIndex(ghost, null, RevisionIndex()).assert().isTrue()
+            maintenance.reconcileApps().assert().isEmpty()
+            store.apps()!!.value.complete.assert().isTrue()
+
+            val unreadable = object : ControlStore by store {
+                override suspend fun head(key: SnapshotKey): StoredDocument? =
+                    if (key == ghost) error("Redis is down") else store.head(key)
+            }
+            Revisions(unreadable, clock).reconcileApps(store.documents()).assert().containsExactly("ghost")
+            store.apps()!!.value.complete.assert().isFalse()
+        }
+
+    /** Review of #1181: a write whose reply was lost reads back as a conflict, and is still reported. */
+    @Test
+    fun `a reconciliation whose write reply was lost still reports what it found - RC1-4`() = runBlocking<Unit> {
+        revisions.publish(SnapshotKey.Platform, null, candidate(SnapshotKey.Platform), publication())
+        publishUnlisted(SnapshotKey.App("legacy"))
+        val lossy = object : ControlStore by store {
+            override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean {
+                store.putApps(expected, apps).assert().isTrue()
+                return false
+            }
+        }
+        Revisions(lossy, clock).reconcileApps(store.documents()).assert().containsExactly("legacy")
+        store.apps()!!.value.complete.assert().isFalse()
     }
 
     @Test

@@ -112,7 +112,7 @@ class RetentionPolicy(
  * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
  *    marks the app list complete when it names every app document the store lists.
  *
- * Steps 3 and 4 run to the end even when the caller is cancelled.
+ * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged.
  *
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
@@ -135,12 +135,19 @@ class Revisions(
     /**
      * Publishes [candidate] over [base] (`null`: [key] has no document yet) for [publication]. The candidate's own
      * revision, time and provenance are replaced: the revision follows the base's, the parent is the base.
+     *
+     * Once the head is written, the rest does not respond to cancellation, and [afterWrite] runs in it: what the caller
+     * must do once the revision is in effect. A failure of this class's own steps after the write is only logged, and
+     * the revision is [PublishOutcome.Published]: the references it adds were indexed before the write, so a reference
+     * it fails to remove leaves the index a superset, and [history] rebuilds the revision index from the chain. What
+     * [afterWrite] throws is thrown.
      */
     suspend fun publish(
         key: SnapshotKey,
         base: Head?,
         candidate: PolicyDocument,
-        publication: Publication
+        publication: Publication,
+        afterWrite: suspend (PublishOutcome.Published) -> Unit = {},
     ): PublishOutcome {
         requireDocumentKey(key)
         require(base == null || base.key == key) { "The base of [$key] is a head of [$key], not of [${base?.key}]." }
@@ -170,7 +177,6 @@ class Revisions(
                 "[$key] could not be listed among the app documents; the head was not moved."
             }
         }
-        // From the head write on, a caller that goes away must not leave the index or the app list half done.
         return withContext(NonCancellable) {
             when (val write = store.putHead(key, base?.digest, stored)) {
                 is HeadWrite.Conflict -> {
@@ -182,32 +188,57 @@ class Revisions(
                     write.digest == digest
                 ) { "The store wrote the head of [$key] as another digest." }
             }
-            published(key, RevisionEntry(revision, digest, publishedAt), before - after)
+            settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
             if (key == SnapshotKey.Platform && base == null) {
                 completeOnNewStore()
             }
-            PublishOutcome.Published(revision, digest)
+            PublishOutcome.Published(revision, digest).also { afterWrite(it) }
+        }
+    }
+
+    /** [published], after the head write: a failure is only logged ([publish] says why that is safe). */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+        try {
+            published(key, entry, dropped)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) {
+                "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
+                    "updated: history() rebuilds the index, and an extra reference blocks a removal at most."
+            }
         }
     }
 
     /**
      * Marks the app list complete once the platform's first revision is written (RC1-4): on a new store no app document
-     * exists before it. Only when the list names every app document the store lists, as `repair-references` leaves it:
-     * a platform head that was lost and is published again finds app documents a rebuilt list may not name. The head is
-     * written whatever this does, so a failure is only logged.
+     * exists before it. Only when the list names every app document [ControlStore.documents] lists that has a head, as
+     * `repair-references` leaves it: a platform head that was lost and is published again may find app documents a
+     * rebuilt list does not name. A listed app without a head is one whose first publish stopped before its head
+     * write; it does not count, since an app lists itself before its head is written. The head is written whatever this
+     * does, so a failure is only logged.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun completeOnNewStore() {
         try {
-            val apps = listedApps(store.documents())
-            val done = updateApps { list -> if (list.entries.containsAll(apps)) list.copy(complete = true) else list }
-            val list = store.apps()?.value
-            if (!done || list?.complete != true) {
-                warn(
-                    "The platform's first revision found app documents ${apps - list?.entries.orEmpty()} the app list " +
-                        "may not name; it stays incomplete until cosec-migrate repair-references runs"
-                )
+            val documents = store.documents()
+            repeat(maxAttempts) {
+                val current = store.apps()
+                val list = current?.value ?: AppList.EMPTY
+                val missing = missingApps(documents, list.entries)
+                if (missing.isNotEmpty()) {
+                    warn(
+                        "The platform's first revision found app documents $missing the app list does not name; it " +
+                            "stays incomplete until cosec-migrate repair-references runs"
+                    )
+                    return
+                }
+                if (list.complete || store.putApps(current?.digest, list.copy(complete = true))) {
+                    return
+                }
             }
+            warn("The app list kept changing and was not marked complete; grants over every app wait for approval")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -216,31 +247,57 @@ class Revisions(
     }
 
     /**
-     * Marks a complete app list incomplete again when [documents] names an app document it does not (RC1-4): one
-     * published by an instance or a cosec-migrate that does not keep the list, during a rolling upgrade or after a
+     * Marks a complete app list incomplete again when [documents] names an app document with a head it does not (RC1-4):
+     * one published by an instance or a cosec-migrate that does not keep the list, during a rolling upgrade or after a
      * downgrade. The apps it misses; empty when it misses none, is not complete, or is not there.
      */
     suspend fun reconcileApps(documents: Set<SnapshotKey>): Set<String> {
-        val apps = listedApps(documents)
+        var marked: Set<String>? = null
         repeat(maxAttempts) {
             val current = store.apps() ?: return emptySet()
-            val missing = apps - current.value.entries
-            if (!current.value.complete || missing.isEmpty()) {
+            if (!current.value.complete) {
+                // A write whose reply was lost reads back as a conflict: what the earlier attempt found is still so.
+                marked?.let { incompleteAgain(it) }
+                return marked.orEmpty()
+            }
+            val missing = missingApps(documents, current.value.entries)
+            if (missing.isEmpty()) {
                 return emptySet()
             }
+            marked = missing
             if (store.putApps(current.digest, current.value.copy(complete = false))) {
-                warn(
-                    "The app list misses the app documents $missing; it is incomplete again, and grants over every app " +
-                        "wait for approval until cosec-migrate repair-references runs"
-                )
+                incompleteAgain(missing)
                 return missing
             }
         }
         throw IllegalStateException("The app list kept changing; gave up after $maxAttempts attempts.")
     }
 
-    private fun listedApps(documents: Set<SnapshotKey>): Set<String> =
-        documents.filterIsInstance<SnapshotKey.App>().mapTo(HashSet()) { it.appId }
+    private fun incompleteAgain(missing: Set<String>) {
+        warn(
+            "The app list misses the app documents $missing; it is incomplete again, and grants over every app wait " +
+                "for approval until cosec-migrate repair-references runs"
+        )
+    }
+
+    /**
+     * The apps of [documents] that [listed] does not name and that have a head; one whose head cannot be read counts,
+     * since it may well have one.
+     */
+    private suspend fun missingApps(documents: Set<SnapshotKey>, listed: Set<String>): Set<String> =
+        documents.filterIsInstance<SnapshotKey.App>()
+            .filter { it.appId !in listed && hasHead(it) }
+            .mapTo(HashSet()) { it.appId }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun hasHead(key: SnapshotKey.App): Boolean = try {
+        store.head(key) != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The head of [$key] could not be read; it counts as an app document the app list misses." }
+        true
+    }
 
     /**
      * Lists [apps] among the app documents and marks the list complete (`repair-references`, RC1-4): the caller has

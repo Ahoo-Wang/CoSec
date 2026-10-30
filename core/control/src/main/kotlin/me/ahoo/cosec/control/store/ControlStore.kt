@@ -157,9 +157,11 @@ sealed interface HeadWrite {
 /**
  * The app documents there are (RC1-4). [entries] are app ids as they were listed, kept as written even when one does not
  * read as an app id, so nothing is ever dropped from the list. [complete] says that every app document is among them:
- * true once the platform document is first published on a new store, or once `cosec-migrate repair-references` has
- * listed every app the store knows. A list rebuilt after it was lost starts incomplete. The grant analysis trusts only a
- * complete list whose every entry reads as an app id.
+ * true once the platform document's first revision is written and the list names every app document with a head that
+ * [ControlStore.documents] lists, or once `cosec-migrate repair-references` has listed every app document
+ * [ControlStore.documents] lists. A list rebuilt after it was lost starts incomplete, and the reclamation pass marks a
+ * complete one incomplete again when [ControlStore.documents] lists an app document with a head it misses. The grant
+ * analysis trusts only a complete list whose every entry reads as an app id.
  */
 data class AppList(val entries: Set<String>, val complete: Boolean) {
     companion object {

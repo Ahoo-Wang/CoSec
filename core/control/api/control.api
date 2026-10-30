@@ -1292,6 +1292,7 @@ public final class me/ahoo/cosec/control/store/ControlMaintenance {
 	public fun <init> (Lme/ahoo/cosec/control/store/ControlStore;Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/control/change/Changes;Ljava/time/Duration;)V
 	public final fun closeShadowWindows (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun reclaim (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun reconcileApps (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/store/ControlMaintenance$Companion {
@@ -1484,7 +1485,8 @@ public final class me/ahoo/cosec/control/store/Revisions {
 	public final fun getRetention ()Lme/ahoo/cosec/control/store/RetentionPolicy;
 	public final fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun history (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun publish (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/store/Head;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/store/Publication;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun publish (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/store/Head;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/store/Publication;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun publish$default (Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/store/Head;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/store/Publication;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun reclaim (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun reclaim$default (Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/Set;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun reconcileApps (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
