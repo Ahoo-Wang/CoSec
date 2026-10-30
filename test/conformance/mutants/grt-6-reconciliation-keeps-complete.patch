@@ -1,0 +1,17 @@
+# Rule: GRT-6
+# Mutant: the reclamation pass finds an app document the complete app list misses but leaves the list complete
+# Tests: :control:test --tests me.ahoo.cosec.control.store.ControlMaintenanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 74d84543..d6a480e2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -265,7 +265,7 @@ class Revisions(
+                 return emptySet()
+             }
+             marked = missing
+-            if (store.putApps(current.digest, current.value.copy(complete = false))) {
++            if (store.putApps(current.digest, current.value.copy(complete = true))) {
+                 incompleteAgain(missing)
+                 return missing
+             }

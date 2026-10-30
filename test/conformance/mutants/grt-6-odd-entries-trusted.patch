@@ -1,0 +1,17 @@
+# Rule: GRT-6
+# Mutant: the grant analysis trusts an app list with an entry that names no app document, so an app document it would miss is taken as none
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index 8e89989d..96c91cb5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -282,7 +282,7 @@ class ChangeAuthority(
+                 }
+             }
+ 
+-            list.entries.any { !isAppId(it) } -> null.also {
++            list.entries.isEmpty() && list.entries.any { !isAppId(it) } -> null.also {
+                 untrusted {
+                     "The app list has an entry that names no app document: run cosec-migrate repair-references; until " +
+                         "then every app a grant reaches is unknown."
