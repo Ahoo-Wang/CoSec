@@ -13,6 +13,23 @@
 >
 > **2026-10-26 修订（路线图审查，[RFC 0008](0008-conformance-and-direct-build.md) §4.4、§4.5）**：PR-6 的分析部分拆成 PR-6a，现在开工；"切换 PR"拆成 S1–S5，
 > PR-9 移出的 starter 装配落在 S1，PR-11 分到 S1、S2、S4、S5（RFC 0008 §4.4.2）。
+>
+> **2026-10-30 修订（RC 安全审查第 1 轮的修复批次 B，维护者："按建议派发"；[审查记录](../security/8.0-rc-review.md) 的 Fix plan）**：下列各处以本段为准。
+>
+> - §7.4 授出分析读授出者的权利，与引擎读的完全一致：属性值经引擎所用的同一个函数读取，共用而不是复制（RC1-2）；经带 `expiresAt` 的绑定持有的语句，
+>   只包含自身绑定不晚于它到期的片段，可附加策略、没有到期或到期更晚的片段为 UNKNOWN（RC1-3）；授出者的角色能触及的每个 app 文档都经反向引用索引（§5.8）读入，
+>   索引或文档读不到即 UNKNOWN（RC1-4）；解析不到策略的绑定是 UNKNOWN 片段（RC1-32）；租户 `RemovePolicy` 之后改解析到别处的绑定与附加按新授出分析，
+>   平台不能新增与某个租户文档中同 id 的策略，报错列出这些文档（RC1-9）；租户 `(0)` 中授给 `Anyone` 的一律要审批（RC1-35）。
+> - §5.4、§5.5：发布对分析记录的全部头（`checkedWith`）原子地比较并交换，是 `ControlStore` 的改动（RC1-33）；只收窄的变更由持有 `cosec:skip-shadow`
+>   的人抢占暂存槽，被抢占的变更成为 CONFLICTED；"只收窄"按白名单判断：删除绑定或附加、加黑名单条目、加只含 DENY 的策略及其绑定，其余都不能抢占；
+>   break-glass 撤销总能抢占（RC1-12）。
+> - §7.3：信任根是平台租户中持有 `cosec:approve` 的主体，作为硬性规则，`SetBoundary` 同样（RC1-10）；`cosec:platform-admin` 只能在平台文档中绑定（RC1-36）。
+> - §7.5：发布时按审批时记录的凭据 id 与 `iat` 检查审批人的吊销；成员关系来自提供者时，以提供者的新答复判定（RC1-11）；starter 的控制面 Pipeline 带上应用的
+>   `MembershipProvider`（RC1-13）。
+> - §8：break-glass 绑定的元数据（`grantedBy`、`approvedBy`、`change`、`reason`，且 `grantedBy ≠ approvedBy`）由编译器强制；`cosec-migrate` 的
+>   `--break-glass-max-duration` 上限 24 小时（RC1-27）；`BreakGlass.request` 不再接受调用方指定的绑定 id（RC1-29）；`four-eyes` 关闭时 break-glass
+>   的保证不约束单个信任根管理员，8.0 只写进文档，平台文档的发布要求 REQUIRED 审计放到 8.1（新增）（RC1-28）。
+> - §7.1：控制面资源中默认空间的占位符改为空间 id 语法本来就不接受的形式，数据面格式不变（RC1-37）。
 
 ## 0. 结论先行
 
