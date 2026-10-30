@@ -31,7 +31,11 @@ analysis read the author's rights as enforcement does, so some changes that publ
   scope that reaches that app. An app document that cannot be read makes such a grant an escalation (`UNREADABLE`).
 - **A platform policy cannot take a tenant's id** (RC1-9, `CTL-21`). A platform change that adds a policy whose id a
   tenant document defines or binds is refused (`V2`, `422`, naming the tenant documents). A tenant that defines the
-  id itself no longer blocks the platform from removing its own policy of that id.
+  id itself no longer blocks the platform from removing its own policy of that id. The back-reference index learns a
+  tenant's own ids when the tenant next publishes: **after upgrading, run
+  [`cosec-migrate repair-references`](#repair-the-back-reference-index) once**, as a Kubernetes Job, with the Redis
+  and key prefix of the control plane. Until it has run, a platform policy that takes the id of an older tenant's own
+  policy is not refused, only ambiguous in that tenant, which enforcement fails closed on.
 - **Escalations** gain the reasons `UNRESOLVED` (a new binding of a policy no document defines, RC1-32),
   `UNREADABLE` (RC1-4) and `TENANT_BINDING` (each tenant binding an app document change widens, RC1-34, `APR-6`); an
   approval of such an app change covers them. Code that matches every `UnknownReason` or `Shortfall` gains
@@ -149,7 +153,7 @@ from the CoSec sources of the version you deploy:
 migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
-It has four commands. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
+Its commands are below. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
 
 | Command | What it does |
 |---|---|
@@ -157,6 +161,7 @@ It has four commands. Exit codes: `0` done, `1` the data was rejected or a write
 | `publish` | Writes the documents of an accepted conversion to Redis as their first revisions, through the control plane's store. Never touches the 7.x keys. |
 | `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
+| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses. Only adds. |
 
 #### Convert
 
@@ -262,6 +267,20 @@ comes from `publish`, so publish first. `bootstrap` binds principal `alice` of t
 platform tenant's document, and records it as a revision of kind `BOOTSTRAP`. It refuses when that document already
 binds someone to `cosec:platform-admin`; `--force` is for the recovery where every one of them is lost. Anyone with
 the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
+
+#### Repair the back-reference index
+
+```bash
+cosec-migrate repair-references --to-redis redis://localhost:6379 [--key-prefix cosec]
+```
+
+The control plane keeps an index of which documents refer to which policy, so that a platform change cannot remove a
+policy a document still uses, nor add one whose id a tenant document uses ([Storage](./storage.md#redis-keys)).
+`repair-references` reads the head of every document the store lists and adds whatever the index misses; it prints
+how many documents it visited and how many references it added. It only adds, so it may run while the control plane
+runs, and running it again adds nothing: an entry the index has stays, and an extra one blocks a removal at most. A
+document whose head cannot be read is printed as `FAILED <doc>: <reason>`, the others are still visited, and the
+command exits with `1`.
 
 #### Rollback
 

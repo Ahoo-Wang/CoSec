@@ -56,7 +56,7 @@ contain `:`, so a key names one document only.
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
-| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one |
+| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
 | `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane | the documents that have revisions, and the change requests that may still be open, so the maintenance passes, and the grant analysis for the app documents, can visit each |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
@@ -256,8 +256,10 @@ own host at once, and to every other instance through CoCache's invalidation mes
 The grant analysis of a tenant change reads every app document, whether or not the change names the app: it lists
 them from `<s>:control:list:documents`, which names every document the control plane or `cosec-migrate` ever
 published. A document written to Redis any other way is not seen by the analysis, nor by the back-reference index or
-the maintenance passes; write documents only through these two. Each analysis reads the list and every app head, so its
-cost grows with the number of documents.
+the maintenance passes; write documents only through these two. Each analysis asks Redis for the list and reads every app
+head. The list is one value that grows with the number of documents (about 5 MB for 100,000 tenants); each
+control-plane instance keeps the last one it read, with its digest, and asks with a conditional read, so an unchanged
+list is neither sent nor decoded again, at the cost of about 14 MB of heap for 100,000 tenants.
 
 ### What a publish compares
 

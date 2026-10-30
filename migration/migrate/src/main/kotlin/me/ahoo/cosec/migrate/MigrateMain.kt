@@ -49,15 +49,18 @@ import kotlin.system.exitProcess
  *         [--rate-limit-rules ./rate-limit.json]
  * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted [--resume] [--break-glass-max-duration PT4H]
  * bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
+ * repair-references --to-redis redis://localhost:6379 [--key-prefix cosec]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--api-key-prefix cosec:api-key] [--key-prefix cosec] --out ./api-keys
  *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
  * ```
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
- * what they write (RFC 0007 §5.9).
+ * what they write (RFC 0007 §5.9). `repair-references` adds to the back-reference index what the heads refer to
+ * ([ReferenceRepair]).
  *
- * Exit codes: 0 done; 1 the data was rejected or publishing failed (see `report.json` and the console); 2 usage.
+ * Exit codes: 0 done; 1 the data was rejected, publishing failed, or a document's references could not be repaired
+ * (see `report.json` and the console); 2 usage.
  */
 object MigrateMain {
     const val OK = 0
@@ -74,6 +77,7 @@ object MigrateMain {
                   [--rate-limit-rules <file>]
           publish --to-redis <uri> [--key-prefix <p>] --in <dir> [--resume] [--break-glass-max-duration <duration>]
           bootstrap --to-redis <uri> [--key-prefix <p>] --platform-admin <principal> [--force]
+          repair-references --to-redis <uri> [--key-prefix <p>]
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--api-key-prefix <p>] [--key-prefix <p>] --out <dir> [--memberships <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
@@ -95,17 +99,7 @@ object MigrateMain {
             return USAGE
         }
         return try {
-            when (command) {
-                "convert" -> convert(options, out)
-                "publish" -> publish(options, out)
-                "bootstrap" -> bootstrap(options, out)
-                "partition plan" -> partitionPlan(options, out)
-                "api-keys" -> apiKeys(options, out)
-                else -> {
-                    out.println(USAGE_TEXT)
-                    USAGE
-                }
-            }
+            dispatch(command, options, out)
         } catch (error: UsageException) {
             out.println(error.message)
             out.println(USAGE_TEXT)
@@ -113,6 +107,19 @@ object MigrateMain {
         } catch (error: Exception) {
             out.println("Failed: ${error.message}")
             FAILED
+        }
+    }
+
+    private fun dispatch(command: String?, options: Options, out: PrintStream): Int = when (command) {
+        "convert" -> convert(options, out)
+        "publish" -> publish(options, out)
+        "bootstrap" -> bootstrap(options, out)
+        "repair-references" -> repairReferences(options, out)
+        "partition plan" -> partitionPlan(options, out)
+        "api-keys" -> apiKeys(options, out)
+        else -> {
+            out.println(USAGE_TEXT)
+            USAGE
         }
     }
 
@@ -279,6 +286,18 @@ object MigrateMain {
         out.println(
             "Bound ${principal.value} of the platform tenant to cosec:platform-admin: ${Bootstrap.KEY} revision $revision."
         )
+        return OK
+    }
+
+    /** `repair-references`: every document visited, every failed one listed; any failure exits with [FAILED]. */
+    private fun repairReferences(options: Options, out: PrintStream): Int {
+        val result = controlStore(options) { store -> ReferenceRepair(store).run() }
+        result.failed.forEach { (key, message) -> out.println("FAILED $key: $message") }
+        out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
+        if (result.failed.isNotEmpty()) {
+            out.println("${result.failed.size} document(s) could not be read or repaired: fix them and run again.")
+            return FAILED
+        }
         return OK
     }
 

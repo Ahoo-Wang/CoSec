@@ -323,15 +323,22 @@ class Revisions(
 
     /**
      * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
-     * §5.8). It only adds: an extra entry blocks a deletion at most, a missing one would let it through.
+     * §5.8); the number of references it added. It only adds: an extra entry blocks a deletion at most, a missing one
+     * would let it through. A head that cannot be read throws.
      */
-    suspend fun repairReferences(key: SnapshotKey) {
-        val head = head(key) ?: return
+    suspend fun repairReferences(key: SnapshotKey): Int {
+        val head = head(key) ?: return 0
+        var added = 0
         for ((target, policy) in references(head.document)) {
+            if (store.referrers(target, policy)?.value?.contains(key) == true) {
+                continue
+            }
             check(
                 updateReferrers(target, policy) { it + key }
             ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
+            added++
         }
+        return added
     }
 
     /**

@@ -49,7 +49,7 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订 |
 | `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址 |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引 |
-| `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id |
+| `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目 |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它 |
 | `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面 | 有修订的文档，以及可能仍未结束的变更请求，供维护任务（以及授出分析读 app 文档时）逐个访问 |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
@@ -219,7 +219,7 @@ sequenceDiagram
 
 租户变更的授出分析读取每一份 app 文档，不论变更是否点名该 app：它从 `<s>:control:list:documents` 列出它们，这个列表记着
 控制面或 `cosec-migrate` 发布过的每一份文档。以其他方式写进 Redis 的文档，授出分析、反向引用索引和维护任务都看不到；只经这两条
-路径写文档。每次分析读一次列表和每个 app 的头，所以开销随文档数量增长。
+路径写文档。每次分析都向 Redis 询问这个列表，并读取每个 app 的头。列表是一个随文档数量增长的值（10 万个租户时约 5 MB）；每个控制面实例保留上次读到的列表及其摘要，以条件读询问，所以列表未变时既不传输也不重新解码，代价是 10 万个租户时约 14 MB 的堆内存。
 
 ### 一次发布比较什么 {#what-a-publish-compares}
 
