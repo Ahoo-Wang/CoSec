@@ -34,10 +34,28 @@
 > - §7.3：信任根是平台租户中持有 `cosec:approve` 的主体，作为硬性规则，`SetBoundary` 同样（RC1-10）；`cosec:platform-admin` 只能在平台文档中绑定（RC1-36）。
 > - §7.5：发布时按审批时记录的凭据 id 与 `iat` 检查审批人的吊销；成员关系来自提供者时，以提供者的新答复判定（RC1-11）；starter 的控制面 Pipeline 带上应用的
 >   `MembershipProvider`（RC1-13）。
-> - §8：break-glass 绑定的元数据（`grantedBy`、`approvedBy`、`change`、`reason`，且 `grantedBy ≠ approvedBy`）由编译器强制；`cosec-migrate` 的
->   `--break-glass-max-duration` 上限 24 小时（RC1-27）；`BreakGlass.request` 不再接受调用方指定的绑定 id（RC1-29）；`four-eyes` 关闭时 break-glass
+> - §8：`cosec-migrate` 不写任何 break-glass 绑定（`publish`、`bootstrap` 拒绝含 break-glass 绑定的输入，`convert` 不生成，去掉
+>   `--break-glass-max-duration`），break-glass 在切换后经控制面按两人流程申请；**取消** §8 中"数据面编译器要求 break-glass 绑定带 `grantedBy`、
+>   `approvedBy`、`change`、`reason`"的规定：两人原则由控制面对每种变更类型强制（`BRK-5`），修订的出处记录作者与批准人，而写在文档里的元数据
+>   挡不住任何能写文档的人（RC1-27；维护者 2026-10-30："A：迁移工具不写 break-glass"，取代同日先前"由编译器强制、上限 24 小时"的决定）；`BreakGlass.request` 不再接受调用方指定的绑定 id（RC1-29）；`four-eyes` 关闭时 break-glass
 >   的保证不约束单个信任根管理员，8.0 只写进文档，平台文档的发布要求 REQUIRED 审计放到 8.1（新增）（RC1-28）。
 > - §7.1：控制面资源中默认空间的占位符改为空间 id 语法本来就不接受的形式，数据面格式不变（RC1-37）。
+>
+> **实现说明（2026-10-30，#1181，批次 B1）**：上一段中 RC1-2、3、4、9、32、33、34 的实现，以下几处与上一段的措辞不同或更具体，以此为准。
+>
+> - §7.4.3：app 列表是 `<p>:control:apps:all`（`ControlStore.apps()`/`putApps()`）。它在平台的**首个修订**写入成功之后、且 `documents()` 中没有列表缺少的、
+>   有头的 App 键时标为完成（不是平台首次写索引时：索引丢失后会把重建的列表又标完成）；`repair-references` 按同一判定标完成；控制面启动时与每次回收都做对账，
+>   发现完整的列表缺少有头的 App 键就标回未完成。新的未知原因 `UNRESOLVED`、`UNREADABLE`，新的不足 `EXPIRY`；平台与租户同 id 的策略在分析中是二义的，
+>   授出者经它什么也不持有。RC1-34 的 `TENANT_BINDING` 条目只列租户文档键与绑定 id，是信息性的：它的变化不使批准失效，不需要单独批准（放宽策略本身仍有
+>   `NOT_ANALYZED`）。
+> - §5.8：租户自有的策略 id 记为 `(platform, id)` 的引用方，读者按引用方的头区分"定义"与"引用"；只定义该 id（且边界不指向它）的租户不阻止平台删除；
+>   读不到的头按引用处理。`repair-references` 是 `cosec-migrate` 的命令（`--to-redis`，或 `--cluster`），只增不删，可在控制面运行时执行。
+> - §5.4、§10.5：`checkedWith` 记录检查与分析读过的每个头和 app 列表的摘要；头写入成功之后的收尾（索引、引用、完成判定、结算、审计、写后检测）在
+>   `NonCancellable` 中执行，其中的非致命错误只记日志，发布照常成立；写后检测发 BEST_EFFORT 的 `HEADS_MOVED` 或 `REVIEW_NEEDED`（检测超时为
+>   `DETECTION_TIMED_OUT`）。
+> - §14.2：授出分析不再读 `documents()`；每次租户分析读 app 列表与各 app 的头。
+> - 留给 B2：重试时按头的出处认出已发布的变更；写后收尾遇到取消或 `Error` 时仍执行 `afterWrite`；首次对账成功之前不信任 app 列表；
+>   滚动升级期间旧实例新建的 app 直到下一次回收才被看到（`upgrading.md` 写明窗口）。
 
 ## 0. 结论先行
 
