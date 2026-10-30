@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.grant.GrantFixtures.policy
 import me.ahoo.cosec.control.grant.GrantFixtures.principal
 import me.ahoo.cosec.control.grant.GrantFixtures.role
 import me.ahoo.cosec.control.grant.GrantFixtures.snapshot
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
@@ -514,6 +515,73 @@ class GrantAnalyzerTest {
                     bindings = forever.bindings + bind("b", principal("bob"), "orders", expiresAt = until),
                 ),
             ).assertContained()
+        }
+    }
+
+    /**
+     * RC1-4: the grantor's role-bound DENYs in an app document count whether or not the change names the app, and an
+     * app document that could not be read leaves the grantor's rights in that app unknown.
+     */
+    @Nested
+    inner class AppDocuments {
+        private val gina = grantor(roles = mapOf("" to listOf("ops")))
+        private val published = GrantDocument(
+            policies = listOf(policy("orders", allow("order:*", "order/**"))),
+            bindings = listOf(bind("ops", role("ops"), "orders", space = "")),
+        )
+        private val billing = GrantDocument(
+            policies = listOf(policy("perm:billing/no-delete", deny("order:delete"))),
+            bindings = listOf(bind("no-delete", role("ops", tenant = null), "perm:billing/no-delete", app = "billing")),
+        )
+        private val grant = GrantDocument(
+            policies = published.policies,
+            bindings = published.bindings + bind("bob", principal("bob"), "orders", space = ""),
+        )
+
+        private fun snapshot(apps: Map<String, GrantDocument>, unread: Dimension<AppId> = Dimension.Only(emptySet())) =
+            GrantSnapshot(
+                apps = apps.mapKeys { AppId(it.key) },
+                tenants = mapOf(ACME to published),
+                now = GrantFixtures.NOW,
+                unreadApps = unread,
+            )
+
+        private fun verdicts(snapshot: GrantSnapshot) =
+            analyzer.analyze(gina, snapshot, GrantChange(ACME, grant)).verdicts.map { it.second }
+
+        @Test
+        fun `a role-bound deny of an app the grant does not name overlaps it`() {
+            verdicts(snapshot(mapOf("billing" to billing))).assertUnknown(UnknownReason.DENY_OVERLAP)
+            verdicts(snapshot(emptyMap())).assertContained()
+        }
+
+        @Test
+        fun `an app document that could not be read makes a grant reaching it unknown`() {
+            verdicts(
+                snapshot(emptyMap(), Dimension.Only(setOf(AppId("billing"))))
+            ).assertUnknown(UnknownReason.UNREADABLE)
+            // A grant in another app does not reach it.
+            val inOrder = GrantDocument(
+                policies = published.policies,
+                bindings = published.bindings + bind("bob", principal("bob"), "orders", app = "order", space = ""),
+            )
+            analyzer.analyze(
+                gina,
+                snapshot(emptyMap(), Dimension.Only(setOf(AppId("billing")))),
+                GrantChange(ACME, inOrder)
+            )
+                .verdicts.map { it.second }.assertContained()
+        }
+
+        @Test
+        fun `without the list of apps, only grants within the apps read are decided`() {
+            val unlisted = snapshot(mapOf("order" to GrantDocument.EMPTY), Dimension.Every())
+            verdicts(unlisted).assertUnknown(UnknownReason.UNREADABLE)
+            val inOrder = GrantDocument(
+                policies = published.policies,
+                bindings = published.bindings + bind("bob", principal("bob"), "orders", app = "order", space = ""),
+            )
+            analyzer.analyze(gina, unlisted, GrantChange(ACME, inOrder)).verdicts.map { it.second }.assertContained()
         }
     }
 

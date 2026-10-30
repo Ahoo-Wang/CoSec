@@ -240,13 +240,33 @@ class GrantGenerator(private val random: Random) {
                 attachable = random.nextInt(3) == 0,
             )
         }
-        val apps = apps.filter { random.nextInt(3) == 0 }.associateWith(::app)
+        val apps = apps.filter { random.nextInt(4) == 0 }.associateWith(::app)
         return GrantSnapshot(
             platform = GrantDocument(policies, bindings),
             apps = apps,
             tenants = mapOf(ACME to document("p")),
             now = GrantFixtures.NOW,
         )
+    }
+
+    /**
+     * [snapshot] as the analysis may get it (RC1-4): now and then without an app document it could not read, or
+     * without the list of apps and so only some of them.
+     */
+    fun unreadable(snapshot: GrantSnapshot): GrantSnapshot = when (random.nextInt(12)) {
+        0 -> snapshot.apps.keys.randomOrNull(random)?.let { app ->
+            GrantSnapshot(snapshot.platform, snapshot.apps - app, snapshot.tenants, snapshot.now, Dimension.Only(setOf(app)))
+        } ?: snapshot
+
+        1 -> GrantSnapshot(
+            snapshot.platform,
+            snapshot.apps.filterKeys { random.nextBoolean() },
+            snapshot.tenants,
+            snapshot.now,
+            Dimension.Every(),
+        )
+
+        else -> snapshot
     }
 
     /** A request that matches [action] and [resource] as often as values allow. */

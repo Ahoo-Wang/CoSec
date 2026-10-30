@@ -56,7 +56,12 @@ class GrantPropertyTest {
             val snapshot = generator.snapshot()
             val gina = generator.subject("gina")
             val candidate = grant(generator, random, snapshot, gina, "g")
-            val analysis = analyzer.analyze(generator.grantor(gina), snapshot, GrantChange(ACME, candidate))
+            // The oracle reads every document; the analysis may have failed to read one (RC1-4).
+            val analysis = analyzer.analyze(
+                generator.grantor(gina),
+                generator.unreadable(snapshot),
+                GrantChange(ACME, candidate)
+            )
             for ((fragment, verdict) in analysis.verdicts) {
                 if (verdict !is GrantVerdict.Contained) continue
                 contained++
@@ -193,9 +198,9 @@ class GrantPropertyTest {
         }
         val policy = GrantPolicy(PolicyId(name), listOf(statement), attachable = random.nextInt(8) == 0)
         val scope = source?.let { scopeFor(it, grantor, random) } ?: generator.scope()
-        val expiresAt = when (random.nextInt(5)) {
-            0, 1, 2 -> source?.expiresAt
-            3 -> generator.expiry()
+        val expiresAt = when (random.nextInt(8)) {
+            in 0..5 -> source?.expiresAt
+            6 -> generator.expiry()
             else -> null
         }
         val binding = Binding(BindingId("$name-b"), generator.subjectRef(), scope, policy.id, expiresAt)

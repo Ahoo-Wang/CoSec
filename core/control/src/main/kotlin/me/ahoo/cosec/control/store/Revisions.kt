@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 
 /** A head as the control plane works with it: decoded, with the store's digest. */
 class Head(val key: SnapshotKey, val document: PolicyDocument, val stored: StoredDocument) {
@@ -333,7 +334,10 @@ class Revisions(
         }
     }
 
-    /** The removed policies of a platform or app candidate that other documents still refer to; `null` for none. */
+    /**
+     * The removed policies of a platform or app candidate that other documents still refer to; `null` for none. A
+     * tenant whose head defines the id itself does not refer to the platform's policy, and does not block (RC1-9).
+     */
     private suspend fun referenced(
         key: SnapshotKey,
         base: Head?,
@@ -344,9 +348,23 @@ class Revisions(
         }
         val kept = candidate.policies.map { it.id }.toSet()
         val blocked = base.document.policies.map { it.id }.filter { it !in kept }
-            .associateWith { referrers(key, it) - key }
+            .associateWith { policy ->
+                val referrers = referrers(key, policy) - key
+                referrers.filterNotTo(HashSet()) { definesItself(it, policy) }
+            }
             .filterValues { it.isNotEmpty() }
         return if (blocked.isEmpty()) null else PublishOutcome.Referenced(blocked)
+    }
+
+    /** Whether [referrer] is a tenant whose head, read, defines [policy] itself; one that cannot be read may refer. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean = try {
+        referrer is SnapshotKey.Tenant && head(referrer)?.document?.policies?.any { it.id == policy } == true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of [$referrer] could not be read; it counts as referring to [${policy.value}]." }
+        false
     }
 
     /**
@@ -354,6 +372,9 @@ class Revisions(
      * policy, and in a tenant document bound in one app, possibly that app's permission policy (RFC 0007 §3.1 N1).
      * Both are indexed: the index may hold more than the true references, never less. A tenant's boundary names a
      * platform boundary policy (RFC 0007 §7.6).
+     *
+     * A tenant's own policy ids are indexed as uses of the platform's id too (RC1-9), so that the platform cannot add
+     * a policy of an id a tenant already defines; readers tell the two apart by the tenant's head.
      */
     private fun references(document: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
         if (document.kind == DocumentKind.PLATFORM) {
@@ -361,6 +382,9 @@ class Revisions(
         }
         val own = document.policies.map { it.id }.toSet()
         val references = LinkedHashSet<Pair<SnapshotKey, PolicyId>>()
+        if (document.kind == DocumentKind.TENANT) {
+            own.forEach { references += SnapshotKey.Platform to it }
+        }
         for (binding in document.bindings) {
             if (binding.policy in own) continue
             references += SnapshotKey.Platform to binding.policy

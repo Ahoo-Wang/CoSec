@@ -209,6 +209,16 @@
         "control:ProviderAttributesTest#a candidate compiles against the platform's and the providers' attributes"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-21",
+      "source": "RFC 0007 §3.1 N2, §5.8, 2026-10-30 revision (RC1-9)",
+      "statement": "The control plane refuses a platform policy whose id a tenant document already defines or binds (422), naming those documents, confirmed by reading their heads; a tenant that only defines the id never keeps the platform from removing its own policy of that id.",
+      "level": "control",
+      "guards": [
+        "control:ChangesTest#the platform cannot add an id a tenant uses, and one that only defines it never blocks a removal - RC1-9"
+      ],
+      "pending": null
     }
   ]
 }

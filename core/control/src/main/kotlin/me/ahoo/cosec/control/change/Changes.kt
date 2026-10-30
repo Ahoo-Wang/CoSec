@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListeners
-import me.ahoo.cosec.control.audit.RevisionRef
+import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
@@ -103,11 +103,13 @@ class Changes(
     private val context = object : ChangeChecks.Context {
         override suspend fun head(key: SnapshotKey): Head? = revisions.head(key)
 
-        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> = revisions.referrers(
-            target,
-            policy
-        )
+        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
+            revisions.referrers(target, policy)
+
+        override suspend fun documents(): Set<SnapshotKey> = store.documents()
     }
+
+    private val movedHeads = MovedHeads(revisions, authority, context, clock)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -515,7 +517,22 @@ class Changes(
             )
         }
         audit(outcomeOf(change, settled), settled, publisher.actor)
+        if (settled.state == ChangeState.PUBLISHED) {
+            recordMoved(settled, rechecked, head?.document, candidate, publisher)
+        }
         return settled
+    }
+
+    /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
+    private suspend fun recordMoved(
+        published: ChangeRequest,
+        rechecked: ChangeRequest,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        publisher: Operator,
+    ) = movedHeads.record(published, rechecked, base, candidate, publisher) { found ->
+        val change = published.copy(escalations = found.escalations, note = found.note)
+        audit(found.kind, change, publisher.actor, found.moved)
     }
 
     /** How a publish is recorded: who published, who approved what needed approval, and the shadow window. */
@@ -566,7 +583,15 @@ class Changes(
                 escalations = emptyList(),
                 updatedAt = now
             )
-        val checkedResult = checks.check(change.key, candidate, change.kind, change.operations, head?.document, context)
+        val recording = RecordingContext(context)
+        val checkedResult = checks.check(
+            change.key,
+            candidate,
+            change.kind,
+            change.operations,
+            head?.document,
+            recording
+        )
         val breakGlass = BreakGlassRules.findings(
             change.kind,
             change.operations,
@@ -577,7 +602,7 @@ class Changes(
         )
         val result = CheckResult(applyFindings + breakGlass + checkedResult.findings, checkedResult.checkedWith)
         val escalations = if (result.clean) {
-            authority.escalations(operator, change.key, change.operations, head?.document, candidate, context, now)
+            authority.escalations(operator, change.key, change.operations, head?.document, candidate, recording, now)
         } else {
             emptyList()
         }
@@ -585,7 +610,7 @@ class Changes(
             state = if (result.clean) ChangeState.CHECKED else ChangeState.DRAFT,
             findings = result.findings,
             candidate = if (result.clean) CandidateDigest.of(candidate) else null,
-            checkedWith = result.checkedWith,
+            checkedWith = result.checkedWith + recording.read.filterKeys { it != change.key && it !in result.checkedWith },
             escalations = escalations,
             updatedAt = now,
         )
@@ -669,28 +694,14 @@ class Changes(
     }
 
     /** Tells the listeners (RFC 0007 §10.5); a REQUIRED one that cannot record a gated step stops it (503). */
-    private suspend fun audit(kind: ChangeEvent.Kind, change: ChangeRequest, operator: Actor) {
-        val event = ChangeEvent(
-            id = "${change.id.value}:${kind.name}:${clock.millis()}",
-            time = clock.instant(),
-            kind = kind,
-            operator = operator,
-            change = change.id,
-            document = change.key,
-            base = RevisionRef(change.base.revision, change.base.digest?.toString()),
-            candidate = change.candidate?.let {
-                RevisionRef(
-                    change.publishedRevision ?: (change.base.revision + 1),
-                    it
-                )
-            },
-            escalations = change.escalations,
-            confirmations = change.confirmations,
-            shadow = change.shadow?.closed,
-            note = change.note,
-        )
+    private suspend fun audit(
+        kind: ChangeEvent.Kind,
+        change: ChangeRequest,
+        operator: Actor,
+        moved: List<MovedHead> = emptyList(),
+    ) {
         try {
-            listeners.publish(event)
+            listeners.publish(change.event(kind, operator, clock, moved))
         } catch (e: ChangeAuditException) {
             throw ChangeRejectedException(UNAVAILABLE, e.message.orEmpty(), e)
         }

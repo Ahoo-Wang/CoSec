@@ -72,13 +72,23 @@ class GrantDocument(
     }
 }
 
-/** The published snapshot the grantor's own rights are read from (RFC 0007 §7.4.2): the documents at [now]. */
+/**
+ * The published snapshot the grantor's own rights are read from (RFC 0007 §7.4.2): the documents at [now]. [apps]
+ * holds every app document, whether or not a change names its app (RC1-4): an app document binds roles, so the grantor
+ * may hold or be denied something in any app.
+ */
 class GrantSnapshot(
     val platform: GrantDocument = GrantDocument.EMPTY,
     val apps: Map<AppId, GrantDocument> = emptyMap(),
     val tenants: Map<TenantId, GrantDocument> = emptyMap(),
     /** Epoch milliseconds: bindings that expired by then do not apply. */
     val now: Long,
+    /**
+     * The apps whose document could not be read, so what the grantor holds or is denied there is not known (RC1-4):
+     * none by default, and [Dimension.Every] for every app that [apps] does not have, when not even the list of app
+     * documents could be read. A fragment that reaches one of them is never contained.
+     */
+    val unreadApps: Dimension<AppId> = Dimension.Only(emptySet()),
 ) {
     fun tenant(id: TenantId): GrantDocument = tenants[id] ?: GrantDocument.EMPTY
 }

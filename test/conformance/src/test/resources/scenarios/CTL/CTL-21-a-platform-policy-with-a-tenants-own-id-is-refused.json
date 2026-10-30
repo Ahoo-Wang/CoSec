@@ -1,0 +1,83 @@
+{
+  "rules": [
+    "CTL-21"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-9: acme defines its own editor and binds it. The platform then adding a policy of the same id would make it ambiguous in acme, and removing acme's later would re-point acme's binding to the platform's: the control plane refuses it (422), naming tenant:acme.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "editor",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          },
+          {
+            "putBinding": {
+              "id": "staff",
+              "subject": {
+                "role": "staff"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "editor"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "editor",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "platform": 0,
+      "tenant:acme": 1
+    }
+  }
+}

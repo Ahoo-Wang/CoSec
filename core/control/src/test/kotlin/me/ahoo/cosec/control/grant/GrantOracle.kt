@@ -81,7 +81,7 @@ enum class OracleDecision { PERMIT, DENY, INDETERMINATE }
  * An independent transcription of the data plane over [GrantSnapshot]s, for the soundness properties A5, A6 and A8:
  * bindings applied as RFC 0004 §4.2 says and only until they expire, deny before allow, a binding or attachment to a
  * policy that does not resolve fails closed, and so does a tenant binding or attachment of an id the platform also
- * defines, unless both are the same policy (RFC 0007 N2). Patterns and conditions are matched and evaluated by the
+ * defines, unless both have the same content (RFC 0007 N2). Patterns and conditions are matched and evaluated by the
  * engine and the model; only the combination is written here, without any of the analysis's code. Subject attributes
  * read as the engine reads them, as their `toString()`.
  */
@@ -156,18 +156,30 @@ class GrantOracle(
     }
 
     /**
-     * The tenant's policy [id], else the platform's. When both define it as different policies (RFC 0007 N2), nothing,
-     * which fails; or, unless [ambiguousFails], a policy that does nothing.
+     * The tenant's policy [id], else the platform's. When both define it with different content (RFC 0007 N2, as the
+     * engine compares them), nothing, which fails; or, unless [ambiguousFails], a policy that does nothing.
      */
     private fun shared(tenant: GrantDocument, platform: GrantDocument, id: PolicyId): GrantPolicy? {
         val own = tenant.policy(id)
         val other = platform.policy(id)
         return when {
-            own == null || other == null || own === other -> own ?: other
+            own == null || other == null || sameContent(own, other) -> own ?: other
             ambiguousFails -> null
             else -> LEFT_OUT
         }
     }
+
+    /** Whether two policies decide alike: the same flags, statements and conditions, the conditions as checked. */
+    private fun sameContent(a: GrantPolicy, b: GrantPolicy): Boolean =
+        a.attachable == b.attachable && checked(a.condition) == checked(b.condition) &&
+            a.statements.size == b.statements.size &&
+            a.statements.zip(b.statements).all { (x, y) ->
+                x.effect == y.effect && x.actions.map { it.toString() } == y.actions.map { it.toString() } &&
+                    x.resources.map { it.toString() } == y.resources.map { it.toString() } &&
+                    checked(x.condition) == checked(y.condition)
+            }
+
+    private fun checked(condition: Condition?) = condition?.let { (checker.check(it) as CheckResult.Valid).condition }
 
     private fun applies(binding: Binding, now: Long, request: OracleRequest): Boolean {
         if (binding.expiresAt != null && now >= binding.expiresAt!!) return false

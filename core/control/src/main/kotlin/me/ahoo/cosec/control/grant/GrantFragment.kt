@@ -97,6 +97,9 @@ enum class UnknownReason {
 
     /** The fragment's binding names a policy that does not resolve, so what it grants cannot be told (RC1-32). */
     UNRESOLVED,
+
+    /** An app document the fragment reaches could not be read, so the grantor's rights there are not known (RC1-4). */
+    UNREADABLE,
 }
 
 /** How far the closest of the grantor's ALLOWs got, in the order the analysis checks (RFC 0007 §7.4.3). */

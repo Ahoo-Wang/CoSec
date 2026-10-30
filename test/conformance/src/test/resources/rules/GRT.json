@@ -74,6 +74,20 @@
         "engine:SubjectAttributesTest"
       ],
       "pending": null
+    },
+    {
+      "id": "GRT-6",
+      "source": "RFC 0007 §7.4.3 step 3, 2026-10-30 revision (RC1-4)",
+      "statement": "The analysis reads the grantor's rights from every app document there is, whether or not the change names its app; a fragment that reaches an app whose document cannot be read is never contained.",
+      "level": "control",
+      "properties": [
+        "control:GrantPropertyTest#A5 the grant analysis is sound"
+      ],
+      "guards": [
+        "control:GrantAnalyzerTest",
+        "control:ChangesTest#the analysis reads every app document, and one it cannot read leaves a grant unknown - RC1-4"
+      ],
+      "pending": null
     }
   ]
 }

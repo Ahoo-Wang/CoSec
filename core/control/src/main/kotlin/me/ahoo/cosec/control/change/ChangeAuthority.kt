@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalysis
 import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
@@ -209,7 +210,14 @@ class ChangeAuthority(
         return escalations
     }
 
-    /** The grant analysis of [candidate] replacing [base] as tenant [key], by [operator]; a failure is a 503. */
+    /**
+     * The grant analysis of [candidate] replacing [base] as tenant [key], by [operator]; a failure is a 503. It reads
+     * every app document there is, not only the apps the change names (RC1-4): an app document binds roles, so the
+     * grantor may be denied something in any app. They are listed with [ChangeChecks.Context.documents], which never
+     * names fewer documents than exist as long as only [me.ahoo.cosec.control.store.Revisions] writes them, the same
+     * premise the back-reference index rests on. One that cannot be read leaves the grantor's rights in its app unknown,
+     * and a list that cannot be read every app not named.
+     */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun analyze(
         operator: Operator,
@@ -220,12 +228,19 @@ class ChangeAuthority(
         now: Instant,
     ): GrantAnalysis = try {
         val tenant = TenantId(key.tenantId)
-        val apps = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
+        val named = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
+        val listed = listedApps(documents)
+        val apps = LinkedHashMap<AppId, PolicyDocument?>()
+        val unread = HashSet<AppId>()
+        for (app in named + listed.orEmpty()) {
+            appHead(documents, app)?.let { apps[app] = it.document } ?: run { unread += app }
+        }
         val snapshot = GrantDocuments.snapshot(
             platform = documents.head(SnapshotKey.Platform)?.document,
-            apps = apps.associateWith { documents.head(SnapshotKey.App(it.value))?.document },
+            apps = apps,
             tenants = mapOf(tenant to base),
             now = now.toEpochMilli(),
+            unreadApps = if (listed == null) Dimension.Every() else Dimension.Only(unread),
         )
         val grantor = Grantor(
             operator.tenant,
@@ -240,6 +255,30 @@ class ChangeAuthority(
     } catch (e: Exception) {
         throw ChangeRejectedException(UNAVAILABLE, "the grant analysis of [$key] failed: ${e.message}", e)
     }
+
+    /** The apps of every document there is, or `null` when they cannot be listed. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun listedApps(documents: ChangeChecks.Context): Set<AppId>? = try {
+        documents.documents().filterIsInstance<SnapshotKey.App>().mapTo(LinkedHashSet()) { AppId(it.appId) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The documents could not be listed; every app a grant reaches but does not name is unknown." }
+        null
+    }
+
+    /** The head of [app]'s document, [AppHead.document] `null` when there is none; `null` when it cannot be read. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun appHead(documents: ChangeChecks.Context, app: AppId): AppHead? = try {
+        AppHead(documents.head(SnapshotKey.App(app.value))?.document)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of app [${app.value}] could not be read; grants that reach it are unknown." }
+        null
+    }
+
+    private class AppHead(val document: PolicyDocument?)
 
     /**
      * What a platform or app change needs (RFC 0007 §7.4.1): the analysis reads tenant documents, so one by anyone but

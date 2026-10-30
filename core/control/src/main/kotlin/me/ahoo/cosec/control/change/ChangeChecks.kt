@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.change
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.Match
@@ -27,6 +28,7 @@ import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import kotlin.coroutines.cancellation.CancellationException
 
 /** The limits of what a change may publish (RFC 0007 §6.2 V2), and how changes expire and are approved. */
 class ChangeOptions(
@@ -109,11 +111,16 @@ class ChangeChecks(
     /** The headers the host reads credentials from besides the fixed ones, which no reference may read (`CND-5`). */
     private val credentialHeaders: Set<String> = emptySet(),
 ) {
-    /** Reads what the checks combine a candidate with: current heads, and the back-references of the platform's policies. */
+    /**
+     * Reads what the checks and the grant analysis combine a candidate with: current heads, the back-references of the
+     * platform's and apps' policies, and every document there is ([me.ahoo.cosec.control.store.ControlStore.documents]: never fewer than exist).
+     */
     interface Context {
         suspend fun head(key: SnapshotKey): Head?
 
         suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey>
+
+        suspend fun documents(): Set<SnapshotKey>
     }
 
     suspend fun check(
@@ -159,6 +166,7 @@ class ChangeChecks(
         when (candidate.kind) {
             DocumentKind.PLATFORM -> {
                 removedReferences(base, candidate, context, findings)
+                sharedIds(base, candidate, context, findings)
                 sectionWarnings(base, candidate, findings)
             }
 
@@ -219,6 +227,12 @@ class ChangeChecks(
         }
     }
 
+    /**
+     * The policies a platform candidate removes that other documents still refer to (RFC 0007 §5.8). A tenant whose
+     * head defines the id itself refers to its own policy, not the platform's (RC1-9): the index lists it for
+     * [sharedIds], and removing the platform's policy ends an ambiguity, so it does not block. Any other referrer does,
+     * one whose head cannot be read included: the index may hold more than the true references, never less.
+     */
     private suspend fun removedReferences(
         base: PolicyDocument?,
         candidate: PolicyDocument,
@@ -227,11 +241,68 @@ class ChangeChecks(
     ) {
         val kept = candidate.policies.map { it.id }.toSet()
         for (policy in base?.policies.orEmpty().map { it.id }.filter { it !in kept }) {
-            val referrers = context.referrers(SnapshotKey.Platform, policy)
+            val referrers = context.referrers(SnapshotKey.Platform, policy).filterNotTo(HashSet()) {
+                definesItself(context, it, policy)
+            }
             if (referrers.isNotEmpty()) {
                 findings += Finding("REFERENCES", "$.policies", "[${policy.value}] is referred to by ${referrers.sorted()}", UNPROCESSABLE)
             }
         }
+    }
+
+    /**
+     * The policy ids a platform candidate adds that a tenant document already uses, defining or binding it (RFC 0007
+     * N2, RC1-9): the id would be ambiguous in that tenant, which the engine fails closed on, and removing the tenant's
+     * own policy later would re-point its bindings to the platform's. The tenants come from the back-reference index,
+     * each confirmed by reading its head; one whose head cannot be read is refused as well.
+     */
+    private suspend fun sharedIds(
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        context: Context,
+        findings: MutableList<Finding>,
+    ) {
+        val existing = base?.policies.orEmpty().map { it.id }.toSet()
+        for ((i, policy) in candidate.policies.withIndex()) {
+            if (policy.id in existing) continue
+            val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
+            val uses = tenants.associateWith { uses(context, it, policy.id) }
+            val using = uses.filterValues { it != false }.keys
+            if (using.isEmpty()) continue
+            val status = if (uses.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
+            findings += Finding(
+                "V2",
+                "$.policies[$i].id",
+                "[${policy.id.value}] is a policy id ${using.map { it.toString() }.sorted()} already use" +
+                    if (status == UNAVAILABLE) ", or whose document could not be read" else "",
+                status,
+            )
+        }
+    }
+
+    /** Whether the head of [tenant] defines or binds [policy]; `null` when it cannot be read. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun uses(context: Context, tenant: SnapshotKey.Tenant, policy: PolicyId): Boolean? = try {
+        context.head(tenant)?.document.let { document ->
+            document != null &&
+                (document.policies.any { it.id == policy } || document.bindings.any { it.policy == policy })
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of [$tenant] could not be read; [${policy.value}] is refused as one it may use." }
+        null
+    }
+
+    /** Whether [referrer] is a tenant whose readable head defines [policy] itself. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun definesItself(context: Context, referrer: SnapshotKey, policy: PolicyId): Boolean = try {
+        referrer is SnapshotKey.Tenant && context.head(referrer)?.document?.policies?.any { it.id == policy } == true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of [$referrer] could not be read; it counts as referring to [${policy.value}]." }
+        false
     }
 
     private fun sectionWarnings(base: PolicyDocument?, candidate: PolicyDocument, findings: MutableList<Finding>) {
@@ -261,8 +332,10 @@ class ChangeChecks(
     private fun Set<SnapshotKey>.sorted(): List<String> = map { it.toString() }.sorted()
 
     internal companion object {
+        private val log = KotlinLogging.logger {}
         private const val BAD_REQUEST = 400
         private const val UNPROCESSABLE = 422
+        private const val UNAVAILABLE = 503
         private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
         val RESERVED = listOf("cosec:", "g:", "r:")
     }

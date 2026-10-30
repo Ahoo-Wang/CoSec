@@ -61,8 +61,27 @@ class HeldStatement(
  *   ambiguous, which only takes rights away. Expired bindings, the blacklist and the break-glass root are left out: the blacklist
  *   binds every grantee too, and leaving out an ALLOW only makes the analysis stricter.
  * - A statement held through a binding with `expiresAt` carries that expiry ([HeldStatement.expiresAt], RC1-3).
+ * - Where an app document could not be read ([GrantSnapshot.unreadApps]), the grantor's rights are not known at all
+ *   ([unread], RC1-4).
  */
-class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatement>) {
+class GrantorRights(
+    val allows: List<HeldStatement>,
+    val denies: List<HeldStatement>,
+    private val unreadApps: Dimension<AppId> = Dimension.Only(emptySet()),
+    private val readApps: Set<AppId> = emptySet(),
+) {
+    /** Whether [scope] reaches an app whose document could not be read, where the grantor's rights are not known. */
+    fun unread(scope: ScopeSet): Boolean {
+        val apps = scope.apps
+        return when (val unread = unreadApps) {
+            is Dimension.Every -> apps !is Dimension.Only || !readApps.containsAll(apps.values)
+            is Dimension.Only -> when (apps) {
+                is Dimension.Every -> unread.values.isNotEmpty()
+                is Dimension.Only -> apps.values.any { it in unread.values }
+            }
+        }
+    }
+
     companion object {
         private val BUILTIN = setOf(PolicyId("cosec:blacklist"), PolicyId("cosec:root"))
         private val EVERYTHING = GrantStatement(Effect.DENY, listOf(ActionPattern.ANY), name = "unresolved")
@@ -73,7 +92,7 @@ class GrantorRights(val allows: List<HeldStatement>, val denies: List<HeldStatem
             snapshot.apps.forEach { (app, document) -> collector.document(document, DocumentKind.APP, app) }
             collector.document(snapshot.tenant(grantor.tenant), DocumentKind.TENANT, null)
             collector.attachments()
-            return GrantorRights(collector.allows, collector.denies)
+            return GrantorRights(collector.allows, collector.denies, snapshot.unreadApps, snapshot.apps.keys)
         }
     }
 

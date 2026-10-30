@@ -54,11 +54,13 @@ object GrantDocuments {
         apps: Map<AppId, PolicyDocument?>,
         tenants: Map<TenantId, PolicyDocument?>,
         now: Long,
+        unreadApps: Dimension<AppId> = Dimension.Only(emptySet()),
     ): GrantSnapshot = GrantSnapshot(
         platform = platform(platform),
         apps = apps.mapValues { of(it.value) },
         tenants = tenants.mapValues { of(it.value) },
         now = now,
+        unreadApps = unreadApps,
     )
 
     private fun policy(definition: PolicyDefinition): GrantPolicy = GrantPolicy(

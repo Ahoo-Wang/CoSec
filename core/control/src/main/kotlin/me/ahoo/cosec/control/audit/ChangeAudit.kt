@@ -45,8 +45,21 @@ private val log = KotlinLogging.logger {}
 data class RevisionRef(val revision: Long, val digest: String?)
 
 /**
+ * A head a published change was checked with that is not the same once it is published (RC1-33): its [document], the
+ * digest it was checked with ([checked], `null` for none) and the digest it has now ([current], `null` for none, or
+ * when it cannot be read: [readable]).
+ */
+data class MovedHead(
+    val document: SnapshotKey,
+    val checked: String?,
+    val current: String?,
+    val readable: Boolean = true
+)
+
+/**
  * What happened to a change (RFC 0007 §10.5). Never carries a document's content: the change id, the document, the
- * base and candidate it was about, what needed approval, the confirmations, the shadow summary and the note.
+ * base and candidate it was about, what needed approval, the confirmations, the shadow summary and the note; for
+ * [Kind.HEADS_MOVED] and [Kind.REVIEW_NEEDED], the heads that [moved] and the escalations the analysis finds now.
  */
 class ChangeEvent(
     val id: String,
@@ -61,6 +74,7 @@ class ChangeEvent(
     val confirmations: List<Confirmation> = emptyList(),
     val shadow: ShadowSummary? = null,
     val note: String = "",
+    val moved: List<MovedHead> = emptyList(),
 ) {
     enum class Kind {
         PROPOSED,
@@ -77,6 +91,18 @@ class ChangeEvent(
         REVOKED,
         BOOTSTRAP,
         MIGRATE,
+
+        /**
+         * A change was published while another document it was checked with moved (RC1-33): the analysis, run again on
+         * the current heads, finds nothing the publish did not have approved. Recorded, nothing to do.
+         */
+        HEADS_MOVED,
+
+        /**
+         * As [HEADS_MOVED], but the analysis run again finds an escalation the publish did not have approved, or could
+         * not run: the published change may need a person's review (RC1-33). Nothing was rolled back.
+         */
+        REVIEW_NEEDED,
         ;
 
         /**
@@ -225,6 +251,14 @@ object ChangeEventJson {
                     "policy",
                     it.policy.value
                 ).put("statement", it.statement).put("kind", it.kind).put("digest", it.digest)
+            }
+        }
+        if (event.moved.isNotEmpty()) {
+            root.putArray("moved").apply {
+                event.moved.forEach {
+                    addObject().put("document", it.document.toString()).put("checked", it.checked)
+                        .put("current", it.current).put("readable", it.readable)
+                }
             }
         }
         event.shadow?.let { shadow ->

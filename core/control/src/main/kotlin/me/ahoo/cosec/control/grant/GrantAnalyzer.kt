@@ -287,9 +287,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
             }
         }
         val scope = refine(fragment.scope, granted)
-        if (scope.isEmpty) {
-            return GrantVerdict.Contained(null)
-        }
+        unreached(rights, scope)?.let { return it }
         val by = when (val found = holder(grantor, rights, fragment, scope, granted)) {
             null -> return notCovered(Shortfall.NO_ALLOW, "the grantor holds no ALLOW", null)
             is Search.Missed -> return notCovered(
@@ -315,6 +313,18 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
             return unknown(UnknownReason.CROSS_TENANT, null, "the grantor is in ${grantor.tenant.value}", null)
         }
         return null
+    }
+
+    /**
+     * The verdict when [scope] (σ') settles it before any ALLOW is looked at, or `null`: contained when the fragment
+     * applies nowhere, UNKNOWN when it reaches an app whose document could not be read (RC1-4).
+     */
+    private fun unreached(rights: GrantorRights, scope: ScopeSet): GrantVerdict? = when {
+        scope.isEmpty -> GrantVerdict.Contained(null)
+        rights.unread(
+            scope
+        ) -> unknown(UnknownReason.UNREADABLE, null, "an app document it reaches could not be read", null)
+        else -> null
     }
 
     /** What the search for one containing ALLOW found: it, the one that got furthest, or nothing (`null`). */
