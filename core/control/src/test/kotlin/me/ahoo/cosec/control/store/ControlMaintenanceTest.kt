@@ -29,6 +29,8 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -72,6 +74,37 @@ class ControlMaintenanceTest {
         store.openChanges().assert().isEmpty()
         maintenance.reclaim().getValue(ACME).records.assert().containsExactly(second)
         maintenance.reclaim().assert().isEmpty()
+    }
+
+    /**
+     * Review of #1181: an app document published by something that does not keep the app list (an instance or a
+     * cosec-migrate from before the upgrade, or after a downgrade) makes a complete list incomplete again.
+     */
+    @Test
+    fun `reclamation marks a complete app list incomplete when it misses an app document - RC1-4`() = runBlocking<Unit> {
+        val billing = SnapshotKey.App("billing")
+        revisions.publish(SnapshotKey.Platform, null, candidate(SnapshotKey.Platform), publication())
+        revisions.publish(billing, null, candidate(billing), publication())
+        maintenance.reclaim()
+        store.apps()!!.value.assert().isEqualTo(AppList(setOf("billing"), complete = true))
+
+        val older = object : ControlStore by store {
+            override suspend fun apps(): Versioned<AppList>? = null
+
+            override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean = true
+        }
+        val legacy = SnapshotKey.App("legacy")
+        Revisions(older, clock).publish(legacy, null, candidate(legacy), publication())
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+        store.apps()!!.value.complete.assert().isTrue()
+
+        maintenance.reclaim()
+        store.apps()!!.value.assert().isEqualTo(AppList(setOf("billing"), complete = false))
+        // Nothing more to do until repair-references lists it.
+        revisions.reconcileApps(store.documents()).assert().isEmpty()
+        revisions.completeApps(setOf("billing", "legacy")).assert().isTrue()
+        maintenance.reclaim()
+        store.apps()!!.value.complete.assert().isTrue()
     }
 
     @Test

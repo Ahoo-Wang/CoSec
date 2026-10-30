@@ -32,14 +32,16 @@ analysis read the author's rights as enforcement does, so some changes that publ
   that reaches that app. An app document that cannot be read makes such a grant an escalation (`UNREADABLE`). The
   analysis trusts the app list only once it is complete, and an upgraded store's list is not: **until
   [`cosec-migrate repair-references`](#repair-the-back-reference-index) has run after the upgrade, every tenant grant
-  over every app (a binding with app `*`, or an attachment) needs an approval** (`UNREADABLE`), and the control plane
-  logs a WARN that names the command.
+  over every app (a binding with app `*`, or an attachment, also one a condition narrows to apps the change does not
+  name) needs an approval** (`UNREADABLE`), and the control plane logs a WARN that names the command, at most once a
+  minute.
 - **A platform policy cannot take a tenant's id** (RC1-9, `CTL-21`). A platform change that adds a policy whose id a
   tenant document defines or binds is refused (`V2`, `422`, naming the tenant documents). A tenant that defines the
   id itself no longer blocks the platform from removing its own policy of that id. The back-reference index learns
   only the ids a tenant adds after the upgrade; the ones its document already had enter it only through
-  `repair-references`: **after upgrading, run [`cosec-migrate repair-references`](#repair-the-back-reference-index)
-  once**, as a Kubernetes Job, with the Redis and key prefix of the control plane. Until it has run, a platform policy
+  `repair-references`: **once every control-plane instance and every `cosec-migrate` binary runs this version, run
+  [`cosec-migrate repair-references`](#repair-the-back-reference-index) once**, as a Kubernetes Job, with the Redis
+  and key prefix of the control plane, and again after any downgrade. Until it has run, a platform policy
   that takes the id of a tenant's own policy from before the upgrade is not refused, only ambiguous in that tenant,
   which enforcement fails closed on.
 - **Escalations** gain the reasons `UNRESOLVED` (a new binding of a policy no document defines, RC1-32),
@@ -292,6 +294,11 @@ how many documents it visited and how many references it added. It only adds, so
 runs, and running it again adds nothing: an entry the index has stays, and an extra one blocks a removal at most. A
 document whose head cannot be read is printed as `FAILED <doc>: <reason>`, the others are still visited, and the
 command exits with `1`.
+
+Run it once every control-plane instance and every `cosec-migrate` binary that writes to this Redis runs this
+version, not during a rolling upgrade: an older one publishes app documents without listing them. The reclamation
+pass marks the list incomplete again when it finds one ([Storage](./storage.md#publishing-through-the-control-plane)),
+so a run too early, or a downgrade, only sends grants back to approval; run it again after the upgrade is complete.
 
 It then lists every app document among the documents in the app list and marks the list complete, printing
 `The app list is complete: <n> app(s).`; until then the grant analysis takes every grant over every app as

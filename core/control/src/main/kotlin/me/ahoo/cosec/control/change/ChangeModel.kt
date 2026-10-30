@@ -203,6 +203,12 @@ data class Escalation(val subject: String, val reason: String, val detail: Strin
 
     companion object {
         const val TENANT_BINDING = "TENANT_BINDING"
+
+        /**
+         * Only in a [me.ahoo.cosec.control.audit.ChangeEvent.Kind.REVIEW_NEEDED] event: the comparison after a publish
+         * did not finish in time, so whether anything moved is not known (RC1-33).
+         */
+        const val DETECTION_TIMED_OUT = "DETECTION_TIMED_OUT"
     }
 }
 

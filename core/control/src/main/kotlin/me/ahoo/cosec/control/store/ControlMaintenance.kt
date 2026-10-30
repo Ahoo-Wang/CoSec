@@ -41,7 +41,9 @@ private val log = KotlinLogging.logger {}
  *
  * - [reclaim] removes the revision records retention no longer keeps (RFC 0007 §5.7), document by document, keeping
  *   what open changes rest on. [Revisions.reclaim] takes a lease per document, so one instance does each. A pass that
- *   cannot read every open change reclaims nothing: it would not know what they rest on;
+ *   cannot read every open change reclaims nothing: it would not know what they rest on. With the documents it reads,
+ *   it marks a complete app list incomplete again when an app document is missing from it ([Revisions.reconcileApps],
+ *   RC1-4);
  * - [closeShadowWindows] looks at every shadowing change ([Changes.shadowed], RFC 0007 §6.4) under the
  *   [SHADOW_LEASE], so one instance does it per period. The pass is bounded by [shadowInterval] and the lease lasts
  *   twice that, so it never outlives the lease; it is released when the pass ends.
@@ -77,7 +79,9 @@ class ControlMaintenance(
             return emptyMap()
         }
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
-        for (key in store.documents()) {
+        val documents = store.documents()
+        attempt("reconcile the app list with the documents") { revisions.reconcileApps(documents) }
+        for (key in documents) {
             val keep = open.filter { it.key == key }.flatMapTo(HashSet()) { it.restsOn() }
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.records.isNotEmpty() || it.orphans.isNotEmpty() }

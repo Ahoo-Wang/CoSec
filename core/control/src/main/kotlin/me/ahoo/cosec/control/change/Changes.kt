@@ -16,6 +16,8 @@
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
@@ -465,6 +467,9 @@ class Changes(
      * the grant analysis runs again as them on the current heads. When that finds escalations the change's approval
      * does not validly cover (missing, for another candidate, expired, the author's or the publisher's own), the change
      * goes back to `AWAITING_APPROVAL` with them, keeping its slot, and nothing is published.
+     *
+     * Once the write starts, it runs to the end even when the caller is cancelled: the change is settled, its outcome
+     * audited and what moved meanwhile recorded.
      */
     suspend fun publish(publisher: Operator, id: ChangeId, ack: ShadowAck? = null): ChangeRequest {
         val change = visible(publisher, id)
@@ -495,35 +500,38 @@ class Changes(
         val candidate = applied(change, head?.document).first!!
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
-        val settled = when (
-            val outcome = revisions.publish(
-                change.key,
-                head,
-                candidate,
-                publication(change, publisher, rechecked)
-            )
-        ) {
-            is PublishOutcome.Published -> settle(change, ChangeState.PUBLISHED, published = outcome.revision)
-            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
-            is PublishOutcome.Referenced -> settle(
-                change,
-                ChangeState.DRAFT,
-                outcome.referrers.map { (policy, referrers) ->
-                    Finding(
-                        "REFERENCES",
-                        "$.policies",
-                        "[${policy.value}] is referred to by ${referrers.map { it.toString() }.sorted()}",
-                        UNPROCESSABLE
-                    )
-                },
-            )
+        // From the write on, a client that goes away must not leave the change unsettled or unaudited: each step is
+        // bounded by its store's or listeners' own timeouts.
+        return withContext(NonCancellable) {
+            val settled = when (
+                val outcome = revisions.publish(
+                    change.key,
+                    head,
+                    candidate,
+                    publication(change, publisher, rechecked)
+                )
+            ) {
+                is PublishOutcome.Published -> settle(change, ChangeState.PUBLISHED, published = outcome.revision)
+                is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
+                is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, referenced(outcome))
+            }
+            audit(outcomeOf(change, settled), settled, publisher.actor)
+            if (settled.state == ChangeState.PUBLISHED) {
+                recordMoved(settled, rechecked, head?.document, candidate, publisher)
+            }
+            settled
         }
-        audit(outcomeOf(change, settled), settled, publisher.actor)
-        if (settled.state == ChangeState.PUBLISHED) {
-            recordMoved(settled, rechecked, head?.document, candidate, publisher)
-        }
-        return settled
     }
+
+    private fun referenced(outcome: PublishOutcome.Referenced): List<Finding> =
+        outcome.referrers.map { (policy, referrers) ->
+            Finding(
+                "REFERENCES",
+                "$.policies",
+                "[${policy.value}] is referred to by ${referrers.map { it.toString() }.sorted()}",
+                UNPROCESSABLE
+            )
+        }
 
     /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
     private suspend fun recordMoved(

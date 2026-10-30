@@ -86,9 +86,9 @@ internal class MovedHeads(
     /**
      * Records with [audit] what [detect] finds about [published]: the publish has happened whatever it finds, so a
      * failure is only logged. It runs to the end even when the caller is cancelled (a client that disconnects), within
-     * [timeout]; one that does not finish in time is recorded as [ChangeEvent.Kind.REVIEW_NEEDED]. The event is
-     * delivered as every event but the gated ones, best effort: a REQUIRED listener could not undo the write, so it does
-     * not wait for one.
+     * [timeout]; one that does not finish in time is recorded as [ChangeEvent.Kind.REVIEW_NEEDED] with the escalation
+     * [Escalation.DETECTION_TIMED_OUT], so it is told apart from a head that moved. The event is delivered as every
+     * event but the gated ones, best effort: a REQUIRED listener could not undo the write, so it does not wait for one.
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun record(
@@ -107,7 +107,7 @@ internal class MovedHeads(
                 null -> HeadsMoved(
                     ChangeEvent.Kind.REVIEW_NEEDED,
                     emptyList(),
-                    emptyList(),
+                    listOf(Escalation(published.key.toString(), Escalation.DETECTION_TIMED_OUT, "within $timeout")),
                     "the heads could not be compared within $timeout"
                 )
 

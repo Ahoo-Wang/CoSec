@@ -106,8 +106,7 @@ interface ControlStore : CandidateStore {
 
     /**
      * Every document this store has indexed revisions for, so reclamation can visit each (RFC 0007 §5.7). It may name
-     * more than exist, never fewer: a key is added before its first index write and never removed. A list that was lost
-     * is rebuilt as documents are published again.
+     * more than exist, never fewer: a key is added before its first index write and never removed.
      */
     suspend fun documents(): Set<SnapshotKey>
 

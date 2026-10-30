@@ -270,7 +270,8 @@ The analysis reads the author's rights as enforcement does:
   the change names that app. The analysis reads every app document the app list names; one that cannot be read makes
   every grant that reaches its app `UNREADABLE`. Until the app list is complete (after an upgrade, until
   [`cosec-migrate repair-references`](../operations/upgrading.md#repair-the-back-reference-index) has run), every grant
-  over every app, a binding with app `*` or an attachment, is `UNREADABLE`.
+  over every app, a binding with app `*` or an attachment, is `UNREADABLE`, also one whose condition narrows it to apps
+  the change does not name: the analysis takes the app from the binding's scope, not from the condition.
 
 Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
 whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the

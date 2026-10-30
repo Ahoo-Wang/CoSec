@@ -107,6 +107,9 @@ class MovedHeadsTest {
         impatient.record(change, change, null, candidate, ALICE_OP) { found = it }
         found!!.kind.assert().isEqualTo(ChangeEvent.Kind.REVIEW_NEEDED)
         found!!.note.assert().contains("could not be compared within")
+        // Told apart from a head that moved: nothing is named as moved, and the reason says why.
+        found!!.moved.assert().isEmpty()
+        found!!.escalations.map { it.reason }.assert().containsExactly(Escalation.DETECTION_TIMED_OUT)
     }
 
     @Test

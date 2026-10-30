@@ -635,6 +635,24 @@ class GrantAnalyzerTest {
             analyzer.fragments(snapshot(platform, published), GrantChange(ACME, candidate)).assert().isEmpty()
         }
 
+        /** Review of #1181: a kept binding of a removed policy no other document defines names nothing any more. */
+        @Test
+        fun `a kept binding of a removed policy that now resolves nowhere is unresolved`() {
+            val candidate = GrantDocument(policies = listOf(published.policies[0]), bindings = published.bindings)
+            val fragment = analyzer.fragments(snapshot(platform, published), GrantChange(ACME, candidate)).single()
+            fragment.resolved.assert().isFalse()
+            fragment.toString().assert().isEqualTo("held (does not resolve) to binding gina in (*, *)")
+            // Not even an ALLOW of everything the grantor holds contains what cannot be told.
+            val everything = GrantDocument(
+                policies = published.policies + policy("all", allow("*")),
+                bindings = published.bindings + bind("all", principal("gina"), "all"),
+            )
+            analyzer.analyze(grantor(), snapshot(platform, everything), GrantChange(ACME, candidate)).verdicts
+                .single().second
+                .assert().isInstanceOf(GrantVerdict.Unknown::class.java)
+                .extracting { (it as GrantVerdict.Unknown).reason }.isEqualTo(UnknownReason.UNRESOLVED)
+        }
+
         @Test
         fun `an id both the tenant and the platform define is ambiguous, as the engine has it`() {
             // The engine refuses gina's binding to `editor` as ambiguous: Indeterminate wherever it applies to her.

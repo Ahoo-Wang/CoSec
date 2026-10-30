@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.cache.control
 
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.Cache
@@ -161,21 +160,6 @@ class CoCacheControlStoreTest {
             """{"apps":[],"complete":"yes"}""",
         )) {
             assertThrownBy<SnapshotFormatException> { AppListCodec.decode(refused.encodeToByteArray()) }
-        }
-    }
-
-    /** RC1-4 review: a document list that lost a document gets it back when its head is written again. */
-    @Test
-    fun `a head write lists its document again`() = runBlocking<Unit> {
-        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
-            val store = store(node, lists = lists)
-            store.putIndex(key, null, RevisionIndex()).assert().isTrue()
-            store.documents().assert().containsExactly(key)
-            lists.async().invalidate("documents").await()
-            store.documents().assert().isEmpty()
-            store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)
-            store.documents().assert().containsExactly(key)
         }
     }
 

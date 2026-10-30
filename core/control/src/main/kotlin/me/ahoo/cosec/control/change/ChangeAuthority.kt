@@ -48,7 +48,12 @@ import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Who may do what to a change (RFC 0007 §7.2–§7.5), for [Changes]. Every step is checked in order, and anything but a
@@ -237,7 +242,7 @@ class ChangeAuthority(
         }
         // An app the change names has a head the list does not name: the list misses apps, so it says nothing.
         if (listed != null && named.any { it !in listed && apps[it] != null }) {
-            log.warn { "The app list misses an app document that exists; every app a grant reaches is unknown." }
+            untrusted { "The app list misses an app document that exists; every app a grant reaches is unknown." }
             listed = null
         }
         val snapshot = GrantDocuments.snapshot(
@@ -263,19 +268,28 @@ class ChangeAuthority(
 
     /**
      * Every app document there is, from the app list; `null`, every app unknown, when the list is not there, is not
-     * complete, cannot be read, or has an entry that does not read as an app id (RC1-4). An entry is never dropped: one
-     * the analysis cannot read could be an app document it would miss.
+     * complete, cannot be read, or has an entry that does not name an app document (RC1-4). An entry is never dropped:
+     * one the analysis cannot read could be an app document it would miss.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun listedApps(documents: ChangeChecks.Context): Set<AppId>? = try {
         val list = documents.apps()?.value
-        if (list == null || !list.complete) {
-            log.warn {
-                "The app list is missing or incomplete: run cosec-migrate repair-references; until then every app a grant reaches is unknown."
+        when {
+            list == null || !list.complete -> null.also {
+                untrusted {
+                    "The app list is missing or incomplete: run cosec-migrate repair-references; until then every app a " +
+                        "grant reaches is unknown."
+                }
             }
-            null
-        } else {
-            list.entries.mapTo(LinkedHashSet(), ::AppId)
+
+            list.entries.any { !isAppId(it) } -> null.also {
+                untrusted {
+                    "The app list has an entry that names no app document: run cosec-migrate repair-references; until " +
+                        "then every app a grant reaches is unknown."
+                }
+            }
+
+            else -> list.entries.mapTo(LinkedHashSet(), ::AppId)
         }
     } catch (e: CancellationException) {
         throw e
@@ -283,6 +297,21 @@ class ChangeAuthority(
         log.warn(e) { "The app list could not be read; every app a grant reaches is unknown." }
         null
     }
+
+    /** Whether [entry] names an app document: a valid [SnapshotKey.App] id that is not the wildcard ([AppId]). */
+    private fun isAppId(entry: String): Boolean = SnapshotKey.App.isValidAppId(entry) && entry != Match.WILDCARD
+
+    /**
+     * A WARN that the app list is not to be trusted, at most once per [UNTRUSTED_WARN_INTERVAL]: until
+     * `repair-references` runs, every tenant change would log it.
+     */
+    private fun untrusted(message: () -> String) {
+        if (untrustedWarnings.ready()) {
+            log.warn(message)
+        }
+    }
+
+    private val untrustedWarnings = Throttle(UNTRUSTED_WARN_INTERVAL)
 
     /** The head of [app]'s document, [AppHead.document] `null` when there is none; `null` when it cannot be read. */
     @Suppress("TooGenericExceptionCaught")
@@ -527,5 +556,18 @@ class ChangeAuthority(
         const val RATE_LIMIT = "rateLimit"
         const val NOT_ANALYZED = "NOT_ANALYZED"
         const val BREAK_GLASS = "BREAK_GLASS"
+
+        /** How often the WARN that the app list is not to be trusted may be logged (RC1-4). */
+        val UNTRUSTED_WARN_INTERVAL: Duration = 1.minutes
+    }
+}
+
+/** Says yes at most once per [interval] of [timeSource], first at once; safe across threads. */
+internal class Throttle(private val interval: Duration, private val timeSource: TimeSource = TimeSource.Monotonic) {
+    private val last = AtomicReference<TimeMark?>(null)
+
+    fun ready(): Boolean {
+        val mark = last.get()
+        return (mark == null || mark.elapsedNow() >= interval) && last.compareAndSet(mark, timeSource.markNow())
     }
 }

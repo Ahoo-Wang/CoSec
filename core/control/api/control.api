@@ -754,6 +754,7 @@ public final class me/ahoo/cosec/control/change/EntryDigest {
 
 public final class me/ahoo/cosec/control/change/Escalation {
 	public static final field Companion Lme/ahoo/cosec/control/change/Escalation$Companion;
+	public static final field DETECTION_TIMED_OUT Ljava/lang/String;
 	public static final field TENANT_BINDING Ljava/lang/String;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -1486,6 +1487,7 @@ public final class me/ahoo/cosec/control/store/Revisions {
 	public final fun publish (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/store/Head;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/control/store/Publication;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun reclaim (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun reclaim$default (Lme/ahoo/cosec/control/store/Revisions;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/util/Set;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun reconcileApps (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun repairReferences (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun revision (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;

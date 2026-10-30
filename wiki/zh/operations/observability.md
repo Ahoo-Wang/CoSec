@@ -179,7 +179,7 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 - **`PUBLISHED` 之后可能跟着 `HEADS_MOVED` 或 `REVIEW_NEEDED`：** 变更检查时读过的其他文档在它写入之前变化了
   （[一次发布比较什么](./storage.md#what-a-publish-compares)）。事件列出变化的头（`moved`：文档，app 列表记为 `list:apps`；
   检查时的摘要、现在的摘要、能否读到），带上授出分析在当前的头上发现的升级项，并在备注中说明含义。`HEADS_MOVED` 无需处理；
-  `REVIEW_NEEDED` 表示分析发现了发布时未经审批的升级项、分析无法运行，或比较没有按时完成（这时 `moved` 为空）：应当有人复核
+  `REVIEW_NEEDED` 表示分析发现了发布时未经审批的升级项、分析无法运行，或比较没有按时完成（这时 `moved` 为空，唯一的升级项原因为 `DETECTION_TIMED_OUT`）：应当有人复核
   这次发布，控制面还会以 `WARN` 记录 `Change <changeId> published on [<doc>]: <note>; moved [...].`。发布的客户端断开连接时
   它们也会被记录。它们和所有不受控的事件一样尽力投递：发布已经发生。
 - **事件中的升级项**是 `subject`、`reason` 与 `detail`（[测试变更](../policies/testing.md)）。`TENANT_BINDING` 项只写出绑定和

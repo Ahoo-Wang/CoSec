@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.cache.control
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.CacheWriteException
@@ -48,7 +47,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The [ControlStore] over CoCache and Redis (RFC 0007 §5.2). The heads are the snapshot documents the data plane
@@ -101,7 +99,6 @@ class CoCacheControlStore internal constructor(
         }
         if (written is HeadWrite.Written) {
             onPublished(key)
-            relist(key)
         }
         return written
     }
@@ -231,23 +228,6 @@ class CoCacheControlStore internal constructor(
         }
     }
 
-    /**
-     * Lists [key] among the documents again if the list misses it, as after the list was lost (RC1-4 review): every
-     * head write mends it for its own document. After the write, which has happened whatever this does; a failure is
-     * only logged, and the next write of the document tries again.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun relist(key: SnapshotKey) {
-        try {
-            val entry = SnapshotKeyEncoder.encode(key)
-            updateList(DOCUMENTS) { if (entry in it) it else it + (entry to clock.instant()) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.warn(e) { "[$key] could not be listed among the documents again; its next write tries again." }
-        }
-    }
-
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
     private suspend fun updateList(name: String, next: (Map<String, Instant>) -> Map<String, Instant>) {
         repeat(MAX_LIST_ATTEMPTS) {
@@ -313,7 +293,6 @@ class CoCacheControlStore internal constructor(
         }
 
     companion object {
-        private val log = KotlinLogging.logger {}
         private const val DOCUMENTS = "documents"
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"

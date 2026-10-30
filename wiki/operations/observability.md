@@ -201,7 +201,8 @@ content. Change listeners receive them.
   moved (`moved`: the document, or `list:apps` for the app list, the digest it was checked with, the digest it has
   now, and whether it could be read), carries the escalations the grant analysis finds on the current heads, and says
   in its note what that means. `HEADS_MOVED` needs nothing; `REVIEW_NEEDED` means the analysis found an escalation the
-  publish did not have approved, could not run, or the comparison did not finish in time (`moved` is then empty): a
+  publish did not have approved, could not run, or the comparison did not finish in time (`moved` is then empty, and
+  the one escalation has the reason `DETECTION_TIMED_OUT`): a
   person should review the published change, and the control plane also logs
   `Change <changeId> published on [<doc>]: <note>; moved [...].` at `WARN`. They are recorded even when the client
   that published disconnects. Like every event that is not gated, they are best effort: the publish has already

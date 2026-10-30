@@ -15,9 +15,13 @@
 
 package me.ahoo.cosec.control.change
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
@@ -27,6 +31,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
@@ -223,11 +228,14 @@ class ChangesB1Test {
     fun `an app list that is not to be trusted leaves every app unknown - RC1-4`() = runBlocking<Unit> {
         billing()
         var failing = false
+        val read = HashSet<SnapshotKey>()
         val store = object : ControlStore by harness.memory {
             override suspend fun apps(): Versioned<AppList>? {
                 check(!failing) { "the app list cannot be read" }
                 return harness.memory.apps()
             }
+
+            override suspend fun head(key: SnapshotKey): StoredDocument? = harness.memory.head(key).also { read += key }
         }
         val changes = fourEyes(store)
         suspend fun list(apps: AppList?) {
@@ -240,9 +248,14 @@ class ChangesB1Test {
         // Incomplete, as when it was lost and an app document's publish started it again.
         list(AppList(setOf("billing"), complete = false))
         grant(changes).assert().containsExactly("UNREADABLE")
-        // An entry that is not an app id: it may be an app document the analysis would miss.
-        list(AppList(setOf("billing", "not:an app"), complete = true))
-        grant(changes).assert().containsExactly("UNREADABLE")
+        // An entry that names no app document: it may be one the analysis would miss, so no entry is trusted, and the
+        // apps it does name are not even read.
+        for (odd in listOf("not:an app", "", "*")) {
+            list(AppList(setOf("billing", odd), complete = true))
+            read.clear()
+            grant(changes).assert().describedAs(odd).containsExactly("UNREADABLE")
+            read.assert().describedAs(odd).doesNotContain(SnapshotKey.App("billing"))
+        }
         // It cannot be read.
         list(AppList(setOf("billing"), complete = true))
         failing = true
@@ -254,7 +267,105 @@ class ChangesB1Test {
         grant(changes, alsoIn = "billing").assert().contains("UNREADABLE")
         // Complete and right: billing's DENY is read again.
         list(AppList(setOf("billing"), complete = true))
+        read.clear()
         grant(changes).assert().containsExactly("DENY_OVERLAP")
+        read.assert().contains(SnapshotKey.App("billing"))
+    }
+
+    /** Review of #1181 (N3): the platform's first revision vouches for the list only when nothing says it misses an app. */
+    @Test
+    fun `the platform's first revision completes the app list only when it names every app document - RC1-4`() =
+        runBlocking<Unit> {
+            val revisions = harness.revisions
+            val billing = SnapshotKey.App("billing")
+            val order = SnapshotKey.App("order")
+            // The platform's head was lost; billing and order are still there, and order alone rebuilt a lost list.
+            revisions.publish(billing, null, StoreFixtures.candidate(billing), StoreFixtures.publication())
+            revisions.publish(order, null, StoreFixtures.candidate(order), StoreFixtures.publication())
+            harness.memory.dropApps()
+            revisions.publish(order, revisions.head(order), StoreFixtures.candidate(order), StoreFixtures.publication())
+            harness.memory.apps()!!.value.assert().isEqualTo(AppList(setOf("order"), complete = false))
+            revisions.publish(
+                SnapshotKey.Platform,
+                null,
+                StoreFixtures.candidate(SnapshotKey.Platform),
+                StoreFixtures.publication()
+            ).assert().isInstanceOf(PublishOutcome.Published::class.java)
+            harness.memory.apps()!!.value.assert().isEqualTo(AppList(setOf("order"), complete = false))
+        }
+
+    @Test
+    fun `a platform's first revision that does not land leaves the app list as it was - RC1-4`() = runBlocking<Unit> {
+        val conflicting = object : ControlStore by harness.memory {
+            override suspend fun putHead(
+                key: SnapshotKey,
+                expected: SnapshotDigest?,
+                document: SnapshotDocument
+            ): HeadWrite = HeadWrite.Conflict(null)
+        }
+        Revisions(conflicting, harness.clock).publish(
+            SnapshotKey.Platform,
+            null,
+            StoreFixtures.candidate(SnapshotKey.Platform),
+            StoreFixtures.publication()
+        ).assert().isInstanceOf(PublishOutcome.Conflicted::class.java)
+        harness.memory.apps().assert().isNull()
+    }
+
+    /** Review of #1181 (N1): a client that goes away after the head write leaves the change settled and audited. */
+    @Test
+    fun `a publish cancelled after its head write still settles as published - RC1-33`() = runBlocking<Unit> {
+        val written = CompletableDeferred<Unit>()
+        val store = object : ControlStore by harness.memory {
+            override suspend fun putHead(
+                key: SnapshotKey,
+                expected: SnapshotDigest?,
+                document: SnapshotDocument
+            ): HeadWrite = harness.memory.putHead(key, expected, document).also {
+                written.complete(Unit)
+                // Where the caller is cancelled: what follows must still run.
+                delay(100)
+            }
+
+            // The writes after the head suspend, as a real store's do, so that a cancellation would be seen there.
+            override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+                yield()
+                return harness.memory.putIndex(key, expected, index)
+            }
+
+            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+                yield()
+                return harness.memory.putChange(expected, change)
+            }
+        }
+        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent.Kind>())
+        val listener = object : ChangeListener {
+            override val name = "events"
+
+            override suspend fun onChange(event: ChangeEvent) {
+                events += event.kind
+            }
+        }
+        val changes = Changes(
+            store,
+            Revisions(store, harness.clock),
+            { ChangeId("cancelled") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            listeners = ChangeListeners(listOf(listener)),
+        )
+        val change = changes.propose(PLATO, SnapshotKey.Platform, 0, listOf(Operation.PutPolicy(allow("read"))), "c")
+        changes.skipShadow(PLATO, change.id, "test")
+        val publishing = launch { changes.publish(PLATO, change.id) }
+        written.await()
+        publishing.cancelAndJoin()
+        harness.memory.change(change.id)!!.value.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.memory.index(SnapshotKey.Platform)!!.value.entries.map { it.revision }.assert().containsExactly(1L)
+        harness.memory.apps()!!.value.complete.assert().isTrue()
+        withTimeout(5_000) {
+            while (ChangeEvent.Kind.PUBLISHED !in events) delay(10)
+        }
     }
 
     @Test

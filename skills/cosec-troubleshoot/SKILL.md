@@ -261,8 +261,9 @@ an escalation nobody approved; the change stays published and needs a person's r
 
 When every tenant grant over every app (a binding with app `*`, an attachment) waits for approval as `UNREADABLE`
 after an upgrade, and the control plane logs `The app list is missing or incomplete`, the app list is not complete:
-run `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once. The same after the list
-was lost.
+run `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once, after every control-plane
+instance and `cosec-migrate` runs the new version. The same after the list was lost, and after the reclamation pass
+logs `The app list misses the app documents [...]; it is incomplete again` (an older instance published an app).
 
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
