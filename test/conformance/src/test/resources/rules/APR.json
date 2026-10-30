@@ -23,9 +23,10 @@
     {
       "id": "APR-3",
       "source": "RFC 0007 §7.3, §7.5, Q10",
-      "statement": "A holder of cosec:approve on the document is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder.",
+      "statement": "A holder of cosec:approve on the document in the platform tenant is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder. A tenant principal holding cosec:approve is not the trust root: its own changes are analyzed (RC1-10).",
       "level": "control",
       "guards": [
+        "control:ApprovalB2Test#a tenant approver's own change is analyzed, and it approves others' - RC1-10",
         "control:ControlAuthorizationTest#the trust root publishes alone unless four-eyes is on"
       ],
       "pending": null
@@ -60,6 +61,28 @@
         "control:ChangesB1Test#widening an app permission policy lists the tenant bindings it widens - RC1-34"
       ],
       "pending": null
+    },
+    {
+      "id": "APR-7",
+      "source": "RFC 0007 §7.5 (2026-10-30 revision)",
+      "statement": "An approval is a person's: a principal authenticated by an API key never approves (403), whatever it holds.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ApprovalB2Test#an API key never approves"
+      ]
+    },
+    {
+      "id": "APR-8",
+      "source": "RFC 0007 §7.5 (2026-10-30 revision)",
+      "statement": "An approval records the approver's token id and issue time; at publish it no longer counts when that token, or every token of the approver issued by then, has been revoked since, nor when the approver's memberships come from the provider and it no longer holds what it approved with.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ApprovalB2Test#an approval by a token revoked since does not count",
+        "control:ApprovalB2Test#an approver from the provider counts with the roles it holds now",
+        "spring-boot:ControlApprovalStarterTest#an approval by a provider-membership token publishes"
+      ]
     }
   ]
 }

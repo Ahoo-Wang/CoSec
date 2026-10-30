@@ -1,0 +1,249 @@
+{
+  "rules": [
+    "BDY-2"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-10: under four-eyes, plato's change of acme's boundary is approved by pia and publishes.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "fence",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "acme-approver",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:approve",
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:boundary"
+              ],
+              "resource": [
+                "doc/tenant/acme",
+                "doc/tenant/acme/**",
+                "scope/acme/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "break-glass-requester",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:breakglass",
+                "cosec:publish"
+              ],
+              "resource": "doc/platform"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "kim",
+          "subject": {
+            "principal": "kim",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "rita",
+          "subject": {
+            "principal": "rita",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "break-glass-requester"
+        },
+        {
+          "id": "carol",
+          "subject": {
+            "principal": "carol",
+            "tenant": "acme"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "acme-approver"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "approvers",
+            "subject": {
+              "role": "approver"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "acme-approver"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "carol": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)",
+      "credential": {
+        "token": "t-pia",
+        "issuedAt": "2026-10-31T23:00:00Z"
+      }
+    },
+    "kim": {
+      "tenant": "(platform)",
+      "credential": "api-key"
+    },
+    "rita": {
+      "tenant": "(platform)"
+    },
+    "dave": {
+      "tenant": "acme",
+      "roles": [
+        "approver"
+      ],
+      "provider": true
+    }
+  },
+  "options": {
+    "fourEyes": true
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "setBoundary": "fence"
+          }
+        ]
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "pia"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "plato"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "AWAITING_APPROVAL",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    },
+    "escalations": {
+      "c1": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

@@ -59,7 +59,12 @@ import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.MembershipAnswer
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.testkit.ScenarioFormatException
 import me.ahoo.cosec.testkit.bool
 import me.ahoo.cosec.testkit.fields
@@ -81,7 +86,10 @@ import java.time.Instant
  *
  * ```jsonc
  * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
- * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [], "attributes": { "level": 3 } } },
+ * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [], "attributes": { "level": 3 } },
+ *                "kim":  { "tenant": "(platform)", "credential": "api-key" },           // authenticated by an API key
+ *                "pia":  { "tenant": "(platform)", "credential": { "token": "t1", "issuedAt": "2026-11-01T00:00:00Z" } },
+ *                "dave": { "tenant": "acme", "roles": ["approver"], "provider": true } },  // the provider says its roles
  * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
  *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
@@ -98,8 +106,11 @@ import java.time.Instant
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
- *            { "rateLimits": "platform" } ],   // the rule ids of the document's head, in order
- *  operations also take { "putRateLimit": { ...a rule... } } and { "removeRateLimit": "id" }
+ *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
+ *            { "revoke": "t1" },               // that token is revoked; { "revokeTokens": "pia" }: every token of pia's
+ *            { "provide": { "operator": "dave", "roles": [] } },   // what the provider answers for dave from now on
+ *            { "unaudited": true } ],          // later steps run on an instance without a REQUIRED change listener
+ *  operations also take { "putRateLimit": { ...a rule... } }, { "removeRateLimit": "id" } and { "setBoundary": "id" | null }
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
@@ -107,8 +118,8 @@ import java.time.Instant
  * A proposal is made on the current head of its document. With `operators`, every step names who takes it (`by`),
  * each is authenticated by a host pipeline and checked through the real pipeline and engine over the current heads
  * (the built-in control-plane policies included); `documents` are published first as `bootstrap` would. Without
- * `operators`, the scenario is about the flow alone: every action is permitted, and a step is taken by `alice` of
- * `acme` on a tenant document and by a platform principal on the others, as the hard rule requires.
+ * `operators`, the scenario is about the flow alone: every action is permitted, and every step is taken by a platform
+ * principal, the trust root of every document (RC1-10).
  *
  * Shadow windows (RFC 0007 §6.4) close as soon as `shadowed` looks at them unless `options.shadow` sets their bounds;
  * a `report` step writes an instance's cumulative report of a change's current window, as its reporter would.
@@ -116,7 +127,6 @@ import java.time.Instant
 object ChangeRunner : ScenarioRunner {
     val NOW = Instant.parse("2026-11-01T00:00:00Z")
     val NONE = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
-    val ALICE = Operator(Actor(TenantId("acme"), PrincipalId("alice")), NONE)
     val PLATFORM = Operator(Actor(TenantId.PLATFORM, PrincipalId("cosec")), NONE)
 
     override fun run(scenario: Scenario): Outcome = runBlocking {
@@ -129,17 +139,56 @@ object ChangeRunner : ScenarioRunner {
         private val clock = MutableClock(NOW)
         private val store = InMemoryControlStore(clock)
         val revisions = Revisions(store, clock)
-        private val engine = ControlEngine(revisions)
+
+        /** The roles the membership provider answers, by operator; a `provide` step changes them. */
+        private val provided = node.get("operators")?.fields().orEmpty().entries
+            .filter { (_, operator) -> operator.get("provider")?.bool() == true }
+            .associateTo(java.util.concurrent.ConcurrentHashMap()) { (name, operator) ->
+                name to operator.get("roles")?.strings().orEmpty()
+            }
+        private val provider = MembershipProvider { _, principal ->
+            provided[principal.value]?.let { roles ->
+                MembershipAnswer.Known(
+                    MembershipClaims.parse(roles, emptyList()).let {
+                        Memberships(Memberships.Source.PROVIDER, it.roles, it.attachments)
+                    }
+                )
+            } ?: MembershipAnswer.Unknown
+        }
+        private val engine = ControlEngine(revisions, provider)
         private val authorized = node.has("operators")
         private val operators = node.get("operators")?.fields().orEmpty().entries.associate { (name, operator) ->
-            operator.only("tenant", "roles", "policies", "attributes")
+            operator.only("tenant", "roles", "policies", "attributes", "credential", "provider")
+            val credential = operator.get("credential")
             name to engine.operator(
                 TenantId(operator.required("tenant").text()),
                 name,
                 operator.get("roles")?.strings().orEmpty(),
                 operator.get("policies")?.strings().orEmpty(),
                 operator.get("attributes")?.let(::attributes).orEmpty(),
+                credential = credential?.let(::credential),
+                issuedAt = credential?.get("issuedAt")?.let { Instant.parse(it.text()) },
+                provided = operator.get("provider")?.bool() == true,
             )
+        }
+
+        /** Revoked token ids, and the instant before which an operator's tokens are revoked. */
+        private val revokedTokens = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        private val revokedBefore = java.util.concurrent.ConcurrentHashMap<String, Instant>()
+        private val revocations = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = tokenId in revokedTokens
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                revokedBefore[principal.value]
+        }
+
+        /** `"api-key"`, or `{ "token": "t1", "issuedAt": ... }`: a token CoSec's verifier did not issue, by its id. */
+        private fun credential(node: JsonNode): Identity.Credential = if (node.isString) {
+            if (node.text() != "api-key") throw ScenarioFormatException("Unknown credential $node")
+            Identity.Credential(Identity.Method.API_KEY, "key", null)
+        } else {
+            node.only("token", "issuedAt")
+            Identity.Credential(Identity.Method("oidc"), node.required("token").text(), null)
         }
         private var next: ChangeId? = null
         private val reports = InMemoryShadowReports(clock)
@@ -151,18 +200,26 @@ object ChangeRunner : ScenarioRunner {
 
             override suspend fun statuses() = reports.statuses()
         }
-        private val changes = Changes(
+        private val authorizer =
+            if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
+        private val options =
+            ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions())
+
+        // Break-glass is recorded by a REQUIRED listener before it is created (RFC 0007 §8).
+        private fun changes(listeners: ChangeListeners = ChangeListeners(listOf(RecordingAudit))) = Changes(
             store,
             revisions,
             { next!! },
-            if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
+            authorizer,
             clock,
-            ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions()),
+            options,
             attributes = providers(),
             reports = reader,
-            // Break-glass is recorded by a REQUIRED listener before it is created (RFC 0007 §8).
-            listeners = ChangeListeners(listOf(RecordingAudit)),
+            listeners = listeners,
+            authority = ChangeAuthority(authorizer, options, revocations = revocations, revocationSkew = Duration.ZERO),
         )
+
+        private var changes = changes()
         private val documents = LinkedHashSet<SnapshotKey>()
         private val named = LinkedHashMap<String, ChangeRequest>()
         private val plane = DefaultControlPlane(
@@ -216,6 +273,8 @@ object ChangeRunner : ScenarioRunner {
                     report(argument)
                 } else if (action == "simulate") {
                     simulate(argument)
+                } else if (action in CREDENTIAL_STEPS) {
+                    credentials(action, argument)
                 } else if (action == "rateLimits") {
                     val head = revisions.head(documentKey(argument.text()))
                     "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
@@ -232,6 +291,19 @@ object ChangeRunner : ScenarioRunner {
                 .filterValues { it.isNotEmpty() }
             val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
             return Outcome.Changed(results, errors, heads, escalations)
+        }
+
+        /** What happens to the operators' credentials and the instance's audit between steps ([CREDENTIAL_STEPS]). */
+        private fun credentials(action: String, argument: JsonNode): String = when (action) {
+            "revoke" -> "revoked".also { revokedTokens += argument.text() }
+            "revokeTokens" -> "revoked".also { revokedBefore[argument.text()] = clock.now.plusSeconds(1) }
+            "provide" -> {
+                argument.only("operator", "roles")
+                provided[argument.required("operator").text()] = argument.get("roles")?.strings().orEmpty()
+                "provided"
+            }
+
+            else -> "unaudited".also { changes = changes(ChangeListeners.NONE) }
         }
 
         private suspend fun step(action: String, argument: JsonNode): ChangeRequest = when (action) {
@@ -311,7 +383,7 @@ object ChangeRunner : ScenarioRunner {
                     .mapValues { (_, value) -> value.text() },
             )
             val result = plane.simulate(
-                by(argument, SnapshotKey.Tenant(tenant.value)),
+                by(argument),
                 simulated,
                 argument.get("candidate")?.text()?.let(::ChangeId)
             )
@@ -344,7 +416,7 @@ object ChangeRunner : ScenarioRunner {
             val head = revisions.head(key)?.revision ?: 0
             val operations = argument.required("operations").values().map { operation(key, it) }
             val kind = argument.get("kind")?.text()?.let(ProvenanceKind::valueOf) ?: ProvenanceKind.PUBLISH
-            return changes.propose(by(argument, key), key, head, operations, "scenario", kind)
+            return changes.propose(by(argument), key, head, operations, "scenario", kind)
         }
 
         /** `:apply` (RFC 0007 §6.7): the change that makes the document's head into `desired`, by `mode`. */
@@ -355,7 +427,7 @@ object ChangeRunner : ScenarioRunner {
             next = ChangeId(argument.required("change").text())
             val desired = decode(key, argument.required("desired"), revisions.head(key)?.revision ?: 0)
             val mode = ApplyMode.valueOf(argument.required("mode").text())
-            return plane.apply(by(argument, key), key, desired, mode, "scenario")
+            return plane.apply(by(argument), key, desired, mode, "scenario")
         }
 
         /** `{ "change": "c2", "by": "walt", "document": "platform", "revision": 1 }`: a rollback (RFC 0007 §5.6). */
@@ -364,7 +436,7 @@ object ChangeRunner : ScenarioRunner {
             val key = documentKey(argument.required("document").text())
             documents += key
             next = ChangeId(argument.required("change").text())
-            return changes.rollback(by(argument, key), key, argument.required("revision").asLong(), "scenario")
+            return changes.rollback(by(argument), key, argument.required("revision").asLong(), "scenario")
         }
 
         private suspend fun candidate(id: ChangeId, node: JsonNode): String = when (val which = node.get("candidate")?.text() ?: "own") {
@@ -373,8 +445,11 @@ object ChangeRunner : ScenarioRunner {
             else -> throw ScenarioFormatException("candidate is own or other, not $which")
         }
 
-        /** Who takes a step: its `by` with operators, otherwise whoever the hard rule lets act on [key]. */
-        private fun by(step: JsonNode, key: SnapshotKey): Operator {
+        /**
+         * Who takes a step: its `by` with operators, otherwise a platform principal, the trust root of every document
+         * (RFC 0007 §7.3): a tenant principal holding `cosec:approve` is not one (RC1-10).
+         */
+        private fun by(step: JsonNode): Operator {
             val name = step.get("by")?.text()
             if (authorized != (name != null)) {
                 throw ScenarioFormatException(
@@ -382,7 +457,7 @@ object ChangeRunner : ScenarioRunner {
                 )
             }
             if (name == null) {
-                return if (key is SnapshotKey.Tenant) ALICE else PLATFORM
+                return PLATFORM
             }
             return operators[name] ?: throw ScenarioFormatException("No operator $name")
         }
@@ -394,7 +469,7 @@ object ChangeRunner : ScenarioRunner {
             }
             val id = ChangeId(if (argument.isString) argument.text() else argument.required("change").text())
             // A change that does not exist is still named, so that the step answers for it as for any other.
-            return Triple(id, by(argument, store.change(id)?.value?.key ?: SnapshotKey.Platform), argument)
+            return Triple(id, by(argument), argument)
         }
     }
 
@@ -452,6 +527,7 @@ object ChangeRunner : ScenarioRunner {
             "removeBinding" -> Operation.RemoveBinding(BindingId(value.text()))
             "putRateLimit" -> Operation.PutRateLimit(PolicyDocumentCodec.decodeRateLimit(value))
             "removeRateLimit" -> Operation.RemoveRateLimit(value.text())
+            "setBoundary" -> Operation.SetBoundary(if (value.isNull) null else PolicyId(value.text()))
             else -> throw ScenarioFormatException("Unknown operation $name")
         }
     }
@@ -466,6 +542,8 @@ object ChangeRunner : ScenarioRunner {
     const val DIGEST_LENGTH = 64
 
     /** A REQUIRED change listener that records everything. */
+    private val CREDENTIAL_STEPS = setOf("revoke", "revokeTokens", "provide", "unaudited")
+
     private object RecordingAudit : ChangeListener {
         override val name: String = "audit"
         override val delivery: Delivery = Delivery.REQUIRED

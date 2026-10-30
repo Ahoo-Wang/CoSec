@@ -30,13 +30,14 @@
     {
       "id": "BRK-3",
       "source": "RFC 0007 §8",
-      "statement": "Break-glass is created only through the control plane: two people, a bounded lifetime, and a REQUIRED audit written first.",
+      "statement": "Break-glass is created only through the control plane: two people, a bounded lifetime, and a REQUIRED audit written first; its approval needs a REQUIRED change listener and is recorded once its digest is checked, before it is stored (RC1-30).",
       "level": "control",
       "pending": null,
       "guards": [
+        "control:BreakGlassControlTest#an approval of break-glass is recorded first, and only for the candidate it approves",
+        "control:BreakGlassControlTest#its lifetime is bounded, when requested and when published",
         "control:BreakGlassControlTest#two people create it, each step recorded first",
-        "control:BreakGlassControlTest#without a REQUIRED listener, or when it fails, nothing is created",
-        "control:BreakGlassControlTest#its lifetime is bounded, when requested and when published"
+        "control:BreakGlassControlTest#without a REQUIRED listener, or when it fails, nothing is created"
       ]
     },
     {
@@ -81,6 +82,16 @@
         "jwt:JwtTokenVerifierTest#onlyThisVerifiersTokensMayUseBreakGlass"
       ],
       "pending": null
+    },
+    {
+      "id": "BRK-9",
+      "source": "RFC 0007 §5.5, §8 (2026-10-30 revision)",
+      "statement": "A break-glass revoke takes the document's staging slot whatever change holds it; the holder becomes CONFLICTED.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:BreakGlassControlTest#a revoke takes the slot another change holds"
+      ]
     }
   ]
 }

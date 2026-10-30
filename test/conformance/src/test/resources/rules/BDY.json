@@ -15,6 +15,16 @@
         "runtime:PolicyDocumentCompilerTest#boundaries live in the platform, only allow, and are never bound"
       ],
       "pending": null
+    },
+    {
+      "id": "BDY-2",
+      "source": "RFC 0007 §7.3, §9.1 (2026-10-30 revision)",
+      "statement": "A tenant's boundary is the platform's: only a platform principal sets it (403 otherwise, whatever the operator holds), and only a platform principal approves a change that sets one.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ApprovalB2Test#only a platform principal sets a tenant's boundary or approves it"
+      ]
     }
   ]
 }
