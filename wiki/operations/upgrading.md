@@ -26,21 +26,29 @@ analysis read the author's rights as enforcement does, so some changes that publ
   escalation with the shortfall `EXPIRY`.
 - **Removing a tenant policy whose id the platform defines** (RC1-9, `GRT-4`) is analyzed as granting the platform's
   policy to the tenant's bindings and attachments of that id. An id both define grants the author nothing.
-- **Every app document** (RC1-4, `GRT-6`). The analysis of a tenant change reads every app document, not only those
-  the change names, so a DENY an app binds to one of the author's roles limits what the author may grant in every
-  scope that reaches that app. An app document that cannot be read makes such a grant an escalation (`UNREADABLE`).
+- **Every app document** (RC1-4, `GRT-6`). The analysis of a tenant change reads every app document the app list
+  names (`<s>:control:apps:all`, [Storage](./storage.md#publishing-through-the-control-plane)), not only those the
+  change names, so a DENY an app binds to one of the author's roles limits what the author may grant in every scope
+  that reaches that app. An app document that cannot be read makes such a grant an escalation (`UNREADABLE`). The
+  analysis trusts the app list only once it is complete, and an upgraded store's list is not: **until
+  [`cosec-migrate repair-references`](#repair-the-back-reference-index) has run after the upgrade, every tenant grant
+  over every app (a binding with app `*`, or an attachment) needs an approval** (`UNREADABLE`), and the control plane
+  logs a WARN that names the command.
 - **A platform policy cannot take a tenant's id** (RC1-9, `CTL-21`). A platform change that adds a policy whose id a
   tenant document defines or binds is refused (`V2`, `422`, naming the tenant documents). A tenant that defines the
-  id itself no longer blocks the platform from removing its own policy of that id. The back-reference index learns a
-  tenant's own ids when the tenant next publishes: **after upgrading, run
-  [`cosec-migrate repair-references`](#repair-the-back-reference-index) once**, as a Kubernetes Job, with the Redis
-  and key prefix of the control plane. Until it has run, a platform policy that takes the id of an older tenant's own
-  policy is not refused, only ambiguous in that tenant, which enforcement fails closed on.
+  id itself no longer blocks the platform from removing its own policy of that id. The back-reference index learns
+  only the ids a tenant adds after the upgrade; the ones its document already had enter it only through
+  `repair-references`: **after upgrading, run [`cosec-migrate repair-references`](#repair-the-back-reference-index)
+  once**, as a Kubernetes Job, with the Redis and key prefix of the control plane. Until it has run, a platform policy
+  that takes the id of a tenant's own policy from before the upgrade is not refused, only ambiguous in that tenant,
+  which enforcement fails closed on.
 - **Escalations** gain the reasons `UNRESOLVED` (a new binding of a policy no document defines, RC1-32),
-  `UNREADABLE` (RC1-4) and `TENANT_BINDING` (each tenant binding an app document change widens, RC1-34, `APR-6`); an
-  approval of such an app change covers them. Code that matches every `UnknownReason` or `Shortfall` gains
+  `UNREADABLE` (RC1-4) and `TENANT_BINDING` (each tenant binding an app document change widens, RC1-34, `APR-6`).
+  `TENANT_BINDING` is informational: the app change needs its approval for `NOT_ANALYZED`, and the entry names only
+  the binding and its tenant document. Code that matches every `UnknownReason` or `Shortfall` gains
   `UNRESOLVED`, `UNREADABLE` and `EXPIRY`.
-- **Moved heads after a publish** (RC1-33). When another document a change was checked with moved before its write,
+- **Moved heads after a publish** (RC1-33). When another document a change was checked with, or the app list, moved
+  before its write,
   the control plane records `HEADS_MOVED` or `REVIEW_NEEDED` after `PUBLISHED`, with the heads in a new `moved` member
   ([What a publish compares](./storage.md#what-a-publish-compares)). A change listener that handles every
   `ChangeEvent.Kind` gains the two.
@@ -154,6 +162,9 @@ migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
 Its commands are below. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
+`publish`, `bootstrap` and `repair-references` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
+nodes, comma-separated (`redis://node-1:6379,redis://node-2:6379`). The other commands read Redis with clients that
+do not, and refuse it.
 
 | Command | What it does |
 |---|---|
@@ -161,7 +172,7 @@ Its commands are below. Exit codes: `0` done, `1` the data was rejected or a wri
 | `publish` | Writes the documents of an accepted conversion to Redis as their first revisions, through the control plane's store. Never touches the 7.x keys. |
 | `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
-| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses. Only adds. |
+| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, and completes the app list. Only adds. |
 
 #### Convert
 
@@ -237,7 +248,7 @@ Read each entry. Nothing in the report needs a change to the data, but each one 
 #### Publish
 
 ```bash
-cosec-migrate publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted \
+cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted \
   [--resume] [--break-glass-max-duration PT4H]
 ```
 
@@ -258,7 +269,7 @@ documents that exist.
 #### Bootstrap the control plane
 
 ```bash
-cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
+cosec-migrate bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
 ```
 
 The control plane authorizes its own writes with the policies in the snapshot, so with no administrator nobody may
@@ -271,7 +282,7 @@ the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
 #### Repair the back-reference index
 
 ```bash
-cosec-migrate repair-references --to-redis redis://localhost:6379 [--key-prefix cosec]
+cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
 ```
 
 The control plane keeps an index of which documents refer to which policy, so that a platform change cannot remove a
@@ -281,6 +292,13 @@ how many documents it visited and how many references it added. It only adds, so
 runs, and running it again adds nothing: an entry the index has stays, and an extra one blocks a removal at most. A
 document whose head cannot be read is printed as `FAILED <doc>: <reason>`, the others are still visited, and the
 command exits with `1`.
+
+It then lists every app document among the documents in the app list and marks the list complete, printing
+`The app list is complete: <n> app(s).`; until then the grant analysis takes every grant over every app as
+unknown. If the list kept changing under it, it prints `FAILED the app list could not be completed` and exits with
+`1`: run it again. The list it completes is as good as `<s>:control:list:documents`, which names every document the
+control plane or `cosec-migrate` ever published, as long as that list has not been lost; a document written to Redis
+another way is in neither.
 
 #### Rollback
 

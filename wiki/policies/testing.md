@@ -243,9 +243,9 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `DENY_OVERLAP` | A DENY that binds the author may overlap it. |
 | `CROSS_TENANT` | The author is not in the document's tenant. |
 | `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
-| `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known. |
+| `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known; or the app list cannot be trusted and the grant reaches every app ([Storage](../operations/storage.md#publishing-through-the-control-plane)). |
 | `NOT_ANALYZED` | A platform or app document change, or a tenant boundary change, by someone who is not the trust root. |
-| `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one escalation per binding, so the approver sees whom the change reaches. |
+| `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one per binding, naming only the binding and its tenant document, so the approver sees whom the change reaches. Informational: the approval is for `NOT_ANALYZED`, and a change in these entries alone never sends an approved change back to `AWAITING_APPROVAL`. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
 
 The author's rights are those of the credential the request came with. With a role cap (an API key with `roles`), the
@@ -262,11 +262,15 @@ The analysis reads the author's rights as enforcement does:
 - **Bindings that expire.** What the author holds through a binding with `expiresAt` they hold only until then, so it
   contains a grant only when that grant's own binding expires no later. A grant without `expiresAt`, a later one, or
   making a policy attachable is an escalation; the closest ALLOW is reported with the shortfall `EXPIRY`.
-- **Ids both the tenant and the platform define.** Enforcement refuses such a binding or attachment as ambiguous, so
-  the author holds nothing through it, and where it binds the author it counts like a DENY of everything.
+- **Ids both the tenant and the platform define.** Enforcement refuses such a binding or attachment as ambiguous when
+  the two policies differ in content. The analysis does not compare content and takes every such id as ambiguous,
+  which only takes rights away: the author holds nothing through it, and where it binds the author it counts like a
+  DENY of everything.
 - **Every app document.** An app document binds roles, so it can deny the author something in its app whether or not
-  the change names that app. The analysis reads every app document there is; one that cannot be read makes every grant
-  that reaches its app `UNREADABLE`.
+  the change names that app. The analysis reads every app document the app list names; one that cannot be read makes
+  every grant that reaches its app `UNREADABLE`. Until the app list is complete (after an upgrade, until
+  [`cosec-migrate repair-references`](../operations/upgrading.md#repair-the-back-reference-index) has run), every grant
+  over every app, a binding with app `*` or an attachment, is `UNREADABLE`.
 
 Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
 whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the

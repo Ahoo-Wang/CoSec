@@ -198,12 +198,18 @@ content. Change listeners receive them.
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
 - **`HEADS_MOVED` and `REVIEW_NEEDED` follow a `PUBLISHED`** when another document the change was checked with moved
   before its write landed ([What a publish compares](./storage.md#what-a-publish-compares)). Each names the heads that
-  moved (`moved`: the document, the digest it was checked with, the digest it has now, and whether it could be read),
-  carries the escalations the grant analysis finds on the current heads, and says in its note what that means.
-  `HEADS_MOVED` needs nothing; `REVIEW_NEEDED` means the analysis found an escalation the publish did not have
-  approved, or could not run: a person should review the published change, and the control plane also logs
-  `Change <changeId> published on [<doc>] while ... moved: ...` at `WARN`. Like every event that is not gated, they
-  are best effort: the publish has already happened.
+  moved (`moved`: the document, or `list:apps` for the app list, the digest it was checked with, the digest it has
+  now, and whether it could be read), carries the escalations the grant analysis finds on the current heads, and says
+  in its note what that means. `HEADS_MOVED` needs nothing; `REVIEW_NEEDED` means the analysis found an escalation the
+  publish did not have approved, could not run, or the comparison did not finish in time (`moved` is then empty): a
+  person should review the published change, and the control plane also logs
+  `Change <changeId> published on [<doc>]: <note>; moved [...].` at `WARN`. They are recorded even when the client
+  that published disconnects. Like every event that is not gated, they are best effort: the publish has already
+  happened.
+- **Escalations** in an event are `subject`, `reason` and `detail` ([Testing changes](../policies/testing.md)). A
+  `TENANT_BINDING` one names only the binding and its tenant document (`binding <id> of [tenant:<t>]`), with the
+  policy and the statements in `detail`; whom the binding binds, and in which space, is the tenant's and is left out.
+  It is informational: it never counts as what needed approval.
 
 With `cosec-kafka` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) is `false`. It writes each event to

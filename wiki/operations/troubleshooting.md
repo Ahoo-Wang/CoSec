@@ -431,7 +431,14 @@ for a check, `412` for an `ifMatch` that does not hold).
   the index names could not be read; retry once Redis answers.
 - **A `REVIEW_NEEDED` change event** after a publish: another document the change was checked with moved before its
   write, and the analysis on the current heads finds an escalation nobody approved. The change is published; review it
-  as [What a publish compares](./storage.md#what-a-publish-compares) describes.
+  as [What a publish compares](./storage.md#what-a-publish-compares) describes. With `the heads could not be compared
+  within ...`, the comparison after the write did not finish in time; review the change the same way.
+- **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
+  `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN`: the app list is not
+  complete yet, so the analysis cannot tell what the author holds in apps it did not read. Run
+  [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) once. The same after the list
+  was lost (a `FLUSHDB`, an eviction). `The app list misses an app document that exists` means an app the change names
+  has a head the list does not; run `repair-references` too.
 
 ## Form POST body is empty after CoSec on Spring MVC
 

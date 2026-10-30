@@ -58,7 +58,8 @@ contain `:`, so a key names one document only.
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
 | `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
-| `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane | the documents that have revisions, and the change requests that may still be open, so the maintenance passes, and the grant analysis for the app documents, can visit each |
+| `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane, `cosec-migrate` | the documents that have revisions, and the change requests that may still be open, so the maintenance passes and `repair-references` can visit each; a head write lists its document again if the list lost it |
+| `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open |
@@ -253,13 +254,28 @@ is `CONFLICTED` and must be rebased; nothing is overwritten. The workflow, its c
 [Testing changes](../policies/testing.md). The control plane announces each published revision to the instances of its
 own host at once, and to every other instance through CoCache's invalidation message.
 
-The grant analysis of a tenant change reads every app document, whether or not the change names the app: it lists
-them from `<s>:control:list:documents`, which names every document the control plane or `cosec-migrate` ever
-published. A document written to Redis any other way is not seen by the analysis, nor by the back-reference index or
-the maintenance passes; write documents only through these two. Each analysis asks Redis for the list and reads every app
-head. The list is one value that grows with the number of documents (about 5 MB for 100,000 tenants); each
-control-plane instance keeps the last one it read, with its digest, and asks with a conditional read, so an unchanged
-list is neither sent nor decoded again, at the cost of about 14 MB of heap for 100,000 tenants.
+The grant analysis of a tenant change reads every app document, whether or not the change names the app: it reads
+the app list, `<s>:control:apps:all`, and the head of every app it names. The list is small (the app ids and a
+`complete` flag) and is kept by whatever publishes a document, the control plane or `cosec-migrate`:
+
+- an app document lists itself before its head is written, so an app never has a head the list does not name; a
+  list that is not there is started, not complete;
+- the platform document's first revision marks the list complete: on a new store, no app document can exist before
+  it;
+- [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) lists every app document
+  `<s>:control:list:documents` names and marks the list complete. A store upgraded from 8.0.0-alpha.2 needs it once.
+
+The analysis trusts only a complete list. When the list is not there, not complete, cannot be read, or holds an
+entry that is not an app id, or when an app the change names has a head the list does not name, the grantor's rights
+are unknown in every app: a grant over every app (a binding with app `*`, or an attachment) and a grant in an app it
+could not read go to approval (`UNREADABLE`), and the control plane logs a WARN that names `repair-references`. A list
+that was lost, through a `FLUSHDB` or an eviction, starts again incomplete when the next app document is published,
+so the analysis falls back to approval until `repair-references` runs again.
+
+A document written to Redis any other way is in neither list, so it is not seen by the analysis, the back-reference
+index or the maintenance passes; write documents only through these two. `<s>:control:list:documents` grows with the
+number of documents (about 5 MB for 100,000 tenants). The analysis does not read it; each head write reads it once to
+list its document again if the list lost it.
 
 ### What a publish compares
 
@@ -271,8 +287,11 @@ safe to leave: restricting a grantor never withdraws a grant the grantor already
 meanwhile and the grant come out as the serial order "grant, then restriction". The one outcome no serial order gives
 is two changes that each remove a right the other's grant relies on, landing within the same window.
 
-After the write, the control plane reads every recorded head again. When one moved, or cannot be read, it runs the
-grant analysis again on the current heads and records a change event: `HEADS_MOVED` when the analysis finds nothing
+After the write, the control plane compares the digest of every recorded head, and of the app list, with the one it
+was checked with; only digests, no document is decoded. This runs to the end even when the client that published
+disconnects, within a bounded time; a comparison that does not finish in time is recorded as `REVIEW_NEEDED`. When a
+head or the app list moved, or cannot be read, it runs the grant analysis again on the current heads and records a
+change event: `HEADS_MOVED` when the analysis finds nothing
 the publish did not have approved, `REVIEW_NEEDED` when it finds more, or cannot run. The event names the heads that
 moved and carries what the analysis found ([Observability](./observability.md#control-plane-change-log)). Nothing is
 rolled back. To review a `REVIEW_NEEDED`, read its escalations as an approver would: if the grant should not stand,

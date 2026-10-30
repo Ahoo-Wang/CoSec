@@ -16,10 +16,10 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **任意类型的 token 属性**（RC1-2、`GRT-5`）。分析按引擎的方式读取 `subject.attributes.*`，布尔值和数字读作它们的文本。token 中写着 `"suspended": true` 时，条件为未被 `suspended` 的 ALLOW 不再算作作者持有。代码中，`Operator.attributes` 与 `Grantor.attributes` 是 `Map<String, Any>`，即 token 声明原样，alpha.2 只保留了字符串。
 - **会到期的绑定**（RC1-3、`GRT-3`）。作者经带 `expiresAt` 的绑定持有的权限，只包含自身绑定不晚于它到期的授出；没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级，短缺为 `EXPIRY`。
 - **删除平台也定义了同一 id 的租户策略**（RC1-9、`GRT-4`）按把平台的策略授给租户中该 id 的绑定与附加来分析。两边都定义的 id 不给作者任何权限。
-- **每一份 app 文档**（RC1-4、`GRT-6`）。租户变更的分析读取每一份 app 文档，而不只是变更点名的那些，所以 app 绑定给作者某个角色的 DENY，会在触及该 app 的每个作用域中限制作者可以授出的东西。读不到的 app 文档使这样的授出成为升级（`UNREADABLE`）。
-- **平台策略不能占用租户的 id**（RC1-9、`CTL-21`）。平台变更新增的策略 id 若已被某个租户文档定义或绑定，变更被拒绝（`V2`、`422`，列出这些租户文档）。自己定义了该 id 的租户，不再阻止平台删除它自己的同 id 策略。反向引用索引在租户下一次发布时才记下它自己的 id：**升级之后，以 Kubernetes Job 运行一次 [`cosec-migrate repair-references`](#repair-the-back-reference-index)**，使用与控制面相同的 Redis 和 key 前缀。在它运行之前，平台策略若占用了某个旧租户自有策略的 id，不会被拒绝，只会在那个租户中二义，执行时对此失败即拒绝。
-- **升级**新增原因 `UNRESOLVED`（新绑定指向没有任何文档定义的策略，RC1-32）、`UNREADABLE`（RC1-4）与 `TENANT_BINDING`（应用文档的变更放宽了的每条租户绑定，RC1-34、`APR-6`）；对这类应用变更的审批覆盖它们。穷举 `UnknownReason` 或 `Shortfall` 的代码要加上 `UNRESOLVED`、`UNREADABLE` 与 `EXPIRY`。
-- **发布后的头变化**（RC1-33）。变更检查时读过的其他文档在它写入之前变化时，控制面在 `PUBLISHED` 之后记 `HEADS_MOVED` 或 `REVIEW_NEEDED`，变化的头在新成员 `moved` 中（[一次发布比较什么](./storage.md#what-a-publish-compares)）。处理每一种 `ChangeEvent.Kind` 的变更监听器要加上这两种。
+- **每一份 app 文档**（RC1-4、`GRT-6`）。租户变更的分析读取 app 列表（`<s>:control:apps:all`，[存储](./storage.md#publishing-through-the-control-plane)）列出的每一份 app 文档，而不只是变更点名的那些，所以 app 绑定给作者某个角色的 DENY，会在触及该 app 的每个作用域中限制作者可以授出的东西。读不到的 app 文档使这样的授出成为升级（`UNREADABLE`）。分析只在 app 列表完整时信任它，而升级上来的存储的列表并不完整：**升级后，在 [`cosec-migrate repair-references`](#repair-the-back-reference-index) 运行之前，覆盖所有 app 的每个租户授出（app 为 `*` 的绑定，或附加）都需要审批**（`UNREADABLE`），控制面会记一条点名该命令的 WARN。
+- **平台策略不能占用租户的 id**（RC1-9、`CTL-21`）。平台变更新增的策略 id 若已被某个租户文档定义或绑定，变更被拒绝（`V2`、`422`，列出这些租户文档）。自己定义了该 id 的租户，不再阻止平台删除它自己的同 id 策略。反向引用索引只记下租户在升级之后新增的 id；租户文档原有的 id 只有经 `repair-references` 才进入索引：**升级之后，以 Kubernetes Job 运行一次 [`cosec-migrate repair-references`](#repair-the-back-reference-index)**，使用与控制面相同的 Redis 和 key 前缀。在它运行之前，平台策略若占用了某个租户在升级前就有的自有策略的 id，不会被拒绝，只会在那个租户中二义，执行时对此失败即拒绝。
+- **升级**新增原因 `UNRESOLVED`（新绑定指向没有任何文档定义的策略，RC1-32）、`UNREADABLE`（RC1-4）与 `TENANT_BINDING`（应用文档的变更放宽了的每条租户绑定，RC1-34、`APR-6`）。`TENANT_BINDING` 仅供参考：应用变更因 `NOT_ANALYZED` 而需要审批，这一项只写出绑定和它所在的租户文档。穷举 `UnknownReason` 或 `Shortfall` 的代码要加上 `UNRESOLVED`、`UNREADABLE` 与 `EXPIRY`。
+- **发布后的头变化**（RC1-33）。变更检查时读过的其他文档或 app 列表在它写入之前变化时，控制面在 `PUBLISHED` 之后记 `HEADS_MOVED` 或 `REVIEW_NEEDED`，变化的头在新成员 `moved` 中（[一次发布比较什么](./storage.md#what-a-publish-compares)）。处理每一种 `ChangeEvent.Kind` 的变更监听器要加上这两种。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
 
@@ -81,7 +81,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
-它的命令如下。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。
+它的命令如下。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。`publish`、`bootstrap` 与 `repair-references` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。
 
 | 命令 | 作用 |
 |---|---|
@@ -89,7 +89,7 @@ migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 | `publish` | 把一次已接受的转换中的文档作为它们的第一个修订写入 Redis，经过控制面的存储。从不触碰 7.x 的 key。 |
 | `bootstrap` | 把平台租户的一个主体绑定到 `cosec:platform-admin`，让控制面有人可以写入。 |
 | `partition plan` | 分别用 `--partition platform` 和 `by-owner` 转换两次，为每个租户写出一份计划，由控制面提交。不向 Redis 写任何东西。 |
-| `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引。只增不删。 |
+| `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引，并补全 app 列表。只增不删。 |
 
 #### 转换 {#convert}
 
@@ -160,7 +160,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 #### 发布 {#publish}
 
 ```bash
-cosec-migrate publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted \
+cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted \
   [--resume] [--break-glass-max-duration PT4H]
 ```
 
@@ -176,7 +176,7 @@ break-glass 绑定。它经过控制面的存储把每份文档写成修订 1，
 #### 引导控制面 {#bootstrap-the-control-plane}
 
 ```bash
-cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
+cosec-migrate bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
 ```
 
 控制面用快照中的策略授权自己的写操作，所以没有管理员时谁都不能写入。`bootstrap` 只写平台租户的文档 `Tenant((platform))`；平台文档本身来自 `publish`，所以先发布。`bootstrap` 在平台租户自己的文档中，把平台租户的主体 `alice`
@@ -186,10 +186,12 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 #### 修复反向引用索引 {#repair-the-back-reference-index}
 
 ```bash
-cosec-migrate repair-references --to-redis redis://localhost:6379 [--key-prefix cosec]
+cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
 ```
 
 控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。它只增不删，所以可以在控制面运行时执行，再运行一次也不会新增：索引已有的条目保留，多出的条目最多误拦一次删除。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
+
+然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:list:documents` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
 
 #### 回滚 {#rollback}
 

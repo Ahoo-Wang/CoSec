@@ -51,7 +51,8 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引 |
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目 |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它 |
-| `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面 | 有修订的文档，以及可能仍未结束的变更请求，供维护任务（以及授出分析读 app 文档时）逐个访问 |
+| `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面、`cosec-migrate` | 有修订的文档，以及可能仍未结束的变更请求，供维护任务与 `repair-references` 逐个访问；列表丢了某份文档时，这份文档的下一次头写入会把它重新列入 |
+| `<s>:control:apps:all` | 控制面、`cosec-migrate` | app 列表：现有的 app 文档，以及列表是否完整；授出分析在每次租户变更时读取它（[见下文](#publishing-through-the-control-plane)） |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
 | `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选 |
@@ -217,9 +218,22 @@ sequenceDiagram
 变基；不会覆盖任何内容。工作流、检查和审批见[测试变更](../policies/testing.md)。控制面把每个发布的修订立即告知同一宿主
 上的实例，并通过 CoCache 的失效消息告知其他所有实例。
 
-租户变更的授出分析读取每一份 app 文档，不论变更是否点名该 app：它从 `<s>:control:list:documents` 列出它们，这个列表记着
-控制面或 `cosec-migrate` 发布过的每一份文档。以其他方式写进 Redis 的文档，授出分析、反向引用索引和维护任务都看不到；只经这两条
-路径写文档。每次分析都向 Redis 询问这个列表，并读取每个 app 的头。列表是一个随文档数量增长的值（10 万个租户时约 5 MB）；每个控制面实例保留上次读到的列表及其摘要，以条件读询问，所以列表未变时既不传输也不重新解码，代价是 10 万个租户时约 14 MB 的堆内存。
+租户变更的授出分析读取每一份 app 文档，不论变更是否点名该 app：它读 app 列表 `<s>:control:apps:all`，再读列表中每个 app 的头。
+这个列表很小（app id 加一个 `complete` 标记），由发布文档的一方维护，即控制面或 `cosec-migrate`：
+
+- app 文档在写入自己的头之前把自己列入，所以不会有列表未列出的 app 头；列表不存在时新建，为不完整；
+- 平台文档的第一个修订把列表标记为完整：在新的存储上，它之前不可能有 app 文档；
+- [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 把 `<s>:control:list:documents`
+  列出的每份 app 文档列入，并把列表标记为完整。从 8.0.0-alpha.2 升级的存储需要运行一次。
+
+分析只信任完整的列表。列表不存在、不完整、读不到、含有不是 app id 的条目，或者变更点名的某个 app 有头而列表没有列出它时，授出者在
+每个 app 中的权利都未知：覆盖所有 app 的授出（app 为 `*` 的绑定，或附加）以及在读不到的 app 中的授出进入审批（`UNREADABLE`），
+控制面记一条点名 `repair-references` 的 WARN。列表丢失（`FLUSHDB` 或驱逐）后，下一份发布的 app 文档会以不完整的状态重新建立它，
+所以在再次运行 `repair-references` 之前，分析一律退回到审批。
+
+以其他方式写进 Redis 的文档不在这两个列表中，授出分析、反向引用索引和维护任务都看不到它；只经这两条路径写文档。
+`<s>:control:list:documents` 随文档数量增长（10 万个租户时约 5 MB）。授出分析不读它；每次头写入读它一次，以便在列表丢了这份文档时
+把它重新列入。
 
 ### 一次发布比较什么 {#what-a-publish-compares}
 
@@ -229,7 +243,9 @@ sequenceDiagram
 限制与这次授出，结果等同于"先授出、后限制"的串行顺序。唯一不能串行化的情形，是两个变更各自移除对方授出所依赖的权利，并在同一个
 时间窗内落地。
 
-写入之后，控制面重读每个记录的头。有任一头变化或读不到时，它在当前的头上重新运行授出分析，并记一个变更事件：分析没有发现发布时
+写入之后，控制面把每个记录的头以及 app 列表的摘要与检查时的摘要比较；只比较摘要，不解码任何文档。发布的客户端断开连接时，
+这一步也会在限定时间内跑完；没有按时完成的比较记为 `REVIEW_NEEDED`。有任一头或 app 列表变化或读不到时，它在当前的头上重新运行
+授出分析，并记一个变更事件：分析没有发现发布时
 未经审批的东西，是 `HEADS_MOVED`；发现了，或分析无法运行，是 `REVIEW_NEEDED`。事件列出变化的头和分析的结论
 （[可观测性](./observability.md#control-plane-change-log)）。不会回滚任何东西。复核 `REVIEW_NEEDED` 时，像审批人那样读它的升级项：
 如果这次授出不应保留，提议一个删除它的变更，或回滚该文档。
