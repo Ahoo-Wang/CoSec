@@ -62,9 +62,9 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id. |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
-| `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to; a tenant's `boundary` is not a platform boundary. |
+| `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to (a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
@@ -243,6 +243,7 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `DENY_OVERLAP` | A DENY that binds the author may overlap it. |
 | `CROSS_TENANT` | The author is not in the document's tenant. |
 | `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
+| `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known. |
 | `NOT_ANALYZED` | A platform or app document change, or a tenant boundary change, by someone who is not the trust root. |
 | `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one escalation per binding, so the approver sees whom the change reaches. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
@@ -263,6 +264,9 @@ The analysis reads the author's rights as enforcement does:
   making a policy attachable is an escalation; the closest ALLOW is reported with the shortfall `EXPIRY`.
 - **Ids both the tenant and the platform define.** Enforcement refuses such a binding or attachment as ambiguous, so
   the author holds nothing through it, and where it binds the author it counts like a DENY of everything.
+- **Every app document.** An app document binds roles, so it can deny the author something in its app whether or not
+  the change names that app. The analysis reads every app document there is; one that cannot be read makes every grant
+  that reaches its app `UNREADABLE`.
 
 Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
 whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the
@@ -295,6 +299,12 @@ they approved with: an approval given with a capped key does not count the ALLOW
 one given without CoSec's own token does not count their break-glass bindings. If the approval no longer holds, the change
 goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved, the change is `CONFLICTED`; if the
 candidate no longer compiles against the current documents, it is `DRAFT` with the findings.
+
+Only the document's own head is compared when it is written. Another document the checks read, a platform change
+landing at the same moment for example, can move between the publish's last check and its write; the control plane
+then analyzes the change again and records `HEADS_MOVED`, or `REVIEW_NEEDED` when the analysis now finds an escalation
+nobody approved. The change stays published: [What a publish compares](../operations/storage.md#what-a-publish-compares)
+says why that is safe, and how to review such an event.
 
 To undo a revision, `POST /documents/{key}:rollback` with `{"revision": 11, "note": "..."}` proposes a `ROLLBACK`
 change that makes the document what it was at that revision. It goes through the same checks, window, approval and

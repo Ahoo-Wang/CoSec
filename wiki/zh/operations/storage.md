@@ -49,9 +49,9 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订 |
 | `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址 |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引 |
-| `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档 |
+| `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它 |
-| `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面 | 有修订的文档，以及可能仍未结束的变更请求，供维护任务逐个访问 |
+| `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面 | 有修订的文档，以及可能仍未结束的变更请求，供维护任务（以及授出分析读 app 文档时）逐个访问 |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
 | `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选 |
@@ -216,6 +216,23 @@ sequenceDiagram
 一个基准修订提出，经过检查，视需要经过影子窗口和审批，然后发布。到发布时基准已经变化的变更成为 `CONFLICTED`，必须
 变基；不会覆盖任何内容。工作流、检查和审批见[测试变更](../policies/testing.md)。控制面把每个发布的修订立即告知同一宿主
 上的实例，并通过 CoCache 的失效消息告知其他所有实例。
+
+租户变更的授出分析读取每一份 app 文档，不论变更是否点名该 app：它从 `<s>:control:list:documents` 列出它们，这个列表记着
+控制面或 `cosec-migrate` 发布过的每一份文档。以其他方式写进 Redis 的文档，授出分析、反向引用索引和维护任务都看不到；只经这两条
+路径写文档。每次分析读一次列表和每个 app 的头，所以开销随文档数量增长。
+
+### 一次发布比较什么 {#what-a-publish-compares}
+
+一次发布只对一个 key 做比较并交换：它所修改文档的头。它的检查还读了别的头（平台文档的、各 app 文档的，某些检查还有租户文档的），
+并记在变更上。这些是不同的 key，分布在 Redis Cluster 的不同槽位，没有一次写入能覆盖它们，所以在发布的最后一次检查与写入之间，
+其中某个头可能变化。这个时间窗很短（写入前刚刚又检查过一次），留着也是安全的：限制授出者从不撤销它之前已做的授出，所以期间发布的
+限制与这次授出，结果等同于"先授出、后限制"的串行顺序。唯一不能串行化的情形，是两个变更各自移除对方授出所依赖的权利，并在同一个
+时间窗内落地。
+
+写入之后，控制面重读每个记录的头。有任一头变化或读不到时，它在当前的头上重新运行授出分析，并记一个变更事件：分析没有发现发布时
+未经审批的东西，是 `HEADS_MOVED`；发现了，或分析无法运行，是 `REVIEW_NEEDED`。事件列出变化的头和分析的结论
+（[可观测性](./observability.md#control-plane-change-log)）。不会回滚任何东西。复核 `REVIEW_NEEDED` 时，像审批人那样读它的升级项：
+如果这次授出不应保留，提议一个删除它的变更，或回滚该文档。
 
 ### 修订、历史与回滚 {#revisions-history-and-rollback}
 

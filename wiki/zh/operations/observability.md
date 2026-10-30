@@ -163,7 +163,7 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 ## 控制面变更日志 {#control-plane-change-log}
 
 控制面为变更的每一步发出一个变更事件：`PROPOSED`、`CHECKED`、`SHADOW_STARTED`、`SHADOWED`、`APPROVED`、`REJECTED`、
-`PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`。事件指明变更、文档、
+`PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`。事件指明变更、文档、
 操作者、基准修订和候选修订、需要审批的内容、确认、影子窗口摘要和备注；它从不携带文档内容。变更监听器接收这些事件。
 
 - **默认监听器**以 `INFO` 记录每个事件，格式为
@@ -176,6 +176,11 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
   记录。
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
+- **`PUBLISHED` 之后可能跟着 `HEADS_MOVED` 或 `REVIEW_NEEDED`：** 变更检查时读过的其他文档在它写入之前变化了
+  （[一次发布比较什么](./storage.md#what-a-publish-compares)）。事件列出变化的头（`moved`：文档、检查时的摘要、现在的摘要、
+  能否读到），带上授出分析在当前的头上发现的升级项，并在备注中说明含义。`HEADS_MOVED` 无需处理；`REVIEW_NEEDED` 表示分析
+  发现了发布时未经审批的升级项，或分析无法运行：应当有人复核这次发布，控制面还会以 `WARN` 记录
+  `Change <changeId> published on [<doc>] while ... moved: ...`。它们和所有不受控的事件一样尽力投递：发布已经发生。
 
 有 `cosec-kafka` 和 `KafkaOperations` bean 时，starter 还会注册一个 `KafkaChangeListener`，除非
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) 为 `false`。它把每个事件写到

@@ -425,6 +425,14 @@ does, so a refusal does not tell whether a document, a change or a DENY exists.
 A change whose checks fail is not an error response: it stays `DRAFT` with its `findings`, each with a status (`422`
 for a check, `412` for an `ifMatch` that does not hold).
 
+- **`[<id>] is a policy id [tenant:...] already use`** (`V2`) on a platform change: a tenant document defines or binds
+  a policy of that id, and the platform's would make it ambiguous there. Give the platform policy another id, or have
+  the tenant remove or rename its own first. With `, or whose document could not be read` (`503`), a tenant document
+  the index names could not be read; retry once Redis answers.
+- **A `REVIEW_NEEDED` change event** after a publish: another document the change was checked with moved before its
+  write, and the analysis on the current heads finds an escalation nobody approved. The change is published; review it
+  as [What a publish compares](./storage.md#what-a-publish-compares) describes.
+
 ## Form POST body is empty after CoSec on Spring MVC
 
 A 7.x symptom: its WebMvc adapter read query parameters through `HttpServletRequest.getParameter`, which made the

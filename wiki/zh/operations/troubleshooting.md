@@ -375,6 +375,9 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 检查未通过的变更不是错误响应：它保持 `DRAFT`，带有 `findings`，每条都有一个状态码（检查为 `422`，不成立的 `ifMatch`
 为 `412`）。
 
+- **平台变更出现 `V2` 发现 `[<id>] is a policy id [tenant:...] already use`**：某个租户文档定义或绑定了这个 id 的策略，平台的策略会使它在那里二义。给平台策略换一个 id，或先让该租户删除或改名它自己的策略。带 `, or whose document could not be read`（`503`）时，索引列出的某个租户文档读不到；等 Redis 恢复后重试。
+- **发布之后出现 `REVIEW_NEEDED` 变更事件**：变更检查时读过的其他文档在它写入之前变化了，而在当前的头上分析发现了无人审批的升级项。变更已经发布；按[一次发布比较什么](./storage.md#what-a-publish-compares)所述复核它。
+
 ## Spring MVC 上经过 CoSec 后表单 POST 请求体为空 {#form-post-body-is-empty-after-cosec-on-spring-mvc}
 
 这是 7.x 的症状：它的 WebMvc 适配器通过 `HttpServletRequest.getParameter` 读取查询参数，这会让 servlet 容器在 CoSec 的

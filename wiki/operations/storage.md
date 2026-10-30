@@ -56,9 +56,9 @@ contain `:`, so a key names one document only.
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
-| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>` |
+| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
-| `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane | the documents that have revisions, and the change requests that may still be open, so the maintenance passes can visit each |
+| `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane | the documents that have revisions, and the change requests that may still be open, so the maintenance passes, and the grant analysis for the app documents, can visit each |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open |
@@ -252,6 +252,29 @@ checked, optionally shadowed and approved, then published. A change whose base h
 is `CONFLICTED` and must be rebased; nothing is overwritten. The workflow, its checks and its approvals are in
 [Testing changes](../policies/testing.md). The control plane announces each published revision to the instances of its
 own host at once, and to every other instance through CoCache's invalidation message.
+
+The grant analysis of a tenant change reads every app document, whether or not the change names the app: it lists
+them from `<s>:control:list:documents`, which names every document the control plane or `cosec-migrate` ever
+published. A document written to Redis any other way is not seen by the analysis, nor by the back-reference index or
+the maintenance passes; write documents only through these two. Each analysis reads the list and every app head, so its
+cost grows with the number of documents.
+
+### What a publish compares
+
+A publish compare-and-sets one key: the head of the document it changes. Its checks also read other heads, the platform
+document's, the app documents' and, for some checks, tenant documents', and recorded them on the change. Those are
+separate keys, in different Redis Cluster slots, so no single write can cover them, and one of them can move between
+the publish's last check and its write. This window is short (the checks run again right before the write) and it is
+safe to leave: restricting a grantor never withdraws a grant the grantor already made, so a restriction published
+meanwhile and the grant come out as the serial order "grant, then restriction". The one outcome no serial order gives
+is two changes that each remove a right the other's grant relies on, landing within the same window.
+
+After the write, the control plane reads every recorded head again. When one moved, or cannot be read, it runs the
+grant analysis again on the current heads and records a change event: `HEADS_MOVED` when the analysis finds nothing
+the publish did not have approved, `REVIEW_NEEDED` when it finds more, or cannot run. The event names the heads that
+moved and carries what the analysis found ([Observability](./observability.md#control-plane-change-log)). Nothing is
+rolled back. To review a `REVIEW_NEEDED`, read its escalations as an approver would: if the grant should not stand,
+propose a change that removes it, or roll the document back.
 
 ### Revisions, history and rollback
 

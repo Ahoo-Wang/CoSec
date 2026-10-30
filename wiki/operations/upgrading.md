@@ -26,9 +26,20 @@ analysis read the author's rights as enforcement does, so some changes that publ
   escalation with the shortfall `EXPIRY`.
 - **Removing a tenant policy whose id the platform defines** (RC1-9, `GRT-4`) is analyzed as granting the platform's
   policy to the tenant's bindings and attachments of that id. An id both define grants the author nothing.
-- **Escalations** gain the reasons `UNRESOLVED` (a new binding of a policy no document defines, RC1-32) and
-  `TENANT_BINDING` (each tenant binding an app document change widens, RC1-34, `APR-6`); an approval of such an app
-  change covers them. Code that matches every `UnknownReason` or `Shortfall` gains `UNRESOLVED` and `EXPIRY`.
+- **Every app document** (RC1-4, `GRT-6`). The analysis of a tenant change reads every app document, not only those
+  the change names, so a DENY an app binds to one of the author's roles limits what the author may grant in every
+  scope that reaches that app. An app document that cannot be read makes such a grant an escalation (`UNREADABLE`).
+- **A platform policy cannot take a tenant's id** (RC1-9, `CTL-21`). A platform change that adds a policy whose id a
+  tenant document defines or binds is refused (`V2`, `422`, naming the tenant documents). A tenant that defines the
+  id itself no longer blocks the platform from removing its own policy of that id.
+- **Escalations** gain the reasons `UNRESOLVED` (a new binding of a policy no document defines, RC1-32),
+  `UNREADABLE` (RC1-4) and `TENANT_BINDING` (each tenant binding an app document change widens, RC1-34, `APR-6`); an
+  approval of such an app change covers them. Code that matches every `UnknownReason` or `Shortfall` gains
+  `UNRESOLVED`, `UNREADABLE` and `EXPIRY`.
+- **Moved heads after a publish** (RC1-33). When another document a change was checked with moved before its write,
+  the control plane records `HEADS_MOVED` or `REVIEW_NEEDED` after `PUBLISHED`, with the heads in a new `moved` member
+  ([What a publish compares](./storage.md#what-a-publish-compares)). A change listener that handles every
+  `ChangeEvent.Kind` gains the two.
 
 ## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
 
