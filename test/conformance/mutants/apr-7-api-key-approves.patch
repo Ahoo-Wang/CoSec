@@ -1,0 +1,17 @@
+# Rule: APR-7
+# Mutant: a principal authenticated by an API key approves like a person
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index a47b8f7e..5b1e3cb6 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -207,7 +207,7 @@ class ChangeAuthority(
+      * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10).
+      */
+     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
+-        operator.security?.principal?.credential?.method == Identity.Method.API_KEY ->
++        operator.security?.principal?.credential?.method == Identity.Method("never") ->
+             "an API key cannot approve: an approval is a person's"
+ 
+         !operator.platform && change.operations.any { it is Operation.SetBoundary } ->

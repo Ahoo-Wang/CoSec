@@ -1,0 +1,19 @@
+# Rule: GRT-6
+# Mutant: the analysis trusts the app list before this instance has reconciled it, so a complete list an older writer left missing an app is believed
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index 91e67243..0c59c71f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -113,10 +113,6 @@ class Changes(
+          * stale is never trusted. One that fails throws, and the analysis takes the list as untrusted until the next.
+          */
+         override suspend fun apps(): Versioned<AppList>? {
+-            if (!appsReconciled.get()) {
+-                revisions.reconcileApps(store.documents())
+-                appsReconciled.set(true)
+-            }
+             return store.apps()
+         }
+     }

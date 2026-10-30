@@ -1,0 +1,16 @@
+# Rule: APR-8
+# Mutant: an approval counts at publish though the approver's token has been revoked since
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index a47b8f7e..4fd207e9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -485,7 +485,6 @@ class ChangeAuthority(
+         if (approval.approver.tenant != TenantId.PLATFORM && change.operations.any { it is Operation.SetBoundary }) {
+             return "only a platform principal approves a boundary change"
+         }
+-        revoked(approval)?.let { return it }
+         // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
+         // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
+         val source = if (memberships.source == Memberships.Source.PROVIDER) {

@@ -1,0 +1,17 @@
+# Rule: APR-8
+# Mutant: the approver is checked again on the memberships recorded at approval, though the provider no longer gives them
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+index 9146f151..133d771d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+@@ -154,7 +154,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
+             if (now == null || !now.active) {
+                 return Decision.Deny(null)
+             }
+-            heldThenAndNow(memberships, now)
++            memberships
+         } else {
+             memberships
+         }
