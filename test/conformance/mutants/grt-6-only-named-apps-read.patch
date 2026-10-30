@@ -1,17 +1,17 @@
 # Rule: GRT-6
 # Mutant: the grant analysis reads only the app documents a change names, so a role-bound DENY of another app is not among the grantor's
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesTest :conformance:test
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index c5954f30..b41b4719 100644
+index e2da47e8..f575626a 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 @@ -232,7 +232,7 @@ class ChangeAuthority(
-         val listed = listedApps(documents)
+         var listed = listedApps(documents)
          val apps = LinkedHashMap<AppId, PolicyDocument?>()
          val unread = HashSet<AppId>()
 -        for (app in named + listed.orEmpty()) {
 +        for (app in named) {
              appHead(documents, app)?.let { apps[app] = it.document } ?: run { unread += app }
          }
-         val snapshot = GrantDocuments.snapshot(
+         // An app the change names has a head the list does not name: the list misses apps, so it says nothing.

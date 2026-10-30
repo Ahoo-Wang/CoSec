@@ -1,0 +1,17 @@
+# Rule: CTL-21
+# Mutant: the control plane lets the platform add a policy id a tenant document already defines or binds
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index c4893f4b..1d7ae2d7 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -269,7 +269,7 @@ class ChangeChecks(
+             if (policy.id in existing) continue
+             val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
+             val uses = tenants.associateWith { uses(context, it, policy.id) }
+-            val using = uses.filterValues { it != false }.keys
++            val using = emptySet<SnapshotKey.Tenant>()
+             if (using.isEmpty()) continue
+             val status = if (uses.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
+             findings += Finding(
