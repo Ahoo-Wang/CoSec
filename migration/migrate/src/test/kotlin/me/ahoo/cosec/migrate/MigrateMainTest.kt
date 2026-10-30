@@ -122,23 +122,61 @@ class MigrateMainTest {
         Files.isRegularFile(out.resolve(ConvertedDirectory.PLATFORM_FILE)).assert().isTrue()
     }
 
+    /** RC1-27: the options that wrote break-glass are gone, and say what to do instead. */
     @Test
-    fun `a root without an expiry is rejected, and the console says how to fix it`() {
-        val out = temp.resolve("out")
-        val (code, output) = run("convert --from-files ${export()} --out $out --root-enabled --root-id admin")
-        code.assert().isEqualTo(MigrateMain.FAILED)
-        output.assert().contains("REJECT ROOT_WITHOUT_EXPIRY").contains("pass --root-expires-at")
+    fun `the root and break-glass options are gone, and say what to do instead`() {
+        for (args in listOf(
+            "convert --from-files ${export()} --out ${temp.resolve("out")} --root-enabled",
+            "convert --from-files ${export()} --out ${temp.resolve("out")} --root-expires-at 2026-12-31T00:00:00Z",
+            "publish --to-redis $REDIS --in ${temp.resolve("out")} --break-glass-max-duration PT4H",
+        )) {
+            val (code, output) = run(args)
+            code.assert().describedAs(output).isEqualTo(MigrateMain.USAGE)
+            output.assert().contains("writes no break-glass binding").contains("by two people")
+        }
+    }
+
+    /** RC1-27: publish refuses converted documents that hold a break-glass binding, and writes nothing. */
+    @Test
+    fun `publish refuses a break-glass binding and writes nothing`() {
+        val converted = Converter().convert(Fixtures7x.source(listOf("p" to Fixtures7x.policy("p"))), ConvertOptions())
+        val platform = converted.documents.getValue(SnapshotKey.Platform)
+        val glass = Binding(
+            BindingId("root"),
+            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("cosec")),
+            BindingScope(Match.Any, Match.Any),
+            me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
+            expiresAt = Instant.now().plusSeconds(3600).toEpochMilli(),
+            breakGlass = true,
+        )
+        val withGlass = PolicyDocument(
+            platform.kind,
+            platform.owner,
+            platform.revision,
+            platform.publishedAt,
+            platform.policies,
+            platform.bindings + glass,
+        )
+        val input = temp.resolve("converted")
+        ConvertedDirectory.write(
+            Conversion(mapOf(SnapshotKey.Platform to withGlass), converted.provenance, converted.report),
+            input
+        )
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val (code, output) = run("publish --to-redis $REDIS --key-prefix $keyPrefix --in $input")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().contains("writes no break-glass binding").contains("Nothing was written")
+        controlStore(keyPrefix) { store -> store.documents().assert().isEmpty() }
     }
 
     @Test
-    fun `a root with an expiry and by-owner partition convert`() {
+    fun `a by-owner partition converts`() {
         val out = temp.resolve("out")
         val (code, output) = run(
-            "convert --from-files ${export("[${policy("c", tenantId = "acme")}]")} --out $out " +
-                "--root-expires-at 2026-12-31T00:00:00Z --partition by-owner",
+            "convert --from-files ${export("[${policy("c", tenantId = "acme")}]")} --out $out --partition by-owner",
         )
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
-        output.assert().contains("semantic change C1d").contains("semantic change C5")
+        output.assert().contains("semantic change C5")
         Files.isRegularFile(out.resolve("tenants/acme.json")).assert().isTrue()
     }
 

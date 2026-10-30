@@ -43,9 +43,6 @@ enum class RejectionKind(val advice: String) {
     /** The same id twice: a policy in an export, or a permission in one app. */
     DUPLICATE_ID("keep one of them"),
 
-    /** Root was enabled without `--root-expires-at`: an 8.0 break-glass binding always expires (RFC 0004 §4.8). */
-    ROOT_WITHOUT_EXPIRY("pass --root-expires-at, or leave root disabled"),
-
     /** `--partition by-owner` and a policy whose `tenantId` names no tenant document. */
     OWNER_TENANT("set the policy's tenantId, or convert with --partition platform"),
 

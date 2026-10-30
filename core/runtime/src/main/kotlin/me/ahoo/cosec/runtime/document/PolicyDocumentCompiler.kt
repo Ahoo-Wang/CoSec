@@ -269,12 +269,13 @@ class PolicyDocumentCompiler(
                     "[$it] is reserved: space ids beginning with [${ScopeResolver.RESERVED_SPACE_PREFIX}] are CoSec's"
                 )
             }
-            if (binding.policy == BuiltinPolicies.PLATFORM_ADMIN && document.kind != DocumentKind.PLATFORM) {
+            if (binding.policy == BuiltinPolicies.PLATFORM_ADMIN && !platformTenant(document)) {
                 // It holds cosec:approve and cosec:boundary: bound in a tenant's own document, its subjects would be
-                // the trust root of that document and move its boundary (RC1-36, TNT-2).
+                // the trust root of that document and move its boundary (RC1-36, TNT-2). The platform tenant's own
+                // document binds it to the platform's principals, as `cosec-migrate bootstrap` writes it.
                 errors += CompileError(
                     "$.bindings[$i].policy",
-                    "[${BuiltinPolicies.PLATFORM_ADMIN.value}] is bound only in the platform document"
+                    "[${BuiltinPolicies.PLATFORM_ADMIN.value}] is bound only by the platform and the platform tenant"
                 )
             }
         }
@@ -286,6 +287,10 @@ class PolicyDocumentCompiler(
             )
         }
     }
+
+    /** Whether [document] is the platform's or the platform tenant's own, whose subjects are the platform's. */
+    private fun platformTenant(document: PolicyDocument): Boolean = document.kind == DocumentKind.PLATFORM ||
+        (document.kind == DocumentKind.TENANT && document.owner == TenantId.PLATFORM.value)
 
     private fun checkBoundaries(document: PolicyDocument, errors: MutableList<CompileError>) {
         val boundaries = HashSet<String>()

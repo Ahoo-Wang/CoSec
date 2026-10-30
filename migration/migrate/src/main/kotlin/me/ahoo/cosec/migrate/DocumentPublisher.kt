@@ -28,8 +28,6 @@ import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
-import java.time.Duration
-import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 /** `publish` stopped: [written] are the keys it wrote before, exactly; nothing else was written. */
@@ -64,9 +62,9 @@ class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKe
  * document does not exist yet, so an existing 8.0 deployment is never overwritten. It does not touch the 7.x keys:
  * rolling back is not switching. The 8.0 schema marker belongs to the switch (RFC 0008 S1), so publish does not write it.
  *
- * Every document is compiled first, every app document's references are checked against the platform document, and
- * every break-glass binding must expire within [breakGlassMaxDuration] of now, as the control plane requires of one
- * (RFC 0007 §8): a long-lived root is what break-glass replaces, so such a binding is refused, not written.
+ * Every document is compiled first, and every app document's references are checked against the platform document.
+ * Documents that hold a break-glass binding are refused, nothing written (RC1-27): break-glass is requested through the
+ * control plane after the switch, where two people take part in every step (RFC 0007 §8, `BRK-5`).
  *
  * Writes are one per document, so a failure can leave a part written; the exception says exactly which keys. With
  * `resume`, a document already published is skipped when its content is the converted one, and refused otherwise, so a
@@ -76,7 +74,6 @@ class DocumentPublisher(
     private val store: ControlStore,
     private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler(),
     private val clock: Clock = Clock.systemUTC(),
-    private val breakGlassMaxDuration: Duration = DEFAULT_BREAK_GLASS_MAX_DURATION,
 ) {
     private val revisions = Revisions(store, clock)
 
@@ -87,26 +84,15 @@ class DocumentPublisher(
             compiler.compile(document)
             compiler.checkReferences(document, platform)
         }
-        checkBreakGlass(platform)
+        refuseBreakGlass(documents.values)
         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
         val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
         checkExisting(existing, documents, resume)
         PublishResult(write(ordered.filterNot { it in existing }, documents), existing.keys.toList())
     }
 
-    private fun checkBreakGlass(platform: PolicyDocument) {
-        val now = clock.instant()
-        val tooLong = platform.bindings.filter { it.breakGlass }.filter { binding ->
-            val expiresAt = binding.expiresAt?.let(Instant::ofEpochMilli)
-            expiresAt == null || Duration.between(now, expiresAt) > breakGlassMaxDuration
-        }
-        if (tooLong.isNotEmpty()) {
-            throw PublishException(
-                "Break-glass binding(s) ${tooLong.map { it.id.value }} expire more than $breakGlassMaxDuration from now " +
-                    "(RFC 0007 §8): convert without root, and request break-glass through the control plane after the switch.",
-                emptyList(),
-            )
-        }
+    private fun refuseBreakGlass(documents: Collection<PolicyDocument>) {
+        refusedBreakGlass(documents)?.let { throw PublishException(it, emptyList()) }
     }
 
     private fun checkExisting(existing: Map<SnapshotKey, PolicyDocument>, converted: Map<SnapshotKey, PolicyDocument>, resume: Boolean) {
@@ -156,12 +142,25 @@ class DocumentPublisher(
 
     companion object {
         /** `cosec.control.break-glass.max-duration` by default (RFC 0007 §8). */
-        val DEFAULT_BREAK_GLASS_MAX_DURATION: Duration = Duration.ofHours(4)
 
         /** Who writes what `cosec-migrate` writes: recorded in each revision's provenance. */
         val MIGRATE_ACTOR: Actor = Actor(TenantId.PLATFORM, PrincipalId("cosec-migrate"))
 
         private val PUBLICATION = Publication("migrate", ProvenanceKind.MIGRATE, MIGRATE_ACTOR)
         private val ORDER = mapOf(DocumentKind.PLATFORM to 0, DocumentKind.APP to 1, DocumentKind.TENANT to 2)
+    }
+}
+
+/**
+ * Why [documents] are not written: the break-glass bindings they hold (RC1-27); null when they hold none. Shared by
+ * `publish` and `bootstrap`.
+ */
+internal fun refusedBreakGlass(documents: Collection<PolicyDocument>): String? {
+    val glass = documents.flatMap { document -> document.bindings.filter { it.breakGlass }.map { it.id.value } }
+    return if (glass.isEmpty()) {
+        null
+    } else {
+        "Break-glass binding(s) $glass: cosec-migrate writes no break-glass binding. After the switch, request " +
+            "break-glass through the control plane, by two people (RFC 0007 §8)."
     }
 }

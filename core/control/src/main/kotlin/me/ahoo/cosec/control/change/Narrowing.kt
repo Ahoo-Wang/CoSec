@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
@@ -117,6 +118,7 @@ internal object Narrowing {
  * may; otherwise a change that only narrows ([Narrowing]), on the current head, staged by a holder of
  * `cosec:skip-shadow` on the document. An emergency ban must not queue behind a change in its shadow window.
  */
+@OptIn(InternalCoSecApi::class)
 internal class Preemption(private val revisions: Revisions, private val authority: ChangeAuthority) {
     suspend fun preempts(operator: Operator, change: ChangeRequest, head: Head?): Boolean {
         if (head?.digest != change.base.digest) {

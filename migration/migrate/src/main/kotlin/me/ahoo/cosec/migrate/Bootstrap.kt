@@ -77,6 +77,7 @@ class Bootstrap(
             current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding,
             rateLimits = current?.rateLimits.orEmpty(),
         )
+        refusedBreakGlass(listOf(candidate))?.let { throw BootstrapRefusedException(it) }
         compiler.compile(candidate)
         if (current != null && CandidateDigest.of(current) == CandidateDigest.of(candidate)) {
             return@runBlocking current.revision
