@@ -24,7 +24,7 @@ internal fun ChangeRequest.event(
     kind: ChangeEvent.Kind,
     operator: Actor,
     clock: Clock,
-    moved: List<MovedHead> = emptyList(),
+    moved: List<MovedHead>,
 ): ChangeEvent = ChangeEvent(
     id = "${id.value}:${kind.name}:${clock.millis()}",
     time = clock.instant(),

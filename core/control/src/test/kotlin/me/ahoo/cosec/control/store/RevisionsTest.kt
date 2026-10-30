@@ -321,8 +321,33 @@ class RevisionsTest {
                 emptySet()
             )
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
-            revisions.repairReferences(ACME)
+            revisions.repairReferences(ACME).assert().isEqualTo(1)
             revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
+            // Again, nothing is missing.
+            revisions.repairReferences(ACME).assert().isEqualTo(0)
+            revisions.repairReferences(SnapshotKey.Tenant("absent")).assert().isEqualTo(0)
         }
+
+        @Test
+        fun `a tenant whose head cannot be read still blocks the platform removing its policy - RC1-9`() =
+            runBlocking<Unit> {
+                published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("own"), policy("other"))))
+                published(document = candidate(ACME, listOf(policy("own")), listOf(binding("c", "own"))))
+                val unreadable = object : ControlStore by memory {
+                    override suspend fun head(key: SnapshotKey): StoredDocument? {
+                        check(key != ACME) { "[$key] cannot be read" }
+                        return memory.head(key)
+                    }
+                }
+                val refused = Revisions(unreadable, clock).publish(
+                    SnapshotKey.Platform,
+                    revisions.head(SnapshotKey.Platform),
+                    candidate(SnapshotKey.Platform, listOf(policy("other"))),
+                    publication("c")
+                )
+                (refused as PublishOutcome.Referenced).referrers.assert().isEqualTo(
+                    mapOf(PolicyId("own") to setOf(ACME))
+                )
+            }
     }
 }

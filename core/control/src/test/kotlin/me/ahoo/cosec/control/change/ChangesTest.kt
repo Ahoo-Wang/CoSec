@@ -375,6 +375,15 @@ class ChangesTest {
             ACME,
             Operation.PutBinding(bind("readers", "perm:order/read", app = "order")),
             Operation.PutBinding(bind("writers", "perm:order/write", app = "order")),
+            Operation.PutBinding(
+                binding(
+                    "bob",
+                    SubjectRef.Principal(TenantId("acme"), PrincipalId("bob")),
+                    "perm:order/read",
+                    "order",
+                    SpaceId("team-a")
+                )
+            ),
         )
         // Four-eyes, so that the platform's own change is analyzed as far as an app document is.
         val ids = java.util.concurrent.atomic.AtomicInteger()
@@ -399,6 +408,11 @@ class ChangesTest {
                 "binding readers of [tenant:acme]",
                 "TENANT_BINDING",
                 "[perm:order/read] statements [0] widen what it grants to role editor in space [*]",
+            ),
+            Escalation(
+                "binding bob of [tenant:acme]",
+                "TENANT_BINDING",
+                "[perm:order/read] statements [0] widen what it grants to principal bob in space [team-a]",
             ),
         )
         val narrowed = fourEyes.propose(
@@ -469,10 +483,16 @@ class ChangesTest {
                 Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId.DEFAULT to setOf(RoleId("ops"))), emptyList())
             )
         val unreadable = HashSet<SnapshotKey>()
+        var unlisted = false
         val store = object : ControlStore by harness.memory {
             override suspend fun head(key: SnapshotKey): StoredDocument? {
                 check(key !in unreadable) { "[$key] cannot be read" }
                 return harness.memory.head(key)
+            }
+
+            override suspend fun documents(): Set<SnapshotKey> {
+                check(!unlisted) { "the documents cannot be listed" }
+                return harness.memory.documents()
             }
         }
         val changes = fourEyes(store)
@@ -491,6 +511,11 @@ class ChangesTest {
             .containsExactly("DENY_OVERLAP")
         unreadable += SnapshotKey.App("billing")
         changes.propose(ops, ACME, 1, grant, "grant again").escalations.map { it.reason }.distinct().assert()
+            .containsExactly("UNREADABLE")
+        // Without the list, every app the grant reaches and does not name is unknown.
+        unreadable.clear()
+        unlisted = true
+        changes.propose(ops, ACME, 1, grant, "unlisted").escalations.map { it.reason }.distinct().assert()
             .containsExactly("UNREADABLE")
     }
 
@@ -613,5 +638,113 @@ class ChangesTest {
     @Test
     fun `heads that did not move are not reported - RC1-33`() = runBlocking<Unit> {
         publishInterleaved(null).assert().isEmpty()
+    }
+
+    @Test
+    fun `tenants that cannot be read refuse a widening app change - RC1-34`() = runBlocking<Unit> {
+        val order = SnapshotKey.App("order")
+        publish(order, Operation.PutPolicy(allow("perm:order/read", action = "order:read")))
+        publish(ACME, Operation.PutBinding(bind("readers", "perm:order/read", app = "order")))
+        val store = object : ControlStore by harness.memory {
+            override suspend fun referrers(target: SnapshotKey, policy: PolicyId) =
+                if (target == order) error("the index cannot be read") else harness.memory.referrers(target, policy)
+        }
+        assertThrownBy<ChangeRejectedException> {
+            runBlocking {
+                fourEyes(store).propose(
+                    PLATO,
+                    order,
+                    1,
+                    listOf(Operation.PutPolicy(allow("perm:order/read", action = "order:*"))),
+                    "widen"
+                )
+            }
+        }.extracting { (it as ChangeRejectedException).status }.isEqualTo(503)
+    }
+
+    @Test
+    fun `a tenant document that cannot be read refuses a platform id and keeps blocking a removal - RC1-9`() =
+        runBlocking<Unit> {
+            publish(ACME, Operation.PutPolicy(allow("editor")), Operation.PutBinding(bind("staff", "editor")))
+            var unreadable = false
+            val store = object : ControlStore by harness.memory {
+                override suspend fun head(key: SnapshotKey): StoredDocument? {
+                    check(!(unreadable && key == ACME)) { "[$key] cannot be read" }
+                    return harness.memory.head(key)
+                }
+            }
+            val changes = fourEyes(store)
+            unreadable = true
+            val added = changes.propose(
+                PLATO,
+                SnapshotKey.Platform,
+                0,
+                listOf(Operation.PutPolicy(allow("editor", action = "order:*"))),
+                "add"
+            )
+            added.errors.map { it.check to it.status }.assert().containsExactly("V2" to 503)
+            added.errors.single().message.assert().contains("could not be read")
+            // Written as cosec-migrate would, from before the upgrade: acme may define editor, but cannot be read, so
+            // it may refer to the platform's and still blocks its removal.
+            unreadable = false
+            harness.revisions.publish(
+                SnapshotKey.Platform,
+                null,
+                StoreFixtures.candidate(SnapshotKey.Platform, listOf(allow("editor"))),
+                StoreFixtures.publication()
+            )
+            unreadable = true
+            changes.propose(
+                PLATO,
+                SnapshotKey.Platform,
+                1,
+                listOf(Operation.RemovePolicy(PolicyId("editor"))),
+                "remove"
+            )
+                .errors.map { it.check }.assert().containsExactly("REFERENCES")
+        }
+
+    @Test
+    fun `a head that cannot be read after the write is reported for review - RC1-33`() = runBlocking<Unit> {
+        val alice = SubjectRef.Principal(TenantId("acme"), PrincipalId("alice"))
+        publish(
+            SnapshotKey.Platform,
+            Operation.PutPolicy(allow("orders", action = "order:*", resource = "order/**")),
+            Operation.PutBinding(binding("alice", alice, "orders")),
+        )
+        var written = false
+        val store = object : ControlStore by harness.memory {
+            override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument) =
+                harness.memory.putHead(key, expected, document).also { if (key == ACME) written = true }
+
+            override suspend fun head(key: SnapshotKey): StoredDocument? {
+                check(!(written && key == SnapshotKey.Platform)) { "the platform cannot be read" }
+                return harness.memory.head(key)
+            }
+        }
+        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent>())
+        val listener = object : ChangeListener {
+            override val name = "events"
+
+            override suspend fun onChange(event: ChangeEvent) {
+                events += event
+            }
+        }
+        val changes = fourEyes(store, ChangeListeners(listOf(listener)))
+        val grant = Operation.PutBinding(
+            binding("bob", SubjectRef.Principal(TenantId("acme"), PrincipalId("bob")), "orders")
+        )
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(grant), "grant")
+        changes.skipShadow(ALICE_OP, change.id, "test")
+        changes.publish(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val detected = withTimeout(5_000) {
+            while (events.none { it.kind == ChangeEvent.Kind.REVIEW_NEEDED }) delay(10)
+            events.single { it.kind == ChangeEvent.Kind.REVIEW_NEEDED }
+        }
+        detected.moved.single().let {
+            it.document.assert().isEqualTo(SnapshotKey.Platform)
+            it.readable.assert().isFalse()
+        }
+        detected.note.assert().contains("could not run again")
     }
 }

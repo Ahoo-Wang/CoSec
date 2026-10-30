@@ -386,6 +386,7 @@ class GrantAnalyzerTest {
             fragment.resolved.assert().isFalse()
             fragment.policy.assert().isEqualTo(PolicyId("missing"))
             fragment.grantee.toString().assert().isEqualTo("binding x")
+            fragment.toString().assert().isEqualTo("missing (does not resolve) to binding x in (*, *)")
             // Whatever the grantor holds: not even an ALLOW of everything contains what cannot be told.
             val everything = snapshot(
                 tenant = GrantDocument(

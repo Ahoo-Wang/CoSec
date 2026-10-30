@@ -96,6 +96,11 @@ class MigrateMainTest {
             "convert --from-files",
             "convert from-files",
             "publish --in x",
+            "bootstrap --to-redis redis://localhost:6379",
+            "repair-references",
+            "repair-references --key-prefix cosec",
+            "partition plan --out x",
+            "api-keys --out x",
         ],
     )
     fun `usage errors exit with 2`(args: String) {

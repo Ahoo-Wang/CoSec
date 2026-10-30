@@ -1041,7 +1041,6 @@ public final class me/ahoo/cosec/control/grant/GrantDocuments {
 	public final fun of (Lme/ahoo/cosec/runtime/document/PolicyDocument;)Lme/ahoo/cosec/control/grant/GrantDocument;
 	public final fun platform (Lme/ahoo/cosec/runtime/document/PolicyDocument;)Lme/ahoo/cosec/control/grant/GrantDocument;
 	public final fun snapshot (Lme/ahoo/cosec/runtime/document/PolicyDocument;Ljava/util/Map;Ljava/util/Map;JLme/ahoo/cosec/control/grant/Dimension;)Lme/ahoo/cosec/control/grant/GrantSnapshot;
-	public static synthetic fun snapshot$default (Lme/ahoo/cosec/control/grant/GrantDocuments;Lme/ahoo/cosec/runtime/document/PolicyDocument;Ljava/util/Map;Ljava/util/Map;JLme/ahoo/cosec/control/grant/Dimension;ILjava/lang/Object;)Lme/ahoo/cosec/control/grant/GrantSnapshot;
 }
 
 public final class me/ahoo/cosec/control/grant/GrantFragment {
@@ -1143,7 +1142,6 @@ public final class me/ahoo/cosec/control/grant/Grantor {
 public final class me/ahoo/cosec/control/grant/GrantorRights {
 	public static final field Companion Lme/ahoo/cosec/control/grant/GrantorRights$Companion;
 	public fun <init> (Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/grant/Dimension;Ljava/util/Set;)V
-	public synthetic fun <init> (Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/grant/Dimension;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAllows ()Ljava/util/List;
 	public final fun getDenies ()Ljava/util/List;
 	public final fun unread (Lme/ahoo/cosec/control/grant/ScopeSet;)Z

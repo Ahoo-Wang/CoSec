@@ -67,8 +67,8 @@ class HeldStatement(
 class GrantorRights(
     val allows: List<HeldStatement>,
     val denies: List<HeldStatement>,
-    private val unreadApps: Dimension<AppId> = Dimension.Only(emptySet()),
-    private val readApps: Set<AppId> = emptySet(),
+    private val unreadApps: Dimension<AppId>,
+    private val readApps: Set<AppId>,
 ) {
     /** Whether [scope] reaches an app whose document could not be read, where the grantor's rights are not known. */
     fun unread(scope: ScopeSet): Boolean {

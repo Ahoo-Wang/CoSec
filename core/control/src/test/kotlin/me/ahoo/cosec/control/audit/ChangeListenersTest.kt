@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.audit
 
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -133,5 +136,37 @@ class ChangeListenersTest {
             )
         }
         event(ChangeEvent.Kind.PUBLISHED).toString().assert().contains("c1")
+    }
+
+    /** RC1-33: a moved-heads event names each head, as checked and as it is now, and whether it could be read. */
+    @Test
+    fun `a moved-heads event writes the heads that moved`() {
+        val event = ChangeEvent(
+            "e",
+            Instant.EPOCH,
+            ChangeEvent.Kind.REVIEW_NEEDED,
+            Actor(TenantId("acme"), PrincipalId("alice")),
+            ChangeId("c1"),
+            SnapshotKey.Tenant("acme"),
+            RevisionRef(1, "d"),
+            RevisionRef(2, "e"),
+            note = "the analysis on the current heads finds 1 escalation(s) the publish did not have approved",
+            moved = listOf(
+                MovedHead(SnapshotKey.Platform, "a", "b"),
+                MovedHead(SnapshotKey.App("order"), "c", null, readable = false),
+            ),
+        )
+        val json = me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(ChangeEventJson.write(event))
+        json.get("kind").asString().assert().isEqualTo("REVIEW_NEEDED")
+        json.get("moved").values().map {
+            "${it.get("document").asString()} ${it.get("checked").asString()} ${it.get("readable").asBoolean()}"
+        }
+            .assert().containsExactly("platform a true", "app:order c false")
+        json.get("moved").get(1).get("current").isNull.assert().isTrue()
+        // Other events have no moved member.
+        val plain = me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(
+            ChangeEventJson.write(event(ChangeEvent.Kind.PUBLISHED))
+        )
+        plain.has("moved").assert().isFalse()
     }
 }
