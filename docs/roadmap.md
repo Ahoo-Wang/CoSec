@@ -299,6 +299,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **RC1-33 不做多键原子写**（Redis Cluster 上不可行）：发布仍只比较并交换目标头，时间窗写进文档，写后重读分析用过的头，有变化就重新分析并写审计事件，不回滚。同日协调者按 B1 的发现调整 RC1-4（经 `documents()` 读全部 app 文档）与 RC1-9 后一半（租户自有 id 进现有索引，升级后 `repair-references`） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订；维护者："文档加写后检测" |
 | **CoCache 是一方库**：CoSec 需要的存储能力（条件写、失效通知的可靠性等）缺失时，请 CoCache 会话在 CoCache 中实现，不在 CoSec 里绕过 CoCache（RFC 0007 §5.2）。批次 D 调查失效通知丢失与 Lettuce `SharedLock` 时，修复可以落在 CoCache | 2026-10-30 | 仅记在本文；维护者："CoCache 是一方库，是我们自己维护的，需要的话可以让 CoCache 会话增加特性。" |
 | **RC1-4 再调整**（#1181 的独立审查，协调者决定）：授出分析不再读单一文档列表（丢失时 fail open；每次租户变更在 Redis 中哈希 5.2 MB，可被租户管理员循环触发），改读 `ControlStore` 中只列 app 的小列表，带 `complete` 标志；缺失、未完成或不可信即 UNKNOWN，升级后跑 `repair-references` 之前覆盖所有 app 的租户授出需要审批 | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订 |
+| **运行时依赖升级**：`cosec-cosid` 用的 CosId 5.0.0-alpha.2 → 5.0.0 正式版（#1180）；只影响可选扩展 `cosec-cosid`，Wow 不用它 | 2026-10-30 | [RFC 0001 §3.11](rfc/0001-target-architecture.md) 修订；维护者："合入 #1180" |
 
 ## 10. 尚未派发的下一步
 
