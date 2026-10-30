@@ -489,7 +489,7 @@ profile 引导的优化，峰值吞吐通常更低。所以 native 只是网关�
 ### 3.11 关键依赖：CoCache 6.4、CosId 4.0
 
 > **2026-10-29 修订**：CoSec 不再依赖 CosId（#1170）。id 由 CoSec 自己的端口 `IdGenerator`（`cosec-spi`）生成；CosId 只出现在可选扩展
-> `cosec-cosid` 中，基于 CosId 5.0.0-alpha.2，由 starter 按类路径装配。下文关于 CosId 4.0 的内容只适用于 7.x。
+> `cosec-cosid` 中，基于 CosId 5.0.0-alpha.2（2026-10-30 升到 5.0.0 正式版，#1180），由 starter 按类路径装配。下文关于 CosId 4.0 的内容只适用于 7.x。
 
 **决定**：目标架构以 **CoCache 6.4** 和 **CosId 4.0** 为准，并随它们的后续版本更新。main 已升级到 CoCache 6.6.0 和 CosId 4.0.2（7.0）。
 两者的基线都是 JDK 17 与 Spring Boot 4，与 3.9 一致。
