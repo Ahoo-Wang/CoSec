@@ -226,6 +226,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 后续项（#1114 审查）：`SnapshotConsistencyPropertyTest`（SNP-1）的视图由测试内的副本拼装，补一个经生产 `DocumentSnapshotViews`、在并发重新发布下的 runtime 级变体；`migrate/` 改用不需要匹配器的读取器，去掉 `OgnlSandbox` 与 `ognl`（L8 余项）。
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。**2026-10-29 第二次失败**（#1162 的 CI，该 PR 只改 node 版本）：`Expecting empty but was: [platform]`，即等待期内 `platform` 键的失效通知没有送达。按本条规则升级：RC 批次 D 优先调查失效通知是否会丢（CoCache 6 的发布与订阅、重连期间、多实例），而不是重跑了事；结论与修复写进 `docs/security/8.0-rc-review.md`。
 - 观察项（RC 批次 D，2026-10-29）：`SnapshotStoreBlockHoundTest#aColdLoadOverTheStoreNeverBlocksTheCaller` 在 #1164 的 CI 上失败一次（main 最近 15 次全绿，#1164 未改 `cocache`）。阻塞点在 Lettuce 内部：并发冷加载时 `DefaultEndpoint.write` → `SharedLock.incrementWriters` 的 `ReentrantLock` 在争用下 park（经 `MaintenanceAwareExpiryWriter`、CoCache 的 `RedisRemoteStore.readAsync`）。要查清：是 Lettuce 维护通知（maintenance events）等路径持有独占锁时的真实短暂阻塞，还是测试的并发方式造成；据此决定关闭该特性、预热连接，或按 Lettuce 自己的 BlockHound 集成放行 `SharedLock` 并写明理由。不得为了变绿而放宽守护。
+- 观察项（RC 批次 D，#1181 审查，2026-10-30）：CoCache 的条件读（`getIfChanged`）在 Redis 的 Lua 中对整份存储值做 `sha1hex` 来比较摘要；数据面 `SnapshotSource` 的条件重新验证也走它（`RedisSnapshotDocumentStore.readIfChanged`），所以每次重新验证的 Redis 线程时间与文档大小成正比（1 MB 文档量级为毫秒）。批次 D 量化它；可请 CoCache 会话把摘要存进值的头部，使条件读与大小无关（CoCache 新版本是运行时依赖升级，需维护者确认）。
+- 后续项（#1181 审查）：控制面 API 没有按租户的速率限制，租户管理员可以循环调用 propose 等昂贵操作，归入批次 D 评估；控制面的单一文档列表 `<p>:control:list:documents` 随租户数增长、回收任务每轮整份读取，换成不需要整份读取的结构。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。归入 RC 批次 D（2026-10-30）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
@@ -296,6 +298,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **RC 修复批次 B 拆成 B1（授出分析的健全性）与 B2（信任根、审批、break-glass、变更审计）**，同一个实现会话依次做；RC1-2、4、9、12、27、29、33、35、37 按协调者建议的修法，RC1-28 在 8.0 只写文档；非数组 `roles`/`policies` 声明的 500 归入批次 D | 2026-10-30 | [RFC 0007](rfc/0007-control-plane.md) 修订、[RC 审查](security/8.0-rc-review.md) 的 Fix plan；维护者："按建议派发" |
 | **RC1-33 不做多键原子写**（Redis Cluster 上不可行）：发布仍只比较并交换目标头，时间窗写进文档，写后重读分析用过的头，有变化就重新分析并写审计事件，不回滚。同日协调者按 B1 的发现调整 RC1-4（经 `documents()` 读全部 app 文档）与 RC1-9 后一半（租户自有 id 进现有索引，升级后 `repair-references`） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订；维护者："文档加写后检测" |
 | **CoCache 是一方库**：CoSec 需要的存储能力（条件写、失效通知的可靠性等）缺失时，请 CoCache 会话在 CoCache 中实现，不在 CoSec 里绕过 CoCache（RFC 0007 §5.2）。批次 D 调查失效通知丢失与 Lettuce `SharedLock` 时，修复可以落在 CoCache | 2026-10-30 | 仅记在本文；维护者："CoCache 是一方库，是我们自己维护的，需要的话可以让 CoCache 会话增加特性。" |
+| **RC1-4 再调整**（#1181 的独立审查，协调者决定）：授出分析不再读单一文档列表（丢失时 fail open；每次租户变更在 Redis 中哈希 5.2 MB，可被租户管理员循环触发），改读 `ControlStore` 中只列 app 的小列表，带 `complete` 标志；缺失、未完成或不可信即 UNKNOWN，升级后跑 `repair-references` 之前覆盖所有 app 的租户授出需要审批 | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订 |
 
 ## 10. 尚未派发的下一步
 
