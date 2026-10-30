@@ -83,5 +83,6 @@ object GrantDocuments {
             .ifEmpty { listOf(ResourcePattern.AnyResource) },
         condition = source.condition,
         name = source.name,
+        onMissing = source.onMissing,
     )
 }

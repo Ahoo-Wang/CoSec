@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.cache.control
 
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.Cache
@@ -30,6 +31,7 @@ import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
@@ -66,6 +68,7 @@ class CoCacheControlStoreTest {
         node: SnapshotNode,
         heads: Cache<SnapshotKey, SnapshotDocument> = node.cache,
         lists: Cache<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        appLists: Cache<String, AppList> = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
         clock: Clock = Clock.systemUTC(),
         changes: Cache<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
     ) = CoCacheControlStore(
@@ -78,6 +81,7 @@ class CoCacheControlStoreTest {
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = lists,
+        appLists = appLists,
         clock = clock,
         missingGrace = Duration.ofHours(1),
     )
@@ -123,33 +127,55 @@ class CoCacheControlStoreTest {
         }
     }
 
-    /**
-     * RC1-4: the grant analysis lists the documents on every tenant change. Each call asks Redis whether the list is the
-     * one decoded last; only then is that set the answer.
-     */
+    /** RC1-4: the app list is one small conditional value, read from Redis on every call. */
     @Test
-    fun `the document list is asked for on every call and decoded again only when it changed`() = runBlocking<Unit> {
+    fun `the app list is conditional, strict and read from Redis`() = runBlocking<Unit> {
         val backend = HookedBackend(InMemoryBackend())
         val keyPrefix = newKeyPrefix()
         SnapshotNode(backend, keyPrefix).use { reading ->
             SnapshotNode(backend, keyPrefix).use { writing ->
                 val store = store(reading)
                 val other = store(writing)
-                other.putIndex(key, null, RevisionIndex()).assert().isTrue()
-                val first = store.documents()
-                first.assert().containsExactly(key)
-                // Unchanged in Redis: the set decoded before is the answer.
-                store.documents().assert().isSameAs(first)
-                // Listed by another instance: the next call sees it.
-                val beta = SnapshotKey.Tenant("beta")
-                other.putIndex(beta, null, RevisionIndex()).assert().isTrue()
-                store.documents().assert().containsExactlyInAnyOrder(key, beta)
-                // A read that fails throws, never answering from the set kept.
+                store.apps().assert().isNull()
+                other.putApps(null, AppList(setOf("order"), complete = false)).assert().isTrue()
+                other.putApps(null, AppList(emptySet(), complete = true)).assert().isFalse()
+                // Written by another instance: read at once.
+                val listed = store.apps()!!
+                listed.value.assert().isEqualTo(AppList(setOf("order"), complete = false))
+                store.putApps(listed.digest, AppList(setOf("order", "billing"), complete = true)).assert().isTrue()
+                store.putApps(listed.digest, AppList(emptySet(), complete = true)).assert().isFalse()
+                other.apps()!!.value.assert().isEqualTo(AppList(setOf("billing", "order"), complete = true))
                 backend.failAll = true
-                assertThrownBy<Exception> { runBlocking { store.documents() } }
+                assertThrownBy<Exception> { runBlocking { store.apps() } }
                 backend.failAll = false
-                store.documents().assert().containsExactlyInAnyOrder(key, beta)
             }
+        }
+        // Entries are kept as written, whatever they are; anything but the two members is refused.
+        val odd = AppList(setOf("not:an app", "order"), complete = true)
+        val encoded = AppListCodec.encode(odd)
+        AppListCodec.decode(encoded).assert().isEqualTo(odd)
+        encoded.decodeToString().assert().isEqualTo("""{"apps":["not:an app","order"],"complete":true}""")
+        for (refused in listOf(
+            """{"apps":[],"complete":true,"x":1}""",
+            """{"apps":[1],"complete":true}""",
+            """{"apps":[],"complete":"yes"}""",
+        )) {
+            assertThrownBy<SnapshotFormatException> { AppListCodec.decode(refused.encodeToByteArray()) }
+        }
+    }
+
+    /** RC1-4 review: a document list that lost a document gets it back when its head is written again. */
+    @Test
+    fun `a head write lists its document again`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+            val store = store(node, lists = lists)
+            store.putIndex(key, null, RevisionIndex()).assert().isTrue()
+            store.documents().assert().containsExactly(key)
+            lists.async().invalidate("documents").await()
+            store.documents().assert().isEmpty()
+            store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)
+            store.documents().assert().containsExactly(key)
         }
     }
 
@@ -250,6 +276,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
                 { published += it },
             )
             store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)

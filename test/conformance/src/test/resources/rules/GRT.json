@@ -78,14 +78,14 @@
     {
       "id": "GRT-6",
       "source": "RFC 0007 §7.4.3 step 3, 2026-10-30 revision (RC1-4)",
-      "statement": "The analysis reads the grantor's rights from every app document there is, whether or not the change names its app; a fragment that reaches an app whose document cannot be read is never contained.",
+      "statement": "The analysis reads the grantor's rights from every app document the app list names, whether or not the change names its app; a fragment that reaches an app whose document cannot be read is never contained, nor, when the app list is missing, incomplete, unreadable or misses an app document that exists, one that reaches any app the change does not name.",
       "level": "control",
-      "properties": [
-        "control:GrantPropertyTest#A5 the grant analysis is sound"
-      ],
+      "properties": [],
       "guards": [
         "control:GrantAnalyzerTest",
-        "control:ChangesTest#the analysis reads every app document, and one it cannot read leaves a grant unknown - RC1-4"
+        "control:ChangesB1Test#the analysis reads every app document the app list names - RC1-4",
+        "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
+        "control:ChangesB1Test#an app document lists itself, and a lost list starts again incomplete - RC1-4"
       ],
       "pending": null
     }

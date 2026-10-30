@@ -6,6 +6,7 @@
   "level": "control",
   "description": "RC1-4: billing denies order:delete to the role ops; alice, who has ops, grants bob the ALLOW of order:* she holds through ops, in every app. The change names no app, yet billing's DENY of alice counts, so the grant waits for approval.",
   "documents": {
+    "platform": {},
     "apps": {
       "billing": {
         "policies": [

@@ -94,7 +94,12 @@ internal object GrantFixtures {
     )
 
     fun snapshot(platform: GrantDocument = GrantDocument.EMPTY, tenant: GrantDocument = GrantDocument.EMPTY) =
-        GrantSnapshot(platform = platform, tenants = mapOf(ACME to tenant), now = NOW)
+        GrantSnapshot(
+            platform = platform,
+            tenants = mapOf(ACME to tenant),
+            now = NOW,
+            unreadApps = Dimension.Only(emptySet())
+        )
 
     fun eq(attribute: String, value: String) = Condition.Eq(attribute, Literal.Str(value))
 

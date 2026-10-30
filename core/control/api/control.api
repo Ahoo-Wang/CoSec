@@ -413,18 +413,18 @@ public final class me/ahoo/cosec/control/audit/LoggingChangeListener : me/ahoo/c
 }
 
 public final class me/ahoo/cosec/control/audit/MovedHead {
-	public fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/String;Z)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Z
-	public final fun copy (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/String;Z)Lme/ahoo/cosec/control/audit/MovedHead;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/audit/MovedHead;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lme/ahoo/cosec/control/audit/MovedHead;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lme/ahoo/cosec/control/audit/MovedHead;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/audit/MovedHead;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lme/ahoo/cosec/control/audit/MovedHead;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getChecked ()Ljava/lang/String;
 	public final fun getCurrent ()Ljava/lang/String;
-	public final fun getDocument ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public final fun getDocument ()Ljava/lang/String;
 	public final fun getReadable ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -583,7 +583,7 @@ public final class me/ahoo/cosec/control/change/ChangeChecks {
 }
 
 public abstract interface class me/ahoo/cosec/control/change/ChangeChecks$Context {
-	public abstract fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun apps (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
@@ -626,8 +626,8 @@ public final class me/ahoo/cosec/control/change/ChangeRejectedException : java/l
 }
 
 public final class me/ahoo/cosec/control/change/ChangeRequest {
-	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lme/ahoo/cosec/control/change/CheckedApps;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lme/ahoo/cosec/control/change/CheckedApps;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-3oa4_5Q ()Ljava/lang/String;
 	public final fun component10 ()Ljava/lang/String;
 	public final fun component11 ()Ljava/util/Map;
@@ -640,6 +640,7 @@ public final class me/ahoo/cosec/control/change/ChangeRequest {
 	public final fun component18 ()Lme/ahoo/cosec/control/change/ShadowState;
 	public final fun component19 ()Ljava/util/List;
 	public final fun component2 ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
+	public final fun component20 ()Lme/ahoo/cosec/control/change/CheckedApps;
 	public final fun component3 ()Lme/ahoo/cosec/control/change/Base;
 	public final fun component4 ()Ljava/util/List;
 	public final fun component5 ()Lme/ahoo/cosec/runtime/document/Actor;
@@ -647,13 +648,14 @@ public final class me/ahoo/cosec/control/change/ChangeRequest {
 	public final fun component7 ()Lme/ahoo/cosec/runtime/document/ProvenanceKind;
 	public final fun component8 ()Lme/ahoo/cosec/control/change/ChangeState;
 	public final fun component9 ()Ljava/util/List;
-	public final fun copy-k5EO-rs (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;)Lme/ahoo/cosec/control/change/ChangeRequest;
-	public static synthetic fun copy-k5EO-rs$default (Lme/ahoo/cosec/control/change/ChangeRequest;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/ChangeRequest;
+	public final fun copy-QZMcZFI (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lme/ahoo/cosec/control/change/CheckedApps;)Lme/ahoo/cosec/control/change/ChangeRequest;
+	public static synthetic fun copy-QZMcZFI$default (Lme/ahoo/cosec/control/change/ChangeRequest;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lme/ahoo/cosec/control/change/CheckedApps;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/ChangeRequest;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApproval ()Lme/ahoo/cosec/control/change/Approval;
 	public final fun getAuthor ()Lme/ahoo/cosec/runtime/document/Actor;
 	public final fun getBase ()Lme/ahoo/cosec/control/change/Base;
 	public final fun getCandidate ()Ljava/lang/String;
+	public final fun getCheckedApps ()Lme/ahoo/cosec/control/change/CheckedApps;
 	public final fun getCheckedWith ()Ljava/util/Map;
 	public final fun getConfirmations ()Ljava/util/List;
 	public final fun getCreatedAt ()Ljava/time/Instant;
@@ -709,6 +711,17 @@ public final class me/ahoo/cosec/control/change/CheckResult {
 	public final fun getFindings ()Ljava/util/List;
 }
 
+public final class me/ahoo/cosec/control/change/CheckedApps {
+	public fun <init> (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)V
+	public final fun component1 ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun copy (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Lme/ahoo/cosec/control/change/CheckedApps;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/change/CheckedApps;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/CheckedApps;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDigest ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/control/change/Confirmation {
 	public static final field Companion Lme/ahoo/cosec/control/change/Confirmation$Companion;
 	public static final field DENY_NOMATCH Ljava/lang/String;
@@ -740,6 +753,8 @@ public final class me/ahoo/cosec/control/change/EntryDigest {
 }
 
 public final class me/ahoo/cosec/control/change/Escalation {
+	public static final field Companion Lme/ahoo/cosec/control/change/Escalation$Companion;
+	public static final field TENANT_BINDING Ljava/lang/String;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
@@ -749,10 +764,14 @@ public final class me/ahoo/cosec/control/change/Escalation {
 	public static synthetic fun copy$default (Lme/ahoo/cosec/control/change/Escalation;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/Escalation;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDetail ()Ljava/lang/String;
+	public final fun getInformational ()Z
 	public final fun getReason ()Ljava/lang/String;
 	public final fun getSubject ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/control/change/Escalation$Companion {
 }
 
 public final class me/ahoo/cosec/control/change/Finding {
@@ -1086,12 +1105,13 @@ public final class me/ahoo/cosec/control/grant/GrantSnapshot {
 }
 
 public final class me/ahoo/cosec/control/grant/GrantStatement {
-	public fun <init> (Lme/ahoo/cosec/model/Effect;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/model/condition/Condition;Ljava/lang/String;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/model/Effect;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/model/condition/Condition;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/model/Effect;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/model/condition/Condition;Ljava/lang/String;Lme/ahoo/cosec/engine/flat/OnMissing;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/model/Effect;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/model/condition/Condition;Ljava/lang/String;Lme/ahoo/cosec/engine/flat/OnMissing;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getActions ()Ljava/util/List;
 	public final fun getCondition ()Lme/ahoo/cosec/model/condition/Condition;
 	public final fun getEffect ()Lme/ahoo/cosec/model/Effect;
 	public final fun getName ()Ljava/lang/String;
+	public final fun getOnMissing ()Lme/ahoo/cosec/engine/flat/OnMissing;
 	public final fun getResources ()Ljava/util/List;
 }
 
@@ -1234,6 +1254,24 @@ public final class me/ahoo/cosec/control/grant/UnknownReason : java/lang/Enum {
 	public static fun values ()[Lme/ahoo/cosec/control/grant/UnknownReason;
 }
 
+public final class me/ahoo/cosec/control/store/AppList {
+	public static final field Companion Lme/ahoo/cosec/control/store/AppList$Companion;
+	public fun <init> (Ljava/util/Set;Z)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/util/Set;Z)Lme/ahoo/cosec/control/store/AppList;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/store/AppList;Ljava/util/Set;ZILjava/lang/Object;)Lme/ahoo/cosec/control/store/AppList;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getComplete ()Z
+	public final fun getEntries ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/control/store/AppList$Companion {
+	public final fun getEMPTY ()Lme/ahoo/cosec/control/store/AppList;
+}
+
 public abstract interface class me/ahoo/cosec/control/store/ChainCheck {
 }
 
@@ -1260,12 +1298,14 @@ public final class me/ahoo/cosec/control/store/ControlMaintenance$Companion {
 
 public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ahoo/cosec/runtime/shadow/CandidateStore {
 	public abstract fun acquireLease (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun apps (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun change-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public abstract fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -1307,14 +1347,17 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public fun <init> (Ljava/time/Clock;)V
 	public synthetic fun <init> (Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun acquireLease (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun apps (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun candidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun change-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public fun documents (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun dropApps ()V
 	public final fun dropIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -1436,6 +1479,7 @@ public final class me/ahoo/cosec/control/store/Revisions {
 	public static final field DEFAULT_MAX_ATTEMPTS I
 	public fun <init> (Lme/ahoo/cosec/control/store/ControlStore;Ljava/time/Clock;Lme/ahoo/cosec/control/store/RetentionPolicy;I)V
 	public synthetic fun <init> (Lme/ahoo/cosec/control/store/ControlStore;Ljava/time/Clock;Lme/ahoo/cosec/control/store/RetentionPolicy;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun completeApps (Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getRetention ()Lme/ahoo/cosec/control/store/RetentionPolicy;
 	public final fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun history (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

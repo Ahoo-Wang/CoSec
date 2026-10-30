@@ -14,7 +14,9 @@
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
@@ -113,14 +115,14 @@ class ChangeChecks(
 ) {
     /**
      * Reads what the checks and the grant analysis combine a candidate with: current heads, the back-references of the
-     * platform's and apps' policies, and every document there is ([me.ahoo.cosec.control.store.ControlStore.documents]: never fewer than exist).
+     * platform's and apps' policies, and the app list ([me.ahoo.cosec.control.store.ControlStore.apps], RC1-4).
      */
     interface Context {
         suspend fun head(key: SnapshotKey): Head?
 
         suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey>
 
-        suspend fun documents(): Set<SnapshotKey>
+        suspend fun apps(): Versioned<AppList>?
     }
 
     suspend fun check(
@@ -294,10 +296,12 @@ class ChangeChecks(
         null
     }
 
-    /** Whether [referrer] is a tenant whose readable head defines [policy] itself. */
+    /** Whether [referrer] is a tenant whose readable head defines [policy] itself and does not name it as its boundary. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun definesItself(context: Context, referrer: SnapshotKey, policy: PolicyId): Boolean = try {
-        referrer is SnapshotKey.Tenant && context.head(referrer)?.document?.policies?.any { it.id == policy } == true
+        referrer is SnapshotKey.Tenant && context.head(referrer)?.document?.let { document ->
+            document.boundary != policy && document.policies.any { it.id == policy }
+        } == true
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

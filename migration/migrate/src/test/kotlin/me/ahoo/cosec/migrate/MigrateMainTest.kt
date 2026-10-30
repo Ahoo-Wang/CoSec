@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.RevisionIndex
@@ -99,6 +100,9 @@ class MigrateMainTest {
             "bootstrap --to-redis redis://localhost:6379",
             "repair-references",
             "repair-references --key-prefix cosec",
+            "repair-references --cluster",
+            "convert --from-files a --out x --cluster",
+            "api-keys --redis redis://localhost:6379 --out x --cluster",
             "partition plan --out x",
             "api-keys --out x",
         ],
@@ -227,6 +231,38 @@ class MigrateMainTest {
         val (failed, out) = run(args)
         failed.assert().describedAs(out).isEqualTo(MigrateMain.FAILED)
         out.assert().contains("FAILED tenant:broken").contains("Visited 3 document(s); added 0 reference(s).")
+    }
+
+    /** RC1-4: the app list stays incomplete until `repair-references` lists every app document the store lists. */
+    @Test
+    fun `repair-references completes the app list from the documents the store lists`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val order = SnapshotKey.App("order")
+        val billing = SnapshotKey.App("billing")
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+            revisions.publish(order, null, document(order, listOf("orders")), publication)
+            revisions.publish(billing, null, document(billing, listOf("invoices")), publication)
+            // As after the upgrade: the list started with what was published since, and is not complete.
+            val list = store.apps()!!
+            list.value.complete.assert().isFalse()
+            store.putApps(list.digest, AppList(setOf("order"), complete = false)).assert().isTrue()
+        }
+        val (code, output) = run("repair-references --to-redis $REDIS --key-prefix $keyPrefix")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("The app list is complete: 2 app(s).")
+        controlStore(keyPrefix) { store ->
+            store.apps()!!.value.assert().isEqualTo(AppList(setOf("billing", "order"), complete = true))
+        }
+    }
+
+    @Test
+    fun `--cluster names seed nodes of a cluster, so a Redis that is not one fails`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val (code, output) = run("repair-references --to-redis $REDIS --cluster --key-prefix $keyPrefix")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().contains("Failed:")
     }
 
     private companion object {

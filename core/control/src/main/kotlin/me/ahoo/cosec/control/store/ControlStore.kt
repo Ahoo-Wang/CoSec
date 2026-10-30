@@ -106,9 +106,19 @@ interface ControlStore : CandidateStore {
 
     /**
      * Every document this store has indexed revisions for, so reclamation can visit each (RFC 0007 §5.7). It may name
-     * more than exist, never fewer: a key is added before its first index write and never removed.
+     * more than exist, never fewer: a key is added before its first index write and never removed. A list that was lost
+     * is rebuilt as documents are published again.
      */
     suspend fun documents(): Set<SnapshotKey>
+
+    /**
+     * The app documents there are (RC1-4), with the digest a [putApps] must name; `null` when there is none. Small, apart
+     * from [documents], so the grant analysis reads it on every tenant change; [Revisions] keeps it.
+     */
+    suspend fun apps(): Versioned<AppList>?
+
+    /** Replaces the app list if it is still at [expected] (`null`: only if there is none); `false` when it changed. */
+    suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean
 
     /**
      * The change requests that may still be open, so shadow windows can be closed (RFC 0007 §6.4) and the revisions
@@ -143,6 +153,19 @@ sealed interface HeadWrite {
 
     /** The head was not [expected][ControlStore.putHead]; [current] is what the store holds, `null` for nothing. */
     class Conflict(val current: SnapshotDigest?) : HeadWrite
+}
+
+/**
+ * The app documents there are (RC1-4). [entries] are app ids as they were listed, kept as written even when one does not
+ * read as an app id, so nothing is ever dropped from the list. [complete] says that every app document is among them:
+ * true once the platform document is first published on a new store, or once `cosec-migrate repair-references` has
+ * listed every app the store knows. A list rebuilt after it was lost starts incomplete. The grant analysis trusts only a
+ * complete list whose every entry reads as an app id.
+ */
+data class AppList(val entries: Set<String>, val complete: Boolean) {
+    companion object {
+        val EMPTY: AppList = AppList(emptySet(), complete = false)
+    }
 }
 
 /** One published revision of a document. */

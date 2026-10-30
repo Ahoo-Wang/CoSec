@@ -47,9 +47,9 @@ import kotlin.system.exitProcess
  *         [--partition platform|by-owner] [--root-enabled] [--root-id cosec] [--root-expires-at 2026-12-31T00:00:00Z]
  * convert --from-files ./export --out ./converted [...]
  *         [--rate-limit-rules ./rate-limit.json]
- * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted [--resume] [--break-glass-max-duration PT4H]
- * bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
- * repair-references --to-redis redis://localhost:6379 [--key-prefix cosec]
+ * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume] [--break-glass-max-duration PT4H]
+ * bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
+ * repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--api-key-prefix cosec:api-key] [--key-prefix cosec] --out ./api-keys
  *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
@@ -57,7 +57,7 @@ import kotlin.system.exitProcess
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
  * what they write (RFC 0007 §5.9). `repair-references` adds to the back-reference index what the heads refer to
- * ([ReferenceRepair]).
+ * ([ReferenceRepair]). With `--cluster`, `--to-redis` names seed nodes of a Redis Cluster, comma-separated.
  *
  * Exit codes: 0 done; 1 the data was rejected, publishing failed, or a document's references could not be repaired
  * (see `report.json` and the console); 2 usage.
@@ -68,6 +68,9 @@ object MigrateMain {
     const val USAGE = 2
     private const val SCAN_COUNT = 1000L
     private const val DEFAULT_API_KEY_PREFIX = "cosec:api-key"
+
+    /** The commands that accept `--cluster`: the others read or write Redis with plain clients that do not. */
+    private val CLUSTER_COMMANDS = listOf("publish", "bootstrap", "repair-references")
     const val API_KEYS_REPORT_FILE = "api-keys-report.json"
 
     private val USAGE_TEXT = """
@@ -75,9 +78,10 @@ object MigrateMain {
           convert (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
                   [--partition platform|by-owner] [--root-enabled] [--root-id <id>] [--root-expires-at <instant>]
                   [--rate-limit-rules <file>]
-          publish --to-redis <uri> [--key-prefix <p>] --in <dir> [--resume] [--break-glass-max-duration <duration>]
-          bootstrap --to-redis <uri> [--key-prefix <p>] --platform-admin <principal> [--force]
-          repair-references --to-redis <uri> [--key-prefix <p>]
+          publish --to-redis <uri> [--cluster] [--key-prefix <p>] --in <dir> [--resume] [--break-glass-max-duration <duration>]
+          bootstrap --to-redis <uri> [--cluster] [--key-prefix <p>] --platform-admin <principal> [--force]
+          repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
+          (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--api-key-prefix <p>] [--key-prefix <p>] --out <dir> [--memberships <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
@@ -110,7 +114,16 @@ object MigrateMain {
         }
     }
 
-    private fun dispatch(command: String?, options: Options, out: PrintStream): Int = when (command) {
+    private fun dispatch(command: String?, options: Options, out: PrintStream): Int {
+        if (options.flag("cluster") && command !in CLUSTER_COMMANDS) {
+            throw UsageException(
+                "--cluster is for ${CLUSTER_COMMANDS.joinToString()}, which write through the control plane's store."
+            )
+        }
+        return command(command, options, out)
+    }
+
+    private fun command(command: String?, options: Options, out: PrintStream): Int = when (command) {
         "convert" -> convert(options, out)
         "publish" -> publish(options, out)
         "bootstrap" -> bootstrap(options, out)
@@ -139,7 +152,7 @@ object MigrateMain {
                 "rate-limit-rules", "platform-admin", "break-glass-max-duration", "redis", "api-key-prefix", "role-prefix",
                 "memberships", "grant-to-principal",
             )
-            private val FLAGS = setOf("root-enabled", "resume", "force", "dry-run")
+            private val FLAGS = setOf("root-enabled", "resume", "force", "dry-run", "cluster")
 
             fun parse(args: List<String>): Options {
                 val values = HashMap<String, String>()
@@ -294,8 +307,10 @@ object MigrateMain {
         val result = controlStore(options) { store -> ReferenceRepair(store).run() }
         result.failed.forEach { (key, message) -> out.println("FAILED $key: $message") }
         out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
-        if (result.failed.isNotEmpty()) {
-            out.println("${result.failed.size} document(s) could not be read or repaired: fix them and run again.")
+        result.apps?.let { out.println("The app list is complete: $it app(s).") }
+            ?: out.println("FAILED the app list could not be completed: run again.")
+        if (result.failed.isNotEmpty() || result.apps == null) {
+            out.println("Not everything was repaired: fix what failed and run again.")
             return FAILED
         }
         return OK
@@ -427,14 +442,28 @@ object MigrateMain {
         }
     }
 
-    /** The control plane's store over the Redis of `--to-redis`, for [block]. */
+    /** The control plane's store over the Redis of `--to-redis` (seed nodes of a cluster with `--cluster`), for [block]. */
     private fun <T> controlStore(options: Options, block: (CoCacheControlStore) -> T): T =
-        controlStore(options.required("to-redis"), options.value("key-prefix") ?: CoSec.COSEC, block)
+        controlStore(
+            options.required("to-redis"),
+            options.value("key-prefix") ?: CoSec.COSEC,
+            options.flag("cluster"),
+            block
+        )
 
-    /** The control plane's store over the Redis at [uri], for [block]. */
-    private fun <T> controlStore(uri: String, keyPrefix: String, block: (CoCacheControlStore) -> T): T {
-        val redisUri = RedisURI.create(uri)
-        return RedisBackend.standalone(redisUri).use { backend ->
+    /** The control plane's store over the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
+    private fun <T> controlStore(
+        uri: String,
+        keyPrefix: String,
+        cluster: Boolean = false,
+        block: (CoCacheControlStore) -> T
+    ): T {
+        val backend = if (cluster) {
+            RedisBackend.cluster(uri.split(',').map { RedisURI.create(it.trim()) })
+        } else {
+            RedisBackend.standalone(RedisURI.create(uri))
+        }
+        return backend.use { backend ->
             CacheRuntime.builder().backend(backend).build().use { runtime ->
                 val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
                 block(CoCacheControlStore.create(runtime, heads, keyPrefix))

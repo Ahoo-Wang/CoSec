@@ -177,9 +177,14 @@ data class ChangeRequest(
     val shadow: ShadowState? = null,
     /** What its author confirmed (RFC 0007 §9.5): `deny-nomatch` statements, by digest. */
     val confirmations: List<Confirmation> = emptyList(),
+    /** The app list its last check read (RC1-4, RC1-33); `null` when that check did not read it. */
+    val checkedApps: CheckedApps? = null,
 ) {
     val errors: List<Finding> get() = findings.filter { it.severity == Severity.ERROR }
 }
+
+/** The app list a check read: its [digest], `null` when there was none. */
+data class CheckedApps(val digest: SnapshotDigest?)
 
 /** Where a document's staging slot is (RFC 0007 §5.5): the change holding it, `null` when it is free. */
 /**
@@ -189,7 +194,17 @@ data class ChangeRequest(
  * break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an approval covers the
  * escalations whose subjects it lists.
  */
-data class Escalation(val subject: String, val reason: String, val detail: String = "")
+data class Escalation(val subject: String, val reason: String, val detail: String = "") {
+    /**
+     * Shown to the approver, never itself a reason to approve: the tenant bindings an app change widens (RC1-34). Their
+     * own change after an approval does not send the change back, since what was approved is widening the policy.
+     */
+    val informational: Boolean get() = reason == TENANT_BINDING
+
+    companion object {
+        const val TENANT_BINDING = "TENANT_BINDING"
+    }
+}
 
 /**
  * An approval (RFC 0007 §7.5): by [approver], at [at], of the change whose candidate digest was [candidate], covering

@@ -147,8 +147,11 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         }
         for (binding in live) {
             val now = resolve(snapshot, after, binding)
-            if (now != null && !samePolicy(removed.getValue(binding.policy), now)) {
-                now.statements.indices.forEach { split(change.tenant, now, it, Grantee.Bound(binding), into) }
+            when {
+                // It names nothing now: what it grants cannot be told (RC1-32).
+                now == null -> into += GrantFragment.unresolved(change.tenant, binding)
+                !samePolicy(removed.getValue(binding.policy), now) ->
+                    now.statements.indices.forEach { split(change.tenant, now, it, Grantee.Bound(binding), into) }
             }
         }
         for (own in removed.values) {
@@ -469,7 +472,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
 
     private fun sameStatement(a: GrantStatement, b: GrantStatement): Boolean =
         a.effect == b.effect && a.name == b.name && a.actions == b.actions && a.resources == b.resources &&
-            sameCondition(a.condition, b.condition)
+            a.onMissing == b.onMissing && sameCondition(a.condition, b.condition)
 
     /**
      * Conditions compare by their canonical rendering; one that does not check (an attribute outside the catalog)

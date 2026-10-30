@@ -148,33 +148,43 @@ class GrantOracle(
         }
         scan(snapshot.platform) { snapshot.platform.policy(it) }
         app?.let { document -> scan(document) { document.policy(it) ?: snapshot.platform.policy(it) } }
-        scan(tenant) { shared(tenant, snapshot.platform, it) ?: app?.policy(it) }
+        scan(tenant) { id -> shared(tenant, snapshot.platform, id) { app?.policy(id) } }
         for (id in request.subject.memberships.attachments) {
-            found += shared(tenant, snapshot.platform, id)?.takeIf { it.attachable } to false
+            found += shared(tenant, snapshot.platform, id) { null }?.takeIf { it.attachable } to false
         }
         return found
     }
 
     /**
-     * The tenant's policy [id], else the platform's. When both define it with different content (RFC 0007 N2, as the
-     * engine compares them), nothing, which fails; or, unless [ambiguousFails], a policy that does nothing.
+     * The tenant's policy [id], else the platform's, else what [otherwise] finds. When both define it with different
+     * content (RFC 0007 N2, as the engine compares them), nothing, which fails; or, unless [ambiguousFails], a policy that
+     * does nothing; never what [otherwise] finds, which the engine does not look at then either.
      */
-    private fun shared(tenant: GrantDocument, platform: GrantDocument, id: PolicyId): GrantPolicy? {
+    private fun shared(
+        tenant: GrantDocument,
+        platform: GrantDocument,
+        id: PolicyId,
+        otherwise: () -> GrantPolicy?
+    ): GrantPolicy? {
         val own = tenant.policy(id)
         val other = platform.policy(id)
         return when {
-            own == null || other == null || sameContent(own, other) -> own ?: other
+            own == null || other == null || sameContent(own, other) -> own ?: other ?: otherwise()
             ambiguousFails -> null
             else -> LEFT_OUT
         }
     }
 
-    /** Whether two policies decide alike: the same flags, statements and conditions, the conditions as checked. */
+    /**
+     * Whether two policies decide alike, as the engine's `CompiledPolicy.sameContent` compares them: the same flags,
+     * condition and statements, each with its name, effect, patterns, condition and `onMissing`; conditions as checked.
+     */
     private fun sameContent(a: GrantPolicy, b: GrantPolicy): Boolean =
         a.attachable == b.attachable && checked(a.condition) == checked(b.condition) &&
             a.statements.size == b.statements.size &&
             a.statements.zip(b.statements).all { (x, y) ->
-                x.effect == y.effect && x.actions.map { it.toString() } == y.actions.map { it.toString() } &&
+                x.name == y.name && x.effect == y.effect && x.onMissing == y.onMissing &&
+                    x.actions.map { it.toString() } == y.actions.map { it.toString() } &&
                     x.resources.map { it.toString() } == y.resources.map { it.toString() } &&
                     checked(x.condition) == checked(y.condition)
             }

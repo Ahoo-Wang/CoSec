@@ -27,11 +27,13 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.document.Actor
@@ -106,10 +108,10 @@ class Changes(
         override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
             revisions.referrers(target, policy)
 
-        override suspend fun documents(): Set<SnapshotKey> = store.documents()
+        override suspend fun apps(): Versioned<AppList>? = store.apps()
     }
 
-    private val movedHeads = MovedHeads(revisions, authority, context, clock)
+    private val movedHeads = MovedHeads(store, authority, context, clock)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -537,7 +539,9 @@ class Changes(
 
     /** How a publish is recorded: who published, who approved what needed approval, and the shadow window. */
     private fun publication(change: ChangeRequest, publisher: Operator, rechecked: ChangeRequest): Publication {
-        val approvedBy = listOfNotNull(change.approval?.approver?.takeIf { rechecked.escalations.isNotEmpty() })
+        val approvedBy = listOfNotNull(
+            change.approval?.approver?.takeIf { rechecked.escalations.any { !it.informational } }
+        )
         val window = when {
             change.shadow != null -> ShadowWindow(change.shadow.window, skipped = false)
             change.skipShadow != null -> ShadowWindow(null, skipped = true)
@@ -611,6 +615,7 @@ class Changes(
             findings = result.findings,
             candidate = if (result.clean) CandidateDigest.of(candidate) else null,
             checkedWith = result.checkedWith + recording.read.filterKeys { it != change.key && it !in result.checkedWith },
+            checkedApps = recording.apps,
             escalations = escalations,
             updatedAt = now,
         )
@@ -709,7 +714,7 @@ class Changes(
 
     /** Where a change goes when its window closes or is skipped (RFC 0007 §6.1). */
     private fun afterWindow(change: ChangeRequest): ChangeState =
-        if (change.escalations.isEmpty()) ChangeState.READY else ChangeState.AWAITING_APPROVAL
+        if (change.escalations.all { it.informational }) ChangeState.READY else ChangeState.AWAITING_APPROVAL
 
     private fun requireAuthor(operator: Operator, change: ChangeRequest) {
         if (operator.actor != change.author) {

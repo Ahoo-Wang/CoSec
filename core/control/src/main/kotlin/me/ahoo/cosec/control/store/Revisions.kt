@@ -103,7 +103,8 @@ class RetentionPolicy(
  * [publish] writes in the order that never loses content and never lets the data plane see anything but the old or
  * the new head:
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
- * 2. the back-references the candidate adds are added (the index stays a superset of the true references);
+ * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
+ *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
  * 3. the head is replaced with `putIfMatch(expected = base digest)`: one key, one atomic step (P7). A conflict leaves
  *    the head as someone else wrote it and is reported, never retried on the new content (RFC 0007 §5.5);
  * 4. the index gains the revision, and back-references only the base had are removed.
@@ -157,6 +158,7 @@ class Revisions(
                 "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
             }
         }
+        listApps(key, base)
         when (val write = store.putHead(key, base?.digest, stored)) {
             is HeadWrite.Conflict -> {
                 log.info { "[$key] changed since revision ${base?.revision ?: 0} was read; not published." }
@@ -170,6 +172,28 @@ class Revisions(
         published(key, RevisionEntry(revision, digest, publishedAt), before - after)
         return PublishOutcome.Published(revision, digest)
     }
+
+    /**
+     * Keeps the app list (RC1-4) before a head of [key] moves: an app document is listed if it is not, whether this is
+     * its first revision or the list was lost and is being rebuilt, so no app has a head the list does not name. The
+     * platform's first revision is a new store: no app document can exist before it, so the list it starts is complete.
+     */
+    private suspend fun listApps(key: SnapshotKey, base: Head?) {
+        when {
+            key is SnapshotKey.App -> check(updateApps { it.copy(entries = it.entries + key.appId) }) {
+                "[$key] could not be listed among the app documents; the head was not moved."
+            }
+
+            key == SnapshotKey.Platform && base == null -> updateApps { it.copy(complete = true) } ||
+                warn("The app list could not be marked complete; grants over every app wait for approval until repaired")
+        }
+    }
+
+    /**
+     * Lists [apps] among the app documents and marks the list complete (`repair-references`, RC1-4): the caller has
+     * listed every app document there is. `false` when the list kept changing.
+     */
+    suspend fun completeApps(apps: Set<String>): Boolean = updateApps { AppList(it.entries + apps, complete = true) }
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
     private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = PolicyDocument(
@@ -363,10 +387,15 @@ class Revisions(
         return if (blocked.isEmpty()) null else PublishOutcome.Referenced(blocked)
     }
 
-    /** Whether [referrer] is a tenant whose head, read, defines [policy] itself; one that cannot be read may refer. */
+    /**
+     * Whether [referrer] is a tenant whose head, read, defines [policy] itself and does not name it as its boundary;
+     * one that cannot be read may refer.
+     */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean = try {
-        referrer is SnapshotKey.Tenant && head(referrer)?.document?.policies?.any { it.id == policy } == true
+        referrer is SnapshotKey.Tenant && head(referrer)?.document?.let { document ->
+            document.boundary != policy && document.policies.any { it.id == policy }
+        } == true
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -408,6 +437,21 @@ class Revisions(
         repeat(maxAttempts) {
             val current = store.index(key)
             if (store.putIndex(key, current?.digest, change(current?.value ?: RevisionIndex.EMPTY))) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /** A conditional replace of the app list, retried while it changes; no write when [change] leaves it as it is. */
+    private suspend fun updateApps(change: (AppList) -> AppList): Boolean {
+        repeat(maxAttempts) {
+            val current = store.apps()
+            val next = change(current?.value ?: AppList.EMPTY)
+            if (current != null && next == current.value) {
+                return true
+            }
+            if (store.putApps(current?.digest, next)) {
                 return true
             }
         }

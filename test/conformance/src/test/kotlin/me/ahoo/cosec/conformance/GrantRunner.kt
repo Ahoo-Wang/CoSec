@@ -16,6 +16,7 @@
 package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
 import me.ahoo.cosec.control.grant.GrantDocument
@@ -88,6 +89,8 @@ object GrantRunner : ScenarioRunner {
             tenants = documents?.get("tenants")?.fields().orEmpty().entries
                 .associate { (tenant, it) -> TenantId(tenant) to document(it, TenantId(tenant)) },
             now = NOW,
+            // The scenario names every app document there is.
+            unreadApps = Dimension.Only(emptySet()),
         )
         val candidate = node.required("candidate")
         candidate.only("tenant", "document")

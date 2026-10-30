@@ -6,6 +6,7 @@
   "level": "control",
   "description": "RC1-4: billing denies order:delete to auditors only; alice is not one, so her grant of order:* to bob is contained in what she holds and needs nobody else.",
   "documents": {
+    "platform": {},
     "apps": {
       "billing": {
         "policies": [

@@ -19,13 +19,21 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException
 
-/** What [ReferenceRepair.run] did: the documents it visited, the references it added, and the documents it could not. */
-class RepairResult(val documents: Int, val added: Int, val failed: Map<SnapshotKey, String>)
+/**
+ * What [ReferenceRepair.run] did: the documents it visited, the references it added, the documents it could not, and
+ * how many apps the app list names now, `null` when it could not be completed.
+ */
+class RepairResult(val documents: Int, val added: Int, val failed: Map<SnapshotKey, String>, val apps: Int?)
 
 /**
  * `repair-references` (RFC 0007 §5.8): adds to the back-reference index whatever the head of each document refers to
  * and the index misses. After the upgrade from 8.0.0-alpha.2 that is the tenant documents' own policy ids, which the
  * index records since RC1-9, so that the platform cannot add a policy of an id a tenant already uses.
+ *
+ * It also lists every app document the store lists among the apps and marks the app list complete (RC1-4): the grant
+ * analysis trusts only a complete list, so until this has run after the upgrade every grant over every app waits for
+ * approval. The list it completes is as good as [ControlStore.documents]: never fewer than exist, as long as that list
+ * has not been lost.
  *
  * It only adds, never removes, so it may run while the control plane runs, and run again: a second run adds nothing.
  * The index stays what it must be, a superset of the true references. A reference added for a head that a publish has
@@ -41,7 +49,8 @@ class ReferenceRepair(private val store: ControlStore) {
         var documents = 0
         var added = 0
         val failed = LinkedHashMap<SnapshotKey, String>()
-        for (key in store.documents().sortedBy { it.toString() }) {
+        val listed = store.documents().sortedBy { it.toString() }
+        for (key in listed) {
             documents++
             try {
                 added += revisions.repairReferences(key)
@@ -51,6 +60,8 @@ class ReferenceRepair(private val store: ControlStore) {
                 failed[key] = e.message ?: e.javaClass.name
             }
         }
-        RepairResult(documents, added, failed)
+        val apps = listed.filterIsInstance<SnapshotKey.App>().mapTo(HashSet()) { it.appId }
+        val completed = revisions.completeApps(apps)
+        RepairResult(documents, added, failed, if (completed) store.apps()?.value?.entries?.size else null)
     }
 }

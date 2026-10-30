@@ -51,6 +51,8 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(policy = weakened).policy,
         CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME to ControlCacheSpecs.lease(policy = weakened).policy,
         CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME to ControlCacheSpecs.list(policy = weakened).policy,
+        // RC1-4: an app list read as absent would leave the grant analysis trusting nothing, never more; it still throws.
+        CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME to ControlCacheSpecs.appList(policy = weakened).policy,
         CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME to ControlCacheSpecs.changeRequest(policy = weakened).policy,
         CoSecCacheSpecs.STAGE_CACHE_NAME to ControlCacheSpecs.stage(policy = weakened).policy,
         // RFC 0007 §6.4: a staged candidate is the control plane's only copy while its change stages.
@@ -76,6 +78,7 @@ class CacheTtlPolicyTest {
         ControlCacheSpecs.referenceIndex().namespace.assert().isEqualTo("cosec:control:refs")
         ControlCacheSpecs.lease().namespace.assert().isEqualTo("cosec:control:lease")
         ControlCacheSpecs.list().namespace.assert().isEqualTo("cosec:control:list")
+        ControlCacheSpecs.appList().namespace.assert().isEqualTo("cosec:control:apps")
         ControlCacheSpecs.changeRequest().namespace.assert().isEqualTo("cosec:control:change")
         ControlCacheSpecs.stage().namespace.assert().isEqualTo("cosec:control:stage")
         listOf(

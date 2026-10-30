@@ -152,8 +152,8 @@ class ChangeListenersTest {
             RevisionRef(2, "e"),
             note = "the analysis on the current heads finds 1 escalation(s) the publish did not have approved",
             moved = listOf(
-                MovedHead(SnapshotKey.Platform, "a", "b"),
-                MovedHead(SnapshotKey.App("order"), "c", null, readable = false),
+                MovedHead("platform", "a", "b"),
+                MovedHead("app:order", "c", null, readable = false),
             ),
         )
         val json = me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(ChangeEventJson.write(event))

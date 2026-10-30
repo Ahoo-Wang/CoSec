@@ -135,7 +135,7 @@ class GrantPropertyTest {
                 val analysis = analyzer.analyze(generator.grantor(grantor), snapshot, GrantChange(ACME, candidate))
                 if (analysis.verdicts.all { it.second is GrantVerdict.Contained } && analysis.unprotect.isEmpty()) {
                     published++
-                    snapshot = GrantSnapshot(snapshot.platform, snapshot.apps, mapOf(ACME to candidate), snapshot.now)
+                    snapshot = GrantSnapshot(snapshot.platform, snapshot.apps, mapOf(ACME to candidate), snapshot.now, snapshot.unreadApps)
                 }
             }
             repeat(SAMPLES * 2) {
@@ -233,7 +233,7 @@ class GrantPropertyTest {
         return request.takeIf { strict.matches(statement, fragment.condition, it, CaptureReading.ANY) }
     }
 
-    private fun GrantSnapshot.at(time: Long) = GrantSnapshot(platform, apps, tenants, time)
+    private fun GrantSnapshot.at(time: Long) = GrantSnapshot(platform, apps, tenants, time, unreadApps)
 
     private fun <T> pick(dimension: Dimension<T>, pool: List<T>, random: Random): T? = when (dimension) {
         is Dimension.Every -> pool.random(random)

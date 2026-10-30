@@ -246,6 +246,7 @@ class GrantGenerator(private val random: Random) {
             apps = apps,
             tenants = mapOf(ACME to document("p")),
             now = GrantFixtures.NOW,
+            unreadApps = Dimension.Only(emptySet()),
         )
     }
 

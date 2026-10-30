@@ -45,16 +45,11 @@ private val log = KotlinLogging.logger {}
 data class RevisionRef(val revision: Long, val digest: String?)
 
 /**
- * A head a published change was checked with that is not the same once it is published (RC1-33): its [document], the
- * digest it was checked with ([checked], `null` for none) and the digest it has now ([current], `null` for none, or
- * when it cannot be read: [readable]).
+ * A head a published change was checked with that is not the same once it is published (RC1-33): its [document]
+ * (`platform`, `app:<a>`, `tenant:<t>`, or `list:apps` for the app list), the digest it was checked with ([checked],
+ * `null` for none) and the digest it has now ([current], `null` for none, or when it cannot be read: [readable]).
  */
-data class MovedHead(
-    val document: SnapshotKey,
-    val checked: String?,
-    val current: String?,
-    val readable: Boolean = true
-)
+data class MovedHead(val document: String, val checked: String?, val current: String?, val readable: Boolean = true)
 
 /**
  * What happened to a change (RFC 0007 §10.5). Never carries a document's content: the change id, the document, the
@@ -256,7 +251,7 @@ object ChangeEventJson {
         if (event.moved.isNotEmpty()) {
             root.putArray("moved").apply {
                 event.moved.forEach {
-                    addObject().put("document", it.document.toString()).put("checked", it.checked)
+                    addObject().put("document", it.document).put("checked", it.checked)
                         .put("current", it.current).put("readable", it.readable)
                 }
             }

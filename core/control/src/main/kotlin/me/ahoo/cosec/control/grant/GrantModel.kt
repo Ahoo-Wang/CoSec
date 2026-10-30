@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
@@ -38,6 +39,8 @@ class GrantStatement(
     val resources: List<ResourcePattern> = listOf(ResourcePattern.AnyResource),
     val condition: Condition? = null,
     val name: String = "",
+    /** What an external attribute its condition reads that cannot be fetched means; `null` for the default. */
+    val onMissing: OnMissing? = null,
 ) {
     init {
         require(actions.isNotEmpty()) { "A statement names at least one action." }
@@ -84,11 +87,12 @@ class GrantSnapshot(
     /** Epoch milliseconds: bindings that expired by then do not apply. */
     val now: Long,
     /**
-     * The apps whose document could not be read, so what the grantor holds or is denied there is not known (RC1-4):
-     * none by default, and [Dimension.Every] for every app that [apps] does not have, when not even the list of app
-     * documents could be read. A fragment that reaches one of them is never contained.
+     * The apps whose document could not be read, so what the grantor holds or is denied there is not known (RC1-4). By
+     * default [Dimension.Every], every app [apps] does not have: a snapshot that does not say it holds every app document
+     * might not. [Dimension.Only] names the apps that failed when [apps] holds every other one. A fragment that reaches
+     * one of them is never contained.
      */
-    val unreadApps: Dimension<AppId> = Dimension.Only(emptySet()),
+    val unreadApps: Dimension<AppId> = Dimension.Every(),
 ) {
     fun tenant(id: TenantId): GrantDocument = tenants[id] ?: GrantDocument.EMPTY
 }

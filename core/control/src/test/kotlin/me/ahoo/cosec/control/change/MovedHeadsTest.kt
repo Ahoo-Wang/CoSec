@@ -18,16 +18,21 @@ package me.ahoo.cosec.control.change
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.control.store.StoredDocument
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 
 /** RC1-33: what [MovedHeads] records after a publish, and that recording never undoes it. */
 class MovedHeadsTest {
@@ -39,9 +44,9 @@ class MovedHeadsTest {
         override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
             revisions.referrers(target, policy)
 
-        override suspend fun documents(): Set<SnapshotKey> = store.documents()
+        override suspend fun apps(): Versioned<AppList>? = store.apps()
     }
-    private val moved = MovedHeads(revisions, ChangeAuthority(PERMIT_ALL), context, Clock.systemUTC())
+    private val moved = MovedHeads(store, ChangeAuthority(PERMIT_ALL), context, Clock.systemUTC())
     private val candidate = StoreFixtures.candidate(ACME)
 
     private fun checked(checkedWith: Map<SnapshotKey, SnapshotDigest?>) = ChangeRequest(
@@ -73,8 +78,35 @@ class MovedHeadsTest {
         val found = moved.detect(change, change, null, candidate, ALICE_OP)!!
         found.kind.assert().isEqualTo(ChangeEvent.Kind.HEADS_MOVED)
         // The document itself is the publish's own write, never a moved head.
-        found.moved.map { it.document }.assert().containsExactly(SnapshotKey.Platform)
+        found.moved.map { it.document }.assert().containsExactly("platform")
         found.moved.single().current.assert().isNull()
+    }
+
+    @Test
+    fun `an app list that moved is recorded too`() = runBlocking<Unit> {
+        val change = checked(emptyMap()).copy(checkedApps = CheckedApps(null))
+        store.putApps(null, AppList(setOf("billing"), complete = true)).assert().isTrue()
+        val found = moved.detect(change, change, null, candidate, ALICE_OP)!!
+        found.moved.single().document.assert().isEqualTo(MovedHeads.APP_LIST)
+        // Read as it is now: nothing moved.
+        val now = checked(emptyMap()).copy(checkedApps = CheckedApps(store.apps()!!.digest))
+        moved.detect(now, now, null, candidate, ALICE_OP).assert().isNull()
+    }
+
+    @Test
+    fun `a detection that does not finish in time is recorded for review`() = runBlocking<Unit> {
+        val slow = object : ControlStore by store {
+            override suspend fun head(key: SnapshotKey): StoredDocument? {
+                kotlinx.coroutines.delay(1_000)
+                return store.head(key)
+            }
+        }
+        val impatient = MovedHeads(slow, ChangeAuthority(PERMIT_ALL), context, Clock.systemUTC(), 50.milliseconds)
+        val change = checked(mapOf(SnapshotKey.Platform to null))
+        var found: HeadsMoved? = null
+        impatient.record(change, change, null, candidate, ALICE_OP) { found = it }
+        found!!.kind.assert().isEqualTo(ChangeEvent.Kind.REVIEW_NEEDED)
+        found!!.note.assert().contains("could not be compared within")
     }
 
     @Test

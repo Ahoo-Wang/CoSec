@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.cache.control
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.CacheWriteException
@@ -33,6 +34,7 @@ import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.RevisionIndex
@@ -46,8 +48,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.Collections
-import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The [ControlStore] over CoCache and Redis (RFC 0007 §5.2). The heads are the snapshot documents the data plane
@@ -75,6 +76,8 @@ class CoCacheControlStore internal constructor(
     private val candidates: Cache<SnapshotKey, StoredCandidate>,
     /** The document keys and the ids of changes that may be open ([documents], [openChanges]). */
     private val lists: Cache<String, Map<String, Instant>>,
+    /** The app documents there are ([apps], RC1-4). */
+    private val appLists: Cache<String, AppList>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
     private val clock: Clock = Clock.systemUTC(),
@@ -98,6 +101,7 @@ class CoCacheControlStore internal constructor(
         }
         if (written is HeadWrite.Written) {
             onPublished(key)
+            relist(key)
         }
         return written
     }
@@ -133,36 +137,14 @@ class CoCacheControlStore internal constructor(
         return put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
     }
 
-    /**
-     * The listed documents. The list grows with every tenant and the grant analysis lists it on every tenant change
-     * (RC1-4), so this instance keeps the last list it decoded with its digest, and each call is a conditional read on
-     * that digest: when Redis answers that the list is still it, the decoded set is the answer, without the value
-     * crossing the wire or being decoded again; otherwise the list Redis holds now is decoded and kept. Every answer is
-     * thus confirmed by Redis at the time of the call, so it never names fewer documents than exist, and a read that
-     * fails throws, never falling back to the kept list. The kept pair is replaced as a whole, so concurrent calls only
-     * ever see a digest with its own set; one that keeps an older pair costs the next call a full read, nothing else.
-     */
-    override suspend fun documents(): Set<SnapshotKey> {
-        val last = listed.get()
-        return when (val read = lists.async().getIfChanged(DOCUMENTS, last?.digest).await()) {
-            ConditionalGet.Unchanged -> {
-                checkNotNull(last) { "An unconditional read of the document list was answered as unchanged." }
-                last.keys
-            }
+    override suspend fun documents(): Set<SnapshotKey> =
+        read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
 
-            is ConditionalGet.Present -> {
-                val keys = read.value.keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
-                Listed(read.digest, Collections.unmodifiableSet(keys)).also { listed.set(it) }.keys
-            }
+    override suspend fun apps(): Versioned<AppList>? =
+        read(appLists, APP_LIST)?.let { (value, digest) -> Versioned(value, digest) }
 
-            ConditionalGet.Absent -> emptySet<SnapshotKey>().also { listed.set(null) }
-        }
-    }
-
-    /** The last list of documents [documents] decoded, under the digest CoCache read it with. */
-    private class Listed(val digest: Digest, val keys: Set<SnapshotKey>)
-
-    private val listed = AtomicReference<Listed?>(null)
+    override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean =
+        put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
@@ -249,6 +231,23 @@ class CoCacheControlStore internal constructor(
         }
     }
 
+    /**
+     * Lists [key] among the documents again if the list misses it, as after the list was lost (RC1-4 review): every
+     * head write mends it for its own document. After the write, which has happened whatever this does; a failure is
+     * only logged, and the next write of the document tries again.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun relist(key: SnapshotKey) {
+        try {
+            val entry = SnapshotKeyEncoder.encode(key)
+            updateList(DOCUMENTS) { if (entry in it) it else it + (entry to clock.instant()) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "[$key] could not be listed among the documents again; its next write tries again." }
+        }
+    }
+
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
     private suspend fun updateList(name: String, next: (Map<String, Instant>) -> Map<String, Instant>) {
         repeat(MAX_LIST_ATTEMPTS) {
@@ -314,8 +313,10 @@ class CoCacheControlStore internal constructor(
         }
 
     companion object {
+        private val log = KotlinLogging.logger {}
         private const val DOCUMENTS = "documents"
         private const val OPEN_CHANGES = "open-changes"
+        private const val APP_LIST = "all"
         private const val MAX_LIST_ATTEMPTS = 16
 
         /** As `cosec.control.revisions.orphan-age`'s default. */
@@ -343,6 +344,7 @@ class CoCacheControlStore internal constructor(
             stages = runtime.create(ControlCacheSpecs.stage(keyPrefix)),
             candidates = runtime.create(ShadowCacheSpecs.candidate(keyPrefix)),
             lists = runtime.create(ControlCacheSpecs.list(keyPrefix)),
+            appLists = runtime.create(ControlCacheSpecs.appList(keyPrefix)),
             onPublished = onPublished,
             missingGrace = missingGrace,
         )

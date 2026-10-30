@@ -16,25 +16,43 @@
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
-import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
-/** [context], keeping the digest of every head it served first: what one check of a candidate read (RC1-33). */
+/**
+ * [context], keeping the digest of every head it served first, and of the app list: what one check of a candidate read
+ * (RC1-33).
+ */
 internal class RecordingContext(private val context: ChangeChecks.Context) : ChangeChecks.Context by context {
     val read = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
 
+    /** The app list as first read; `null` until it is. */
+    var apps: CheckedApps? = null
+        private set
+
     override suspend fun head(key: SnapshotKey): Head? = context.head(key).also { read.putIfAbsent(key, it?.digest) }
+
+    override suspend fun apps(): Versioned<AppList>? = context.apps().also {
+        if (apps == null) apps = CheckedApps(it?.digest)
+    }
 }
 
 /** What [MovedHeads.detect] found once a change was published: the event to record (RC1-33). */
@@ -58,15 +76,19 @@ internal class HeadsMoved(
  * how it is seen, and a person reviews it.
  */
 internal class MovedHeads(
-    private val revisions: Revisions,
+    private val store: ControlStore,
     private val authority: ChangeAuthority,
     private val context: ChangeChecks.Context,
     private val clock: Clock,
+    /** How long the detection may take: an order above the analysis budget (RFC 0007 §14.2), for its reads. */
+    private val timeout: Duration = DEFAULT_TIMEOUT,
 ) {
     /**
      * Records with [audit] what [detect] finds about [published]: the publish has happened whatever it finds, so a
-     * failure is only logged. The event is delivered as every event but the gated ones, best effort: a REQUIRED
-     * listener could not undo the write, so it does not wait for one.
+     * failure is only logged. It runs to the end even when the caller is cancelled (a client that disconnects), within
+     * [timeout]; one that does not finish in time is recorded as [ChangeEvent.Kind.REVIEW_NEEDED]. The event is
+     * delivered as every event but the gated ones, best effort: a REQUIRED listener could not undo the write, so it does
+     * not wait for one.
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun record(
@@ -76,15 +98,32 @@ internal class MovedHeads(
         candidate: PolicyDocument,
         publisher: Operator,
         audit: suspend (HeadsMoved) -> Unit,
-    ) {
+    ) = withContext(NonCancellable) {
         try {
-            detect(published, rechecked, base, candidate, publisher)?.let { audit(it) }
-        } catch (e: CancellationException) {
-            throw e
+            val outcome = withTimeoutOrNull(timeout) {
+                Outcome(detect(published, rechecked, base, candidate, publisher))
+            }
+            val found = when (outcome) {
+                null -> HeadsMoved(
+                    ChangeEvent.Kind.REVIEW_NEEDED,
+                    emptyList(),
+                    emptyList(),
+                    "the heads could not be compared within $timeout"
+                )
+
+                else -> outcome.found ?: return@withContext
+            }
+            if (found.kind == ChangeEvent.Kind.REVIEW_NEEDED) {
+                log.warn { "Change ${published.id.value} published on [${published.key}]: ${found.note}; moved ${found.moved}." }
+            }
+            audit(found)
         } catch (e: Exception) {
             log.warn(e) { "Whether the heads change ${published.id.value} was checked with moved could not be told." }
         }
     }
+
+    /** What [detect] answered, so that "nothing moved" is told apart from a timeout. */
+    private class Outcome(val found: HeadsMoved?)
 
     /**
      * What to record about [published], whose last check was [rechecked] of [candidate] over [base] by [publisher];
@@ -97,16 +136,14 @@ internal class MovedHeads(
         candidate: PolicyDocument,
         publisher: Operator,
     ): HeadsMoved? {
-        val moved = rechecked.checkedWith.filterKeys { it != published.key }
-            .mapNotNull { (key, checked) -> moved(key, checked) }
+        val heads = rechecked.checkedWith.filterKeys { it != published.key }
+            .mapNotNull { (key, checked) -> moved(key.toString(), checked) { store.head(key)?.digest } }
+        val apps = rechecked.checkedApps?.let { checked -> moved(APP_LIST, checked.digest) { store.apps()?.digest } }
+        val moved = heads + listOfNotNull(apps)
         if (moved.isEmpty()) {
             return null
         }
-        val found = analyzed(published, rechecked, base, candidate, publisher, moved)
-        if (found.kind == ChangeEvent.Kind.REVIEW_NEEDED) {
-            log.warn { "Change ${published.id.value} published on [${published.key}] while $moved moved: ${found.note}." }
-        }
-        return found
+        return analyzed(published, rechecked, base, candidate, publisher, moved)
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -128,7 +165,7 @@ internal class MovedHeads(
             clock.instant(),
         )
         val approved = rechecked.escalations.map { it.subject }.toSet()
-        val unapproved = now.filter { it.subject !in approved }
+        val unapproved = now.filter { !it.informational && it.subject !in approved }
         if (unapproved.isEmpty()) {
             HeadsMoved(ChangeEvent.Kind.HEADS_MOVED, moved, now, "the analysis on the current heads finds nothing new")
         } else {
@@ -147,17 +184,30 @@ internal class MovedHeads(
         HeadsMoved(ChangeEvent.Kind.REVIEW_NEEDED, moved, emptyList(), "the analysis could not run again: ${e.message}")
     }
 
-    /** [key] as a [MovedHead] when its head is not [checked] any more, or cannot be read; `null` when it is the same. */
+    /**
+     * [name] as a [MovedHead] when what [current] reads is not [checked] any more, or cannot be read; `null` when it is
+     * the same. Only digests are compared: the store's own, never a decoded document.
+     */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun moved(key: SnapshotKey, checked: SnapshotDigest?): MovedHead? {
-        val current = try {
-            revisions.head(key)?.digest
+    private suspend fun moved(
+        name: String,
+        checked: SnapshotDigest?,
+        current: suspend () -> SnapshotDigest?
+    ): MovedHead? {
+        val now = try {
+            current()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.warn(e) { "The head of [$key] could not be read after a publish; it counts as moved." }
-            return MovedHead(key, checked?.toString(), null, readable = false)
+            log.warn(e) { "[$name] could not be read after a publish; it counts as moved." }
+            return MovedHead(name, checked?.toString(), null, readable = false)
         }
-        return if (current == checked) null else MovedHead(key, checked?.toString(), current?.toString())
+        return if (now == checked) null else MovedHead(name, checked?.toString(), now?.toString())
+    }
+
+    companion object {
+        /** How [MovedHead.document] names the app list (RC1-4). */
+        const val APP_LIST = "list:apps"
+        val DEFAULT_TIMEOUT: Duration = 1.seconds
     }
 }
