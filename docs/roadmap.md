@@ -294,6 +294,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **RC 审查的发现公开修复**（alpha 是预览版）；7.x 的缺陷只登记不修，7.x 中可被外部利用的漏洞只私下报告给维护者，不开公开 issue 或 PR | 2026-10-29 | 维护者："Fix in public"；[RC 审查](security/8.0-rc-review.md) |
 | **发布 alpha 之后 `main` 保持该 alpha 版本号**，不回到 SNAPSHOT（alpha.2 起） | 2026-10-29 | [RFC 0001 §6](rfc/0001-target-architecture.md) 修订 |
 | **RC 修复批次 B 拆成 B1（授出分析的健全性）与 B2（信任根、审批、break-glass、变更审计）**，同一个实现会话依次做；RC1-2、4、9、12、27、29、33、35、37 按协调者建议的修法，RC1-28 在 8.0 只写文档；非数组 `roles`/`policies` 声明的 500 归入批次 D | 2026-10-30 | [RFC 0007](rfc/0007-control-plane.md) 修订、[RC 审查](security/8.0-rc-review.md) 的 Fix plan；维护者："按建议派发" |
+| **RC1-33 不做多键原子写**（Redis Cluster 上不可行）：发布仍只比较并交换目标头，时间窗写进文档，写后重读分析用过的头，有变化就重新分析并写审计事件，不回滚。同日协调者按 B1 的发现调整 RC1-4（经 `documents()` 读全部 app 文档）与 RC1-9 后一半（租户自有 id 进现有索引，升级后 `repair-references`） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订；维护者："文档加写后检测" |
+| **CoCache 是一方库**：CoSec 需要的存储能力（条件写、失效通知的可靠性等）缺失时，请 CoCache 会话在 CoCache 中实现，不在 CoSec 里绕过 CoCache（RFC 0007 §5.2）。批次 D 调查失效通知丢失与 Lettuce `SharedLock` 时，修复可以落在 CoCache | 2026-10-30 | 仅记在本文；维护者："CoCache 是一方库，是我们自己维护的，需要的话可以让 CoCache 会话增加特性。" |
 
 ## 10. 尚未派发的下一步
 
