@@ -30,7 +30,7 @@ detekt = "1.23.8"
 dokka = "2.2.0"
 kotlin = "2.4.21"
 publish-plugin = "2.0.0"
-jmh-plugin = "0.7.3"
+jmh-plugin = "0.7.4"
 [libraries]
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
 spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
