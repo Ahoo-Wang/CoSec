@@ -46,6 +46,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The [ControlStore] over CoCache and Redis (RFC 0007 §5.2). The heads are the snapshot documents the data plane
@@ -131,8 +133,36 @@ class CoCacheControlStore internal constructor(
         return put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
     }
 
-    override suspend fun documents(): Set<SnapshotKey> =
-        read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
+    /**
+     * The listed documents. The list grows with every tenant and the grant analysis lists it on every tenant change
+     * (RC1-4), so this instance keeps the last list it decoded with its digest, and each call is a conditional read on
+     * that digest: when Redis answers that the list is still it, the decoded set is the answer, without the value
+     * crossing the wire or being decoded again; otherwise the list Redis holds now is decoded and kept. Every answer is
+     * thus confirmed by Redis at the time of the call, so it never names fewer documents than exist, and a read that
+     * fails throws, never falling back to the kept list. The kept pair is replaced as a whole, so concurrent calls only
+     * ever see a digest with its own set; one that keeps an older pair costs the next call a full read, nothing else.
+     */
+    override suspend fun documents(): Set<SnapshotKey> {
+        val last = listed.get()
+        return when (val read = lists.async().getIfChanged(DOCUMENTS, last?.digest).await()) {
+            ConditionalGet.Unchanged -> {
+                checkNotNull(last) { "An unconditional read of the document list was answered as unchanged." }
+                last.keys
+            }
+
+            is ConditionalGet.Present -> {
+                val keys = read.value.keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
+                Listed(read.digest, Collections.unmodifiableSet(keys)).also { listed.set(it) }.keys
+            }
+
+            ConditionalGet.Absent -> emptySet<SnapshotKey>().also { listed.set(null) }
+        }
+    }
+
+    /** The last list of documents [documents] decoded, under the digest CoCache read it with. */
+    private class Listed(val digest: Digest, val keys: Set<SnapshotKey>)
+
+    private val listed = AtomicReference<Listed?>(null)
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }

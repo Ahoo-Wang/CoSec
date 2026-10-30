@@ -123,6 +123,36 @@ class CoCacheControlStoreTest {
         }
     }
 
+    /**
+     * RC1-4: the grant analysis lists the documents on every tenant change. Each call asks Redis whether the list is the
+     * one decoded last; only then is that set the answer.
+     */
+    @Test
+    fun `the document list is asked for on every call and decoded again only when it changed`() = runBlocking<Unit> {
+        val backend = HookedBackend(InMemoryBackend())
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { reading ->
+            SnapshotNode(backend, keyPrefix).use { writing ->
+                val store = store(reading)
+                val other = store(writing)
+                other.putIndex(key, null, RevisionIndex()).assert().isTrue()
+                val first = store.documents()
+                first.assert().containsExactly(key)
+                // Unchanged in Redis: the set decoded before is the answer.
+                store.documents().assert().isSameAs(first)
+                // Listed by another instance: the next call sees it.
+                val beta = SnapshotKey.Tenant("beta")
+                other.putIndex(beta, null, RevisionIndex()).assert().isTrue()
+                store.documents().assert().containsExactlyInAnyOrder(key, beta)
+                // A read that fails throws, never answering from the set kept.
+                backend.failAll = true
+                assertThrownBy<Exception> { runBlocking { store.documents() } }
+                backend.failAll = false
+                store.documents().assert().containsExactlyInAnyOrder(key, beta)
+            }
+        }
+    }
+
     /** Coordinator review: a change listed but not written yet is being written, or its write failed. */
     @Test
     fun `a listed change that is missing stays until the grace has passed`() = runBlocking<Unit> {
