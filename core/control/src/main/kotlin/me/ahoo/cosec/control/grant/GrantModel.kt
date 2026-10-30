@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.AppId
@@ -84,13 +85,14 @@ class GrantSnapshot(
 
 /**
  * The principal of a control-plane request, with the memberships of that request (RFC 0007 §7.4.2): always
- * authenticated. [attributes] are its token's `attributes` claim, as `subject.attributes.<name>` reads them.
+ * authenticated. [attributes] are its token's `attributes` claim, of every JSON type, as the engine holds them; the
+ * analysis reads `subject.attributes.<name>` from them through the engine's own [SubjectAttributes.string] (RC1-2).
  */
 class Grantor(
     val tenant: TenantId,
     val id: PrincipalId,
     val memberships: Memberships,
-    val attributes: Map<String, String>,
+    val attributes: Map<String, Any>,
     /**
      * Whether what is bound to the grantor by name (attachments, principal bindings) grants it anything here: false for
      * a credential with a role cap (RFC 0009 §4.2), which does not hold those ALLOWs, and so cannot grant them either.

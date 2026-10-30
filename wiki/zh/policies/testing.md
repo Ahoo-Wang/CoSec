@@ -189,12 +189,20 @@ flowchart LR
 | `NOT_COVERED` | 没有作者的任何一条 ALLOW 被证明包含该变更授予的内容。 |
 | `DENY_OVERLAP` | 约束作者的某条 DENY 可能与之重叠。 |
 | `CROSS_TENANT` | 作者不在该文档的租户中。 |
+| `UNRESOLVED` | 新增或修改的绑定指向一条没有任何文档定义的策略，它授予什么无从判断。 |
 | `NOT_ANALYZED` | 非信任根所做的平台或应用文档变更，或租户边界变更。 |
+| `TENANT_BINDING` | 与应用文档的 `NOT_ANALYZED` 一起出现：变更新增或放宽了某条权限策略的 ALLOW，租户文档中每条绑定该策略的绑定各是一项升级，审批人由此看到变更影响到谁。 |
 | `BREAK_GLASS` | 新增或修改的 break-glass 绑定：总是需要第二个人。 |
 
 作者的权限是本次请求所带凭证的权限。带角色上限的凭证（带 `roles` 的 API key）不计入点名作者或作者附加的 ALLOW，只计入上限内的角色和 `Anyone` 绑定，与数据面一致；点名作者或作者附加的 DENY 仍然限制它可以授予的范围。break-glass 绑定从不计入任何人可以授予的范围。
 
-删除条目和收窄 ALLOW 不授予任何东西。对文档持有 `cosec:approve` 的人是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。
+分析读取作者权限的方式与执行时相同：
+
+- **任意类型的 token 属性。** `subject.attributes.*` 上的条件把布尔值和数字当作它们的文本（`true`、`3`），数据面与分析都是如此。token 中写着 `"suspended": true` 的作者并不持有带条件 `not(eq(subject.attributes.suspended, "true"))` 的 ALLOW，因此不能去掉条件把它授出。
+- **会到期的绑定。** 作者经带 `expiresAt` 的绑定持有的权限只持有到那时，所以它只包含自身绑定不晚于它到期的授出。没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级；最接近的 ALLOW 以短缺 `EXPIRY` 报告。
+- **租户与平台都定义的 id。** 执行时这样的绑定或附加因二义而被拒绝，所以作者经它什么也不持有；它绑定到作者的地方，按拒绝一切的 DENY 计。
+
+删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。对文档持有 `cosec:approve` 的人是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。
 
 有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。
 

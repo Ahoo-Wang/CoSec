@@ -287,6 +287,11 @@ public final class me/ahoo/cosec/engine/flat/StatementSource {
 	public final fun getResources ()Ljava/util/List;
 }
 
+public final class me/ahoo/cosec/engine/flat/SubjectAttributes {
+	public static final field INSTANCE Lme/ahoo/cosec/engine/flat/SubjectAttributes;
+	public final fun string (Ljava/util/Map;Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/engine/flat/ViewVersion {
 	public fun <init> (JLjava/lang/Long;Ljava/lang/Long;)V
 	public final fun component1 ()J

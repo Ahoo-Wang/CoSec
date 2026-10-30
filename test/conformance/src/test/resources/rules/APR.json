@@ -50,6 +50,16 @@
         "control:ControlRoundTwoFixesTest#an approval keeps every attribute of its approver, so that publishing checks what it was decided on",
         "control:ControlRoundTwoFixesTest#an approval's other attribute types survive the store"
       ]
+    },
+    {
+      "id": "APR-6",
+      "source": "RFC 0007 §7.5, §5.8 (RC1-34)",
+      "statement": "A change of an app document that adds or widens an ALLOW of a permission policy names, as an escalation of its own, every binding of that policy scoped to the app in each tenant document the back-reference index lists.",
+      "level": "control",
+      "guards": [
+        "control:ChangesTest#widening an app permission policy lists the tenant bindings it widens - RC1-34"
+      ],
+      "pending": null
     }
   ]
 }

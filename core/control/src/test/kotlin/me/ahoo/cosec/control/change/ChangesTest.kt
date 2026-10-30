@@ -337,4 +337,52 @@ class ChangesTest {
         publish(ACME, Operation.PutPolicy(allow("a"))).state.assert().isEqualTo(ChangeState.PUBLISHED)
         harness.revisions.head(ACME)!!.document.rateLimits.map { it.id }.assert().containsExactly("orders")
     }
+
+    @Test
+    fun `widening an app permission policy lists the tenant bindings it widens - RC1-34`() = runBlocking<Unit> {
+        val order = SnapshotKey.App("order")
+        publish(
+            order,
+            Operation.PutPolicy(allow("perm:order/read", action = "order:read")),
+            Operation.PutPolicy(allow("perm:order/write", action = "order:write")),
+        )
+        publish(
+            ACME,
+            Operation.PutBinding(bind("readers", "perm:order/read", app = "order")),
+            Operation.PutBinding(bind("writers", "perm:order/write", app = "order")),
+        )
+        // Four-eyes, so that the platform's own change is analyzed as far as an app document is.
+        val ids = java.util.concurrent.atomic.AtomicInteger()
+        val fourEyes = Changes(
+            harness.memory,
+            harness.revisions,
+            { ChangeId("four-eyes-${ids.incrementAndGet()}") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
+        )
+        val widened = fourEyes.propose(
+            PLATO,
+            order,
+            1,
+            listOf(Operation.PutPolicy(allow("perm:order/read", action = "order:*"))),
+            "widen",
+        )
+        widened.escalations.assert().containsExactly(
+            Escalation("document app:order", "NOT_ANALYZED", "only the trust root publishes it alone"),
+            Escalation(
+                "binding readers of [tenant:acme]",
+                "TENANT_BINDING",
+                "[perm:order/read] statements [0] widen what it grants to role editor in space [*]",
+            ),
+        )
+        val narrowed = fourEyes.propose(
+            PLATO,
+            order,
+            1,
+            listOf(Operation.PutPolicy(allow("perm:order/read", action = "order:read", resource = "order/1"))),
+            "narrow",
+        )
+        narrowed.escalations.map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+    }
 }

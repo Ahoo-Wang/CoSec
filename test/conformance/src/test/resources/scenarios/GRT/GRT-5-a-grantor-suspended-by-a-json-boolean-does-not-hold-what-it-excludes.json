@@ -1,0 +1,123 @@
+{
+  "rules": [
+    "GRT-5"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-2: gina's token says suspended: true, a JSON boolean. The engine reads it as \"true\", so her ALLOW unless suspended does not apply to her; the analysis reads it the same way and does not let her grant it without the condition.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "ops",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**",
+                "condition": {
+                  "not": {
+                    "eq": [
+                      "subject.attributes.suspended",
+                      "true"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "ops"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "ops"
+    ],
+    "attributes": {
+      "suspended": true
+    }
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "ops",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.attributes.suspended",
+                    "true"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "bob-orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "ops",
+          "subject": {
+            "role": "ops"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "ops"
+        },
+        {
+          "id": "bob-orders",
+          "subject": {
+            "principal": "bob"
+          },
+          "app": "*",
+          "space": "",
+          "policy": "bob-orders"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "bob-orders",
+        "statement": 0,
+        "action": "order:*",
+        "resource": "order/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "CONDITION"
+      }
+    ]
+  }
+}

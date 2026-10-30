@@ -40,6 +40,11 @@ import kotlin.random.Random
  * Random snapshots, grantors, statements and requests over small pools, so that values collide: the same roles in
  * several spaces, conditions that read the grantor's attributes, variables, overlapping resources. Narrowed
  * statements are built from held ones, so that the analysis's YES branch is reached often.
+ *
+ * The four ways the analysis once read the grantor's rights differently from the engine are all reachable (RC review
+ * §2): attributes of other JSON types than strings (RC1-2), bindings that expire (RC1-3), app documents that bind the
+ * grantor's roles (RC1-4), and platform policies with a tenant policy's id, which a removal re-points bindings to
+ * (RC1-9).
  */
 class GrantGenerator(private val random: Random) {
     val apps = listOf("order", "user").map(::AppId)
@@ -86,13 +91,17 @@ class GrantGenerator(private val random: Random) {
             spaces.filter { random.nextInt(3) == 0 }.associateWith { roles.filter { random.nextInt(3) == 0 }.toSet() },
             if (random.nextInt(4) == 0) listOf(PolicyId("p0")) else emptyList(),
         ),
-        attributes = if (random.nextBoolean()) mapOf("region" to pick(listOf("eu", "us"))) else emptyMap(),
+        attributes = buildMap {
+            if (random.nextBoolean()) put("region", pick(listOf("eu", "us")))
+            if (random.nextInt(3) == 0) put("suspended", random.nextBoolean())
+            if (random.nextInt(3) == 0) put("level", random.nextInt(1, 4))
+        },
     )
 
     fun grantor(subject: OracleSubject): Grantor =
         Grantor(subject.tenant, PrincipalId(subject.id), subject.memberships, subject.attributes, true)
 
-    fun atom(): Condition = when (random.nextInt(11)) {
+    fun atom(): Condition = when (val kind = random.nextInt(14)) {
         0 -> Condition.Eq("scope.space", Literal.Str(pick(spaces).value))
         1 -> Condition.In(
             "scope.space",
@@ -106,8 +115,22 @@ class GrantGenerator(private val random: Random) {
         7 -> Condition.Contains(Literal.Str(pick(roles).value), "subject.roles")
         8 -> Condition.Eq("http.header.x-k", Literal.Str("1"))
         9 -> Condition.Eq("resource.var.v0", Literal.Str(pick(values)))
+        in 10..12 -> typedAttribute(kind)
         else -> Condition.Eq("subject.id", Literal.Str(pick(principals)))
     }
+
+    /** An atom over an attribute of another type than strings, which reads as its toString() (RC1-2). */
+    private fun typedAttribute(kind: Int): Condition = when (kind) {
+        10 -> Condition.Not(Condition.Eq("subject.attributes.suspended", Literal.Str("true")))
+        11 -> Condition.Eq("subject.attributes.level", Literal.Str(pick(listOf("1", "2", "3"))))
+        else -> Condition.Exists("subject.attributes.${pick(listOf("suspended", "level"))}")
+    }
+
+    /** No expiry most of the time, else one of a few times after [GrantFixtures.NOW] (RC1-3). */
+    fun expiry(): Long? = if (random.nextInt(3) == 0) pick(EXPIRIES) else null
+
+    /** A time a request is made at before [until]: now, or after some of the [expiry] times; `null` if none is. */
+    fun time(until: Long? = null): Long? = TIMES.filter { until == null || it < until }.randomOrNull(random)
 
     fun condition(): Condition? = when (random.nextInt(6)) {
         0, 1 -> null
@@ -178,21 +201,52 @@ class GrantGenerator(private val random: Random) {
             )
         }
         val bound = (0 until bindings).map { index ->
-            Binding(BindingId("$prefix-b$index"), subjectRef(), scope(), list[random.nextInt(list.size)].id)
+            Binding(BindingId("$prefix-b$index"), subjectRef(), scope(), list[random.nextInt(list.size)].id, expiry())
+        }
+        return GrantDocument(list, bound)
+    }
+
+    /**
+     * An app document: its permission policies `perm:<app>/...`, ALLOWs and DENYs, bound to roles of every tenant or
+     * of acme. The analysis must read it whether or not a change names the app (RC1-4).
+     */
+    fun app(app: AppId): GrantDocument {
+        val list = (0 until random.nextInt(1, 3)).map { index ->
+            GrantPolicy(PolicyId("perm:${app.value}/p$index"), List(random.nextInt(1, 3)) { statement() })
+        }
+        val bound = (0 until random.nextInt(1, 3)).map { index ->
+            val role = SubjectRef.Role(if (random.nextBoolean()) null else ACME, pick(roles))
+            val scope = BindingScope(
+                Match.Exactly(app),
+                if (random.nextBoolean()) Match.Exactly(pick(spaces)) else Match.Any
+            )
+            Binding(BindingId("${app.value}-b$index"), role, scope, list[random.nextInt(list.size)].id, expiry())
         }
         return GrantDocument(list, bound)
     }
 
     fun snapshot(): GrantSnapshot {
-        val platform = if (random.nextInt(3) == 0) {
-            GrantDocument(
-                listOf(GrantPolicy(PolicyId("platform-deny"), listOf(statement(Effect.DENY)))),
-                listOf(Binding(BindingId("pd"), SubjectRef.Anyone, scope(), PolicyId("platform-deny"))),
-            )
-        } else {
-            GrantDocument.EMPTY
+        val policies = ArrayList<GrantPolicy>()
+        val bindings = ArrayList<Binding>()
+        if (random.nextInt(3) == 0) {
+            policies += GrantPolicy(PolicyId("platform-deny"), listOf(statement(Effect.DENY)))
+            bindings += Binding(BindingId("pd"), SubjectRef.Anyone, scope(), PolicyId("platform-deny"))
         }
-        return GrantSnapshot(platform = platform, tenants = mapOf(ACME to document("p")), now = GrantFixtures.NOW)
+        if (random.nextInt(4) == 0) {
+            // A platform policy with one of the tenant's ids: ambiguous until the tenant removes its own (RC1-9).
+            policies += GrantPolicy(
+                PolicyId("p${random.nextInt(3)}"),
+                List(random.nextInt(1, 3)) { statement() },
+                attachable = random.nextInt(3) == 0,
+            )
+        }
+        val apps = apps.filter { random.nextInt(3) == 0 }.associateWith(::app)
+        return GrantSnapshot(
+            platform = GrantDocument(policies, bindings),
+            apps = apps,
+            tenants = mapOf(ACME to document("p")),
+            now = GrantFixtures.NOW,
+        )
     }
 
     /** A request that matches [action] and [resource] as often as values allow. */
@@ -240,5 +294,17 @@ class GrantGenerator(private val random: Random) {
         } else {
             Resource(out.first(), out.drop(1).joinToString("/"), emptyMap())
         }
+    }
+
+    private companion object {
+        const val HOUR = 3_600_000L
+        val EXPIRIES = listOf(GrantFixtures.NOW + HOUR, GrantFixtures.NOW + 2 * HOUR, GrantFixtures.NOW + 3 * HOUR)
+        val TIMES = listOf(
+            GrantFixtures.NOW,
+            GrantFixtures.NOW + HOUR / 2,
+            GrantFixtures.NOW + HOUR + HOUR / 2,
+            GrantFixtures.NOW + 2 * HOUR + HOUR / 2,
+            GrantFixtures.NOW + 4 * HOUR,
+        )
     }
 }

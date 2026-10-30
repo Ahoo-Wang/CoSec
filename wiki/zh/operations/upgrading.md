@@ -9,6 +9,15 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 存储、API、属性和可观测性。本页是迁移步骤的唯一出处。每个版本的发布说明见
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 从 8.0.0-alpha.2 升级 {#from-8-0-0-alpha-2}
+
+8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档无需迁移。
+
+- **任意类型的 token 属性**（RC1-2、`GRT-5`）。分析按引擎的方式读取 `subject.attributes.*`，布尔值和数字读作它们的文本。token 中写着 `"suspended": true` 时，条件为未被 `suspended` 的 ALLOW 不再算作作者持有。代码中，`Operator.attributes` 与 `Grantor.attributes` 是 `Map<String, Any>`，即 token 声明原样，alpha.2 只保留了字符串。
+- **会到期的绑定**（RC1-3、`GRT-3`）。作者经带 `expiresAt` 的绑定持有的权限，只包含自身绑定不晚于它到期的授出；没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级，短缺为 `EXPIRY`。
+- **删除平台也定义了同一 id 的租户策略**（RC1-9、`GRT-4`）按把平台的策略授给租户中该 id 的绑定与附加来分析。两边都定义的 id 不给作者任何权限。
+- **升级**新增原因 `UNRESOLVED`（新绑定指向没有任何文档定义的策略，RC1-32）与 `TENANT_BINDING`（应用文档的变更放宽了的每条租户绑定，RC1-34、`APR-6`）；对这类应用变更的审批覆盖它们。穷举 `UnknownReason` 或 `Shortfall` 的代码要加上 `UNRESOLVED` 与 `EXPIRY`。
+
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
 
 8.0.0-alpha.1 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，会破坏基于它写成的决策、代码或配置。7.x 部署在下面各节中读到它们。

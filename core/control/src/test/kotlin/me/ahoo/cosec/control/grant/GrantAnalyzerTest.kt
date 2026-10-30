@@ -376,14 +376,227 @@ class GrantAnalyzerTest {
         }
 
         @Test
-        fun `a binding to a policy that resolves nowhere grants nothing`() {
-            fragments(
-                GrantDocument(
-                    policies = published.policies,
-                    bindings = published.bindings + bind("x", role("viewer"), "missing")
+        fun `a binding to a policy that resolves nowhere is one unresolved fragment - RC1-32`() {
+            val candidate = GrantDocument(
+                policies = published.policies,
+                bindings = published.bindings + bind("x", role("viewer"), "missing"),
+            )
+            val fragment = fragments(candidate).single()
+            fragment.resolved.assert().isFalse()
+            fragment.policy.assert().isEqualTo(PolicyId("missing"))
+            fragment.grantee.toString().assert().isEqualTo("binding x")
+            // Whatever the grantor holds: not even an ALLOW of everything contains what cannot be told.
+            val everything = snapshot(
+                tenant = GrantDocument(
+                    policies = listOf(policy("all", allow("*"))),
+                    bindings = listOf(bind("g", principal("gina"), "all"))
                 )
             )
-                .assert().isEmpty()
+            analyzer.analyze(grantor(), everything, GrantChange(ACME, candidate)).verdicts
+                .single { !it.first.resolved }.second
+                .assert().isInstanceOf(GrantVerdict.Unknown::class.java)
+                .extracting { (it as GrantVerdict.Unknown).reason }.isEqualTo(UnknownReason.UNRESOLVED)
+        }
+    }
+
+    /** RC1-2: the grantor's attributes are read as the engine reads them, whatever their JSON type. */
+    @Nested
+    inner class GrantorAttributes {
+        /** `order:*` on every order, unless the grantor is suspended. */
+        private val published = GrantDocument(
+            policies = listOf(
+                policy("ops", allow("order:*", "order/**", Condition.Not(eq("subject.attributes.suspended", "true")))),
+                policy("level", allow("order:read", "order/**", eq("subject.attributes.level", "3"))),
+                policy(
+                    "unflagged",
+                    allow("order:list", "order/**", Condition.Not(Condition.Exists("subject.attributes.flag")))
+                ),
+            ),
+            bindings = listOf(
+                bind("ops", principal("gina"), "ops"),
+                bind("level", principal("gina"), "level"),
+                bind("unflagged", principal("gina"), "unflagged"),
+            ),
+        )
+
+        private fun grant(statement: GrantStatement, attributes: Map<String, Any>) = verdicts(
+            grantor(attributes = attributes),
+            snapshot(tenant = published),
+            GrantDocument(
+                policies = published.policies + GrantPolicy(PolicyId("g"), listOf(statement)),
+                bindings = published.bindings + bind("g", principal("bob"), "g"),
+            ),
+        )
+
+        @Test
+        fun `a grantor suspended by a JSON boolean does not hold what its condition excludes`() {
+            grant(allow("order:delete", "order/**"), mapOf("suspended" to true))
+                .assertUnknown(UnknownReason.NOT_COVERED, Shortfall.CONDITION)
+            grant(allow("order:delete", "order/**"), mapOf("suspended" to false)).assertContained()
+            grant(allow("order:delete", "order/**"), emptyMap()).assertContained()
+        }
+
+        // Suspended, so that `ops` holds nothing and only the statement under test can contain the grant.
+
+        @Test
+        fun `a number reads as the engine renders it`() {
+            grant(allow("order:read", "order/1"), mapOf("suspended" to true, "level" to 3)).assertContained()
+            grant(allow("order:read", "order/1"), mapOf("suspended" to true, "level" to 4))
+                .assertUnknown(UnknownReason.NOT_COVERED, Shortfall.CONDITION)
+        }
+
+        @Test
+        fun `an attribute of any type exists`() {
+            grant(allow("order:list", "order/1"), mapOf("suspended" to true, "flag" to listOf("x")))
+                .assertUnknown(UnknownReason.NOT_COVERED, Shortfall.CONDITION)
+            grant(allow("order:list", "order/1"), mapOf("suspended" to true, "flag" to 0))
+                .assertUnknown(UnknownReason.NOT_COVERED, Shortfall.CONDITION)
+            grant(allow("order:list", "order/1"), mapOf("suspended" to true, "other" to true)).assertContained()
+        }
+    }
+
+    /**
+     * RC1-3: what the grantor holds through a binding with `expiresAt` contains only grants that end no later; the
+     * platform's eight-hour `tenant-admin` for a contractor does not let the contractor make it permanent.
+     */
+    @Nested
+    inner class BindingExpiry {
+        private val until = GrantFixtures.NOW + 8 * 3_600_000L
+        private val published = GrantDocument(
+            policies = listOf(TENANT_ADMIN, policy("orders", allow("order:*", "order/**"))),
+            bindings = listOf(
+                bind("temp", principal("gina"), "cosec:tenant-admin", "cosec-control", "", expiresAt = until),
+                bind("orders", principal("gina"), "orders", expiresAt = until),
+            ),
+        )
+
+        private fun grant(binding: Binding, policies: List<GrantPolicy> = published.policies) = verdicts(
+            grantor(),
+            snapshot(tenant = published),
+            GrantDocument(policies = policies, bindings = published.bindings + binding),
+        )
+
+        @Test
+        fun `the same binding without expiry is not contained`() {
+            grant(bind("forever", principal("gina"), "cosec:tenant-admin", "cosec-control", ""))
+                .assertUnknown(UnknownReason.NOT_COVERED, Shortfall.EXPIRY)
+        }
+
+        @Test
+        fun `a grant that ends later is not contained, one that ends no later is`() {
+            grant(bind("later", principal("bob"), "orders", expiresAt = until + 1))
+                .assertUnknown(UnknownReason.NOT_COVERED, Shortfall.EXPIRY)
+            grant(bind("same", principal("bob"), "orders", expiresAt = until)).assertContained()
+            grant(bind("sooner", principal("bob"), "orders", expiresAt = until - 1)).assertContained()
+        }
+
+        @Test
+        fun `an attachable policy never ends, so it is not contained`() {
+            val attachable = policy("att", allow("order:read", "order/1"), attachable = true)
+            verdicts(
+                grantor(),
+                snapshot(tenant = published),
+                GrantDocument(policies = published.policies + attachable, bindings = published.bindings),
+            ).assertUnknown(UnknownReason.NOT_COVERED, Shortfall.EXPIRY)
+        }
+
+        @Test
+        fun `an allow held without expiry contains a grant that has one`() {
+            val forever = GrantDocument(
+                policies = published.policies,
+                bindings = listOf(bind("orders", principal("gina"), "orders")),
+            )
+            verdicts(
+                grantor(),
+                snapshot(tenant = forever),
+                GrantDocument(
+                    policies = forever.policies,
+                    bindings = forever.bindings + bind("b", principal("bob"), "orders", expiresAt = until),
+                ),
+            ).assertContained()
+        }
+    }
+
+    /**
+     * RC1-9: removing a tenant's own policy re-points its unchanged bindings and attachments to the platform's policy
+     * of the same id, which is then granted to them.
+     */
+    @Nested
+    inner class Reresolution {
+        private val platform = GrantDocument(
+            policies = listOf(
+                policy("editor", allow("order:*", "order/**"), attachable = true),
+                policy("shared", allow("order:read")),
+            ),
+        )
+        private val published = GrantDocument(
+            policies = listOf(
+                policy("editor", allow("order:read", "order/a"), attachable = true),
+                policy("held", allow("order:read", "order/a")),
+            ),
+            bindings = listOf(bind("staff", role("staff"), "editor"), bind("gina", principal("gina"), "held")),
+        )
+        private val removed = GrantDocument(policies = listOf(published.policies[1]), bindings = published.bindings)
+
+        @Test
+        fun `bindings and attachments that now name the platform's policy are granted all of it`() {
+            val fragments = analyzer.fragments(snapshot(platform, published), GrantChange(ACME, removed))
+            fragments.map { "${it.policy.value} ${it.action} ${it.resource} to ${it.grantee}" }.assert()
+                .containsExactlyInAnyOrder(
+                    "editor order:* order/** to binding staff",
+                    "editor order:* order/** to attachment"
+                )
+            verdicts(grantor(), snapshot(platform, published), removed).assertUnknown(UnknownReason.NOT_COVERED)
+        }
+
+        @Test
+        fun `a grantor who holds what the platform's policy grants may remove the tenant's`() {
+            val holder = GrantDocument(
+                policies = published.policies + policy("big", allow("order:*", "order/**")),
+                bindings = published.bindings + bind("big", principal("gina"), "big"),
+            )
+            val candidate = GrantDocument(policies = holder.policies.drop(1), bindings = holder.bindings)
+            verdicts(grantor(), snapshot(platform, holder), candidate).assertContained()
+        }
+
+        @Test
+        fun `removing a policy no other document defines re-points nothing`() {
+            val candidate =
+                GrantDocument(policies = listOf(published.policies[0]), bindings = published.bindings.take(1))
+            analyzer.fragments(snapshot(platform, published), GrantChange(ACME, candidate)).assert().isEmpty()
+        }
+
+        @Test
+        fun `an id both the tenant and the platform define is ambiguous, as the engine has it`() {
+            // The engine refuses gina's binding to `editor` as ambiguous: Indeterminate wherever it applies to her.
+            val ambiguous = GrantDocument(
+                policies = listOf(policy("editor", allow("order:*", "order/**")), policy("big", allow("order:*"))),
+                bindings = listOf(bind("gina", principal("gina"), "editor"), bind("big", principal("gina"), "big")),
+            )
+            val grant = GrantDocument(
+                policies = ambiguous.policies + policy("g", allow("order:read", "order/1")),
+                bindings = ambiguous.bindings + bind("g", principal("bob"), "g"),
+            )
+            verdicts(grantor(), snapshot(platform, ambiguous), grant).assertUnknown(UnknownReason.DENY_OVERLAP)
+            verdicts(grantor(), snapshot(tenant = ambiguous), grant).assertContained()
+        }
+
+        @Test
+        fun `an attachment of an id both define is ambiguous too`() {
+            val tenant = GrantDocument(
+                policies = listOf(
+                    policy("editor", allow("order:*", "order/**"), attachable = true),
+                    policy("big", allow("order:*"))
+                ),
+                bindings = listOf(bind("big", principal("gina"), "big")),
+            )
+            val grant = GrantDocument(
+                policies = tenant.policies + policy("g", allow("order:read", "order/1")),
+                bindings = tenant.bindings + bind("g", principal("bob"), "g"),
+            )
+            val attaching = grantor(attachments = listOf("editor"))
+            verdicts(attaching, snapshot(platform, tenant), grant).assertUnknown(UnknownReason.DENY_OVERLAP)
+            verdicts(attaching, snapshot(tenant = tenant), grant).assertContained()
         }
     }
 

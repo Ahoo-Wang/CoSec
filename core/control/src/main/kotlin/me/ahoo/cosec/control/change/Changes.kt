@@ -403,8 +403,8 @@ class Changes(
                 candidate,
                 current.escalations.map { it.subject },
                 operator.memberships,
-                // Every attribute, not only the strings the grant analysis reads (round-2 review R2).
-                operator.security?.principal?.attributes ?: operator.attributes,
+                // Every attribute, of every type (round-2 review R2, RC1-2).
+                operator.attributes,
                 principalBindings = operator.principalBindings,
                 breakGlass = operator.breakGlass,
             )
@@ -577,9 +577,7 @@ class Changes(
         )
         val result = CheckResult(applyFindings + breakGlass + checkedResult.findings, checkedResult.checkedWith)
         val escalations = if (result.clean) {
-            authority.escalations(operator, change.key, change.operations, head?.document, candidate, {
-                revisions.head(it)?.document
-            }, now)
+            authority.escalations(operator, change.key, change.operations, head?.document, candidate, context, now)
         } else {
             emptyList()
         }

@@ -183,9 +183,10 @@ data class ChangeRequest(
 /** Where a document's staging slot is (RFC 0007 §5.5): the change holding it, `null` when it is free. */
 /**
  * What one person cannot publish alone (RFC 0007 §7.5): a granted fragment the grant analysis could not prove contained
- * ([reason] `NOT_COVERED`, `DENY_OVERLAP`, `CROSS_TENANT`), a change to a document it does not analyze
- * (`NOT_ANALYZED`), or a break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an
- * approval covers the escalations whose subjects it lists.
+ * ([reason] `NOT_COVERED`, `DENY_OVERLAP`, `CROSS_TENANT`, `UNRESOLVED`), a change to a document it does not analyze
+ * (`NOT_ANALYZED`), with each tenant binding it widens for an app document (`TENANT_BINDING`, RC1-34), or a
+ * break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an approval covers the
+ * escalations whose subjects it lists.
  */
 data class Escalation(val subject: String, val reason: String, val detail: String = "")
 

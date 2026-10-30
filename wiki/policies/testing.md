@@ -242,7 +242,9 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `NOT_COVERED` | No single ALLOW of the author is proven to contain what the change grants. |
 | `DENY_OVERLAP` | A DENY that binds the author may overlap it. |
 | `CROSS_TENANT` | The author is not in the document's tenant. |
+| `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
 | `NOT_ANALYZED` | A platform or app document change, or a tenant boundary change, by someone who is not the trust root. |
+| `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one escalation per binding, so the approver sees whom the change reaches. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
 
 The author's rights are those of the credential the request came with. With a role cap (an API key with `roles`), the
@@ -250,7 +252,22 @@ ALLOWs bound to the author by name or attached do not count, only the capped rol
 data plane; the DENYs bound to the author or attached still limit what it may grant.
 Break-glass bindings never count toward what anyone may grant.
 
-Removing entries and narrowing ALLOWs grant nothing. A holder of `cosec:approve` on the document is the trust root:
+The analysis reads the author's rights as enforcement does:
+
+- **Token attributes of any type.** A condition on `subject.attributes.*` sees a boolean or a number as its text
+  (`true`, `3`), on the data plane and in the analysis alike. An author whose token says `"suspended": true` does
+  not hold an ALLOW conditioned on `not(eq(subject.attributes.suspended, "true"))`, so cannot grant it without the
+  condition.
+- **Bindings that expire.** What the author holds through a binding with `expiresAt` they hold only until then, so it
+  contains a grant only when that grant's own binding expires no later. A grant without `expiresAt`, a later one, or
+  making a policy attachable is an escalation; the closest ALLOW is reported with the shortfall `EXPIRY`.
+- **Ids both the tenant and the platform define.** Enforcement refuses such a binding or attachment as ambiguous, so
+  the author holds nothing through it, and where it binds the author it counts like a DENY of everything.
+
+Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
+whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the
+platform's policy is attachable, to the platform's policy. That is analyzed as granting the platform's policy to
+them. A holder of `cosec:approve` on the document is the trust root:
 its own changes are not analyzed, unless `cosec.control.approval.four-eyes` is on, in which case they are analyzed like
 anyone's.
 

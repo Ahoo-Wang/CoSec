@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.grant.GrantAnalysis
 import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
 import me.ahoo.cosec.control.grant.GrantDocuments
@@ -163,16 +164,16 @@ class ChangeAuthority(
 
     /**
      * What [operator] cannot publish alone when [candidate] replaces [base] as [key] (RFC 0007 §7.4, §7.5), read
-     * against the current heads [head] gives. Also requires `cosec:unprotect` on every protected entry it changes.
+     * against the current heads and back-references [documents] gives. Also requires `cosec:unprotect` on every
+     * protected entry it changes.
      */
-    @Suppress("TooGenericExceptionCaught")
     suspend fun escalations(
         operator: Operator,
         key: SnapshotKey,
         operations: List<Operation>,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        head: suspend (SnapshotKey) -> PolicyDocument?,
+        documents: ChangeChecks.Context,
         now: Instant,
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
@@ -182,12 +183,7 @@ class ChangeAuthority(
             return escalations
         }
         if (key !is SnapshotKey.Tenant) {
-            // The analysis reads tenant documents (§7.4.1); a platform or app change by anyone but the trust root, or
-            // by it under four-eyes, needs a second person for whatever it puts.
-            if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
-                escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
-            }
-            return escalations
+            return escalations + untenanted(key, operations, base, candidate, documents)
         }
         // A tenant's rate limit rules need no second person, tightened or loosened: they count in the tenant's own
         // buckets (OBL-2), so they never spend another document's, and every platform and app rule still applies to
@@ -197,28 +193,7 @@ class ChangeAuthority(
             // Removing or replacing a boundary can widen every permit of the tenant; the analysis does not see it.
             escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
         }
-        val analysis = try {
-            val tenant = TenantId(key.tenantId)
-            val apps = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
-            val snapshot = GrantDocuments.snapshot(
-                platform = head(SnapshotKey.Platform),
-                apps = apps.associateWith { head(SnapshotKey.App(it.value)) },
-                tenants = mapOf(tenant to base),
-                now = now.toEpochMilli(),
-            )
-            val grantor = Grantor(
-                operator.tenant,
-                operator.actor.principal,
-                operator.memberships,
-                operator.attributes,
-                operator.principalBindings,
-            )
-            analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            throw ChangeRejectedException(UNAVAILABLE, "the grant analysis of [$key] failed: ${e.message}", e)
-        }
+        val analysis = analyze(operator, key, base, candidate, documents, now)
         for (entry in analysis.unprotect) {
             val resource = when (entry) {
                 is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
@@ -232,6 +207,110 @@ class ChangeAuthority(
             }
         }
         return escalations
+    }
+
+    /** The grant analysis of [candidate] replacing [base] as tenant [key], by [operator]; a failure is a 503. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun analyze(
+        operator: Operator,
+        key: SnapshotKey.Tenant,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+        now: Instant,
+    ): GrantAnalysis = try {
+        val tenant = TenantId(key.tenantId)
+        val apps = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
+        val snapshot = GrantDocuments.snapshot(
+            platform = documents.head(SnapshotKey.Platform)?.document,
+            apps = apps.associateWith { documents.head(SnapshotKey.App(it.value))?.document },
+            tenants = mapOf(tenant to base),
+            now = now.toEpochMilli(),
+        )
+        val grantor = Grantor(
+            operator.tenant,
+            operator.actor.principal,
+            operator.memberships,
+            operator.attributes,
+            operator.principalBindings,
+        )
+        analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "the grant analysis of [$key] failed: ${e.message}", e)
+    }
+
+    /**
+     * What a platform or app change needs (RFC 0007 §7.4.1): the analysis reads tenant documents, so one by anyone but
+     * the trust root, or by it under four-eyes, needs a second person for whatever it puts. For an app document, the
+     * approver also sees each tenant binding the change widens (RC1-34).
+     */
+    private suspend fun untenanted(
+        key: SnapshotKey,
+        operations: List<Operation>,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> {
+        val escalations = ArrayList<Escalation>()
+        if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
+            escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
+        }
+        if (key is SnapshotKey.App) {
+            escalations += referringBindings(key, base, candidate, documents)
+        }
+        return escalations
+    }
+
+    /**
+     * The tenant bindings that a change of app [key] widens (RC1-34): each binding of a tenant document the
+     * back-reference index names (RFC 0007 §5.8) to a permission policy whose ALLOWs the candidate adds or widens,
+     * scoped to the app (N1). The approver sees whom the change reaches in which tenant, not only the app document. An
+     * index or a head that cannot be read is a 503: an approval must not be asked for what cannot be shown.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun referringBindings(
+        key: SnapshotKey.App,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> = try {
+        val app = AppId(key.appId)
+        val widened = analyzer.widened(GrantDocuments.of(base), GrantDocuments.of(candidate))
+        val found = ArrayList<Escalation>()
+        for ((policy, statements) in widened) {
+            val referrers = documents.referrers(key, policy)
+            val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
+            for (tenant in tenants) {
+                val bindings = documents.head(tenant)?.document?.bindings.orEmpty().filter {
+                    it.policy == policy && it.scope.app == Match.Exactly(app)
+                }
+                for (binding in bindings) {
+                    found += Escalation(
+                        "binding ${binding.id.value} of [$tenant]",
+                        TENANT_BINDING,
+                        "[${policy.value}] statements $statements widen what it grants to ${describe(binding)}",
+                    )
+                }
+            }
+        }
+        found
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "the tenants referring to [$key] could not be read: ${e.message}", e)
+    }
+
+    /** Whom [binding] grants to, and in which space of its app. */
+    private fun describe(binding: Binding): String {
+        val subject = when (val subject = binding.subject) {
+            SubjectRef.Anyone -> "anyone"
+            is SubjectRef.Principal -> "principal ${subject.id.value}"
+            is SubjectRef.Role -> "role ${subject.id.value}"
+        }
+        val space = (binding.scope.space as? Match.Exactly)?.value?.value ?: Match.WILDCARD
+        return "$subject in space [$space]"
     }
 
     /**
@@ -294,7 +373,7 @@ class ChangeAuthority(
             ),
             breakGlass = approval.breakGlass,
         )
-        val approver = Operator(approval.approver, memberships, strings(approval.attributes))
+        val approver = Operator(approval.approver, memberships, approval.attributes)
         val permitted = TenantIsolation.allows(approver, change.key) &&
             decideAs(publisher, principal, memberships, ControlActions.APPROVE, ControlResources.document(change.key)) ==
             ControlDecision.PERMIT
@@ -318,10 +397,6 @@ class ChangeAuthority(
         }
         ControlDecision.INDETERMINATE
     }
-
-    /** The string-valued attributes, as the grant analysis and [Operator.attributes] read them. */
-    private fun strings(attributes: Map<String, Any>): Map<String, String> =
-        attributes.mapNotNull { (name, value) -> (value as? String)?.let { name to it } }.toMap()
 
     private suspend fun require(operator: Operator, action: Action, resource: Resource) {
         when (decide(operator, action, resource)) {
@@ -399,6 +474,7 @@ class ChangeAuthority(
         const val BINDING = "binding"
         const val RATE_LIMIT = "rateLimit"
         const val NOT_ANALYZED = "NOT_ANALYZED"
+        const val TENANT_BINDING = "TENANT_BINDING"
         const val BREAK_GLASS = "BREAK_GLASS"
     }
 }

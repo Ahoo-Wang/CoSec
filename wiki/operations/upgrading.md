@@ -10,6 +10,26 @@ the data migration, what 8.0 decides differently, responses, authentication, sto
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## From 8.0.0-alpha.2 {#from-8-0-0-alpha-2}
+
+8.0.0-alpha.2 is a preview with no compatibility promise. These changes since then, from the
+[RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), make the grant
+analysis read the author's rights as enforcement does, so some changes that published alone now wait for approval
+([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents.
+
+- **Token attributes of every type** (RC1-2, `GRT-5`). The analysis reads `subject.attributes.*` as the engine does,
+  a boolean or a number as its text. An author whose ALLOW is conditioned on not being `suspended` no longer counts
+  as holding it when the token says `"suspended": true`. In code, `Operator.attributes` and `Grantor.attributes` are
+  `Map<String, Any>`, the token's claim as is, where alpha.2 kept only the strings.
+- **Expiring bindings** (RC1-3, `GRT-3`). What an author holds through a binding with `expiresAt` covers only grants
+  whose own binding expires no later; a grant without `expiresAt`, a later one, or making a policy attachable is an
+  escalation with the shortfall `EXPIRY`.
+- **Removing a tenant policy whose id the platform defines** (RC1-9, `GRT-4`) is analyzed as granting the platform's
+  policy to the tenant's bindings and attachments of that id. An id both define grants the author nothing.
+- **Escalations** gain the reasons `UNRESOLVED` (a new binding of a policy no document defines, RC1-32) and
+  `TENANT_BINDING` (each tenant binding an app document change widens, RC1-34, `APR-6`); an approval of such an app
+  change covers them. Code that matches every `UnknownReason` or `Shortfall` gains `UNRESOLVED` and `EXPIRY`.
+
 ## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
 
 8.0.0-alpha.1 is a preview with no compatibility promise. These changes since then, from the
