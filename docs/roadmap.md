@@ -302,6 +302,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **CoCache 是一方库**：CoSec 需要的存储能力（条件写、失效通知的可靠性等）缺失时，请 CoCache 会话在 CoCache 中实现，不在 CoSec 里绕过 CoCache（RFC 0007 §5.2）。批次 D 调查失效通知丢失与 Lettuce `SharedLock` 时，修复可以落在 CoCache | 2026-10-30 | 仅记在本文；维护者："CoCache 是一方库，是我们自己维护的，需要的话可以让 CoCache 会话增加特性。" |
 | **RC1-4 再调整**（#1181 的独立审查，协调者决定）：授出分析不再读单一文档列表（丢失时 fail open；每次租户变更在 Redis 中哈希 5.2 MB，可被租户管理员循环触发），改读 `ControlStore` 中只列 app 的小列表，带 `complete` 标志；缺失、未完成或不可信即 UNKNOWN，升级后跑 `repair-references` 之前覆盖所有 app 的租户授出需要审批 | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订 |
 | **运行时依赖升级**：`cosec-cosid` 用的 CosId 5.0.0-alpha.2 → 5.0.0 正式版（#1180）；只影响可选扩展 `cosec-cosid`，Wow 不用它 | 2026-10-30 | [RFC 0001 §3.11](rfc/0001-target-architecture.md) 修订；维护者："合入 #1180" |
+| **RC1-27：`cosec-migrate` 不写 break-glass 绑定，8.0 不做逐绑定的元数据检查**（取代同日"由编译器强制元数据"）：两人原则由控制面对每种变更类型强制，修订出处记录作者与批准人；文档里的元数据挡不住能写文档的人 | 2026-10-30 | [RFC 0007](rfc/0007-control-plane.md) 修订、[RC 审查](security/8.0-rc-review.md) 的 Fix plan；维护者："A：迁移工具不写 break-glass" |
+| **B2 规划中的协调者决定**：API Key 不能审批（审批是人的两人原则，同 `BRK-8`），审批记录 `jti` 与签发时间、发布时查吊销；`SetBoundary` 只归平台租户（提议者与审批人）；RC1-35(b) 只对经分析的变更；默认空间占位符改为 `(default)`，以 `(` 开头的空间 id 保留；抢占白名单收紧（删除含 DENY 的绑定、删除黑名单条目、含 DENY 的策略改为不可附加都不算收窄） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan（B2 合入时补全） |
 
 ## 10. 尚未派发的下一步
 

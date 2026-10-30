@@ -34,8 +34,10 @@
 > - §7.3：信任根是平台租户中持有 `cosec:approve` 的主体，作为硬性规则，`SetBoundary` 同样（RC1-10）；`cosec:platform-admin` 只能在平台文档中绑定（RC1-36）。
 > - §7.5：发布时按审批时记录的凭据 id 与 `iat` 检查审批人的吊销；成员关系来自提供者时，以提供者的新答复判定（RC1-11）；starter 的控制面 Pipeline 带上应用的
 >   `MembershipProvider`（RC1-13）。
-> - §8：break-glass 绑定的元数据（`grantedBy`、`approvedBy`、`change`、`reason`，且 `grantedBy ≠ approvedBy`）由编译器强制；`cosec-migrate` 的
->   `--break-glass-max-duration` 上限 24 小时（RC1-27）；`BreakGlass.request` 不再接受调用方指定的绑定 id（RC1-29）；`four-eyes` 关闭时 break-glass
+> - §8：`cosec-migrate` 不写任何 break-glass 绑定（`publish`、`bootstrap` 拒绝含 break-glass 绑定的输入，`convert` 不生成，去掉
+>   `--break-glass-max-duration`），break-glass 在切换后经控制面按两人流程申请；**取消** §8 中"数据面编译器要求 break-glass 绑定带 `grantedBy`、
+>   `approvedBy`、`change`、`reason`"的规定：两人原则由控制面对每种变更类型强制（`BRK-5`），修订的出处记录作者与批准人，而写在文档里的元数据
+>   挡不住任何能写文档的人（RC1-27；维护者 2026-10-30："A：迁移工具不写 break-glass"，取代同日先前"由编译器强制、上限 24 小时"的决定）；`BreakGlass.request` 不再接受调用方指定的绑定 id（RC1-29）；`four-eyes` 关闭时 break-glass
 >   的保证不约束单个信任根管理员，8.0 只写进文档，平台文档的发布要求 REQUIRED 审计放到 8.1（新增）（RC1-28）。
 > - §7.1：控制面资源中默认空间的占位符改为空间 id 语法本来就不接受的形式，数据面格式不变（RC1-37）。
 >
