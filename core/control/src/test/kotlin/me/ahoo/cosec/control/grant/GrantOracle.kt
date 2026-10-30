@@ -34,12 +34,12 @@ import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.matches
 
-/** Who asks, as the data plane sees it: always authenticated here. */
+/** Who asks, as the data plane sees it: always authenticated here. [attributes] are of any JSON type, as in a token. */
 class OracleSubject(
     val tenant: TenantId,
     val id: String,
     val memberships: Memberships,
-    val attributes: Map<String, String>,
+    val attributes: Map<String, Any>,
 )
 
 /** One concrete request. */
@@ -79,15 +79,22 @@ enum class OracleDecision { PERMIT, DENY, INDETERMINATE }
 
 /**
  * An independent transcription of the data plane over [GrantSnapshot]s, for the soundness properties A5, A6 and A8:
- * bindings applied as RFC 0004 §4.2 says, deny before allow, a binding or attachment to a policy that does not
- * resolve fails closed. Patterns and conditions are matched and evaluated by the engine and the model; only the
- * combination is written here, without any of the analysis's code.
+ * bindings applied as RFC 0004 §4.2 says and only until they expire, deny before allow, a binding or attachment to a
+ * policy that does not resolve fails closed, and so does a tenant binding or attachment of an id the platform also
+ * defines, unless both have the same content (RFC 0007 N2). Patterns and conditions are matched and evaluated by the
+ * engine and the model; only the combination is written here, without any of the analysis's code. Subject attributes
+ * read as the engine reads them, as their `toString()`.
  */
 class GrantOracle(
     private val allowReading: CaptureReading,
     private val denyReading: CaptureReading,
     /** Leave out what binds every subject alike: DENYs and unresolved policies reached through `Anyone` (Q8). */
     private val ignoreAnyone: Boolean,
+    /**
+     * Whether a binding or attachment of an ambiguous id fails, as on the data plane, or is left out, as if it were
+     * not there: what the documents grant once the ambiguity is resolved, before anything re-points it.
+     */
+    private val ambiguousFails: Boolean = true,
 ) {
     private val checker = ConditionChecker(ConditionLimits(maxNodes = 129, maxDepth = 9, maxCost = 513))
 
@@ -141,12 +148,48 @@ class GrantOracle(
         }
         scan(snapshot.platform) { snapshot.platform.policy(it) }
         app?.let { document -> scan(document) { document.policy(it) ?: snapshot.platform.policy(it) } }
-        scan(tenant) { tenant.policy(it) ?: snapshot.platform.policy(it) ?: app?.policy(it) }
+        scan(tenant) { id -> shared(tenant, snapshot.platform, id) { app?.policy(id) } }
         for (id in request.subject.memberships.attachments) {
-            found += (tenant.policy(id) ?: snapshot.platform.policy(id))?.takeIf { it.attachable } to false
+            found += shared(tenant, snapshot.platform, id) { null }?.takeIf { it.attachable } to false
         }
         return found
     }
+
+    /**
+     * The tenant's policy [id], else the platform's, else what [otherwise] finds. When both define it with different
+     * content (RFC 0007 N2, as the engine compares them), nothing, which fails; or, unless [ambiguousFails], a policy that
+     * does nothing; never what [otherwise] finds, which the engine does not look at then either.
+     */
+    private fun shared(
+        tenant: GrantDocument,
+        platform: GrantDocument,
+        id: PolicyId,
+        otherwise: () -> GrantPolicy?
+    ): GrantPolicy? {
+        val own = tenant.policy(id)
+        val other = platform.policy(id)
+        return when {
+            own == null || other == null || sameContent(own, other) -> own ?: other ?: otherwise()
+            ambiguousFails -> null
+            else -> LEFT_OUT
+        }
+    }
+
+    /**
+     * Whether two policies decide alike, as the engine's `CompiledPolicy.sameContent` compares them: the same flags,
+     * condition and statements, each with its name, effect, patterns, condition and `onMissing`; conditions as checked.
+     */
+    private fun sameContent(a: GrantPolicy, b: GrantPolicy): Boolean =
+        a.attachable == b.attachable && checked(a.condition) == checked(b.condition) &&
+            a.statements.size == b.statements.size &&
+            a.statements.zip(b.statements).all { (x, y) ->
+                x.name == y.name && x.effect == y.effect && x.onMissing == y.onMissing &&
+                    x.actions.map { it.toString() } == y.actions.map { it.toString() } &&
+                    x.resources.map { it.toString() } == y.resources.map { it.toString() } &&
+                    checked(x.condition) == checked(y.condition)
+            }
+
+    private fun checked(condition: Condition?) = condition?.let { (checker.check(it) as CheckResult.Valid).condition }
 
     private fun applies(binding: Binding, now: Long, request: OracleRequest): Boolean {
         if (binding.expiresAt != null && now >= binding.expiresAt!!) return false
@@ -186,7 +229,7 @@ class GrantOracle(
         override fun string(attribute: Attribute): String? = when (attribute.kind) {
             Kind.SUBJECT_ID -> subject.id
             Kind.SUBJECT_TENANT, Kind.SCOPE_TENANT -> subject.tenant.value
-            Kind.SUBJECT_ATTRIBUTE -> subject.attributes[attribute.name]
+            Kind.SUBJECT_ATTRIBUTE -> subject.attributes[attribute.name]?.toString()
             Kind.SCOPE_APP -> request.app.value
             Kind.SCOPE_SPACE -> request.space.value
             Kind.ACTION_SERVICE -> request.action.namespace
@@ -224,5 +267,8 @@ class GrantOracle(
 
     private companion object {
         val BUILTIN = setOf("cosec:blacklist", "cosec:root")
+
+        /** An ambiguous id left out: no statement, so it neither allows nor denies, and it attaches without failing. */
+        val LEFT_OUT = GrantPolicy(PolicyId("left-out"), emptyList(), attachable = true)
     }
 }

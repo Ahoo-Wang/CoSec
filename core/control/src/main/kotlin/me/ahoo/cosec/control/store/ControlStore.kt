@@ -111,6 +111,15 @@ interface ControlStore : CandidateStore {
     suspend fun documents(): Set<SnapshotKey>
 
     /**
+     * The app documents there are (RC1-4), with the digest a [putApps] must name; `null` when there is none. Small, apart
+     * from [documents], so the grant analysis reads it on every tenant change; [Revisions] keeps it.
+     */
+    suspend fun apps(): Versioned<AppList>?
+
+    /** Replaces the app list if it is still at [expected] (`null`: only if there is none); `false` when it changed. */
+    suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean
+
+    /**
      * The change requests that may still be open, so shadow windows can be closed (RFC 0007 §6.4) and the revisions
      * open changes rest on kept (§5.7). It may name more, never fewer: an id is added before its change is first written
      * and removed once a write makes the change terminal. A removal that failed is made up here: ids whose change is
@@ -143,6 +152,21 @@ sealed interface HeadWrite {
 
     /** The head was not [expected][ControlStore.putHead]; [current] is what the store holds, `null` for nothing. */
     class Conflict(val current: SnapshotDigest?) : HeadWrite
+}
+
+/**
+ * The app documents there are (RC1-4). [entries] are app ids as they were listed, kept as written even when one does not
+ * read as an app id, so nothing is ever dropped from the list. [complete] says that every app document is among them:
+ * true once the platform document's first revision is written and the list names every app document with a head that
+ * [ControlStore.documents] lists, or once `cosec-migrate repair-references` has listed every app document
+ * [ControlStore.documents] lists. A list rebuilt after it was lost starts incomplete, and the reclamation pass marks a
+ * complete one incomplete again when [ControlStore.documents] lists an app document with a head it misses. The grant
+ * analysis trusts only a complete list whose every entry reads as an app id.
+ */
+data class AppList(val entries: Set<String>, val complete: Boolean) {
+    companion object {
+        val EMPTY: AppList = AppList(emptySet(), complete = false)
+    }
 }
 
 /** One published revision of a document. */

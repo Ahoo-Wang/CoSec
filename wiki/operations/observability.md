@@ -180,7 +180,7 @@ CoSec registers no meters for the documents an instance holds. To see whether in
 
 The control plane emits a change event for every step of a change: `PROPOSED`, `CHECKED`, `SHADOW_STARTED`,
 `SHADOWED`, `APPROVED`, `REJECTED`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `BREAK_GLASS_REQUESTED`,
-`BREAK_GLASS_APPROVED`, `REVOKED`. An event names the change, the document, the operator, the base and candidate
+`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`. An event names the change, the document, the operator, the base and candidate
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them.
 
@@ -196,6 +196,21 @@ content. Change listeners receive them.
   published.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
+- **`HEADS_MOVED` and `REVIEW_NEEDED` follow a `PUBLISHED`** when another document the change was checked with moved
+  before its write landed ([What a publish compares](./storage.md#what-a-publish-compares)). Each names the heads that
+  moved (`moved`: the document, or `list:apps` for the app list, the digest it was checked with, the digest it has
+  now, and whether it could be read), carries the escalations the grant analysis finds on the current heads, and says
+  in its note what that means. `HEADS_MOVED` needs nothing; `REVIEW_NEEDED` means the analysis found an escalation the
+  publish did not have approved, could not run, or the comparison did not finish in time (`moved` is then empty, and
+  the one escalation has the reason `DETECTION_TIMED_OUT`): a
+  person should review the published change, and the control plane also logs
+  `Change <changeId> published on [<doc>]: <note>; moved [...].` at `WARN`. They are recorded even when the client
+  that published disconnects. Like every event that is not gated, they are best effort: the publish has already
+  happened.
+- **Escalations** in an event are `subject`, `reason` and `detail` ([Testing changes](../policies/testing.md)). A
+  `TENANT_BINDING` one names only the binding and its tenant document (`binding <id> of [tenant:<t>]`), with the
+  policy and the statements in `detail`; whom the binding binds, and in which space, is the tenant's and is left out.
+  It is informational: it never counts as what needed approval.
 
 With `cosec-kafka` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) is `false`. It writes each event to

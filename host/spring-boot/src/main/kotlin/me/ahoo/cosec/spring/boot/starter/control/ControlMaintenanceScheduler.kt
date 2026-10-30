@@ -35,6 +35,7 @@ private val log = KotlinLogging.logger {}
  * Runs the control plane's periodic tasks on every instance while the application runs: [ControlMaintenance.reclaim]
  * every [reclaimInterval] and [ControlMaintenance.closeShadowWindows] every [shadowInterval], each after one interval
  * first. Leases keep two instances from doing the same work; a failed pass is logged and the next one tries again.
+ * [ControlMaintenance.reconcileApps] runs once at start, without waiting for the first reclamation pass (RC1-4).
  */
 class ControlMaintenanceScheduler(
     private val maintenance: ControlMaintenance,
@@ -51,6 +52,7 @@ class ControlMaintenanceScheduler(
 
     override fun start() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-control-maintenance"))
+        scope.launch { pass("reconcile the app list at startup") { maintenance.reconcileApps() } }
         scope.every(reclaimInterval) { maintenance.reclaim() }
         scope.every(shadowInterval) { maintenance.closeShadowWindows() }
         this.scope = scope
@@ -60,16 +62,20 @@ class ControlMaintenanceScheduler(
      * Runs [pass] every [interval] until [stop]. Whatever a pass throws, a timeout's cancellation or an `Error` included,
      * is logged and the next pass runs; only the cancellation of this scheduler's own scope ends the loop.
      */
-    @Suppress("TooGenericExceptionCaught")
     private fun CoroutineScope.every(interval: Duration, pass: suspend () -> Unit) = launch {
         while (isActive) {
             delay(interval.toKotlinDuration())
-            try {
-                pass()
-            } catch (e: Throwable) {
-                currentCoroutineContext().ensureActive()
-                log.warn(e) { "A control-plane maintenance pass failed; the next one tries again." }
-            }
+            pass("run a control-plane maintenance pass", pass)
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun pass(what: String, pass: suspend () -> Unit) {
+        try {
+            pass()
+        } catch (e: Throwable) {
+            currentCoroutineContext().ensureActive()
+            log.warn(e) { "Could not $what; the next pass tries again." }
         }
     }
 

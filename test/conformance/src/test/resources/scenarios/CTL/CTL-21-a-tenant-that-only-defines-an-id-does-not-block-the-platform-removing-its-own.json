@@ -1,0 +1,81 @@
+{
+  "rules": [
+    "CTL-21"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-9: from before the upgrade, acme and the platform both define editor, which is ambiguous in acme. acme defines it itself and refers to nothing of the platform's, so the platform may remove its own and end the ambiguity.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "editor",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "editor",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "staff",
+            "subject": {
+              "role": "staff"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "editor"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "removePolicy": "editor"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    }
+  }
+}

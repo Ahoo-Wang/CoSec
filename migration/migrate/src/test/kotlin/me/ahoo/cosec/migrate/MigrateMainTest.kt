@@ -11,9 +11,42 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import io.lettuce.core.RedisURI
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.redis.RedisBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cache.control.CoCacheControlStore
+import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.HeadWrite
+import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.RevisionIndex
+import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.migrate.Fixtures7x.policy
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -23,6 +56,8 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
+import java.util.UUID
 
 class MigrateMainTest {
     @TempDir
@@ -62,6 +97,14 @@ class MigrateMainTest {
             "convert --from-files",
             "convert from-files",
             "publish --in x",
+            "bootstrap --to-redis redis://localhost:6379",
+            "repair-references",
+            "repair-references --key-prefix cosec",
+            "repair-references --cluster",
+            "convert --from-files a --out x --cluster",
+            "api-keys --redis redis://localhost:6379 --out x --cluster",
+            "partition plan --out x",
+            "api-keys --out x",
         ],
     )
     fun `usage errors exit with 2`(args: String) {
@@ -107,5 +150,122 @@ class MigrateMainTest {
         run(
             "publish --to-redis redis://localhost:6379 --in ${temp.resolve("absent")}"
         ).first.assert().isEqualTo(MigrateMain.FAILED)
+    }
+
+    /** The control plane's store on the local Redis under [keyPrefix], as the commands build it. */
+    private fun <T> controlStore(keyPrefix: String, block: suspend (CoCacheControlStore) -> T): T =
+        RedisBackend.standalone(RedisURI.create(REDIS)).use { backend ->
+            CacheRuntime.builder().backend(backend).build().use { runtime ->
+                val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                runBlocking { block(CoCacheControlStore.create(runtime, heads, keyPrefix)) }
+            }
+        }
+
+    private fun document(key: SnapshotKey, policies: List<String>, bindings: List<String> = emptyList()): PolicyDocument {
+        val (kind, owner) = Revisions.ownerOf(key)
+        return PolicyDocument(
+            kind,
+            owner,
+            1,
+            Instant.now(),
+            policies.map {
+                PolicyDefinition(
+                    PolicyId(it),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.ALLOW, listOf("*")))
+                )
+            },
+            bindings.map {
+                Binding(
+                    BindingId(it),
+                    SubjectRef.Role(null, RoleId("staff")),
+                    BindingScope(Match.Any, Match.Any),
+                    PolicyId(it)
+                )
+            },
+        )
+    }
+
+    /** RC1-9: after the upgrade, the tenants' own policy ids enter the back-reference index. */
+    @Test
+    fun `repair-references adds what the heads refer to, adds nothing again, and fails on a head it cannot read`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val acme = SnapshotKey.Tenant("acme")
+        val own = PolicyId("own")
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+            revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
+            revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared", "own")), publication)
+            // As published before the upgrade: acme's own id is not in the index.
+            val indexed = store.referrers(SnapshotKey.Platform, own)!!
+            store.putReferrers(SnapshotKey.Platform, own, indexed.digest, emptySet()).assert().isTrue()
+        }
+        val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"
+        val (code, output) = run(args)
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("Visited 2 document(s); added 1 reference(s).")
+        controlStore(keyPrefix) { store ->
+            store.referrers(SnapshotKey.Platform, own)!!.value.assert().containsExactly(acme)
+            store.referrers(SnapshotKey.Platform, PolicyId("shared"))!!.value.assert().containsExactly(acme)
+        }
+        run(args).let { (again, out) ->
+            again.assert().describedAs(out).isEqualTo(MigrateMain.OK)
+            out.assert().contains("Visited 2 document(s); added 0 reference(s).")
+        }
+        // A listed document whose head does not decode (the strict codec refuses an unknown member) is named, and the
+        // run fails; the others are still visited.
+        val broken = SnapshotKey.Tenant("broken")
+        controlStore(keyPrefix) { store ->
+            store.putIndex(broken, null, RevisionIndex()).assert().isTrue()
+            val body = """{"schema":${PolicyDocumentCodec.SCHEMA},"revision":1,"publishedAt":"2026-11-01T00:00:00Z","unknown":1}"""
+            val garbage = SnapshotDocument(
+                PolicyDocumentCodec.SCHEMA,
+                1,
+                Instant.parse("2026-11-01T00:00:00Z"),
+                body.encodeToByteArray()
+            )
+            store.putHead(broken, null, garbage).assert().isInstanceOf(HeadWrite.Written::class.java)
+        }
+        val (failed, out) = run(args)
+        failed.assert().describedAs(out).isEqualTo(MigrateMain.FAILED)
+        out.assert().contains("FAILED tenant:broken").contains("Visited 3 document(s); added 0 reference(s).")
+    }
+
+    /** RC1-4: the app list stays incomplete until `repair-references` lists every app document the store lists. */
+    @Test
+    fun `repair-references completes the app list from the documents the store lists`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val order = SnapshotKey.App("order")
+        val billing = SnapshotKey.App("billing")
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+            revisions.publish(order, null, document(order, listOf("orders")), publication)
+            revisions.publish(billing, null, document(billing, listOf("invoices")), publication)
+            // As after the upgrade: the list started with what was published since, and is not complete.
+            val list = store.apps()!!
+            list.value.complete.assert().isFalse()
+            store.putApps(list.digest, AppList(setOf("order"), complete = false)).assert().isTrue()
+        }
+        val (code, output) = run("repair-references --to-redis $REDIS --key-prefix $keyPrefix")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("The app list is complete: 2 app(s).")
+        controlStore(keyPrefix) { store ->
+            store.apps()!!.value.assert().isEqualTo(AppList(setOf("billing", "order"), complete = true))
+        }
+    }
+
+    @Test
+    fun `--cluster names seed nodes of a cluster, so a Redis that is not one fails`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val (code, output) = run("repair-references --to-redis $REDIS --cluster --key-prefix $keyPrefix")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().contains("Failed:")
+    }
+
+    private companion object {
+        const val REDIS = "redis://localhost:6379"
     }
 }

@@ -254,19 +254,39 @@ class RevisionsTest {
         private val shared = PolicyId("shared")
 
         @Test
-        fun `a tenant's references to platform and app policies are indexed, its own are not`() = runBlocking<Unit> {
-            published(
-                document = candidate(
-                    ACME,
-                    listOf(policy("own")),
-                    listOf(binding("a", "shared"), binding("b", "perm", app = "order"), binding("c", "own"))
+        fun `a tenant's references to platform and app policies and its own ids are indexed, an app's own are not`() =
+            runBlocking<Unit> {
+                published(
+                    document = candidate(
+                        ACME,
+                        listOf(policy("own")),
+                        listOf(binding("a", "shared"), binding("b", "perm", app = "order"), binding("c", "own"))
+                    )
                 )
-            )
-            revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
-            revisions.referrers(SnapshotKey.Platform, PolicyId("perm")).assert().containsExactly(ACME)
-            revisions.referrers(SnapshotKey.App("order"), PolicyId("perm")).assert().containsExactly(ACME)
-            revisions.referrers(SnapshotKey.Platform, PolicyId("own")).assert().isEmpty()
-        }
+                revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
+                revisions.referrers(SnapshotKey.Platform, PolicyId("perm")).assert().containsExactly(ACME)
+                revisions.referrers(SnapshotKey.App("order"), PolicyId("perm")).assert().containsExactly(ACME)
+                // A tenant's own ids are recorded as uses of the platform's id (RC1-9), so the platform cannot add one.
+                revisions.referrers(SnapshotKey.Platform, PolicyId("own")).assert().containsExactly(ACME)
+                val order = SnapshotKey.App("order")
+                published(
+                    order,
+                    candidate(order, listOf(policy("perm:order/read")), listOf(binding("r", "perm:order/read")))
+                )
+                revisions.referrers(SnapshotKey.Platform, PolicyId("perm:order/read")).assert().isEmpty()
+                // Removing the tenant's own policy removes its use.
+                published(document = candidate(ACME, bindings = listOf(binding("a", "shared"))))
+                revisions.referrers(SnapshotKey.Platform, PolicyId("own")).assert().isEmpty()
+            }
+
+        @Test
+        fun `a tenant that only defines the id does not block the platform removing its own - RC1-9`() =
+            runBlocking<Unit> {
+                published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("own"), policy("other"))))
+                published(document = candidate(ACME, listOf(policy("own")), listOf(binding("c", "own"))))
+                publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))))
+                    .assert().isInstanceOf(PublishOutcome.Published::class.java)
+            }
 
         @Test
         fun `removing a referenced policy is refused until nothing refers to it`() = runBlocking<Unit> {
@@ -301,8 +321,33 @@ class RevisionsTest {
                 emptySet()
             )
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
-            revisions.repairReferences(ACME)
+            revisions.repairReferences(ACME).assert().isEqualTo(1)
             revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
+            // Again, nothing is missing.
+            revisions.repairReferences(ACME).assert().isEqualTo(0)
+            revisions.repairReferences(SnapshotKey.Tenant("absent")).assert().isEqualTo(0)
         }
+
+        @Test
+        fun `a tenant whose head cannot be read still blocks the platform removing its policy - RC1-9`() =
+            runBlocking<Unit> {
+                published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("own"), policy("other"))))
+                published(document = candidate(ACME, listOf(policy("own")), listOf(binding("c", "own"))))
+                val unreadable = object : ControlStore by memory {
+                    override suspend fun head(key: SnapshotKey): StoredDocument? {
+                        check(key != ACME) { "[$key] cannot be read" }
+                        return memory.head(key)
+                    }
+                }
+                val refused = Revisions(unreadable, clock).publish(
+                    SnapshotKey.Platform,
+                    revisions.head(SnapshotKey.Platform),
+                    candidate(SnapshotKey.Platform, listOf(policy("other"))),
+                    publication("c")
+                )
+                (refused as PublishOutcome.Referenced).referrers.assert().isEqualTo(
+                    mapOf(PolicyId("own") to setOf(ACME))
+                )
+            }
     }
 }

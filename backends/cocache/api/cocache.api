@@ -104,6 +104,7 @@ public final class me/ahoo/cosec/cache/RevokedTokenCache$DefaultImpls {
 public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cosec/control/store/ControlStore {
 	public static final field Companion Lme/ahoo/cosec/cache/control/CoCacheControlStore$Companion;
 	public fun acquireLease (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun apps (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun candidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun change-FAXAYUI (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
@@ -111,6 +112,7 @@ public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cos
 	public fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

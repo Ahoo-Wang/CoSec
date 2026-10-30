@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.authz
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Match
@@ -39,8 +40,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 class Operator(
     val actor: Actor,
     val memberships: Memberships,
-    /** The token's `attributes` claim, as `subject.attributes.<name>` reads them. */
-    val attributes: Map<String, String> = emptyMap(),
+    /**
+     * The token's `attributes` claim, of every JSON type, as the engine holds them: `subject.attributes.<name>` reads
+     * each through [SubjectAttributes.string], and so does the grant analysis (RC1-2).
+     */
+    val attributes: Map<String, Any> = emptyMap(),
     val security: RequestSecurity? = null,
 ) {
     val tenant: TenantId get() = actor.tenant
@@ -65,7 +69,7 @@ class Operator(
             return Operator(
                 actor = Actor(principal.tenant, principal.id),
                 memberships = security.memberships,
-                attributes = principal.attributes.mapNotNull { (name, value) -> (value as? String)?.let { name to it } }.toMap(),
+                attributes = principal.attributes,
                 security = security,
             )
         }

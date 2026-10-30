@@ -1,0 +1,88 @@
+{
+  "rules": [
+    "GRT-2"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-32: a binding of a policy no document defines grants what cannot be told, so it is one fragment the analysis never proves contained, even for a grantor who may do everything.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "everything",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "everything"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "everything",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "everything"
+        },
+        {
+          "id": "x",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "missing"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "missing",
+        "statement": -1,
+        "action": "*",
+        "resource": "*",
+        "verdict": "UNKNOWN",
+        "reason": "UNRESOLVED"
+      }
+    ]
+  }
+}

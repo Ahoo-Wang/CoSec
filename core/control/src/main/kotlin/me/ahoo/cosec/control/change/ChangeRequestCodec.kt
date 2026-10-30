@@ -90,6 +90,7 @@ object ChangeRequestCodec {
         change.candidate?.let { root.put("candidate", it) }
         val checkedWith = root.putObject("checkedWith")
         change.checkedWith.forEach { (key, digest) -> checkedWith.put(key.toString(), digest?.toString()) }
+        change.checkedApps?.let { root.putObject("checkedApps").put("digest", it.digest?.toString()) }
         root.put("createdAt", change.createdAt.toString())
         root.put("updatedAt", change.updatedAt.toString())
         change.skipShadow?.let { root.put("skipShadow", it) }
@@ -310,6 +311,7 @@ object ChangeRequestCodec {
         node.only(
             "id", "key", "base", "operations", "author", "note", "kind", "state", "findings", "candidate", "checkedWith",
             "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
+            "checkedApps",
         )
         val key = documentKey(node.need("key").text())
         val (kind, owner) = Revisions.ownerOf(key)
@@ -348,6 +350,10 @@ object ChangeRequestCodec {
             shadow = node.get("shadow")?.let(::shadow),
             confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),
             approval = node.get("approval")?.let(::approval),
+            checkedApps = node.get("checkedApps")?.let { apps ->
+                apps.only("digest")
+                CheckedApps(apps.get("digest")?.takeUnless { it.isNull }?.let { digest(it.text()) })
+            },
         )
     }
 

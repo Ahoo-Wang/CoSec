@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
@@ -66,6 +67,7 @@ class CoCacheControlStoreTest {
         node: SnapshotNode,
         heads: Cache<SnapshotKey, SnapshotDocument> = node.cache,
         lists: Cache<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        appLists: Cache<String, AppList> = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
         clock: Clock = Clock.systemUTC(),
         changes: Cache<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
     ) = CoCacheControlStore(
@@ -78,6 +80,7 @@ class CoCacheControlStoreTest {
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = lists,
+        appLists = appLists,
         clock = clock,
         missingGrace = Duration.ofHours(1),
     )
@@ -120,6 +123,43 @@ class CoCacheControlStoreTest {
             lists.put("open-changes", listed + ("c1" to Instant.EPOCH))
             store.openChanges().assert().containsExactly(ChangeId("c2"))
             lists.get("open-changes")!!.keys.assert().containsExactly("c2")
+        }
+    }
+
+    /** RC1-4: the app list is one small conditional value, read from Redis on every call. */
+    @Test
+    fun `the app list is conditional, strict and read from Redis`() = runBlocking<Unit> {
+        val backend = HookedBackend(InMemoryBackend())
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { reading ->
+            SnapshotNode(backend, keyPrefix).use { writing ->
+                val store = store(reading)
+                val other = store(writing)
+                store.apps().assert().isNull()
+                other.putApps(null, AppList(setOf("order"), complete = false)).assert().isTrue()
+                other.putApps(null, AppList(emptySet(), complete = true)).assert().isFalse()
+                // Written by another instance: read at once.
+                val listed = store.apps()!!
+                listed.value.assert().isEqualTo(AppList(setOf("order"), complete = false))
+                store.putApps(listed.digest, AppList(setOf("order", "billing"), complete = true)).assert().isTrue()
+                store.putApps(listed.digest, AppList(emptySet(), complete = true)).assert().isFalse()
+                other.apps()!!.value.assert().isEqualTo(AppList(setOf("billing", "order"), complete = true))
+                backend.failAll = true
+                assertThrownBy<Exception> { runBlocking { store.apps() } }
+                backend.failAll = false
+            }
+        }
+        // Entries are kept as written, whatever they are; anything but the two members is refused.
+        val odd = AppList(setOf("not:an app", "order"), complete = true)
+        val encoded = AppListCodec.encode(odd)
+        AppListCodec.decode(encoded).assert().isEqualTo(odd)
+        encoded.decodeToString().assert().isEqualTo("""{"apps":["not:an app","order"],"complete":true}""")
+        for (refused in listOf(
+            """{"apps":[],"complete":true,"x":1}""",
+            """{"apps":[1],"complete":true}""",
+            """{"apps":[],"complete":"yes"}""",
+        )) {
+            assertThrownBy<SnapshotFormatException> { AppListCodec.decode(refused.encodeToByteArray()) }
         }
     }
 
@@ -220,6 +260,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
                 { published += it },
             )
             store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)

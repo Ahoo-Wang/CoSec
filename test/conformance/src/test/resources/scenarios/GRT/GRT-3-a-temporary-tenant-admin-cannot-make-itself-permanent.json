@@ -1,0 +1,228 @@
+{
+  "rules": [
+    "GRT-3"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-3: the platform made the contractor tenant admin of acme until 08:00. The contractor binds tenant-admin to itself without expiresAt: what it holds only until 08:00 does not contain a grant that never ends, so every fragment waits for approval.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "contractor",
+          "subject": {
+            "principal": "contractor",
+            "tenant": "acme"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin",
+          "expiresAt": "2026-11-01T08:00:00Z"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {}
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "contractor"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "bindings": [
+        {
+          "id": "forever",
+          "subject": {
+            "principal": "contractor"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:read",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:read",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:write",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:write",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:grant",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:grant",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:publish",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:publish",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:simulate",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:simulate",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:explain",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:explain",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:analyze",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:analyze",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:shadow-read",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:shadow-read",
+        "resource": "scope/{t}/**",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "EXPIRY"
+      }
+    ]
+  }
+}

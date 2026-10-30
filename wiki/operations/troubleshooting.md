@@ -425,6 +425,29 @@ does, so a refusal does not tell whether a document, a change or a DENY exists.
 A change whose checks fail is not an error response: it stays `DRAFT` with its `findings`, each with a status (`422`
 for a check, `412` for an `ifMatch` that does not hold).
 
+- **`[<id>] is a policy id [tenant:...] already use`** (`V2`) on a platform change: a tenant document defines or binds
+  a policy of that id, and the platform's would make it ambiguous there. Give the platform policy another id, or have
+  the tenant remove or rename its own first. With `, or whose document could not be read` (`503`), a tenant document
+  the index names could not be read; retry once Redis answers.
+- **A `REVIEW_NEEDED` change event** after a publish: another document the change was checked with moved before its
+  write, and the analysis on the current heads finds an escalation nobody approved. The change is published; review it
+  as [What a publish compares](./storage.md#what-a-publish-compares) describes. With the escalation reason
+  `DETECTION_TIMED_OUT`, the comparison after the write did not finish in time, so nothing is known to have moved;
+  review the change the same way.
+- **`[<doc>] revision <n> is published; its index or the references it dropped could not be updated`** at `WARN`:
+  the store failed after the head write. The revision is in effect and nothing needs doing: `history` rebuilds the
+  index from the chain, and a reference left behind blocks a removal at most. If the change itself could not be
+  settled, the publish answers an error although the revision is in effect, and publishing it again reports
+  `CONFLICTED`; the document's `history` shows the revision with the change's id.
+- **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
+  `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute):
+  the app list is not complete yet, so the analysis cannot tell what the author holds in apps it did not read. Once
+  every control-plane instance and `cosec-migrate` runs this version, run
+  [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) once. The same after the list
+  was lost (a `FLUSHDB`, an eviction). `The app list misses an app document that exists`, `The app list has an entry
+  that names no app document`, and, from the reclamation pass, `The app list misses the app documents [...]; it is
+  incomplete again` (an older instance or `cosec-migrate` published an app) need `repair-references` too.
+
 ## Form POST body is empty after CoSec on Spring MVC
 
 A 7.x symptom: its WebMvc adapter read query parameters through `HttpServletRequest.getParameter`, which made the

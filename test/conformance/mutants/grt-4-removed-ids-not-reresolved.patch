@@ -1,0 +1,17 @@
+# Rule: GRT-4
+# Mutant: the grant analysis finds nothing re-resolved when a tenant removes its own policy of an id the platform defines, so the platform's policy reaches its bindings and attachments unanalyzed
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
+index 25813996..3450fdff 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
+@@ -138,7 +138,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+     ) {
+         val after = change.candidate
+         val before = snapshot.tenant(change.tenant)
+-        val removed = before.policies.filter { after.policy(it.id) == null }.associateBy { it.id }
++        val removed = before.policies.filter { false }.associateBy { it.id }
+         if (removed.isEmpty()) {
+             return
+         }

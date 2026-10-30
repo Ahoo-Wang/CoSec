@@ -148,7 +148,8 @@ data class Base(val revision: Long, val digest: SnapshotDigest?) {
  *
  * [candidate] is the digest of the candidate the last clean check accepted ([CandidateDigest]); approvals and shadow
  * reports are bound to it, so anything that changes the candidate voids them. [checkedWith] are the heads of the other
- * documents the candidate was compiled with; publishing compiles again when one of them moved.
+ * documents the candidate was compiled and analyzed with; publishing checks again on the current heads, and once it has
+ * written, looks whether one of them moved in between (RC1-33).
  */
 data class ChangeRequest(
     val id: ChangeId,
@@ -176,18 +177,40 @@ data class ChangeRequest(
     val shadow: ShadowState? = null,
     /** What its author confirmed (RFC 0007 §9.5): `deny-nomatch` statements, by digest. */
     val confirmations: List<Confirmation> = emptyList(),
+    /** The app list its last check read (RC1-4, RC1-33); `null` when that check did not read it. */
+    val checkedApps: CheckedApps? = null,
 ) {
     val errors: List<Finding> get() = findings.filter { it.severity == Severity.ERROR }
 }
 
+/** The app list a check read: its [digest], `null` when there was none. */
+data class CheckedApps(val digest: SnapshotDigest?)
+
 /** Where a document's staging slot is (RFC 0007 §5.5): the change holding it, `null` when it is free. */
 /**
  * What one person cannot publish alone (RFC 0007 §7.5): a granted fragment the grant analysis could not prove contained
- * ([reason] `NOT_COVERED`, `DENY_OVERLAP`, `CROSS_TENANT`), a change to a document it does not analyze
- * (`NOT_ANALYZED`), or a break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an
- * approval covers the escalations whose subjects it lists.
+ * ([reason] `NOT_COVERED`, `DENY_OVERLAP`, `CROSS_TENANT`, `UNRESOLVED`), a change to a document it does not analyze
+ * (`NOT_ANALYZED`), with each tenant binding it widens for an app document (`TENANT_BINDING`, RC1-34), or a
+ * break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an approval covers the
+ * escalations whose subjects it lists.
  */
-data class Escalation(val subject: String, val reason: String, val detail: String = "")
+data class Escalation(val subject: String, val reason: String, val detail: String = "") {
+    /**
+     * Shown to the approver, never itself a reason to approve: the tenant bindings an app change widens (RC1-34). Their
+     * own change after an approval does not send the change back, since what was approved is widening the policy.
+     */
+    val informational: Boolean get() = reason == TENANT_BINDING
+
+    companion object {
+        const val TENANT_BINDING = "TENANT_BINDING"
+
+        /**
+         * Only in a [me.ahoo.cosec.control.audit.ChangeEvent.Kind.REVIEW_NEEDED] event: the comparison after a publish
+         * did not finish in time, so whether anything moved is not known (RC1-33).
+         */
+        const val DETECTION_TIMED_OUT = "DETECTION_TIMED_OUT"
+    }
+}
 
 /**
  * An approval (RFC 0007 §7.5): by [approver], at [at], of the change whose candidate digest was [candidate], covering

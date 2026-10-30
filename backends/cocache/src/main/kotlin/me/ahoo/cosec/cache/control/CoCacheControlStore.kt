@@ -33,6 +33,7 @@ import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
+import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.RevisionIndex
@@ -73,6 +74,8 @@ class CoCacheControlStore internal constructor(
     private val candidates: Cache<SnapshotKey, StoredCandidate>,
     /** The document keys and the ids of changes that may be open ([documents], [openChanges]). */
     private val lists: Cache<String, Map<String, Instant>>,
+    /** The app documents there are ([apps], RC1-4). */
+    private val appLists: Cache<String, AppList>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
     private val clock: Clock = Clock.systemUTC(),
@@ -133,6 +136,12 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun documents(): Set<SnapshotKey> =
         read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
+
+    override suspend fun apps(): Versioned<AppList>? =
+        read(appLists, APP_LIST)?.let { (value, digest) -> Versioned(value, digest) }
+
+    override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean =
+        put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
@@ -286,6 +295,7 @@ class CoCacheControlStore internal constructor(
     companion object {
         private const val DOCUMENTS = "documents"
         private const val OPEN_CHANGES = "open-changes"
+        private const val APP_LIST = "all"
         private const val MAX_LIST_ATTEMPTS = 16
 
         /** As `cosec.control.revisions.orphan-age`'s default. */
@@ -313,6 +323,7 @@ class CoCacheControlStore internal constructor(
             stages = runtime.create(ControlCacheSpecs.stage(keyPrefix)),
             candidates = runtime.create(ShadowCacheSpecs.candidate(keyPrefix)),
             lists = runtime.create(ControlCacheSpecs.list(keyPrefix)),
+            appLists = runtime.create(ControlCacheSpecs.appList(keyPrefix)),
             onPublished = onPublished,
             missingGrace = missingGrace,
         )

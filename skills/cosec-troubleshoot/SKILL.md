@@ -254,6 +254,18 @@ be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebM
 `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
 first one with `cosec-migrate publish`.
 
+A platform change with the `V2` finding `[<id>] is a policy id [tenant:...] already use` adds an id a tenant document
+defines or binds; rename the platform policy, or have the tenant remove its own first. A `REVIEW_NEEDED` change event
+after a publish means another document the change was checked with moved before the write and the analysis now finds
+an escalation nobody approved; the change stays published and needs a person's review.
+
+When every tenant grant over every app (a binding with app `*`, an attachment, also one whose condition narrows it to
+apps the change does not name) waits for approval as `UNREADABLE`
+after an upgrade, and the control plane logs `The app list is missing or incomplete`, the app list is not complete:
+run `cosec-migrate repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]` once, after every control-plane
+instance and `cosec-migrate` runs the new version. The same after the list was lost, and after the reclamation pass
+logs `The app list misses the app documents [...]; it is incomplete again` (an older instance published an app).
+
 A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
 it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
 declared types must match on every instance and the control host; the change is never published while blocked.

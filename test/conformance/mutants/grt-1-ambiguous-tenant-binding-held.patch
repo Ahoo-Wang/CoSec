@@ -1,0 +1,17 @@
+# Rule: GRT-1
+# Mutant: the grant analysis credits a grantor with a tenant binding of an id the platform also defines, which the engine refuses as ambiguous
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+index e361b8da..53462c17 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt
+@@ -195,7 +195,7 @@ class GrantorRights(
+             val own = document.policy(binding.policy)
+             val shared = if (kind != DocumentKind.PLATFORM) snapshot.platform.policy(binding.policy) else null
+             if (own != null) {
+-                return if (kind == DocumentKind.TENANT && shared != null) null else own
++                return own
+             }
+             shared?.let { return it }
+             val app = binding.scope.app

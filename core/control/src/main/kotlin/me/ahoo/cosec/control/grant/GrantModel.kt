@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.engine.flat.OnMissing
+import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.AppId
@@ -37,6 +39,8 @@ class GrantStatement(
     val resources: List<ResourcePattern> = listOf(ResourcePattern.AnyResource),
     val condition: Condition? = null,
     val name: String = "",
+    /** What an external attribute its condition reads that cannot be fetched means; `null` for the default. */
+    val onMissing: OnMissing? = null,
 ) {
     init {
         require(actions.isNotEmpty()) { "A statement names at least one action." }
@@ -71,26 +75,38 @@ class GrantDocument(
     }
 }
 
-/** The published snapshot the grantor's own rights are read from (RFC 0007 §7.4.2): the documents at [now]. */
+/**
+ * The published snapshot the grantor's own rights are read from (RFC 0007 §7.4.2): the documents at [now]. [apps]
+ * holds every app document, whether or not a change names its app (RC1-4): an app document binds roles, so the grantor
+ * may hold or be denied something in any app.
+ */
 class GrantSnapshot(
     val platform: GrantDocument = GrantDocument.EMPTY,
     val apps: Map<AppId, GrantDocument> = emptyMap(),
     val tenants: Map<TenantId, GrantDocument> = emptyMap(),
     /** Epoch milliseconds: bindings that expired by then do not apply. */
     val now: Long,
+    /**
+     * The apps whose document could not be read, so what the grantor holds or is denied there is not known (RC1-4). By
+     * default [Dimension.Every], every app [apps] does not have: a snapshot that does not say it holds every app document
+     * might not. [Dimension.Only] names the apps that failed when [apps] holds every other one. A fragment that reaches
+     * one of them is never contained.
+     */
+    val unreadApps: Dimension<AppId> = Dimension.Every(),
 ) {
     fun tenant(id: TenantId): GrantDocument = tenants[id] ?: GrantDocument.EMPTY
 }
 
 /**
  * The principal of a control-plane request, with the memberships of that request (RFC 0007 §7.4.2): always
- * authenticated. [attributes] are its token's `attributes` claim, as `subject.attributes.<name>` reads them.
+ * authenticated. [attributes] are its token's `attributes` claim, of every JSON type, as the engine holds them; the
+ * analysis reads `subject.attributes.<name>` from them through the engine's own [SubjectAttributes.string] (RC1-2).
  */
 class Grantor(
     val tenant: TenantId,
     val id: PrincipalId,
     val memberships: Memberships,
-    val attributes: Map<String, String>,
+    val attributes: Map<String, Any>,
     /**
      * Whether what is bound to the grantor by name (attachments, principal bindings) grants it anything here: false for
      * a credential with a role cap (RFC 0009 §4.2), which does not hold those ALLOWs, and so cannot grant them either.
