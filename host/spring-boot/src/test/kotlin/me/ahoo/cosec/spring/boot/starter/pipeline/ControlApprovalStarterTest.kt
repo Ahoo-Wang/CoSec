@@ -97,7 +97,9 @@ class ControlApprovalStarterTest {
         .withBean(MembershipLoader::class.java, {
             MembershipLoader { _, principal ->
                 val roles = if (principal.value == "dave") setOf(RoleId("approver")) else emptySet()
-                MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to roles), emptyList()))
+                MembershipAnswer.Known(
+                    Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to roles), emptyList())
+                )
             }
         })
 
@@ -105,7 +107,10 @@ class ControlApprovalStarterTest {
     private fun published(context: ApplicationContext) {
         val cache = context.getBean(PolicySnapshotCache::class.java)
         val documents = context.getBean(RedisSnapshotDocumentStore::class.java)
-        mapOf(SnapshotKey.Platform to PLATFORM, SnapshotKey.Tenant(TenantId.PLATFORM.value) to APPROVERS).forEach { (key, body) ->
+        mapOf(
+            SnapshotKey.Platform to PLATFORM,
+            SnapshotKey.Tenant(TenantId.PLATFORM.value) to APPROVERS
+        ).forEach { (key, body) ->
             cache.put(
                 key,
                 SnapshotDocument(

@@ -60,11 +60,11 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
