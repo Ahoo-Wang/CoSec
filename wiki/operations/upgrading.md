@@ -296,9 +296,12 @@ document whose head cannot be read is printed as `FAILED <doc>: <reason>`, the o
 command exits with `1`.
 
 Run it once every control-plane instance and every `cosec-migrate` binary that writes to this Redis runs this
-version, not during a rolling upgrade: an older one publishes app documents without listing them. The reclamation
-pass marks the list incomplete again when it finds one ([Storage](./storage.md#publishing-through-the-control-plane)),
-so a run too early, or a downgrade, only sends grants back to approval; run it again after the upgrade is complete.
+version, not during a rolling upgrade, and again after a downgrade. While an older instance runs, it decides with the
+older analysis itself: what RC1-4 protects does not hold for the changes it checks, and the app documents it publishes
+are not listed. Each new instance reconciles the list at startup, and every reclamation pass again: a complete list
+that misses an app document with a head is marked incomplete
+([Storage](./storage.md#publishing-through-the-control-plane)), so new instances send grants over every app back to
+approval. The run of `repair-references` after the upgrade is complete is what ends that.
 
 It then lists every app document among the documents in the app list and marks the list complete, printing
 `The app list is complete: <n> app(s).`; until then the grant analysis takes every grant over every app as

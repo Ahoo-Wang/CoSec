@@ -434,6 +434,11 @@ for a check, `412` for an `ifMatch` that does not hold).
   as [What a publish compares](./storage.md#what-a-publish-compares) describes. With the escalation reason
   `DETECTION_TIMED_OUT`, the comparison after the write did not finish in time, so nothing is known to have moved;
   review the change the same way.
+- **`[<doc>] revision <n> is published; its index or the references it dropped could not be updated`** at `WARN`:
+  the store failed after the head write. The revision is in effect and nothing needs doing: `history` rebuilds the
+  index from the chain, and a reference left behind blocks a removal at most. If the change itself could not be
+  settled, the publish answers an error although the revision is in effect, and publishing it again reports
+  `CONFLICTED`; the document's `history` shows the revision with the change's id.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute):
   the app list is not complete yet, so the analysis cannot tell what the author holds in apps it did not read. Once

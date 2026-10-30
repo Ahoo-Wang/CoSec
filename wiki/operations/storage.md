@@ -266,9 +266,11 @@ the app list, `<s>:control:apps:all`, and the head of every app it names. The li
   revision that conflicts marks nothing;
 - [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) lists every app document
   `<s>:control:list:documents` names and marks the list complete. A store upgraded from 8.0.0-alpha.2 needs it once;
-- the reclamation pass, which reads `<s>:control:list:documents` anyway, marks a complete list incomplete again when
-  an app document listed there is missing from it, and logs a WARN: an instance or a `cosec-migrate` that does not
-  keep the list published it, during a rolling upgrade or after a downgrade.
+- each control-plane instance at startup, and every reclamation pass before anything else, marks a complete list
+  incomplete again when an app document `<s>:control:list:documents` lists, and that has a head, is missing from it,
+  and logs a WARN: an instance or a `cosec-migrate` that does not keep the list published it, during a rolling
+  upgrade or after a downgrade. A listed app without a head is one whose first publish stopped before its head write,
+  and does not count; one whose head cannot be read does. The platform's first revision judges the same way.
 
 The analysis trusts only a complete list. When the list is not there, not complete, cannot be read, or holds an
 entry that names no app document (not a valid app id, or `*`), or when an app the change names has a head the list
@@ -280,8 +282,10 @@ document is published, so the analysis falls back to approval until `repair-refe
 
 Two cases depend on Redis keeping what it acknowledged, and nothing above catches them: a failover under asynchronous
 replication that rolls the list back to a state that still says complete but misses an app published since, and a
-`<s>:control:list:documents` that had already lost entries when `repair-references` read it. Both are the storage
-durability the control plane relies on throughout ([Redis requirements](#redis-requirements); RC1-47 in the
+`<s>:control:list:documents` that had already lost entries when `repair-references` read it. Entries lost from that
+list are never listed again, and the platform's first revision and the reconciliation judge by the same list, so
+neither catches an app document whose entry is gone. Both are the storage durability the control plane relies on
+throughout ([Redis requirements](#redis-requirements); RC1-47 in the
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)).
 
 A document written to Redis any other way is in neither list, so it is not seen by the analysis, the back-reference

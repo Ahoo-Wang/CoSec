@@ -191,7 +191,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。它只增不删，所以可以在控制面运行时执行，再运行一次也不会新增：索引已有的条目保留，多出的条目最多误拦一次删除。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
 
-在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行：旧版本发布 app 文档时不会把它列入。回收任务发现这样的文档时会把列表标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），所以运行得太早或者降级，只会让授出退回审批；升级完成后再运行一次即可。
+在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 
 然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:list:documents` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
 
