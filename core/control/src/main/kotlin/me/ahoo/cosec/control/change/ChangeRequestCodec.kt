@@ -118,6 +118,12 @@ object ChangeRequestCodec {
         change.approval?.let { approvalTree(root.putObject("approval"), it) }
     }
 
+    /** The approver's credential (RC1-11): written only when the credential said, so older approvals keep their bytes. */
+    private fun credentialTree(node: ObjectNode, approval: Approval) {
+        approval.credentialId?.let { node.put("credentialId", it) }
+        approval.issuedAt?.let { node.put("issuedAt", it.toString()) }
+    }
+
     private fun approvalTree(node: ObjectNode, approval: Approval) {
         node.set("approver", actorTree(approval.approver))
         node.put("at", approval.at.toString()).put("candidate", approval.candidate)
@@ -138,6 +144,7 @@ object ChangeRequestCodec {
         // Written only when false, so an approval made with a token keeps the bytes it had (RFC 0009 §4.2).
         if (!approval.principalBindings) node.put("principalBindings", false)
         if (!approval.breakGlass) node.put("breakGlass", false)
+        credentialTree(node, approval)
     }
 
     /**
@@ -366,7 +373,9 @@ object ChangeRequestCodec {
             "memberships",
             "attributes",
             "principalBindings",
-            "breakGlass"
+            "breakGlass",
+            "credentialId",
+            "issuedAt",
         )
         return Approval(
             actor(node.need("approver")),
@@ -379,6 +388,8 @@ object ChangeRequestCodec {
             }?.toMap().orEmpty(),
             principalBindings = onlyFalse(node, "principalBindings"),
             breakGlass = onlyFalse(node, "breakGlass"),
+            credentialId = node.get("credentialId")?.text(),
+            issuedAt = node.get("issuedAt")?.let { Instant.parse(it.text()) },
         )
     }
 

@@ -236,6 +236,13 @@ data class Approval(
     val principalBindings: Boolean = true,
     /** Whether break-glass could reach the approver when it approved: only with CoSec's own token. */
     val breakGlass: Boolean = true,
+    /**
+     * The credential the approver approved with (its token's `jti`) and when it was issued (`iat`): publishing checks
+     * that neither that token nor the approver's tokens issued by then have been revoked since (RC1-11). Null when the
+     * credential did not say; a revocation of the approver's tokens then counts.
+     */
+    val credentialId: String? = null,
+    val issuedAt: Instant? = null,
 )
 
 /**

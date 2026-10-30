@@ -71,6 +71,15 @@ object ScopeResolver {
     const val MAX_APP_ID_LENGTH = 128
 
     /**
+     * Space ids beginning with it are CoSec's, as the tenants `(0)` and `(platform)`: the control plane writes the
+     * default space as `(default)` (RC1-37), so no request selects one and no document binds in one.
+     */
+    const val RESERVED_SPACE_PREFIX = "("
+
+    /** Whether [space] is reserved for CoSec ([RESERVED_SPACE_PREFIX]). */
+    fun isReservedSpaceId(space: String): Boolean = space.startsWith(RESERVED_SPACE_PREFIX)
+
+    /**
      * Whether [app] can name an app: not blank, not [Match.WILDCARD], no `:` (it separates document key parts, as in
      * `SnapshotKey.App`) and at most [MAX_APP_ID_LENGTH] characters.
      */
@@ -85,7 +94,8 @@ object ScopeResolver {
         if (hostApp != null && declared.app.isNotEmpty() && declared.app != hostApp.value) {
             return APP_MISMATCH
         }
-        if (declared.space == Match.WILDCARD) {
+        // Neither the wildcard nor a reserved space is a space a principal can be a member of, whatever it claims.
+        if (declared.space == Match.WILDCARD || isReservedSpaceId(declared.space)) {
             return SPACE_NOT_MEMBER
         }
         val app = hostApp ?: AppId(declared.app)

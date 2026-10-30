@@ -47,6 +47,7 @@ import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
 /** A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). */
@@ -108,10 +109,30 @@ class Changes(
         override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
             revisions.referrers(target, policy)
 
-        override suspend fun apps(): Versioned<AppList>? = store.apps()
+        /**
+         * The app list once this instance has reconciled it with the documents (RC1-4, B1 review): until a
+         * reconciliation has succeeded here, the first read runs one, so a complete list a downgraded writer left
+         * stale is never trusted. One that fails throws, and the analysis takes the list as untrusted until the next.
+         */
+        override suspend fun apps(): Versioned<AppList>? {
+            if (!appsReconciled.get()) {
+                revisions.reconcileApps(store.documents())
+                appsReconciled.set(true)
+            }
+            return store.apps()
+        }
+    }
+
+    private val appsReconciled = AtomicBoolean(false)
+
+    /** This instance has reconciled the app list ([me.ahoo.cosec.control.store.ControlMaintenance.reconcileApps]). */
+    internal fun appListReconciled() {
+        appsReconciled.set(true)
     }
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
+
+    private val preemption = Preemption(revisions, authority)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -293,7 +314,7 @@ class Changes(
         authority.require(operator, change.key, ControlActions.PUBLISH)
         requireState(change, setOf(ChangeState.CHECKED))
         val head = revisions.head(change.key)
-        takeSlot(change)
+        takeSlot(operator, change, head)
         if (exempt(change, head)) {
             return transition(
                 id,
@@ -376,7 +397,7 @@ class Changes(
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
         }
         requireState(change, setOf(ChangeState.CHECKED))
-        takeSlot(change)
+        takeSlot(operator, change, revisions.head(change.key))
         return transition(id, setOf(ChangeState.CHECKED)) { it.copy(state = afterWindow(it), skipShadow = reason) }
     }
 
@@ -384,6 +405,10 @@ class Changes(
      * Approves an `AWAITING_APPROVAL` change (RFC 0007 §7.5): [operator] holds `cosec:approve` on the document and is
      * not its author, and approves the [candidate] digest it has seen; a change whose candidate is another is a 409.
      * The approval covers the change's escalations, and the change is `READY`.
+     *
+     * An approval is a person's ([ChangeAuthority.approvalRefusal]): an API key never approves, and only a platform
+     * principal approves a boundary change. A break-glass approval needs a REQUIRED change listener, and is recorded
+     * there once the digest is checked, before the approval is (RC1-30).
      */
     suspend fun approve(operator: Operator, id: ChangeId, candidate: String): ChangeRequest {
         val change = visible(operator, id)
@@ -392,8 +417,13 @@ class Changes(
         if (operator.actor == change.author) {
             throw ChangeRejectedException(FORBIDDEN, "the author of change ${id.value} cannot approve it")
         }
+        authority.approvalRefusal(operator, change)?.let { throw ChangeRejectedException(FORBIDDEN, it) }
+        if (change.candidate != candidate) {
+            throw ChangeRejectedException(CONFLICT, "change ${id.value} is not candidate $candidate")
+        }
         val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
         if (breakGlass) {
+            requireAudit(true)
             audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
         }
         return transition(id, setOf(ChangeState.AWAITING_APPROVAL)) { current ->
@@ -411,6 +441,8 @@ class Changes(
                 operator.attributes,
                 principalBindings = operator.principalBindings,
                 breakGlass = operator.breakGlass,
+                credentialId = operator.security?.principal?.credential?.id,
+                issuedAt = operator.security?.principal?.issuedAt,
             )
             current.copy(
                 state = ChangeState.READY,
@@ -478,6 +510,11 @@ class Changes(
         authority.authorize(publisher, change.key, change.operations, change.kind, touchesBreakGlass(change))
         val head = revisions.head(change.key)
         if (head?.digest != change.base.digest) {
+            if (publishedBy(change, head)) {
+                // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
+                return settle(change, ChangeState.PUBLISHED, published = head!!.revision)
+                    .also { audit(outcomeOf(change, it), it, publisher.actor) }
+            }
             return settle(change, ChangeState.CONFLICTED)
         }
         val rechecked = checked(change, head, publisher)
@@ -533,6 +570,14 @@ class Changes(
         } finally {
             recordMoved(settled ?: change, rechecked, base, candidate, publisher)
         }
+    }
+
+    /** Whether [head] is [change], published over its base: the head's provenance names the change and that base. */
+    private fun publishedBy(change: ChangeRequest, head: Head?): Boolean {
+        val provenance = head?.document?.provenance ?: return false
+        return provenance.change == change.id.value &&
+            provenance.parent?.digest == change.base.digest?.toString() &&
+            (provenance.parent?.revision ?: 0) == change.base.revision
     }
 
     private fun referenced(outcome: PublishOutcome.Referenced): List<Finding> =
@@ -796,21 +841,44 @@ class Changes(
     }
 
     /** Takes the slot of [change]'s document; a holder that no longer stages (finished, expired, gone) frees it. */
-    private suspend fun takeSlot(change: ChangeRequest) {
+    /**
+     * Takes [change]'s document's staging slot for [operator]. A slot another change still holds is a 409, unless
+     * [change] may preempt it ([preempts]): the holder then becomes `CONFLICTED`, its candidate withdrawn (RC1-12).
+     */
+    private suspend fun takeSlot(operator: Operator, change: ChangeRequest, head: Head?) {
         repeat(MAX_ATTEMPTS) {
             val current = store.stage(change.key)
             val holder = current?.value?.holder
             if (holder == change.id) {
                 return
             }
-            if (holder != null && store.change(holder)?.value?.let(::stillStaged) == true) {
-                throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${holder.value}")
+            val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
+            if (held != null && !preemption.preempts(operator, change, head)) {
+                throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
             }
             if (store.putStage(change.key, current?.digest, StageSlot(change.id, clock.instant()))) {
+                held?.let { preempted(it, change, operator) }
                 return
             }
         }
         throw ChangeRejectedException(CONFLICT, "the staging slot of [${change.key}] kept changing")
+    }
+
+    /** [held] loses its slot to [by]: `CONFLICTED`, its candidate withdrawn, and recorded as a failure. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun preempted(held: ChangeRequest, by: ChangeRequest, operator: Operator) {
+        try {
+            val conflicted = transition(held.id, setOf(held.state)) { it.copy(state = ChangeState.CONFLICTED) }
+            withdraw(conflicted)
+            audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = "preempted by ${by.id.value}"), operator.actor)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The slot is taken: the holder cannot publish over the change that took it, whose base it would move.
+            log.warn(
+                e
+            ) { "Change ${held.id.value} lost its slot to ${by.id.value} but could not be marked conflicted." }
+        }
     }
 
     private fun stillStaged(holder: ChangeRequest): Boolean =

@@ -23,6 +23,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.CoSecSpi
@@ -156,6 +158,11 @@ class ChangeListeners(
         }
     }
 
+    /**
+     * Delivers [event] to every REQUIRED listener. A [CancellationException] is the caller's only while the caller's own
+     * coroutine is cancelled; one a listener throws while the step is active (a cancelled future, say) is a failure of
+     * that listener, so the step answers 503 like any other (RC1-31, as `DecisionListeners.deliver`).
+     */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun deliverRequired(event: ChangeEvent) {
         var failure: Exception? = null
@@ -165,7 +172,11 @@ class ChangeListeners(
                 true
             }
         } catch (e: CancellationException) {
-            throw e
+            if (!currentCoroutineContext().isActive) {
+                throw e
+            }
+            failure = e
+            null
         } catch (e: Exception) {
             failure = e
             null

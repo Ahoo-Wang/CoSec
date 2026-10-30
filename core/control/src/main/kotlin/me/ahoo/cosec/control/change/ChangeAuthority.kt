@@ -47,6 +47,8 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.SubjectRevocation
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
@@ -76,6 +78,10 @@ class ChangeAuthority(
     private val options: ChangeOptions = ChangeOptions(),
     private val analyzer: GrantAnalyzer = GrantAnalyzer(),
     private val controlApp: AppId = PipelineControlAuthorizer.CONTROL_APP,
+    /** The host's token revocations: an approver's revoked token no longer approves (RC1-11). */
+    private val revocations: RevocationReader = RevocationReader.NONE,
+    /** `cosec.authentication.revocation.skew`, as the host's token authenticator reads revocations with. */
+    private val revocationSkew: java.time.Duration = SubjectRevocation.DEFAULT_SKEW,
 ) {
     /** The hard rule: a 403 when [operator] may not act on [key] at all. */
     fun isolate(operator: Operator, key: SnapshotKey) {
@@ -163,9 +169,51 @@ class ChangeAuthority(
                 is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
                 is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
                 is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
-                is Operation.SetBoundary -> require(operator, ControlActions.BOUNDARY, boundaryOf(key))
+                is Operation.SetBoundary -> boundary(operator, key)
             }
         }
+    }
+
+    /**
+     * Why [approval] no longer counts because its approver's token was revoked since (RC1-11): that token by its id, or
+     * every token of the approver issued by then; `null` when neither is. As the host's token authenticator reads them.
+     */
+    private suspend fun revoked(approval: Approval): String? {
+        if (approval.credentialId?.let { revocations.isRevoked(it) } == true) {
+            return "the token the approver approved with is revoked"
+        }
+        val before = revocations.subjectRevokedBefore(approval.approver.tenant, approval.approver.principal)
+        return if (SubjectRevocation.revokes(before, approval.issuedAt, revocationSkew)) {
+            "the approver's tokens are revoked"
+        } else {
+            null
+        }
+    }
+
+    /**
+     * `cosec:boundary` on [key]'s boundary. A tenant's boundary is the platform's ceiling on it (RFC 0007 §9.1): never a
+     * tenant principal's to move, whatever it holds (RC1-10).
+     */
+    private suspend fun boundary(operator: Operator, key: SnapshotKey) {
+        if (!operator.platform) {
+            throw ChangeRejectedException(FORBIDDEN, "only a platform principal sets a tenant's boundary")
+        }
+        require(operator, ControlActions.BOUNDARY, boundaryOf(key))
+    }
+
+    /**
+     * Why [operator] may not approve [change] whatever it holds (RFC 0007 §7.5); `null` when it may. An approval is a
+     * person's: an API key, a workload's credential, never approves, as break-glass never reaches one (`BRK-8`). A
+     * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10).
+     */
+    fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
+        operator.security?.principal?.credential?.method == Identity.Method.API_KEY ->
+            "an API key cannot approve: an approval is a person's"
+
+        !operator.platform && change.operations.any { it is Operation.SetBoundary } ->
+            "only a platform principal approves a boundary change"
+
+        else -> null
     }
 
     /**
@@ -184,7 +232,9 @@ class ChangeAuthority(
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
         breakGlass(base, candidate, escalations)
-        val trustRoot = holds(operator, key, ControlActions.APPROVE)
+        // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
+        // its own document approves others' changes, and its own are analyzed (RC1-10).
+        val trustRoot = operator.platform && holds(operator, key, ControlActions.APPROVE)
         if (trustRoot && !options.fourEyes) {
             return escalations
         }
@@ -432,6 +482,10 @@ class ChangeAuthority(
         if (!memberships.active) {
             return "the approver is deactivated"
         }
+        if (approval.approver.tenant != TenantId.PLATFORM && change.operations.any { it is Operation.SetBoundary }) {
+            return "only a platform principal approves a boundary change"
+        }
+        revoked(approval)?.let { return it }
         // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
         // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
         val source = if (memberships.source == Memberships.Source.PROVIDER) {

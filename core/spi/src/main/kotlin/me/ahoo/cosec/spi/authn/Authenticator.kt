@@ -23,6 +23,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import java.time.Instant
 
 /**
  * Turns a request's credentials into a principal (RFC 0006 §5.3.2).
@@ -102,6 +103,12 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
      * (RFC 0009 §4.2, `BRK-8`). It goes with [Identity.Method.JWT], which a gateway forwards for CoSec's tokens only.
      */
     val breakGlass: Boolean,
+    /**
+     * When the credential was issued (a token's `iat`), so that a later revocation of the principal's tokens can be told
+     * apart from an earlier one: CoSec's token authenticator sets it, an approval records it with the credential's id
+     * (RC1-11). Null when the credential does not say, which a revocation of the principal's tokens takes as revoked.
+     */
+    val issuedAt: Instant? = null,
 ) {
     init {
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {

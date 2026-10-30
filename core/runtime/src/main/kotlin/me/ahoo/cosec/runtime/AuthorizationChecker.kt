@@ -129,7 +129,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      *
      * Whether the principal still stands is asked again, though: a principal whose memberships come from the
      * membership provider and which it no longer knows, or knows as deactivated, is denied (RFC 0009 §4.2), and one it
-     * cannot answer for is indeterminate. A principal of claimed memberships stands until its token expires.
+     * cannot answer for is indeterminate. For such a principal the decision is on what the provider answers now, held
+     * to what was recorded (RC1-11): a role counts only if it held it then and holds it now, so a role it lost does not
+     * count and one it gained does not either; the policies attached to it are the provider's current ones, so a DENY
+     * attached since applies. A principal of claimed memberships stands until its token expires.
      */
     suspend fun decideAs(
         security: RequestSecurity,
@@ -142,21 +145,36 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         if (!memberships.active) {
             return Decision.Deny(null)
         }
-        if (principal.membershipSource is MembershipSource.Provider) {
-            val stands = try {
-                pipeline.standing(principal)
+        val decided = if (principal.membershipSource is MembershipSource.Provider) {
+            val now = try {
+                pipeline.currentMemberships(principal)
             } catch (e: MembershipUnavailableException) {
                 return Decision.Indeterminate(Cause.MembershipUnavailable(e))
             }
-            if (!stands) {
+            if (now == null || !now.active) {
                 return Decision.Deny(null)
             }
+            heldThenAndNow(memberships, now)
+        } else {
+            memberships
         }
-        val recorded = security.asPrincipal(principal, memberships) ?: return Decision.Deny(null)
+        val recorded = security.asPrincipal(principal, decided) ?: return Decision.Deny(null)
         return decide(recorded, app, action, resource)
     }
 
     private companion object {
         const val HTTP = "http"
+
+        /** The roles in both [then] and [now], space by space, with [now]'s attached policies ([decideAs]). */
+        fun heldThenAndNow(then: Memberships, now: Memberships): Memberships = Memberships(
+            then.source,
+            then.roles.mapNotNull { (space, roles) ->
+                val still = roles.filterTo(LinkedHashSet()) { it in now.roles[space].orEmpty() }
+                if (still.isEmpty()) null else space to still
+            }.toMap(LinkedHashMap()),
+            now.attachments,
+            then.malformed,
+            active = true,
+        )
     }
 }

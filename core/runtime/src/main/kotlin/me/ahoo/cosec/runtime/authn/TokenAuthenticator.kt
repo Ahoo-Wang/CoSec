@@ -32,6 +32,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.ExpiresAtCapable
+import me.ahoo.cosec.spi.token.IssuedAtCapable
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenExpiredException
@@ -115,6 +116,7 @@ class TokenAuthenticator(
                 principal.attributes,
                 Identity.Credential(credentialMethod, principal.tokenId, expiresAt),
                 breakGlass = ownTokens,
+                issuedAt = principal.findInDelegationChain<IssuedAtCapable>()?.issuedAt,
             ),
             method,
         )

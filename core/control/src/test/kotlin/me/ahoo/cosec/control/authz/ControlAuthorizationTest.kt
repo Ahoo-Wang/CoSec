@@ -401,7 +401,9 @@ class ControlAuthorizationTest {
         ControlResources.document(SnapshotKey.Platform).id.assert().isEqualTo("platform")
         ControlResources.entry(TENANT, "policy", "p").id.assert().isEqualTo("tenant/acme/policy/p")
         ControlResources.entry(SnapshotKey.App("order"), "catalog", "").id.assert().isEqualTo("app/order/catalog")
-        ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId.DEFAULT)).id.assert().isEqualTo("*/*/-")
+        ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId.DEFAULT)).id.assert().isEqualTo("*/*/(default)")
+        // RC1-37: `-` is a space like any other, so a right on it is not one on the default space.
+        ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId("-"))).id.assert().isEqualTo("*/*/-")
         org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
             ControlResources.document(
                 SnapshotKey.Tenant("a/b")

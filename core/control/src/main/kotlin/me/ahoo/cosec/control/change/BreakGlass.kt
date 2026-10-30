@@ -44,16 +44,23 @@ import java.time.Instant
  * There is no renewal: a new request is approved again. An expired binding stops applying by itself (RFC 0004 §4.2).
  */
 class BreakGlass(private val changes: Changes, private val revisions: Revisions) {
-    /** Proposes the binding and stages it, so that it waits for its approval. */
+    /**
+     * Proposes the binding and stages it, so that it waits for its approval. Its id is derived from [principal] and
+     * [expiresAt], never the caller's: a request never replaces another binding (RC1-29), and one whose id is already
+     * taken is refused (409).
+     */
     suspend fun request(
         operator: Operator,
         principal: PrincipalId,
         expiresAt: Instant,
         reason: String,
         policy: PolicyId = BuiltinPolicies.ROOT,
-        binding: BindingId = BindingId("break-glass-${principal.value}-${expiresAt.toEpochMilli()}"),
     ): ChangeRequest {
         require(reason.isNotBlank()) { "Break-glass needs a reason." }
+        val binding = BindingId("break-glass-${principal.value}-${expiresAt.toEpochMilli()}")
+        if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
+            throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
+        }
         val grant = Binding(
             binding,
             SubjectRef.Principal(TenantId.PLATFORM, principal),
@@ -98,4 +105,8 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
     }
 
     private suspend fun head(): Long = revisions.head(SnapshotKey.Platform)?.revision ?: 0
+
+    private companion object {
+        const val CONFLICT = 409
+    }
 }

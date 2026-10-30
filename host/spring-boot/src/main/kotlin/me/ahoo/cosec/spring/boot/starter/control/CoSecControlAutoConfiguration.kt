@@ -62,7 +62,12 @@ import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.credentialHeaders
 import me.ahoo.cosec.spring.boot.starter.pipeline.toOptions
@@ -94,7 +99,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnCoSecEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
-@EnableConfigurationProperties(ControlProperties::class)
+@EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class)
 class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -146,12 +151,15 @@ class CoSecControlAutoConfiguration {
         snapshot: ControlSnapshot,
         authenticator: Authenticator,
         attributes: AttributeProviders,
+        membershipProvider: ObjectProvider<MembershipProvider>,
         properties: ControlProperties,
     ): ControlAuthorizer {
         val pipeline = Pipeline(
             PipelineComponents(
                 authenticator = authenticator,
                 snapshots = SuspendingSnapshotSource(DocumentSnapshotViews(snapshot.source, platformRequired = true)),
+                // The application's: an approver whose memberships come from it is checked again at publish (RC1-13).
+                membershipProvider = membershipProvider.ifAvailable,
                 attributes = attributes,
             ),
         )
@@ -178,7 +186,19 @@ class CoSecControlAutoConfiguration {
         authorizer: ControlAuthorizer,
         options: ChangeOptions,
         properties: ControlProperties,
-    ): ChangeAuthority = ChangeAuthority(authorizer, options, controlApp = AppId(properties.appId))
+        revocationReader: ObjectProvider<RevocationReader>,
+        tokenStore: ObjectProvider<TokenStore>,
+        revocation: RevocationProperties,
+    ): ChangeAuthority = ChangeAuthority(
+        authorizer,
+        options,
+        controlApp = AppId(properties.appId),
+        // The pipeline's own reader: an approver's revoked token no longer approves (RC1-11). Without tokens there is
+        // none to read, and nothing to revoke.
+        revocations = revocationReader.ifAvailable ?: CoCacheRevocation.readerOf(tokenStore.ifAvailable)
+            ?: RevocationReader.NONE,
+        revocationSkew = revocation.skew,
+    )
 
     /** The change log, beside any listener the application registers. */
     @Bean

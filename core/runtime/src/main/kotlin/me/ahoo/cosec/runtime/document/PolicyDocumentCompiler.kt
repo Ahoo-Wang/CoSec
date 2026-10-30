@@ -31,6 +31,7 @@ import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -262,6 +263,20 @@ class PolicyDocumentCompiler(
                 principals++
             }
             permissionError(document, binding, "$.bindings[$i].policy")?.let { errors += it }
+            (binding.scope.space as? Match.Exactly)?.value?.value?.takeIf(ScopeResolver::isReservedSpaceId)?.let {
+                errors += CompileError(
+                    "$.bindings[$i].space",
+                    "[$it] is reserved: space ids beginning with [${ScopeResolver.RESERVED_SPACE_PREFIX}] are CoSec's"
+                )
+            }
+            if (binding.policy == BuiltinPolicies.PLATFORM_ADMIN && document.kind != DocumentKind.PLATFORM) {
+                // It holds cosec:approve and cosec:boundary: bound in a tenant's own document, its subjects would be
+                // the trust root of that document and move its boundary (RC1-36, TNT-2).
+                errors += CompileError(
+                    "$.bindings[$i].policy",
+                    "[${BuiltinPolicies.PLATFORM_ADMIN.value}] is bound only in the platform document"
+                )
+            }
         }
         if (principals > principalBindingLimit) {
             errors += CompileError(

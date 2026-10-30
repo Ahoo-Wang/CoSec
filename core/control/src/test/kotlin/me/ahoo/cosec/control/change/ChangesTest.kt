@@ -222,7 +222,8 @@ class ChangesTest {
             Operation.SetBoundary(PolicyId("fence"))
         )
         harness.revisions.head(SnapshotKey.Platform)!!.document.boundary!!.value.assert().isEqualTo("fence")
-        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.SetBoundary(PolicyId("plain"))), "not a boundary")
+        // A tenant's boundary is the platform's to set (RC1-10): its own principals are refused before any check.
+        changes.propose(PLATO, ACME, 0, listOf(Operation.SetBoundary(PolicyId("plain"))), "not a boundary")
             .errors.map { it.check to it.path }.assert().containsExactly("REFERENCES" to "$.boundary")
         publish(ACME, Operation.SetBoundary(PolicyId("fence")))
         harness.revisions.head(ACME)!!.document.boundary!!.value.assert().isEqualTo("fence")
@@ -239,9 +240,9 @@ class ChangesTest {
             .errors.map { it.check }.assert().containsExactly("OPERATION")
         // Applying the head proposes nothing; a replace without the boundary removes it.
         val head = harness.revisions.head(ACME)!!.document
-        changes.apply(ALICE_OP, ACME, head, ApplyMode.REPLACE, "same").operations.assert().isEmpty()
+        changes.apply(PLATO, ACME, head, ApplyMode.REPLACE, "same").operations.assert().isEmpty()
         val cleared = changes.apply(
-            ALICE_OP,
+            PLATO,
             ACME,
             StoreFixtures.candidate(ACME, emptyList()),
             ApplyMode.REPLACE,
@@ -263,7 +264,7 @@ class ChangesTest {
             Operation.SetBoundary(PolicyId("fence")),
             Operation.SetBoundary(null),
         )
-        val change = changes.propose(ALICE_OP, ACME, 0, operations, "all of them")
+        val change = changes.propose(PLATO, ACME, 0, operations, "all of them")
         val stored = ChangeRequestCodec.encode(change)
         val read = ChangeRequestCodec.decode(stored)
         ChangeRequestCodec.encode(read).assert().isEqualTo(stored)

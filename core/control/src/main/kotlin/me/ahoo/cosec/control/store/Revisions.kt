@@ -188,11 +188,17 @@ class Revisions(
                     write.digest == digest
                 ) { "The store wrote the head of [$key] as another digest." }
             }
-            settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
-            if (key == SnapshotKey.Platform && base == null) {
-                completeOnNewStore()
+            val published = PublishOutcome.Published(revision, digest)
+            try {
+                settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
+                if (key == SnapshotKey.Platform && base == null) {
+                    completeOnNewStore()
+                }
+            } finally {
+                // Exactly once once the head is written, whatever the steps before it threw (B1 review).
+                afterWrite(published)
             }
-            PublishOutcome.Published(revision, digest).also { afterWrite(it) }
+            published
         }
     }
 
