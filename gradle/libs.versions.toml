@@ -6,7 +6,7 @@ spring-boot = "4.1.2"
 spring-cloud = "2025.1.4"
 cocache = "6.7.0"
 # cosec-cosid only: never in cosec-dependencies, so CoSec forces no CosId version on an application
-cosid = "5.0.0-alpha.2"
+cosid = "5.0.0"
 opentelemetry = "2.32.0"
 guava = "33.7.2-jre"
 kotlin-logging = "8.0.4"
@@ -30,7 +30,7 @@ detekt = "1.23.8"
 dokka = "2.2.0"
 kotlin = "2.4.21"
 publish-plugin = "2.0.0"
-jmh-plugin = "0.7.3"
+jmh-plugin = "0.7.4"
 [libraries]
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
 spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
