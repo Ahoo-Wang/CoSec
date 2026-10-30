@@ -180,6 +180,15 @@ flowchart LR
 
 `POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。只创建或吊销 break-glass 绑定的变更没有窗口。
 
+### 抢占被占用的暂存槽 {#taking-a-busy-slot}
+
+一个文档的暂存槽同一时间只由一个变更持有：它在影子窗口中、等待审批或已就绪时都占着槽；同一文档的其他变更要等待（`409`）。紧急情况不能排队：有两类变更可以抢占槽。
+
+- **撤销 break-glass**，总是可以。
+- **只收窄的变更**，由在该文档上持有 `cosec:skip-shadow` 的人暂存或跳过影子。每个操作都必须属于下列之一：删除一条绑定，被绑定的策略只含 ALLOW 且不是 `cosec:blacklist`；把一条只含 ALLOW 的可附加策略改为不可附加，语句不变；新增一条黑名单条目；新增一条只含 DENY 的策略，或新增一条指向这种策略的绑定。删除 DENY 或黑名单条目、把含 DENY 的策略改为不可附加、替换任何已有条目，都会放宽或可能放宽，与其他变更一样等待。
+
+原先持有槽的变更成为 `CONFLICTED`，影子候选被撤回，并以 `FAILED` 记录，备注为 `preempted by <change>`；变基后可以再试。
+
 ## 审批 {#approval}
 
 任何人都不能授予超出自己权限的东西。变更被检查时，控制面以作者身份分析它授予了什么，凡是无法证明包含在作者自身权限之内的，都成为一项*升级*：
@@ -190,6 +199,7 @@ flowchart LR
 | `DENY_OVERLAP` | 约束作者的某条 DENY 可能与之重叠。 |
 | `CROSS_TENANT` | 作者不在该文档的租户中。 |
 | `UNRESOLVED` | 新增或修改的绑定指向一条没有任何文档定义的策略，它授予什么无从判断。 |
+| `ANONYMOUS` | 授给默认租户 `(0)` 中的 `Anyone`：未认证的调用方都在这个租户中，授出也会作用于它们。 |
 | `UNREADABLE` | 授出触及的某个 app 文档读不到，作者在那里持有什么无从得知；或 app 列表不可信，而授出触及所有 app（[存储](../operations/storage.md#publishing-through-the-control-plane)）。 |
 | `NOT_ANALYZED` | 非信任根所做的平台或应用文档变更，或租户边界变更。 |
 | `TENANT_BINDING` | 与应用文档的 `NOT_ANALYZED` 一起出现：变更新增或放宽了某条权限策略的 ALLOW，租户文档中每条绑定该策略的绑定各是一项，只写出绑定 id 和它所在的租户文档，审批人由此看到变更影响到谁。仅供参考：审批针对的是 `NOT_ANALYZED`，只有这些条目变化时，已审批的变更不会退回 `AWAITING_APPROVAL`。 |
@@ -204,9 +214,15 @@ flowchart LR
 - **租户与平台都定义的 id。** 执行时，两条策略内容不同，这样的绑定或附加才因二义而被拒绝。分析不比较内容，把每个这样的 id 都当作二义，这只会减少权利：作者经它什么也不持有；它绑定到作者的地方，按拒绝一切的 DENY 计。
 - **每一份 app 文档。** app 文档绑定角色，所以无论变更是否点名该 app，它都可能在该 app 中拒绝作者某些东西。分析读取 app 列表列出的每一份 app 文档；读不到的那份，使触及它所在 app 的每个授出成为 `UNREADABLE`。app 列表完整之前（升级后，在 [`cosec-migrate repair-references`](../operations/upgrading.md#repair-the-back-reference-index) 运行之前），覆盖所有 app 的每个授出（app 为 `*` 的绑定或附加）都是 `UNREADABLE`，经条件收窄到变更没有点名的 app 的授出也是：分析从绑定的作用域取 app，不从条件中取。
 
-删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。对文档持有 `cosec:approve` 的人是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。
+删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批设置边界的变更。
 
-有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。
+分析看不到的东西：
+
+- **受保护的条目。** 租户文档目前还不能把条目标为 `protected`，所以租户管理员可以先删除平台放进该租户文档的 DENY，再授出它拒绝的东西。对租户管理员的限制请放在平台或 app 的文档中。
+- **针对个人的限制。** 绑定到 `Anyone`、带 `subject.id` 条件的 DENY 限制的是该主体能做什么，而不是它能授出什么：分析把 `Anyone` 的 DENY 读作对每个被授予者同样生效。请把这条 DENY 绑定到该主体。
+- **信任根。** 不开启 four-eyes 时，它的变更完全不经分析；这时 break-glass 的两个人和时间上限也都约束不了它（[安全模型](../guide/security-model.md#break-glass)）。
+
+有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以 API key 认证的主体不能审批（`403`）。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。成员关系来自成员关系提供者的审批人，发布时按提供者当时的答复再查一次：只有审批时持有、现在仍持有的角色才算数。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。
 
 ## 发布与回滚 {#publishing-and-rolling-back}
 

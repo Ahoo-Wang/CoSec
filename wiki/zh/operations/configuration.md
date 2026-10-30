@@ -244,7 +244,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.revisions.reclaim-interval` | duration | `1h` | 每个控制面实例多久回收一次修订；租约保证同一时间只有一个实例处理某个文档。必须为正。 |
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。 |
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。 |
-| `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的操作者（信任根）的变更：分析无法证明受限的部分随之需要第二个人审批。升级权限的变更无论如何都需要。 |
+| `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要第二个人审批。升级权限的变更无论如何都需要。 |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h` 启动失败。 |
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。 |
 | `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。 |

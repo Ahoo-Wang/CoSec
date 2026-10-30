@@ -259,6 +259,13 @@ defines or binds; rename the platform policy, or have the tenant remove its own 
 after a publish means another document the change was checked with moved before the write and the analysis now finds
 an escalation nobody approved; the change stays published and needs a person's review.
 
+An approval that no longer counts at publish sends the change back to `AWAITING_APPROVAL` with an `APPROVAL` finding:
+the approver's token was revoked since, the provider no longer gives the approver its role, or a tenant principal
+approved a boundary change. `an API key cannot approve` (403): approvals are a person's, so approve with a token. A
+tenant principal's `SetBoundary` is 403: a tenant's boundary is the platform's. A 409 on staging means another change
+holds the document's slot; only a break-glass revoke, or a change that only narrows by a holder of
+`cosec:skip-shadow`, takes it.
+
 When every tenant grant over every app (a binding with app `*`, an attachment, also one whose condition narrows it to
 apps the change does not name) waits for approval as `UNREADABLE`
 after an upgrade, and the control plane logs `The app list is missing or incomplete`, the app list is not complete:

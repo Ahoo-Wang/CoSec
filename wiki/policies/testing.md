@@ -232,6 +232,21 @@ shows no difference there.
 `cosec:skip-shadow`, and the revision records that the window was skipped. A change that only creates or revokes
 break-glass bindings has no window.
 
+### Taking a busy slot
+
+One change at a time holds a document's staging slot while it is shadowing, awaiting approval or ready; another
+change of that document waits (`409`). An emergency must not: two kinds of change take the slot.
+
+- **Revoking break-glass**, always.
+- **A change that only narrows**, staged or skipped by a holder of `cosec:skip-shadow` on the document. Every
+  operation must be one of: removing a binding of a policy of ALLOWs only that is not `cosec:blacklist`; making an
+  attachable policy of ALLOWs only not attachable, its statements as they were; a new blacklist entry; a new policy of
+  DENYs only, or a new binding of one. Removing a DENY or a blacklist entry, making a DENY not attachable, or replacing
+  any entry there is widens, or may, and waits like any change.
+
+The change that held the slot becomes `CONFLICTED`, its candidate withdrawn, and is recorded as `FAILED` with the note
+`preempted by <change>`; rebase it to try again.
+
 ## Approval
 
 Nobody can grant beyond their own rights. When a change is checked, the control plane analyzes what it grants as its
@@ -243,6 +258,7 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `DENY_OVERLAP` | A DENY that binds the author may overlap it. |
 | `CROSS_TENANT` | The author is not in the document's tenant. |
 | `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
+| `ANONYMOUS` | A grant to `Anyone` in the default tenant `(0)`, where unauthenticated callers are: it reaches them too. |
 | `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known; or the app list cannot be trusted and the grant reaches every app ([Storage](../operations/storage.md#publishing-through-the-control-plane)). |
 | `NOT_ANALYZED` | A platform or app document change, or a tenant boundary change, by someone who is not the trust root. |
 | `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one per binding, naming only the binding and its tenant document, so the approver sees whom the change reaches. Informational: the approval is for `NOT_ANALYZED`, and a change in these entries alone never sends an approved change back to `AWAITING_APPROVAL`. |
@@ -276,13 +292,31 @@ The analysis reads the author's rights as enforcement does:
 Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
 whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the
 platform's policy is attachable, to the platform's policy. That is analyzed as granting the platform's policy to
-them. A holder of `cosec:approve` on the document is the trust root:
+them. A platform principal holding `cosec:approve` on the document is the trust root:
 its own changes are not analyzed, unless `cosec.control.approval.four-eyes` is on, in which case they are analyzed like
-anyone's.
+anyone's. A tenant principal the platform gave `cosec:approve` on its tenant's document approves others' changes, and
+its own are analyzed. A tenant's boundary is the platform's: only a platform principal sets it (`403` otherwise), and
+only a platform principal approves a change that sets one.
+
+What the analysis does not see:
+
+- **Protected entries.** A tenant's document cannot mark its entries `protected` yet, so a tenant administrator can
+  remove a DENY the platform placed in the tenant's document and then grant what it denied. Put restrictions on tenant
+  administrators in the platform's or an app's document.
+- **Personal restrictions.** A DENY bound to `Anyone` with a `subject.id` condition limits what that principal may do,
+  not what it may grant: the analysis reads `Anyone` DENYs as limiting every grantee alike. Bind the DENY to the
+  principal instead.
+- **The trust root.** Its changes are not analyzed at all unless four-eyes is on; neither break-glass's two people
+  nor its time bound bind it then ([Security model](../guide/security-model.md#break-glass)).
 
 A change with escalations waits in `AWAITING_APPROVAL` once its window closed or was skipped. Another person holding
 `cosec:approve` approves it with `POST /changes/{id}:approve` and the `candidate` digest they reviewed (from
-`GET /changes/{id}`); a different digest is a `409`, and the author cannot approve their own change. `:reject` with a
+`GET /changes/{id}`); a different digest is a `409`, and the author cannot approve their own change. An approval is a
+person's: a principal that authenticated with an API key cannot approve (`403`). The approval records the approver's
+token (its `jti` and `iat`); when that token, or every token of the approver issued by then, is revoked before the
+change publishes, the approval no longer counts. An approver whose memberships come from the membership provider is
+checked again with what the provider answers at publish: a role counts only if it held it when it approved and still
+holds it. `:reject` with a
 `reason` ends it. An approval is valid for `cosec.control.approval.expire-after` (72 hours) and only for that
 candidate.
 

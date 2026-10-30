@@ -20,6 +20,14 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **平台策略不能占用租户的 id**（RC1-9、`CTL-21`）。平台变更新增的策略 id 若已被某个租户文档定义或绑定，变更被拒绝（`V2`、`422`，列出这些租户文档）。自己定义了该 id 的租户，不再阻止平台删除它自己的同 id 策略。反向引用索引只记下租户在升级之后新增的 id；租户文档原有的 id 只有经 `repair-references` 才进入索引：**在每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后，以 Kubernetes Job 运行一次 [`cosec-migrate repair-references`](#repair-the-back-reference-index)**，使用与控制面相同的 Redis 和 key 前缀；任何一次降级之后再运行一次。在它运行之前，平台策略若占用了某个租户在升级前就有的自有策略的 id，不会被拒绝，只会在那个租户中二义，执行时对此失败即拒绝。
 - **升级**新增原因 `UNRESOLVED`（新绑定指向没有任何文档定义的策略，RC1-32）、`UNREADABLE`（RC1-4）与 `TENANT_BINDING`（应用文档的变更放宽了的每条租户绑定，RC1-34、`APR-6`）。`TENANT_BINDING` 仅供参考：应用变更因 `NOT_ANALYZED` 而需要审批，这一项只写出绑定和它所在的租户文档。穷举 `UnknownReason` 或 `Shortfall` 的代码要加上 `UNRESOLVED`、`UNREADABLE` 与 `EXPIRY`。
 - **发布后的头变化**（RC1-33）。变更检查时读过的其他文档或 app 列表在它写入之前变化时，控制面在 `PUBLISHED` 之后记 `HEADS_MOVED` 或 `REVIEW_NEEDED`，变化的头在新成员 `moved` 中（[一次发布比较什么](./storage.md#what-a-publish-compares)）。处理每一种 `ChangeEvent.Kind` 的变更监听器要加上这两种。
+- **信任根属于平台**（RC1-10、`APR-3`）。只有持有 `cosec:approve` 的平台主体发布自己的变更时不经分析；平台授予了 `cosec:approve` 的租户主体，它自己的变更现在要经分析，它审批别人的变更。租户的边界属于平台：租户主体的 `SetBoundary` 返回 `403`，也只有平台主体能审批设置边界的变更（`BDY-2`）。
+- **`cosec:platform-admin` 只由平台绑定**（RC1-36、`TNT-2`）：在平台文档中，或在平台租户自己的文档中（`bootstrap` 就写在这里）。绑定它的租户或 app 文档不再能编译；升级前请删除这样的绑定。
+- **审批是人的行为，并会再次核查**（RC1-11、`APR-7`、`APR-8`）。以 API key 认证的主体不能审批（`403`）。审批记录审批人的令牌（`jti`、`iat`）；变更发布之前吊销这个令牌，或吊销审批人的令牌，审批就不再算数。成员关系来自成员关系提供者的审批人，按它审批时持有、现在仍持有的角色计；starter 现在把应用的 `MembershipProvider` 交给控制面（RC1-13）。升级前做的审批没有记录令牌：吊销其审批人的令牌就会让它不再算数。代码中，`AuthenticatedPrincipal` 多了 `issuedAt`。
+- **被占用的暂存槽可以被抢占**（RC1-12、`CTL-22`、`BRK-9`）：撤销 break-glass，以及持有 `cosec:skip-shadow` 的人提交的只收窄变更（[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）。原先持有槽的变更成为 `CONFLICTED`。
+- **租户 `(0)` 中的 `Anyone`**（RC1-35、`GRT-7`）：这样的授出会作用于未认证的调用方，需要审批（`ANONYMOUS`）。穷举 `UnknownReason` 的代码要加上 `ANONYMOUS`。
+- **控制面资源中的默认空间写作 `(default)`**（RC1-37、`SCP-9`），以 `(` 开头的空间 id 保留给 CoSec：声明这种空间的请求返回 `403`（`scope-rejected`），在这种空间中绑定的文档不能编译。为 `scope/<tenant>/<app>/-` 写的控制面策略现在指名为 `-` 的空间；默认空间请写 `scope/<tenant>/<app>/(default)`。
+- **break-glass**（RC1-27、RC1-29、RC1-30）：`cosec-migrate` 不写 break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）；`BreakGlass.request` 自行派生绑定 id，不再有 `binding` 参数；审批 break-glass 需要 REQUIRED 变更监听器（否则 `503`，`BRK-3`）。
+- **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
 
@@ -106,7 +114,6 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `--out <dir>` | 一个不存在或为空的目录。`convert` 从不覆盖。 |
 | `--rate-limit-rules <file>` | 7.x 的限流规则（`cosec.limiter.locations`）：一个规则对象，或规则的数组，每条带 `id`。多个规则文件请合并成一个数组。 |
 | `--partition platform\|by-owner` | `platform`（默认）把每条策略放进平台文档，任何人都可以附加，与 7.x 相同。`by-owner` 把每条非全局策略放进其 `tenantId` 所指租户的文档（见下文规则 C5）；含 DENY 语句的策略留在平台文档中，并给出警告。 |
-| `--root-enabled`、`--root-id <id>`、`--root-expires-at <instant>` | 把 7.x 的 root 转换为 [break-glass 绑定](#root-becomes-break-glass)。`--root-id` 默认为 `cosec`；后两个选项任一出现即隐含 `--root-enabled`。没有 `--root-expires-at` 的 root 会被拒绝。 |
 
 输出目录：
 
@@ -134,7 +141,6 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `RESERVED_POLICY_ID` | 策略 id 以 `perm:`、`g:`、`r:` 或 `cosec:` 开头，这些前缀留给生成的 id。 | 重命名这条策略，以及引用它的每个附加策略。 |
 | `INVALID_ID` | 8.0 无法容纳的 id：应用或空间 id 为 `*` 或空、应用 id 含 `:`、角色 id 含 `@`。 | 重命名。8.0 中 `*` 表示任意应用或空间。 |
 | `DUPLICATE_ID` | 导出中同一条策略出现两次，或同一个应用中同一个权限出现两次。 | 只保留一个。 |
-| `ROOT_WITHOUT_EXPIRY` | 启用了 root 却没有 `--root-expires-at`。 | 给出过期时间，或不带 root 转换。 |
 | `OWNER_TENANT` | 使用 `--partition by-owner`，而策略的 `tenantId` 不指向任何租户。 | 设置它的 `tenantId`，或改用 `--partition platform` 转换。 |
 | `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写。 |
 | `EXPRESSION_CONDITION` | `spel` 或 `ognl` 条件。 | 用[策略语言](../policies/language.md)的条件重写。 |
@@ -160,13 +166,11 @@ cosec-migrate convert --from-files ./export --out ./converted
 #### 发布 {#publish}
 
 ```bash
-cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted \
-  [--resume] [--break-glass-max-duration PT4H]
+cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
 ```
 
 `publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被修改、缺失或新增的文件会让
-它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝在 `--break-glass-max-duration`（默认 `PT4H`）之后才过期的
-break-glass 绑定。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
+它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
 `--key-prefix` 是 8.0 的快照前缀，与 `cosec.authorization.snapshot.key-prefix` 相同。
@@ -233,8 +237,8 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 `cosec.authorization.root-enabled` 和根主体已删除。8.0 中对应的是 break-glass 绑定：有时间上限（最多 24 小时，
 `cosec.control.break-glass.max-duration`，默认 4 小时），受每一条 DENY 约束（C2），并且只有在 REQUIRED 决策监听器记录了请求时才能放行
-（否则 `503`，规则 `OBS-2`）。需要时通过控制面申请。`convert --root-enabled --root-expires-at` 会把 7.x 的 root 转换为平台租户中
-`--root-id` 主体的这样一个绑定，但除非它在 `--break-glass-max-duration` 之内过期，`publish` 会拒绝它。通常请不带 root 转换。
+（否则 `503`，规则 `OBS-2`）。需要时通过控制面申请，由两个人完成。`cosec-migrate` 不写 break-glass 绑定：`convert` 不转换 7.x 的 root，
+`--root-enabled`、`--root-id`、`--root-expires-at` 与 `publish --break-glass-max-duration` 已删除（传入时报用法错误并说明原因）。
 
 #### 动作中的路径模板 {#path-templates-in-actions}
 

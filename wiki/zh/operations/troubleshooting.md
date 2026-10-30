@@ -366,7 +366,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `403` | 操作者无权对这个文档执行这个动作，或者硬性规则禁止：作者审批自己的变更、其他人变基该变更。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误，或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。 | 修正请求；`detail` 指出问题。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。 | |
-| `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽，或者影子窗口仍打开或被阻塞。 | 变基、等待另一个变更，或查看窗口的摘要。 |
+| `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)），或者影子窗口仍打开或被阻塞。 | 变基、等待另一个变更，或查看窗口的摘要。 |
 | `410` | 请求的修订没有保留。 | |
 | `428` | 发布需要确认影子窗口的计数。 | 带上该窗口的 `ack` 再次发布。 |
 | `503` | 动作的授权无法决定（没有平台文档、Redis 不可用）、存储无法读取，或者 `REQUIRED` 变更监听器没有记录一个受控步骤。没有 `REQUIRED` 变更监听器时使用 break-glass：`break-glass needs a REQUIRED change listener, and none is configured`。 | 恢复 Redis 或监听器的存储（[控制面变更日志](./observability.md#control-plane-change-log)）。 |
@@ -378,7 +378,8 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 - **平台变更出现 `V2` 发现 `[<id>] is a policy id [tenant:...] already use`**：某个租户文档定义或绑定了这个 id 的策略，平台的策略会使它在那里二义。给平台策略换一个 id，或先让该租户删除或改名它自己的策略。带 `, or whose document could not be read`（`503`）时，索引列出的某个租户文档读不到；等 Redis 恢复后重试。
 - **发布之后出现 `REVIEW_NEEDED` 变更事件**：变更检查时读过的其他文档在它写入之前变化了，而在当前的头上分析发现了无人审批的升级项。变更已经发布；按[一次发布比较什么](./storage.md#what-a-publish-compares)所述复核它。升级项原因为 `DETECTION_TIMED_OUT` 时，写入之后的比较没有按时完成，并不知道有东西变化；同样复核这次变更。
 - **以 `WARN` 记录 `[<doc>] revision <n> is published; its index or the references it dropped could not be updated`**：存储在写头之后失败了。这个修订已经生效，无需处理：`history` 会沿修订链重建索引，残留的引用最多误拦一次删除。如果变更本身没能结算，发布会返回错误，尽管修订已经生效；再次发布它会报 `CONFLICTED`；文档的 `history` 中能看到带有该变更 id 的这个修订。
-- **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
+- **发布时审批不再算数**：变更回到 `AWAITING_APPROVAL`，`APPROVAL` 发现写着 `the token the approver approved with is revoked`、`the approver's tokens are revoked`、`the approver no longer holds cosec:approve on the document` 或 `only a platform principal approves a boundary change`。请重新申请审批。`:approve` 返回 `an API key cannot approve`（`403`）：请用人的令牌审批。
+- **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 
 ## Spring MVC 上经过 CoSec 后表单 POST 请求体为空 {#form-post-body-is-empty-after-cosec-on-spring-mvc}
 

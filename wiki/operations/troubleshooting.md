@@ -416,7 +416,7 @@ does, so a refusal does not tell whether a document, a change or a DENY exists.
 | `403` | The operator may not take this action on this document, or the hard rules forbid it: the author approving their own change, someone else rebasing it. | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type, or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). | Fix the request; `detail` names the problem. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. | |
-| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot, or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
+| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
 | `410` | The revision asked for is not kept. | |
 | `428` | Publishing needs an acknowledgement of the shadow window's counts. | Publish again with the `ack` of that window. |
 | `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |
@@ -439,8 +439,13 @@ for a check, `412` for an `ifMatch` that does not hold).
   index from the chain, and a reference left behind blocks a removal at most. If the change itself could not be
   settled, the publish answers an error although the revision is in effect, and publishing it again reports
   `CONFLICTED`; the document's `history` shows the revision with the change's id.
+- **An approval no longer counts at publish**: the change is `AWAITING_APPROVAL` again, its `APPROVAL` finding saying
+  `the token the approver approved with is revoked`, `the approver's tokens are revoked`, `the approver no longer
+  holds cosec:approve on the document` or `only a platform principal approves a boundary change`. Ask for a new
+  approval. `an API key cannot approve` (`403`) on `:approve`: approve with a person's token.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
-  `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute):
+  `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
+  startup too):
   the app list is not complete yet, so the analysis cannot tell what the author holds in apps it did not read. Once
   every control-plane instance and `cosec-migrate` runs this version, run
   [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) once. The same after the list
