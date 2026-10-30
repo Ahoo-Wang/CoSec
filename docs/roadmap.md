@@ -215,8 +215,10 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1171 | `AuthorizationChecker.decide` 返回决定 | ✅ 已合入 |
 | #1172、#1173 | 未知属性检查忽略 Kubernetes 服务链接变量 | ✅ 已合入 |
 | v8.0.0-alpha.2 | 预览版，不承诺兼容性（#1174）：GitHub prerelease、Maven Central（含 `cosec-cosid`）、GitHub Packages、Docker 只推 `8.0.0-alpha.2`；发布后 `main` 保持 `8.0.0-alpha.2`，不回到 SNAPSHOT（维护者 2026-10-29） | ✅ 2026-10-29 发布 |
+| #1178、#1182、#1183 | 批次 B 的决定与当天的两次调整（RC1-4 改读 app 专用列表、RC1-9 后一半、RC1-33 文档加写后检测）；CosId 5.0.0（#1180）；失效通知测试的竞态与新发现 RC1-50 | ✅ 已合入 |
+| #1181 | `fix(control)!`：RC 修复批次 B1，授出分析的健全性（RC1-2/3/4 高危与 RC1-9、32、33、34）；`cosec-migrate repair-references`；规则 GRT-3–6、APR-6、CTL-21 与 9 个变异体；三轮独立审查，余下四项转入 B2 | ✅ 已合入 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：RC 修复批次 B，拆成 B1（授出分析的健全性，含 RC1-2/3/4 高危）与 B2（信任根、审批、break-glass、变更审计），同一个实现会话依次做，B1 于 2026-10-30 派发 → 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：RC 修复批次 B2（信任根、审批、break-glass、变更审计，含 B1 审查留下的四项），由 B1 的实现会话接着做 → 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -303,7 +305,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-30 起的顺序**：RC 修复批次 B1 → B2 → C（网关）→ D（DoS、快照、泄露；先查清快照失效通知会不会丢，以及 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
+- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2 → C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
