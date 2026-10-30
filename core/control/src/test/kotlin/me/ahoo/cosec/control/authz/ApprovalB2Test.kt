@@ -307,6 +307,13 @@ class ApprovalB2Test {
         publishedAfter { revokedIds += "jti-pia" }.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         publishedAfter { revokedBefore["(platform)/pia"] = issued.plusSeconds(1) }
             .assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        // An approval whose credential said nothing is taken back by any revocation of its approver's tokens.
+        val change = awaiting("viewers-untokened")
+        changes.approve(pia, change.id, change.candidate!!).approval!!.credentialId.assert().isNull()
+        revokedBefore["(platform)/pia"] = issued.minusSeconds(60)
+        changes.publish(alice, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        revokedBefore.clear()
+        changes.abandon(alice, change.id)
         // Revoking the tokens issued before an older instant leaves this one standing.
         publishedAfter { revokedBefore["(platform)/pia"] = issued.minusSeconds(60) }
             .assert().isEqualTo(ChangeState.PUBLISHED)
@@ -327,6 +334,13 @@ class ApprovalB2Test {
         val lost = awaiting("viewers-again")
         changes.approve(dave, lost.id, lost.candidate!!)
         provided["dave"] = emptySet()
+        changes.publish(alice, lost.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+
+        // One the provider no longer knows does not count either.
+        provided["dave"] = setOf(RoleId("approver"))
+        val gone = changes.get(lost.id)
+        changes.approve(dave, lost.id, gone.candidate!!)
+        provided.remove("dave")
         changes.publish(alice, lost.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
     }
 

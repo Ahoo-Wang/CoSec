@@ -17,6 +17,9 @@ package me.ahoo.cosec.control.change
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.store.AppList
@@ -103,6 +106,53 @@ class ChangesB2Test {
         narrows(Operation.RemovePolicy(PolicyId("reads"))).assert().isFalse()
         narrows(Operation.RemoveBinding(BindingId("reads")), Operation.PutPolicy(allow("more"))).assert().isFalse()
         narrows().assert().isFalse()
+        // A base to narrow is needed, and new entries are DENYs that bind nobody's break-glass.
+        runBlocking { Narrowing.only(null, base, listOf(Operation.RemoveBinding(BindingId("reads")))) { null } }
+            .assert().isFalse()
+        narrows(
+            Operation.PutPolicy(PolicyDefinition(PolicyId("fence"), false, null, deny("x").statements, boundary = true))
+        )
+            .assert().isFalse()
+        narrows(Operation.PutPolicy(PolicyDefinition(PolicyId("none"), false, null, emptyList()))).assert().isFalse()
+        narrows(Operation.PutPolicy(allow("reads"))).assert().isFalse()
+        val glass = Binding(
+            BindingId("g"),
+            SubjectRef.Anyone,
+            BindingScope(Match.Any, Match.Any),
+            BuiltinPolicies.BLACKLIST,
+            breakGlass = true
+        )
+        narrows(Operation.PutBinding(glass)).assert().isFalse()
+    }
+
+    /** The policy a removed binding names may be a built-in's or another document's: ALLOWs only narrow there too. */
+    @Test
+    fun `a removed binding of a built-in or another document's policy narrows when it only allows`() = runBlocking<Unit> {
+        val elsewhere = StoreFixtures.candidate(
+            ACME,
+            emptyList(),
+            listOf(
+                binding("admins", BuiltinPolicies.TENANT_ADMIN),
+                binding("root", BuiltinPolicies.ROOT),
+                binding("shared", PolicyId("shared")),
+                binding("shared-deny", PolicyId("shared-deny")),
+                binding("ghost", PolicyId("ghost")),
+            ),
+        )
+        val others = mapOf(PolicyId("shared") to allow("shared"), PolicyId("shared-deny") to deny("shared-deny"))
+        suspend fun removes(id: String) = Narrowing.only(
+            elsewhere,
+            elsewhere,
+            listOf(Operation.RemoveBinding(BindingId(id)))
+        ) {
+            others[it]
+        }
+        removes("admins").assert().isTrue()
+        removes("root").assert().isTrue()
+        removes("shared").assert().isTrue()
+        removes("shared-deny").assert().isFalse()
+        removes("ghost").assert().isFalse()
+        removes("missing").assert().isFalse()
     }
 
     private suspend fun publish(key: SnapshotKey, vararg operations: Operation) {
@@ -175,6 +225,146 @@ class ChangesB2Test {
     }
 
     private val counter = AtomicInteger()
+
+    /** A tenant change in its shadow window, holding acme's slot. */
+    private suspend fun holdingAcme(changes: Changes = this.changes): ChangeRequest {
+        val head = harness.revisions.head(ACME)!!.revision
+        val change = changes.propose(PLATO, ACME, head, listOf(Operation.PutPolicy(allow("acme-slow"))), "slow")
+        return changes.stage(PLATO, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }
+    }
+
+    /** RC1-12: removing a tenant's binding of the platform's or an app's policy of ALLOWs takes a busy slot. */
+    @Test
+    fun `removing a binding of another document's allow takes a busy slot`() = runBlocking<Unit> {
+        publish(SnapshotKey.Platform, Operation.PutPolicy(allow("shared")))
+        publish(SnapshotKey.App("order"), Operation.PutPolicy(allow("perm:order/read")))
+        publish(
+            ACME,
+            Operation.PutBinding(binding("uses-shared", PolicyId("shared"))),
+            Operation.PutBinding(
+                Binding(
+                    BindingId("uses-perm"),
+                    SubjectRef.Anyone,
+                    BindingScope(Match.Exactly(me.ahoo.cosec.model.AppId("order")), Match.Any),
+                    PolicyId("perm:order/read")
+                )
+            ),
+        )
+        for (removed in listOf("uses-shared", "uses-perm")) {
+            val held = holdingAcme()
+            val head = harness.revisions.head(ACME)!!.revision
+            val removal = changes.propose(
+                PLATO,
+                ACME,
+                head,
+                listOf(Operation.RemoveBinding(BindingId(removed))),
+                removed
+            )
+            changes.skipShadow(
+                PLATO,
+                removal.id,
+                "incident"
+            ).state.assert().describedAs(removed).isEqualTo(ChangeState.READY)
+            changes.get(held.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+            changes.publish(PLATO, removal.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        }
+    }
+
+    /** A holder that cannot be marked conflicted still loses the slot: it cannot publish over the change that took it. */
+    @Test
+    fun `a holder that cannot be marked conflicted still loses its slot`() = runBlocking<Unit> {
+        publish(SnapshotKey.Platform, Operation.PutPolicy(allow("reads")))
+        val store = object : ControlStore by harness.memory {
+            override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+                check(change.state != ChangeState.CONFLICTED) { "Redis is down" }
+                return harness.memory.putChange(expected, change)
+            }
+        }
+        val flaky = Changes(
+            store,
+            Revisions(store, harness.clock),
+            { ChangeId("h${counter.incrementAndGet()}") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW)
+        )
+        val held = holding(flaky)
+        val head = harness.revisions.head(SnapshotKey.Platform)!!.revision
+        val ban = listOf(Operation.PutPolicy(deny("ban")), Operation.PutBinding(binding("ban", PolicyId("ban"))))
+        val emergency = flaky.propose(PLATO, SnapshotKey.Platform, head, ban, "ban")
+        flaky.skipShadow(PLATO, emergency.id, "incident").state.assert().isEqualTo(ChangeState.READY)
+        flaky.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        flaky.get(held.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+    }
+
+    /** References a publish finds at its write, added since its last check, leave the change a draft with them. */
+    @Test
+    fun `a publish that meets new references at its write is a draft`() = runBlocking<Unit> {
+        publish(SnapshotKey.Platform, Operation.PutPolicy(allow("shared")))
+        val added = java.util.concurrent.atomic.AtomicBoolean()
+        val meanwhile = object : ChangeListener {
+            override val name = "meanwhile"
+            override val delivery = me.ahoo.cosec.runtime.event.Delivery.REQUIRED
+
+            override suspend fun onChange(event: ChangeEvent) {
+                if (event.kind == ChangeEvent.Kind.PUBLISHING && added.compareAndSet(false, true)) {
+                    val tenant = StoreFixtures.candidate(
+                        ACME,
+                        emptyList(),
+                        listOf(binding("uses-shared", PolicyId("shared")))
+                    )
+                    harness.revisions.publish(ACME, null, tenant, StoreFixtures.publication())
+                }
+            }
+        }
+        val audit = ChangeListeners(listOf(meanwhile))
+        val listened = Changes(
+            harness.memory,
+            harness.revisions,
+            { ChangeId("r${counter.incrementAndGet()}") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            listeners = audit,
+        )
+        val head = harness.revisions.head(SnapshotKey.Platform)!!.revision
+        val drop = listened.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head,
+            listOf(Operation.RemovePolicy(PolicyId("shared"))),
+            "drop"
+        )
+        listened.skipShadow(PLATO, drop.id, "test")
+        val published = listened.publish(PLATO, drop.id)
+        published.state.assert().isEqualTo(ChangeState.DRAFT)
+        published.findings.map { it.check }.assert().contains("REFERENCES")
+        harness.revisions.head(SnapshotKey.Platform)!!.document.policies.map { it.id.value }.assert().contains("shared")
+        audit.cancel()
+    }
+
+    /** RC1-11: the approver's credential reads back as it was stored. */
+    @Test
+    fun `an approval's credential reads back as it was stored`() = runBlocking<Unit> {
+        val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("acme-reads"))), "reads")
+        val approval = Approval(
+            PLATO.actor,
+            java.time.Instant.parse("2026-11-01T00:00:00Z"),
+            change.candidate!!,
+            emptyList(),
+            me.ahoo.cosec.model.Memberships(me.ahoo.cosec.model.Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+            credentialId = "t1",
+            issuedAt = java.time.Instant.parse("2026-10-31T23:00:00Z"),
+        )
+        val stored = change.copy(approval = approval)
+        val read = ChangeRequestCodec.decode(ChangeRequestCodec.encode(stored)).approval!!
+        read.credentialId.assert().isEqualTo("t1")
+        read.issuedAt.assert().isEqualTo(approval.issuedAt)
+        ChangeRequestCodec.decode(
+            ChangeRequestCodec.encode(change.copy(approval = approval.copy(credentialId = null, issuedAt = null)))
+        )
+            .approval!!.credentialId.assert().isNull()
+    }
 
     /**
      * B1 review: a publish that wrote the head and could not settle the change leaves it READY; publishing it again finds
