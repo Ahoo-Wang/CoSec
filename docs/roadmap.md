@@ -216,25 +216,27 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1172、#1173 | 未知属性检查忽略 Kubernetes 服务链接变量 | ✅ 已合入 |
 | v8.0.0-alpha.2 | 预览版，不承诺兼容性（#1174）：GitHub prerelease、Maven Central（含 `cosec-cosid`）、GitHub Packages、Docker 只推 `8.0.0-alpha.2`；发布后 `main` 保持 `8.0.0-alpha.2`，不回到 SNAPSHOT（维护者 2026-10-29） | ✅ 2026-10-29 发布 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：RC 修复批次 B（授出分析与控制面，RC1-2/3/4 高危）→ 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：RC 修复批次 B，拆成 B1（授出分析的健全性，含 RC1-2/3/4 高危）与 B2（信任根、审批、break-glass、变更审计），同一个实现会话依次做，B1 于 2026-10-30 派发 → 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
 - **百万例 `property-stress.yml` 在 `main` 上全部通过**：`model`、`engine`、`runtime`、`control`（[40628433863](https://github.com/Ahoo-Wang/CoSec/actions/runs/40628433863)），`cosec-core`（#1111 之后重跑，[40635399876](https://github.com/Ahoo-Wang/CoSec/actions/runs/40635399876)）。S1b 的证据在它自己的最终 head 上再跑一次。
 - #1108（`fix(runtime)`，N3 重新编译覆盖加载中的槽位，审查发现 S4）：按旧平台编译的加载不安装，无法重新编译即 fail closed 并按退避重试；新规则 `SNP-4`（`pending`，S1b 把它移到 `timing`）；变异体拆成 4 个，全部被杀死。已合入。
-- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。S2–S4 的删除 PR 已合入（#1114，见 §6）。S5 文档进行中，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
+- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。S2–S4 的删除 PR 已合入（#1114，见 §6）。S5 文档（#1131）、RFC 0008 PR-5/PR-6 与 RC 安全审查第 1 轮均已完成。
 - 后续项（#1114 审查）：`SnapshotConsistencyPropertyTest`（SNP-1）的视图由测试内的副本拼装，补一个经生产 `DocumentSnapshotViews`、在并发重新发布下的 runtime 级变体；`migrate/` 改用不需要匹配器的读取器，去掉 `OgnlSandbox` 与 `ognl`（L8 余项）。
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。**2026-10-29 第二次失败**（#1162 的 CI，该 PR 只改 node 版本）：`Expecting empty but was: [platform]`，即等待期内 `platform` 键的失效通知没有送达。按本条规则升级：RC 批次 D 优先调查失效通知是否会丢（CoCache 6 的发布与订阅、重连期间、多实例），而不是重跑了事；结论与修复写进 `docs/security/8.0-rc-review.md`。
 - 观察项（RC 批次 D，2026-10-29）：`SnapshotStoreBlockHoundTest#aColdLoadOverTheStoreNeverBlocksTheCaller` 在 #1164 的 CI 上失败一次（main 最近 15 次全绿，#1164 未改 `cocache`）。阻塞点在 Lettuce 内部：并发冷加载时 `DefaultEndpoint.write` → `SharedLock.incrementWriters` 的 `ReentrantLock` 在争用下 park（经 `MaintenanceAwareExpiryWriter`、CoCache 的 `RedisRemoteStore.readAsync`）。要查清：是 Lettuce 维护通知（maintenance events）等路径持有独占锁时的真实短暂阻塞，还是测试的并发方式造成；据此决定关闭该特性、预热连接，或按 Lettuce 自己的 BlockHound 集成放行 `SharedLock` 并写明理由。不得为了变绿而放宽守护。
+- 观察项（RC 批次 D，#1181 审查，2026-10-30）：CoCache 的条件读（`getIfChanged`）在 Redis 的 Lua 中对整份存储值做 `sha1hex` 来比较摘要；数据面 `SnapshotSource` 的条件重新验证也走它（`RedisSnapshotDocumentStore.readIfChanged`），所以每次重新验证的 Redis 线程时间与文档大小成正比（1 MB 文档量级为毫秒）。批次 D 量化它；可请 CoCache 会话把摘要存进值的头部，使条件读与大小无关（CoCache 新版本是运行时依赖升级，需维护者确认）。
+- 后续项（#1181 审查）：控制面 API 没有按租户的速率限制，租户管理员可以循环调用 propose 等昂贵操作，归入批次 D 评估；控制面的单一文档列表 `<p>:control:list:documents` 随租户数增长、回收任务每轮整份读取，换成不需要整份读取的结构。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
-- 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。
+- 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。归入 RC 批次 D（2026-10-30）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - 后续项（CI，2026-10-29）：main 上的 Docker 作业推送阿里云镜像仓库时多次挂住，撞上 30 分钟超时（ghcr 几秒完成），连带 AOT 冒烟被跳过。把阿里云镜像同步拆成单独的非阻塞作业（在 ghcr 推送与 AOT 冒烟之后，失败不影响 main 的状态）。
 - RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
 - RC 前（Wow 的导入清单，2026-10-29）：Wow 用到的生产面（`SecurityContext`、`SecurityScope`、`CoSecPrincipal`、WebFlux 的上下文读取、`AuthorizationChecker`、`RouteMap` 与 `RouteMapCodec`、`CoSecParameters`、starter 的属性键）保持公开并有文档；测试面用到的内部类型（`PipelineComponents`、`SuspendingSnapshotSource`、`engine.flat.*`）在归类时多半转为 `@InternalCoSecApi`，在此之前 `cosec-testkit` 提供公开的夹具（从文档构建真实 Pipeline，给出 `evaluate` 与已放行的 `SecurityContext`，`@ExperimentalCoSecApi`）。
 - RC 前（Wow 集成时遇到的问题，2026-10-29）：`cosec-migrate` 的发行包（`application` 插件的 `distZip`）作为 release 资产发布，并写明以 Kubernetes Job 运行；手写文档的播种走 `bootstrap` 加控制面 `apply`（不给 `publish` 加 `--no-report`：报告证明字节的来源），文档给出这条路径；`HostScope` 的按路由 app 即 RC1-6（批次 C）；macOS 上 Lettuce 的 kqueue 扩展 keepalive 启动失败写进排障；网关镜像的内存预期（堆、直接内存、ZGC）写进运维文档，并在批次 C 重新评估 512M 直接内存的默认值。`CoSec-Identity` v1 的字节视为稳定：任何改动都升 `v`。
 - ✅ alpha.2 前（已完成）：未知 `cosec.*` 属性检查忽略 Kubernetes 服务链接变量（#1172、#1173）；`k8s/` 清单 `enableServiceLinks: false` 与显式的 JVM 内存参数（#1167）。
-- **alpha.2 的内容**：RC 修复批次 A（#1164）、Java 21 基线、CoSec 自己的 `IdGenerator` 与 `cosec-cosid`（CosId 5.0.0-alpha.2）、`AuthorizationChecker` 返回决定、上面的 Kubernetes 启动修复。发布等维护者确认。
+- **alpha.2 的内容**：RC 修复批次 A（#1164）、Java 21 基线、CoSec 自己的 `IdGenerator` 与 `cosec-cosid`（CosId 5.0.0-alpha.2）、`AuthorizationChecker` 返回决定、上面的 Kubernetes 启动修复。已于 2026-10-29 发布（#1174）。
 - #1106、#1107 草稿只作保存，不合入。
 - 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
@@ -291,13 +293,19 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **CoSec 8.0 的基线升到 Java 21**（7.x 不变）：全部模块按 Java 21 编译，CI 与发布用 JDK 21；CosId 5 只支持 Java 21，`cosec-cosid` 因此是普通模块，RFC 0011 D2 不需要例外。破坏性变更，写进 `upgrading.md` | 2026-10-29 | 维护者："CoSec 基线升级到 JAVA 21 吧。" |
 | **`AuthorizationChecker` 返回决定**（RC 前）：与 `check` 同语义，`check` 即"决定为 Permit"；决定只到进程内的宿主代码，不进响应体 | 2026-10-29 | Wow 的请求 |
 | **网关身份转发改为按 scheme 选择加入**（RC1-49）：默认只转发给 `lb://` 路由，其他路由须写 `cosec-identity: true`；网关主机上暴露非 health 的 actuator 端点时启动失败（RC1-48） | 2026-10-29 | [RC 审查](security/8.0-rc-review.md) 的建议 |
+| **RC 审查的发现公开修复**（alpha 是预览版）；7.x 的缺陷只登记不修，7.x 中可被外部利用的漏洞只私下报告给维护者，不开公开 issue 或 PR | 2026-10-29 | 维护者："Fix in public"；[RC 审查](security/8.0-rc-review.md) |
+| **发布 alpha 之后 `main` 保持该 alpha 版本号**，不回到 SNAPSHOT（alpha.2 起） | 2026-10-29 | [RFC 0001 §6](rfc/0001-target-architecture.md) 修订 |
+| **RC 修复批次 B 拆成 B1（授出分析的健全性）与 B2（信任根、审批、break-glass、变更审计）**，同一个实现会话依次做；RC1-2、4、9、12、27、29、33、35、37 按协调者建议的修法，RC1-28 在 8.0 只写文档；非数组 `roles`/`policies` 声明的 500 归入批次 D | 2026-10-30 | [RFC 0007](rfc/0007-control-plane.md) 修订、[RC 审查](security/8.0-rc-review.md) 的 Fix plan；维护者："按建议派发" |
+| **RC1-33 不做多键原子写**（Redis Cluster 上不可行）：发布仍只比较并交换目标头，时间窗写进文档，写后重读分析用过的头，有变化就重新分析并写审计事件，不回滚。同日协调者按 B1 的发现调整 RC1-4（经 `documents()` 读全部 app 文档）与 RC1-9 后一半（租户自有 id 进现有索引，升级后 `repair-references`） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订；维护者："文档加写后检测" |
+| **CoCache 是一方库**：CoSec 需要的存储能力（条件写、失效通知的可靠性等）缺失时，请 CoCache 会话在 CoCache 中实现，不在 CoSec 里绕过 CoCache（RFC 0007 §5.2）。批次 D 调查失效通知丢失与 Lettuce `SharedLock` 时，修复可以落在 CoCache | 2026-10-30 | 仅记在本文；维护者："CoCache 是一方库，是我们自己维护的，需要的话可以让 CoCache 会话增加特性。" |
+| **RC1-4 再调整**（#1181 的独立审查，协调者决定）：授出分析不再读单一文档列表（丢失时 fail open；每次租户变更在 Redis 中哈希 5.2 MB，可被租户管理员循环触发），改读 `ControlStore` 中只列 app 的小列表，带 `complete` 标志；缺失、未完成或不可信即 UNKNOWN，升级后跑 `repair-references` 之前覆盖所有 app 的租户授出需要审批 | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan、[RFC 0007](rfc/0007-control-plane.md) 修订 |
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-28 起的顺序**：RFC 0008 PR-5（死代码清理，扩大范围）→ [RFC 0010](rfc/0010-ga-extension-points.md) 的 C1–C3（一个 PR）→ [RFC 0011](rfc/0011-module-architecture.md) PR-1、PR-2 → [RFC 0009](rfc/0009-identity-and-credentials.md) PR-1、PR-3（PR-2 移到 8.1）→ RFC 0008 PR-6 → RFC 0011 PR-3（RC 前）→ RC 前提。
+- **2026-10-30 起的顺序**：RC 修复批次 B1 → B2 → C（网关）→ D（DoS、快照、泄露；先查清快照失效通知会不会丢，以及 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
-- 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0005 PR-5（#1079）、RFC 0006 PR-5（#1078）的第 1 轮，RFC 0007 PR-3 至 PR-9 的第 1 轮（#1095 已修复 PR-4 至 PR-9 的第 1 轮发现，其中 K1 为高危），之前合入、只做过第 1 轮的 PR 的第 2 轮，#1097 的审查；各表中"—"表示尚无已合入的修复 PR。
+- （已由 2026-10-29 的决定取代：不再逐个补做已合入 PR 的两轮审查，改为对 RC 候选提交做两轮整体审查，见 [RFC 0008 §3.9](rfc/0008-conformance-and-direct-build.md) 修订。）
