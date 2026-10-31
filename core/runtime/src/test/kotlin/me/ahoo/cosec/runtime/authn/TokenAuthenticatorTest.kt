@@ -151,10 +151,25 @@ class TokenAuthenticatorTest {
         val own = TokenAuthenticator(OwnVerifier(mapOf("t" to { token() }))).authenticate(Credentials("t", null))
         own.principal().breakGlass.assert().isTrue()
         own.principal().credential!!.method.assert().isEqualTo(Identity.Method.JWT)
+        own.principal().apiKey.assert().isFalse()
         val other = authenticate({ token() }).principal()
         other.breakGlass.assert().isFalse()
         other.credential!!.method.assert().isEqualTo(Identity.Method(TokenAuthenticator.METHOD))
         AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), null).breakGlass.assert().isFalse()
+        // Review M2: a credential named api-key is an API key, whoever made it (a gateway's forwarded identity): fail
+        // closed. Another name is not.
+        AuthenticatedPrincipal(
+            PrincipalId("svc"),
+            TenantId("acme"),
+            null,
+            credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+        ).apiKey.assert().isTrue()
+        AuthenticatedPrincipal(
+            PrincipalId("alice"),
+            TenantId("acme"),
+            null,
+            credential = Identity.Credential(Identity.Method("ldap"), "s1", null),
+        ).apiKey.assert().isFalse()
         AuthenticatedPrincipal(
             PrincipalId("alice"),
             TenantId("acme"),

@@ -165,9 +165,19 @@ class ApprovalB2Test {
             )
             bootstrap(
                 TENANT,
-                listOf(allow("orders", action = "order:*", resource = "order/**")),
+                listOf(
+                    allow("orders", action = "order:*", resource = "order/**"),
+                    // A suspended approver approves nothing.
+                    PolicyDefinition(
+                        PolicyId("no-approve"),
+                        false,
+                        null,
+                        listOf(StatementSource("", Effect.DENY, listOf("cosec:approve"), listOf(ResourceSource("doc/**")))),
+                    ),
+                ),
                 listOf(
                     control("admins", SubjectRef.Role(ACME, RoleId("admin")), BuiltinPolicies.TENANT_ADMIN),
+                    control("suspended", SubjectRef.Role(ACME, RoleId("suspended")), PolicyId("no-approve")),
                     control("approvers", SubjectRef.Role(ACME, RoleId("approver")), PolicyId("acme-approver")),
                     Binding(
                         BindingId("ops"),
@@ -240,6 +250,7 @@ class ApprovalB2Test {
                 Identity.Credential(Identity.Method("oidc"), jti, null),
                 breakGlass = false,
                 issuedAt = issuedAt,
+                apiKeyCredential = false,
             )
         )
 
@@ -287,6 +298,48 @@ class ApprovalB2Test {
         )
         refused { changes.approve(key, change.id, change.candidate!!) }.assert().isEqualTo(403)
         changes.approve(pia, change.id, change.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+    }
+
+    /**
+     * Review M2: an API key is never the trust root, though its principal holds `cosec:platform-admin`: so CoSec's API
+     * key authenticator says, by provenance, whatever the method is called, and so does a forwarded identity that
+     * carries the reserved method name (fail closed). Its platform change waits for a person, and it approves nothing.
+     */
+    @Test
+    fun `an API key is never the trust root - review M2`() = runBlocking<Unit> {
+        val platform = listOf(Operation.PutPolicy(allow("keys", action = "order:read", resource = "order/**")))
+        changes.propose(pia, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a person")
+            .escalations.assert().isEmpty()
+        val byProvenance = engine.operator(
+            AuthenticatedPrincipal(
+                PrincipalId("pia"),
+                TenantId.PLATFORM,
+                MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
+                emptyMap(),
+                Identity.Credential(Identity.Method("service-key"), "key-2", null),
+                breakGlass = false,
+                issuedAt = null,
+                apiKeyCredential = true,
+            )
+        )
+        val byName = engine.operator(
+            AuthenticatedPrincipal(
+                PrincipalId("pia"),
+                TenantId.PLATFORM,
+                Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+                credential = Identity.Credential(Identity.Method.API_KEY, "key-1", null),
+            )
+        )
+        for (key in listOf(byProvenance, byName)) {
+            val change = changes.propose(key, SnapshotKey.Platform, head(SnapshotKey.Platform), platform, "a key")
+            change.escalations.map { it.reason }.assert().containsExactly("NOT_ANALYZED")
+            changes.stage(key, change.id)
+            val waiting = changes.shadowed(change.id)
+            waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+            refused { changes.publish(key, change.id) }.assert().isEqualTo(409)
+            refused { changes.approve(byProvenance, change.id, waiting.candidate!!) }.assert().isEqualTo(403)
+            changes.abandon(key, change.id)
+        }
     }
 
     /** RC1-11: the approval records its token's id and `iat`; a revocation since takes it back. */
@@ -342,6 +395,16 @@ class ApprovalB2Test {
         changes.approve(dave, lost.id, gone.candidate!!)
         provided.remove("dave")
         changes.publish(alice, lost.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        changes.abandon(alice, lost.id)
+
+        // A role gained since counts for its DENYs: suspended, dave approves nothing (deny-first).
+        provided["dave"] = setOf(RoleId("approver"))
+        val suspended = awaiting("viewers-suspended")
+        changes.approve(dave, suspended.id, suspended.candidate!!)
+        provided["dave"] = setOf(RoleId("approver"), RoleId("suspended"))
+        changes.publish(alice, suspended.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        changes.abandon(alice, suspended.id)
+
     }
 
     private companion object {

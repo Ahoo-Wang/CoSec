@@ -129,10 +129,11 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      *
      * Whether the principal still stands is asked again, though: a principal whose memberships come from the
      * membership provider and which it no longer knows, or knows as deactivated, is denied (RFC 0009 §4.2), and one it
-     * cannot answer for is indeterminate. For such a principal the decision is on what the provider answers now, held
-     * to what was recorded (RC1-11): a role counts only if it held it then and holds it now, so a role it lost does not
-     * count and one it gained does not either; the policies attached to it are the provider's current ones, so a DENY
-     * attached since applies. A principal of claimed memberships stands until its token expires.
+     * cannot answer for is indeterminate. For such a principal it is decided twice, and both must permit (RC1-11): once
+     * on the roles it held then and holds now, with the policies attached to it now, so a role it gained grants it
+     * nothing it did not approve with; and once on everything the provider answers now, so a DENY bound to a role it
+     * gained since, a `suspended` role say, still applies. A principal of claimed memberships stands until its token
+     * expires.
      */
     suspend fun decideAs(
         security: RequestSecurity,
@@ -145,20 +146,33 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         if (!memberships.active) {
             return Decision.Deny(null)
         }
-        val decided = if (principal.membershipSource is MembershipSource.Provider) {
-            val now = try {
-                pipeline.currentMemberships(principal)
-            } catch (e: MembershipUnavailableException) {
-                return Decision.Indeterminate(Cause.MembershipUnavailable(e))
-            }
-            if (now == null || !now.active) {
-                return Decision.Deny(null)
-            }
-            heldThenAndNow(memberships, now)
-        } else {
-            memberships
+        if (principal.membershipSource !is MembershipSource.Provider) {
+            return decideOn(security, principal, memberships, app, action, resource)
         }
-        val recorded = security.asPrincipal(principal, decided) ?: return Decision.Deny(null)
+        val now = try {
+            pipeline.currentMemberships(principal)
+        } catch (e: MembershipUnavailableException) {
+            return Decision.Indeterminate(Cause.MembershipUnavailable(e))
+        }
+        if (now == null || !now.active) {
+            return Decision.Deny(null)
+        }
+        val held = decideOn(security, principal, heldThenAndNow(memberships, now), app, action, resource)
+        if (held !is Decision.Permit) {
+            return held
+        }
+        return decideOn(security, principal, now, app, action, resource)
+    }
+
+    private suspend fun decideOn(
+        security: RequestSecurity,
+        principal: AuthenticatedPrincipal,
+        memberships: Memberships,
+        app: AppId,
+        action: Action,
+        resource: Resource,
+    ): Decision {
+        val recorded = security.asPrincipal(principal, memberships) ?: return Decision.Deny(null)
         return decide(recorded, app, action, resource)
     }
 

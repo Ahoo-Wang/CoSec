@@ -270,9 +270,12 @@ class ChangesB2Test {
         }
     }
 
-    /** A holder that cannot be marked conflicted still loses the slot: it cannot publish over the change that took it. */
+    /**
+     * Review M3: a holder that cannot be marked conflicted keeps its slot, and the preemption is given up (503): a change
+     * that still stages never loses its slot, so it never publishes over the change that would have taken it.
+     */
     @Test
-    fun `a holder that cannot be marked conflicted still loses its slot`() = runBlocking<Unit> {
+    fun `a holder that cannot be marked conflicted keeps its slot`() = runBlocking<Unit> {
         publish(SnapshotKey.Platform, Operation.PutPolicy(allow("reads")))
         val store = object : ControlStore by harness.memory {
             override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
@@ -292,9 +295,12 @@ class ChangesB2Test {
         val head = harness.revisions.head(SnapshotKey.Platform)!!.revision
         val ban = listOf(Operation.PutPolicy(deny("ban")), Operation.PutBinding(binding("ban", PolicyId("ban"))))
         val emergency = flaky.propose(PLATO, SnapshotKey.Platform, head, ban, "ban")
-        flaky.skipShadow(PLATO, emergency.id, "incident").state.assert().isEqualTo(ChangeState.READY)
-        flaky.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        refused { flaky.skipShadow(PLATO, emergency.id, "incident") }.assert().isEqualTo(503)
+        flaky.get(emergency.id).state.assert().isEqualTo(ChangeState.CHECKED)
         flaky.get(held.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        harness.memory.stage(SnapshotKey.Platform)!!.value.holder.assert().isEqualTo(held.id)
+        flaky.shadowed(held.id).state.assert().isEqualTo(ChangeState.READY)
+        flaky.publish(PLATO, held.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
     }
 
     /** References a publish finds at its write, added since its last check, leave the change a draft with them. */

@@ -190,6 +190,9 @@ class ChangeAuthority(
         }
     }
 
+    /** Whether an API key authenticated [operator], by provenance or by a credential of that name (fail closed). */
+    private fun apiKey(operator: Operator): Boolean = operator.security?.principal?.apiKey == true
+
     /**
      * `cosec:boundary` on [key]'s boundary. A tenant's boundary is the platform's ceiling on it (RFC 0007 §9.1): never a
      * tenant principal's to move, whatever it holds (RC1-10).
@@ -207,8 +210,7 @@ class ChangeAuthority(
      * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10).
      */
     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
-        operator.security?.principal?.credential?.method == Identity.Method.API_KEY ->
-            "an API key cannot approve: an approval is a person's"
+        apiKey(operator) -> "an API key cannot approve: an approval is a person's"
 
         !operator.platform && change.operations.any { it is Operation.SetBoundary } ->
             "only a platform principal approves a boundary change"
@@ -233,8 +235,8 @@ class ChangeAuthority(
         val escalations = ArrayList<Escalation>()
         breakGlass(base, candidate, escalations)
         // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
-        // its own document approves others' changes, and its own are analyzed (RC1-10).
-        val trustRoot = operator.platform && holds(operator, key, ControlActions.APPROVE)
+        // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never an API key.
+        val trustRoot = operator.platform && !apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
         if (trustRoot && !options.fourEyes) {
             return escalations
         }
@@ -494,19 +496,22 @@ class ChangeAuthority(
             MembershipSource.Claims(memberships)
         }
         // Under the terms it approved with (review N3): a capped credential's principal bindings, and break-glass for
-        // anything but CoSec's own token, do not count now either. The credential is rebuilt only for those two facts.
+        // anything but CoSec's own token, do not count now either. The credential is rebuilt only for those two facts,
+        // under a method of its own: an API key never approved (approvalRefusal).
         val principal = AuthenticatedPrincipal(
             approval.approver.principal,
             approval.approver.tenant,
             source,
             approval.attributes,
             Identity.Credential(
-                if (approval.breakGlass) Identity.Method.JWT else Identity.Method.API_KEY,
+                if (approval.breakGlass) Identity.Method.JWT else RECORDED_METHOD,
                 RECORDED_APPROVAL,
                 null,
                 capped = !approval.principalBindings,
             ),
             breakGlass = approval.breakGlass,
+            issuedAt = approval.issuedAt,
+            apiKeyCredential = false,
         )
         val approver = Operator(approval.approver, memberships, approval.attributes)
         val permitted = TenantIsolation.allows(approver, change.key) &&
@@ -603,6 +608,7 @@ class ChangeAuthority(
 
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
         const val RECORDED_APPROVAL = "recorded-approval"
+        private val RECORDED_METHOD = Identity.Method(RECORDED_APPROVAL)
         const val FORBIDDEN = 403
         const val UNAVAILABLE = 503
         const val POLICY = "policy"

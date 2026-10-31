@@ -106,9 +106,12 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     /**
      * When the credential was issued (a token's `iat`), so that a later revocation of the principal's tokens can be told
      * apart from an earlier one: CoSec's token authenticator sets it, an approval records it with the credential's id
-     * (RC1-11). Null when the credential does not say, which a revocation of the principal's tokens takes as revoked.
+     * (RC1-11). Null when the credential does not say, which a revocation of the principal's tokens takes as revoked:
+     * an approval by such a principal is taken back by any revocation of its tokens.
      */
-    val issuedAt: Instant? = null,
+    val issuedAt: Instant?,
+    /** Set by CoSec's API key authenticator: by provenance, as [breakGlass] ([apiKey]). */
+    private val apiKeyCredential: Boolean,
 ) {
     init {
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {
@@ -125,7 +128,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         membershipSource: MembershipSource,
         attributes: Map<String, Any> = emptyMap(),
         credential: Identity.Credential? = null,
-    ) : this(id, tenant, membershipSource, attributes, credential, breakGlass = false)
+    ) : this(id, tenant, membershipSource, attributes, credential, breakGlass = false, issuedAt = null, apiKeyCredential = false)
 
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
@@ -145,7 +148,17 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         attributes,
         credential,
         breakGlass = false,
+        issuedAt = null,
+        apiKeyCredential = false,
     )
+
+    /**
+     * Whether an API key proved the principal, a workload's credential: so CoSec's API key authenticator says, by
+     * provenance, and so does any credential named [Identity.Method.API_KEY], a gateway's forwarded identity among them
+     * (fail closed). An API key never approves a change and is never the control plane's trust root (RC1-11); a host's
+     * own authenticator for workloads should not be given `cosec:approve` either.
+     */
+    val apiKey: Boolean get() = apiKeyCredential || credential?.method == Identity.Method.API_KEY
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships

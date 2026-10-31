@@ -537,6 +537,12 @@ class Changes(
         }
         val candidate = applied(change, head?.document).first!!
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
+        if (store.stage(change.key)?.value?.holder != change.id) {
+            // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). The
+            // head write is conditional on the base, not the slot: preempted after this, it still publishes, and the
+            // change that took the slot conflicts and is rebased on it, never written over it unseen.
+            return settle(change, ChangeState.CONFLICTED)
+        }
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
         var published: ChangeRequest? = null
         val outcome = revisions.publish(
@@ -774,44 +780,66 @@ class Changes(
         }
     }
 
-    /** Takes the slot of [change]'s document; a holder that no longer stages (finished, expired, gone) frees it. */
     /**
-     * Takes [change]'s document's staging slot for [operator]. A slot another change still holds is a 409, unless
-     * [change] may preempt it ([preempts]): the holder then becomes `CONFLICTED`, its candidate withdrawn (RC1-12).
+     * Takes [change]'s document's staging slot for [operator]; a holder that no longer stages (finished, expired, gone)
+     * frees it. A slot another change still holds is a 409, unless [change] may preempt it ([Preemption.preempts]): the
+     * holder is first made `CONFLICTED`, from whichever staged state it is in by then (approved or past its window
+     * meanwhile), and only then does the slot move and its candidate go (RC1-12). A holder that cannot be marked keeps
+     * its slot, and the preemption is given up (review M3): no change that still stages ever loses its slot.
      */
     private suspend fun takeSlot(operator: Operator, change: ChangeRequest, head: Head?) {
-        repeat(MAX_ATTEMPTS) {
-            val current = store.stage(change.key)
-            val holder = current?.value?.holder
-            if (holder == change.id) {
-                return
+        val conflicted = ArrayList<ChangeRequest>()
+        try {
+            repeat(MAX_ATTEMPTS) {
+                val current = store.stage(change.key)
+                val holder = current?.value?.holder
+                if (holder == change.id) {
+                    return
+                }
+                val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
+                if (held != null) {
+                    if (!preemption.preempts(operator, change, head)) {
+                        throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
+                    }
+                    conflicted += conflict(held, change)
+                }
+                if (store.putStage(change.key, current?.digest, StageSlot(change.id, clock.instant()))) {
+                    return
+                }
             }
-            val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
-            if (held != null && !preemption.preempts(operator, change, head)) {
-                throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
-            }
-            if (store.putStage(change.key, current?.digest, StageSlot(change.id, clock.instant()))) {
-                held?.let { preempted(it, change, operator) }
-                return
-            }
+            throw ChangeRejectedException(CONFLICT, "the staging slot of [${change.key}] kept changing")
+        } finally {
+            conflicted.forEach { preempted(it, change, operator) }
         }
-        throw ChangeRejectedException(CONFLICT, "the staging slot of [${change.key}] kept changing")
     }
 
-    /** [held] loses its slot to [by]: `CONFLICTED`, its candidate withdrawn, and recorded as a failure. */
+    /** [held] made `CONFLICTED` for [by] from any staged state, before its slot moves; 409 or 503 when it cannot be. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun preempted(held: ChangeRequest, by: ChangeRequest, operator: Operator) {
+    private suspend fun conflict(held: ChangeRequest, by: ChangeRequest): ChangeRequest = try {
+        transition(held.id, STAGED) { it.copy(state = ChangeState.CONFLICTED) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ChangeRejectedException) {
+        throw ChangeRejectedException(
+            CONFLICT,
+            "[${by.key}] is staged by change ${held.id.value}, which could not be preempted: ${e.message}",
+            e
+        )
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "change ${held.id.value} could not be preempted", e)
+    }
+
+    /** [conflicted] lost its slot to [by]: its candidate withdrawn, and recorded as a failure. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun preempted(conflicted: ChangeRequest, by: ChangeRequest, operator: Operator) {
         try {
-            val conflicted = transition(held.id, setOf(held.state)) { it.copy(state = ChangeState.CONFLICTED) }
             withdraw(conflicted)
             audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = "preempted by ${by.id.value}"), operator.actor)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // The slot is taken: the holder cannot publish over the change that took it, whose base it would move.
-            log.warn(
-                e
-            ) { "Change ${held.id.value} lost its slot to ${by.id.value} but could not be marked conflicted." }
+            // The holder is CONFLICTED already, so it publishes nothing: only the withdrawal or its record failed.
+            log.warn(e) { "Change ${conflicted.id.value} lost its slot to ${by.id.value}, unrecorded." }
         }
     }
 
@@ -847,5 +875,6 @@ class Changes(
         const val MAX_ATTEMPTS = 16
         const val APPROVAL = "APPROVAL"
         val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
+        val STAGED = ChangeState.entries.filter { it.staged }.toSet()
     }
 }

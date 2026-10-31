@@ -112,6 +112,8 @@ class BreakGlassAndShadowTest {
                 emptyMap(),
                 Identity.Credential(Identity.Method.JWT, "t1", null),
                 breakGlass = true,
+                issuedAt = null,
+                apiKeyCredential = false,
             ),
             "token"
         )

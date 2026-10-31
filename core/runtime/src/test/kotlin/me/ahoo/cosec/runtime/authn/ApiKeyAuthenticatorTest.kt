@@ -69,6 +69,8 @@ class ApiKeyAuthenticatorTest {
         principal.id.assert().isEqualTo(PrincipalId("svc-billing"))
         principal.tenant.assert().isEqualTo(TenantId("acme"))
         principal.attributes.assert().isEqualTo(mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "billing"))
+        // Review M2: an API key by provenance, so it never approves and is never the control plane's trust root.
+        principal.apiKey.assert().isTrue()
         // IDN-1: the key claims nothing; the provider answers, narrowed to the key's roles.
         principal.memberships.assert().isNull()
         val source = principal.membershipSource as MembershipSource.Provider
