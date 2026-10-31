@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-index eed12d74..d95101c7 100644
+index b84039b8..5f16a026 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -61,7 +61,7 @@ internal object Narrowing {
-             when (operation) {
-                 is Operation.RemoveBinding -> {
-                     val removed = base.bindings.firstOrNull { it.id == operation.id }
--                    removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
-+                    removed != null
-                 }
+@@ -70,7 +70,7 @@ internal object Narrowing {
+     ): Boolean = when (operation) {
+         is Operation.RemoveBinding -> {
+             val removed = base.bindings.firstOrNull { it.id == operation.id }
+-            removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
++            removed != null
+         }
  
-                 is Operation.PutPolicy -> !shadows(operation.policy.id) &&
+         is Operation.PutPolicy -> !shadows(operation.policy.id) &&
