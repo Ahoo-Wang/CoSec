@@ -3,14 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 91e67243..0c59c71f 100644
+index d9a59d36..5557c77c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -113,10 +113,6 @@ class Changes(
-          * stale is never trusted. One that fails throws, and the analysis takes the list as untrusted until the next.
+@@ -117,11 +117,6 @@ class Changes(
+          * last attempt is recent (review item 19): until one succeeds, not every analysis reads every document's key.
           */
          override suspend fun apps(): Versioned<AppList>? {
 -            if (!appsReconciled.get()) {
+-                check(reconcileAttempts.ready()) { "the app list is not reconciled on this instance yet" }
 -                revisions.reconcileApps(store.documents())
 -                appsReconciled.set(true)
 -            }

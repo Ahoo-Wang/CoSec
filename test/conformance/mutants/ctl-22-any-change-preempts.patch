@@ -3,15 +3,21 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-index 17b299a3..3e11987c 100644
+index eed12d74..61cdcd49 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -131,7 +131,7 @@ internal class Preemption(private val revisions: Revisions, private val authorit
+@@ -138,13 +138,7 @@ internal class Preemption(
              return false
          }
          val candidate = Operations.apply(change.key, head?.document, change.operations).candidate ?: return false
--        return Narrowing.only(head?.document, candidate, change.operations) { policy -> elsewhere(change.key, policy) }
+-        return Narrowing.only(
+-            head?.document,
+-            candidate,
+-            change.operations,
+-            policyOf = { policy -> elsewhere(change.key, policy) },
+-            shadows = { policy -> change.key is SnapshotKey.Tenant && defines(head, candidate, policy) && platform(policy) != null },
+-        )
 +        return candidate.owner == candidate.owner
      }
  
-     private fun revokesBreakGlass(change: ChangeRequest, head: Head?): Boolean {
+     /** Whether [change] only revokes break-glass bindings [head] has that still grant: an expired one grants nothing. */

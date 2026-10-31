@@ -3,12 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index a47b8f7e..4fd207e9 100644
+index f45a5ef8..a8f75d60 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -485,7 +485,6 @@ class ChangeAuthority(
-         if (approval.approver.tenant != TenantId.PLATFORM && change.operations.any { it is Operation.SetBoundary }) {
-             return "only a platform principal approves a boundary change"
+@@ -502,7 +502,6 @@ class ChangeAuthority(
+         if (approval.approver.tenant != TenantId.PLATFORM) {
+             approverTenantProblem(change)?.let { return it }
          }
 -        revoked(approval)?.let { return it }
          // As the approver authenticated: memberships from the provider are asked about again, so an approver it no

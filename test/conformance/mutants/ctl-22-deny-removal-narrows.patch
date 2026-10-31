@@ -1,17 +1,17 @@
 # Rule: CTL-22
-# Mutant: removing a binding narrows whatever it binds, a DENY or a blacklist entry included
+# Mutant: removing a binding narrows whatever it binds, a DENY included
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-index 17b299a3..0e39aac0 100644
+index eed12d74..d95101c7 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -58,7 +58,7 @@ internal object Narrowing {
+@@ -61,7 +61,7 @@ internal object Narrowing {
              when (operation) {
                  is Operation.RemoveBinding -> {
                      val removed = base.bindings.firstOrNull { it.id == operation.id }
--                    removed != null && allowsOnly(base, removed.policy, policyOf)
+-                    removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
 +                    removed != null
                  }
  
-                 is Operation.PutPolicy -> madeUnattachable(base, operation.policy) ||
+                 is Operation.PutPolicy -> !shadows(operation.policy.id) &&

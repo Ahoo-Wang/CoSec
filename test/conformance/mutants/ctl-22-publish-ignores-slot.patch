@@ -1,0 +1,21 @@
+# Rule: CTL-22
+# Mutant: a READY change whose slot another change took meanwhile still publishes, over the change that preempted it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index d9a59d36..0f1cbb65 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -546,12 +546,6 @@ class Changes(
+         }
+         val candidate = applied(change, head?.document).first!!
+         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
+-        if (store.stage(change.key)?.value?.holder != change.id) {
+-            // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). The
+-            // head write is conditional on the base, not the slot: preempted after this, it still publishes, and the
+-            // change that took the slot conflicts and is rebased on it, never written over it unseen.
+-            return settle(change, ChangeState.CONFLICTED)
+-        }
+         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
+         var published: ChangeRequest? = null
+         val outcome = revisions.publish(
