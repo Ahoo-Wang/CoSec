@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.authz
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
@@ -284,6 +285,88 @@ class ApprovalB2Test {
         revisions.head(TENANT)!!.document.boundary.assert().isEqualTo(PolicyId("fence"))
     }
 
+    /**
+     * [id] as an older instance would have left it: `READY`, approved by [approver] with everything this version
+     * records, so that only the check at publish stands between the approval and the head.
+     */
+    private suspend fun approvedBy(id: ChangeId, approver: Operator) {
+        val current = store.change(id)!!
+        val change = current.value
+        val approval = Approval(
+            approver.actor,
+            clock.now,
+            change.candidate!!,
+            change.escalations.map { it.subject },
+            approver.memberships,
+            approver.attributes,
+            credentialId = "token-${approver.actor.principal.value}",
+        )
+        store.putChange(current.digest, change.copy(state = ChangeState.READY, approval = approval)).assert().isTrue()
+    }
+
+    /** Review item 10 (`BDY-2`): a boundary change a tenant approver approved does not publish, however it got READY. */
+    @Test
+    fun `a boundary change a tenant principal approved does not publish`() = runBlocking<Unit> {
+        val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
+        val change = fourEyes.propose(plato, TENANT, head(), listOf(Operation.SetBoundary(PolicyId("fence"))), "fence")
+        fourEyes.stage(plato, change.id)
+        fourEyes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        approvedBy(change.id, carol)
+        fourEyes.publish(plato, change.id).let {
+            it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+            it.findings.map { finding -> finding.message }.assert()
+                .contains("only a platform principal approves a boundary change")
+        }
+        revisions.head(TENANT)!!.document.boundary.assert().isNull()
+    }
+
+    /** Review item 8 (`BDY-2`): a boundary change is the platform's to end, as it is the platform's to set. */
+    @Test
+    fun `only a platform principal rejects or abandons a boundary change`() = runBlocking<Unit> {
+        val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
+        val change = fourEyes.propose(plato, TENANT, head(), listOf(Operation.SetBoundary(PolicyId("fence"))), "fence")
+        fourEyes.stage(plato, change.id)
+        fourEyes.shadowed(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        // carol holds cosec:approve and cosec:publish on acme's document, and still ends nothing here.
+        refused { fourEyes.reject(carol, change.id, "no fence") }.assert().isEqualTo(403)
+        refused { fourEyes.abandon(carol, change.id) }.assert().isEqualTo(403)
+        fourEyes.get(change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        fourEyes.reject(pia, change.id, "not now").state.assert().isEqualTo(ChangeState.REJECTED)
+        // Another change of acme's carol may still end.
+        val own = fourEyes.propose(alice, TENANT, head(), grant("carol-ends"), "mine")
+        fourEyes.abandon(carol, own.id).state.assert().isEqualTo(ChangeState.ABANDONED)
+    }
+
+    /**
+     * Review item 7 (RFC 0007 §7.5): under four-eyes, the second person of a platform principal's change is a platform
+     * principal too; a tenant approver of the document approves only others' changes.
+     */
+    @Test
+    fun `under four-eyes a platform principal's change needs a platform approver`() = runBlocking<Unit> {
+        val fourEyes = changes(ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true))
+        suspend fun waiting(policy: String): ChangeRequest {
+            val change = fourEyes.propose(plato, TENANT, head(), grant(policy), policy)
+            fourEyes.stage(plato, change.id)
+            return fourEyes.shadowed(change.id).also { it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL) }
+        }
+        val refusedOne = waiting("platos")
+        refused { fourEyes.approve(carol, refusedOne.id, refusedOne.candidate!!) }.assert().isEqualTo(403)
+        fourEyes.approve(pia, refusedOne.id, refusedOne.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+        fourEyes.publish(plato, refusedOne.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        // Recorded by an instance that took carol's approval, it does not publish.
+        val recorded = waiting("platos-again")
+        approvedBy(recorded.id, carol)
+        fourEyes.publish(plato, recorded.id).let {
+            it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+            it.findings.map { finding -> finding.message }.assert()
+                .contains("under four-eyes, only a platform principal approves a platform principal's change")
+        }
+        fourEyes.abandon(plato, recorded.id)
+        // Without four-eyes, carol approves a tenant principal's change as before.
+        val alices = awaiting("alices")
+        changes.approve(carol, alices.id, alices.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+    }
+
     /** RC1-11: an approval is a person's two-person rule; an API key is a workload's credential. */
     @Test
     fun `an API key never approves`() = runBlocking<Unit> {
@@ -360,13 +443,32 @@ class ApprovalB2Test {
         publishedAfter { revokedIds += "jti-pia" }.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         publishedAfter { revokedBefore["(platform)/pia"] = issued.plusSeconds(1) }
             .assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
-        // An approval whose credential said nothing is taken back by any revocation of its approver's tokens.
-        val change = awaiting("viewers-untokened")
-        changes.approve(pia, change.id, change.candidate!!).approval!!.credentialId.assert().isNull()
+        // Review item 12: an approval whose credential did not say when it was issued is taken back by any revocation
+        // of its approver's tokens (fail closed).
+        val undated = withToken(TenantId.PLATFORM, "pia", "jti-undated", null)
+        val change = awaiting("viewers-undated")
+        changes.approve(undated, change.id, change.candidate!!).approval!!.issuedAt.assert().isNull()
         revokedBefore["(platform)/pia"] = issued.minusSeconds(60)
         changes.publish(alice, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         revokedBefore.clear()
         changes.abandon(alice, change.id)
+        // Review item 4: nor does an approval that names no credential count: one before the upgrade, an older
+        // instance's, or a credential's without an id, whose revocation cannot be checked.
+        val anonymousCredential = engine.operator(
+            AuthenticatedPrincipal(
+                PrincipalId("pia"),
+                TenantId.PLATFORM,
+                Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+            )
+        )
+        val unnamed = awaiting("viewers-unnamed")
+        changes.approve(anonymousCredential, unnamed.id, unnamed.candidate!!).approval!!.credentialId.assert().isNull()
+        changes.publish(alice, unnamed.id).let {
+            it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+            it.findings.map { finding -> finding.message }.assert()
+                .contains("the approval does not say what credential its approver approved with")
+        }
+        changes.abandon(alice, unnamed.id)
         // Revoking the tokens issued before an older instant leaves this one standing.
         publishedAfter { revokedBefore["(platform)/pia"] = issued.minusSeconds(60) }
             .assert().isEqualTo(ChangeState.PUBLISHED)

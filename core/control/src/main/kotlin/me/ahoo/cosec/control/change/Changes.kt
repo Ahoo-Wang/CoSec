@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.control.change
 
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -109,11 +112,13 @@ class Changes(
 
         /**
          * The app list once this instance has reconciled it with the documents (RC1-4, B1 review): until a
-         * reconciliation has succeeded here, the first read runs one, so a complete list a downgraded writer left
-         * stale is never trusted. One that fails throws, and the analysis takes the list as untrusted until the next.
+         * reconciliation has succeeded here, a read runs one, so a complete list a downgraded writer left stale is
+         * never trusted. One that fails throws, and the analysis takes the list as untrusted; so does a read while the
+         * last attempt is recent (review item 19): until one succeeds, not every analysis reads every document's key.
          */
         override suspend fun apps(): Versioned<AppList>? {
             if (!appsReconciled.get()) {
+                check(reconcileAttempts.ready()) { "the app list is not reconciled on this instance yet" }
                 revisions.reconcileApps(store.documents())
                 appsReconciled.set(true)
             }
@@ -122,6 +127,7 @@ class Changes(
     }
 
     private val appsReconciled = AtomicBoolean(false)
+    private val reconcileAttempts = Throttle(RECONCILE_INTERVAL)
 
     /** This instance has reconciled the app list ([me.ahoo.cosec.control.store.ControlMaintenance.reconcileApps]). */
     internal fun appListReconciled() {
@@ -130,7 +136,7 @@ class Changes(
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
 
-    private val preemption = Preemption(revisions, authority)
+    private val preemption = Preemption(revisions, authority, clock)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -456,11 +462,15 @@ class Changes(
         refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
     }
 
-    /** Rejects an `AWAITING_APPROVAL` change: [operator] holds `cosec:approve` on the document. Its slot is released. */
+    /**
+     * Rejects an `AWAITING_APPROVAL` change: [operator] holds `cosec:approve` on the document, and is a platform
+     * principal when the change sets a boundary (`BDY-2`). Its slot is released.
+     */
     suspend fun reject(operator: Operator, id: ChangeId, reason: String): ChangeRequest {
         require(reason.isNotBlank()) { "A rejection needs a reason." }
         val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
+        requireBoundaryOperator(operator, change)
         requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
         val rejected = transition(id, setOf(ChangeState.AWAITING_APPROVAL)) {
             it.copy(state = ChangeState.REJECTED, findings = it.findings + Finding(APPROVAL, "$", reason, FORBIDDEN))
@@ -472,10 +482,12 @@ class Changes(
 
     /**
      * Abandons a change that is not finished; its slot is released. Its author may, and so may whoever holds
-     * `cosec:publish` on the document, which the change may be holding up.
+     * `cosec:publish` on the document, which the change may be holding up; a change that sets a boundary, only a
+     * platform principal (`BDY-2`).
      */
     suspend fun abandon(operator: Operator, id: ChangeId): ChangeRequest {
         val current = visible(operator, id)
+        requireBoundaryOperator(operator, current)
         if (operator.actor != current.author) {
             authority.require(operator, current.key, ControlActions.PUBLISH)
         }
@@ -512,11 +524,8 @@ class Changes(
         authority.authorize(publisher, change.key, change.operations, change.kind, touchesBreakGlass(change))
         val head = revisions.head(change.key)
         if (head?.digest != change.base.digest) {
-            if (PublishRules.publishedBy(change, head)) {
-                // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
-                return settle(change, ChangeState.PUBLISHED, published = head!!.revision)
-                    .also { audit(PublishRules.outcomeOf(change, it), it, publisher.actor) }
-            }
+            // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
+            ownRevision(change, head)?.let { return republished(change, it, publisher) }
             return settle(change, ChangeState.CONFLICTED)
         }
         val rechecked = checked(change, head, publisher)
@@ -592,10 +601,45 @@ class Changes(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         publisher: Operator,
+        actor: Actor = publisher.actor,
     ) = movedHeads.record(published, rechecked, base, candidate, publisher) { found ->
         val change = published.copy(escalations = found.escalations, note = found.note)
-        audit(found.kind, change, publisher.actor, found.moved)
+        audit(found.kind, change, actor, found.moved)
     }
+
+    /**
+     * [change]'s own revision, the one after its base, when an earlier publish wrote it: the head, or a revision the
+     * chain still holds when the head has moved on since (review item 13); `null` when none is [change]'s.
+     */
+    private suspend fun ownRevision(change: ChangeRequest, head: Head?): Head? {
+        val revision = change.base.revision + 1
+        val own = when {
+            head == null || head.revision < revision -> null
+            head.revision == revision -> head
+            else -> revisions.at(change.key, revision)
+        }
+        return own?.takeIf { PublishRules.publishedBy(change, it) }
+    }
+
+    /**
+     * [change], whose head write an earlier publish made and could not finish after (a lost reply, a failed store):
+     * what follows the write runs now, as it would have then, without responding to cancellation. The events name the
+     * publisher the revision records, not whoever retries.
+     */
+    private suspend fun republished(change: ChangeRequest, own: Head, publisher: Operator): ChangeRequest =
+        withContext(NonCancellable) {
+            revisions.rewritten(change.key, own, first = change.base.revision == 0L)
+            val by = own.document.provenance?.publishedBy ?: publisher.actor
+            val base = change.base.revision.takeIf { it > 0 }?.let { revisions.at(change.key, it)?.document }
+            var settled: ChangeRequest? = null
+            try {
+                settled = settle(change, ChangeState.PUBLISHED, published = own.revision)
+                audit(PublishRules.outcomeOf(change, settled), settled, by)
+                settled
+            } finally {
+                recordMoved(settled ?: change, change, base, own.document, publisher, by)
+            }
+        }
 
     /**
      * Creating or altering break-glass ([breakGlass], [BreakGlassRules.touches]) needs a REQUIRED change listener to
@@ -774,6 +818,13 @@ class Changes(
         throw ChangeRejectedException(CONFLICT, "change ${id.value} kept changing")
     }
 
+    /** A change that sets a tenant's boundary is the platform's (`BDY-2`): only a platform principal ends it. */
+    private fun requireBoundaryOperator(operator: Operator, change: ChangeRequest) {
+        if (!operator.platform && change.operations.any { it is Operation.SetBoundary }) {
+            throw ChangeRejectedException(FORBIDDEN, "only a platform principal ends a boundary change")
+        }
+    }
+
     private fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
         if (change.state !in allowed) {
             throw ChangeRejectedException(CONFLICT, "change ${change.id.value} is ${change.state}, not one of $allowed")
@@ -798,7 +849,7 @@ class Changes(
                 }
                 val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
                 if (held != null) {
-                    if (!preemption.preempts(operator, change, head)) {
+                    if (!preemption.preempts(operator, change, head) || publishedReady(held, head)) {
                         throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
                     }
                     conflicted += conflict(held, change)
@@ -812,6 +863,13 @@ class Changes(
             conflicted.forEach { preempted(it, change, operator) }
         }
     }
+
+    /**
+     * Whether [held] is `READY` and the chain shows its revision written: published, and only waiting for a retry of its
+     * publish to settle it, so no change takes its slot (review item 13).
+     */
+    private suspend fun publishedReady(held: ChangeRequest, head: Head?): Boolean =
+        held.state == ChangeState.READY && ownRevision(held, head) != null
 
     /** [held] made `CONFLICTED` for [by] from any staged state, before its slot moves; 409 or 503 when it cannot be. */
     @Suppress("TooGenericExceptionCaught")
@@ -876,5 +934,8 @@ class Changes(
         const val APPROVAL = "APPROVAL"
         val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
         val STAGED = ChangeState.entries.filter { it.staged }.toSet()
+
+        /** How often an analysis may try to reconcile the app list until a reconciliation succeeds here. */
+        val RECONCILE_INTERVAL = 30.seconds
     }
 }

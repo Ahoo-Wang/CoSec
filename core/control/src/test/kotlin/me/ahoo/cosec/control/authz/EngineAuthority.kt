@@ -44,6 +44,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -96,7 +97,14 @@ class EngineAuthority(
         policies: List<String> = emptyList(),
         attributes: Map<String, Any> = emptyMap(),
     ): me.ahoo.cosec.runtime.RequestSecurity = security(
-        AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies), attributes)
+        AuthenticatedPrincipal(
+            PrincipalId(id),
+            tenant,
+            MembershipClaims.parse(roles, policies),
+            attributes,
+            // A credential with an id, as an approval records it (review item 4).
+            Identity.Credential(Identity.Method("test"), "token-$id", null),
+        )
     )
 
     private fun security(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.RequestSecurity {

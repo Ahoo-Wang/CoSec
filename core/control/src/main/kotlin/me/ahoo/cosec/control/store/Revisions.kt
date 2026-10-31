@@ -379,6 +379,48 @@ class Revisions(
         return (indexed.entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
     }
 
+    /**
+     * The head [key] had at [revision], found along the `parent` chain from the head, if the records on the way are
+     * retained: for a publish retried after its head write, whose own revision may since have been replaced, and which
+     * the index may not hold (review item 13).
+     */
+    internal suspend fun at(key: SnapshotKey, revision: Long): Head? {
+        var current = head(key) ?: return null
+        while (current.revision > revision) {
+            val parent = current.document.provenance?.parent ?: return null
+            val digest = SnapshotDigest(hex(parent.digest))
+            val record = store.record(key, digest) ?: return null
+            current = Head(key, decode(key, record), StoredDocument(record, digest))
+        }
+        return current.takeIf { it.revision == revision }
+    }
+
+    /**
+     * What follows the head write of [published], for a publish retried because its reply was lost (review item 13):
+     * its index entry, added where it is missing and never replacing a later one, and the app list's completion on a
+     * new store when [first]. The references it dropped stay indexed: a later revision may refer to them again, and a
+     * superset blocks a deletion at most. Failures only warn, as after the write.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    internal suspend fun rewritten(key: SnapshotKey, published: Head, first: Boolean) = withContext(NonCancellable) {
+        val entry = RevisionEntry(published.revision, published.digest, published.document.publishedAt)
+        try {
+            updateIndex(key) { index ->
+                index.copy(
+                    entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
+                    pending = index.pending.filter { it.digest != entry.digest },
+                )
+            } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "[$key] revision ${entry.revision} is published; its index entry could not be written." }
+        }
+        if (key == SnapshotKey.Platform && first) {
+            completeOnNewStore()
+        }
+    }
+
     /** The document [key] had at [revision], if its record is retained: for rollback and for explaining by version. */
     suspend fun revision(key: SnapshotKey, revision: Long): PolicyDocument? {
         val entry = history(key).firstOrNull { it.revision == revision } ?: return null

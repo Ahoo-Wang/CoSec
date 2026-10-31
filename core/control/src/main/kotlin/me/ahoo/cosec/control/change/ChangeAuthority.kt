@@ -207,13 +207,24 @@ class ChangeAuthority(
     /**
      * Why [operator] may not approve [change] whatever it holds (RFC 0007 §7.5); `null` when it may. An approval is a
      * person's: an API key, a workload's credential, never approves, as break-glass never reaches one (`BRK-8`). A
-     * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10).
+     * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10). Under
+     * four-eyes, a platform principal's change is approved by another platform principal: the second person of the
+     * trust root is the trust root's.
      */
     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
         apiKey(operator) -> "an API key cannot approve: an approval is a person's"
 
-        !operator.platform && change.operations.any { it is Operation.SetBoundary } ->
-            "only a platform principal approves a boundary change"
+        !operator.platform -> approverTenantProblem(change)
+
+        else -> null
+    }
+
+    /** Why an approver outside the platform tenant does not count for [change]; `null` when it may. */
+    private fun approverTenantProblem(change: ChangeRequest): String? = when {
+        change.operations.any { it is Operation.SetBoundary } -> "only a platform principal approves a boundary change"
+
+        options.fourEyes && change.author.tenant == TenantId.PLATFORM ->
+            "under four-eyes, only a platform principal approves a platform principal's change"
 
         else -> null
     }
@@ -484,8 +495,12 @@ class ChangeAuthority(
         if (!memberships.active) {
             return "the approver is deactivated"
         }
-        if (approval.approver.tenant != TenantId.PLATFORM && change.operations.any { it is Operation.SetBoundary }) {
-            return "only a platform principal approves a boundary change"
+        // Only an approval this version recorded names its credential: one from before the upgrade, or from an older
+        // instance, which took tenant approvers for the trust root and API keys for approvers, counts no more; nor
+        // does one by a credential without an id, whose revocation could not be checked.
+        approval.credentialId ?: return "the approval does not say what credential its approver approved with"
+        if (approval.approver.tenant != TenantId.PLATFORM) {
+            approverTenantProblem(change)?.let { return it }
         }
         revoked(approval)?.let { return it }
         // As the approver authenticated: memberships from the provider are asked about again, so an approver it no

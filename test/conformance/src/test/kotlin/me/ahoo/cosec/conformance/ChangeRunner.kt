@@ -89,6 +89,8 @@ import java.time.Instant
  * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [], "attributes": { "level": 3 } },
  *                "kim":  { "tenant": "(platform)", "credential": "api-key" },           // authenticated by an API key
  *                "pia":  { "tenant": "(platform)", "credential": { "token": "t1", "issuedAt": "2026-11-01T00:00:00Z" } },
+ *                "nia":  { "tenant": "(platform)", "credential": "none" },  // a credential without an id; by default,
+ *                                                                           // token "token-<name>", issued at no time
  *                "dave": { "tenant": "acme", "roles": ["approver"], "provider": true } },  // the provider says its roles
  * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
  *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
@@ -166,7 +168,9 @@ object ChangeRunner : ScenarioRunner {
                 operator.get("roles")?.strings().orEmpty(),
                 operator.get("policies")?.strings().orEmpty(),
                 operator.get("attributes")?.let(::attributes).orEmpty(),
-                credential = credential?.let(::credential),
+                // By default a token of its own, as an approval records it.
+                credential = credential?.let(::credential)
+                    ?: Identity.Credential(Identity.Method("oidc"), "token-$name", null).takeIf { credential == null },
                 issuedAt = credential?.get("issuedAt")?.let { Instant.parse(it.text()) },
                 provided = operator.get("provider")?.bool() == true,
             )
@@ -182,10 +186,16 @@ object ChangeRunner : ScenarioRunner {
                 revokedBefore[principal.value]
         }
 
-        /** `"api-key"`, or `{ "token": "t1", "issuedAt": ... }`: a token CoSec's verifier did not issue, by its id. */
-        private fun credential(node: JsonNode): Identity.Credential = if (node.isString) {
-            if (node.text() != "api-key") throw ScenarioFormatException("Unknown credential $node")
-            Identity.Credential(Identity.Method.API_KEY, "key", null)
+        /**
+         * `"api-key"`, `"none"` (a credential that names no id), or `{ "token": "t1", "issuedAt": ... }`: a token
+         * CoSec's verifier did not issue, by its id.
+         */
+        private fun credential(node: JsonNode): Identity.Credential? = if (node.isString) {
+            when (node.text()) {
+                "api-key" -> Identity.Credential(Identity.Method.API_KEY, "key", null)
+                "none" -> null
+                else -> throw ScenarioFormatException("Unknown credential $node")
+            }
         } else {
             node.only("token", "issuedAt")
             Identity.Credential(Identity.Method("oidc"), node.required("token").text(), null)

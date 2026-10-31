@@ -204,6 +204,49 @@ class BreakGlassControlTest {
             .assert().isEqualTo(BuiltinPolicies.BLACKLIST)
     }
 
+    /**
+     * RC1-29 (review item 16): however a change is made, a break-glass binding never replaces an ordinary one: the
+     * checks say so, so a rebase or an internal proposal is held to it as a request is.
+     */
+    @Test
+    fun `a break-glass binding never replaces another binding`() = runBlocking<Unit> {
+        val head = revisions.head(SnapshotKey.Platform)!!
+        val alice = head.document.bindings.single { it.id == BindingId("alice") }
+        val turned = Binding(
+            alice.id,
+            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("rita")),
+            BindingScope(Match.Any, Match.Any),
+            BuiltinPolicies.ROOT,
+            inHours(1).toEpochMilli(),
+            breakGlass = true,
+        )
+        val change = changes.propose(
+            rita,
+            SnapshotKey.Platform,
+            head.revision,
+            listOf(Operation.PutBinding(turned)),
+            "incident",
+            kind = ProvenanceKind.BREAK_GLASS,
+        )
+        change.state.assert().isEqualTo(ChangeState.DRAFT)
+        change.findings.map { it.message }.assert().contains("a break-glass binding never replaces another binding")
+    }
+
+    /** Review item 20: an expired break-glass binding grants nothing, so revoking it takes no busy slot. */
+    @Test
+    fun `revoking an expired binding waits for the slot`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id)
+        val binding = glass()!!.id
+        clock.now = inHours(2)
+        val head = revisions.head(SnapshotKey.Platform)!!.revision
+        val holding = changes.propose(plato, SnapshotKey.Platform, head, listOf(Operation.PutPolicy(allowAll("widen"))), "slow")
+        changes.stage(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        refused { breakGlass.revoke(rita, binding, "tidy") }.assert().isEqualTo(409)
+        changes.get(holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+    }
+
     @Test
     fun `only the platform's principals with cosec breakglass request it`() = runBlocking<Unit> {
         // alice holds platform-admin through a wrongly written binding; the hard rule still refuses her.

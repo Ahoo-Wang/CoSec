@@ -19,11 +19,13 @@
     {
       "id": "BDY-2",
       "source": "RFC 0007 §7.3, §9.1 (2026-10-30 revision)",
-      "statement": "A tenant's boundary is the platform's: only a platform principal sets it (403 otherwise, whatever the operator holds), and only a platform principal approves a change that sets one.",
+      "statement": "A tenant's boundary is the platform's: only a platform principal sets it (403 otherwise, whatever the operator holds), only a platform principal approves a change that sets one, at approve and again at publish, and only a platform principal rejects or abandons one.",
       "level": "control",
       "pending": null,
       "guards": [
-        "control:ApprovalB2Test#only a platform principal sets a tenant's boundary or approves it"
+        "control:ApprovalB2Test#only a platform principal sets a tenant's boundary or approves it",
+        "control:ApprovalB2Test#a boundary change a tenant principal approved does not publish",
+        "control:ApprovalB2Test#only a platform principal rejects or abandons a boundary change"
       ]
     }
   ]

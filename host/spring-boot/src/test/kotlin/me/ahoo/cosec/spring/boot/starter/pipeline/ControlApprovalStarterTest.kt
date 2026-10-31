@@ -55,6 +55,9 @@ import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -170,6 +173,55 @@ class ControlApprovalStarterTest {
                 plane.approve(dave, change.id, waiting.candidate!!).state.assert().isEqualTo(ChangeState.READY)
                 plane.publish(plato, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
             }
+        }
+    }
+
+    /** RC1-11 through the starter (review item 6): an approver whose tokens are revoked since no longer counts. */
+    @Test
+    fun `an approval by a token revoked since does not publish`() {
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            published(context)
+            val plato = operator(context, "plato", provider = false)
+            val dave = operator(context, "dave", provider = true)
+            val plane = context.getBean(ControlPlane::class.java)
+            runBlocking {
+                val policy = PolicyDefinition(
+                    PolicyId("writes"),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.ALLOW, listOf("order:write")))
+                )
+                val change = plane.propose(plato, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(policy)), "writes")
+                val waiting = plane.skipShadow(plato, change.id, "test")
+                plane.approve(dave, change.id, waiting.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+                context.getBean(TokenRevoker::class.java)
+                    .revokeSubject(TenantId.PLATFORM, PrincipalId("dave"), Instant.now().plusSeconds(1))
+                plane.publish(plato, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+            }
+        }
+    }
+
+    /** Review item 5: a revocation kept for less time than an approval counts would be forgotten while it does. */
+    @Test
+    fun `a revocation kept shorter than an approval counts fails startup`() {
+        runner.withPropertyValues("cosec.control.approval.expire-after=8d").run { context ->
+            val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+            message.assert().contains("cosec.jwt.token-validity.refresh").contains("cosec.control.approval.expire-after")
+        }
+    }
+
+    /** Review item 6: without a revocation reader the control plane does not start, as the pipeline does not. */
+    @Test
+    fun `a control plane without a revocation reader fails startup`() {
+        val untokened = runner.withPropertyValues("${JwtProperties.PREFIX}.enabled=false")
+        untokened.run { context ->
+            val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+            message.assert().contains("no revocation reader is available")
+        }
+        untokened.withBean(RevocationReader::class.java, { RevocationReader.NONE }).run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBean(ControlPlane::class.java).assert().isNotNull()
         }
     }
 

@@ -223,12 +223,18 @@
     {
       "id": "CTL-22",
       "source": "RFC 0007 §5.5, Q5 (2026-10-30 revision)",
-      "statement": "A change that only narrows, every operation one of: removing a binding of an ALLOW-only policy that is not cosec:blacklist, making an attachable ALLOW-only policy unattachable, a new blacklist entry, a new DENY-only policy or a new binding of one, staged by a holder of cosec:skip-shadow, takes a busy staging slot and the holder becomes CONFLICTED; any other change waits (409).",
+      "statement": "A change that only narrows, every operation one of: removing a binding of an ALLOW-only policy, making an attachable ALLOW-only policy unattachable, a new DENY-only policy or a new binding of one, none on a policy id the platform also defines, staged by a holder of cosec:skip-shadow, takes a busy staging slot: the holder is made CONFLICTED first, from whichever staged state it is in, and keeps its slot when it cannot be; a publish goes on only while its change holds the slot, and a READY holder the chain shows published keeps it. Any other change waits (409).",
       "level": "control",
       "pending": null,
       "guards": [
         "control:ChangesB2Test#only a whitelist of changes narrows",
-        "control:ChangesB2Test#an emergency deny takes a busy slot, a widening change does not"
+        "control:ChangesB2Test#an emergency deny takes a busy slot, a widening change does not",
+        "control:ChangesB2Test#an operation on a policy id the platform also defines does not narrow",
+        "control:ChangesB2Test#a holder that cannot be marked conflicted keeps its slot",
+        "control:PreemptionRaceTest#a holder approved while it is preempted is conflicted",
+        "control:PreemptionRaceTest#a holder whose window closes while it is preempted is conflicted",
+        "control:PreemptionRaceTest#a change preempted while it publishes publishes nothing",
+        "control:RetriedPublishTest#a retry after a lost reply finishes the publish as its publisher"
       ]
     }
   ]

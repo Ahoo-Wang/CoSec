@@ -71,7 +71,6 @@ class ChangesB2Test {
         listOf(
             binding("reads", PolicyId("reads")),
             binding("no-delete", PolicyId("no-delete")),
-            binding("blocked", BuiltinPolicies.BLACKLIST),
         ),
     )
 
@@ -83,18 +82,14 @@ class ChangesB2Test {
     /** RC1-12: each kind of change the whitelist names narrows, and its widening twin does not. */
     @Test
     fun `only a whitelist of changes narrows`() {
-        // 1. Removing a binding of ALLOWs narrows; removing one of a DENY, or a blacklist entry, widens.
+        // 1. Removing a binding of ALLOWs narrows; removing one of a DENY widens.
         narrows(Operation.RemoveBinding(BindingId("reads"))).assert().isTrue()
         narrows(Operation.RemoveBinding(BindingId("no-delete"))).assert().isFalse()
-        narrows(Operation.RemoveBinding(BindingId("blocked"))).assert().isFalse()
         // 2. An attachable policy of ALLOWs no longer attachable narrows; one of DENYs widens; a changed one is not it.
         narrows(Operation.PutPolicy(allow("lendable"))).assert().isTrue()
         narrows(Operation.PutPolicy(deny("lendable-deny"))).assert().isFalse()
         narrows(Operation.PutPolicy(allow("lendable", action = "order:*"))).assert().isFalse()
-        // 3. A new blacklist entry narrows; one replacing a binding there is does not.
-        narrows(Operation.PutBinding(binding("ban", BuiltinPolicies.BLACKLIST))).assert().isTrue()
-        narrows(Operation.PutBinding(binding("reads", BuiltinPolicies.BLACKLIST))).assert().isFalse()
-        // 4. A new policy of DENYs and a new binding of it narrow; an ALLOW, or a replaced DENY, does not.
+        // 3. A new policy of DENYs and a new binding of it narrow; an ALLOW, or a replaced DENY, does not.
         narrows(
             Operation.PutPolicy(deny("ban")),
             Operation.PutBinding(binding("ban", PolicyId("ban")))
@@ -119,10 +114,37 @@ class ChangesB2Test {
             BindingId("g"),
             SubjectRef.Anyone,
             BindingScope(Match.Any, Match.Any),
-            BuiltinPolicies.BLACKLIST,
+            PolicyId("glass-ban"),
             breakGlass = true
         )
-        narrows(Operation.PutBinding(glass)).assert().isFalse()
+        narrows(Operation.PutPolicy(deny("glass-ban")), Operation.PutBinding(glass)).assert().isFalse()
+    }
+
+    /**
+     * Review item 15: an operation on a policy id a tenant's document defines and the platform's also does narrows
+     * nothing, whatever the tenant's definition says: which one a binding reaches is not the tenant's alone. The
+     * checks refuse such a pair (V2) whichever document is changed; one written around them, as by a migration, is
+     * still no narrowing.
+     */
+    @Test
+    fun `an operation on a policy id the platform also defines does not narrow`() = runBlocking<Unit> {
+        val tenant = StoreFixtures.candidate(
+            ACME,
+            listOf(allow("reads"), allow("shared"), attachable(allow("lent"))),
+            listOf(binding("reads", PolicyId("reads")), binding("shared", PolicyId("shared"))),
+        )
+        val platform = setOf(PolicyId("shared"), PolicyId("dup"), PolicyId("lent"))
+        suspend fun narrows(vararg operations: Operation): Boolean {
+            val applied = Operations.apply(ACME, tenant, operations.toList()).candidate!!
+            return Narrowing.only(tenant, applied, operations.toList(), shadows = { it in platform }) { null }
+        }
+        narrows(Operation.RemoveBinding(BindingId("reads"))).assert().isTrue()
+        narrows(Operation.RemoveBinding(BindingId("shared"))).assert().isFalse()
+        narrows(Operation.PutPolicy(deny("ban")), Operation.PutBinding(binding("ban", PolicyId("ban")))).assert().isTrue()
+        narrows(Operation.PutPolicy(deny("dup"))).assert().isFalse()
+        narrows(Operation.PutPolicy(deny("dup")), Operation.PutBinding(binding("dup", PolicyId("dup")))).assert().isFalse()
+        narrows(Operation.PutPolicy(allow("lent"))).assert().isFalse()
+
     }
 
     /** The policy a removed binding names may be a built-in's or another document's: ALLOWs only narrow there too. */
@@ -474,5 +496,35 @@ class ChangesB2Test {
         started.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("acme-reads"))), "first")
             .errors.assert().isEmpty()
         harness.memory.apps()!!.value.complete.assert().isFalse()
+    }
+
+    /**
+     * Review item 19: a reconciliation that fails is not tried by every analysis after it: until the interval passes,
+     * the list is untrusted without reading every document's key again.
+     */
+    @Test
+    fun `a failed reconciliation is not tried again by every analysis`() = runBlocking<Unit> {
+        val reads = AtomicInteger()
+        val failing = object : ControlStore by harness.memory {
+            override suspend fun documents(): Set<SnapshotKey> {
+                reads.incrementAndGet()
+                error("Redis is down")
+            }
+        }
+        val started = Changes(
+            failing,
+            Revisions(failing, harness.clock),
+            { ChangeId("t${counter.incrementAndGet()}") },
+            PERMIT_ALL,
+            harness.clock
+        )
+        repeat(3) {
+            started.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("acme-reads-$it"))), "next")
+        }
+        reads.get().assert().isEqualTo(1)
+        // The background reconciliation succeeds: the list is trusted from then on.
+        started.appListReconciled()
+        started.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("acme-trusted"))), "trusted")
+        reads.get().assert().isEqualTo(1)
     }
 }

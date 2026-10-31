@@ -152,10 +152,10 @@ class DocumentPublisher(
 }
 
 /**
- * Why [documents] are not written: the break-glass bindings they hold (RC1-27); null when they hold none. Shared by
- * `publish` and `bootstrap`.
+ * Why [documents] are not written: the break-glass bindings they hold (RC1-27); null when they hold none. `bootstrap`
+ * writes the platform tenant's document, where compiling refuses one (BRK-2).
  */
-internal fun refusedBreakGlass(documents: Collection<PolicyDocument>): String? {
+private fun refusedBreakGlass(documents: Collection<PolicyDocument>): String? {
     val glass = documents.flatMap { document -> document.bindings.filter { it.breakGlass }.map { it.id.value } }
     return if (glass.isEmpty()) {
         null

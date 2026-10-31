@@ -27,28 +27,31 @@ import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Clock
 
 /**
  * Whether a change only narrows what its document grants (RFC 0007 §5.5, RC1-12), so that a holder of
  * `cosec:skip-shadow` may take the document's staging slot from a change that holds it: an emergency ban must not
  * queue. A whitelist, every operation one of:
  *
- * 1. a `RemoveBinding` whose binding, in the base, binds a policy of ALLOWs only that is not `cosec:blacklist`
- *    (removing a DENY or a blacklist entry widens);
+ * 1. a `RemoveBinding` whose binding, in the base, binds a policy of ALLOWs only (removing a DENY widens);
  * 2. a `PutPolicy` that only makes an attachable policy of ALLOWs only not attachable, its statements as they were
  *    (a DENY no longer attachable widens);
- * 3. a `PutBinding` of a new id binding `cosec:blacklist`;
- * 4. a `PutPolicy` of a new id whose statements are all DENYs, or a `PutBinding` of a new id binding a policy of the
+ * 3. a `PutPolicy` of a new id whose statements are all DENYs, or a `PutBinding` of a new id binding a policy of the
  *    candidate whose statements are all DENYs.
  *
- * Anything else, replacing an entry the base has in particular, does not narrow for this purpose, though it may.
- * A policy a binding names in another document is read through [policyOf]; one that cannot be found does not narrow.
+ * Anything else, replacing an entry the base has in particular, does not narrow for this purpose, though it may; nor
+ * does an operation on a policy id the document defines that another also defines ([shadows]: the platform's, for a
+ * tenant document), since which definition a binding then reaches is not this document's alone. A policy a binding names in another
+ * document is read through [policyOf]; one that cannot be found does not narrow. Blocking a principal is no document
+ * change: the blacklist is an attribute provider's (`environment.blocked`), and waits for no slot.
  */
 internal object Narrowing {
     suspend fun only(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         operations: List<Operation>,
+        shadows: suspend (PolicyId) -> Boolean = { false },
         policyOf: suspend (PolicyId) -> PolicyDefinition?,
     ): Boolean {
         if (base == null || operations.isEmpty()) {
@@ -58,19 +61,19 @@ internal object Narrowing {
             when (operation) {
                 is Operation.RemoveBinding -> {
                     val removed = base.bindings.firstOrNull { it.id == operation.id }
-                    removed != null && allowsOnly(base, removed.policy, policyOf)
+                    removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
                 }
 
-                is Operation.PutPolicy -> madeUnattachable(base, operation.policy) ||
-                    (base.policies.none { it.id == operation.policy.id } && deniesOnly(operation.policy))
+                is Operation.PutPolicy -> !shadows(operation.policy.id) &&
+                    (
+                        madeUnattachable(base, operation.policy) ||
+                            (base.policies.none { it.id == operation.policy.id } && deniesOnly(operation.policy))
+                        )
 
                 is Operation.PutBinding -> {
                     val binding = operation.binding
-                    base.bindings.none { it.id == binding.id } && !binding.breakGlass &&
-                        (
-                            binding.policy == BuiltinPolicies.BLACKLIST ||
-                                candidate.policies.firstOrNull { it.id == binding.policy }?.let(::deniesOnly) == true
-                            )
+                    base.bindings.none { it.id == binding.id } && !binding.breakGlass && !shadows(binding.policy) &&
+                        candidate.policies.firstOrNull { it.id == binding.policy }?.let(::deniesOnly) == true
                 }
 
                 else -> false
@@ -119,7 +122,11 @@ internal object Narrowing {
  * `cosec:skip-shadow` on the document. An emergency ban must not queue behind a change in its shadow window.
  */
 @OptIn(InternalCoSecApi::class)
-internal class Preemption(private val revisions: Revisions, private val authority: ChangeAuthority) {
+internal class Preemption(
+    private val revisions: Revisions,
+    private val authority: ChangeAuthority,
+    private val clock: Clock,
+) {
     suspend fun preempts(operator: Operator, change: ChangeRequest, head: Head?): Boolean {
         if (head?.digest != change.base.digest) {
             return false
@@ -131,19 +138,37 @@ internal class Preemption(private val revisions: Revisions, private val authorit
             return false
         }
         val candidate = Operations.apply(change.key, head?.document, change.operations).candidate ?: return false
-        return Narrowing.only(head?.document, candidate, change.operations) { policy -> elsewhere(change.key, policy) }
+        return Narrowing.only(
+            head?.document,
+            candidate,
+            change.operations,
+            policyOf = { policy -> elsewhere(change.key, policy) },
+            shadows = { policy -> change.key is SnapshotKey.Tenant && defines(head, candidate, policy) && platform(policy) != null },
+        )
     }
 
+    /** Whether [change] only revokes break-glass bindings [head] has that still grant: an expired one grants nothing. */
     private fun revokesBreakGlass(change: ChangeRequest, head: Head?): Boolean {
-        val glass = head?.document?.bindings.orEmpty().filter { it.breakGlass }.map { it.id }.toSet()
+        val now = clock.millis()
+        val glass = head?.document?.bindings.orEmpty()
+            .filter { it.breakGlass && (it.expiresAt?.let { expiresAt -> expiresAt > now } ?: true) }
+            .map { it.id }
+            .toSet()
         return change.kind == ProvenanceKind.BREAK_GLASS && change.operations.isNotEmpty() &&
             change.operations.all { it is Operation.RemoveBinding && it.id in glass }
     }
 
+    /** Whether [head] or [candidate], the tenant's own document, defines [policy]. */
+    private fun defines(head: Head?, candidate: PolicyDocument, policy: PolicyId): Boolean =
+        head?.document?.policies.orEmpty().any { it.id == policy } || candidate.policies.any { it.id == policy }
+
+    private suspend fun platform(policy: PolicyId): PolicyDefinition? =
+        revisions.head(SnapshotKey.Platform)?.document?.policies?.firstOrNull { it.id == policy }
+
     /** [policy] as another document than [key]'s defines it: the platform's, or the app's of a permission policy. */
     private suspend fun elsewhere(key: SnapshotKey, policy: PolicyId): PolicyDefinition? {
         if (key != SnapshotKey.Platform) {
-            revisions.head(SnapshotKey.Platform)?.document?.policies?.firstOrNull { it.id == policy }?.let { return it }
+            platform(policy)?.let { return it }
         }
         val prefix = PolicyDocumentCompiler.PERMISSION_PREFIX
         val app = policy.value.removePrefix(prefix).substringBefore('/')
