@@ -15,10 +15,9 @@
 
 package me.ahoo.cosec.control.change
 
-import kotlin.time.Duration.Companion.seconds
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
@@ -30,13 +29,10 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
-import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.control.store.Versioned
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -48,7 +44,6 @@ import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
 /** A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). */
@@ -104,35 +99,10 @@ class Changes(
 ) {
     private val windows = ShadowWindows(reports, options.shadow)
 
-    private val context = object : ChangeChecks.Context {
-        override suspend fun head(key: SnapshotKey): Head? = revisions.head(key)
-
-        override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-            revisions.referrers(target, policy)
-
-        /**
-         * The app list once this instance has reconciled it with the documents (RC1-4, B1 review): until a
-         * reconciliation has succeeded here, a read runs one, so a complete list a downgraded writer left stale is
-         * never trusted. One that fails throws, and the analysis takes the list as untrusted; so does a read while the
-         * last attempt is recent (review item 19): until one succeeds, not every analysis reads every document's key.
-         */
-        override suspend fun apps(): Versioned<AppList>? {
-            if (!appsReconciled.get()) {
-                check(reconcileAttempts.ready()) { "the app list is not reconciled on this instance yet" }
-                revisions.reconcileApps(store.documents())
-                appsReconciled.set(true)
-            }
-            return store.apps()
-        }
-    }
-
-    private val appsReconciled = AtomicBoolean(false)
-    private val reconcileAttempts = Throttle(RECONCILE_INTERVAL)
+    private val context = ChangeContext(store, revisions)
 
     /** This instance has reconciled the app list ([me.ahoo.cosec.control.store.ControlMaintenance.reconcileApps]). */
-    internal fun appListReconciled() {
-        appsReconciled.set(true)
-    }
+    internal fun appListReconciled() = context.reconciled()
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
 
@@ -470,7 +440,7 @@ class Changes(
         require(reason.isNotBlank()) { "A rejection needs a reason." }
         val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
-        requireBoundaryOperator(operator, change)
+        authority.requireBoundaryOperator(operator, change)
         requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
         val rejected = transition(id, setOf(ChangeState.AWAITING_APPROVAL)) {
             it.copy(state = ChangeState.REJECTED, findings = it.findings + Finding(APPROVAL, "$", reason, FORBIDDEN))
@@ -487,7 +457,7 @@ class Changes(
      */
     suspend fun abandon(operator: Operator, id: ChangeId): ChangeRequest {
         val current = visible(operator, id)
-        requireBoundaryOperator(operator, current)
+        authority.requireBoundaryOperator(operator, current)
         if (operator.actor != current.author) {
             authority.require(operator, current.key, ControlActions.PUBLISH)
         }
@@ -525,7 +495,7 @@ class Changes(
         val head = revisions.head(change.key)
         if (head?.digest != change.base.digest) {
             // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
-            ownRevision(change, head)?.let { return republished(change, it, publisher) }
+            PublishRules.ownRevision(revisions, change, head)?.let { return republished(change, it, publisher) }
             return settle(change, ChangeState.CONFLICTED)
         }
         val rechecked = checked(change, head, publisher)
@@ -605,20 +575,6 @@ class Changes(
     ) = movedHeads.record(published, rechecked, base, candidate, publisher) { found ->
         val change = published.copy(escalations = found.escalations, note = found.note)
         audit(found.kind, change, actor, found.moved)
-    }
-
-    /**
-     * [change]'s own revision, the one after its base, when an earlier publish wrote it: the head, or a revision the
-     * chain still holds when the head has moved on since (review item 13); `null` when none is [change]'s.
-     */
-    private suspend fun ownRevision(change: ChangeRequest, head: Head?): Head? {
-        val revision = change.base.revision + 1
-        val own = when {
-            head == null || head.revision < revision -> null
-            head.revision == revision -> head
-            else -> revisions.at(change.key, revision)
-        }
-        return own?.takeIf { PublishRules.publishedBy(change, it) }
     }
 
     /**
@@ -818,13 +774,6 @@ class Changes(
         throw ChangeRejectedException(CONFLICT, "change ${id.value} kept changing")
     }
 
-    /** A change that sets a tenant's boundary is the platform's (`BDY-2`): only a platform principal ends it. */
-    private fun requireBoundaryOperator(operator: Operator, change: ChangeRequest) {
-        if (!operator.platform && change.operations.any { it is Operation.SetBoundary }) {
-            throw ChangeRejectedException(FORBIDDEN, "only a platform principal ends a boundary change")
-        }
-    }
-
     private fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
         if (change.state !in allowed) {
             throw ChangeRejectedException(CONFLICT, "change ${change.id.value} is ${change.state}, not one of $allowed")
@@ -869,7 +818,7 @@ class Changes(
      * publish to settle it, so no change takes its slot (review item 13).
      */
     private suspend fun publishedReady(held: ChangeRequest, head: Head?): Boolean =
-        held.state == ChangeState.READY && ownRevision(held, head) != null
+        held.state == ChangeState.READY && PublishRules.ownRevision(revisions, held, head) != null
 
     /** [held] made `CONFLICTED` for [by] from any staged state, before its slot moves; 409 or 503 when it cannot be. */
     @Suppress("TooGenericExceptionCaught")
@@ -934,8 +883,5 @@ class Changes(
         const val APPROVAL = "APPROVAL"
         val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
         val STAGED = ChangeState.entries.filter { it.staged }.toSet()
-
-        /** How often an analysis may try to reconcile the app list until a reconciliation succeeds here. */
-        val RECONCILE_INTERVAL = 30.seconds
     }
 }

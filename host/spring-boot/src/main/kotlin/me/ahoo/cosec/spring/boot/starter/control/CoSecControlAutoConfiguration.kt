@@ -333,7 +333,10 @@ class CoSecControlAutoConfiguration {
          * [RevocationReader] bean, else the CoCache token store's. With neither, startup fails, as the pipeline's does:
          * the control plane never takes an approval for unrevoked by reading nothing.
          */
-        fun revocations(reader: ObjectProvider<RevocationReader>, tokenStore: ObjectProvider<TokenStore>): RevocationReader {
+        fun revocations(
+            reader: ObjectProvider<RevocationReader>,
+            tokenStore: ObjectProvider<TokenStore>
+        ): RevocationReader {
             reader.ifAvailable?.let { return it }
             return checkNotNull(CoCacheRevocation.readerOf(tokenStore.ifAvailable)) {
                 "The control plane checks its approvers' revocations, but no revocation reader is available: enable " +

@@ -42,9 +42,9 @@ import java.time.Clock
  *
  * Anything else, replacing an entry the base has in particular, does not narrow for this purpose, though it may; nor
  * does an operation on a policy id the document defines that another also defines ([shadows]: the platform's, for a
- * tenant document), since which definition a binding then reaches is not this document's alone. A policy a binding names in another
- * document is read through [policyOf]; one that cannot be found does not narrow. Blocking a principal is no document
- * change: the blacklist is an attribute provider's (`environment.blocked`), and waits for no slot.
+ * tenant document), since which definition a binding then reaches is not this document's alone. A policy a binding
+ * names in another document is read through [policyOf]; one that cannot be found does not narrow. Blocking a principal
+ * is no document change: the blacklist is an attribute provider's (`environment.blocked`), and waits for no slot.
  */
 internal object Narrowing {
     suspend fun only(
@@ -57,28 +57,35 @@ internal object Narrowing {
         if (base == null || operations.isEmpty()) {
             return false
         }
-        return operations.all { operation ->
-            when (operation) {
-                is Operation.RemoveBinding -> {
-                    val removed = base.bindings.firstOrNull { it.id == operation.id }
-                    removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
-                }
+        return operations.all { narrows(it, base, candidate, shadows, policyOf) }
+    }
 
-                is Operation.PutPolicy -> !shadows(operation.policy.id) &&
-                    (
-                        madeUnattachable(base, operation.policy) ||
-                            (base.policies.none { it.id == operation.policy.id } && deniesOnly(operation.policy))
-                        )
-
-                is Operation.PutBinding -> {
-                    val binding = operation.binding
-                    base.bindings.none { it.id == binding.id } && !binding.breakGlass && !shadows(binding.policy) &&
-                        candidate.policies.firstOrNull { it.id == binding.policy }?.let(::deniesOnly) == true
-                }
-
-                else -> false
-            }
+    /** Whether [operation] is one of the whitelist's on [base], giving [candidate]. */
+    private suspend fun narrows(
+        operation: Operation,
+        base: PolicyDocument,
+        candidate: PolicyDocument,
+        shadows: suspend (PolicyId) -> Boolean,
+        policyOf: suspend (PolicyId) -> PolicyDefinition?,
+    ): Boolean = when (operation) {
+        is Operation.RemoveBinding -> {
+            val removed = base.bindings.firstOrNull { it.id == operation.id }
+            removed != null && !shadows(removed.policy) && allowsOnly(base, removed.policy, policyOf)
         }
+
+        is Operation.PutPolicy -> !shadows(operation.policy.id) &&
+            (
+                madeUnattachable(base, operation.policy) ||
+                    (base.policies.none { it.id == operation.policy.id } && deniesOnly(operation.policy))
+                )
+
+        is Operation.PutBinding -> {
+            val binding = operation.binding
+            base.bindings.none { it.id == binding.id } && !binding.breakGlass && !shadows(binding.policy) &&
+                candidate.policies.firstOrNull { it.id == binding.policy }?.let(::deniesOnly) == true
+        }
+
+        else -> false
     }
 
     /** Whether [policy], as [base] or another document defines it, is ALLOWs only and not the blacklist. */

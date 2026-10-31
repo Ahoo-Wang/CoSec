@@ -190,6 +190,13 @@ class ChangeAuthority(
         }
     }
 
+    /** A change that sets a tenant's boundary is the platform's (`BDY-2`): only a platform principal rejects or abandons it. */
+    fun requireBoundaryOperator(operator: Operator, change: ChangeRequest) {
+        if (!operator.platform && change.operations.any { it is Operation.SetBoundary }) {
+            throw ChangeRejectedException(FORBIDDEN, "only a platform principal ends a boundary change")
+        }
+    }
+
     /** Whether an API key authenticated [operator], by provenance or by a credential of that name (fail closed). */
     private fun apiKey(operator: Operator): Boolean = operator.security?.principal?.apiKey == true
 

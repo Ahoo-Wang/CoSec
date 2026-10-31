@@ -140,11 +140,16 @@ class ChangesB2Test {
         }
         narrows(Operation.RemoveBinding(BindingId("reads"))).assert().isTrue()
         narrows(Operation.RemoveBinding(BindingId("shared"))).assert().isFalse()
-        narrows(Operation.PutPolicy(deny("ban")), Operation.PutBinding(binding("ban", PolicyId("ban")))).assert().isTrue()
+        narrows(
+            Operation.PutPolicy(deny("ban")),
+            Operation.PutBinding(binding("ban", PolicyId("ban")))
+        ).assert().isTrue()
         narrows(Operation.PutPolicy(deny("dup"))).assert().isFalse()
-        narrows(Operation.PutPolicy(deny("dup")), Operation.PutBinding(binding("dup", PolicyId("dup")))).assert().isFalse()
+        narrows(
+            Operation.PutPolicy(deny("dup")),
+            Operation.PutBinding(binding("dup", PolicyId("dup")))
+        ).assert().isFalse()
         narrows(Operation.PutPolicy(allow("lent"))).assert().isFalse()
-
     }
 
     /** The policy a removed binding names may be a built-in's or another document's: ALLOWs only narrow there too. */

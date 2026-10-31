@@ -173,7 +173,9 @@ class ApprovalB2Test {
                         PolicyId("no-approve"),
                         false,
                         null,
-                        listOf(StatementSource("", Effect.DENY, listOf("cosec:approve"), listOf(ResourceSource("doc/**")))),
+                        listOf(
+                            StatementSource("", Effect.DENY, listOf("cosec:approve"), listOf(ResourceSource("doc/**")))
+                        ),
                     ),
                 ),
                 listOf(
@@ -506,7 +508,6 @@ class ApprovalB2Test {
         provided["dave"] = setOf(RoleId("approver"), RoleId("suspended"))
         changes.publish(alice, suspended.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         changes.abandon(alice, suspended.id)
-
     }
 
     private companion object {

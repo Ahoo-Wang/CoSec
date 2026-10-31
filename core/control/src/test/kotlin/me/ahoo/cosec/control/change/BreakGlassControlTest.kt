@@ -241,7 +241,13 @@ class BreakGlassControlTest {
         val binding = glass()!!.id
         clock.now = inHours(2)
         val head = revisions.head(SnapshotKey.Platform)!!.revision
-        val holding = changes.propose(plato, SnapshotKey.Platform, head, listOf(Operation.PutPolicy(allowAll("widen"))), "slow")
+        val holding = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            head,
+            listOf(Operation.PutPolicy(allowAll("widen"))),
+            "slow"
+        )
         changes.stage(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         refused { breakGlass.revoke(rita, binding, "tidy") }.assert().isEqualTo(409)
         changes.get(holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)

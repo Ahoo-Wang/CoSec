@@ -62,7 +62,11 @@ class RetriedPublishTest {
     @Volatile
     private var loseReply = false
     private val store = object : ControlStore by memory {
-        override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument): HeadWrite {
+        override suspend fun putHead(
+            key: SnapshotKey,
+            expected: SnapshotDigest?,
+            document: SnapshotDocument
+        ): HeadWrite {
             val written = memory.putHead(key, expected, document)
             if (loseReply) {
                 loseReply = false
@@ -191,7 +195,12 @@ class RetriedPublishTest {
         val PIA = Operator(Actor(TenantId.PLATFORM, PrincipalId("pia")), NO_MEMBERSHIPS)
         val BAN = listOf(
             Operation.PutPolicy(
-                PolicyDefinition(PolicyId("ban"), false, null, listOf(StatementSource("", Effect.DENY, listOf("order:delete"))))
+                PolicyDefinition(
+                    PolicyId("ban"),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.DENY, listOf("order:delete")))
+                )
             ),
             Operation.PutBinding(
                 Binding(BindingId("ban"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("ban"))

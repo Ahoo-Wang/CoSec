@@ -128,7 +128,16 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         membershipSource: MembershipSource,
         attributes: Map<String, Any> = emptyMap(),
         credential: Identity.Credential? = null,
-    ) : this(id, tenant, membershipSource, attributes, credential, breakGlass = false, issuedAt = null, apiKeyCredential = false)
+    ) : this(
+        id,
+        tenant,
+        membershipSource,
+        attributes,
+        credential,
+        breakGlass = false,
+        issuedAt = null,
+        apiKeyCredential = false
+    )
 
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the

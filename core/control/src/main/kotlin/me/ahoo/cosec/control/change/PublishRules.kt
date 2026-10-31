@@ -18,6 +18,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.ShadowWindow
 
@@ -33,6 +34,20 @@ internal object PublishRules {
         return provenance.change == change.id.value &&
             provenance.parent?.digest == change.base.digest?.toString() &&
             (provenance.parent?.revision ?: 0) == change.base.revision
+    }
+
+    /**
+     * [change]'s own revision, the one after its base, when an earlier publish wrote it: the head, or a revision the
+     * chain still holds when the head has moved on since (review item 13); `null` when none is [change]'s.
+     */
+    suspend fun ownRevision(revisions: Revisions, change: ChangeRequest, head: Head?): Head? {
+        val revision = change.base.revision + 1
+        val own = when {
+            head == null || head.revision < revision -> null
+            head.revision == revision -> head
+            else -> revisions.at(change.key, revision)
+        }
+        return own?.takeIf { publishedBy(change, it) }
     }
 
     fun referenced(outcome: PublishOutcome.Referenced): List<Finding> =

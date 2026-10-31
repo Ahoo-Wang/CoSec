@@ -37,6 +37,7 @@ import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
@@ -51,13 +52,12 @@ import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -192,7 +192,13 @@ class ControlApprovalStarterTest {
                     null,
                     listOf(StatementSource("", Effect.ALLOW, listOf("order:write")))
                 )
-                val change = plane.propose(plato, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(policy)), "writes")
+                val change = plane.propose(
+                    plato,
+                    SnapshotKey.Platform,
+                    1,
+                    listOf(Operation.PutPolicy(policy)),
+                    "writes"
+                )
                 val waiting = plane.skipShadow(plato, change.id, "test")
                 plane.approve(dave, change.id, waiting.candidate!!).state.assert().isEqualTo(ChangeState.READY)
                 context.getBean(TokenRevoker::class.java)
@@ -207,7 +213,9 @@ class ControlApprovalStarterTest {
     fun `a revocation kept shorter than an approval counts fails startup`() {
         runner.withPropertyValues("cosec.control.approval.expire-after=8d").run { context ->
             val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
-            message.assert().contains("cosec.jwt.token-validity.refresh").contains("cosec.control.approval.expire-after")
+            message.assert().contains(
+                "cosec.jwt.token-validity.refresh"
+            ).contains("cosec.control.approval.expire-after")
         }
     }
 

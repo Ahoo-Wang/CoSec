@@ -52,7 +52,13 @@ class PreemptionRaceTest {
     /** A harness over the racing store, with a platform document to narrow: preemption narrows a head. */
     private suspend fun harness(): ChangeHarness {
         val harness = ChangeHarness(clock, memory, racing, ChangeOptions(shadow = IMMEDIATE_WINDOW))
-        val setup = harness.changes.propose(PLATO, SnapshotKey.Platform, 0, listOf(Operation.PutPolicy(allow("reads"))), "setup")
+        val setup = harness.changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            0,
+            listOf(Operation.PutPolicy(allow("reads"))),
+            "setup"
+        )
         harness.changes.skipShadow(PLATO, setup.id, "setup")
         harness.changes.publish(PLATO, setup.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         return harness
@@ -80,7 +86,9 @@ class PreemptionRaceTest {
                 listOf(StatementSource("", Effect.DENY, listOf("order:delete")))
             )
         ),
-        Operation.PutBinding(Binding(BindingId("ban"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("ban"))),
+        Operation.PutBinding(
+            Binding(BindingId("ban"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("ban"))
+        ),
     )
 
     private suspend fun head(harness: ChangeHarness): Long = harness.revisions.head(SnapshotKey.Platform)!!.revision
@@ -108,7 +116,13 @@ class PreemptionRaceTest {
     fun `a holder approved while it is preempted is conflicted`() = runBlocking<Unit> {
         val harness = harness()
         val changes = fourEyes(harness)
-        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        val proposed = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(harness),
+            listOf(Operation.PutPolicy(allow("slow"))),
+            "slow"
+        )
         val held = changes.stage(PLATO, proposed.id)
         val waiting = changes.shadowed(held.id)
         waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
