@@ -260,9 +260,9 @@ Blocking a principal, a device or an address is not a document change: the black
 The change that held the slot is made `CONFLICTED` before the slot moves, from whichever state it is in by then
 (approved or past its window meanwhile), its candidate withdrawn, and it is recorded as `FAILED` with the note
 `preempted by <change>`; rebase it to try again. A holder that cannot be marked, because the store fails, keeps the
-slot, and the change that would take it is refused (`503`); so does a `READY` holder whose revision the chain already
-shows, a publish that wrote and lost its answer, until that publish is retried. A publish goes on only while its change
-holds the slot.
+slot, and the change that would take it is refused (`503`). A `READY` holder whose revision the chain already shows, a
+publish that wrote and lost its answer, keeps it too (`409`) until that publish is retried. A publish goes on only
+while its change holds the slot.
 
 ## Approval
 
