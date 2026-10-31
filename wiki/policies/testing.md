@@ -33,6 +33,10 @@ principals of the `(platform)` tenant.
 | Approve, reject | `cosec:approve` |
 | `simulate`, `explain`, `analyze` | `cosec:simulate`, `cosec:explain`, `cosec:analyze` on the tenant document asked about |
 
+`cosec:grant` is checked on the scope of each binding, `scope/<tenant>/<app>/<space>`: `*` for a binding of any
+app or any space, and `(default)` for the default space, so a policy that limits grants in the default space names
+`scope/acme/order/(default)`. Space ids beginning with `(` are CoSec's, so `(default)` is never a space of yours.
+
 Three built-in policies can be bound to operators: `cosec:platform-admin` (every action on every document),
 `cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` on its own
 tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` and `publish`).
@@ -51,7 +55,8 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
-exists.
+exists. The control host logs why at `INFO`, with the problem's `requestId`
+([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
 
 ## Validating policies
 
@@ -158,7 +163,9 @@ A change is a set of entry operations on one document, made on the revision you 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
 "note"}`) and proposes the operations that turn the current revision into it: `MERGE` only adds and changes, `REPLACE`
-also removes what the document leaves out. Use `apply` to set a tenant's `boundary` or the platform's default. How
+also removes what the document leaves out. Use `apply` to set a tenant's `boundary` or the platform's default. A
+tenant's boundary is the platform's: a tenant principal's `REPLACE` or rollback that would remove or change the
+boundary the platform set is a `403`. How
 rate limit rule changes are authorized and approved is in [Rate limiting](./rate-limiting.md#publishing-rules).
 
 A base that is no longer the current revision is a `409`. A DENY with `onMissing: "nomatch"` needs a confirmation in
@@ -186,7 +193,8 @@ until that one is published, abandoned, rejected or expired. A change that is no
 read after that, and the control plane's maintenance pass reads every open change each
 `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
 `DRAFT` or `CHECKED` change onto the current revision, which runs every check again and drops earlier approvals and
-shadow evidence. The author, or anyone with `cosec:publish`, can `:abandon` it.
+shadow evidence. The author, or anyone with `cosec:publish`, can `:abandon` it; a change that sets a tenant's boundary
+only a platform principal rejects or abandons.
 
 ## Trying changes in shadow mode
 
@@ -237,15 +245,24 @@ break-glass bindings has no window.
 One change at a time holds a document's staging slot while it is shadowing, awaiting approval or ready; another
 change of that document waits (`409`). An emergency must not: two kinds of change take the slot.
 
-- **Revoking break-glass**, always.
+- **Revoking break-glass**, always, for a binding that has not expired. Revoking publishes only through a REQUIRED
+  change listener that records it; while that listener's store is down, revoke the principal's tokens instead
+  (`TokenRevoker.revokeSubject`), which needs no listener.
 - **A change that only narrows**, staged or skipped by a holder of `cosec:skip-shadow` on the document. Every
-  operation must be one of: removing a binding of a policy of ALLOWs only that is not `cosec:blacklist`; making an
-  attachable policy of ALLOWs only not attachable, its statements as they were; a new blacklist entry; a new policy of
-  DENYs only, or a new binding of one. Removing a DENY or a blacklist entry, making a DENY not attachable, or replacing
-  any entry there is widens, or may, and waits like any change.
+  operation must be one of: removing a binding of a policy of ALLOWs only; making an attachable policy of ALLOWs only
+  not attachable, its statements as they were; a new policy of DENYs only, or a new binding of one. Removing a DENY,
+  making a DENY not attachable, replacing any entry there is, or an operation on a policy id both the tenant and the
+  platform define widens, or may, and waits like any change.
 
-The change that held the slot becomes `CONFLICTED`, its candidate withdrawn, and is recorded as `FAILED` with the note
-`preempted by <change>`; rebase it to try again.
+Blocking a principal, a device or an address is not a document change: the blacklist is read at request time
+([Security model](../guide/security-model.md#blacklist)), so it waits for no slot.
+
+The change that held the slot is made `CONFLICTED` before the slot moves, from whichever state it is in by then
+(approved or past its window meanwhile), its candidate withdrawn, and it is recorded as `FAILED` with the note
+`preempted by <change>`; rebase it to try again. A holder that cannot be marked, because the store fails, keeps the
+slot, and the change that would take it is refused (`503`); so does a `READY` holder whose revision the chain already
+shows, a publish that wrote and lost its answer, until that publish is retried. A publish goes on only while its change
+holds the slot.
 
 ## Approval
 
@@ -294,9 +311,15 @@ whose id the platform also defines re-points the tenant's bindings of that id, a
 platform's policy is attachable, to the platform's policy. That is analyzed as granting the platform's policy to
 them. A platform principal holding `cosec:approve` on the document is the trust root:
 its own changes are not analyzed, unless `cosec.control.approval.four-eyes` is on, in which case they are analyzed like
-anyone's. A tenant principal the platform gave `cosec:approve` on its tenant's document approves others' changes, and
-its own are analyzed. A tenant's boundary is the platform's: only a platform principal sets it (`403` otherwise), and
-only a platform principal approves a change that sets one.
+anyone's and what needs approval needs another platform principal's. A tenant principal the platform gave
+`cosec:approve` on its tenant's document approves others' changes, and its own are analyzed. A tenant's boundary is the
+platform's: only a platform principal sets it (`403` otherwise), and only a platform principal approves, rejects or
+abandons a change that sets one.
+
+An API key is never the trust root, and never approves, whatever its principal holds. CoSec tells its own API keys by
+where they were verified, and any credential named `api-key`, a gateway's forwarded identity's among them, counts as
+one. A credential your own authenticator accepts is a person's to CoSec: give an authenticator of workloads neither
+`cosec:approve` nor `cosec:platform-admin`.
 
 What the analysis does not see:
 
@@ -313,12 +336,20 @@ A change with escalations waits in `AWAITING_APPROVAL` once its window closed or
 `cosec:approve` approves it with `POST /changes/{id}:approve` and the `candidate` digest they reviewed (from
 `GET /changes/{id}`); a different digest is a `409`, and the author cannot approve their own change. An approval is a
 person's: a principal that authenticated with an API key cannot approve (`403`). The approval records the approver's
-token (its `jti` and `iat`); when that token, or every token of the approver issued by then, is revoked before the
-change publishes, the approval no longer counts. An approver whose memberships come from the membership provider is
-checked again with what the provider answers at publish: a role counts only if it held it when it approved and still
-holds it. `:reject` with a
-`reason` ends it. An approval is valid for `cosec.control.approval.expire-after` (72 hours) and only for that
-candidate.
+credential (its id, a token's `jti`, and when it was issued, its `iat`); when that token, or every token of the
+approver issued by then, is revoked before the change publishes, the approval no longer counts. An approval that
+records no credential id does not count either: one made before the upgrade to this version, one an older instance
+accepted, or one given with a credential that has no id; approve it again. A credential that does not say when it was
+issued, from an authenticator of yours that sets no `issuedAt`, loses its approvals to any revocation of its
+principal's tokens. Revocations are read as the pipeline reads them, so a degraded read counts as "not revoked" here
+too ([Authentication](../integration/authentication.md#logout-and-revocation)); they are kept for
+`cosec.jwt.token-validity.refresh`, which must be no shorter than `cosec.control.approval.expire-after`, or the starter
+does not start. An approver whose memberships come from the membership provider is decided twice at publish: on the
+roles it held when it approved and still holds, and on everything the provider answers now; both must permit, so a DENY
+bound to a role it gained since takes the approval back. `:reject` with a `reason` ends it. An approval is valid for
+`cosec.control.approval.expire-after` (72 hours) and only for that candidate. A break-glass approval is recorded by a
+REQUIRED change listener before it is stored: when storing it fails after that, the record shows an approval the change
+does not have, and the approver approves again.
 
 ## Publishing and rolling back
 
@@ -336,8 +367,11 @@ approval, which must cover the escalations found now, be unexpired, be for this 
 nor the publisher, and come from someone who still holds `cosec:approve`. The approver is checked with the credential
 they approved with: an approval given with a capped key does not count the ALLOWs of the approver's own bindings at publish time, and
 one given without CoSec's own token does not count their break-glass bindings. If the approval no longer holds, the change
-goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved, the change is `CONFLICTED`; if the
-candidate no longer compiles against the current documents, it is `DRAFT` with the findings.
+goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved, or another change has taken the
+document's staging slot meanwhile, the change is `CONFLICTED`; if the candidate no longer compiles against the current
+documents, it is `DRAFT` with the findings. A publish whose revision was written but whose answer was lost is
+`PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
+finishes what followed the write, and records the events as the publisher the revision names.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane

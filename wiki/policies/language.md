@@ -411,7 +411,7 @@ A binding says: *subject* is subject to *policy* in *app* and *space*.
 | `id` | string | required | Unique in its document. The control plane refuses new ids that start with `cosec:`, `g:` or `r:`. |
 | `subject` | `"*"` or object | required | Who: see below. |
 | `app` | string | required | An app id, or `*` for any app. Never empty. |
-| `space` | string | required | A space id, `""` for the default space, or `*` for any space. |
+| `space` | string | required | A space id, `""` for the default space, or `*` for any space. A space id beginning with `(` is CoSec's, and a binding in one does not compile. |
 | `policy` | string | required | The policy id. |
 | `expiresAt` | string | none | An ISO-8601 instant. From then on the binding does not apply. |
 | `breakGlass` | boolean | `false` | A break-glass binding ([security model](../guide/security-model.md)). |
@@ -436,7 +436,8 @@ What a binding may name in `policy`:
 - an app's permission policy: only in that app's document, or in a tenant document with `app` set to that app
   ([Role permissions](./role-permissions.md#tenant-role-bindings));
 - `cosec:root`, only from a break-glass binding; `cosec:platform-admin`, `cosec:tenant-admin` and
-  `cosec:tenant-viewer`, which authorize the control plane.
+  `cosec:tenant-viewer`, which authorize the control plane. `cosec:platform-admin` is bound only in the platform
+  document and the platform tenant's own, `(platform)`: a tenant or app document that binds it does not compile.
 
 A boundary policy and `cosec:blacklist` are never bound. A break-glass binding is only in the platform document, binds
 a principal of the `(platform)` tenant, and has `expiresAt`. A document binds at most 1,000 principals: grant users

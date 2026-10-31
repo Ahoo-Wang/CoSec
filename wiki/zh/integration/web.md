@@ -119,7 +119,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `401` | `token-expired` | Deny，且令牌已过期。在网关之后：`CoSec-Identity` 或其凭证过旧。 |
 | `401` | `token-revoked` | Deny，且该令牌或其主体的全部令牌已被吊销。 |
 | `403` | `forbidden` | Deny，且调用方已认证：显式 DENY、隐式拒绝或平台边界。 |
-| `403` | `scope-rejected` | 调用方已认证，且作用域被拒绝：声明了与宿主不同的应用，或主体在声明的空间中没有角色。 |
+| `403` | `scope-rejected` | 调用方已认证，且作用域被拒绝：声明了与宿主不同的应用，主体在声明的空间中没有角色，或声明的空间 id 以 `(` 开头（归 CoSec 所有）。 |
 | `429` | `too-many-requests` | Permit，但某条匹配的[限流规则](../policies/rate-limiting.md)已没有许可。 |
 | `503` | `unavailable` | 无法做出决策：Indeterminate；认证器或成员关系提供者失败或超时；快照源失败；严格的限流规则无法计数；Permit 时某个 REQUIRED 决策监听器失败；只有 break-glass 放行却没有 REQUIRED 监听器；或超过了 `cosec.pipeline.timeout`。 |
 | `500` | `internal-error` | 未被建模的异常：CoSec 的缺陷。在网关上，还包括身份无法转发的 Permit（[转发身份](#forwarding-the-identity)）。 |

@@ -352,13 +352,18 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `Invalid change options.`、`Invalid shadow window options.` | 修正 [`cosec.control.*`](./configuration.md#control-plane)：`break-glass.max-duration` 超过 `24h`，或 `shadow.max-duration` 小于 `shadow.min-duration`。 |
 | `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
+| `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | 启用 CoSec 的令牌并加上 `cosec-cocache`，或声明一个 `RevocationReader` bean；只有在审批人的凭证从不吊销时才用 `RevocationReader.NONE`（[控制面](./configuration.md#control-plane)）。 |
+| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | 调大前者或调小后者：吊销记录必须比它的令牌给出的每一次审批活得更久。 |
 
 ## 控制面错误 {#control-plane-errors}
 
 发往控制 API 的请求像其他请求一样先经过宿主的管道，所以管道自己的 `401`、`403` 和 `503` 对它同样适用。之后控制面在
 应用 [`cosec.control.app-id`](./configuration.md#control-plane) 中以该主体的身份再次授权每个动作。它的 problem 响应体
 使用相同的 `type` 前缀；`400`、`409`、`410`、`412`、`422` 或 `428` 会在 `detail` 中解释请求的问题，`401`、`403`、
-`404`、`500` 或 `503` 则从不解释，所以一次拒绝不会透露某个文档、变更或 DENY 是否存在。
+`404`、`500` 或 `503` 则从不解释，所以一次拒绝不会透露某个文档、变更或 DENY 是否存在。被拒绝步骤的原因改为记在控制面所在主机的日志中，
+由 `me.ahoo.cosec.control.api` 以 `INFO` 记录：`Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>`，
+其中的 `requestId` 与 problem 响应体中的相同，例如 `an API key cannot approve: an approval is a person's` 或
+`only a platform principal sets a tenant's boundary`。
 
 | 状态码 | 原因 | 修复 |
 |---|---|---|
@@ -377,8 +382,8 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 
 - **平台变更出现 `V2` 发现 `[<id>] is a policy id [tenant:...] already use`**：某个租户文档定义或绑定了这个 id 的策略，平台的策略会使它在那里二义。给平台策略换一个 id，或先让该租户删除或改名它自己的策略。带 `, or whose document could not be read`（`503`）时，索引列出的某个租户文档读不到；等 Redis 恢复后重试。
 - **发布之后出现 `REVIEW_NEEDED` 变更事件**：变更检查时读过的其他文档在它写入之前变化了，而在当前的头上分析发现了无人审批的升级项。变更已经发布；按[一次发布比较什么](./storage.md#what-a-publish-compares)所述复核它。升级项原因为 `DETECTION_TIMED_OUT` 时，写入之后的比较没有按时完成，并不知道有东西变化；同样复核这次变更。
-- **以 `WARN` 记录 `[<doc>] revision <n> is published; its index or the references it dropped could not be updated`**：存储在写头之后失败了。这个修订已经生效，无需处理：`history` 会沿修订链重建索引，残留的引用最多误拦一次删除。如果变更本身没能结算，发布会返回错误，尽管修订已经生效；再次发布它会报 `CONFLICTED`；文档的 `history` 中能看到带有该变更 id 的这个修订。
-- **发布时审批不再算数**：变更回到 `AWAITING_APPROVAL`，`APPROVAL` 发现写着 `the token the approver approved with is revoked`、`the approver's tokens are revoked`、`the approver no longer holds cosec:approve on the document` 或 `only a platform principal approves a boundary change`。请重新申请审批。`:approve` 返回 `an API key cannot approve`（`403`）：请用人的令牌审批。
+- **以 `WARN` 记录 `[<doc>] revision <n> is published; its index or the references it dropped could not be updated`**，来自控制面的修订存储（`me.ahoo.cosec.control.store`）：写头之后的某一步失败了，即修订索引或反向引用索引的更新，而不是写入本身。这个修订已经生效，无需处理：`history` 会沿修订链重建索引，残留的引用最多误拦一次删除。如果变更本身没能结算，发布会返回错误，尽管修订已经生效；再次发布它会报 `PUBLISHED`，补做写入之后的步骤，并以原发布人的身份记录事件。
+- **发布时审批不再算数**：变更回到 `AWAITING_APPROVAL`，`APPROVAL` 发现写着 `the token the approver approved with is revoked`、`the approver's tokens are revoked`、`the approver no longer holds cosec:approve on the document`、`only a platform principal approves a boundary change`、`under four-eyes, only a platform principal approves a platform principal's change`，或 `the approval does not say what credential its approver approved with`（升级前的审批、旧实例接受的审批，或用不带 id 的凭证给出的审批）。请重新申请审批。`:approve` 返回 `403` 而日志中写着 `an API key cannot approve`：请用人的令牌审批。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 
 ## Spring MVC 上经过 CoSec 后表单 POST 请求体为空 {#form-post-body-is-empty-after-cosec-on-spring-mvc}

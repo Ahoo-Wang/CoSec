@@ -73,7 +73,8 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * Errors are RFC 9457 problems in RFC 0006's vocabulary (`invalid-request`, `unauthorized`, `forbidden`,
  * `unavailable`, `internal-error`), plus the control API's own statuses (404, 409, 410, 412, 422, 428). A problem
  * says what the caller can act on: a 401, 403, 404, 500 or 503 carries no detail, so a refusal never tells whether a
- * document, a change or a DENY exists; a 400, 409, 410, 412, 422 or 428 explains the caller's own request.
+ * document, a change or a DENY exists, and why a refused step was refused is logged at INFO instead; a 400, 409, 410,
+ * 412, 422 or 428 explains the caller's own request.
  *
  * | Method and path | Call |
  * |---|---|
@@ -102,7 +103,16 @@ class ControlHttp(private val plane: ControlPlane) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: ChangeRejectedException) {
-            problem(Problem.of(e.status), requestId, e.message)
+            val problem = Problem.of(e.status)
+            if (!problem.detailed) {
+                // The answer says nothing, so a refusal never tells what exists; the operator's administrator reads why.
+                log.info {
+                    "Control API ${request.method} ${request.path} by ${operator.tenant.value}/" +
+                        "${operator.actor.principal.value} is ${problem.status} " +
+                        "(request $requestId): ${e.message}"
+                }
+            }
+            problem(problem, requestId, e.message)
         } catch (e: IllegalArgumentException) {
             problem(Problem.INVALID_REQUEST, requestId, e.message)
         } catch (e: SnapshotFormatException) {

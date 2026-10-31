@@ -56,33 +56,49 @@ analysis read the author's rights as enforcement does, so some changes that publ
   `ChangeEvent.Kind` gains the two.
 - **The trust root is the platform's** (RC1-10, `APR-3`). Only a platform principal holding `cosec:approve` publishes
   its own changes unanalyzed; a tenant principal the platform gave `cosec:approve` now has its own changes analyzed,
-  and approves others'. A tenant's boundary is the platform's: a tenant principal's `SetBoundary` is `403`, and only a
-  platform principal approves a change that sets one (`BDY-2`).
+  and approves others'. A tenant's boundary is the platform's: a tenant principal's `SetBoundary` is `403`, so is its
+  `apply` with `REPLACE` or a rollback that would remove or change the boundary the platform set, and only a platform
+  principal approves, rejects or abandons a change that sets one (`BDY-2`). An API key is never the trust root, even
+  for a platform principal holding `cosec:approve`; nor is any credential named `api-key`, a forwarded identity's
+  included. Under `four-eyes`, a platform principal's change needs another platform principal's approval.
 - **`cosec:platform-admin` is bound only by the platform** (RC1-36, `TNT-2`): in the platform document, or the
   platform tenant's own, as `bootstrap` writes it. A tenant or app document that binds it no longer compiles; remove
   such a binding before upgrading.
 - **Approvals are a person's, and checked again** (RC1-11, `APR-7`, `APR-8`). A principal that authenticated with an
-  API key cannot approve (`403`). An approval records the approver's token (`jti`, `iat`); revoking that token, or the
-  approver's tokens, before the change publishes takes the approval back. An approver whose memberships come from the
-  membership provider counts with the roles it held then and still holds; the starter now gives the control plane the
-  application's `MembershipProvider` (RC1-13). Approvals made before the upgrade record no token: a revocation of their
-  approver's tokens takes them back. In code, `AuthenticatedPrincipal` has `issuedAt`.
+  API key cannot approve (`403`). An approval records the approver's credential (`jti`, `iat`); revoking that token,
+  or the approver's tokens, before the change publishes takes the approval back. An approver whose memberships come
+  from the membership provider must be permitted both on the roles it held then and still holds and on what the
+  provider answers now; the starter now gives the control plane the application's `MembershipProvider` (RC1-13). **An
+  approval that records no credential id does not count**: every change approved before the upgrade goes back to
+  `AWAITING_APPROVAL` at publish, and is approved again. In code, `AuthenticatedPrincipal` has `issuedAt` and `apiKey`.
+- **The starter checks how approvals are revoked.** The control plane needs a revocation reader, as the pipeline
+  does: a `RevocationReader` bean, or CoSec's tokens with `cosec-cocache`; startup fails without one (declare
+  `RevocationReader.NONE` when no approver's credential is ever revoked). Startup also fails when
+  `cosec.jwt.token-validity.refresh`, how long a revocation is kept, is shorter than
+  `cosec.control.approval.expire-after`.
 - **A busy staging slot can be taken** (RC1-12, `CTL-22`, `BRK-9`): by a break-glass revoke, and by a change that only
   narrows, staged by a holder of `cosec:skip-shadow` ([Taking a busy slot](../policies/testing.md#taking-a-busy-slot)).
-  The change that held it becomes `CONFLICTED`.
+  The change that held it becomes `CONFLICTED`. A publish retried after its answer was lost reports `PUBLISHED`.
 - **`Anyone` in tenant `(0)`** (RC1-35, `GRT-7`): such a grant reaches unauthenticated callers, and needs an approval
   (`ANONYMOUS`). Code that matches every `UnknownReason` gains `ANONYMOUS`.
 - **The default space in control-plane resources is `(default)`** (RC1-37, `SCP-9`), and space ids beginning with `(`
   are CoSec's: a request that declares one is `403` (`scope-rejected`), and a document binding in one does not compile.
   A control-plane policy written for `scope/<tenant>/<app>/-` now means the space named `-`; write
-  `scope/<tenant>/<app>/(default)` for the default space.
+  `scope/<tenant>/<app>/(default)` for the default space. **A control-plane DENY on `scope/*/*/-` no longer applies to
+  the default space**: rewrite it as `scope/*/*/(default)` before upgrading, or the grants it held back are allowed.
+  A binding in a space whose id begins with `(` stops its document compiling, and a request in such a space is
+  refused: before upgrading, look for `"space": "(` in every document, move such bindings to a space id of yours, and
+  move the memberships of that space with them.
 - **Break-glass** (RC1-27, RC1-29, RC1-30): `cosec-migrate` writes no break-glass binding
   ([Root becomes break-glass](#root-becomes-break-glass)); `BreakGlass.request` derives the binding's id and has no
   `binding` parameter; approving break-glass needs a REQUIRED change listener (`503` otherwise, `BRK-3`).
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,
-  or lower `reclaim-interval` for the duration.
+  or lower `reclaim-interval` for the duration. An older instance also still takes a tenant principal holding
+  `cosec:approve` for the trust root, and accepts an API key's approval: approve and publish through upgraded
+  instances only until the roll is done. An approval an older instance accepted names no credential, so an upgraded
+  instance does not publish on it.
 
 ## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
 

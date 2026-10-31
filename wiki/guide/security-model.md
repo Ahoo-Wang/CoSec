@@ -240,15 +240,22 @@ it fails, the request is `503`. A permission check in code (`AuthorizationChecke
 
 The two people are the control plane's rule, enforced for every kind of change that creates break-glass (`BRK-5`):
 the request and its approval are steps of one change, each recorded by a REQUIRED change listener, and the revision it
-publishes records its author and its approver (`provenance`). The data plane does not check a break-glass binding for
+publishes records who published it and who approved it (`provenance.publishedBy`, `approvedBy`); who requested it is
+in the change log. The data plane does not check a break-glass binding for
 who granted or approved it: whoever can write a document can write such names too, so they would prove nothing.
 `cosec-migrate` writes no break-glass binding; after the switch, request one through the control plane.
 
-These guarantees bind the trust root only with `cosec.control.approval.four-eyes` on. A platform administrator holding
-`cosec:approve` publishes its own changes without analysis or a second person when it is off, and holds
-`cosec:skip-shadow`: alone, it can bind itself a non-expiring ALLOW of everything, which is what break-glass gives,
-without its second person, its time bound or its REQUIRED audit. Turn four-eyes on where that matters
-([Testing policies](../policies/testing.md#approval)).
+These guarantees do not bind the trust root. A platform administrator holding `cosec:approve` publishes its own
+changes without analysis or a second person, and holds `cosec:skip-shadow`: alone, it can bind itself a non-expiring
+ALLOW of everything, which is what break-glass gives, without its second person, its time bound or its REQUIRED audit.
+`cosec.control.approval.four-eyes` brings back the analysis and the second person, another platform principal; it adds
+no time bound and no REQUIRED audit to such a binding. Turn four-eyes on where a second person matters
+([Testing policies](../policies/testing.md#approval)), and watch the change log for ALLOWs of everything.
+
+The trust root is a person. An API key is never the trust root and never approves, whatever its principal holds: CoSec
+tells its own API keys by where they were verified, and takes any credential named `api-key`, a gateway's forwarded
+identity's included, for one. A credential your own authenticator accepts is a person's to CoSec, so give an
+authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`.
 
 ## Platform boundary
 

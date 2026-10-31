@@ -157,7 +157,7 @@ proceeds to your handler only on a Permit.
 | `401` | `token-expired` | Deny, and the token had expired. Behind a gateway: a `CoSec-Identity`, or its credential, that is too old. |
 | `401` | `token-revoked` | Deny, and the token, or every token of its principal, was revoked. |
 | `403` | `forbidden` | Deny, and the caller is authenticated: an explicit DENY, the implicit deny, or the platform boundary. |
-| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a declared app other than the host's, or a space the principal has no role in. |
+| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a declared app other than the host's, a space the principal has no role in, or a space id beginning with `(`, which is CoSec's. |
 | `429` | `too-many-requests` | Permit, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. |
 | `503` | `unavailable` | No decision could be made: Indeterminate, the authenticator or a membership provider failed or timed out, the snapshot source failed, a strict rate limit rule could not be counted, a REQUIRED decision listener failed on a Permit, a Permit only break-glass gives without a REQUIRED listener, or `cosec.pipeline.timeout` passed. |
 | `500` | `internal-error` | An exception nothing modelled: a defect of CoSec. At a gateway, also a Permit whose identity cannot be forwarded ([Forwarding the identity](#forwarding-the-identity)). |

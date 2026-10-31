@@ -401,6 +401,8 @@ random one.
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
+| `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |
+| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | Raise the first or lower the second: a revocation must outlive every approval its token gave. |
 
 ## Control-plane errors
 
@@ -408,7 +410,11 @@ The request to the control API goes through the host's pipeline first, like any 
 `401`, `403` and `503` apply to it. Then the control plane authorizes each action again as that principal, in the app
 [`cosec.control.app-id`](./configuration.md#control-plane). Its problem bodies use the same `type` prefix, and a
 `400`, `409`, `410`, `412`, `422` or `428` explains the request in `detail`; a `401`, `403`, `404`, `500` or `503` never
-does, so a refusal does not tell whether a document, a change or a DENY exists.
+does, so a refusal does not tell whether a document, a change or a DENY exists. The reason of a refused step is in the
+control host's log instead, at `INFO` from `me.ahoo.cosec.control.api`:
+`Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>`, with the
+`requestId` of the problem body, such as `an API key cannot approve: an approval is a person's` or `only a platform
+principal sets a tenant's boundary`.
 
 | Status | Cause | Fix |
 |---|---|---|
@@ -434,15 +440,19 @@ for a check, `412` for an `ifMatch` that does not hold).
   as [What a publish compares](./storage.md#what-a-publish-compares) describes. With the escalation reason
   `DETECTION_TIMED_OUT`, the comparison after the write did not finish in time, so nothing is known to have moved;
   review the change the same way.
-- **`[<doc>] revision <n> is published; its index or the references it dropped could not be updated`** at `WARN`:
-  the store failed after the head write. The revision is in effect and nothing needs doing: `history` rebuilds the
-  index from the chain, and a reference left behind blocks a removal at most. If the change itself could not be
-  settled, the publish answers an error although the revision is in effect, and publishing it again reports
-  `CONFLICTED`; the document's `history` shows the revision with the change's id.
+- **`[<doc>] revision <n> is published; its index or the references it dropped could not be updated`** at `WARN`,
+  from the control plane's revision store (`me.ahoo.cosec.control.store`): a step after the head write failed, the
+  revision index or the back-reference index, not the write. The revision is in effect and nothing needs doing:
+  `history` rebuilds the index from the chain, and a reference left behind blocks a removal at most. If the change
+  itself could not be settled, the publish answers an error although the revision is in effect; publishing it again
+  reports `PUBLISHED`, finishes what followed the write and records the events as the original publisher.
 - **An approval no longer counts at publish**: the change is `AWAITING_APPROVAL` again, its `APPROVAL` finding saying
   `the token the approver approved with is revoked`, `the approver's tokens are revoked`, `the approver no longer
-  holds cosec:approve on the document` or `only a platform principal approves a boundary change`. Ask for a new
-  approval. `an API key cannot approve` (`403`) on `:approve`: approve with a person's token.
+  holds cosec:approve on the document`, `only a platform principal approves a boundary change`, `under four-eyes, only
+  a platform principal approves a platform principal's change`, or `the approval does not say what credential its
+  approver approved with` (an approval from before the upgrade, from an older instance, or by a credential without an
+  id). Ask for a new approval. A `403` on `:approve` with `an API key cannot approve` in the log: approve with a
+  person's token.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):

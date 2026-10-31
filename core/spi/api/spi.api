@@ -83,7 +83,7 @@ public final class me/ahoo/cosec/spi/authn/AuthenticatedPrincipal {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/Memberships;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/authn/MembershipSource;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/authn/MembershipSource;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/spi/authn/MembershipSource;Ljava/util/Map;Lme/ahoo/cosec/spi/identity/Identity$Credential;ZLjava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getApiKey ()Z
 	public final fun getAttributes ()Ljava/util/Map;
 	public final fun getBreakGlass ()Z
 	public final fun getCredential ()Lme/ahoo/cosec/spi/identity/Identity$Credential;
