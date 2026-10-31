@@ -89,6 +89,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
 - **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `cosec-kafka`, a
   `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
+- **`The control plane checks its approvers' revocations, but no revocation reader is available`**: enable CoSec's
+  tokens with `cosec-cocache`, or declare a `RevocationReader` bean (`RevocationReader.NONE` only when no approver's
+  credential is ever revoked). **`cosec.jwt.token-validity.refresh (...), how long a token revocation is kept, is
+  shorter than cosec.control.approval.expire-after`**: raise the first or lower the second.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
   `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG
   GET maxmemory-policy failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a
@@ -252,12 +256,27 @@ does not match; 422 the candidate does not compile, refers to a missing policy, 
 (`cosec:`, `g:`, `r:`); 428 a DENY with `onMissing: nomatch` needs a confirmation; 503 the decision or store could not
 be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebMvc a body over
 `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
-first one with `cosec-migrate publish`.
+first one with `cosec-migrate publish`. A 401, 403, 404, 500 or 503 carries no `detail`: read why in the control
+host's log, `Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>` at
+`INFO` from `me.ahoo.cosec.control.api`, matching the problem's `requestId`.
 
 A platform change with the `V2` finding `[<id>] is a policy id [tenant:...] already use` adds an id a tenant document
 defines or binds; rename the platform policy, or have the tenant remove its own first. A `REVIEW_NEEDED` change event
 after a publish means another document the change was checked with moved before the write and the analysis now finds
 an escalation nobody approved; the change stays published and needs a person's review.
+
+An approval that no longer counts at publish sends the change back to `AWAITING_APPROVAL` with an `APPROVAL` finding:
+the approver's token was revoked since, the provider no longer gives the approver its role or now binds it a DENY, a
+tenant principal approved a boundary change or (under four-eyes) a platform principal's change, or the approval names
+no credential (`the approval does not say what credential its approver approved with`: from before the upgrade, an
+older instance, or a credential without an id), so approve again. A 403 on `:approve` with `an API key cannot approve`
+in the log: approvals are a person's, so approve with a token; an API key is never the trust root either. A tenant
+principal's `SetBoundary`, its `REPLACE` or rollback that would drop the platform's boundary, and its reject or abandon
+of a boundary change are 403: a tenant's boundary is the platform's. A 409 on staging means another change holds the
+document's slot; only a break-glass revoke of a live binding, or a change that only narrows by a holder of
+`cosec:skip-shadow`, takes it, and a holder that cannot be marked `CONFLICTED` keeps it (503). A publish retried after
+its answer was lost reports `PUBLISHED`. Blocking a principal is not a document change: use the blacklist's
+`BlacklistSource`, which waits for no slot.
 
 When every tenant grant over every app (a binding with app `*`, an attachment, also one whose condition narrows it to
 apps the change does not name) waits for approval as `UNREADABLE`

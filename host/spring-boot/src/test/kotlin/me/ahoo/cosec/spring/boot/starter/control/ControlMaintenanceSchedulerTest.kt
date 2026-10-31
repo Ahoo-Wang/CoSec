@@ -142,6 +142,29 @@ class ControlMaintenanceSchedulerTest {
         store.apps()!!.value.assert().isEqualTo(AppList(emptySet(), complete = false))
     }
 
+    /** B1 review: one failed reconciliation at startup does not wait for the first reclamation pass, an hour away. */
+    @Test
+    fun `a reconciliation that fails at startup is tried again until it succeeds`() {
+        val attempts = AtomicInteger()
+        val maintenance = mockk<ControlMaintenance> {
+            coEvery { reconcileApps() } answers {
+                if (attempts.incrementAndGet() < 3) error("Redis is down")
+                emptySet()
+            }
+            coEvery { reclaim() } returns emptyMap()
+            coEvery { closeShadowWindows() } returns emptyList()
+        }
+        val scheduler = ControlMaintenanceScheduler(maintenance, Duration.ofHours(1), Duration.ofHours(1))
+        scheduler.start()
+        val deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos()
+        while (attempts.get() < 3 && System.nanoTime() < deadline) {
+            Thread.sleep(20)
+        }
+        Thread.sleep(200)
+        scheduler.stop()
+        attempts.get().assert().isEqualTo(3)
+    }
+
     private fun document(key: SnapshotKey): PolicyDocument {
         val (kind, owner) = Revisions.ownerOf(key)
         return PolicyDocument(kind, owner, 1, Instant.EPOCH, emptyList(), emptyList())

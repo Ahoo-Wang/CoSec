@@ -28,15 +28,11 @@ import me.ahoo.cosec.cache.ApiKeyCodec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
-import me.ahoo.cosec.migrate.v7.api.principal.RootPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.runtime.json.CoSecJson
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.Duration
-import java.time.Instant
-import java.time.format.DateTimeParseException
 import kotlin.system.exitProcess
 
 /**
@@ -44,10 +40,10 @@ import kotlin.system.exitProcess
  *
  * ```
  * convert --from-redis redis://localhost:6379 [--key-prefix cosec] --out ./converted
- *         [--partition platform|by-owner] [--root-enabled] [--root-id cosec] [--root-expires-at 2026-12-31T00:00:00Z]
+ *         [--partition platform|by-owner]
  * convert --from-files ./export --out ./converted [...]
  *         [--rate-limit-rules ./rate-limit.json]
- * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume] [--break-glass-max-duration PT4H]
+ * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
  * bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
  * repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
@@ -58,6 +54,9 @@ import kotlin.system.exitProcess
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
  * what they write (RFC 0007 §5.9). `repair-references` adds to the back-reference index what the heads refer to
  * ([ReferenceRepair]). With `--cluster`, `--to-redis` names seed nodes of a Redis Cluster, comma-separated.
+ *
+ * It writes no break-glass binding (RC1-27): `publish` and `bootstrap` refuse documents that hold one, and a 7.x root
+ * is not converted. After the switch, break-glass is requested through the control plane, by two people (RFC 0007 §8).
  *
  * Exit codes: 0 done; 1 the data was rejected, publishing failed, or a document's references could not be repaired
  * (see `report.json` and the console); 2 usage.
@@ -76,9 +75,9 @@ object MigrateMain {
     private val USAGE_TEXT = """
         Usage:
           convert (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
-                  [--partition platform|by-owner] [--root-enabled] [--root-id <id>] [--root-expires-at <instant>]
+                  [--partition platform|by-owner]
                   [--rate-limit-rules <file>]
-          publish --to-redis <uri> [--cluster] [--key-prefix <p>] --in <dir> [--resume] [--break-glass-max-duration <duration>]
+          publish --to-redis <uri> [--cluster] [--key-prefix <p>] --in <dir> [--resume]
           bootstrap --to-redis <uri> [--cluster] [--key-prefix <p>] --platform-admin <principal> [--force]
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
@@ -148,11 +147,14 @@ object MigrateMain {
 
         companion object {
             private val VALUED = setOf(
-                "from-redis", "from-files", "key-prefix", "out", "partition", "root-id", "root-expires-at", "to-redis", "in",
-                "rate-limit-rules", "platform-admin", "break-glass-max-duration", "redis", "api-key-prefix", "role-prefix",
+                "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
+                "rate-limit-rules", "platform-admin", "redis", "api-key-prefix", "role-prefix",
                 "memberships", "grant-to-principal",
             )
-            private val FLAGS = setOf("root-enabled", "resume", "force", "dry-run", "cluster")
+            private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
+
+            /** The options that wrote break-glass, gone with it (RC1-27): what to do instead. */
+            private val REMOVED = setOf("root-enabled", "root-id", "root-expires-at", "break-glass-max-duration")
 
             fun parse(args: List<String>): Options {
                 val values = HashMap<String, String>()
@@ -168,6 +170,11 @@ object MigrateMain {
                             require(values.put(name, args[i + 1]) == null) { "--$name is given twice." }
                             i++
                         }
+
+                        in REMOVED -> throw IllegalArgumentException(
+                            "--$name was removed: cosec-migrate writes no break-glass binding. After the switch, " +
+                                "request break-glass through the control plane, by two people."
+                        )
 
                         else -> throw IllegalArgumentException("Unknown option [--$name].")
                     }
@@ -185,7 +192,6 @@ object MigrateMain {
             throw UsageException("Give exactly one of --from-redis and --from-files.")
         }
         val partition = partitionOf(options)
-        val root = rootOf(options)
         val outDirectory = Path.of(options.required("out"))
         val read = if (fromRedis != null) {
             readRedis(fromRedis, options.value("key-prefix") ?: CoSec.COSEC)
@@ -193,7 +199,7 @@ object MigrateMain {
             ExportDirectory.read(Path.of(fromFiles!!))
         }
         val source = options.value("rate-limit-rules")?.let { file -> read.withRateLimitRules(ExportDirectory.rateLimitRules(Path.of(file))) } ?: read
-        val conversion = Converter().convert(source, ConvertOptions(partition, root))
+        val conversion = Converter().convert(source, ConvertOptions(partition))
         ConvertedDirectory.write(conversion, outDirectory)
         summarize(conversion.report, out)
         out.println("Wrote ${outDirectory.resolve(ConvertedDirectory.REPORT_FILE)}")
@@ -204,24 +210,6 @@ object MigrateMain {
         "platform" -> Partition.PLATFORM
         "by-owner" -> Partition.BY_OWNER
         else -> throw UsageException("--partition is platform or by-owner, not [$text].")
-    }
-
-    /** Root is enabled by `--root-enabled`, or implied by `--root-id` or `--root-expires-at`. */
-    private fun rootOf(options: Options): RootOptions? {
-        val expiresAt = options.value("root-expires-at")?.let {
-            try {
-                Instant.parse(it)
-            } catch (_: DateTimeParseException) {
-                throw UsageException(
-                    "--root-expires-at is an ISO-8601 instant, such as 2026-12-31T00:00:00Z, not [$it]."
-                )
-            }
-        }
-        val rootId = options.value("root-id")
-        if (!options.flag("root-enabled") && expiresAt == null && rootId == null) {
-            return null
-        }
-        return RootOptions(rootId ?: RootPrincipal.ROOT_ID, expiresAt)
     }
 
     private fun summarize(report: ConversionReport, out: PrintStream) {
@@ -274,18 +262,8 @@ object MigrateMain {
         options.required("to-redis")
         val input = Path.of(options.required("in"))
         val documents = ConvertedDirectory.read(input)
-        val maxDuration = options.value("break-glass-max-duration")?.let {
-            try {
-                Duration.parse(it)
-            } catch (_: DateTimeParseException) {
-                throw UsageException("--break-glass-max-duration is an ISO-8601 duration, such as PT4H, not [$it].")
-            }
-        } ?: DocumentPublisher.DEFAULT_BREAK_GLASS_MAX_DURATION
         controlStore(options) { store ->
-            val result = DocumentPublisher(
-                store,
-                breakGlassMaxDuration = maxDuration
-            ).publish(documents, resume = options.flag("resume"))
+            val result = DocumentPublisher(store).publish(documents, resume = options.flag("resume"))
             result.written.forEach { out.println("Published $it") }
             result.skipped.forEach { out.println("Already published, identical: $it") }
         }

@@ -203,13 +203,14 @@ object ControlActions {
 /**
  * The control-plane resources (RFC 0007 §7.1): `doc/<layer>[/<id>]`, an entry `doc/<layer>[/<id>]/<kind>/<entryId>`
  * a section `doc/<layer>[/<id>]/<name>` (`catalog`, `limits`, `attributes`) and a scope
- * `scope/<tenant>/<app>/<space>`, a wildcard dimension written as the literal segment `*`. The space of
- * the default space is the empty segment's stand-in `-`, since an id never has an empty segment.
+ * `scope/<tenant>/<app>/<space>`, a wildcard dimension written as the literal segment `*`. The default space, whose id
+ * is empty, is written `(default)`: space ids beginning with `(` are CoSec's, as the tenants `(0)` and `(platform)`, so
+ * no real space shares the stand-in (RC1-37; [me.ahoo.cosec.model.scope.ScopeResolver.RESERVED_SPACE_PREFIX]).
  */
 object ControlResources {
     private const val DOC = "doc"
     private const val SCOPE = "scope"
-    const val DEFAULT_SPACE: String = "-"
+    const val DEFAULT_SPACE: String = "(default)"
 
     fun document(key: SnapshotKey): Resource = Resource(DOC, documentId(key), emptyMap())
 

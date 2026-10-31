@@ -87,9 +87,21 @@
         "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
         "control:ChangesB1Test#an app document lists itself, and a lost list starts again incomplete - RC1-4",
         "control:ChangesB1Test#the platform's first revision completes the app list only when it names every app document - RC1-4",
-        "control:ControlMaintenanceTest#reclamation marks a complete app list incomplete when it misses an app document - RC1-4"
+        "control:ControlMaintenanceTest#reclamation marks a complete app list incomplete when it misses an app document - RC1-4",
+        "control:ChangesB2Test#the first analysis reconciles the app list before it trusts it",
+        "control:ChangesB2Test#a failed reconciliation is not tried again by every analysis"
       ],
       "pending": null
+    },
+    {
+      "id": "GRT-7",
+      "source": "RFC 0007 §7.4 (2026-10-30 revision)",
+      "statement": "A fragment granted to Anyone in the default tenant (0), where unauthenticated callers are, is never contained.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:GrantAnalyzerTest#an Anyone grant in the default tenant is never contained"
+      ]
     }
   ]
 }

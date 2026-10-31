@@ -77,6 +77,7 @@ class Bootstrap(
             current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding,
             rateLimits = current?.rateLimits.orEmpty(),
         )
+        // A break-glass binding is the platform document's alone (BRK-2): the compile refuses one here.
         compiler.compile(candidate)
         if (current != null && CandidateDigest.of(current) == CandidateDigest.of(candidate)) {
             return@runBlocking current.revision

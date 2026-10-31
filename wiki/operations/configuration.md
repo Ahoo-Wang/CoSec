@@ -244,6 +244,10 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 
 `cosec.control.*`, with `cosec-control` and `cosec-cocache` ([Publishing documents](./storage.md#publishing-documents)).
 
+The control plane checks every approver for revocation as the pipeline reads it: startup fails without a
+`RevocationReader` bean or CoSec's tokens with `cosec-cocache`. Declare `RevocationReader.NONE` only when no approver's
+credential is ever revoked.
+
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
@@ -254,8 +258,8 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 | `cosec.control.revisions.orphan-age` | duration | `1h` | Records of conflicted publishes are removed once this old. |
 | `cosec.control.revisions.reclaim-interval` | duration | `1h` | How often each control-plane instance reclaims revisions; a lease lets one instance at a time do each document. Must be positive. |
 | `cosec.control.changes.expire-after` | duration | `7d` | An open change request expires this long after it was proposed, and leaves the list of open changes. |
-| `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. |
-| `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of an operator holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs a second person's approval. A change that escalates needs one either way. |
+| `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. Startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept: an approval would outlive the revocation of its token. |
+| `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of a platform principal holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs another platform principal's approval. A change that escalates needs one either way. |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h` fails startup. |
 | `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. |

@@ -401,6 +401,8 @@ random one.
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
+| `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |
+| `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | Raise the first or lower the second: a revocation must outlive every approval its token gave. |
 
 ## Control-plane errors
 
@@ -408,7 +410,11 @@ The request to the control API goes through the host's pipeline first, like any 
 `401`, `403` and `503` apply to it. Then the control plane authorizes each action again as that principal, in the app
 [`cosec.control.app-id`](./configuration.md#control-plane). Its problem bodies use the same `type` prefix, and a
 `400`, `409`, `410`, `412`, `422` or `428` explains the request in `detail`; a `401`, `403`, `404`, `500` or `503` never
-does, so a refusal does not tell whether a document, a change or a DENY exists.
+does, so a refusal does not tell whether a document, a change or a DENY exists. The reason of a refused step is in the
+control host's log instead, at `INFO` from `me.ahoo.cosec.control.api`:
+`Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>`, with the
+`requestId` of the problem body, such as `an API key cannot approve: an approval is a person's` or `only a platform
+principal sets a tenant's boundary`.
 
 | Status | Cause | Fix |
 |---|---|---|
@@ -416,7 +422,7 @@ does, so a refusal does not tell whether a document, a change or a DENY exists.
 | `403` | The operator may not take this action on this document, or the hard rules forbid it: the author approving their own change, someone else rebasing it. | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type, or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). | Fix the request; `detail` names the problem. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. | |
-| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot, or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
+| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
 | `410` | The revision asked for is not kept. | |
 | `428` | Publishing needs an acknowledgement of the shadow window's counts. | Publish again with the `ack` of that window. |
 | `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |
@@ -434,13 +440,22 @@ for a check, `412` for an `ifMatch` that does not hold).
   as [What a publish compares](./storage.md#what-a-publish-compares) describes. With the escalation reason
   `DETECTION_TIMED_OUT`, the comparison after the write did not finish in time, so nothing is known to have moved;
   review the change the same way.
-- **`[<doc>] revision <n> is published; its index or the references it dropped could not be updated`** at `WARN`:
-  the store failed after the head write. The revision is in effect and nothing needs doing: `history` rebuilds the
-  index from the chain, and a reference left behind blocks a removal at most. If the change itself could not be
-  settled, the publish answers an error although the revision is in effect, and publishing it again reports
-  `CONFLICTED`; the document's `history` shows the revision with the change's id.
+- **`[<doc>] revision <n> is published; its index or the references it dropped could not be updated`** at `WARN`,
+  from the control plane's revision store (`me.ahoo.cosec.control.store`): a step after the head write failed, the
+  revision index or the back-reference index, not the write. The revision is in effect and nothing needs doing:
+  `history` rebuilds the index from the chain, and a reference left behind blocks a removal at most. If the change
+  itself could not be settled, the publish answers an error although the revision is in effect; publishing it again
+  reports `PUBLISHED`, finishes what followed the write and records the events as the original publisher.
+- **An approval no longer counts at publish**: the change is `AWAITING_APPROVAL` again, its `APPROVAL` finding saying
+  `the token the approver approved with is revoked`, `the approver's tokens are revoked`, `the approver no longer
+  holds cosec:approve on the document`, `only a platform principal approves a boundary change`, `under four-eyes, only
+  a platform principal approves a platform principal's change`, or `the approval does not say what credential its
+  approver approved with` (an approval from before the upgrade, from an older instance, or by a credential without an
+  id). Ask for a new approval. A `403` on `:approve` with `an API key cannot approve` in the log: approve with a
+  person's token.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
-  `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute):
+  `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
+  startup too):
   the app list is not complete yet, so the analysis cannot tell what the author holds in apps it did not read. Once
   every control-plane instance and `cosec-migrate` runs this version, run
   [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) once. The same after the list

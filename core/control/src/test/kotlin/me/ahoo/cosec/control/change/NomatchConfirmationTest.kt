@@ -103,7 +103,7 @@ class NomatchConfirmationTest {
         confirmed.state.assert().isEqualTo(ChangeState.PUBLISHED)
         confirmed.confirmations.single().digest.assert().isEqualTo(digest)
         statement().onMissingConfirmed.assert().isEqualTo(
-            OnMissingConfirmation(ALICE.tenant.value, ALICE.principal.value, confirmed.id.value)
+            OnMissingConfirmation(PLATO.actor.tenant.value, PLATO.actor.principal.value, confirmed.id.value)
         )
 
         // Unchanged, it keeps its confirmation; changed, it needs a new one.

@@ -1,0 +1,20 @@
+# Rule: GRT-6
+# Mutant: the analysis trusts the app list before this instance has reconciled it, so a complete list an older writer left missing an app is believed
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeContext.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeContext.kt
+index 026eed3a..9c26ea7a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeContext.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeContext.kt
+@@ -45,11 +45,6 @@ internal class ChangeContext(private val store: ControlStore, private val revisi
+      * attempt is recent (review item 19): until one succeeds, not every analysis reads every document's key.
+      */
+     override suspend fun apps(): Versioned<AppList>? {
+-        if (!reconciled.get()) {
+-            check(attempts.ready()) { "the app list is not reconciled on this instance yet" }
+-            revisions.reconcileApps(store.documents())
+-            reconciled.set(true)
+-        }
+         return store.apps()
+     }
+ 

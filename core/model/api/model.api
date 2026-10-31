@@ -1104,6 +1104,8 @@ public final class me/ahoo/cosec/model/scope/ScopeResolution$Resolved : me/ahoo/
 public final class me/ahoo/cosec/model/scope/ScopeResolver {
 	public static final field INSTANCE Lme/ahoo/cosec/model/scope/ScopeResolver;
 	public static final field MAX_APP_ID_LENGTH I
+	public static final field RESERVED_SPACE_PREFIX Ljava/lang/String;
+	public final fun isReservedSpaceId (Ljava/lang/String;)Z
 	public final fun isValidAppId (Ljava/lang/String;)Z
 	public final fun resolve (Lme/ahoo/cosec/model/scope/ScopeSubject;Lme/ahoo/cosec/model/scope/DeclaredScope;Lme/ahoo/cosec/model/scope/HostScope;)Lme/ahoo/cosec/model/scope/ScopeResolution;
 }

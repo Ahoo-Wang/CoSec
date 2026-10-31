@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 import me.ahoo.cosec.control.store.ControlMaintenance
 import org.springframework.context.SmartLifecycle
 import java.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toKotlinDuration
 
 private val log = KotlinLogging.logger {}
@@ -35,7 +37,8 @@ private val log = KotlinLogging.logger {}
  * Runs the control plane's periodic tasks on every instance while the application runs: [ControlMaintenance.reclaim]
  * every [reclaimInterval] and [ControlMaintenance.closeShadowWindows] every [shadowInterval], each after one interval
  * first. Leases keep two instances from doing the same work; a failed pass is logged and the next one tries again.
- * [ControlMaintenance.reconcileApps] runs once at start, without waiting for the first reclamation pass (RC1-4).
+ * [ControlMaintenance.reconcileApps] runs at start, without waiting for the first reclamation pass, and again with a
+ * backoff until it succeeds once (RC1-4); until then the grant analysis reconciles before it trusts the app list.
  */
 class ControlMaintenanceScheduler(
     private val maintenance: ControlMaintenance,
@@ -52,7 +55,7 @@ class ControlMaintenanceScheduler(
 
     override fun start() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-control-maintenance"))
-        scope.launch { pass("reconcile the app list at startup") { maintenance.reconcileApps() } }
+        scope.launch { untilReconciled() }
         scope.every(reclaimInterval) { maintenance.reclaim() }
         scope.every(shadowInterval) { maintenance.closeShadowWindows() }
         this.scope = scope
@@ -69,14 +72,24 @@ class ControlMaintenanceScheduler(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun pass(what: String, pass: suspend () -> Unit) {
-        try {
-            pass()
-        } catch (e: Throwable) {
-            currentCoroutineContext().ensureActive()
-            log.warn(e) { "Could not $what; the next pass tries again." }
+    /** [ControlMaintenance.reconcileApps] until it succeeds, waiting twice as long after each failure, up to a minute. */
+    private suspend fun CoroutineScope.untilReconciled() {
+        var wait = FIRST_RETRY
+        while (isActive && !pass("reconcile the app list at startup") { maintenance.reconcileApps() }) {
+            delay(wait)
+            wait = minOf(wait * 2, LAST_RETRY)
         }
+    }
+
+    /** Runs [pass]; whether it succeeded. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun pass(what: String, pass: suspend () -> Unit): Boolean = try {
+        pass()
+        true
+    } catch (e: Throwable) {
+        currentCoroutineContext().ensureActive()
+        log.warn(e) { "Could not $what; the next pass tries again." }
+        false
     }
 
     override fun stop() {
@@ -85,4 +98,9 @@ class ControlMaintenanceScheduler(
     }
 
     override fun isRunning(): Boolean = scope != null
+
+    private companion object {
+        val FIRST_RETRY = 1.seconds
+        val LAST_RETRY = 1.minutes
+    }
 }

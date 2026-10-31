@@ -70,6 +70,22 @@ class ScopeResolverTest {
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
     }
 
+    /** RC1-37: spaces beginning with `(` are CoSec's, so no principal is a member of one, whatever it claims. */
+    @Test
+    fun `a reserved space is rejected even for a principal that claims roles in it`() {
+        val claiming = ScopeSubject(
+            acme,
+            authenticated = true,
+            Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId("(default)") to setOf(RoleId("admin"))), emptyList()),
+        )
+        for (space in listOf("(default)", "(x", "(")) {
+            rejectedFor(ScopeResolver.resolve(claiming, DeclaredScope("order", space), noHost))
+                .assert().describedAs(space).isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
+        }
+        ScopeResolver.isReservedSpaceId("x(").assert().isFalse()
+        ScopeResolver.isReservedSpaceId("-").assert().isFalse()
+    }
+
     @Test
     fun `without any role the default space still applies`() {
         val nobody = ScopeSubject(acme, true, Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))

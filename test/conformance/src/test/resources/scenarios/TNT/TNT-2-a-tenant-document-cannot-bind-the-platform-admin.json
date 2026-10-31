@@ -1,0 +1,30 @@
+{
+  "rules": [
+    "TNT-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "RC1-36: cosec:platform-admin holds cosec:approve and cosec:boundary; bound in acme's own document it would make acme's principals the trust root of it.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "a",
+            "subject": {
+              "principal": "alice"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "cosec:platform-admin"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "is bound only by the platform and the platform tenant"
+  }
+}

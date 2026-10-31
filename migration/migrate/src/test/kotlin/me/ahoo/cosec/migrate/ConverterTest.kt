@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.migrate.Fixtures7x.app
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
@@ -25,7 +24,6 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
-import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
@@ -40,8 +38,8 @@ class ConverterTest {
     private val converter = Converter()
     private val at = Instant.parse("2026-10-26T00:00:00Z")
 
-    private fun convert(source: Source7x, partition: Partition = Partition.PLATFORM, root: RootOptions? = null) =
-        converter.convert(source, ConvertOptions(partition, root, at))
+    private fun convert(source: Source7x, partition: Partition = Partition.PLATFORM) =
+        converter.convert(source, ConvertOptions(partition, at))
 
     /** Through the stored form, as publish and the snapshot source read it, and compiled again. */
     private fun PolicyDocument.roundTrip(): PolicyDocument {
@@ -190,11 +188,11 @@ class ConverterTest {
             ),
             marker = "6",
         )
-        val report = convert(source, Partition.BY_OWNER, RootOptions(expiresAt = null)).report
+        val report = convert(source, Partition.BY_OWNER).report
         report.rejections.map { it.kind }.toSet().assert().isEqualTo(RejectionKind.entries.toSet())
         report.rejections.forEach { it.location.assert().isNotBlank() }
         report.accepted.assert().isFalse()
-        convert(source, Partition.BY_OWNER, RootOptions(expiresAt = null)).documents.assert().isEmpty()
+        convert(source, Partition.BY_OWNER).documents.assert().isEmpty()
 
         fun located(kind: RejectionKind) = report.rejections.filter { it.kind == kind }.map { it.location }
         located(RejectionKind.UNDECODABLE).assert().contains("policy:broken")
@@ -271,21 +269,13 @@ class ConverterTest {
         rejection.location.assert().isEqualTo("policy:p#$.statements[1]")
     }
 
+    /** RC1-27: cosec-migrate writes no break-glass binding, so a 7.x root is not converted. */
     @Test
-    fun `an enabled root becomes an expiring break-glass binding bound by global denies`() {
-        val expiresAt = Instant.parse("2026-12-31T00:00:00Z")
-        val conversion = convert(consistent, root = RootOptions("cosec", expiresAt))
+    fun `no break-glass binding is converted`() {
+        val conversion = convert(consistent)
         conversion.report.rejections.assert().isEmpty()
-        val root = conversion.documents.getValue(SnapshotKey.Platform).roundTrip().bindings.single { it.breakGlass }
-        root.id.value.assert().isEqualTo(Converter.ROOT_BINDING_ID)
-        root.policy.assert().isEqualTo(BuiltinPolicies.ROOT)
-        root.subject.assert().isEqualTo(
-            SubjectRef.Principal(TenantId.PLATFORM, me.ahoo.cosec.model.PrincipalId("cosec"))
-        )
-        root.expiresAt.assert().isEqualTo(expiresAt.toEpochMilli())
-        val changes = conversion.report.semanticChanges
-        changes.single { it.change == "C1d" }.location.assert().isEqualTo("--root-expires-at")
-        changes.single { it.change == "C2" }.location.assert().isEqualTo("policy:g#$.statements[1]")
+        conversion.documents.values.flatMap { it.bindings }.filter { it.breakGlass }.assert().isEmpty()
+        conversion.report.semanticChanges.map { it.change }.assert().doesNotContain("C1d")
     }
 
     @Test

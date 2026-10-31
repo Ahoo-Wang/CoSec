@@ -69,7 +69,9 @@ class ControlMaintenance(
     /** One reclamation pass; what was removed, by document. Nothing when an open change cannot be read. */
     @Suppress("TooGenericExceptionCaught")
     suspend fun reclaim(): Map<SnapshotKey, Reclaimed> {
-        attempt("reconcile the app list with the documents") { reconcileApps() }
+        // One read of the documents for both: they are one large value (B1 review).
+        val documents = attempt("list the documents") { store.documents() } ?: return emptyMap()
+        attempt("reconcile the app list with the documents") { reconcileApps(documents) }
         val open = try {
             openChanges()
         } catch (e: CancellationException) {
@@ -81,7 +83,7 @@ class ControlMaintenance(
             return emptyMap()
         }
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
-        for (key in store.documents()) {
+        for (key in documents) {
             val keep = open.filter { it.key == key }.flatMapTo(HashSet()) { it.restsOn() }
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.records.isNotEmpty() || it.orphans.isNotEmpty() }
@@ -95,7 +97,10 @@ class ControlMaintenance(
      * [Revisions.reconcileApps]); the apps it misses. The host runs it at startup, so that a list a downgraded writer
      * left stale is not trusted until the first reclamation pass, and every reclamation pass runs it first.
      */
-    suspend fun reconcileApps(): Set<String> = revisions.reconcileApps(store.documents())
+    suspend fun reconcileApps(): Set<String> = reconcileApps(store.documents())
+
+    private suspend fun reconcileApps(documents: Set<SnapshotKey>): Set<String> =
+        revisions.reconcileApps(documents).also { changes.appListReconciled() }
 
     /** One pass over the shadowing changes; the changes whose window closed or conflicted. Nothing without the lease. */
     suspend fun closeShadowWindows(): List<ChangeRequest> {

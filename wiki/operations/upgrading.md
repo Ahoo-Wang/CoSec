@@ -54,6 +54,51 @@ analysis read the author's rights as enforcement does, so some changes that publ
   the control plane records `HEADS_MOVED` or `REVIEW_NEEDED` after `PUBLISHED`, with the heads in a new `moved` member
   ([What a publish compares](./storage.md#what-a-publish-compares)). A change listener that handles every
   `ChangeEvent.Kind` gains the two.
+- **The trust root is the platform's** (RC1-10, `APR-3`). Only a platform principal holding `cosec:approve` publishes
+  its own changes unanalyzed; a tenant principal the platform gave `cosec:approve` now has its own changes analyzed,
+  and approves others'. A tenant's boundary is the platform's: a tenant principal's `SetBoundary` is `403`, so is its
+  `apply` with `REPLACE` or a rollback that would remove or change the boundary the platform set, and only a platform
+  principal approves, rejects or abandons a change that sets one (`BDY-2`). An API key is never the trust root, even
+  for a platform principal holding `cosec:approve`; nor is any credential named `api-key`, a forwarded identity's
+  included. Under `four-eyes`, a platform principal's change needs another platform principal's approval.
+- **`cosec:platform-admin` is bound only by the platform** (RC1-36, `TNT-2`): in the platform document, or the
+  platform tenant's own, as `bootstrap` writes it. A tenant or app document that binds it no longer compiles; remove
+  such a binding before upgrading.
+- **Approvals are a person's, and checked again** (RC1-11, `APR-7`, `APR-8`). A principal that authenticated with an
+  API key cannot approve (`403`). An approval records the approver's credential (`jti`, `iat`); revoking that token,
+  or the approver's tokens, before the change publishes takes the approval back. An approver whose memberships come
+  from the membership provider must be permitted both on the roles it held then and still holds and on what the
+  provider answers now; the starter now gives the control plane the application's `MembershipProvider` (RC1-13). **An
+  approval that records no credential id does not count**: every change approved before the upgrade goes back to
+  `AWAITING_APPROVAL` at publish, and is approved again. In code, `AuthenticatedPrincipal` has `issuedAt` and `apiKey`.
+- **The starter checks how approvals are revoked.** The control plane needs a revocation reader, as the pipeline
+  does: a `RevocationReader` bean, or CoSec's tokens with `cosec-cocache`; startup fails without one (declare
+  `RevocationReader.NONE` when no approver's credential is ever revoked). Startup also fails when
+  `cosec.jwt.token-validity.refresh`, how long a revocation is kept, is shorter than
+  `cosec.control.approval.expire-after`.
+- **A busy staging slot can be taken** (RC1-12, `CTL-22`, `BRK-9`): by a break-glass revoke, and by a change that only
+  narrows, staged by a holder of `cosec:skip-shadow` ([Taking a busy slot](../policies/testing.md#taking-a-busy-slot)).
+  The change that held it becomes `CONFLICTED`. A publish retried after its answer was lost reports `PUBLISHED`.
+- **`Anyone` in tenant `(0)`** (RC1-35, `GRT-7`): such a grant reaches unauthenticated callers, and needs an approval
+  (`ANONYMOUS`). Code that matches every `UnknownReason` gains `ANONYMOUS`.
+- **The default space in control-plane resources is `(default)`** (RC1-37, `SCP-9`), and space ids beginning with `(`
+  are CoSec's: a request that declares one is `403` (`scope-rejected`), and a document binding in one does not compile.
+  A control-plane policy written for `scope/<tenant>/<app>/-` now means the space named `-`; write
+  `scope/<tenant>/<app>/(default)` for the default space. **A control-plane DENY on `scope/*/*/-` no longer applies to
+  the default space**: rewrite it as `scope/*/*/(default)` before upgrading, or the grants it held back are allowed.
+  A binding in a space whose id begins with `(` stops its document compiling, and a request in such a space is
+  refused: before upgrading, look for `"space": "(` in every document, move such bindings to a space id of yours, and
+  move the memberships of that space with them.
+- **Break-glass** (RC1-27, RC1-29, RC1-30): `cosec-migrate` writes no break-glass binding
+  ([Root becomes break-glass](#root-becomes-break-glass)); `BreakGlass.request` derives the binding's id and has no
+  `binding` parameter; approving break-glass needs a REQUIRED change listener (`503` otherwise, `BRK-3`).
+- **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
+  find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
+  and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,
+  or lower `reclaim-interval` for the duration. An older instance also still takes a tenant principal holding
+  `cosec:approve` for the trust root, and accepts an API key's approval: approve and publish through upgraded
+  instances only until the roll is done. An approval an older instance accepted names no credential, so an upgraded
+  instance does not publish on it.
 
 ## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
 
@@ -191,7 +236,6 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `--out <dir>` | A directory that does not exist or is empty. `convert` never overwrites. |
 | `--rate-limit-rules <file>` | The 7.x rate limit rules (`cosec.limiter.locations`): one rule object or an array of rules, each with its `id`. Merge several rule files into one array. |
 | `--partition platform\|by-owner` | `platform` (default) puts every policy into the platform document, attachable by anyone, as in 7.x. `by-owner` puts each non-global policy into the document of the tenant its `tenantId` names (rule C5 below); a policy with DENY statements stays in the platform document, with a warning. |
-| `--root-enabled`, `--root-id <id>`, `--root-expires-at <instant>` | Convert 7.x root into a [break-glass binding](#root-becomes-break-glass). `--root-id` defaults to `cosec`; either of the last two implies `--root-enabled`. Root without `--root-expires-at` is rejected. |
 
 The output directory:
 
@@ -220,7 +264,6 @@ then convert again into a new directory.
 | `RESERVED_POLICY_ID` | A policy id starts with `perm:`, `g:`, `r:` or `cosec:`, which generated ids use. | Rename the policy and every attachment that names it. |
 | `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id. | Rename it. In 8.0 `*` means any app or space. |
 | `DUPLICATE_ID` | The same policy twice in an export, or the same permission twice in one app. | Keep one. |
-| `ROOT_WITHOUT_EXPIRY` | Root was enabled without `--root-expires-at`. | Pass an expiry, or convert without root. |
 | `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
 | `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...). |
 | `EXPRESSION_CONDITION` | A `spel` or `ognl` condition. | Rewrite it as conditions of the [policy language](../policies/language.md). |
@@ -250,14 +293,13 @@ Read each entry. Nothing in the report needs a change to the data, but each one 
 #### Publish
 
 ```bash
-cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted \
-  [--resume] [--break-glass-max-duration PT4H]
+cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
 ```
 
 `publish` reads only an accepted conversion, and only the files `report.json` lists with the SHA-256 recorded there:
 a file edited, missing or added since `convert` stops it. It then compiles every document, checks every app
-document's references against the platform document, and refuses a break-glass binding that expires more than
-`--break-glass-max-duration` (default `PT4H`) from now. It writes each document as revision 1 through the control
+document's references against the platform document, and refuses documents that hold a break-glass binding, writing
+nothing (`bootstrap` refuses them too). It writes each document as revision 1 through the control
 plane's store, so the document's revision history starts there, and only when the document does not exist yet: it
 never overwrites 8.0 data.
 
@@ -354,9 +396,9 @@ send `CoSec-Space-Id` on public endpoints must stop sending it there.
 `cosec.authorization.root-enabled` and the root principal are gone. The 8.0 counterpart is a break-glass binding:
 bounded in time (at most 24 hours, `cosec.control.break-glass.max-duration`, default 4 hours), bound by every DENY
 (C2), and allowed to permit only when a REQUIRED decision listener records the request (otherwise `503`, rule
-`OBS-2`). Request one through the control plane when you need it. `convert --root-enabled --root-expires-at` converts
-7.x root into such a binding for principal `--root-id` of the platform tenant, but `publish` refuses it unless it
-expires within `--break-glass-max-duration`. Usually, convert without root.
+`OBS-2`). Request one through the control plane when you need it, where two people take part. `cosec-migrate` writes
+no break-glass binding: `convert` does not convert 7.x root, and `--root-enabled`, `--root-id`, `--root-expires-at` and
+`publish --break-glass-max-duration` are gone (passing one is a usage error that says so).
 
 #### Path templates in actions
 

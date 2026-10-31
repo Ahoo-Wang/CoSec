@@ -60,9 +60,15 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.credentialHeaders
 import me.ahoo.cosec.spring.boot.starter.pipeline.toOptions
@@ -94,7 +100,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnCoSecEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
-@EnableConfigurationProperties(ControlProperties::class)
+@EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class)
 class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -146,12 +152,15 @@ class CoSecControlAutoConfiguration {
         snapshot: ControlSnapshot,
         authenticator: Authenticator,
         attributes: AttributeProviders,
+        membershipProvider: ObjectProvider<MembershipProvider>,
         properties: ControlProperties,
     ): ControlAuthorizer {
         val pipeline = Pipeline(
             PipelineComponents(
                 authenticator = authenticator,
                 snapshots = SuspendingSnapshotSource(DocumentSnapshotViews(snapshot.source, platformRequired = true)),
+                // The application's: an approver whose memberships come from it is checked again at publish (RC1-13).
+                membershipProvider = membershipProvider.ifAvailable,
                 attributes = attributes,
             ),
         )
@@ -178,7 +187,21 @@ class CoSecControlAutoConfiguration {
         authorizer: ControlAuthorizer,
         options: ChangeOptions,
         properties: ControlProperties,
-    ): ChangeAuthority = ChangeAuthority(authorizer, options, controlApp = AppId(properties.appId))
+        revocationReader: ObjectProvider<RevocationReader>,
+        tokenStore: ObjectProvider<TokenStore>,
+        revocation: RevocationProperties,
+        jwt: ObjectProvider<JwtProperties>,
+    ): ChangeAuthority {
+        jwt.ifAvailable?.let { checkRetention(it, properties) }
+        return ChangeAuthority(
+            authorizer,
+            options,
+            controlApp = AppId(properties.appId),
+            // The pipeline's own reader: an approver's revoked token no longer approves (RC1-11).
+            revocations = revocations(revocationReader, tokenStore),
+            revocationSkew = revocation.skew,
+        )
+    }
 
     /** The change log, beside any listener the application registers. */
     @Bean
@@ -303,6 +326,40 @@ class CoSecControlAutoConfiguration {
     /** Not replaceable: every route needs a request the host pipeline permitted. */
     @Bean
     fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
+
+    internal companion object {
+        /**
+         * The revocations an approver is checked against at publish (RC1-11), as the pipeline reads them: a
+         * [RevocationReader] bean, else the CoCache token store's. With neither, startup fails, as the pipeline's does:
+         * the control plane never takes an approval for unrevoked by reading nothing.
+         */
+        fun revocations(
+            reader: ObjectProvider<RevocationReader>,
+            tokenStore: ObjectProvider<TokenStore>
+        ): RevocationReader {
+            reader.ifAvailable?.let { return it }
+            return checkNotNull(CoCacheRevocation.readerOf(tokenStore.ifAvailable)) {
+                "The control plane checks its approvers' revocations, but no revocation reader is available: enable " +
+                    "CoSec's tokens (${JwtProperties.PREFIX}.enabled) with cosec-cocache, or declare a RevocationReader " +
+                    "bean (RevocationReader.NONE when no approver's credential is ever revoked)."
+            }
+        }
+
+        /**
+         * An approval counts for [ControlProperties.Approval.expireAfter] and is checked at publish against the
+         * revocations of its token; a revocation is kept for the refresh token validity. A shorter one forgets a
+         * revocation while an approval it revoked still counts, so startup fails.
+         */
+        fun checkRetention(jwt: JwtProperties, control: ControlProperties) {
+            val retention = jwt.tokenValidity.refresh
+            val approvals = control.approval.expireAfter
+            check(retention >= approvals) {
+                "${JwtProperties.PREFIX}.token-validity.refresh ($retention), how long a token revocation is kept, is " +
+                    "shorter than ${ControlProperties.PREFIX}.approval.expire-after ($approvals): an approval would " +
+                    "outlive the revocation of its token. Raise the first or lower the second."
+            }
+        }
+    }
 }
 
 /** [KafkaChangeListener.NAME], as a literal: `cosec-kafka` is optional. */

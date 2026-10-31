@@ -129,6 +129,13 @@ after the authenticator's `method`, `token` by default). The method `JWT` is res
 `AuthenticatedPrincipal` you construct with it is refused (`IllegalArgumentException`, a `503`), so no authenticator
 can pass for CoSec's token by its name (`BRK-8`).
 
+The control plane reads two more facts of the principal for approvals ([Testing policies](../policies/testing.md#approval)).
+`apiKey`: CoSec's API key authenticator sets it, and a credential of the method `API_KEY` counts as one whoever made
+it; an API key never approves and is never the trust root. A principal of yours is a person's to CoSec, so give an
+authenticator of workloads neither `cosec:approve` nor `cosec:platform-admin`. The credential's id: an approval records
+it, and one without an id does not count. A principal you construct has no `issuedAt`, so any revocation of its
+tokens (`subjectRevokedBefore`) takes its approvals back.
+
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
 parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
 (`cosec.pipeline.api-key-header`).

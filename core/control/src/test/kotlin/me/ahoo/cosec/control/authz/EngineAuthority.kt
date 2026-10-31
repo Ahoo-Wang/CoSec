@@ -44,6 +44,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -57,7 +58,7 @@ import java.util.concurrent.CompletableFuture
 class EngineAuthority(
     private val revisions: Revisions,
     /** Who a recorded principal whose memberships come from a provider is asked about again; none by default. */
-    membershipProvider: MembershipProvider? = null,
+    private val membershipProvider: MembershipProvider? = null,
 ) {
     private val checker = AuthorizationChecker(
         Pipeline(
@@ -85,6 +86,9 @@ class EngineAuthority(
         attributes: Map<String, Any> = emptyMap(),
     ): Operator = Operator.of(security(tenant, id, roles, policies, attributes))!!
 
+    /** An operator authenticated as [principal] itself: its credential, and memberships from the provider if it says so. */
+    fun operator(principal: AuthenticatedPrincipal): Operator = Operator.of(security(principal))!!
+
     /** The request the host pipeline permitted for that principal: what the control API's routes take. */
     fun security(
         tenant: TenantId,
@@ -92,13 +96,23 @@ class EngineAuthority(
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
         attributes: Map<String, Any> = emptyMap(),
-    ): me.ahoo.cosec.runtime.RequestSecurity {
-        val principal =
-            AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies), attributes)
+    ): me.ahoo.cosec.runtime.RequestSecurity = security(
+        AuthenticatedPrincipal(
+            PrincipalId(id),
+            tenant,
+            MembershipClaims.parse(roles, policies),
+            attributes,
+            // A credential with an id, as an approval records it (review item 4).
+            Identity.Credential(Identity.Method("test"), "token-$id", null),
+        )
+    )
+
+    private fun security(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.RequestSecurity {
         val host = Pipeline(
             PipelineComponents(
                 authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
                 snapshots = SuspendingSnapshotSource(HOST_VIEWS),
+                membershipProvider = membershipProvider,
                 engine = PERMITTING,
             )
         )

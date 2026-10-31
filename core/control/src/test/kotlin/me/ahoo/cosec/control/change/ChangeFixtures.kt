@@ -74,8 +74,12 @@ val ALICE_OP = Operator(ALICE, NO_MEMBERSHIPS)
 /** A principal of the platform tenant: the only one the hard rule lets write the platform and app documents. */
 val PLATO = Operator(Actor(TenantId.PLATFORM, PrincipalId("plato")), NO_MEMBERSHIPS)
 
-/** The operator the hard rule lets act on [key]. */
-fun operatorFor(key: SnapshotKey): Operator = if (key is SnapshotKey.Tenant) ALICE_OP else PLATO
+/**
+ * An operator who publishes [key] alone: a platform principal, the trust root of every document (RFC 0007 §7.3); a
+ * tenant principal holding `cosec:approve` approves others' changes, and its own are analyzed (RC1-10).
+ */
+@Suppress("UnusedParameter")
+fun operatorFor(key: SnapshotKey): Operator = PLATO
 
 fun allow(id: String, action: String = "order:read", resource: String? = null, condition: Condition? = null) =
     PolicyDefinition(

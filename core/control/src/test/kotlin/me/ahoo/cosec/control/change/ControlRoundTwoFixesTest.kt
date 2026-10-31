@@ -348,7 +348,14 @@ class ControlRoundTwoFixesTest {
         )
         val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
         val approved = change.copy(
-            approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, pia.memberships)
+            approval = Approval(
+                pia.actor,
+                clock.now,
+                change.candidate!!,
+                needed.map { it.subject },
+                pia.memberships,
+                credentialId = "token-pia",
+            )
         )
         ChangeAuthority(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
         val noLonger = "the approver no longer holds cosec:approve on the document"
@@ -415,7 +422,14 @@ class ControlRoundTwoFixesTest {
         val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
         val provided = Memberships(Memberships.Source.PROVIDER, pia.memberships.roles, pia.memberships.attachments)
         val approved = change.copy(
-            approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, provided)
+            approval = Approval(
+                pia.actor,
+                clock.now,
+                change.candidate!!,
+                needed.map { it.subject },
+                provided,
+                credentialId = "token-pia",
+            )
         )
         val noLonger = "the approver no longer holds cosec:approve on the document"
         directory.put(pia.actor.tenant, pia.actor.principal, provided)
@@ -455,7 +469,14 @@ class ControlRoundTwoFixesTest {
             "z"
         )
         val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
-        val approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, pia.memberships)
+        val approval = Approval(
+            pia.actor,
+            clock.now,
+            change.candidate!!,
+            needed.map { it.subject },
+            pia.memberships,
+            credentialId = "token-pia",
+        )
         val authority = ChangeAuthority(engine.authorizer)
         authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
         val capped = approval.copy(principalBindings = false)

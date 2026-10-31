@@ -97,26 +97,6 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
         )
     }
 
-    /** Root (RFC 0004 §4.8): no longer skips the platform document (C1d), and global DENYs bind it (C2). */
-    fun root(globalDenies: List<String>, location: String) {
-        record(
-            SemanticChange(
-                "C1d",
-                location,
-                "root no longer skips reading the platform document: when it is unavailable, root fails like everyone",
-            ),
-        )
-        globalDenies.forEach { deny ->
-            record(
-                SemanticChange(
-                    "C2",
-                    deny,
-                    "global DENY statement: it now applies to root as well (7.x: root skipped it)"
-                )
-            )
-        }
-    }
-
     /** `--partition by-owner`: principals of other tenants can no longer attach the policy (C5). */
     fun ownedByTenant(tenantId: String, location: String) {
         record(

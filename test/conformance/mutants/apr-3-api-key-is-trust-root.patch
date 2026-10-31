@@ -1,0 +1,17 @@
+# Rule: APR-3
+# Mutant: a platform principal authenticated by an API key holding cosec:approve is the trust root, so its own changes need no person
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index f45a5ef8..9e58565b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -247,7 +247,7 @@ class ChangeAuthority(
+         breakGlass(base, candidate, escalations)
+         // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
+         // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never an API key.
+-        val trustRoot = operator.platform && !apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
++        val trustRoot = operator.platform && holds(operator, key, ControlActions.APPROVE)
+         if (trustRoot && !options.fourEyes) {
+             return escalations
+         }

@@ -19,9 +19,14 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.source
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -38,7 +43,7 @@ import java.time.ZoneOffset
 
 /**
  * RFC 0007 §5.9, §8, §9.4: `cosec-migrate` writes through the control plane's store, so its writes leave revision
- * records; `bootstrap` binds the first platform administrator once; `publish` refuses a long-lived root; and
+ * records; `bootstrap` binds the first platform administrator once; `publish` refuses break-glass bindings; and
  * `partition plan` copies each tenant's attachable policies exactly.
  */
 class ControlWritesTest {
@@ -70,7 +75,7 @@ class ControlWritesTest {
     }
 
     @Test
-    fun `publish starts the revision chain and refuses a root that outlives break-glass`() {
+    fun `publish starts the revision chain and writes no break-glass binding`() {
         val converted = Converter().convert(source(listOf("p" to policy("p"))), ConvertOptions(publishedAt = now))
         DocumentPublisher(
             store,
@@ -80,32 +85,30 @@ class ControlWritesTest {
             revisions.head(SnapshotKey.Platform)!!.document.provenance!!.kind.assert().isEqualTo(ProvenanceKind.MIGRATE)
             revisions.history(SnapshotKey.Platform).size.assert().isEqualTo(1)
         }
-        // A converted root valid for 30 days is refused; within the cap it publishes.
-        val root = { expiresAt: Instant ->
-            Converter().convert(
-                source(listOf("p" to policy("p"))),
-                ConvertOptions(root = RootOptions(expiresAt = expiresAt), publishedAt = now)
-            ).documents
-        }
+        // Documents holding break-glass are refused, whatever its expiry: nothing is written (RC1-27).
+        val platform = converted.documents.getValue(SnapshotKey.Platform)
+        val glass = Binding(
+            BindingId("root"),
+            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("cosec")),
+            BindingScope(Match.Any, Match.Any),
+            BuiltinPolicies.ROOT,
+            expiresAt = now.plus(Duration.ofHours(1)).toEpochMilli(),
+            breakGlass = true,
+        )
+        val withGlass = PolicyDocument(
+            platform.kind,
+            platform.owner,
+            platform.revision,
+            platform.publishedAt,
+            platform.policies,
+            platform.bindings + glass,
+        )
         val otherStore = InMemoryControlStore(clock)
         assertThrownBy<PublishException> {
-            DocumentPublisher(
-                otherStore,
-                clock = clock
-            ).publish(root(now.plus(Duration.ofDays(30))))
+            DocumentPublisher(otherStore, clock = clock).publish(mapOf(SnapshotKey.Platform to withGlass))
         }
-            .hasMessageContaining("break-glass through the control plane").hasMessageContaining("Nothing was written")
-        DocumentPublisher(
-            otherStore,
-            clock = clock
-        ).publish(root(now.plus(Duration.ofHours(3)))).written.assert().containsExactly(SnapshotKey.Platform)
-        assertThrownBy<PublishException> {
-            DocumentPublisher(
-                InMemoryControlStore(clock),
-                clock = clock,
-                breakGlassMaxDuration = Duration.ofHours(1)
-            ).publish(root(now.plus(Duration.ofHours(3))))
-        }
+            .hasMessageContaining("writes no break-glass binding").hasMessageContaining("Nothing was written")
+        runBlocking { otherStore.documents().assert().isEmpty() }
     }
 
     @Test

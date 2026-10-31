@@ -355,7 +355,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `id` | 字符串 | 必填 | 在所属文档内唯一。控制面拒绝以 `cosec:`、`g:` 或 `r:` 开头的新 id。 |
 | `subject` | `"*"` 或对象 | 必填 | 对谁生效，见下。 |
 | `app` | 字符串 | 必填 | 应用 id，或 `*` 表示任意应用。不能为空。 |
-| `space` | 字符串 | 必填 | 空间 id，`""` 表示默认空间，`*` 表示任意空间。 |
+| `space` | 字符串 | 必填 | 空间 id，`""` 表示默认空间，`*` 表示任意空间。以 `(` 开头的空间 id 归 CoSec 所有，在这种空间中的绑定不能编译。 |
 | `policy` | 字符串 | 必填 | 策略 id。 |
 | `expiresAt` | 字符串 | 无 | ISO-8601 时刻。从该时刻起绑定不再适用。 |
 | `breakGlass` | 布尔 | `false` | break-glass 绑定（[安全模型](../guide/security-model.md)）。 |
@@ -375,7 +375,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 - 本文档中的策略；
 - 在应用或租户文档中，平台策略。它在每个请求时查找：如果平台已不再有该策略，它所适用的请求在没有 DENY 匹配时为 Indeterminate（`503`）。控制面拒绝发布无法解析的引用，也拒绝删除被其他文档引用的平台策略；
 - 应用的权限策略：只能在该应用的文档中，或在 `app` 设为该应用的租户文档中（[角色权限](./role-permissions.md#tenant-role-bindings)）；
-- `cosec:root`，只能由 break-glass 绑定指向；`cosec:platform-admin`、`cosec:tenant-admin` 和 `cosec:tenant-viewer`，用于授权控制面。
+- `cosec:root`，只能由 break-glass 绑定指向；`cosec:platform-admin`、`cosec:tenant-admin` 和 `cosec:tenant-viewer`，用于授权控制面。`cosec:platform-admin` 只能在平台文档和平台租户 `(platform)` 自己的文档中绑定：绑定它的租户或应用文档不能编译。
 
 边界策略和 `cosec:blacklist` 永远不能被绑定。break-glass 绑定只在平台文档中，绑定 `(platform)` 租户的主体，并带有 `expiresAt`。一个文档至多绑定 1,000 个主体：要授权用户，请通过令牌中的角色或 `MembershipProvider`。
 

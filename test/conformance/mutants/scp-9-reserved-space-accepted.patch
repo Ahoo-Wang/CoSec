@@ -1,0 +1,17 @@
+# Rule: SCP-9
+# Mutant: a declared space beginning with ( resolves like any other, so a principal claiming roles there selects it
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 3924e267..321f49e7 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -95,7 +95,7 @@ object ScopeResolver {
+             return APP_MISMATCH
+         }
+         // Neither the wildcard nor a reserved space is a space a principal can be a member of, whatever it claims.
+-        if (declared.space == Match.WILDCARD || isReservedSpaceId(declared.space)) {
++        if (declared.space == Match.WILDCARD) {
+             return SPACE_NOT_MEMBER
+         }
+         val app = hostApp ?: AppId(declared.app)

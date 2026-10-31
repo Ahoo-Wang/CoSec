@@ -17,13 +17,11 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
 import me.ahoo.cosec.migrate.v7.api.policy.Policy
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyType
-import me.ahoo.cosec.migrate.v7.api.principal.RootPrincipal
 import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.AppId
@@ -32,7 +30,6 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
@@ -62,13 +59,12 @@ enum class Partition {
     BY_OWNER,
 }
 
-/** A 7.x deployment that enabled root: its id, and when the break-glass binding that replaces it expires. */
-class RootOptions(val id: String = RootPrincipal.ROOT_ID, val expiresAt: Instant?)
-
+/**
+ * How to convert. There is no root: a 7.x root principal is not converted, since cosec-migrate writes no break-glass
+ * binding; after the switch, break-glass is requested through the control plane, by two people (RFC 0007 §8, RC1-27).
+ */
 class ConvertOptions(
     val partition: Partition = Partition.PLATFORM,
-    /** Null when the 7.x deployment did not enable root (the default). */
-    val root: RootOptions? = null,
     val publishedAt: Instant = Instant.now(),
 )
 
@@ -116,8 +112,6 @@ class Converter(private val compiler: PolicyDocumentCompiler = PolicyDocumentCom
 
         fun permissionPolicyId(appId: String, permissionId: String): String =
             PolicyDocumentCompiler.permissionPrefix(appId) + permissionId
-
-        const val ROOT_BINDING_ID = "cosec:root"
     }
 }
 
@@ -144,7 +138,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     val catalogs = HashMap<SnapshotKey, Catalog>()
     val policyOrigins = ArrayList<Provenance.PolicyOrigin>()
     val bindingOrigins = ArrayList<Provenance.BindingOrigin>()
-    val globalDenies = ArrayList<String>()
     val rateLimits = ArrayList<ConvertedRateLimit>()
 
     /** App and tenant ids by their case-folded form: each names a file, and file systems may ignore case. */
@@ -166,7 +159,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         convertPolicies()
         source.apps.forEach(::convertApp)
         convertRateLimits()
-        convertRoot()
         val documents = if (rejections.isEmpty()) documents() else emptyMap()
         count("documents", documents.size)
         count("rejections", rejections.distinct().size)
@@ -219,7 +211,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val key = placement(id, global, tree, entry.location) ?: return
         val locations = tree.get(STATEMENTS)?.values().orEmpty().indices.map { "${entry.location}#$.$STATEMENTS[$it]" }
         // Translated even when it does not decode, so one run reports every problem of the policy.
-        val translated = translatePolicy(tree, locations, entry.location, global)
+        val translated = translatePolicy(tree, locations, entry.location)
         if (translated == null || decoded == null) {
             return
         }
@@ -298,16 +290,11 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         tree: JsonNode,
         locations: List<String>,
         location: String,
-        global: Boolean,
     ): Pair<Condition?, List<StatementSource>>? {
         val condition = tree.get(CONDITION)
         val nodes = tree.get(STATEMENTS)?.values().orEmpty()
-        val denies = nodes.map { isDeny(it) }
         scan.policyCondition(condition, "$location#$.$CONDITION")
         val translated = nodes.mapIndexed { i, statement -> translateStatement(statement, condition, locations[i]) }
-        if (global) {
-            locations.filterIndexed { i, _ -> denies[i] }.forEach { globalDenies += it }
-        }
         val policy = statements.policy(condition, "$location#$.$CONDITION", translated.filterNotNull())
         return if (translated.none { it == null }) policy else null
     }
@@ -689,35 +676,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         }
     }
 
-    // ---- root (RFC 0004 §4.8) ----
-
-    private fun convertRoot() {
-        val root = options.root ?: return
-        scan.root(globalDenies, ROOT_OPTION)
-        val expiresAt = root.expiresAt
-        if (expiresAt == null) {
-            reject(
-                RejectionKind.ROOT_WITHOUT_EXPIRY,
-                ROOT_OPTION,
-                "root [${root.id}] was enabled: the break-glass binding that replaces it needs --root-expires-at",
-            )
-            return
-        }
-        bindings.getValue(SnapshotKey.Platform) += Binding(
-            BindingId(Converter.ROOT_BINDING_ID),
-            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId(root.id)),
-            BindingScope(Match.Any, Match.Any),
-            BuiltinPolicies.ROOT,
-            expiresAt = expiresAt.toEpochMilli(),
-            breakGlass = true,
-        )
-        bindingOrigins += Provenance.BindingOrigin(
-            SnapshotKey.Platform.toString(),
-            Converter.ROOT_BINDING_ID,
-            "root [${root.id}] of the 7.x deployment ($ROOT_OPTION)",
-        )
-    }
-
     // ---- documents ----
 
     private fun documents(): Map<SnapshotKey, PolicyDocument> {
@@ -818,7 +776,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     companion object {
         const val SCHEMA_7 = "7"
         const val REVISION = 1L
-        const val ROOT_OPTION = "--root-expires-at"
         const val RATE_LIMIT_POLICY = "rate-limit/"
         val RESERVED = Converter.RESERVED_PREFIXES
         val STATEMENT_PATH = Regex("""^\$\.policies\[\d+]\.statements\[(\d+)]""")

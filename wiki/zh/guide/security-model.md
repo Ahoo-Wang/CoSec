@@ -163,6 +163,12 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 每个由 break-glass 放行的请求都必须先写入一个 REQUIRED 决策监听器。没有这样的监听器，或它失败时，请求返回 `503`。代码中的权限检查（`AuthorizationChecker`）如果只有 break-glass 放行，结果为 `false`，因为检查不写审计事件（[代码中的权限检查](../integration/checks.md)）。
 
+两人原则是控制面的规则，对每一种会创建 break-glass 的变更都强制执行（`BRK-5`）：申请与批准是同一个变更的两步，每一步都由 REQUIRED 变更监听器记录，它发布的修订在出处中记录发布人与批准人（`provenance.publishedBy`、`approvedBy`）；申请人记在变更日志里。数据面不检查 break-glass 绑定是谁授予、谁批准的：能写文档的人同样能写出这些名字，它们证明不了什么。`cosec-migrate` 不写 break-glass 绑定；切换之后经控制面申请。
+
+这些保证不约束信任根。持有 `cosec:approve` 的平台管理员发布自己的变更既不经分析也不需要第二个人，又持有 `cosec:skip-shadow`：它可以独自给自己绑定一条不过期的、放行一切的 ALLOW，这正是 break-glass 给的东西，却没有第二个人、时间上限和 REQUIRED 审计。`cosec.control.approval.four-eyes` 补回的是分析和第二个人（另一位平台主体），并不给这样的绑定加上时间上限或 REQUIRED 审计。在需要第二个人的地方请开启 four-eyes（[策略测试](../policies/testing.md#approval)），并在变更日志中留意放行一切的 ALLOW。
+
+信任根是人。API key 无论其主体持有什么，都不是信任根，也不能批准：CoSec 按校验来源识别自己的 API key，并把任何名为 `api-key` 的凭证（包括网关转发的身份所带的）都当作 API key。你自己的认证器认可的凭证，在 CoSec 看来是人的凭证，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
+
 ## 平台边界 {#platform-boundary}
 
 边界限制整个租户最多能被放行什么，不论它自己的文档授予了什么。平台文档定义边界策略（`"boundary": true`，只含 ALLOW 语句）和默认边界（`boundaries.default`）；控制面可以在某个租户的文档中为它设置另一个边界（`boundary`）。平台租户没有边界。
@@ -223,7 +229,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 只能位于默认空间：声明了 `CoSec-Space-Id` 的请求以 `401` 被拒绝；
 - 被拒绝时返回 `401`，绝不返回 `403`，因此客户端的补救办法总是去认证。凭证被拒绝时，problem 会给出原因（`token-invalid`、`token-expired`、`token-revoked`）。
 
-因此匿名调用方能访问的正好是 `Anyone` 绑定所放行的内容（例如登录端点），除此之外什么都访问不了。
+因此匿名调用方能访问的正好是 `Anyone` 绑定所放行的内容（例如登录端点），除此之外什么都访问不了。所以租户 `(0)` 文档中的 `Anyone` 绑定也会作用于未认证的调用方；授出分析把每个这样的授出都送去审批（`ANONYMOUS`），不论谁提出，信任根除外。
 
 ## 租户隔离 {#tenant-isolation}
 

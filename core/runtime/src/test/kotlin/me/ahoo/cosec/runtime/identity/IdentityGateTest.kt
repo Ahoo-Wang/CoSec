@@ -106,6 +106,11 @@ class IdentityGateTest {
             it.principalBindings.assert().isTrue()
             it.breakGlass.assert().isFalse()
         }
+        // Review M2: a forwarded API key is an API key behind the gateway too, by its reserved name (fail closed).
+        fun principal(credential: Identity.Credential) =
+            evaluate(IdentityCodec.encode(identity.copy(credential = credential))).security!!.principal!!
+        principal(key).apiKey.assert().isTrue()
+        principal(identity.credential).apiKey.assert().isFalse()
     }
 
     @Test
