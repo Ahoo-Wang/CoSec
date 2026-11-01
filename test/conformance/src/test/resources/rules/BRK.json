@@ -90,7 +90,7 @@
     {
       "id": "BRK-9",
       "source": "RFC 0007 §5.5, §8 (2026-10-30 revision)",
-      "statement": "A break-glass revoke of a binding that still grants takes the document's staging slot whatever change holds it; the holder becomes CONFLICTED. A revoke of a binding that still grants is taken from the slot only by another such revoke, and revoking the binding again publishes a READY revoke of it that stalled. A revoke of an expired binding waits like any change, and holds the slot against any change that may take it.",
+      "statement": "A break-glass revoke of a binding that still grants takes the document's staging slot whatever change holds it; the holder becomes CONFLICTED. A revoke of a binding that still grants is taken from the slot only by another such revoke, and revoking the binding again publishes a READY revoke of it that stalled. A revoke of an expired binding waits like any change, and any change that may preempt takes its slot.",
       "level": "control",
       "pending": null,
       "guards": [
