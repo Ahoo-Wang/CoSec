@@ -553,11 +553,7 @@ class Changes(
             is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED, from = LOST)
             is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
         }
-        val note = when {
-            slotLost -> "another change took the staging slot before the head write"
-            outcome is PublishOutcome.Conflicted -> "the document moved before the head write"
-            else -> settled.note
-        }
+        val note = PublishRules.unwrittenNote(outcome, slotLost) ?: settled.note
         audit(PublishRules.outcomeOf(change, settled), settled.copy(note = note), publisher.actor)
         return settled
     }

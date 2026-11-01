@@ -79,6 +79,16 @@ internal object PublishRules {
         else -> ChangeEvent.Kind.PUBLISHED
     }
 
+    /**
+     * Why a publish that ended in [outcome] wrote no head, for its failure's record: its change lost the staging slot
+     * ([slotLost]), or met a moved head after its last slot check (reviews L2, N5); `null` for any other outcome.
+     */
+    fun unwrittenNote(outcome: PublishOutcome, slotLost: Boolean): String? = when {
+        slotLost -> "another change took the staging slot before the head write"
+        outcome is PublishOutcome.Conflicted -> "the document moved before the head write"
+        else -> null
+    }
+
     /** Whether [change] is a break-glass revoke: it only removes bindings, as a break-glass change. */
     fun revokes(change: ChangeRequest): Boolean = change.kind == ProvenanceKind.BREAK_GLASS &&
         change.operations.isNotEmpty() && change.operations.all { it is Operation.RemoveBinding }
