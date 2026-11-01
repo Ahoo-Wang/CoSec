@@ -1,0 +1,17 @@
+# Rule: BRK-9
+# Mutant: a change that only narrows takes the slot of a break-glass revoke, so the principal it revokes can hold it off
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index 004614a7..a4fbc7d6 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -787,7 +787,7 @@ class Changes(
+                         republished(held, own, operator)
+                         return@repeat
+                     }
+-                    if (PublishRules.revokes(held) || !preemption.preempts(operator, change, head)) {
++                    if (!preemption.preempts(operator, change, head)) {
+                         throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
+                     }
+                     conflicted += conflict(held, change)

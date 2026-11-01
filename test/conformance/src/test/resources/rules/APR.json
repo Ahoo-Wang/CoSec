@@ -80,7 +80,7 @@
     {
       "id": "APR-8",
       "source": "RFC 0007 §7.5 (2026-10-30 revision)",
-      "statement": "An approval records the approver's token id and issue time; at publish it no longer counts when that token, or every token of the approver issued by then, has been revoked since, nor when it records no token id (made before the upgrade, by an older instance, or with a credential without one), nor when the approver's memberships come from the provider and either decision, on the roles it held then and holds now or on what the provider answers now, does not permit.",
+      "statement": "An approval records the approver's token id and issue time; at publish it no longer counts when that token, or every token of the approver issued by then, has been revoked since, nor when it records no token id (made before the upgrade, by an older instance, or with a credential without one, which cannot approve at all), nor when the approver's memberships come from the provider and either decision, on the roles it held then and holds now or on what the provider answers now, does not permit. Revocations that cannot be read publish nothing (503).",
       "level": "control",
       "pending": null,
       "guards": [
@@ -88,7 +88,8 @@
         "control:ApprovalB2Test#an approver from the provider counts with the roles it holds now",
         "spring-boot:ControlApprovalStarterTest#an approval by a provider-membership token publishes",
         "spring-boot:ControlApprovalStarterTest#an approval by a token revoked since does not publish",
-        "control:ControlReviewFixesTest#an approval that cannot be checked again does not count"
+        "control:ControlReviewFixesTest#an approval that cannot be checked again does not count",
+        "control:ApprovalB2Test#revocations that cannot be read publish nothing"
       ]
     }
   ]

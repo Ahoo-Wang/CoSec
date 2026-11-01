@@ -3,19 +3,24 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index d9a59d36..0f1cbb65 100644
+index 004614a7..f2e86efb 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -546,12 +546,6 @@ class Changes(
-         }
-         val candidate = applied(change, head?.document).first!!
-         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
--        if (store.stage(change.key)?.value?.holder != change.id) {
--            // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). The
--            // head write is conditional on the base, not the slot: preempted after this, it still publishes, and the
--            // change that took the slot conflicts and is rebased on it, never written over it unseen.
+@@ -522,9 +522,6 @@ class Changes(
+         // before the PUBLISHING record, and again right before the head write (review L2): what is left is one store
+         // round trip between that read and the write, which is conditional on the base, not on the slot. A change
+         // preempted within it still publishes, and the one that took the slot conflicts on the moved base ([movedOn]).
+-        if (!holdsSlot(change)) {
 -            return settle(change, ChangeState.CONFLICTED)
 -        }
          audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
          var published: ChangeRequest? = null
-         val outcome = revisions.publish(
+         var slotLost = false
+@@ -533,7 +530,6 @@ class Changes(
+             head,
+             candidate,
+             PublishRules.publication(change, publisher, rechecked),
+-            precondition = { holdsSlot(change).also { slotLost = !it } },
+         ) {
+             published = written(change, it, rechecked, head?.document, candidate, publisher)
+         }

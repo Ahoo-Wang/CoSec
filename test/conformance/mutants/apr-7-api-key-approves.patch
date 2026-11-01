@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index f45a5ef8..7772aa33 100644
+index 9376fa22..db7ee44c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -212,7 +212,7 @@ class ChangeAuthority(
+@@ -225,7 +225,7 @@ class ChangeAuthority(
       * trust root is the trust root's.
       */
      fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
 -        apiKey(operator) -> "an API key cannot approve: an approval is a person's"
 +        apiKey(operator) && change.operations.isEmpty() -> "an API key cannot approve: an approval is a person's"
  
-         !operator.platform -> approverTenantProblem(change)
- 
+         // Publishing would not count it: its revocation could not be checked (review D3).
+         operator.security?.principal?.credential?.id == null ->

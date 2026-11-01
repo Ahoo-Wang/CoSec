@@ -90,12 +90,14 @@
     {
       "id": "BRK-9",
       "source": "RFC 0007 §5.5, §8 (2026-10-30 revision)",
-      "statement": "A break-glass revoke of a binding that still grants takes the document's staging slot whatever change holds it; the holder becomes CONFLICTED. Revoking an expired one waits like any change.",
+      "statement": "A break-glass revoke of a binding that still grants takes the document's staging slot whatever change holds it; the holder becomes CONFLICTED. Nothing takes the slot of a revoke. Revoking an expired one waits like any change.",
       "level": "control",
       "pending": null,
       "guards": [
         "control:BreakGlassControlTest#a revoke takes the slot another change holds",
-        "control:BreakGlassControlTest#revoking an expired binding waits for the slot"
+        "control:BreakGlassControlTest#revoking an expired binding waits for the slot",
+        "control:BreakGlassControlTest#no change takes the slot of a break-glass revoke",
+        "control:RetriedPublishTest#a revoke settles a published holder and takes its slot"
       ]
     }
   ]
