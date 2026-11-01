@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "Review item 4: pia approves with a credential that names no id, as an approval made before the upgrade or by an older instance records it: at publish it does not count.",
+  "description": "Review items 4 and D3: pia's credential names no id, so publishing would not count her approval: she cannot approve (403), and the change keeps waiting.",
   "documents": {
     "platform": {
       "policies": [
@@ -232,12 +232,6 @@
         "change": "c1",
         "by": "pia"
       }
-    },
-    {
-      "publish": {
-        "change": "c1",
-        "by": "alice"
-      }
     }
   ],
   "expect": {
@@ -245,13 +239,10 @@
       "CHECKED",
       "SHADOWING",
       "AWAITING_APPROVAL",
-      "READY",
-      "AWAITING_APPROVAL"
+      "refused 403"
     ],
     "errors": {
-      "c1": [
-        "APPROVAL"
-      ]
+      "c1": []
     },
     "heads": {
       "tenant:acme": 1
