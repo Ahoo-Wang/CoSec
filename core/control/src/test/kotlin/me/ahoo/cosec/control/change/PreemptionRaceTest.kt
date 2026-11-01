@@ -17,6 +17,9 @@ package me.ahoo.cosec.control.change
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -35,14 +38,11 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.control.audit.ChangeEvent
-import me.ahoo.cosec.control.audit.ChangeListener
-import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import org.junit.jupiter.api.AfterEach
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 
 /**
@@ -232,7 +232,13 @@ class PreemptionRaceTest {
         val harness = harness()
         val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val changes = listened(harness, events)
-        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        val proposed = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(harness),
+            listOf(Operation.PutPolicy(allow("slow"))),
+            "slow"
+        )
         changes.skipShadow(PLATO, proposed.id, "test").state.assert().isEqualTo(ChangeState.READY)
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
         // The holder's publish has checked the slot once when the ban takes it.
@@ -247,7 +253,10 @@ class PreemptionRaceTest {
             Thread.sleep(10)
         }
         events.filter { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
-            .contains("preempted by ${emergency.id.value}", "another change took the staging slot before the head write")
+            .contains(
+                "preempted by ${emergency.id.value}",
+                "another change took the staging slot before the head write"
+            )
         changes.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
     }
 
@@ -260,7 +269,13 @@ class PreemptionRaceTest {
         val harness = harness()
         val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val changes = listened(harness, events)
-        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        val proposed = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(harness),
+            listOf(Operation.PutPolicy(allow("slow"))),
+            "slow"
+        )
         changes.skipShadow(PLATO, proposed.id, "test").state.assert().isEqualTo(ChangeState.READY)
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
         // The holder's last slot check, right before its head write, has passed when the ban takes the slot.
@@ -280,7 +295,13 @@ class PreemptionRaceTest {
         val harness = harness()
         val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val changes = listened(harness, events)
-        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        val proposed = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(harness),
+            listOf(Operation.PutPolicy(allow("slow"))),
+            "slow"
+        )
         val held = changes.stage(PLATO, proposed.id)
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
         racing.refuseStages = true

@@ -88,6 +88,7 @@ class ApprovalB2Test {
     /** Revoked token ids, and the instant before which a principal's tokens are revoked. */
     private val revokedIds = ConcurrentHashMap.newKeySet<String>()
     private val revokedBefore = ConcurrentHashMap<String, Instant>()
+
     /** Whether the revocation store fails as no degraded read does: an entry it cannot decode, say. */
     @Volatile
     private var revocationsFail = false

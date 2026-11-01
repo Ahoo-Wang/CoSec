@@ -272,7 +272,11 @@ class Changes(
         return transition(id, REBASABLE) { current ->
             val head = revisions.head(current.key)
             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
-            candidates.checked(current.copy(base = base, skipShadow = null, approval = null, shadow = null), head, author)
+            candidates.checked(
+                current.copy(base = base, skipShadow = null, approval = null, shadow = null),
+                head,
+                author
+            )
         }
     }
 
@@ -782,7 +786,11 @@ class Changes(
                 }
                 val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
                 if (held != null) {
-                    val own = PublishRules.ownRevision(revisions, held, head)?.takeIf { held.state == ChangeState.READY }
+                    val own = PublishRules.ownRevision(
+                        revisions,
+                        held,
+                        head
+                    )?.takeIf { held.state == ChangeState.READY }
                     if (own != null) {
                         republished(held, own, operator)
                         return@repeat

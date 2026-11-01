@@ -63,4 +63,6 @@ internal class ChangeContext(private val store: ControlStore, private val revisi
 }
 
 /** The app list is not reconciled on this instance yet, and the last attempt is too recent to try again. */
-internal class AppListNotReconciledException : IllegalStateException("The app list is not reconciled on this instance yet")
+internal class AppListNotReconciledException : IllegalStateException(
+    "The app list is not reconciled on this instance yet"
+)
