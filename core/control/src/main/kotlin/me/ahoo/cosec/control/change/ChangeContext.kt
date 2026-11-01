@@ -44,7 +44,7 @@ internal class ChangeContext(private val store: ControlStore, private val revisi
      */
     override suspend fun apps(): Versioned<AppList>? {
         if (!reconciled.get()) {
-            check(attempts.ready()) { "the app list is not reconciled on this instance yet" }
+            if (!attempts.ready()) throw AppListNotReconciledException()
             revisions.reconcileApps(store.documents())
             reconciled.set(true)
         }
@@ -61,3 +61,6 @@ internal class ChangeContext(private val store: ControlStore, private val revisi
         val RECONCILE_INTERVAL = 30.seconds
     }
 }
+
+/** The app list is not reconciled on this instance yet, and the last attempt is too recent to try again. */
+internal class AppListNotReconciledException : IllegalStateException("The app list is not reconciled on this instance yet")

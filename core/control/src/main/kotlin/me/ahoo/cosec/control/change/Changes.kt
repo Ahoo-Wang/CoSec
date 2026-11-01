@@ -106,6 +106,8 @@ class Changes(
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
 
+    private val candidates = CandidateChecks(checks, context, authority, clock, options)
+
     private val preemption = Preemption(revisions, authority, clock)
 
     /**
@@ -167,7 +169,7 @@ class Changes(
             updatedAt = now,
             confirmations = confirmations,
         )
-        val checked = checked(draft, head, author)
+        val checked = candidates.checked(draft, head, author)
         if (breakGlass) {
             audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor)
         }
@@ -270,7 +272,7 @@ class Changes(
         return transition(id, REBASABLE) { current ->
             val head = revisions.head(current.key)
             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
-            checked(current.copy(base = base, skipShadow = null, approval = null, shadow = null), head, author)
+            candidates.checked(current.copy(base = base, skipShadow = null, approval = null, shadow = null), head, author)
         }
     }
 
@@ -299,7 +301,7 @@ class Changes(
         val state = ShadowState("${id.value}@${now.toEpochMilli()}", now)
         @Suppress("TooGenericExceptionCaught")
         try {
-            val candidate = applied(change, head?.document).first!!
+            val candidate = candidates.applied(change, head?.document).first!!
             val document = SnapshotDocument(
                 PolicyDocumentCodec.SCHEMA,
                 change.base.revision + 1,
@@ -496,9 +498,9 @@ class Changes(
         if (head?.digest != change.base.digest) {
             // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
             PublishRules.ownRevision(revisions, change, head)?.let { return republished(change, it, publisher) }
-            return settle(change, ChangeState.CONFLICTED)
+            return movedOn(change, head, publisher)
         }
-        val rechecked = checked(change, head, publisher)
+        val rechecked = candidates.checked(change, head, publisher)
         if (rechecked.state != ChangeState.CHECKED || rechecked.candidate != change.candidate) {
             return settle(change, ChangeState.DRAFT, rechecked.findings)
         }
@@ -514,30 +516,54 @@ class Changes(
                 )
             }
         }
-        val candidate = applied(change, head?.document).first!!
+        val candidate = candidates.applied(change, head?.document).first!!
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
-        if (store.stage(change.key)?.value?.holder != change.id) {
-            // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). The
-            // head write is conditional on the base, not the slot: preempted after this, it still publishes, and the
-            // change that took the slot conflicts and is rebased on it, never written over it unseen.
+        // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). Read here,
+        // before the PUBLISHING record, and again right before the head write (review L2): what is left is one store
+        // round trip between that read and the write, which is conditional on the base, not on the slot. A change
+        // preempted within it still publishes, and the one that took the slot conflicts on the moved base ([movedOn]).
+        if (!holdsSlot(change)) {
             return settle(change, ChangeState.CONFLICTED)
         }
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
         var published: ChangeRequest? = null
+        var slotLost = false
         val outcome = revisions.publish(
             change.key,
             head,
             candidate,
-            PublishRules.publication(change, publisher, rechecked)
+            PublishRules.publication(change, publisher, rechecked),
+            precondition = { holdsSlot(change).also { slotLost = !it } },
         ) {
             published = written(change, it, rechecked, head?.document, candidate, publisher)
         }
         val settled = when (outcome) {
             is PublishOutcome.Published -> return checkNotNull(published) { "[${change.key}] was written unsettled." }
-            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED)
+            // A change that lost its slot is CONFLICTED already, by the one that took it.
+            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED, from = if (slotLost) LOST else READY)
             is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
         }
-        audit(PublishRules.outcomeOf(change, settled), settled, publisher.actor)
+        val note = if (slotLost) "another change took the staging slot before the head write" else settled.note
+        audit(PublishRules.outcomeOf(change, settled), settled.copy(note = note), publisher.actor)
+        return settled
+    }
+
+    private suspend fun holdsSlot(change: ChangeRequest): Boolean = store.stage(change.key)?.value?.holder == change.id
+
+    /**
+     * [change], `CONFLICTED`: its document is no longer at its base. When the head is a revision of the same base by
+     * another change, the change it took the slot from has published first (review L2), and that is recorded.
+     */
+    private suspend fun movedOn(change: ChangeRequest, head: Head?, publisher: Operator): ChangeRequest {
+        val settled = settle(change, ChangeState.CONFLICTED)
+        val provenance = head?.document?.provenance
+        if (provenance != null && provenance.change != change.id.value &&
+            provenance.parent?.digest == change.base.digest?.toString()
+        ) {
+            val note = "change ${provenance.change}, which held the slot before it, published over its base first " +
+                "(revision ${head.revision})"
+            audit(ChangeEvent.Kind.FAILED, settled.copy(note = note), publisher.actor)
+        }
         return settled
     }
 
@@ -555,13 +581,34 @@ class Changes(
         publisher: Operator,
     ): ChangeRequest {
         var settled: ChangeRequest? = null
+        var mine = true
         try {
-            settled = settle(change, ChangeState.PUBLISHED, published = outcome.revision)
+            settled = settledPublished(change, outcome.revision)
+            if (settled == null) {
+                // A retry settled it meanwhile, and recorded it (review D1).
+                mine = false
+                return read(change.id).value
+            }
             audit(PublishRules.outcomeOf(change, settled), settled, publisher.actor)
             return settled
         } finally {
-            recordMoved(settled ?: change, rechecked, base, candidate, publisher)
+            if (mine) recordMoved(settled ?: change, rechecked, base, candidate, publisher)
         }
+    }
+
+    /**
+     * [change] moved to `PUBLISHED` at [revision] by this call, whatever state it was in: once the head is written it is
+     * published. `null` when another call has already settled it, which recorded it then (review D1).
+     */
+    private suspend fun settledPublished(change: ChangeRequest, revision: Long): ChangeRequest? {
+        val settled = try {
+            transition(change.id, UNPUBLISHED) { it.copy(state = ChangeState.PUBLISHED, publishedRevision = revision) }
+        } catch (e: ChangeRejectedException) {
+            if (read(change.id).value.state == ChangeState.PUBLISHED) return null
+            throw e
+        }
+        releaseSlot(settled)
+        return settled
     }
 
     /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
@@ -572,28 +619,28 @@ class Changes(
         candidate: PolicyDocument,
         publisher: Operator,
         actor: Actor = publisher.actor,
-    ) = movedHeads.record(published, rechecked, base, candidate, publisher) { found ->
+        retriedBy: Actor? = null,
+    ) = movedHeads.record(published, rechecked, base, candidate, publisher, retriedBy) { found ->
         val change = published.copy(escalations = found.escalations, note = found.note)
         audit(found.kind, change, actor, found.moved)
     }
 
     /**
      * [change], whose head write an earlier publish made and could not finish after (a lost reply, a failed store):
-     * what follows the write runs now, as it would have then, without responding to cancellation. The events name the
-     * publisher the revision records, not whoever retries.
+     * what follows the write runs now, without responding to cancellation, recorded once, by whichever call settles it
+     * (review D1). The events name the publisher the revision records, not [retrier]; what moved is recorded as needing
+     * review, not analyzed again with [retrier]'s rights on what the change was last checked with (review D2).
      */
-    private suspend fun republished(change: ChangeRequest, own: Head, publisher: Operator): ChangeRequest =
+    private suspend fun republished(change: ChangeRequest, own: Head, retrier: Operator): ChangeRequest =
         withContext(NonCancellable) {
             revisions.rewritten(change.key, own, first = change.base.revision == 0L)
-            val by = own.document.provenance?.publishedBy ?: publisher.actor
-            val base = change.base.revision.takeIf { it > 0 }?.let { revisions.at(change.key, it)?.document }
-            var settled: ChangeRequest? = null
+            val by = own.document.provenance?.publishedBy ?: retrier.actor
+            val settled = settledPublished(change, own.revision) ?: return@withContext read(change.id).value
             try {
-                settled = settle(change, ChangeState.PUBLISHED, published = own.revision)
                 audit(PublishRules.outcomeOf(change, settled), settled, by)
                 settled
             } finally {
-                recordMoved(settled ?: change, change, base, own.document, publisher, by)
+                recordMoved(settled, change, null, own.document, retrier, by, retriedBy = retrier.actor)
             }
         }
 
@@ -608,56 +655,6 @@ class Changes(
                 "break-glass needs a REQUIRED change listener, and none is configured"
             )
         }
-    }
-
-    /**
-     * Runs the checks of [change] on [head] and returns it `CHECKED` or `DRAFT`, with what they found; a clean
-     * candidate is analyzed for what [operator] grants with it, and carries the escalations.
-     */
-    private suspend fun checked(change: ChangeRequest, head: Head?, operator: Operator): ChangeRequest {
-        val now = clock.instant()
-        val (candidate, applyFindings) = applied(change, head?.document)
-        candidate
-            ?: return change.copy(
-                state = ChangeState.DRAFT,
-                findings = applyFindings,
-                candidate = null,
-                checkedWith = emptyMap(),
-                escalations = emptyList(),
-                updatedAt = now
-            )
-        val recording = RecordingContext(context)
-        val checkedResult = checks.check(
-            change.key,
-            candidate,
-            change.kind,
-            change.operations,
-            head?.document,
-            recording
-        )
-        val breakGlass = BreakGlassRules.findings(
-            change.kind,
-            change.operations,
-            head?.document,
-            candidate,
-            now,
-            options.breakGlassMaxDuration
-        )
-        val result = CheckResult(applyFindings + breakGlass + checkedResult.findings, checkedResult.checkedWith)
-        val escalations = if (result.clean) {
-            authority.escalations(operator, change.key, change.operations, head?.document, candidate, recording, now)
-        } else {
-            emptyList()
-        }
-        return change.copy(
-            state = if (result.clean) ChangeState.CHECKED else ChangeState.DRAFT,
-            findings = result.findings,
-            candidate = if (result.clean) CandidateDigest.of(candidate) else null,
-            checkedWith = result.checkedWith + recording.read.filterKeys { it != change.key && it !in result.checkedWith },
-            checkedApps = recording.apps,
-            escalations = escalations,
-            updatedAt = now,
-        )
     }
 
     /** Withdraws the candidate of [change]'s window, if it is still the staged one; a failure only leaves it to compare. */
@@ -683,24 +680,7 @@ class Changes(
      */
     suspend fun candidateOf(id: ChangeId): PolicyDocument? {
         val change = get(id)
-        return applied(change, revisions.head(change.key)?.document).first
-    }
-
-    /**
-     * The candidate [change]'s operations make of [base], with the `nomatch` confirmations the control plane writes
-     * (RFC 0007 §9.5), and what kept them from applying or left a DENY unconfirmed.
-     */
-    private fun applied(change: ChangeRequest, base: PolicyDocument?): Pair<PolicyDocument?, List<Finding>> {
-        val applied = Operations.apply(change.key, base, change.operations)
-        val candidate = applied.candidate ?: return null to applied.findings
-        val (confirmed, findings) = NomatchConfirmations.apply(
-            candidate,
-            base,
-            change.confirmations,
-            change.author,
-            change.id
-        )
-        return confirmed to applied.findings + findings
+        return candidates.applied(change, revisions.head(change.key)?.document).first
     }
 
     /** Tells the listeners (RFC 0007 §10.5); a REQUIRED one that cannot record a gated step stops it (503). */
@@ -782,43 +762,46 @@ class Changes(
 
     /**
      * Takes [change]'s document's staging slot for [operator]; a holder that no longer stages (finished, expired, gone)
-     * frees it. A slot another change still holds is a 409, unless [change] may preempt it ([Preemption.preempts]): the
-     * holder is first made `CONFLICTED`, from whichever staged state it is in by then (approved or past its window
+     * frees it, and so does a `READY` holder whose revision the chain shows written, its publish's answer lost: it is
+     * settled as that publish would have been, then the slot is free (review L1). A slot another change still holds is
+     * a 409, unless [change] may preempt it ([Preemption.preempts]) and the holder is no break-glass revoke (review L3):
+     * the holder is first made `CONFLICTED`, from whichever staged state it is in by then (approved or past its window
      * meanwhile), and only then does the slot move and its candidate go (RC1-12). A holder that cannot be marked keeps
      * its slot, and the preemption is given up (review M3): no change that still stages ever loses its slot.
      */
     private suspend fun takeSlot(operator: Operator, change: ChangeRequest, head: Head?) {
         val conflicted = ArrayList<ChangeRequest>()
+        var taken = false
         try {
             repeat(MAX_ATTEMPTS) {
                 val current = store.stage(change.key)
                 val holder = current?.value?.holder
                 if (holder == change.id) {
+                    taken = true
                     return
                 }
                 val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
                 if (held != null) {
-                    if (!preemption.preempts(operator, change, head) || publishedReady(held, head)) {
+                    val own = PublishRules.ownRevision(revisions, held, head)?.takeIf { held.state == ChangeState.READY }
+                    if (own != null) {
+                        republished(held, own, operator)
+                        return@repeat
+                    }
+                    if (PublishRules.revokes(held) || !preemption.preempts(operator, change, head)) {
                         throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
                     }
                     conflicted += conflict(held, change)
                 }
                 if (store.putStage(change.key, current?.digest, StageSlot(change.id, clock.instant()))) {
+                    taken = true
                     return
                 }
             }
             throw ChangeRejectedException(CONFLICT, "the staging slot of [${change.key}] kept changing")
         } finally {
-            conflicted.forEach { preempted(it, change, operator) }
+            withContext(NonCancellable) { conflicted.forEach { preempted(it, change, operator, taken) } }
         }
     }
-
-    /**
-     * Whether [held] is `READY` and the chain shows its revision written: published, and only waiting for a retry of its
-     * publish to settle it, so no change takes its slot (review item 13).
-     */
-    private suspend fun publishedReady(held: ChangeRequest, head: Head?): Boolean =
-        held.state == ChangeState.READY && PublishRules.ownRevision(revisions, held, head) != null
 
     /** [held] made `CONFLICTED` for [by] from any staged state, before its slot moves; 409 or 503 when it cannot be. */
     @Suppress("TooGenericExceptionCaught")
@@ -836,12 +819,16 @@ class Changes(
         throw ChangeRejectedException(UNAVAILABLE, "change ${held.id.value} could not be preempted", e)
     }
 
-    /** [conflicted] lost its slot to [by]: its candidate withdrawn, and recorded as a failure. */
+    /**
+     * [conflicted] was made `CONFLICTED` for [by], which [taken] its slot or gave up: its candidate withdrawn, and
+     * recorded as a failure that says which.
+     */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun preempted(conflicted: ChangeRequest, by: ChangeRequest, operator: Operator) {
+    private suspend fun preempted(conflicted: ChangeRequest, by: ChangeRequest, operator: Operator, taken: Boolean) {
+        val note = if (taken) "preempted by ${by.id.value}" else "conflicted by ${by.id.value}, which did not take the slot"
         try {
             withdraw(conflicted)
-            audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = "preempted by ${by.id.value}"), operator.actor)
+            audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = note), operator.actor)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -883,5 +870,8 @@ class Changes(
         const val APPROVAL = "APPROVAL"
         val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
         val STAGED = ChangeState.entries.filter { it.staged }.toSet()
+        val UNPUBLISHED = ChangeState.entries.toSet() - ChangeState.PUBLISHED
+        val READY = setOf(ChangeState.READY)
+        val LOST = setOf(ChangeState.READY, ChangeState.CONFLICTED)
     }
 }

@@ -88,8 +88,14 @@ class ApprovalB2Test {
     /** Revoked token ids, and the instant before which a principal's tokens are revoked. */
     private val revokedIds = ConcurrentHashMap.newKeySet<String>()
     private val revokedBefore = ConcurrentHashMap<String, Instant>()
+    /** Whether the revocation store fails as no degraded read does: an entry it cannot decode, say. */
+    @Volatile
+    private var revocationsFail = false
     private val revocations = object : RevocationReader {
-        override suspend fun isRevoked(tokenId: String): Boolean = tokenId in revokedIds
+        override suspend fun isRevoked(tokenId: String): Boolean {
+            check(!revocationsFail) { "the revocation entry cannot be decoded" }
+            return tokenId in revokedIds
+        }
 
         override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
             revokedBefore["${tenant.value}/${principal.value}"]
@@ -454,8 +460,8 @@ class ApprovalB2Test {
         changes.publish(alice, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         revokedBefore.clear()
         changes.abandon(alice, change.id)
-        // Review item 4: nor does an approval that names no credential count: one before the upgrade, an older
-        // instance's, or a credential's without an id, whose revocation cannot be checked.
+        // Review items 4 and D3: a credential without an id does not approve, since publishing would not count it;
+        // one recorded before the upgrade, or by an older instance, does not count at publish (ControlReviewFixesTest).
         val anonymousCredential = engine.operator(
             AuthenticatedPrincipal(
                 PrincipalId("pia"),
@@ -464,16 +470,29 @@ class ApprovalB2Test {
             )
         )
         val unnamed = awaiting("viewers-unnamed")
-        changes.approve(anonymousCredential, unnamed.id, unnamed.candidate!!).approval!!.credentialId.assert().isNull()
-        changes.publish(alice, unnamed.id).let {
-            it.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
-            it.findings.map { finding -> finding.message }.assert()
-                .contains("the approval does not say what credential its approver approved with")
-        }
+        refused { changes.approve(anonymousCredential, unnamed.id, unnamed.candidate!!) }.assert().isEqualTo(403)
+        changes.get(unnamed.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         changes.abandon(alice, unnamed.id)
         // Revoking the tokens issued before an older instant leaves this one standing.
         publishedAfter { revokedBefore["(platform)/pia"] = issued.minusSeconds(60) }
             .assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    /**
+     * Review L4: revocations that cannot be read say nothing about the approver: nothing publishes (503), and the change
+     * keeps its approval for when the store answers again.
+     */
+    @Test
+    fun `revocations that cannot be read publish nothing`() = runBlocking<Unit> {
+        val token = withToken(TenantId.PLATFORM, "pia", "jti-pia", clock.now)
+        val change = awaiting("viewers-unread")
+        changes.approve(token, change.id, change.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+        revocationsFail = true
+        refused { changes.publish(alice, change.id) }.assert().isEqualTo(503)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.READY)
+        revisions.head(TENANT)!!.document.policies.none { it.id == PolicyId("viewers-unread") }.assert().isTrue()
+        revocationsFail = false
+        changes.publish(alice, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
     }
 
     /**

@@ -136,6 +136,8 @@ class Revisions(
      * Publishes [candidate] over [base] (`null`: [key] has no document yet) for [publication]. The candidate's own
      * revision, time and provenance are replaced: the revision follows the base's, the parent is the base.
      *
+     * [precondition] is read right before the head write, the last step that may still refuse it: `false` writes nothing
+     * and answers [PublishOutcome.Conflicted], as a moved base would (a change that lost its staging slot, review L2).
      * Once the head is written, the rest does not respond to cancellation, and [afterWrite] runs in it: what the caller
      * must do once the revision is in effect. A failure of this class's own steps after the write is only logged, and
      * the revision is [PublishOutcome.Published]: the references it adds were indexed before the write, so a reference
@@ -147,6 +149,7 @@ class Revisions(
         base: Head?,
         candidate: PolicyDocument,
         publication: Publication,
+        precondition: suspend () -> Boolean = { true },
         afterWrite: suspend (PublishOutcome.Published) -> Unit = {},
     ): PublishOutcome {
         requireDocumentKey(key)
@@ -178,6 +181,10 @@ class Revisions(
             }
         }
         return withContext(NonCancellable) {
+            if (!precondition()) {
+                log.info { "[$key] revision $revision was not written: its precondition no longer holds." }
+                return@withContext PublishOutcome.Conflicted(base?.digest)
+            }
             when (val write = store.putHead(key, base?.digest, stored)) {
                 is HeadWrite.Conflict -> {
                     log.info { "[$key] changed since revision ${base?.revision ?: 0} was read; not published." }

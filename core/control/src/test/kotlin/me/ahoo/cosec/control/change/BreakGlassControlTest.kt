@@ -383,6 +383,46 @@ class BreakGlassControlTest {
             .assert().startsWith("preempted by ")
     }
 
+    /**
+     * Review L3: a break-glass revoke holding the slot is taken by nothing, a narrowing change by a holder of
+     * `cosec:skip-shadow` included: the principal it revokes could otherwise hold its own revocation off.
+     */
+    @Test
+    fun `no change takes the slot of a break-glass revoke`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id)
+        val binding = glass()!!.id
+        // The revoke is staged, and its publish waits for the audit store.
+        audit.failing += ChangeEvent.Kind.PUBLISHING
+        refused { breakGlass.revoke(rita, binding, "compromised") }.assert().isEqualTo(503)
+        audit.failing.clear()
+        val revoke = store.stage(SnapshotKey.Platform)!!.value.holder!!
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+        val deny = PolicyDefinition(
+            PolicyId("ban"),
+            false,
+            null,
+            listOf(StatementSource("", Effect.DENY, listOf("order:delete")))
+        )
+        val ban = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            revisions.head(SnapshotKey.Platform)!!.revision,
+            listOf(
+                Operation.PutPolicy(deny),
+                Operation.PutBinding(
+                    Binding(BindingId("ban"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("ban"))
+                ),
+            ),
+            "ban"
+        )
+        refused { changes.skipShadow(plato, ban.id, "incident") }.assert().isEqualTo(409)
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+        changes.publish(rita, revoke).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        glass().assert().isNull()
+    }
+
     private fun allowAll(id: String) = PolicyDefinition(
         PolicyId(id),
         false,

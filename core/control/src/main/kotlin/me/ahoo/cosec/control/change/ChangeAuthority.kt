@@ -176,21 +176,27 @@ class ChangeAuthority(
 
     /**
      * Why [approval] no longer counts because its approver's token was revoked since (RC1-11): that token by its id, or
-     * every token of the approver issued by then; `null` when neither is. As the host's token authenticator reads them.
+     * every token of the approver issued by then; `null` when neither is. As the host's token authenticator reads them,
+     * degraded read included. Any other failure to read them is a 503 (review L4): the approval says nothing about the
+     * approver then, so nothing is published, and the change keeps its approval for when the store answers again.
      */
-    private suspend fun revoked(approval: Approval): String? {
-        if (approval.credentialId?.let { revocations.isRevoked(it) } == true) {
-            return "the token the approver approved with is revoked"
-        }
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun revoked(approval: Approval): String? = try {
         val before = revocations.subjectRevokedBefore(approval.approver.tenant, approval.approver.principal)
-        return if (SubjectRevocation.revokes(before, approval.issuedAt, revocationSkew)) {
-            "the approver's tokens are revoked"
-        } else {
-            null
+        when {
+            approval.credentialId?.let { revocations.isRevoked(it) } == true ->
+                "the token the approver approved with is revoked"
+
+            SubjectRevocation.revokes(before, approval.issuedAt, revocationSkew) -> "the approver's tokens are revoked"
+            else -> null
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(UNAVAILABLE, "the revocations of the approver could not be read", e)
     }
 
-    /** A change that sets a tenant's boundary is the platform's (`BDY-2`): only a platform principal rejects or abandons it. */
+    /** A change that sets a tenant's boundary is the platform's (`BDY-2`): only a platform principal ends it. */
     fun requireBoundaryOperator(operator: Operator, change: ChangeRequest) {
         if (!operator.platform && change.operations.any { it is Operation.SetBoundary }) {
             throw ChangeRejectedException(FORBIDDEN, "only a platform principal ends a boundary change")
@@ -220,6 +226,10 @@ class ChangeAuthority(
      */
     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
         apiKey(operator) -> "an API key cannot approve: an approval is a person's"
+
+        // Publishing would not count it: its revocation could not be checked (review D3).
+        operator.security?.principal?.credential?.id == null ->
+            "an approval names the approver's credential, and this one names none"
 
         !operator.platform -> approverTenantProblem(change)
 
@@ -363,6 +373,9 @@ class ChangeAuthority(
         }
     } catch (e: CancellationException) {
         throw e
+    } catch (e: AppListNotReconciledException) {
+        // Until this instance has reconciled the list, between two throttled attempts (review D4).
+        null.also { untrusted { "${e.message}: every app a grant reaches is unknown until it is." } }
     } catch (e: Exception) {
         log.warn(e) { "The app list could not be read; every app a grant reaches is unknown." }
         null

@@ -330,8 +330,9 @@ class CoSecControlAutoConfiguration {
     internal companion object {
         /**
          * The revocations an approver is checked against at publish (RC1-11), as the pipeline reads them: a
-         * [RevocationReader] bean, else the CoCache token store's. With neither, startup fails, as the pipeline's does:
-         * the control plane never takes an approval for unrevoked by reading nothing.
+         * [RevocationReader] bean, else the CoCache token store's. With neither, startup fails, also when CoSec's tokens
+         * are off, where the pipeline needs no reader: the control plane never takes an approval for unrevoked by reading
+         * nothing.
          */
         fun revocations(
             reader: ObjectProvider<RevocationReader>,

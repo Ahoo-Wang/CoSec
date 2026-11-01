@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Versioned
+import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -97,11 +98,12 @@ internal class MovedHeads(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         publisher: Operator,
+        retriedBy: Actor? = null,
         audit: suspend (HeadsMoved) -> Unit,
     ) = withContext(NonCancellable) {
         try {
             val outcome = withTimeoutOrNull(timeout) {
-                Outcome(detect(published, rechecked, base, candidate, publisher))
+                Outcome(detect(published, rechecked, base, candidate, publisher, retriedBy))
             }
             val found = when (outcome) {
                 null -> HeadsMoved(
@@ -127,7 +129,9 @@ internal class MovedHeads(
 
     /**
      * What to record about [published], whose last check was [rechecked] of [candidate] over [base] by [publisher];
-     * `null` when every head it was checked with is the one it had.
+     * `null` when every head it was checked with is the one it had. A publish [retriedBy] someone after its write is not
+     * analyzed again: the check it was published on is gone, and the retrier's rights are not the publisher's, so what
+     * moved is [ChangeEvent.Kind.REVIEW_NEEDED] for a person to look at (review D2).
      */
     suspend fun detect(
         published: ChangeRequest,
@@ -135,6 +139,7 @@ internal class MovedHeads(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         publisher: Operator,
+        retriedBy: Actor? = null,
     ): HeadsMoved? {
         val heads = rechecked.checkedWith.filterKeys { it != published.key }
             .mapNotNull { (key, checked) -> moved(key.toString(), checked) { store.head(key)?.digest } }
@@ -142,6 +147,10 @@ internal class MovedHeads(
         val moved = heads + listOfNotNull(apps)
         if (moved.isEmpty()) {
             return null
+        }
+        retriedBy?.let {
+            val note = "retried by ${it.tenant.value}/${it.principal.value}, not re-analyzed"
+            return HeadsMoved(ChangeEvent.Kind.REVIEW_NEEDED, moved, emptyList(), note)
         }
         return analyzed(published, rechecked, base, candidate, publisher, moved)
     }

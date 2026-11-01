@@ -75,11 +75,13 @@ internal object PublishRules {
 
     fun outcomeOf(change: ChangeRequest, settled: ChangeRequest): ChangeEvent.Kind = when {
         settled.state != ChangeState.PUBLISHED -> ChangeEvent.Kind.FAILED
-        change.kind == ProvenanceKind.BREAK_GLASS && change.operations.all {
-            it is Operation.RemoveBinding
-        } -> ChangeEvent.Kind.REVOKED
+        revokes(change) -> ChangeEvent.Kind.REVOKED
         else -> ChangeEvent.Kind.PUBLISHED
     }
+
+    /** Whether [change] is a break-glass revoke: it only removes bindings, as a break-glass change. */
+    fun revokes(change: ChangeRequest): Boolean = change.kind == ProvenanceKind.BREAK_GLASS &&
+        change.operations.isNotEmpty() && change.operations.all { it is Operation.RemoveBinding }
 
     /**
      * A change whose window closed blocked never publishes (409); one whose summary needs acknowledging publishes only

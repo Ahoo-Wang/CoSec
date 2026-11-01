@@ -36,6 +36,12 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import org.junit.jupiter.api.AfterEach
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -127,9 +133,19 @@ class PreemptionRaceTest {
         val waiting = changes.shadowed(held.id)
         waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
-        // The preempting change reads the holder awaiting approval; it is approved right after.
+        // The preempting change reads the holder awaiting approval; another instance approves it right after.
         racing.afterChange(held.id) {
-            changes.approve(PIA, held.id, waiting.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+            val current = memory.change(held.id)!!
+            val approval = Approval(
+                PIA.actor,
+                clock.now,
+                waiting.candidate!!,
+                waiting.escalations.map { it.subject },
+                NO_MEMBERSHIPS,
+                credentialId = "token-pia",
+            )
+            memory.putChange(current.digest, current.value.copy(state = ChangeState.READY, approval = approval))
+                .assert().isTrue()
         }
         changes.skipShadow(PLATO, emergency.id, "incident")
         changes.get(held.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
@@ -168,8 +184,143 @@ class PreemptionRaceTest {
         harness.changes.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
     }
 
+    /** [harness]'s documents with a REQUIRED listener that records every change event in [events]. */
+    private fun listened(harness: ChangeHarness, events: MutableList<ChangeEvent>) = Changes(
+        racing,
+        harness.revisions,
+        { ChangeId("l${ids.incrementAndGet()}") },
+        PERMIT_ALL,
+        clock,
+        ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        listeners = ChangeListeners(
+            listOf(
+                object : ChangeListener {
+                    override val name = "recorder"
+                    override val delivery = Delivery.REQUIRED
+
+                    override suspend fun onChange(event: ChangeEvent) {
+                        events += event
+                    }
+                }
+            )
+        ).also { opened += it },
+    )
+
+    private val opened = ArrayList<ChangeListeners>()
+
+    @AfterEach
+    fun close() {
+        opened.forEach { it.cancel() }
+    }
+
+    /** Events that do not gate a step reach a listener on its own queue: the one of [change] with [note] once there. */
+    private fun note(events: List<ChangeEvent>, change: ChangeId, kind: ChangeEvent.Kind): String? {
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (events.none { it.change == change && it.kind == kind }) {
+            check(System.nanoTime() < deadline) { "Not delivered: ${events.map { it.kind }}" }
+            Thread.sleep(10)
+        }
+        return events.single { it.change == change && it.kind == kind }.note
+    }
+
+    /**
+     * Review L2: a change preempted after its first slot check, while its PUBLISHING record is written, finds the slot
+     * gone right before its head write: nothing is written, and its publish is recorded as failed, saying why.
+     */
+    @Test
+    fun `a change preempted before its head write writes nothing`() = runBlocking<Unit> {
+        val harness = harness()
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
+        val changes = listened(harness, events)
+        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        changes.skipShadow(PLATO, proposed.id, "test").state.assert().isEqualTo(ChangeState.READY)
+        val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
+        // The holder's publish has checked the slot once when the ban takes it.
+        racing.afterStage(skip = 0) {
+            changes.skipShadow(PLATO, emergency.id, "incident").state.assert().isEqualTo(ChangeState.READY)
+        }
+        changes.publish(PLATO, proposed.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        harness.revisions.head(SnapshotKey.Platform)!!.revision.assert().isEqualTo(1)
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (events.count { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED } < 2) {
+            check(System.nanoTime() < deadline) { "Not delivered: ${events.map { it.kind }}" }
+            Thread.sleep(10)
+        }
+        events.filter { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
+            .contains("preempted by ${emergency.id.value}", "another change took the staging slot before the head write")
+        changes.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    /**
+     * Review L2: within the one round trip between the last slot check and the head write, the preempted change still
+     * publishes; the change that took its slot then conflicts, and its failure says which change published first.
+     */
+    @Test
+    fun `the change that took a slot records the publish that beat it`() = runBlocking<Unit> {
+        val harness = harness()
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
+        val changes = listened(harness, events)
+        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        changes.skipShadow(PLATO, proposed.id, "test").state.assert().isEqualTo(ChangeState.READY)
+        val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
+        // The holder's last slot check, right before its head write, has passed when the ban takes the slot.
+        racing.afterStage(skip = 1) {
+            changes.skipShadow(PLATO, emergency.id, "incident").state.assert().isEqualTo(ChangeState.READY)
+        }
+        changes.publish(PLATO, proposed.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        changes.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        note(events, emergency.id, ChangeEvent.Kind.FAILED).assert().isEqualTo(
+            "change ${proposed.id.value}, which held the slot before it, published over its base first (revision 2)"
+        )
+    }
+
+    /** Review L5: a holder made CONFLICTED for a change that then does not take the slot is recorded as such. */
+    @Test
+    fun `a preemption that gives up says so`() = runBlocking<Unit> {
+        val harness = harness()
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
+        val changes = listened(harness, events)
+        val proposed = changes.propose(PLATO, SnapshotKey.Platform, head(harness), listOf(Operation.PutPolicy(allow("slow"))), "slow")
+        val held = changes.stage(PLATO, proposed.id)
+        val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
+        racing.refuseStages = true
+        refused { changes.skipShadow(PLATO, emergency.id, "incident") }.assert().isEqualTo(409)
+        racing.refuseStages = false
+        changes.get(held.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        note(events, held.id, ChangeEvent.Kind.FAILED)
+            .assert().isEqualTo("conflicted by ${emergency.id.value}, which did not take the slot")
+    }
+
     /** Runs a race once: after a read of one change, or before a read of a head. */
     private class Racing(private val memory: InMemoryControlStore) : ControlStore by memory {
+        /** Whether every write of a staging slot is refused, as if it kept changing. */
+        @Volatile
+        var refuseStages = false
+
+        @Volatile
+        private var stage: Pair<Int, suspend () -> Unit>? = null
+
+        /** Runs [race] once, right after the read of a staging slot that follows [skip] others. */
+        fun afterStage(skip: Int, race: suspend () -> Unit) {
+            stage = skip to race
+        }
+
+        override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? {
+            val read = memory.stage(key)
+            stage?.let { (skip, race) ->
+                if (skip > 0) {
+                    stage = skip - 1 to race
+                } else {
+                    stage = null
+                    race()
+                }
+            }
+            return read
+        }
+
+        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =
+            !refuseStages && memory.putStage(key, expected, slot)
+
         @Volatile
         private var change: Pair<ChangeId, suspend () -> Unit>? = null
 

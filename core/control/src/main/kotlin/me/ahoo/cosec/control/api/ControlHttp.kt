@@ -307,10 +307,23 @@ class ControlHttp(private val plane: ControlPlane) {
     private inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
         if (request.method == GET) block() else methodNotAllowed()
 
+    /**
+     * [change] as the API shows it: the approval names its approver, when and what for, never what the approver held,
+     * its token's attributes or which token it was (review D5). The store and the change log keep all of it.
+     */
     private fun changeResponse(change: ChangeRequest, status: Int) = ControlHttpResponse(
         status,
         JSON,
-        ChangeRequestCodec.encode(change)
+        ChangeRequestCodec.encode(
+            change.copy(
+                approval = change.approval?.copy(
+                    memberships = null,
+                    attributes = emptyMap(),
+                    credentialId = null,
+                    issuedAt = null,
+                )
+            )
+        )
     )
 
     private fun document(document: me.ahoo.cosec.runtime.document.PolicyDocument) = ControlHttpResponse(
