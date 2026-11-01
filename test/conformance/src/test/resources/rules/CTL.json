@@ -239,7 +239,8 @@
         "control:PreemptionRaceTest#the change that took a slot records the publish that beat it",
         "control:PreemptionRaceTest#a preemption that gives up says so",
         "control:RetriedPublishTest#a revoke settles a published holder and takes its slot",
-        "control:RetriedPublishTest#a publish and its retry record it once"
+        "control:RetriedPublishTest#a publish and its retry record it once",
+        "control:PreemptionRaceTest#a head write that meets the preempting change's head records the failure"
       ]
     }
   ]

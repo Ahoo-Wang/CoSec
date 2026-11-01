@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 004614a7..a4fbc7d6 100644
+index 5fe3e443..26227c22 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -787,7 +787,7 @@ class Changes(
-                         republished(held, own, operator)
+@@ -813,7 +813,7 @@ class Changes(
                          return@repeat
                      }
--                    if (PublishRules.revokes(held) || !preemption.preempts(operator, change, head)) {
-+                    if (!preemption.preempts(operator, change, head)) {
+                     // A revoke of a binding that still grants is taken only by another such revoke (review N1).
+-                    val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
++                    val guarded = false
+                     if (guarded || !preemption.preempts(operator, change, head)) {
                          throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
                      }
-                     conflicted += conflict(held, change)

@@ -1,0 +1,16 @@
+# Rule: CTL-22
+# Mutant: a publish checks its slot before its PUBLISHING record only, not right before its head write, so a change preempted between the two still publishes
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index 5fe3e443..0afbd896 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -542,7 +542,6 @@ class Changes(
+             head,
+             candidate,
+             PublishRules.publication(change, publisher, rechecked),
+-            precondition = { holdsSlot(change).also { slotLost = !it } },
+         ) {
+             published = written(change, it, rechecked, head?.document, candidate, publisher)
+         }
