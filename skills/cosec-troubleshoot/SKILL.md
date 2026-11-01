@@ -274,8 +274,12 @@ in the log: approvals are a person's, so approve with a token; an API key is nev
 principal's `SetBoundary`, its `REPLACE` or rollback that would drop the platform's boundary, and its reject or abandon
 of a boundary change are 403: a tenant's boundary is the platform's. A 409 on staging means another change holds the
 document's slot; only a break-glass revoke of a live binding, or a change that only narrows by a holder of
-`cosec:skip-shadow`, takes it, and a holder that cannot be marked `CONFLICTED` keeps it (503). A publish retried after
-its answer was lost reports `PUBLISHED`. Blocking a principal is not a document change: use the blacklist's
+`cosec:skip-shadow`, takes it, nothing takes a revoke's, and a holder that cannot be marked `CONFLICTED` keeps it
+(503). A publish retried after its answer was lost reports `PUBLISHED`, and so does a holder whose answer was lost when
+another change comes for its slot. A 403 on `:approve` with `this one names none` in the log: approve with a credential
+that has an id. A 503 on publish with `the revocations of the approver could not be read`: the revocation store failed;
+the change keeps its approval. `FAILED` events with `another change took the staging slot before the head write` or
+`... published over its base first` are a publish and a preemption that crossed: rebase the change that lost. Blocking a principal is not a document change: use the blacklist's
 `BlacklistSource`, which waits for no slot.
 
 When every tenant grant over every app (a binding with app `*`, an attachment, also one whose condition narrows it to

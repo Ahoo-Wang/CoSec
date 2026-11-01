@@ -422,10 +422,10 @@ principal sets a tenant's boundary`.
 | `403` | The operator may not take this action on this document, or the hard rules forbid it: the author approving their own change, someone else rebasing it. | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type, or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). | Fix the request; `detail` names the problem. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. | |
-| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
+| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and nothing takes a revoke's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
 | `410` | The revision asked for is not kept. | |
 | `428` | Publishing needs an acknowledgement of the shadow window's counts. | Publish again with the `ack` of that window. |
-| `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |
+| `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, an approver's revocations could not be read on publish (`the revocations of the approver could not be read` in the log; the change keeps its approval), or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |
 | `500` | A defect: `Control API <method> <path> failed (request <requestId>).` at `ERROR`. | |
 
 A change whose checks fail is not an error response: it stays `DRAFT` with its `findings`, each with a status (`422`
@@ -452,7 +452,13 @@ for a check, `412` for an `ifMatch` that does not hold).
   a platform principal approves a platform principal's change`, or `the approval does not say what credential its
   approver approved with` (an approval from before the upgrade, from an older instance, or by a credential without an
   id). Ask for a new approval. A `403` on `:approve` with `an API key cannot approve` in the log: approve with a
-  person's token.
+  person's token; with `an approval names the approver's credential, and this one names none`: approve with a
+  credential that has an id, such as CoSec's token.
+- **A `FAILED` change event on a publish that met another change at the slot**: `another change took the staging
+  slot before the head write` (the change was preempted while it published; nothing was written), `change <id>,
+  which held the slot before it, published over its base first (revision <n>)` (the change preempted another that
+  still published within one store round trip; rebase it), or `conflicted by <id>, which did not take the slot` (a
+  preemption gave up after marking the holder; rebase the holder).
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):

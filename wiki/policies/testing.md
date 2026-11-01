@@ -245,7 +245,8 @@ break-glass bindings has no window.
 One change at a time holds a document's staging slot while it is shadowing, awaiting approval or ready; another
 change of that document waits (`409`). An emergency must not: two kinds of change take the slot.
 
-- **Revoking break-glass**, always, for a binding that has not expired. Revoking publishes only through a REQUIRED
+- **Revoking break-glass**, always, for a binding that has not expired. Nothing takes the slot from a revoke in
+  turn, so the principal it revokes cannot hold it off with changes of its own. Revoking publishes only through a REQUIRED
   change listener that records it; while that listener's store is down, revoke the principal's tokens instead
   (`TokenRevoker.revokeSubject`), which needs no listener.
 - **A change that only narrows**, staged or skipped by a holder of `cosec:skip-shadow` on the document. Every
@@ -260,9 +261,15 @@ Blocking a principal, a device or an address is not a document change: the black
 The change that held the slot is made `CONFLICTED` before the slot moves, from whichever state it is in by then
 (approved or past its window meanwhile), its candidate withdrawn, and it is recorded as `FAILED` with the note
 `preempted by <change>`; rebase it to try again. A holder that cannot be marked, because the store fails, keeps the
-slot, and the change that would take it is refused (`503`). A `READY` holder whose revision the chain already shows, a
-publish that wrote and lost its answer, keeps it too (`409`) until that publish is retried. A publish goes on only
-while its change holds the slot.
+slot, and the change that would take it is refused (`503`); a preemption that gives up records the holder's failure as
+`conflicted by <change>, which did not take the slot`. A `READY` holder whose revision the chain already shows, a
+publish that wrote and lost its answer, is settled `PUBLISHED` by whichever change comes for its slot, recorded as its
+publisher, and the slot is then free: an ordinary stage takes it too.
+
+A publish goes on only while its change holds the slot: checked before the `PUBLISHING` record, and again right before
+the head write, which records a failure with `another change took the staging slot before the head write` when it is
+gone. Between that last read and the write lies one store round trip, in which a preempted change still publishes; the
+change that took its slot then conflicts on the moved base, and its failure names the change that published first.
 
 ## Approval
 
@@ -335,19 +342,25 @@ What the analysis does not see:
 A change with escalations waits in `AWAITING_APPROVAL` once its window closed or was skipped. Another person holding
 `cosec:approve` approves it with `POST /changes/{id}:approve` and the `candidate` digest they reviewed (from
 `GET /changes/{id}`); a different digest is a `409`, and the author cannot approve their own change. An approval is a
-person's: a principal that authenticated with an API key cannot approve (`403`). The approval records the approver's
+person's: a principal that authenticated with an API key cannot approve (`403`), nor can one whose credential names no
+id (`403`), since publishing would not count its approval. The approval records the approver's
 credential (its id, a token's `jti`, and when it was issued, its `iat`); when that token, or every token of the
 approver issued by then, is revoked before the change publishes, the approval no longer counts. An approval that
 records no credential id does not count either: one made before the upgrade to this version, one an older instance
 accepted, or one given with a credential that has no id; approve it again. A credential that does not say when it was
 issued, from an authenticator of yours that sets no `issuedAt`, loses its approvals to any revocation of its
-principal's tokens. Revocations are read as the pipeline reads them, so a degraded read counts as "not revoked" here
-too ([Authentication](../integration/authentication.md#logout-and-revocation)); they are kept for
+principal's tokens. Once the approver's access token has expired, `TokenRevoker.revoke` no longer takes it, so only
+`revokeSubject` takes its approvals back. Revocations are read as the pipeline reads them, so a degraded read counts as
+"not revoked" here too, for as long as an approval counts
+([Authentication](../integration/authentication.md#logout-and-revocation)); any other failure to read them is a `503`,
+and the change keeps its approval for when the store answers. They are kept for
 `cosec.jwt.token-validity.refresh`, which must be no shorter than `cosec.control.approval.expire-after`, or the starter
 does not start. An approver whose memberships come from the membership provider is decided twice at publish: on the
 roles it held when it approved and still holds, and on everything the provider answers now; both must permit, so a DENY
 bound to a role it gained since takes the approval back. `:reject` with a `reason` ends it. An approval is valid for
-`cosec.control.approval.expire-after` (72 hours) and only for that candidate. A break-glass approval is recorded by a
+`cosec.control.approval.expire-after` (72 hours) and only for that candidate. `GET /changes/{id}` shows who approved
+it, when and for what, not the approver's credential, memberships or attributes, which the store and the change log
+keep. A break-glass approval is recorded by a
 REQUIRED change listener before it is stored: when storing it fails after that, the record shows an approval the change
 does not have, and the approver approves again.
 

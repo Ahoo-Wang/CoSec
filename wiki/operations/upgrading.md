@@ -70,7 +70,9 @@ analysis read the author's rights as enforcement does, so some changes that publ
   from the membership provider must be permitted both on the roles it held then and still holds and on what the
   provider answers now; the starter now gives the control plane the application's `MembershipProvider` (RC1-13). **An
   approval that records no credential id does not count**: every change approved before the upgrade goes back to
-  `AWAITING_APPROVAL` at publish, and is approved again. In code, `AuthenticatedPrincipal` has `issuedAt` and `apiKey`.
+  `AWAITING_APPROVAL` at publish, and is approved again; a credential without an id cannot approve (`403`). The API's
+  view of a change (`GET /changes/{id}` and the answers of its steps) no longer shows the approval's `memberships`,
+  `attributes`, `credentialId` or `issuedAt`. In code, `AuthenticatedPrincipal` has `issuedAt` and `apiKey`.
 - **The starter checks how approvals are revoked.** The control plane needs a revocation reader, as the pipeline
   does: a `RevocationReader` bean, or CoSec's tokens with `cosec-cocache`; startup fails without one (declare
   `RevocationReader.NONE` when no approver's credential is ever revoked). Startup also fails when

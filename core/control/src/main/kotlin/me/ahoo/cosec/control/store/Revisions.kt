@@ -107,8 +107,9 @@ class RetentionPolicy(
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
  * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
  *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
- * 3. the head is replaced with `putIfMatch(expected = base digest)`: one key, one atomic step (P7). A conflict leaves
- *    the head as someone else wrote it and is reported, never retried on the new content (RFC 0007 §5.5);
+ * 3. the caller's precondition is read, and the head is replaced with `putIfMatch(expected = base digest)`: one key,
+ *    one atomic step (P7). A conflict leaves the head as someone else wrote it and is reported, never retried on the
+ *    new content (RFC 0007 §5.5);
  * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
  *    marks the app list complete when it names every app document the store lists.
  *

@@ -188,6 +188,7 @@ class ApprovalB2Test {
                     control("admins", SubjectRef.Role(ACME, RoleId("admin")), BuiltinPolicies.TENANT_ADMIN),
                     control("suspended", SubjectRef.Role(ACME, RoleId("suspended")), PolicyId("no-approve")),
                     control("approvers", SubjectRef.Role(ACME, RoleId("approver")), PolicyId("acme-approver")),
+                    control("deputies", SubjectRef.Role(ACME, RoleId("deputy")), PolicyId("acme-approver")),
                     Binding(
                         BindingId("ops"),
                         SubjectRef.Role(ACME, RoleId("ops")),
@@ -519,6 +520,14 @@ class ApprovalB2Test {
         provided.remove("dave")
         changes.publish(alice, lost.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         changes.abandon(alice, lost.id)
+
+        // A role gained since grants nothing it did not approve with: dave approved as an approver, and is a deputy now.
+        provided["dave"] = setOf(RoleId("approver"))
+        val swapped = awaiting("viewers-swapped")
+        changes.approve(dave, swapped.id, swapped.candidate!!)
+        provided["dave"] = setOf(RoleId("deputy"))
+        changes.publish(alice, swapped.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        changes.abandon(alice, swapped.id)
 
         // A role gained since counts for its DENYs: suspended, dave approves nothing (deny-first).
         provided["dave"] = setOf(RoleId("approver"))
