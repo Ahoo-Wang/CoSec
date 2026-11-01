@@ -245,8 +245,12 @@ break-glass bindings has no window.
 One change at a time holds a document's staging slot while it is shadowing, awaiting approval or ready; another
 change of that document waits (`409`). An emergency must not: two kinds of change take the slot.
 
-- **Revoking break-glass**, always, for a binding that has not expired. Nothing takes the slot from a revoke in
-  turn, so the principal it revokes cannot hold it off with changes of its own. Revoking publishes only through a REQUIRED
+- **Revoking break-glass**, always, for a binding that has not expired. Only another such revoke takes the slot
+  from a revoke of a binding that still grants, so the principal it revokes cannot hold it off with changes of its own;
+  a revoke of an expired binding holds it against nothing. A revoke whose publish stopped (its REQUIRED listener's
+  store was down) stays `READY` in the slot: revoke the binding again, which publishes it, or a revoker who may not
+  read it revokes with a change of its own, which takes its slot; `POST /changes/{id}:publish` or `:abandon` clear it
+  too. Revoking publishes only through a REQUIRED
   change listener that records it; while that listener's store is down, revoke the principal's tokens instead
   (`TokenRevoker.revokeSubject`), which needs no listener.
 - **A change that only narrows**, staged or skipped by a holder of `cosec:skip-shadow` on the document. Every
@@ -268,8 +272,10 @@ publisher, and the slot is then free: an ordinary stage takes it too.
 
 A publish goes on only while its change holds the slot: checked before the `PUBLISHING` record, and again right before
 the head write, which records a failure with `another change took the staging slot before the head write` when it is
-gone. Between that last read and the write lies one store round trip, in which a preempted change still publishes; the
-change that took its slot then conflicts on the moved base, and its failure names the change that published first.
+gone, or `the document moved before the head write` when the change that took it published first. Between that last
+read and the write lies one store round trip, plus any pause of the publishing instance between them (a GC, say), in
+which a preempted change still publishes; the change that took its slot then conflicts on the moved base, and its
+failure names the revision that came first and who published it.
 
 ## Approval
 
@@ -359,8 +365,8 @@ does not start. An approver whose memberships come from the membership provider 
 roles it held when it approved and still holds, and on everything the provider answers now; both must permit, so a DENY
 bound to a role it gained since takes the approval back. `:reject` with a `reason` ends it. An approval is valid for
 `cosec.control.approval.expire-after` (72 hours) and only for that candidate. `GET /changes/{id}` shows who approved
-it, when and for what, not the approver's credential, memberships or attributes, which the store and the change log
-keep. A break-glass approval is recorded by a
+it, when and for what, not the approver's credential, memberships, attributes or what its credential could reach;
+only the change's record in the store keeps them, and no change event carries them. A break-glass approval is recorded by a
 REQUIRED change listener before it is stored: when storing it fails after that, the record shows an approval the change
 does not have, and the approver approves again.
 

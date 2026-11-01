@@ -455,10 +455,15 @@ for a check, `412` for an `ifMatch` that does not hold).
   person's token; with `an approval names the approver's credential, and this one names none`: approve with a
   credential that has an id, such as CoSec's token.
 - **A `FAILED` change event on a publish that met another change at the slot**: `another change took the staging
-  slot before the head write` (the change was preempted while it published; nothing was written), `change <id>,
-  which held the slot before it, published over its base first (revision <n>)` (the change preempted another that
-  still published within one store round trip; rebase it), or `conflicted by <id>, which did not take the slot` (a
-  preemption gave up after marking the holder; rebase the holder).
+  slot before the head write` or `the document moved before the head write` (the change was preempted while it
+  published; nothing was written), `revision <n> was published over the same base first, by <id>` (another publish
+  over the same base came first: the change it preempted, within one store round trip, a bootstrap, a migration or an
+  older instance; rebase it), or `conflicted by <id>, which did not take the slot` (a preemption gave up after marking
+  the holder; rebase the holder).
+- **A revoke answers `503` and the break-glass binding is still there**: its publish stopped (the REQUIRED change
+  listener did not record `PUBLISHING`), and the revoke stays `READY` in the platform document's slot. Revoke the
+  binding again once the listener's store answers: that publishes it; a revoker who may not read it revokes with a
+  change of its own, which takes its slot. Revoking the principal's tokens works meanwhile.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):
