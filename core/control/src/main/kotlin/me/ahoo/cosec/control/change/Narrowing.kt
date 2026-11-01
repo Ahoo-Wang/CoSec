@@ -155,7 +155,7 @@ internal class Preemption(
     }
 
     /** Whether [change] only revokes break-glass bindings [head] has that still grant: an expired one grants nothing. */
-    private fun revokesBreakGlass(change: ChangeRequest, head: Head?): Boolean {
+    fun revokesBreakGlass(change: ChangeRequest, head: Head?): Boolean {
         val now = clock.millis()
         val glass = head?.document?.bindings.orEmpty()
             .filter { it.breakGlass && (it.expiresAt?.let { expiresAt -> expiresAt > now } ?: true) }

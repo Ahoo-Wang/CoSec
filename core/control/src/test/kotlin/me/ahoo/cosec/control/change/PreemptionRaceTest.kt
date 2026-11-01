@@ -284,9 +284,43 @@ class PreemptionRaceTest {
         }
         changes.publish(PLATO, proposed.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         changes.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
-        note(events, emergency.id, ChangeEvent.Kind.FAILED).assert().isEqualTo(
-            "change ${proposed.id.value}, which held the slot before it, published over its base first (revision 2)"
+        note(events, emergency.id, ChangeEvent.Kind.FAILED)
+            .assert().isEqualTo("revision 2 was published over the same base first, by ${proposed.id.value}")
+    }
+
+    /**
+     * Review N5: a change whose last slot check passed, and whose head write then meets the head of the change that
+     * took its slot within that window, is CONFLICTED and records the failure; it does not end in a 409.
+     */
+    @Test
+    fun `a head write that meets the preempting change's head records the failure`() = runBlocking<Unit> {
+        val harness = harness()
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
+        val changes = listened(harness, events)
+        val proposed = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(harness),
+            listOf(Operation.PutPolicy(allow("slow"))),
+            "slow"
         )
+        changes.skipShadow(PLATO, proposed.id, "test").state.assert().isEqualTo(ChangeState.READY)
+        val emergency = changes.propose(PLATO, SnapshotKey.Platform, head(harness), ban, "ban")
+        // Right after the holder's last slot check, the ban takes the slot and publishes before the holder's write.
+        racing.afterStage(skip = 1) {
+            changes.skipShadow(PLATO, emergency.id, "incident").state.assert().isEqualTo(ChangeState.READY)
+            changes.publish(PLATO, emergency.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        }
+        changes.publish(PLATO, proposed.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.policies.none { it.id == PolicyId("slow") }
+            .assert().isTrue()
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (events.count { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED } < 2) {
+            check(System.nanoTime() < deadline) { "Not delivered: ${events.map { it.kind }}" }
+            Thread.sleep(10)
+        }
+        events.filter { it.change == proposed.id && it.kind == ChangeEvent.Kind.FAILED }.map { it.note }.assert()
+            .contains("preempted by ${emergency.id.value}", "the document moved before the head write")
     }
 
     /** Review L5: a holder made CONFLICTED for a change that then does not take the slot is recorded as such. */

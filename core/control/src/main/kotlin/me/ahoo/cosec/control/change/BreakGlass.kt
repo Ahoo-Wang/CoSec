@@ -83,9 +83,14 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
         return changes.stage(operator, proposed.id)
     }
 
-    /** Removes break-glass binding [binding] and publishes the removal: one person, no window, no approval. */
+    /**
+     * Removes break-glass binding [binding] and publishes the removal: one person, no window, no approval. A revoke of
+     * it that holds the slot `READY`, its publish stopped (its REQUIRED listener's store was down, say), is published
+     * instead (review N1); one [operator] may not see or publish is taken over by a new revoke, which preempts it.
+     */
     suspend fun revoke(operator: Operator, binding: BindingId, reason: String): ChangeRequest {
         require(reason.isNotBlank()) { "Revoking break-glass needs a reason." }
+        stalled(operator, binding)?.let { return it }
         val proposed = changes.propose(
             operator,
             SnapshotKey.Platform,
@@ -104,9 +109,25 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
         return changes.publish(operator, staged.id)
     }
 
+    /** The stalled revoke of [binding], published by [operator]; `null` when there is none, or it does not publish. */
+    private suspend fun stalled(operator: Operator, binding: BindingId): ChangeRequest? {
+        val held = changes.stagedOn(SnapshotKey.Platform)?.takeIf { held ->
+            held.state == ChangeState.READY && PublishRules.revokes(held) &&
+                held.operations.any { it is Operation.RemoveBinding && it.id == binding }
+        } ?: return null
+        val published = try {
+            changes.publish(operator, held.id)
+        } catch (e: ChangeRejectedException) {
+            if (e.status != NOT_FOUND && e.status != CONFLICT) throw e
+            return null
+        }
+        return published.takeIf { it.state == ChangeState.PUBLISHED }
+    }
+
     private suspend fun head(): Long = revisions.head(SnapshotKey.Platform)?.revision ?: 0
 
     private companion object {
         const val CONFLICT = 409
+        const val NOT_FOUND = 404
     }
 }

@@ -28,11 +28,13 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ShadowAck
@@ -100,6 +102,7 @@ import java.time.Instant
  *            { "skipShadow": "c1" }, { "stage": { "change": "c1", "by": "alice" } }, { "shadowed": "c1" },
  *            { "publish": "c1" }, { "abandon": "c1" }, { "rebase": "c1" },
  *            { "approve": { "change": "c1", "by": "bob", "candidate": "own" | "other" } },
+ *            { "approveAsBefore": { "change": "c1", "by": "bob" } },  // READY, approved as an older instance stored it
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
@@ -325,6 +328,8 @@ object ChangeRunner : ScenarioRunner {
                 changes.approve(op, id, candidate(id, node))
             }
 
+            "approveAsBefore" -> target(argument).let { (id, op) -> approvedAsBefore(id, op) }
+
             else -> transition(action, argument)
         }
 
@@ -473,6 +478,26 @@ object ChangeRunner : ScenarioRunner {
         }
 
         /** A transition's change and operator: `"c1"`, or `{ "change": "c1", "by": "bob", ... }`. */
+        /**
+         * [id] approved by [op] as an instance before RC1-11 stored it: `READY`, the approval naming no credential, written
+         * to the store as that instance would, past every check of this one's `approve`.
+         */
+        private suspend fun approvedAsBefore(id: ChangeId, op: Operator): ChangeRequest {
+            val current = store.change(id) ?: throw ScenarioFormatException("No change ${id.value} to approve")
+            val change = current.value
+            val approval = Approval(
+                op.actor,
+                clock.now,
+                change.candidate ?: throw ScenarioFormatException("Change ${id.value} has no candidate"),
+                change.escalations.map { it.subject },
+                op.memberships,
+                op.attributes,
+            )
+            val approved = change.copy(state = ChangeState.READY, approval = approval)
+            check(store.putChange(current.digest, approved)) { "Change ${id.value} moved meanwhile." }
+            return approved
+        }
+
         private suspend fun target(argument: JsonNode, vararg fields: String): Triple<ChangeId, Operator, JsonNode> {
             if (!argument.isString) {
                 argument.only("change", "by", *fields)

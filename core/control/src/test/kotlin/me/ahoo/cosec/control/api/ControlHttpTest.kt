@@ -101,7 +101,7 @@ class ControlHttpTest {
         status.assert().isEqualTo(200)
         val approval = approved.get("approval")
         approval.get("approver").get("principal").asString().assert().isEqualTo("plato")
-        listOf("credentialId", "issuedAt", "memberships", "attributes").forEach {
+        listOf("credentialId", "issuedAt", "memberships", "attributes", "principalBindings", "breakGlass").forEach {
             approval.has(it).assert().describedAs(it).isFalse()
             call("GET", "/changes/$id").second.get("approval").has(it).assert().describedAs(it).isFalse()
         }

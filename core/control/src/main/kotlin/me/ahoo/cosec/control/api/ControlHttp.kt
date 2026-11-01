@@ -309,7 +309,8 @@ class ControlHttp(private val plane: ControlPlane) {
 
     /**
      * [change] as the API shows it: the approval names its approver, when and what for, never what the approver held,
-     * its token's attributes or which token it was (review D5). The store and the change log keep all of it.
+     * its token's attributes, which token it was or what that credential could reach (reviews D5, N2). Only the change's
+     * record in the store keeps them; a change event carries none of them.
      */
     private fun changeResponse(change: ChangeRequest, status: Int) = ControlHttpResponse(
         status,
@@ -321,6 +322,8 @@ class ControlHttp(private val plane: ControlPlane) {
                     attributes = emptyMap(),
                     credentialId = null,
                     issuedAt = null,
+                    principalBindings = true,
+                    breakGlass = true,
                 )
             )
         )

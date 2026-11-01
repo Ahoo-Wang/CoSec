@@ -255,6 +255,10 @@ class Changes(
         throw ChangeRejectedException(UNAVAILABLE, "change ${id.value} could not be read", e)
     }
 
+    /** The change holding [key]'s staging slot, `EXPIRED` once past its expiry; `null` when none does. */
+    internal suspend fun stagedOn(key: SnapshotKey): ChangeRequest? =
+        store.stage(key)?.value?.holder?.let { stored(it) }?.let { expired(it) }
+
     /** Whether [change] creates or alters a break-glass binding of its document's current head. */
     private suspend fun touchesBreakGlass(change: ChangeRequest): Boolean =
         BreakGlassRules.touches(change.operations, revisions.head(change.key)?.document, clock.instant())
@@ -524,8 +528,9 @@ class Changes(
         requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
         // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). Read here,
         // before the PUBLISHING record, and again right before the head write (review L2): what is left is one store
-        // round trip between that read and the write, which is conditional on the base, not on the slot. A change
-        // preempted within it still publishes, and the one that took the slot conflicts on the moved base ([movedOn]).
+        // round trip between that read and the write, plus any pause of this instance between them (a GC, say); the
+        // write is conditional on the base, not on the slot. A change preempted within it still publishes, and the one
+        // that took the slot conflicts on the moved base ([movedOn]).
         if (!holdsSlot(change)) {
             return settle(change, ChangeState.CONFLICTED)
         }
@@ -543,11 +548,16 @@ class Changes(
         }
         val settled = when (outcome) {
             is PublishOutcome.Published -> return checkNotNull(published) { "[${change.key}] was written unsettled." }
-            // A change that lost its slot is CONFLICTED already, by the one that took it.
-            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED, from = if (slotLost) LOST else READY)
+            // A change preempted before its head write is CONFLICTED already, by the one that took its slot, whether
+            // it found the slot gone or met the head that change wrote (review N5).
+            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED, from = LOST)
             is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
         }
-        val note = if (slotLost) "another change took the staging slot before the head write" else settled.note
+        val note = when {
+            slotLost -> "another change took the staging slot before the head write"
+            outcome is PublishOutcome.Conflicted -> "the document moved before the head write"
+            else -> settled.note
+        }
         audit(PublishRules.outcomeOf(change, settled), settled.copy(note = note), publisher.actor)
         return settled
     }
@@ -555,8 +565,8 @@ class Changes(
     private suspend fun holdsSlot(change: ChangeRequest): Boolean = store.stage(change.key)?.value?.holder == change.id
 
     /**
-     * [change], `CONFLICTED`: its document is no longer at its base. When the head is a revision of the same base by
-     * another change, the change it took the slot from has published first (review L2), and that is recorded.
+     * [change], `CONFLICTED`: its document is no longer at its base. When the head is a revision of the same base, by
+     * the change it took the slot from (review L2), a bootstrap, a migration or an older instance, that is recorded.
      */
     private suspend fun movedOn(change: ChangeRequest, head: Head?, publisher: Operator): ChangeRequest {
         val settled = settle(change, ChangeState.CONFLICTED)
@@ -564,8 +574,7 @@ class Changes(
         if (provenance != null && provenance.change != change.id.value &&
             provenance.parent?.digest == change.base.digest?.toString()
         ) {
-            val note = "change ${provenance.change}, which held the slot before it, published over its base first " +
-                "(revision ${head.revision})"
+            val note = "revision ${head.revision} was published over the same base first, by ${provenance.change}"
             audit(ChangeEvent.Kind.FAILED, settled.copy(note = note), publisher.actor)
         }
         return settled
@@ -623,8 +632,8 @@ class Changes(
         candidate: PolicyDocument,
         publisher: Operator,
         actor: Actor = publisher.actor,
-        retriedBy: Actor? = null,
-    ) = movedHeads.record(published, rechecked, base, candidate, publisher, retriedBy) { found ->
+        unanalyzed: String? = null,
+    ) = movedHeads.record(published, rechecked, base, candidate, publisher, unanalyzed) { found ->
         val change = published.copy(escalations = found.escalations, note = found.note)
         audit(found.kind, change, actor, found.moved)
     }
@@ -635,7 +644,12 @@ class Changes(
      * (review D1). The events name the publisher the revision records, not [retrier]; what moved is recorded as needing
      * review, not analyzed again with [retrier]'s rights on what the change was last checked with (review D2).
      */
-    private suspend fun republished(change: ChangeRequest, own: Head, retrier: Operator): ChangeRequest =
+    private suspend fun republished(
+        change: ChangeRequest,
+        own: Head,
+        retrier: Operator,
+        taking: Boolean = false,
+    ): ChangeRequest =
         withContext(NonCancellable) {
             revisions.rewritten(change.key, own, first = change.base.revision == 0L)
             val by = own.document.provenance?.publishedBy ?: retrier.actor
@@ -644,7 +658,9 @@ class Changes(
                 audit(PublishRules.outcomeOf(change, settled), settled, by)
                 settled
             } finally {
-                recordMoved(settled, change, null, own.document, retrier, by, retriedBy = retrier.actor)
+                val who = "${retrier.tenant.value}/${retrier.actor.principal.value}"
+                val how = if (taking) "settled by $who while taking the slot" else "retried by $who"
+                recordMoved(settled, change, null, own.document, retrier, by, unanalyzed = "$how, not re-analyzed")
             }
         }
 
@@ -768,7 +784,8 @@ class Changes(
      * Takes [change]'s document's staging slot for [operator]; a holder that no longer stages (finished, expired, gone)
      * frees it, and so does a `READY` holder whose revision the chain shows written, its publish's answer lost: it is
      * settled as that publish would have been, then the slot is free (review L1). A slot another change still holds is
-     * a 409, unless [change] may preempt it ([Preemption.preempts]) and the holder is no break-glass revoke (review L3):
+     * a 409, unless [change] may preempt it ([Preemption.preempts]); a revoke of a binding that still grants, only
+     * another such revoke preempts (reviews L3, N1):
      * the holder is first made `CONFLICTED`, from whichever staged state it is in by then (approved or past its window
      * meanwhile), and only then does the slot move and its candidate go (RC1-12). A holder that cannot be marked keeps
      * its slot, and the preemption is given up (review M3): no change that still stages ever loses its slot.
@@ -792,10 +809,12 @@ class Changes(
                         head
                     )?.takeIf { held.state == ChangeState.READY }
                     if (own != null) {
-                        republished(held, own, operator)
+                        republished(held, own, operator, taking = true)
                         return@repeat
                     }
-                    if (PublishRules.revokes(held) || !preemption.preempts(operator, change, head)) {
+                    // A revoke of a binding that still grants is taken only by another such revoke (review N1).
+                    val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
+                    if (guarded || !preemption.preempts(operator, change, head)) {
                         throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
                     }
                     conflicted += conflict(held, change)
@@ -879,7 +898,6 @@ class Changes(
         val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
         val STAGED = ChangeState.entries.filter { it.staged }.toSet()
         val UNPUBLISHED = ChangeState.entries.toSet() - ChangeState.PUBLISHED
-        val READY = setOf(ChangeState.READY)
         val LOST = setOf(ChangeState.READY, ChangeState.CONFLICTED)
     }
 }
