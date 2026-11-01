@@ -304,6 +304,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **运行时依赖升级**：`cosec-cosid` 用的 CosId 5.0.0-alpha.2 → 5.0.0 正式版（#1180）；只影响可选扩展 `cosec-cosid`，Wow 不用它 | 2026-10-30 | [RFC 0001 §3.11](rfc/0001-target-architecture.md) 修订；维护者："合入 #1180" |
 | **RC1-27：`cosec-migrate` 不写 break-glass 绑定，8.0 不做逐绑定的元数据检查**（取代同日"由编译器强制元数据"）：两人原则由控制面对每种变更类型强制，修订出处记录作者与批准人；文档里的元数据挡不住能写文档的人 | 2026-10-30 | [RFC 0007](rfc/0007-control-plane.md) 修订、[RC 审查](security/8.0-rc-review.md) 的 Fix plan；维护者："A：迁移工具不写 break-glass" |
 | **B2 规划中的协调者决定**：API Key 不能审批（审批是人的两人原则，同 `BRK-8`），审批记录 `jti` 与签发时间、发布时查吊销；`SetBoundary` 只归平台租户（提议者与审批人）；RC1-35(b) 只对经分析的变更；默认空间占位符改为 `(default)`，以 `(` 开头的空间 id 保留；抢占白名单收紧（删除含 DENY 的绑定、删除黑名单条目、含 DENY 的策略改为不可附加都不算收窄） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan（B2 合入时补全） |
+| **运行时依赖升级：CoCache 6.7.0 → 6.10.0**（#1188，含 CoCache 会话的两项通道改动），在 B2 合入后专门适配：Renovate 的 PR 在 CI 上失败（`cosec-cocache` 的 ABI 转储变化；撤销 token 与撤销主体缓存的读失败模式读出为 null，原为 `DEGRADE`），先查清 6.10.0 的语义变化再改，不为变绿放宽 `CacheTtlPolicyTest` | 2026-11-01 | 维护者："批准，B2 后适配" |
 
 ## 10. 尚未派发的下一步
 
