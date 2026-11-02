@@ -94,6 +94,16 @@ analysis read the author's rights as enforcement does, so some changes that publ
 - **Break-glass** (RC1-27, RC1-29, RC1-30): `cosec-migrate` writes no break-glass binding
   ([Root becomes break-glass](#root-becomes-break-glass)); `BreakGlass.request` derives the binding's id and has no
   `binding` parameter; approving break-glass needs a REQUIRED change listener (`503` otherwise, `BRK-3`).
+- **Revoking break-glass answers by its effect** (R4-1). `DELETE /break-glass/{bindingId}` answers `200` only once
+  the binding no longer grants on the platform document's head, whoever removed it. A revoke that leaves it granting
+  is now `409`, its `detail` naming the state of the caller's change (`CONFLICTED`, `DRAFT`, ...), where it was `200`
+  with that change before: a client that read `200` as "revoked" without looking at `state` must handle the `409`. A
+  revoke preempted by another revoke, or meeting a moved head, revokes again, at most three more times.
+- **Abandoning** (RC1-51, `BRK-10`). Only its author abandons a revoke of a break-glass binding that still grants:
+  anyone else, the principal it revokes included, is `403`. Revoke the binding again instead, which publishes the
+  stalled revoke or takes its slot. Every abandon is recorded as a new change event, `ABANDONED`; abandoning a
+  break-glass change needs a REQUIRED change listener (`503` otherwise). A change listener that handles every
+  `ChangeEvent.Kind` gains `ABANDONED`.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

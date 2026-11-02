@@ -51,6 +51,7 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
 | `POST /changes/{id}:rebase`, `:shadow`, `:skip-shadow`, `:approve`, `:reject`, `:abandon`, `:publish` | Move a change on. |
+| `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, and `409` otherwise ([Taking a busy slot](#taking-a-busy-slot)). |
 | `POST /simulate`, `POST /explain`, `POST /analyze` | Decide or analyze without changing anything. |
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
@@ -194,7 +195,9 @@ read after that, and the control plane's maintenance pass reads every open chang
 `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
 `DRAFT` or `CHECKED` change onto the current revision, which runs every check again and drops earlier approvals and
 shadow evidence. The author, or anyone with `cosec:publish`, can `:abandon` it; a change that sets a tenant's boundary
-only a platform principal rejects or abandons.
+only a platform principal rejects or abandons, and a revoke of a break-glass binding that still grants only its author
+abandons (`BRK-10`). Every abandon is recorded as an `ABANDONED` change event whose note names the change's author;
+abandoning a break-glass change needs a REQUIRED change listener, which records it first (`503` without one).
 
 ## Trying changes in shadow mode
 
@@ -246,13 +249,19 @@ One change at a time holds a document's staging slot while it is shadowing, awai
 change of that document waits (`409`). An emergency must not: two kinds of change take the slot.
 
 - **Revoking break-glass**, always, for a binding that has not expired. Only another such revoke takes the slot
-  from a revoke of a binding that still grants, so the principal it revokes cannot hold it off with changes of its own;
-  a revoke of an expired binding holds it against nothing. A revoke whose publish stopped (its REQUIRED listener's
-  store was down) stays `READY` in the slot: revoke the binding again, which publishes it, or a revoker who may not
-  read it revokes with a change of its own, which takes its slot; `POST /changes/{id}:publish` or `:abandon` clear it
-  too. Revoking publishes only through a REQUIRED
-  change listener that records it; while that listener's store is down, revoke the principal's tokens instead
-  (`TokenRevoker.revokeSubject`), which needs no listener.
+  from a revoke of a binding that still grants, and only its author abandons one (`BRK-10`), so the principal it
+  revokes cannot hold it off with changes of its own. A revoke of an expired binding is no emergency, since that binding
+  grants nothing: it waits for the slot and holds it like any change, so a revoke of a live binding or a change that
+  only narrows takes it, and any other change still waits. A revoke whose publish stopped (its REQUIRED listener's
+  store was down) stays `READY` in the slot: revoke the binding again, which publishes it and names you and your reason
+  in its `REVOKED` event, or a revoker who may not read it revokes with a change of its own, which takes its slot;
+  `POST /changes/{id}:publish` clears it too. Two revokes at once can preempt each other: a revoke that ends
+  `CONFLICTED`, preempted or meeting a moved head, revokes again on the new head while its binding still grants, at
+  most three more times. `DELETE /break-glass/{bindingId}` answers `200` only once the binding no longer grants,
+  whoever removed it, and `409` otherwise, its `detail` naming the state of your change: a revoke that did not take
+  effect never looks like one that did. Revoking publishes only through a REQUIRED change listener that records it;
+  while that listener's store is down, revoke the principal's tokens instead (`TokenRevoker.revokeSubject`), which
+  needs no listener.
 - **A change that only narrows**, staged or skipped by a holder of `cosec:skip-shadow` on the document. Every
   operation must be one of: removing a binding of a policy of ALLOWs only; making an attachable policy of ALLOWs only
   not attachable, its statements as they were; a new policy of DENYs only, or a new binding of one. Removing a DENY,
@@ -272,10 +281,13 @@ publisher, and the slot is then free: an ordinary stage takes it too.
 
 A publish goes on only while its change holds the slot: checked before the `PUBLISHING` record, and again right before
 the head write, which records a failure with `another change took the staging slot before the head write` when it is
-gone, or `the document moved before the head write` when the change that took it published first. Between that last
-read and the write lies one store round trip, plus any pause of the publishing instance between them (a GC, say), in
-which a preempted change still publishes; the change that took its slot then conflicts on the moved base, and its
-failure names the revision that came first and who published it.
+gone, or `the document moved before the head write` when the head moved after that check: the change that took the
+slot published first, or a bootstrap, a migration or an older instance wrote the head. Between that last read and the
+write lies one store round trip, plus any pause of the publishing instance between them (a GC, say), in which a
+preempted change still publishes; the change that took its slot then conflicts on the moved base, and its failure
+names the revision that came first and who published it. A head write that meets its own change's revision, written
+meanwhile by another publish of the same change, records no failure: it answers with the change as it stands, and the
+publish that wrote the revision settles it.
 
 ## Approval
 

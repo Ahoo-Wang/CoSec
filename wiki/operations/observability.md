@@ -180,7 +180,7 @@ CoSec registers no meters for the documents an instance holds. To see whether in
 
 The control plane emits a change event for every step of a change: `PROPOSED`, `CHECKED`, `SHADOW_STARTED`,
 `SHADOWED`, `APPROVED`, `REJECTED`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `BREAK_GLASS_REQUESTED`,
-`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`. An event names the change, the document, the operator, the base and candidate
+`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`, `ABANDONED`. An event names the change, the document, the operator, the base and candidate
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them.
 
@@ -196,6 +196,11 @@ content. Change listeners receive them.
   published.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
+- **`ABANDONED` names who abandoned a change and, in its note, its author** (`author <tenant>/<principal>: <note>`).
+  Abandoning a break-glass change is gated like `PUBLISHING`: it needs a `REQUIRED` change listener (`503` without
+  one), which records it before the change is stored as abandoned. Abandoning any other change is recorded afterwards.
+- **`REVOKED` of a stalled revoke published again** names the revoker who revoked again, and its note adds their
+  reason (`<first reason>; published again by <tenant>/<principal>: <reason>`), as does its `PUBLISHING`.
 - **`HEADS_MOVED` and `REVIEW_NEEDED` follow a `PUBLISHED`** when another document the change was checked with moved
   before its write landed ([What a publish compares](./storage.md#what-a-publish-compares)). Each names the heads that
   moved (`moved`: the document, or `list:apps` for the app list, the digest it was checked with, the digest it has
