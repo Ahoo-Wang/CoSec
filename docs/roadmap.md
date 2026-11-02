@@ -218,19 +218,21 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1178、#1182、#1183 | 批次 B 的决定与当天的两次调整（RC1-4 改读 app 专用列表、RC1-9 后一半、RC1-33 文档加写后检测）；CosId 5.0.0（#1180）；失效通知测试的竞态与新发现 RC1-50 | ✅ 已合入 |
 | #1181 | `fix(control)!`：RC 修复批次 B1，授出分析的健全性（RC1-2/3/4 高危与 RC1-9、32、33、34）；`cosec-migrate repair-references`；规则 GRT-3–6、APR-6、CTL-21 与 9 个变异体；三轮独立审查，余下四项转入 B2 | ✅ 已合入 |
 | #1185 | `fix(control)!`：RC 修复批次 B2，信任根、审批、break-glass 与变更审计（RC1-10–13、27–31、35–37 与 B1 审查留下的四项）；规则 APR-7、APR-8、BDY-2、BRK-9、CTL-22、GRT-7、SCP-9 与 21 个变异体；四轮独立审查，第四轮留下的低级问题 R4-1–R4-6 与新发现 RC1-51 转入一个后续 PR | ✅ 2026-11-02 合入（`6064936b`） |
+| #1190 | B2 之后的共享文档：RFC 0007 的 B2 实现说明、审查记录（RC1-12 措辞、RC1-36 偏离、R4-1–R4-6、新发现 RC1-51） | ✅ 已合入 |
+| #1188 | CoCache 6.7.0 → 6.10.0：6.9 起读失败与删除失败模式默认不设置（没有加载器的缓存都抛出），撤销缓存显式设 `degrade`（PIP-7），权威存储的缓存另钉 `InvalidateFailureMode.THROW`（6.7 的 `RETRY` 晚到的删除可能删掉其间的新写入），成员关系缓存的删除仍重试；`SNP-3` 的淘汰检查改读 `INFO memory`（需要 `+info`）；`cosec-cocache` 的 ABI 只增 25 行 | ✅ 2026-11-02 合入（`d10bd61e`） |
 
 **2026-11-02 状态（接手者从这里继续）**：
 
 | 事项 | 状态 | 下一步 |
 |---|---|---|
 | #1185 RC 修复批次 B2 | ✅ 已合入（`6064936b`）。第四轮复审（只读子会话，`0e13948c..0373f6d5`）：N1–N7 成立，四个变异体被失败的测试杀死，没有新的高或中问题；六个低级问题 R4-1–R4-6，另发现既有问题 RC1-51（低） | — |
-| B2 合入后的共享文档 | RFC 0007 的 B2 实现说明（§5.5、§7.1、§7.3、§7.4、§7.5、§8，RC1-36 的偏离，新规则），审查记录的 Fix plan（B2 ✅、RC1-12 的白名单措辞、RC1-36、"Left by B2's review"、RC1-51），wiki 路线图 M7 | 随本次文档 PR 合入 |
-| #1188 CoCache 6.7.0 → 6.10.0 | 维护者已批准，CI 失败：`cosec-cocache` 的 ABI 转储变化；撤销 token 与撤销主体缓存的读失败模式读出为 null（原为 `DEGRADE`） | 下一个派发：一个实现会话先查清 6.10.0 的语义变化再适配，不为变绿放宽 `CacheTtlPolicyTest`；缺的能力请 CoCache 加 |
-| B2 后续 PR | 未开始 | R4-1–R4-6 与 RC1-51（审查记录 Fix plan 的 "Left by B2's review"），#1188 之后、批次 C 之前；实现会话做，只读会话复审 |
+| B2 合入后的共享文档 | ✅ #1190 | — |
+| #1188 CoCache 6.7.0 → 6.10.0 | ✅ 已合入（`d10bd61e`），协调者对照代码审查；共享文档随 #1188 之后的文档 PR | — |
+| B2 后续 PR | 实现会话进行中（2026-11-02 起）：R4-1–R4-6 与 RC1-51，按审查记录的 "Left by B2's review" 与派发时协调者的决定（R4-1：并发抢占后最多重试 3 次，`DELETE /break-glass/{id}` 只在绑定不再生效时答 2xx，否则 409；RC1-51：撤销仍在生效绑定的变更只有作者能放弃，每次放弃写 `ABANDONED` 事件，break-glass 的为 REQUIRED） | 草稿 PR 全绿后由只读会话复审，无高或中问题即合入；之后是批次 C |
 | 批次 C、D 与其余 RC 前事项 | 未开始 | 见 §10；批次 D 含 RC1-50 与失效通知测试的竞态 |
 | #866、#1163 | Renovate，与 main 冲突 | 等 Renovate rebase；#1163 是运行时依赖，须维护者确认 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：CoCache 6.10.0 适配（#1188）→ B2 后续 PR（R4-1–R4-6、RC1-51）→ 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：B2 后续 PR（R4-1–R4-6、RC1-51，进行中）→ 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -246,7 +248,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。归入 RC 批次 D（2026-10-30）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - 后续项（CI，2026-10-29）：main 上的 Docker 作业推送阿里云镜像仓库时多次挂住，撞上 30 分钟超时（ghcr 几秒完成），连带 AOT 冒烟被跳过。把阿里云镜像同步拆成单独的非阻塞作业（在 ghcr 推送与 AOT 冒烟之后，失败不影响 main 的状态）。
-- RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。
+- RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。同时决定 `cosec-cocache` 的四个公开缓存接口（`RevokedTokenCache`、`RevokedSubjectCache`、`MembershipCache`、`PolicySnapshotCache`）是否仍公开继承 CoCache 的 `Cache`：只要继承，CoCache 每给 `Cache` 加一个方法，CoSec 的转储就随之变化（#1188 因 CoCache 6.8 的版本化写入多出 25 行）。
 - RC 前（Wow 的导入清单，2026-10-29）：Wow 用到的生产面（`SecurityContext`、`SecurityScope`、`CoSecPrincipal`、WebFlux 的上下文读取、`AuthorizationChecker`、`RouteMap` 与 `RouteMapCodec`、`CoSecParameters`、starter 的属性键）保持公开并有文档；测试面用到的内部类型（`PipelineComponents`、`SuspendingSnapshotSource`、`engine.flat.*`）在归类时多半转为 `@InternalCoSecApi`，在此之前 `cosec-testkit` 提供公开的夹具（从文档构建真实 Pipeline，给出 `evaluate` 与已放行的 `SecurityContext`，`@ExperimentalCoSecApi`）。
 - RC 前（Wow 集成时遇到的问题，2026-10-29）：`cosec-migrate` 的发行包（`application` 插件的 `distZip`）作为 release 资产发布，并写明以 Kubernetes Job 运行；手写文档的播种走 `bootstrap` 加控制面 `apply`（不给 `publish` 加 `--no-report`：报告证明字节的来源），文档给出这条路径；`HostScope` 的按路由 app 即 RC1-6（批次 C）；macOS 上 Lettuce 的 kqueue 扩展 keepalive 启动失败写进排障；网关镜像的内存预期（堆、直接内存、ZGC）写进运维文档，并在批次 C 重新评估 512M 直接内存的默认值。`CoSec-Identity` v1 的字节视为稳定：任何改动都升 `v`。
 - ✅ alpha.2 前（已完成）：未知 `cosec.*` 属性检查忽略 Kubernetes 服务链接变量（#1172、#1173）；`k8s/` 清单 `enableServiceLinks: false` 与显式的 JVM 内存参数（#1167）。
@@ -279,7 +281,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **共享文档只由协调者修改**：`docs/roadmap.md`、`docs/rfc/*.md` 与 wiki 路线图（中英文）。实现 PR 不改它们，把需要的更新写在 PR 描述的 "For the coordinator: shared-doc updates" 一节，协调者每批合入后统一更新。与改动直接相关的文档（`docs/perf/`、模块的 wiki 页面、`skills/`、`schema/`）仍随改动的 PR | 2026-10-27 | 仅记在本文 |
 | **Q24：没有边界适用时平台边界整段跳过**（`SnapshotView.bounded`），接受 CI 上 `boundary = none` 的 A/B 结果（`global` 100.9 %、`none` 101.0 %、`role` 99.2 %、`role-heavy` 100.5 %，B/op 不增）；`role` 低于 100 % 线但在共享机器的误差内，由 S1 的空闲机器测量复核 | 2026-10-27 | [RFC 0007 Q24](rfc/0007-control-plane.md)、`docs/perf/rfc-0007-boundary/` |
 | **S1 拆成 S1a 与 S1b**：S1a 加法、不登记、可 revert；S1b 注册并删除 7.x，是不可回退点，带 §3.9 的证据 | 2026-10-27 | [RFC 0008 §4.4.1](rfc/0008-conformance-and-direct-build.md) |
-| **`cosec.authorization.snapshot.eviction-check=fail\|warn` 两个值都保留，默认 `fail`**：`warn` 给禁用 `CONFIG GET` 的托管 Redis（如 ElastiCache），启动时打印以 `!!!` 开头的 WARN，说明被淘汰的应用或租户文档读起来是缺失，它的 DENY 会悄悄失效；平台文档缺失 fail closed 不受此影响。S1b 的文档要写进 configuration 与 troubleshooting | 2026-10-27 | #1097 |
+| **`cosec.authorization.snapshot.eviction-check=fail\|warn` 两个值都保留，默认 `fail`**：`warn` 给禁用 `INFO` 的 Redis（CoCache 6.10.0 起检查读 `INFO memory`，需要 `+info`，#1188；此前读 `CONFIG GET`，针对禁用它的托管 Redis，如 ElastiCache），启动时打印以 `!!!` 开头的 WARN，说明被淘汰的应用或租户文档读起来是缺失，它的 DENY 会悄悄失效；平台文档缺失 fail closed 不受此影响。S1b 的文档要写进 configuration 与 troubleshooting | 2026-10-27 | #1097 |
 | **空的 `cosec.authorization.routes.location` 表示有意不用路由映射**；默认位置缺失仍使启动失败。**`cosec.authorization.snapshot.key-prefix`**（默认 `cosec`）是对 RFC 属性列表的补充 | 2026-10-27 | #1097 |
 | **性能门槛改为 CI 上的 v7/v8 对比**：S1b 的性能证据是 CI 工作流 `jmh-v7-v8.yml` 的运行（同一台 runner 上交替运行 7.0.x 与 8.0），每个场景 v8 不低于 v7 即通过；不再要求空闲机器上的 JMH 与 k6。百万例 `propertyStress` 是正确性证据，保留，在 CI 上跑 | 2026-10-27 | [RFC 0008 §3.8](rfc/0008-conformance-and-direct-build.md) |
 | **不在本机跑压力测试**：S1b 的百万例 `propertyStress` 只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上运行（`gh workflow run property-stress.yml -f ref=<branch>`，#1099），运行链接附在 S1b 的 PR 上，这是 §3.9 的证据 | 2026-10-27 | #1099、`AGENTS.md` 的 Feedback loop |
@@ -324,7 +326,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（#1188）→ B2 后续（R4-1–R4-6、RC1-51）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
+- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（R4-1–R4-6、RC1-51，进行中）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
