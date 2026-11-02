@@ -218,7 +218,17 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1178、#1182、#1183 | 批次 B 的决定与当天的两次调整（RC1-4 改读 app 专用列表、RC1-9 后一半、RC1-33 文档加写后检测）；CosId 5.0.0（#1180）；失效通知测试的竞态与新发现 RC1-50 | ✅ 已合入 |
 | #1181 | `fix(control)!`：RC 修复批次 B1，授出分析的健全性（RC1-2/3/4 高危与 RC1-9、32、33、34）；`cosec-migrate repair-references`；规则 GRT-3–6、APR-6、CTL-21 与 9 个变异体；三轮独立审查，余下四项转入 B2 | ✅ 已合入 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：RC 修复批次 B2（信任根、审批、break-glass、变更审计，含 B1 审查留下的四项），由 B1 的实现会话接着做 → 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
+**2026-11-01 收工状态（WIP，额度不足暂停；接手者从这里继续）**：
+
+| 事项 | 状态 | 下一步 |
+|---|---|---|
+| #1185 RC 修复批次 B2（RC1-10–13、27–31、35–37 与 B1 审查留下的四项） | head `0373f6d5`，CI 全绿，未合入。已经过三轮独立审查（`b4df7a9d`、`3439a64c`、`0e13948c`）：前两轮的全部发现与第三轮列出的项已修；最后一轮修复（N1：正在持槽的撤销只让"撤销仍在生效的绑定"的变更抢占，撤销已过期绑定的持槽者不受保护，同一绑定的停住撤销直接发布；N2–N7 细节）**尚未复审** | 由一个只读子会话复审 `0e13948c..0373f6d5`（审查笔记在协调者的共享笔记 `B2-review-*.md`），无新的高或中问题即合入；合入前把 main 合进分支 |
+| B2 合入后的共享文档 | 未做 | RFC 0007 §5.5（抢占白名单，已去掉"新增黑名单条目"一类；撤销的保护；写头前的暂存槽检查与剩余窗口）、§7.1（`(default)`）、§7.3（信任根不含 API Key；`SetBoundary` 只归平台）、§7.5（API Key 不能审批；凭据 id 与 `iat`；两次判定；吊销）、§8（RC1-29、RC1-30）的实现说明；RC1-36 允许平台租户文档绑定 `cosec:platform-admin` 的偏离（已确认）；Fix plan 中 RC1-12 的措辞；规则登记的新规则（PR 描述列出） |
+| #1188 CoCache 6.7.0 → 6.10.0 | 维护者已批准，CI 失败：`cosec-cocache` 的 ABI 转储变化；撤销 token 与撤销主体缓存的读失败模式读出为 null（原为 `DEGRADE`） | B2 合入后由一个子会话适配：先查清 6.10.0 的语义变化，不为变绿放宽 `CacheTtlPolicyTest` |
+| 批次 C、D 与其余 RC 前事项 | 未开始 | 见 §10；批次 D 含 RC1-50 与失效通知测试的竞态 |
+| #866、#1163 | Renovate，与 main 冲突 | 等 Renovate rebase；#1163 是运行时依赖，须维护者确认 |
+
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：RC 修复批次 B2（信任根、审批、break-glass、变更审计，含 B1 审查留下的四项），由 B1 的实现会话接着做（#1185，待最后一轮复审）→ CoCache 6.10.0 适配 → 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -304,6 +314,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **运行时依赖升级**：`cosec-cosid` 用的 CosId 5.0.0-alpha.2 → 5.0.0 正式版（#1180）；只影响可选扩展 `cosec-cosid`，Wow 不用它 | 2026-10-30 | [RFC 0001 §3.11](rfc/0001-target-architecture.md) 修订；维护者："合入 #1180" |
 | **RC1-27：`cosec-migrate` 不写 break-glass 绑定，8.0 不做逐绑定的元数据检查**（取代同日"由编译器强制元数据"）：两人原则由控制面对每种变更类型强制，修订出处记录作者与批准人；文档里的元数据挡不住能写文档的人 | 2026-10-30 | [RFC 0007](rfc/0007-control-plane.md) 修订、[RC 审查](security/8.0-rc-review.md) 的 Fix plan；维护者："A：迁移工具不写 break-glass" |
 | **B2 规划中的协调者决定**：API Key 不能审批（审批是人的两人原则，同 `BRK-8`），审批记录 `jti` 与签发时间、发布时查吊销；`SetBoundary` 只归平台租户（提议者与审批人）；RC1-35(b) 只对经分析的变更；默认空间占位符改为 `(default)`，以 `(` 开头的空间 id 保留；抢占白名单收紧（删除含 DENY 的绑定、删除黑名单条目、含 DENY 的策略改为不可附加都不算收窄） | 2026-10-30 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan（B2 合入时补全） |
+| **运行时依赖升级：CoCache 6.7.0 → 6.10.0**（#1188，含 CoCache 会话的两项通道改动），在 B2 合入后专门适配：Renovate 的 PR 在 CI 上失败（`cosec-cocache` 的 ABI 转储变化；撤销 token 与撤销主体缓存的读失败模式读出为 null，原为 `DEGRADE`），先查清 6.10.0 的语义变化再改，不为变绿放宽 `CacheTtlPolicyTest` | 2026-11-01 | 维护者："批准，B2 后适配" |
+| **协调方式：不用子代理，只用子会话，同一时间只有 1 个子会话在工作**（取代"安全 PR 先由独立的只读子代理审查"中的子代理：独立审查改由一个只读的子会话做，审查者不是被审代码的作者）；慢慢做 | 2026-11-01 | 仅记在本文；维护者："慢慢做，不要开子代理，用子会话，子会话数 为 1" |
 
 ## 10. 尚未派发的下一步
 
