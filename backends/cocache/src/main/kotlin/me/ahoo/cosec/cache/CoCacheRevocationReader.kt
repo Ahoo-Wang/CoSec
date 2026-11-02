@@ -25,8 +25,8 @@ import java.time.Instant
  *
  * Both reads go through CoCache's async view. A local hit answers on the caller's thread without suspending (RFC 0006
  * T1); a miss reads Redis without blocking any thread and completes on CoCache's async pool, from which the pipeline
- * moves on (T2). The caches keep CoCache's degraded read mode: a failed read is a miss, so the token counts as not
- * revoked, the documented exception to failing closed ([CoSecCacheSpecs.revokedToken]).
+ * moves on (T2). The caches degrade a failed read, as [CoSecCacheSpecs.revokedToken] sets them to: it is a miss, so
+ * the token counts as not revoked, the documented exception to failing closed.
  */
 internal class CoCacheRevocationReader @JvmOverloads constructor(
     private val cache: RevokedTokenCache,

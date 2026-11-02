@@ -117,6 +117,21 @@ class CoCacheRevocationReaderTest {
         reader.subjectRevokedBefore(tenant, alice).assert().isNull()
     }
 
+    /** A degraded read caches nothing: once Redis answers again, the next read sees the revocation. */
+    @Test
+    fun aRevocationAppliesAsSoonAsTheStoreIsReadableAgain() = runBlocking<Unit> {
+        val revoked = tokenId()
+        val issuedBefore = Instant.parse("2026-10-27T00:00:00Z")
+        store.revoke(revoked, Duration.ofMinutes(1))
+        store.revokeSubject(tenant, alice, issuedBefore, Duration.ofMinutes(1))
+        backend.failAll = true
+        reader.isRevoked(revoked).assert().isFalse()
+        reader.subjectRevokedBefore(tenant, alice).assert().isNull()
+        backend.failAll = false
+        reader.isRevoked(revoked).assert().isTrue()
+        reader.subjectRevokedBefore(tenant, alice).assert().isEqualTo(issuedBefore)
+    }
+
     private companion object {
         const val PRIMING_ATTEMPTS = 50
         const val PRIMING_PAUSE_MS = 20L

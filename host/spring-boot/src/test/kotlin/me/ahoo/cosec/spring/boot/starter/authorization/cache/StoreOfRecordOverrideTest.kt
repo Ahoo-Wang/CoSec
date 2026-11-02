@@ -23,6 +23,7 @@ import me.ahoo.cocache.core.SetCacheSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
+import me.ahoo.cocache.core.policy.InvalidateFailureMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
@@ -68,6 +69,7 @@ class StoreOfRecordOverrideTest {
         private fun weaken(policy: CachePolicy) = policy.toBuilder()
             .ttl(Duration.ofMinutes(1))
             .readFailure(ReadFailureMode.DEGRADE)
+            .invalidateFailure(InvalidateFailureMode.RETRY)
             .foreignFormat(ForeignFormatMode.RECLAIM)
             .build()
     }
@@ -84,6 +86,7 @@ class StoreOfRecordOverrideTest {
         listOf(
             "cocache.caches.$name.ttl=60s",
             "cocache.caches.$name.read-failure=degrade",
+            "cocache.caches.$name.invalidate-failure=retry",
             "cocache.caches.$name.foreign-format=reclaim",
         )
     }
@@ -91,6 +94,7 @@ class StoreOfRecordOverrideTest {
     private fun assertStoreOfRecord(policy: CachePolicy) {
         policy.ttl.assert().isNull()
         policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.THROW)
         policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
     }
 

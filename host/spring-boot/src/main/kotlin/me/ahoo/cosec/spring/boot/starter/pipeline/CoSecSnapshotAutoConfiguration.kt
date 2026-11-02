@@ -281,7 +281,7 @@ internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOption
 
 /**
  * `SNP-3` (RFC 0003 §4.1): every Redis node's `maxmemory-policy` is `noeviction`. A policy that could not be read is
- * treated like an evicting one: a Redis whose `CONFIG GET` is denied or failed, or a backend this check cannot see
+ * treated like an evicting one: a Redis whose `INFO memory` is denied or failed, or a backend this check cannot see
  * into (a wrapper, a custom backend), is not known to keep the snapshot, so it fails startup unless told to warn.
  */
 internal object EvictionPolicyCheck {
@@ -293,7 +293,7 @@ internal object EvictionPolicyCheck {
         /** CoCache's in-memory backend: nothing is evicted behind its back. */
         data object NotRedis : Reading
 
-        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them. */
+        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them from `INFO memory` (CoCache 6.10). */
         data class Policies(val policies: Map<String, String>) : Reading
 
         data class Unreadable(val reason: String) : Reading
@@ -302,7 +302,7 @@ internal object EvictionPolicyCheck {
     fun read(backend: CoherenceBackend): Reading = when (backend) {
         is InMemoryBackend -> Reading.NotRedis
         is RedisBackend -> backend.maxmemoryPolicies()?.let { Reading.Policies(it) }
-            ?: Reading.Unreadable("CONFIG GET maxmemory-policy failed or is not allowed")
+            ?: Reading.Unreadable("INFO memory failed or is not allowed")
         else -> Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
     }
 

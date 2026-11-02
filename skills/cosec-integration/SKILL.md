@@ -78,7 +78,7 @@ Startup fails, on purpose, when:
 - **The route map location does not exist.** The default `classpath:cosec-routes.json` must exist on WebFlux and
   WebMvc hosts unless `cosec.authorization.routes.location` is set empty. A gateway host loads no route map.
 - **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
-  different policy, or one that cannot be read (`CONFIG GET` denied on a managed Redis, a wrapped CoCache backend),
+  different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
   `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning).
 - **API keys with `store=redis` and no `ReactiveStringRedisTemplate`.**

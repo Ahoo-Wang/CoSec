@@ -77,13 +77,13 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 - **每个节点的 `maxmemory-policy` 都是 `noeviction`。** 文档没有 TTL，也没有其他副本。在 `allkeys-*` 策略下 Redis
   可能驱逐一个文档：已经装入它的实例会失败即拒绝，但之后才加载它的实例会把被驱逐的应用文档或租户文档读成不存在，于是
   其中的 DENY 语句悄悄失效。使用 `noeviction`，并按数据量规划 Redis 的容量。
-- **启动检查。** 使用 Redis 后端时，每个实例在启动时用 `CONFIG GET` 读取 `maxmemory-policy`。某个节点不是
-  `noeviction`、`CONFIG GET` 失败或被拒绝、或者 CoCache 后端无法被检查看穿（包装过的或自定义的后端），默认都会使启动
-  失败。托管 Redis 隐藏了 `CONFIG GET` 而你已经自行设置了 `noeviction` 时，需要
+- **启动检查。** 使用 Redis 后端时，每个实例在启动时从 `INFO memory` 读取每个节点的 `maxmemory-policy`；托管 Redis
+  通常禁用 `CONFIG`，但允许 `INFO`。某个节点不是 `noeviction`、`INFO` 失败或被拒绝、或者 CoCache 后端无法被检查看穿
+  （包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
   [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
   `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
 - **Redis 客户端。** CoCache 根据 `spring.data.redis.*` 构建自己的 Lettuce 客户端；它需要的版本、拓扑和 ACL 命令见
-  [CoCache 文档](https://cocache.ahoo.me/operations/#acl)。数据面还需要 `CONFIG GET` 来做启动检查。
+  [CoCache 文档](https://cocache.ahoo.me/operations/#acl)。启动检查需要 `INFO`（`+info`），CoCache 列出的命令已包含它。
 
 ### 谁可以写哪些 key {#who-may-write-which-keys}
 
@@ -108,7 +108,7 @@ key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一�
 
 ```text
 ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
-ACL SETUSER cosec-pod-a <CoCache 列出的命令和通道> +config|get
+ACL SETUSER cosec-pod-a <CoCache 列出的命令和通道> +info
 ```
 
 再加上该实例其他功能用到的 key（吊销、API key、限流；见 [Redis key](#redis-keys)）。上生产前用 `ACL DRYRUN` 检查这个
@@ -165,7 +165,7 @@ sequenceDiagram
 | 见过之后又从 Redis 消失的文档 | 失败，直到文档回来（以 `ERROR` 记录 `Snapshot document [<doc>] disappeared from the store; failing closed.`）。需要它的请求是 **`503`**，除非先匹配到 DENY。 |
 | `fail-closed.tenants` 中的租户，其文档滞后超过 `fail-closed.max-lag` 之后 | **`503`**，除非先有 DENY 匹配（[实例如何读取文档](#how-instances-read-documents)）。 |
 | 没有发布平台文档 | 每个请求都是 **`503`**（[最初的文档](#the-first-documents)）。 |
-| 已吊销的令牌和主体 | 检查回答"未吊销"，令牌被 **接受**，这样一次故障不会拒绝所有已认证的请求。令牌仍会校验签名，并会自行过期。 |
+| 已吊销的令牌和主体 | 检查回答"未吊销"，令牌被 **接受**，这样一次故障不会拒绝所有已认证的请求。令牌仍会校验签名，并会自行过期。失败的读取不会被缓存：每次检查都重新访问 Redis，Redis 一恢复应答，吊销就生效。 |
 | 基于 Redis 的 `MembershipProvider` 提供的成员关系 | **`503`**。令牌中携带的成员关系不受影响。 |
 | Redis 中的 API key（`cosec.api-key.store=redis`） | **`503`**。 |
 | 限流计数器 | `strictFailure: true` 的规则得到 **`503`**；其他规则被跳过，请求继续（[限流](../policies/rate-limiting.md)）。 |

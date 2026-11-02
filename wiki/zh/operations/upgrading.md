@@ -404,7 +404,7 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 #### 读不到 Redis 的驱逐策略时启动失败 {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
 
 启动时 CoSec 读取 Redis 的 `maxmemory-policy`，不是 `noeviction` 就拒绝启动，因为被驱逐的平台文档会让其中的 DENY 悄无声息地失效。
-`CONFIG GET` 失败或不被允许时（某些托管 Redis 就是这样），启动同样失败；CoCache 后端是包装器或检查读不了的自定义后端时也一样。如果你已经
+它从 `INFO memory` 读取。`INFO` 失败或不被允许时，启动同样失败；CoCache 后端是包装器或检查读不了的自定义后端时也一样。如果你已经
 自行设置了 `noeviction`，请设置 `cosec.authorization.snapshot.eviction-check=warn`：启动继续，并记录一条以 `!!!` 开头的警告。
 
 #### 每个实例依据快照决策 {#each-instance-decides-from-a-snapshot}

@@ -326,13 +326,13 @@ themselves ([Modules, artifacts and packages](./upgrading.md#modules-artifacts-a
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction, so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
-Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG GET maxmemory-policy failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
 ```
 
 The first: a Redis node is not `noeviction`. Set `maxmemory-policy noeviction` on every node. The second: the instance
-could not read the policy, usually because the Redis user may not run `CONFIG GET`, or a managed Redis hides it; it
-also names a CoCache backend the check cannot read (a wrapper or a custom backend). Allow `CONFIG GET`, or, when you
-have set `noeviction` yourself, set
+could not read the policy, usually because the Redis user may not run `INFO`, or a managed Redis denies it; it
+also names a CoCache backend the check cannot read (a wrapper or a custom backend). Allow `INFO` (`+info`), or, when
+you have set `noeviction` yourself, set
 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot) ([Redis requirements](./storage.md#redis-requirements)).
 
 With `warn` the instance starts and logs the same text at `WARN`, starting with `!!!` and ending with

@@ -87,15 +87,15 @@ contain `:`, so a key names one document only.
   policy Redis can evict a document: an instance that had it installed fails closed, but an instance that loads it
   afterwards reads an evicted app or tenant document as absent, so its DENY statements silently stop applying. Use
   `noeviction` and size Redis for the data.
-- **The startup check.** With the Redis backend, each instance reads `maxmemory-policy` at startup with
-  `CONFIG GET`. A node that is not `noeviction`, a `CONFIG GET` that fails or is denied, or a CoCache backend the
-  check cannot see into (a wrapper, a custom backend) fails startup by default. A managed Redis that hides
-  `CONFIG GET` while you have set `noeviction` yourself needs
+- **The startup check.** With the Redis backend, each instance reads every node's `maxmemory-policy` at startup from
+  `INFO memory`, which managed Redis services usually allow where they block `CONFIG`. A node that is not
+  `noeviction`, an `INFO` that fails or is denied, or a CoCache backend the check cannot see into (a wrapper, a custom
+  backend) fails startup by default. A Redis that denies `INFO` while you have set `noeviction` yourself needs
   [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot): the instance starts and logs a
   `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
 - **Redis client.** CoCache builds its own Lettuce client from `spring.data.redis.*`; the versions, topologies and
-  ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The data plane
-  also needs `CONFIG GET` for the startup check.
+  ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The startup check
+  needs `INFO` (`+info`), which CoCache's list includes.
 
 ### Who may write which keys
 
@@ -124,7 +124,7 @@ the keys and takes every command away; the second grants the commands and channe
 
 ```text
 ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
-ACL SETUSER cosec-pod-a <the commands and channels CoCache lists> +config|get
+ACL SETUSER cosec-pod-a <the commands and channels CoCache lists> +info
 ```
 
 Add the keys the instance's other features use (revocations, API keys, rate limits; see [Redis keys](#redis-keys)).
@@ -191,7 +191,7 @@ sequenceDiagram
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
 | No platform document published | Every request is **`503`** ([The first documents](#the-first-documents)). |
-| Revoked tokens and principals | The check answers "not revoked" and the token is **accepted**, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. |
+| Revoked tokens and principals | The check answers "not revoked" and the token is **accepted**, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. |
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |

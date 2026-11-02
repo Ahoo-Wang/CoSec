@@ -146,7 +146,7 @@ of your own replaces both.
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. |
-| `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `CONFIG GET`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. |
+| `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. |
 
 ## Shadow windows
 
@@ -315,6 +315,7 @@ With `cosec-cocache`, CoSec creates its caches on CoCache's runtime. The full li
 | `cocache.caches.<CacheName>.*` | The policy of one cache, by the names above. |
 | `cocache.redis.command-timeout` | How long one Redis command may take (`2s` by default). A snapshot read that times out is a failed read ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `cocache.redis.channel-mode` | `pubsub` or `sharded` invalidation. Every instance, and the control plane, must agree. |
+| `cocache.redis.assume-maxmemory-policy`, `cocache.redis.set-cache-eviction-check` | None: they belong to CoCache's own check for `SetCache`s, and CoSec has none. CoSec's startup check is `cosec.authorization.snapshot.eviction-check` ([Snapshot](#snapshot)). |
 | `spring.data.redis.*` | The Redis CoCache connects to, and the one the rate limiter and the Redis API key store use. |
 
 The control plane's caches and the shadow caches are created from CoSec's own specs, with their policies fixed.
@@ -325,7 +326,8 @@ For `PolicySnapshotCache`, `RevokedTokenCache` and `RevokedSubjectCache`, the ca
 a later step wins over an earlier one:
 
 1. CoSec's default for the cache: `cosec.authorization.snapshot.local-max-age` for the snapshot cache,
-   `cosec.authorization.cache.token.*` for the revocation caches;
+   `cosec.authorization.cache.token.*` and `read-failure: degrade` for the revocation caches (a failed read answers
+   "not revoked"; `read-failure: throw` in a later step makes the revocation check fail closed with `503` instead);
 2. the application's CoCache `CacheSpecCustomizer` beans;
 3. `cocache.defaults.*`, then `cocache.caches.<CacheName>.*`;
 4. CoSec's fixed settings, applied last and impossible to override.
@@ -334,7 +336,7 @@ So a `cocache.*` property wins over the matching `cosec.authorization.cache.toke
 
 | Cache | Fixed | Why |
 |---|---|---|
-| `PolicySnapshotCache` | `ttl` none, `read-failure: throw`, `foreign-format: fail`; no loader (a customizer that sets one fails startup); `local-max-age` from `cosec.authorization.snapshot.local-max-age` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry, a degraded read or a reclaim would silently drop a document, and with it its DENY statements. |
+| `PolicySnapshotCache` | `ttl` none, `read-failure: throw`, `invalidate-failure: throw`, `foreign-format: fail`; no loader (a customizer that sets one fails startup); `local-max-age` from `cosec.authorization.snapshot.local-max-age` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry, a degraded read or a reclaim would silently drop a document, and with it its DENY statements; a failed delete retried later could delete a newer write. |
 | `RevokedTokenCache`, `RevokedSubjectCache` | `foreign-format: fail` | Reclaiming an unreadable revocation would make its tokens valid again. |
 | every CoSec cache | key prefix, namespace and key encoder | The storage layout is CoSec's. A `key-prefix` from a customizer or `cocache.*` is ignored. |
 

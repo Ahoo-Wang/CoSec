@@ -163,9 +163,10 @@ that should have been a Deny goes unnoticed.
 Two checks let a request through when their backend fails, because failing closed would turn a Redis outage into a
 full outage while protecting little:
 
-- **Token revocation, on a degraded read.** When the revocation store cannot be read, CoCache's degraded read answers
-  "not revoked". The token's signature and expiry are still checked, so the exposure is bounded by the access token
-  lifetime. Only this degraded read counts a token as not revoked: an error the revocation check reports fails the
+- **Token revocation, on a degraded read.** When the revocation store cannot be read, the revocation caches' degraded
+  read (`read-failure: degrade`, which CoSec sets on them) answers "not revoked". The token's signature and expiry are
+  still checked, so the exposure is bounded by the access token lifetime. Only this degraded read counts a token as
+  not revoked: an error the revocation check reports fails the
   request with `503`, and a revocation entry that cannot be decoded fails the read too
   ([Logout and revocation](../integration/authentication.md#logout-and-revocation)). The control plane reads an
   approver's revocations the same way when it publishes, and there the exposure is bounded by
