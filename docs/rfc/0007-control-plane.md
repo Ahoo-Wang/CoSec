@@ -55,7 +55,43 @@
 >   `DETECTION_TIMED_OUT`）。
 > - §14.2：授出分析不再读 `documents()`；每次租户分析读 app 列表与各 app 的头。
 > - 留给 B2：重试时按头的出处认出已发布的变更；写后收尾遇到取消或 `Error` 时仍执行 `afterWrite`；首次对账成功之前不信任 app 列表；
->   滚动升级期间旧实例新建的 app 直到下一次回收才被看到（`upgrading.md` 写明窗口）。
+>   滚动升级期间旧实例新建的 app 直到下一次回收才被看到（`upgrading.md` 写明窗口）。（均已在 #1185 完成，见下一段。）
+>
+> **实现说明（2026-11-02，#1185，批次 B2）**：2026-10-30 修订中 RC1-10–13、27–31、35–37 的实现，以下几处与修订的措辞不同或更具体，以此为准。
+> 经四轮独立审查；第四轮留下的低级问题与 RC1-51 见[审查记录](../security/8.0-rc-review.md)的 Fix plan，由一个后续 PR 处理。
+>
+> - §5.5 抢占的白名单（`Narrowing`），变更的每个操作须属于其一：删除只含 ALLOW 的策略的绑定；把可附加、只含 ALLOW 的策略改为不可附加，语句不变；
+>   以新 id 新增只含 DENY 的策略（不是边界），或新增绑定候选中只含 DENY 的策略的绑定（不是 break-glass）。删除含 DENY 的绑定、删除黑名单绑定、把含 DENY
+>   的策略改为不可附加、替换基准中已有的条目、操作平台也定义的同 id 租户策略，都不算收窄。修订中"加黑名单条目"一类删除：封禁主体不改文档（黑名单来自属性
+>   提供者的 `environment.blocked`），不等槽。抢占还要求变更的基准等于当前头。撤销仍在生效的 break-glass 绑定的变更总能抢占；它持槽时，只有另一个这样的
+>   撤销能取走槽（`BRK-9`）。撤销已过期绑定的变更像普通变更一样排队，持槽时也不受保护；对同一绑定再撤销一次，会发布停住的 `READY` 撤销（看不到它的撤销人改为新建撤销并抢占）。
+>   被抢占者在抢占方占槽之前先置为 `CONFLICTED`，撤回候选并记 `FAILED`（`preempted by <id>`）；做不到就放弃抢占（409、503）。持槽者的修订若已写在修订链上，
+>   来取槽的变更先把它结算为 `PUBLISHED` 再取槽。发布在写 `PUBLISHING` 之前与写头之前各查一次槽，写头仍只以基准摘要为条件，所以剩余窗口是一次存储往返
+>   加上发布实例在两步之间的停顿：窗口内被抢占的持槽者仍会发布，取走槽的变更随后 `CONFLICTED` 并记下先发布的修订（`CTL-22`）。重试时按头的出处认出
+>   这个变更已发布，结算为 `PUBLISHED`；`afterWrite` 在头写入后恰好执行一次（`try`/`finally`）。
+> - §7.1：控制面资源中默认空间的占位符是 `(default)`。以 `(` 开头的空间 id 保留：编译器拒绝其中的绑定，`ScopeResolver` 把声明的保留空间判为
+>   `SPACE_NOT_MEMBER`（403 `scope-rejected`）；`scope/<t>/<a>/-` 不再表示默认空间（`SCP-9`）。
+> - §7.3：信任根是平台租户中持有 `cosec:approve`、凭据不是 API Key 的主体（`APR-3`）。是否 API Key 看 `AuthenticatedPrincipal.apiKey`：由
+>   `ApiKeyAuthenticator` 按来源设置，凭据名为 `api-key` 的转发身份也算（fail closed）。`SetBoundary` 只归平台：非平台主体提议即 403；设置边界的变更只有
+>   平台主体能批准（批准时与发布时都查）、拒绝或放弃（`BDY-2`）。四眼模式下，平台主体的变更须由平台审批人批准。RC1-36 的偏离（2026-11-01 确认）：
+>   `cosec:platform-admin` 可以绑定在平台文档与平台租户自己的文档 `Tenant((platform))` 中，租户与 app 文档中的绑定编译失败（`TNT-2`）。`bootstrap`
+>   把第一位管理员绑定在平台租户文档中（§5.9），已有部署也有这样的绑定；该文档的主体都是平台自己的主体，RC1-36 的威胁不适用。
+> - §7.4：租户 `(0)` 中授给 `Anyone` 的片段为 UNKNOWN（`ANONYMOUS`），只对经分析的变更（`GRT-7`）。本实例首次对账成功之前不信任 app 列表：分析在首次
+>   读列表前先对账，失败即不可信，最多每 30 秒再试一次；启动对账按退避重试（1 秒起翻倍，至多 1 分钟）。
+> - §7.5：API Key 不能审批（403，`APR-7`），没有凭据 id 的凭据也不能。审批记录 token 的 `jti`（`credentialId`）与 `iat`（`issuedAt`，
+>   `AuthenticatedPrincipal.issuedAt` 新增）；发布时 `ChangeAuthority` 查 `RevocationReader.isRevoked(jti)` 与主体吊销（容差为
+>   `cosec.authentication.revocation.skew`）。吊销读不到为 503，审批保留：存储错误不说明审批人的任何情况。不带 `credentialId` 的审批（含升级前的）不计入，
+>   须重新审批。成员关系来自提供者的审批人判定两次，都须放行：一次用"审批时持有 ∩ 现在持有"的角色加提供者当前的附加策略，一次用提供者完整的当前答复
+>   （`APR-8`）。附加策略取当前答复而不取交集，否则审批之后附加的 DENY 会被丢掉（deny-first）。starter 的控制面 Pipeline 带上应用的
+>   `MembershipProvider` 与 `RevocationReader`（RC1-13）；没有控制面可用的 `RevocationReader` 时启动失败（`RevocationReader.NONE` 是显式的退出），
+>   `cosec.jwt.token-validity.refresh` 小于 `cosec.control.approval.expire-after` 时也启动失败。API 的变更视图不含审批的成员关系、属性、凭据 id 与 `iat`，
+>   存储中的变更记录保留它们。
+> - §8：`BreakGlass.request` 不接受绑定 id，id 由系统派生，已被占用即 409（RC1-29）；break-glass 的 `PutBinding` 替换普通绑定是 `V5` 发现。break-glass
+>   的批准先核对候选摘要，再要求 REQUIRED 监听器（否则 503），并在保存状态转移之前写 `BREAK_GLASS_APPROVED`（RC1-30，`BRK-3`）。REQUIRED 监听器抛出的
+>   `CancellationException` 只在调用方协程已取消时重抛，否则按监听器失败处理（503）（RC1-31）。`cosec-migrate` 不写 break-glass 绑定，去掉
+>   `--root-enabled`、`--root-id`、`--root-expires-at` 与 `--break-glass-max-duration`（RC1-27）；`four-eyes` 关闭时的保证只写进文档（RC1-28）。
+> - 规则：新增 `APR-7`、`APR-8`、`BDY-2`、`BRK-9`、`CTL-22`、`GRT-7`、`SCP-9`；`APR-3`、`BRK-3`、`TNT-2` 的陈述改变
+>   （`test/conformance/src/test/resources/rules/`）。
 
 ## 0. 结论先行
 
