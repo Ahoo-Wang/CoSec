@@ -1,0 +1,97 @@
+{
+  "rules": [
+    "GRT-7"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-35: granted to a role of tenant (0), which no unauthenticated caller holds, the same grant is contained in what gina holds.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "all"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "(0)",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "(0)",
+    "document": {
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/1"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        },
+        {
+          "id": "open",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "open",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/1",
+        "verdict": "YES"
+      }
+    ]
+  }
+}

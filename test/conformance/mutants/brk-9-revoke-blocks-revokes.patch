@@ -1,0 +1,17 @@
+# Rule: BRK-9
+# Mutant: a revoke holding the slot holds off every change, another revoke of a live binding included, so a revoke that stalled blocks the next
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index 5fe3e443..c7ae2620 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -813,7 +813,7 @@ class Changes(
+                         return@repeat
+                     }
+                     // A revoke of a binding that still grants is taken only by another such revoke (review N1).
+-                    val guarded = preemption.revokesBreakGlass(held, head) && !preemption.revokesBreakGlass(change, head)
++                    val guarded = preemption.revokesBreakGlass(held, head)
+                     if (guarded || !preemption.preempts(operator, change, head)) {
+                         throw ChangeRejectedException(CONFLICT, "[${change.key}] is staged by change ${held.id.value}")
+                     }

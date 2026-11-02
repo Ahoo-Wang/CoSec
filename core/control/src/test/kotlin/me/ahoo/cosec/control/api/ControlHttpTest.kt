@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.json.CoSecJson
@@ -78,6 +79,33 @@ class ControlHttpTest {
         // Another tenant's principal does not even learn the change exists.
         val mallory = fixture.engine.security(ControlPlaneTest.GLOBEX, "mallory", roles = listOf("admin"))
         call("GET", "/changes/$id", security = mallory).first.assert().isEqualTo(404)
+    }
+
+    /**
+     * Review D5: a change's approval names its approver, when and for what; what the approver held, its token's
+     * attributes and which token it was stay in the store and the change log.
+     */
+    @Test
+    fun `an approval shows nothing of its approver's credential`() {
+        val proposal = """{"document":"tenant:acme","base":1,"note":"viewers","operations":[""" +
+            """{"op":"putPolicy","policy":{"id":"viewer-read","statements":""" +
+            """[{"effect":"allow","action":"order:read","resource":"order/{id}"}]}},""" +
+            """{"op":"putBinding","binding":{"id":"viewer-read","subject":{"role":"viewer"},"app":"order",""" +
+            """"space":"*","policy":"viewer-read"}}]}"""
+        val id = call("POST", "/changes", proposal).second.get("id").asString()
+        call("POST", "/changes/$id:shadow").first.assert().isEqualTo(200)
+        val waiting = runBlocking { fixture.changes.shadowed(ChangeId(id)) }
+        waiting.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        val (status, approved) =
+            call("POST", "/changes/$id:approve", """{"candidate":"${waiting.candidate}"}""", security = plato)
+        status.assert().isEqualTo(200)
+        val approval = approved.get("approval")
+        approval.get("approver").get("principal").asString().assert().isEqualTo("plato")
+        listOf("credentialId", "issuedAt", "memberships", "attributes", "principalBindings", "breakGlass").forEach {
+            approval.has(it).assert().describedAs(it).isFalse()
+            call("GET", "/changes/$id").second.get("approval").has(it).assert().describedAs(it).isFalse()
+        }
+        runBlocking { fixture.changes.get(ChangeId(id)) }.approval!!.credentialId.assert().isEqualTo("token-plato")
     }
 
     @Test

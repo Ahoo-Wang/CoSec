@@ -16,7 +16,7 @@
 package me.ahoo.cosec.runtime.authn
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.findInDelegationChain
+import me.ahoo.cosec.api.Delegated
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
@@ -32,6 +32,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.ExpiresAtCapable
+import me.ahoo.cosec.spi.token.IssuedAtCapable
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenExpiredException
@@ -39,6 +40,7 @@ import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import java.time.Duration
+import java.time.Instant
 
 /**
  * Authenticates the request's token (RFC 0006 §5.3.2): [verifier] checks it, which is CPU work and never suspends,
@@ -103,10 +105,10 @@ class TokenAuthenticator(
         }
         val tenant = MembershipClaims.tenantOf(principal)
         val id = PrincipalId(principal.id)
-        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), principal, revocationSkew)) {
+        val (expiresAt, issuedAt) = times(principal)
+        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt, revocationSkew)) {
             return REVOKED
         }
-        val expiresAt = principal.findInDelegationChain<ExpiresAtCapable>()?.expiresAt
         return AuthnResult.Authenticated(
             AuthenticatedPrincipal(
                 id,
@@ -115,9 +117,24 @@ class TokenAuthenticator(
                 principal.attributes,
                 Identity.Credential(credentialMethod, principal.tokenId, expiresAt),
                 breakGlass = ownTokens,
+                issuedAt = issuedAt,
+                apiKeyCredential = false,
             ),
             method,
         )
+    }
+
+    /** The token's expiry and issue time, the first of each along its delegation chain, in one walk of it. */
+    private fun times(principal: TokenPrincipal): Pair<Instant?, Instant?> {
+        var expiry: ExpiresAtCapable? = null
+        var issue: IssuedAtCapable? = null
+        var current: Any? = principal
+        while (current != null && (expiry == null || issue == null)) {
+            if (expiry == null && current is ExpiresAtCapable) expiry = current
+            if (issue == null && current is IssuedAtCapable) issue = current
+            current = (current as? Delegated<*>)?.delegate
+        }
+        return expiry?.expiresAt to issue?.issuedAt
     }
 
     companion object {

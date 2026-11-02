@@ -1,0 +1,16 @@
+# Rule: BRK-3
+# Mutant: cosec-migrate publishes converted documents that hold a break-glass binding
+# Tests: :migrate:test
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
+index 6e2c766f..f0c580fa 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
+@@ -84,7 +84,6 @@ class DocumentPublisher(
+             compiler.compile(document)
+             compiler.checkReferences(document, platform)
+         }
+-        refuseBreakGlass(documents.values)
+         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
+         val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
+         checkExisting(existing, documents, resume)

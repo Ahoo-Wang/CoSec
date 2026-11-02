@@ -1,0 +1,16 @@
+# Rule: BRK-3
+# Mutant: a break-glass approval is recorded without a REQUIRED change listener
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index 91e67243..6f3cb6a9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -415,7 +415,6 @@ class Changes(
+         requireApprovable(operator, change, candidate)
+         val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
+         if (breakGlass) {
+-            requireAudit(true)
+             audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
+         }
+         return transition(id, setOf(ChangeState.AWAITING_APPROVAL)) { current ->

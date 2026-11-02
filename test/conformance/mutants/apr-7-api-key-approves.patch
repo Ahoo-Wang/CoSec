@@ -1,0 +1,17 @@
+# Rule: APR-7
+# Mutant: a principal authenticated by an API key approves like a person
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index 9376fa22..db7ee44c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -225,7 +225,7 @@ class ChangeAuthority(
+      * trust root is the trust root's.
+      */
+     fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
+-        apiKey(operator) -> "an API key cannot approve: an approval is a person's"
++        apiKey(operator) && change.operations.isEmpty() -> "an API key cannot approve: an approval is a person's"
+ 
+         // Publishing would not count it: its revocation could not be checked (review D3).
+         operator.security?.principal?.credential?.id == null ->

@@ -228,6 +228,11 @@ internal object BreakGlassRules {
         if (!binding.breakGlass) {
             return findings
         }
+        if (previous != null && !previous.breakGlass) {
+            // RC1-29: whichever way the change was made (a request, a rebase, an internal proposal), it would turn an
+            // ordinary binding into break-glass; its id is taken.
+            findings += Finding("V5", "$.bindings[$i]", "a break-glass binding never replaces another binding", UNPROCESSABLE)
+        }
         if (!request) {
             findings += Finding("V5", "$.bindings[$i]", "a break-glass binding is created only by a break-glass request", UNPROCESSABLE)
         }

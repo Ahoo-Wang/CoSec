@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
@@ -314,6 +315,15 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         }
         if (grantor.tenant != fragment.tenant) {
             return unknown(UnknownReason.CROSS_TENANT, null, "the grantor is in ${grantor.tenant.value}", null)
+        }
+        val grantee = fragment.grantee
+        if (fragment.tenant == TenantId.DEFAULT && grantee is Grantee.Bound && grantee.binding.subject == SubjectRef.Anyone) {
+            return unknown(
+                UnknownReason.ANONYMOUS,
+                null,
+                "anyone in ${TenantId.DEFAULT.value} includes unauthenticated callers",
+                null
+            )
         }
         return null
     }

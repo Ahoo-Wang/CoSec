@@ -91,6 +91,8 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 [break-glass](../guide/security-model.md#break-glass) 绑定是否适用按来源判断：只有经 `TokenAuthenticator`、由 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌能得到它。你的认证器返回的主体，无论凭证使用自己的方式（例如 `Identity.Method("ldap")`）还是没有凭证，永远得不到 break-glass；你自己的 `TokenVerifier` 认可的令牌也得不到，即使经过 `TokenAuthenticator`（此时凭证以认证器的 `method` 命名，默认为 `token`）。方式 `JWT` 保留给 CoSec 的令牌：你用它构造的 `AuthenticatedPrincipal` 会被拒绝（`IllegalArgumentException`，即 `503`），因此任何认证器都无法凭名字冒充 CoSec 的令牌（`BRK-8`）。
 
+控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key；API key 从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
+
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
 starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切。** 要接受另一种令牌格式并保留内置认证，自己构建内置认证器并委托给它们：

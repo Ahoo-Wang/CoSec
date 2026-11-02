@@ -204,8 +204,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      * provider no longer knows it, or knows it as not active (RFC 0009 §4.2); true for claimed memberships, which only
      * the token's expiry or revocation ends. Throws [MembershipUnavailableException] when that cannot be established.
      */
-    internal suspend fun standing(principal: AuthenticatedPrincipal): Boolean =
-        memberships.resolve(principal.tenant, principal.id, principal.membershipSource) != null
+    /** What the membership provider answers for [principal] now, capped as its credential is; null when it does not know it. */
+    internal suspend fun currentMemberships(principal: AuthenticatedPrincipal): Memberships? =
+        memberships.resolve(principal.tenant, principal.id, principal.membershipSource)
 
     /**
      * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the second half of [decide] (snapshot

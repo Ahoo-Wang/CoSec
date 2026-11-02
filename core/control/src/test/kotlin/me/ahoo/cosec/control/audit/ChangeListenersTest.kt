@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.audit
 
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -112,6 +114,35 @@ class ChangeListenersTest {
                 )
             }
         }
+    }
+
+    /**
+     * RC1-31: a listener that throws a cancellation while the step is active (a cancelled future, say) fails like any
+     * other, so the step answers 503; only the caller's own cancellation is rethrown.
+     */
+    @Test
+    fun `a listener's own cancellation is a failure of that listener`() = runBlocking<Unit> {
+        val cancelling = listeners(
+            Recording("cancelling", Delivery.REQUIRED) { throw CancellationException("the future was cancelled") }
+        )
+        val failure = try {
+            cancelling.publish(event(ChangeEvent.Kind.PUBLISHING))
+            null
+        } catch (e: ChangeAuditException) {
+            e
+        }
+        failure.assert().isNotNull()
+        failure!!.cause.assert().isInstanceOf(CancellationException::class.java)
+
+        val caller = launch {
+            listeners(Recording("waiting", Delivery.REQUIRED) { awaitCancellation() }).publish(
+                event(ChangeEvent.Kind.PUBLISHING)
+            )
+        }
+        delay(50)
+        caller.cancel()
+        caller.join()
+        caller.isCancelled.assert().isTrue()
     }
 
     @Test

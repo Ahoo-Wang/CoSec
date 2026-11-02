@@ -117,7 +117,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 
 有两项检查在其后端失败时让请求通过，因为在这两处失败即拒绝会把一次 Redis 故障变成全面故障，而换来的保护很少：
 
-- **令牌吊销的降级读取。** 吊销存储无法读取时，吊销缓存的降级读取（CoSec 为它们设置的 `read-failure: degrade`）回答“未吊销”。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。只有这种降级读取才会把令牌当作未吊销：吊销检查报告的错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。
+- **令牌吊销的降级读取。** 吊销存储无法读取时，吊销缓存的降级读取（CoSec 为它们设置的 `read-failure: degrade`）回答“未吊销”。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。只有这种降级读取才会把令牌当作未吊销：吊销检查报告的错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。控制面在发布时以同样方式读取审批人的吊销，这时暴露窗口受审批的有效期 `cosec.control.approval.expire-after`（72 小时）限制，而不是令牌的有效期；读取以其他方式失败时，什么都不发布（`503`）（[测试策略](../policies/testing.md#approval)）。
 - **未设置 `strictFailure` 的限流规则。** 规则无法计数时（限流器失败、超时或缺失），该规则被跳过。设置了 `"strictFailure": true` 的规则则以 `503` 拒绝请求。限流只作用于策略已经放行的请求，跳过一条规则不会授予策略没有授予的权限（[限流](../policies/rate-limiting.md)）。
 
 默认情况下没有其他失败即放行的地方。还有一种失效只在你有意写出时存在：带 `onMissing: nomatch` 的 DENY，见下文。
@@ -162,6 +162,12 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 只作用于令牌由 CoSec 自己的校验器（`JwtTokenVerifier`）校验过的主体：从不作用于 API key（无论是否有上限）、其他 `TokenVerifier` 认可的令牌，也不作用于自定义认证器认可的主体，无论它的凭证叫什么名字。判断依据是令牌在哪里被校验，而不是名字：凭证方式 `jwt` 保留给 CoSec 的令牌，其他认证器无法用它构造主体（`BRK-8`）。它是给人的、有时限的授予，而不是给长期凭证的。网关只为 CoSec 的令牌转发 `jwt`，因此网关之后的服务按同一规则处理。
 
 每个由 break-glass 放行的请求都必须先写入一个 REQUIRED 决策监听器。没有这样的监听器，或它失败时，请求返回 `503`。代码中的权限检查（`AuthorizationChecker`）如果只有 break-glass 放行，结果为 `false`，因为检查不写审计事件（[代码中的权限检查](../integration/checks.md)）。
+
+两人原则是控制面的规则，对每一种会创建 break-glass 的变更都强制执行（`BRK-5`）：申请与批准是同一个变更的两步，每一步都由 REQUIRED 变更监听器记录，它发布的修订在出处中记录发布人与批准人（`provenance.publishedBy`、`approvedBy`）；申请人记在变更日志里。数据面不检查 break-glass 绑定是谁授予、谁批准的：能写文档的人同样能写出这些名字，它们证明不了什么。`cosec-migrate` 不写 break-glass 绑定；切换之后经控制面申请。
+
+这些保证不约束信任根。持有 `cosec:approve` 的平台管理员发布自己的变更既不经分析也不需要第二个人，又持有 `cosec:skip-shadow`：它可以独自给自己绑定一条不过期的、放行一切的 ALLOW，这正是 break-glass 给的东西，却没有第二个人、时间上限和 REQUIRED 审计。`cosec.control.approval.four-eyes` 补回的是分析和第二个人（另一位平台主体），并不给这样的绑定加上时间上限或 REQUIRED 审计。在需要第二个人的地方请开启 four-eyes（[策略测试](../policies/testing.md#approval)），并在变更日志中留意放行一切的 ALLOW。
+
+信任根是人。API key 无论其主体持有什么，都不是信任根，也不能批准：CoSec 按校验来源识别自己的 API key，并把任何名为 `api-key` 的凭证（包括网关转发的身份所带的）都当作 API key。你自己的认证器认可的凭证，在 CoSec 看来是人的凭证，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
 
 ## 平台边界 {#platform-boundary}
 
@@ -223,7 +229,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 只能位于默认空间：声明了 `CoSec-Space-Id` 的请求以 `401` 被拒绝；
 - 被拒绝时返回 `401`，绝不返回 `403`，因此客户端的补救办法总是去认证。凭证被拒绝时，problem 会给出原因（`token-invalid`、`token-expired`、`token-revoked`）。
 
-因此匿名调用方能访问的正好是 `Anyone` 绑定所放行的内容（例如登录端点），除此之外什么都访问不了。
+因此匿名调用方能访问的正好是 `Anyone` 绑定所放行的内容（例如登录端点），除此之外什么都访问不了。所以租户 `(0)` 文档中的 `Anyone` 绑定也会作用于未认证的调用方；授出分析把每个这样的授出都送去审批（`ANONYMOUS`），不论谁提出，信任根除外。
 
 ## 租户隔离 {#tenant-isolation}
 

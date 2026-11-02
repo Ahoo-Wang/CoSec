@@ -1,0 +1,26 @@
+# Rule: CTL-22
+# Mutant: a READY change whose slot another change took meanwhile still publishes, over the change that preempted it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index 5fe3e443..ea94e93c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -531,9 +531,6 @@ class Changes(
+         // round trip between that read and the write, plus any pause of this instance between them (a GC, say); the
+         // write is conditional on the base, not on the slot. A change preempted within it still publishes, and the one
+         // that took the slot conflicts on the moved base ([movedOn]).
+-        if (!holdsSlot(change)) {
+-            return settle(change, ChangeState.CONFLICTED)
+-        }
+         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
+         var published: ChangeRequest? = null
+         var slotLost = false
+@@ -542,7 +539,6 @@ class Changes(
+             head,
+             candidate,
+             PublishRules.publication(change, publisher, rechecked),
+-            precondition = { holdsSlot(change).also { slotLost = !it } },
+         ) {
+             published = written(change, it, rechecked, head?.document, candidate, publisher)
+         }

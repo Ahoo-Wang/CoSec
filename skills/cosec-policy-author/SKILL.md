@@ -69,7 +69,9 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   `resource` (one or an array; absent means any resource), `condition`, `name`, and `onMissing` for external
   attributes.
 - Ids starting with `cosec:` are built in: `cosec:blacklist`, `cosec:root` (break-glass only),
-  `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`. No document defines them. Policy and binding
+  `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`. No document defines them, and
+  `cosec:platform-admin` is bound only in the platform document and the `(platform)` tenant's own (elsewhere the
+  document does not compile). Policy and binding
   ids starting with `cosec:`, `g:` or `r:` are reserved (`cosec-migrate` writes `g:` and `r:`): the control plane
   rejects a change that adds one (422).
 
@@ -163,7 +165,7 @@ write that field by hand.
 
 - `subject`: `"*"` (anyone, anonymous included), `{"principal": "...", "tenant": "..."}` or `{"role": "...", "tenant": "..."}`.
 - `app`: an app id or `"*"` (never empty). `space`: a space id, `""` for the default space only, or `"*"` for any space.
-  `"*"` means any and only that.
+  `"*"` means any and only that. A space id beginning with `(` is CoSec's: a binding in one does not compile.
 - `expiresAt` (ISO instant): the binding stops applying then. `breakGlass`: see below.
 
 Where each binding may live:

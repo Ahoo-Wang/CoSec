@@ -107,8 +107,9 @@ class RetentionPolicy(
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
  * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
  *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
- * 3. the head is replaced with `putIfMatch(expected = base digest)`: one key, one atomic step (P7). A conflict leaves
- *    the head as someone else wrote it and is reported, never retried on the new content (RFC 0007 §5.5);
+ * 3. the caller's precondition is read, and the head is replaced with `putIfMatch(expected = base digest)`: one key,
+ *    one atomic step (P7). A conflict leaves the head as someone else wrote it and is reported, never retried on the
+ *    new content (RFC 0007 §5.5);
  * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
  *    marks the app list complete when it names every app document the store lists.
  *
@@ -136,6 +137,8 @@ class Revisions(
      * Publishes [candidate] over [base] (`null`: [key] has no document yet) for [publication]. The candidate's own
      * revision, time and provenance are replaced: the revision follows the base's, the parent is the base.
      *
+     * [precondition] is read right before the head write, the last step that may still refuse it: `false` writes nothing
+     * and answers [PublishOutcome.Conflicted], as a moved base would (a change that lost its staging slot, review L2).
      * Once the head is written, the rest does not respond to cancellation, and [afterWrite] runs in it: what the caller
      * must do once the revision is in effect. A failure of this class's own steps after the write is only logged, and
      * the revision is [PublishOutcome.Published]: the references it adds were indexed before the write, so a reference
@@ -147,6 +150,7 @@ class Revisions(
         base: Head?,
         candidate: PolicyDocument,
         publication: Publication,
+        precondition: suspend () -> Boolean = { true },
         afterWrite: suspend (PublishOutcome.Published) -> Unit = {},
     ): PublishOutcome {
         requireDocumentKey(key)
@@ -178,6 +182,10 @@ class Revisions(
             }
         }
         return withContext(NonCancellable) {
+            if (!precondition()) {
+                log.info { "[$key] revision $revision was not written: its precondition no longer holds." }
+                return@withContext PublishOutcome.Conflicted(base?.digest)
+            }
             when (val write = store.putHead(key, base?.digest, stored)) {
                 is HeadWrite.Conflict -> {
                     log.info { "[$key] changed since revision ${base?.revision ?: 0} was read; not published." }
@@ -188,11 +196,17 @@ class Revisions(
                     write.digest == digest
                 ) { "The store wrote the head of [$key] as another digest." }
             }
-            settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
-            if (key == SnapshotKey.Platform && base == null) {
-                completeOnNewStore()
+            val published = PublishOutcome.Published(revision, digest)
+            try {
+                settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
+                if (key == SnapshotKey.Platform && base == null) {
+                    completeOnNewStore()
+                }
+            } finally {
+                // Exactly once once the head is written, whatever the steps before it threw (B1 review).
+                afterWrite(published)
             }
-            PublishOutcome.Published(revision, digest).also { afterWrite(it) }
+            published
         }
     }
 
@@ -371,6 +385,48 @@ class Revisions(
             )
         } || warn("[$key]: the rebuilt history could not be written back to the index")
         return (indexed.entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
+    }
+
+    /**
+     * The head [key] had at [revision], found along the `parent` chain from the head, if the records on the way are
+     * retained: for a publish retried after its head write, whose own revision may since have been replaced, and which
+     * the index may not hold (review item 13).
+     */
+    internal suspend fun at(key: SnapshotKey, revision: Long): Head? {
+        var current = head(key) ?: return null
+        while (current.revision > revision) {
+            val parent = current.document.provenance?.parent ?: return null
+            val digest = SnapshotDigest(hex(parent.digest))
+            val record = store.record(key, digest) ?: return null
+            current = Head(key, decode(key, record), StoredDocument(record, digest))
+        }
+        return current.takeIf { it.revision == revision }
+    }
+
+    /**
+     * What follows the head write of [published], for a publish retried because its reply was lost (review item 13):
+     * its index entry, added where it is missing and never replacing a later one, and the app list's completion on a
+     * new store when [first]. The references it dropped stay indexed: a later revision may refer to them again, and a
+     * superset blocks a deletion at most. Failures only warn, as after the write.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    internal suspend fun rewritten(key: SnapshotKey, published: Head, first: Boolean) = withContext(NonCancellable) {
+        val entry = RevisionEntry(published.revision, published.digest, published.document.publishedAt)
+        try {
+            updateIndex(key) { index ->
+                index.copy(
+                    entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
+                    pending = index.pending.filter { it.digest != entry.digest },
+                )
+            } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "[$key] revision ${entry.revision} is published; its index entry could not be written." }
+        }
+        if (key == SnapshotKey.Platform && first) {
+            completeOnNewStore()
+        }
     }
 
     /** The document [key] had at [revision], if its record is retained: for rollback and for explaining by version. */

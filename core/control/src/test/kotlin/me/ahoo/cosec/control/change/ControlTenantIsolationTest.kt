@@ -171,12 +171,15 @@ class ControlTenantIsolationTest {
         repeat(ROUNDS) { round ->
             val head = revisions.head(globex)?.revision ?: 0
             val operations = operations(random, round)
-            val change = changes.propose(gil, globex, head, operations, "round $round")
+            // gil may propose to its own tenant's document; what gets published there comes through the trust root,
+            // since gil's own grants would wait for an approval (RC1-10). Either way it is globex's document.
+            changes.propose(gil, globex, head, operations, "round $round, by gil").let { changes.abandon(gil, it.id) }
+            val change = changes.propose(PLATO, globex, head, operations, "round $round")
             if (change.state == ChangeState.CHECKED) {
-                changes.skipShadow(gil, change.id, "test")
-                changes.publish(gil, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+                changes.skipShadow(PLATO, change.id, "test")
+                changes.publish(PLATO, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
             } else {
-                changes.abandon(gil, change.id)
+                changes.abandon(PLATO, change.id)
             }
             refused { changes.propose(gil, acme, 1, operations, "round $round, theirs") }.assert().isEqualTo(403)
             decisions().assert().describedAs("round $round").isEqualTo(before)

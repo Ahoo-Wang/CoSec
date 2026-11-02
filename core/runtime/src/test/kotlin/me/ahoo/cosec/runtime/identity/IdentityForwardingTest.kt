@@ -50,6 +50,8 @@ class IdentityForwardingTest {
             mapOf("name" to "Alice", "secret" to "never forwarded"),
             credential,
             breakGlass = true,
+            issuedAt = null,
+            apiKeyCredential = false,
         ),
         "token",
     )
@@ -155,6 +157,8 @@ class IdentityForwardingTest {
                 emptyMap(),
                 credential.copy(expiresAt = null),
                 breakGlass = true,
+                issuedAt = null,
+                apiKeyCredential = false,
             ),
             "apikey",
         )

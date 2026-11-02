@@ -103,6 +103,9 @@ class BreakGlassControlTest {
     private val plato = engine.operator(TenantId.PLATFORM, "plato")
     private val pia = engine.operator(TenantId.PLATFORM, "pia")
     private val rita = engine.operator(TenantId.PLATFORM, "rita")
+
+    /** Another requester: may request and revoke break-glass, and read none of rita's changes. */
+    private val rhea = engine.operator(TenantId.PLATFORM, "rhea")
     private val alice = engine.operator(TenantId("acme"), "alice")
 
     init {
@@ -131,6 +134,7 @@ class BreakGlassControlTest {
                         control("plato", "plato", BuiltinPolicies.PLATFORM_ADMIN),
                         control("pia", "pia", BuiltinPolicies.PLATFORM_ADMIN),
                         control("rita", "rita", PolicyId("break-glass-requester")),
+                        control("rhea", "rhea", PolicyId("break-glass-requester")),
                         Binding(
                             BindingId("alice"),
                             SubjectRef.Principal(TenantId("acme"), PrincipalId("alice")),
@@ -186,6 +190,73 @@ class BreakGlassControlTest {
         )
     }
 
+    /** RC1-29: the binding's id is the control plane's, so a request never replaces another binding. */
+    @Test
+    fun `a request never takes the id of a binding there is`() = runBlocking<Unit> {
+        val expiresAt = inHours(2)
+        val taken = BindingId("break-glass-rita-${expiresAt.toEpochMilli()}")
+        val head = revisions.head(SnapshotKey.Platform)!!
+        val deny = Binding(taken, SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), BuiltinPolicies.BLACKLIST)
+        revisions.publish(
+            SnapshotKey.Platform,
+            head,
+            StoreFixtures.candidate(SnapshotKey.Platform, head.document.policies, head.document.bindings + deny),
+            Publication("deny", ProvenanceKind.PUBLISH, plato.actor),
+        )
+        refused { breakGlass.request(rita, PrincipalId("rita"), expiresAt, "incident") }.assert().isEqualTo(409)
+        revisions.head(SnapshotKey.Platform)!!.document.bindings.single { it.id == taken }.policy
+            .assert().isEqualTo(BuiltinPolicies.BLACKLIST)
+    }
+
+    /**
+     * RC1-29 (review item 16): however a change is made, a break-glass binding never replaces an ordinary one: the
+     * checks say so, so a rebase or an internal proposal is held to it as a request is.
+     */
+    @Test
+    fun `a break-glass binding never replaces another binding`() = runBlocking<Unit> {
+        val head = revisions.head(SnapshotKey.Platform)!!
+        val alice = head.document.bindings.single { it.id == BindingId("alice") }
+        val turned = Binding(
+            alice.id,
+            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("rita")),
+            BindingScope(Match.Any, Match.Any),
+            BuiltinPolicies.ROOT,
+            inHours(1).toEpochMilli(),
+            breakGlass = true,
+        )
+        val change = changes.propose(
+            rita,
+            SnapshotKey.Platform,
+            head.revision,
+            listOf(Operation.PutBinding(turned)),
+            "incident",
+            kind = ProvenanceKind.BREAK_GLASS,
+        )
+        change.state.assert().isEqualTo(ChangeState.DRAFT)
+        change.findings.map { it.message }.assert().contains("a break-glass binding never replaces another binding")
+    }
+
+    /** Review item 20: an expired break-glass binding grants nothing, so revoking it takes no busy slot. */
+    @Test
+    fun `revoking an expired binding waits for the slot`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id)
+        val binding = glass()!!.id
+        clock.now = inHours(2)
+        val head = revisions.head(SnapshotKey.Platform)!!.revision
+        val holding = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            head,
+            listOf(Operation.PutPolicy(allowAll("widen"))),
+            "slow"
+        )
+        changes.stage(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        refused { breakGlass.revoke(rita, binding, "tidy") }.assert().isEqualTo(409)
+        changes.get(holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+    }
+
     @Test
     fun `only the platform's principals with cosec breakglass request it`() = runBlocking<Unit> {
         // alice holds platform-admin through a wrongly written binding; the hard rule still refuses her.
@@ -219,7 +290,7 @@ class BreakGlassControlTest {
     @Test
     fun `its lifetime is bounded, when requested and when published`() = runBlocking<Unit> {
         breakGlass.request(rita, PrincipalId("rita"), inHours(5), "too long").errors.map { it.path }
-            .assert().contains("$.bindings[4].expiresAt")
+            .assert().contains("$.bindings[5].expiresAt")
         val longer = changes(
             options = ChangeOptions(shadow = IMMEDIATE_WINDOW, breakGlassMaxDuration = Duration.ofHours(24))
         )
@@ -264,6 +335,174 @@ class BreakGlassControlTest {
         changes.get(requested.id).state.assert().isEqualTo(ChangeState.READY)
         glass().assert().isNull()
     }
+
+    /**
+     * RC1-30 (`BRK-3`): a break-glass approval is recorded by a REQUIRED listener once its digest is checked, before it is
+     * stored: an instance without one refuses it, and an approval of another candidate records nothing.
+     */
+    @Test
+    fun `an approval of break-glass is recorded first, and only for the candidate it approves`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident")
+        val drifted = changes(listeners = emptyList())
+        refused { drifted.approve(pia, requested.id, requested.candidate!!) }.assert().isEqualTo(503)
+        refused { changes.approve(pia, requested.id, "0".repeat(64)) }.assert().isEqualTo(409)
+        audit.events.map { it.kind }.assert().doesNotContain(ChangeEvent.Kind.BREAK_GLASS_APPROVED)
+        changes.get(requested.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        changes.approve(pia, requested.id, requested.candidate!!).state.assert().isEqualTo(ChangeState.READY)
+        audit.events.map { it.kind }.assert().contains(ChangeEvent.Kind.BREAK_GLASS_APPROVED)
+    }
+
+    /**
+     * RC1-12: a platform change in its shadow window holds the platform document's slot; revoking break-glass does not
+     * wait for it. The holder becomes CONFLICTED, its candidate withdrawn, recorded as a failure that names the revoke.
+     */
+    @Test
+    fun `a revoke takes the slot another change holds`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id)
+        val binding = glass()!!.id
+        val head = revisions.head(SnapshotKey.Platform)!!.revision
+        val holding = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            head,
+            listOf(Operation.PutPolicy(allowAll("widen"))),
+            "slow"
+        )
+        changes.stage(plato, holding.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        store.candidate(SnapshotKey.Platform).assert().isNotNull()
+
+        breakGlass.revoke(rita, binding, "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        glass().assert().isNull()
+        changes.get(holding.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        store.candidate(SnapshotKey.Platform).assert().isNull()
+        // Not gated: it reaches the listener as it can.
+        kotlinx.coroutines.withTimeout(5_000) {
+            while (audit.events.none { it.change == holding.id && it.kind == ChangeEvent.Kind.FAILED }) {
+                kotlinx.coroutines.delay(10)
+            }
+        }
+        audit.events.single { it.change == holding.id && it.kind == ChangeEvent.Kind.FAILED }.note
+            .assert().startsWith("preempted by ")
+    }
+
+    /**
+     * Review L3: a break-glass revoke holding the slot is taken by nothing, a narrowing change by a holder of
+     * `cosec:skip-shadow` included: the principal it revokes could otherwise hold its own revocation off.
+     */
+    @Test
+    fun `no change takes the slot of a break-glass revoke`() = runBlocking<Unit> {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(1), "incident")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id)
+        val binding = glass()!!.id
+        // The revoke is staged, and its publish waits for the audit store.
+        audit.failing += ChangeEvent.Kind.PUBLISHING
+        refused { breakGlass.revoke(rita, binding, "compromised") }.assert().isEqualTo(503)
+        audit.failing.clear()
+        val revoke = store.stage(SnapshotKey.Platform)!!.value.holder!!
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+        val deny = PolicyDefinition(
+            PolicyId("ban"),
+            false,
+            null,
+            listOf(StatementSource("", Effect.DENY, listOf("order:delete")))
+        )
+        val ban = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            revisions.head(SnapshotKey.Platform)!!.revision,
+            listOf(
+                Operation.PutPolicy(deny),
+                Operation.PutBinding(
+                    Binding(BindingId("ban"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("ban"))
+                ),
+            ),
+            "ban"
+        )
+        refused { changes.skipShadow(plato, ban.id, "incident") }.assert().isEqualTo(409)
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+        changes.publish(rita, revoke).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        glass().assert().isNull()
+    }
+
+    /** A break-glass binding of rita, published, expiring in [hours]. */
+    private suspend fun granted(hours: Long): BindingId {
+        val requested = breakGlass.request(rita, PrincipalId("rita"), inHours(hours), "incident $hours")
+        changes.approve(pia, requested.id, requested.candidate!!)
+        changes.publish(rita, requested.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        return revisions.head(SnapshotKey.Platform)!!.document.bindings
+            .single { it.breakGlass && it.expiresAt == inHours(hours).toEpochMilli() }.id
+    }
+
+    /** A revoke of [binding] whose publish stopped at the audit store: READY, holding the slot. */
+    private suspend fun stalled(binding: BindingId): ChangeId {
+        audit.failing += ChangeEvent.Kind.PUBLISHING
+        refused { breakGlass.revoke(rita, binding, "compromised") }.assert().isEqualTo(503)
+        audit.failing.clear()
+        val revoke = store.stage(SnapshotKey.Platform)!!.value.holder!!
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+        return revoke
+    }
+
+    /** Review N1, scenario A: revoking the binding again publishes the revoke that stalled, rather than a 409. */
+    @Test
+    fun `revoking again publishes a stalled revoke of the same binding`() = runBlocking<Unit> {
+        val binding = granted(1)
+        val revoke = stalled(binding)
+        val again = breakGlass.revoke(rita, binding, "compromised, again")
+        again.id.assert().isEqualTo(revoke)
+        again.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        glass().assert().isNull()
+    }
+
+    /**
+     * Review N1, scenario A: a revoker who may not see the stalled revoke revokes with a change of its own, which takes
+     * the slot from it: a revoke of a binding that still grants is taken by another such revoke, and by nothing else.
+     */
+    @Test
+    fun `a revoke takes the slot of a stalled revoke`() = runBlocking<Unit> {
+        val binding = granted(1)
+        val revoke = stalled(binding)
+        val own = breakGlass.revoke(rhea, binding, "compromised, again")
+        own.id.assert().isNotEqualTo(revoke)
+        own.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        glass().assert().isNull()
+    }
+
+    /**
+     * Review N1, scenario B: a revoke of a binding that has expired grants no one anything back, so it holds the slot
+     * against nothing: a revoke of a live binding takes it.
+     */
+    @Test
+    fun `a revoke of an expired binding does not hold off a revoke`() = runBlocking<Unit> {
+        val expiring = granted(1)
+        val live = granted(3)
+        clock.now = inHours(2)
+        // rita stages a revoke of the binding that has expired, and does not publish it.
+        val head = revisions.head(SnapshotKey.Platform)!!.revision
+        val stale = changes.propose(
+            rita,
+            SnapshotKey.Platform,
+            head,
+            listOf(Operation.RemoveBinding(expiring)),
+            "tidy",
+            ProvenanceKind.BREAK_GLASS
+        )
+        changes.stage(rita, stale.id).state.assert().isEqualTo(ChangeState.READY)
+        breakGlass.revoke(rhea, live, "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        changes.get(stale.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.id == live }.assert().isTrue()
+    }
+
+    private fun allowAll(id: String) = PolicyDefinition(
+        PolicyId(id),
+        false,
+        null,
+        listOf(StatementSource("", Effect.ALLOW, listOf("*")))
+    )
 
     @Test
     fun `one person revokes it at once`() = runBlocking<Unit> {

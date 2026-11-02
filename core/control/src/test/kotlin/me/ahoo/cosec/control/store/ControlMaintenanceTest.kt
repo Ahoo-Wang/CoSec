@@ -111,6 +111,18 @@ class ControlMaintenanceTest {
             .assert().isInstanceOf(PublishOutcome.Published::class.java)
     }
 
+    /** A pass that cannot list the documents reclaims nothing and reconciles nothing; the next one tries again. */
+    @Test
+    fun `a pass that cannot list the documents does nothing`() = runBlocking<Unit> {
+        published()
+        val failing = object : ControlStore by store {
+            override suspend fun documents(): Set<SnapshotKey> = error("Redis is down")
+        }
+        val blindRevisions = Revisions(failing, clock, revisions.retention)
+        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1)).reclaim().assert().isEmpty()
+    }
+
     /** Review of #1181 (F3): the open changes say what a pass may reclaim, nothing about the app list. */
     @Test
     fun `a pass that cannot read an open change still reconciles the app list - RC1-4`() = runBlocking<Unit> {

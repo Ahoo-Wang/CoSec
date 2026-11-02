@@ -1,0 +1,96 @@
+{
+  "rules": [
+    "GRT-7"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-35: unauthenticated callers are in tenant (0), so an Anyone binding there reaches them too: whatever gina holds, it is not contained.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "all"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "(0)",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "(0)",
+    "document": {
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/1"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        },
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "open",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/1",
+        "verdict": "UNKNOWN",
+        "reason": "ANONYMOUS"
+      }
+    ]
+  }
+}

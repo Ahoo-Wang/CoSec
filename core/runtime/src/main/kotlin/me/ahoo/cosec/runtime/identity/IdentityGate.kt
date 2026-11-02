@@ -165,6 +165,8 @@ class IdentityGate(
             identity.claims,
             identity.credential,
             breakGlass = identity.credential.method == Identity.Method.JWT,
+            issuedAt = null,
+            apiKeyCredential = false,
         )
         val resolution = ScopeResolver.resolve(
             ScopeSubject(tenant, true, memberships),

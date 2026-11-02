@@ -1,0 +1,17 @@
+# Rule: APR-8
+# Mutant: a provider approver is decided only on the roles it held then and holds now, so a DENY bound to a role it gained since is dropped
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+index 7fd35bfe..88f1f3c9 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+@@ -161,7 +161,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
+         if (held !is Decision.Permit) {
+             return held
+         }
+-        return decideOn(security, principal, now, app, action, resource)
++        return held
+     }
+ 
+     private suspend fun decideOn(
