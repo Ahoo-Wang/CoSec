@@ -9,6 +9,12 @@
 > 7.0 形状的 `Policies`/`App` 文档、`SnapshotPolicySetLoader` 与 PR-4（#1030）的比较、回放和测量工具在切换时删除（RFC 0008 §4.2）；`SnapshotSource`、
 > `SnapshotDocumentStore`、`RedisSnapshotDocumentStore` 与条件写入原样复用（RFC 0008 §4.3）。PR-5 中仍然成立的要求转入切换 PR（RFC 0008 §4.4）。下文保留原样以便追溯。
 
+> **实现说明（2026-11-02，#1188，CoCache 6.10.0）**：CoCache 6.9 起，`CachePolicy` 的读失败与删除失败模式默认不设置，没有加载器的缓存两者都抛出。
+> 据此，§0、§3.1 与 §6 不变量表中的 `storeOfRecord()` 另外钉住 `InvalidateFailureMode.THROW`：6.7 的默认 `RETRY` 会在后台晚些重试失败的删除，
+> 可能删掉其间别人写入的新值（例如重新写入的修订记录、重新取得的租约）。§3.6 的 `RevokedTokenCache`（与撤销主体缓存）：降级读改由 CoSec 显式设为
+> `read-failure: degrade`，customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）；降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
+> `SNP-3` 的淘汰检查经 CoCache 读 `INFO memory`（不再是 `CONFIG GET`），Redis 账号需要 `+info`。
+
 ## 0. 结论先行
 
 本阶段只做一件事：**授权读取的策略数据全部来自内存中一份不可变、带版本号的快照，评估途中不再有任何策略 I/O。**

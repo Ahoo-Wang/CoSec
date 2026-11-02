@@ -19,6 +19,7 @@ import io.mockk.mockk
 import me.ahoo.cocache.api.CacheLoader
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
+import me.ahoo.cocache.core.policy.InvalidateFailureMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
@@ -36,10 +37,11 @@ import java.time.Duration
  * Redis read, or a read of unmigrated content, must throw. Guards against CoCache's defaults (`ttl` 1 hour, degraded reads) silently applying to them.
  */
 class CacheTtlPolicyTest {
-    /** A policy that expires and degrades, as CoCache's defaults or a `cocache.defaults.*` property would. */
+    /** A policy that expires, degrades and retries, as CoCache's defaults or a `cocache.defaults.*` property would. */
     private val weakened = CachePolicy.builder()
         .ttl(Duration.ofMinutes(1))
         .readFailure(ReadFailureMode.DEGRADE)
+        .invalidateFailure(InvalidateFailureMode.RETRY)
         .foreignFormat(ForeignFormatMode.RECLAIM)
         .build()
 
@@ -67,6 +69,7 @@ class CacheTtlPolicyTest {
         storeOfRecordPolicies.values.forEach { policy ->
             policy.ttl.assert().isNull()
             policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+            policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.THROW)
             policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
         }
     }
@@ -112,6 +115,7 @@ class CacheTtlPolicyTest {
         val policy = weakened.storeOfRecord()
         policy.ttl.assert().isNull()
         policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.THROW)
         policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
     }
 
@@ -148,6 +152,7 @@ class CacheTtlPolicyTest {
         pinned.policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(7))
         pinned.policy.ttl.assert().isNull()
         pinned.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        pinned.policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.THROW)
         val loading = base.toBuilder().loader(mockk<CacheLoader<SnapshotKey, SnapshotDocument>>()).build()
         assertThrows<IllegalArgumentException> { CoSecCacheSpecs.pinPolicySnapshot(loading, base) }
     }
@@ -174,6 +179,19 @@ class CacheTtlPolicyTest {
     }
 
     /**
+     * The degraded read is CoSec's default, set because CoCache would throw for a cache without a loader; a mode the
+     * given policy chose is kept, so an operator can still make the revocation check fail closed.
+     */
+    @Test
+    fun revocationCachesKeepTheReadFailureTheirPolicyChose() {
+        val strict = CachePolicy.builder().readFailure(ReadFailureMode.THROW).build()
+        CoSecCacheSpecs.revokedToken(codec(), policy = strict).policy.readFailure
+            .assert().isEqualTo(ReadFailureMode.THROW)
+        CoSecCacheSpecs.revokedSubject(codec(), policy = strict).policy.readFailure
+            .assert().isEqualTo(ReadFailureMode.THROW)
+    }
+
+    /**
      * RFC 0006 §5.5.2: the memberships cache expires by design, but never degrades a failed read into "no memberships",
      * and it can never be made to live forever: a lost invalidation would then never apply.
      */
@@ -196,5 +214,17 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, weakened).ttl
             .assert().isEqualTo(Duration.ofMinutes(1))
         CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES.assert().doesNotContain(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
+    }
+
+    /**
+     * Every membership read passes the provider's loader, so a failed invalidation is retried as before CoCache 6.9,
+     * which would throw for a cache whose spec has no loader; a mode the given policy chose is kept.
+     */
+    @Test
+    fun membershipCacheRetriesFailedInvalidationsUnlessTold() {
+        CoSecCacheSpecs.membership().policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.RETRY)
+        val strict = CachePolicy.builder().invalidateFailure(InvalidateFailureMode.THROW).build()
+        CoSecCacheSpecs.membership(policy = strict).policy.invalidateFailure
+            .assert().isEqualTo(InvalidateFailureMode.THROW)
     }
 }

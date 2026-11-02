@@ -32,10 +32,15 @@ public final class me/ahoo/cosec/cache/MembershipCache$Companion {
 public final class me/ahoo/cosec/cache/MembershipCache$DefaultImpls {
 	public static fun async (Lme/ahoo/cosec/cache/MembershipCache;)Lme/ahoo/cocache/api/AsyncCache;
 	public static fun getIfChanged (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public static fun getVersioned (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;)Lme/ahoo/cocache/api/Versioned;
+	public static fun invalidateIfNewer (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;J)Lme/ahoo/cocache/api/VersionedPut;
+	public static fun invalidateIfNewer (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 	public static fun putAll (Lme/ahoo/cosec/cache/MembershipCache;Ljava/util/Map;)V
 	public static fun putAll (Lme/ahoo/cosec/cache/MembershipCache;Ljava/util/Map;Ljava/time/Duration;)V
 	public static fun putIfMatch (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/model/Memberships;)Lme/ahoo/cocache/api/ConditionalPut;
 	public static fun putIfMatch (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/model/Memberships;Ljava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+	public static fun putIfNewer (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cosec/model/Memberships;J)Lme/ahoo/cocache/api/VersionedPut;
+	public static fun putIfNewer (Lme/ahoo/cosec/cache/MembershipCache;Ljava/lang/String;Lme/ahoo/cosec/model/Memberships;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 }
 
 public abstract interface class me/ahoo/cosec/cache/MembershipLoader {
@@ -77,10 +82,15 @@ public final class me/ahoo/cosec/cache/RevokedSubjectCache$Companion {
 public final class me/ahoo/cosec/cache/RevokedSubjectCache$DefaultImpls {
 	public static fun async (Lme/ahoo/cosec/cache/RevokedSubjectCache;)Lme/ahoo/cocache/api/AsyncCache;
 	public static fun getIfChanged (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public static fun getVersioned (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;)Lme/ahoo/cocache/api/Versioned;
+	public static fun invalidateIfNewer (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;J)Lme/ahoo/cocache/api/VersionedPut;
+	public static fun invalidateIfNewer (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 	public static fun putAll (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/util/Map;)V
 	public static fun putAll (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/util/Map;Ljava/time/Duration;)V
 	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;J)Lme/ahoo/cocache/api/ConditionalPut;
 	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;JLjava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+	public static fun putIfNewer (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;JJ)Lme/ahoo/cocache/api/VersionedPut;
+	public static fun putIfNewer (Lme/ahoo/cosec/cache/RevokedSubjectCache;Ljava/lang/String;JJLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 }
 
 public abstract interface class me/ahoo/cosec/cache/RevokedTokenCache : me/ahoo/cocache/api/Cache {
@@ -95,10 +105,15 @@ public final class me/ahoo/cosec/cache/RevokedTokenCache$Companion {
 public final class me/ahoo/cosec/cache/RevokedTokenCache$DefaultImpls {
 	public static fun async (Lme/ahoo/cosec/cache/RevokedTokenCache;)Lme/ahoo/cocache/api/AsyncCache;
 	public static fun getIfChanged (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cocache/api/ConditionalGet;
+	public static fun getVersioned (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;)Lme/ahoo/cocache/api/Versioned;
+	public static fun invalidateIfNewer (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;J)Lme/ahoo/cocache/api/VersionedPut;
+	public static fun invalidateIfNewer (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 	public static fun putAll (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/util/Map;)V
 	public static fun putAll (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/util/Map;Ljava/time/Duration;)V
 	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;Z)Lme/ahoo/cocache/api/ConditionalPut;
 	public static fun putIfMatch (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;Lme/ahoo/cocache/api/spi/Digest;ZLjava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+	public static fun putIfNewer (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;ZJ)Lme/ahoo/cocache/api/VersionedPut;
+	public static fun putIfNewer (Lme/ahoo/cosec/cache/RevokedTokenCache;Ljava/lang/String;ZJLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 }
 
 public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cosec/control/store/ControlStore {
@@ -186,9 +201,15 @@ public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCache : me/ahoo/co
 	public final fun getLocalCopyMaxAge ()Ljava/time/Duration;
 	public fun getName ()Ljava/lang/String;
 	public final fun getNamespace ()Ljava/lang/String;
+	public synthetic fun getVersioned (Ljava/lang/Object;)Lme/ahoo/cocache/api/Versioned;
+	public fun getVersioned (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cocache/api/Versioned;
 	public synthetic fun invalidate (Ljava/lang/Object;)V
 	public fun invalidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
 	public fun invalidateAll (Ljava/util/Collection;)V
+	public synthetic fun invalidateIfNewer (Ljava/lang/Object;J)Lme/ahoo/cocache/api/VersionedPut;
+	public synthetic fun invalidateIfNewer (Ljava/lang/Object;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
+	public fun invalidateIfNewer (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;J)Lme/ahoo/cocache/api/VersionedPut;
+	public fun invalidateIfNewer (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 	public synthetic fun lookup (Ljava/lang/Object;)Lme/ahoo/cocache/api/Lookup;
 	public fun lookup (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cocache/api/Lookup;
 	public synthetic fun put (Ljava/lang/Object;Ljava/lang/Object;)V
@@ -201,6 +222,10 @@ public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCache : me/ahoo/co
 	public synthetic fun putIfMatch (Ljava/lang/Object;Lme/ahoo/cocache/api/spi/Digest;Ljava/lang/Object;Ljava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
 	public fun putIfMatch (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cocache/api/ConditionalPut;
 	public fun putIfMatch (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cocache/api/spi/Digest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Ljava/time/Duration;)Lme/ahoo/cocache/api/ConditionalPut;
+	public synthetic fun putIfNewer (Ljava/lang/Object;Ljava/lang/Object;J)Lme/ahoo/cocache/api/VersionedPut;
+	public synthetic fun putIfNewer (Ljava/lang/Object;Ljava/lang/Object;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
+	public fun putIfNewer (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;J)Lme/ahoo/cocache/api/VersionedPut;
+	public fun putIfNewer (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;JLjava/time/Duration;)Lme/ahoo/cocache/api/VersionedPut;
 	public fun toString ()Ljava/lang/String;
 }
 

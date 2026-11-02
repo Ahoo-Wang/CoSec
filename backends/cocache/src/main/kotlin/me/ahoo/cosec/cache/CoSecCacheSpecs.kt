@@ -21,6 +21,7 @@ import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
+import me.ahoo.cocache.core.policy.InvalidateFailureMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
@@ -157,17 +158,22 @@ object CoSecCacheSpecs {
      *   drop a policy or permission. The security pipeline turns the error into a denied (500) response. (A
      *   `SetCache` such as the global policy index has nothing to degrade to and always rethrows; with CoCache 5 a
      *   degraded index read meant "no global policies", so explicit DENY rules were skipped.)
+     * - a failed delete throws ([InvalidateFailureMode.THROW]) instead of being retried later: a late retry would
+     *   delete what another writer wrote in between, such as a revision record written again or a lease taken again.
+     *   CoCache picks this mode itself for a cache without a loader; the pin keeps it whatever a policy says.
      */
     fun CachePolicy.storeOfRecord(): CachePolicy = toBuilder()
         .ttl(null)
         .readFailure(ReadFailureMode.THROW)
+        .invalidateFailure(InvalidateFailureMode.THROW)
         .foreignFormat(ForeignFormatMode.FAIL)
         .build()
 
     /**
      * Revoked tokens are not the store of record (they expire with their tokens, and a failed read degrades on
-     * purpose), but a 6.x revocation must not be reclaimed either: deleting it would accept the token again. Content
-     * the cache cannot read therefore fails the read ([ForeignFormatMode.FAIL]), whatever `cocache.*` says.
+     * purpose, [revocation]), but a 6.x revocation must not be reclaimed either: deleting it would accept the token
+     * again. Content the cache cannot read therefore fails the read ([ForeignFormatMode.FAIL]), whatever `cocache.*`
+     * says.
      */
     fun CachePolicy.failOnForeignFormat(): CachePolicy = toBuilder()
         .foreignFormat(ForeignFormatMode.FAIL)
@@ -255,10 +261,24 @@ object CoSecCacheSpecs {
     }
 
     /**
-     * Revocations are always written with an explicit lifetime. The cache keeps CoCache's degraded read mode on
-     * purpose: tokens are still signature-verified and expire on their own, and failing closed would reject every
-     * authenticated request during a Redis outage. An unreadable revocation still fails ([failOnForeignFormat]).
+     * What both revocation caches start from, before customizers and `cocache.*` properties:
+     *
+     * - "not revoked" is cached for [RevokedTokenCache.MISSING_TTL_SECONDS];
+     * - a failed Redis read degrades to "not revoked" ([ReadFailureMode.DEGRADE]), the documented exception to failing
+     *   closed: tokens are still signature-verified and expire on their own, and failing closed would reject every
+     *   authenticated request during a Redis outage. CoCache would throw for a cache without a loader such as these,
+     *   so the mode is set here; a mode [this] already chose is kept, and a customizer or property may still choose
+     *   `throw`, which fails the revocation check closed with 503. A degraded read caches nothing: every read during
+     *   the outage asks Redis again, and a revocation applies as soon as Redis answers;
+     * - unreadable content fails the read ([failOnForeignFormat]).
      */
+    private fun CachePolicy.revocation(): CachePolicy = toBuilder()
+        .absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+        .readFailure(readFailure ?: ReadFailureMode.DEGRADE)
+        .build()
+        .failOnForeignFormat()
+
+    /** Revocations are always written with an explicit lifetime, under the policy of [revocation]. */
     fun revokedToken(
         codec: Codec<Boolean>,
         keyPrefix: String = CoSec.COSEC,
@@ -266,17 +286,12 @@ object CoSecCacheSpecs {
     ): CacheSpec<String, Boolean> = CacheSpec.builder<String, Boolean>(REVOKED_TOKEN_CACHE_NAME)
         .storageLayout(keyPrefix)
         .codec(codec)
-        .policy(
-            policy.toBuilder()
-                .absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
-                .build()
-                .failOnForeignFormat()
-        )
+        .policy(policy.revocation())
         .build()
 
     /**
-     * The revoked subjects, under the same rules as [revokedToken]: explicit lifetimes, CoCache's degraded read mode
-     * (the documented exception to failing closed), and unreadable content fails the read. A key is a subject's
+     * The revoked subjects, under the same rules as [revokedToken]: explicit lifetimes, a degraded read (the
+     * documented exception to failing closed), and unreadable content fails the read. A key is a subject's
      * [RevokedSubjectCache.key]; a value is the revocation's `issuedBefore`, in epoch milliseconds.
      */
     fun revokedSubject(
@@ -286,17 +301,16 @@ object CoSecCacheSpecs {
     ): CacheSpec<String, Long> = CacheSpec.builder<String, Long>(REVOKED_SUBJECT_CACHE_NAME)
         .storageLayout(keyPrefix)
         .codec(codec)
-        .policy(
-            policy.toBuilder()
-                .absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
-                .build()
-                .failOnForeignFormat()
-        )
+        .policy(policy.revocation())
         .build()
 
     /**
      * The memberships of principals whose token asks the provider ([CoCacheMembershipProvider]): keyed by
      * [MembershipCache.key], expiring after [ttl], and failing closed on read ([expiringFailClosed]).
+     *
+     * A failed [CoCacheMembershipProvider.invalidate] is retried in the background ([InvalidateFailureMode.RETRY])
+     * unless [policy] chose a mode: every read passes the provider's loader, so a late delete only makes the next
+     * request load again. CoCache decides by the spec's loader, which this cache does not have, and would throw.
      */
     fun membership(
         keyPrefix: String = CoSec.COSEC,
@@ -305,7 +319,13 @@ object CoSecCacheSpecs {
     ): CacheSpec<String, Memberships> = CacheSpec.builder<String, Memberships>(MEMBERSHIP_CACHE_NAME)
         .storageLayout(keyPrefix)
         .codec(MembershipsCodec)
-        .policy(policy.toBuilder().ttl(ttl).build().expiringFailClosed())
+        .policy(
+            policy.toBuilder()
+                .ttl(ttl)
+                .invalidateFailure(policy.invalidateFailure ?: InvalidateFailureMode.RETRY)
+                .build()
+                .expiringFailClosed()
+        )
         .build()
 
     inline fun <reified V : Any> jacksonCodec(mapper: ObjectMapper): Codec<V> =

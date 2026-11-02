@@ -24,14 +24,14 @@ labels:
 
 configMapGenerator:
   # Your Redis, as spring.data.redis.* properties. It must run with maxmemory-policy noeviction: each gateway checks
-  # it with CONFIG GET at startup and refuses to start otherwise. For a Redis Cluster, set
+  # it with INFO memory at startup and refuses to start otherwise. For a Redis Cluster, set
   # SPRING_DATA_REDIS_CLUSTER_NODES=host1:6379,host2:6379,... instead of the host and port.
   - name: cosec-gateway-redis
     literals:
       - SPRING_DATA_REDIS_HOST=redis.example.internal
       - SPRING_DATA_REDIS_PORT=6379
       # - SPRING_DATA_REDIS_SSL_ENABLED=true
-      # Only for a managed Redis that hides CONFIG GET, once you have set noeviction on it yourself:
+      # Only for a Redis that denies INFO, once you have set noeviction on it yourself:
       # - COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn
 
 patches:

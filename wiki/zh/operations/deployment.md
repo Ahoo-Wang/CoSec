@@ -86,8 +86,8 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 网关在没有任何文档时也能启动，但在平台文档发布之前，对每个被路由的请求都回答 `503`
 （[最初的文档](./storage.md#the-first-documents)），在此期间报告自己未就绪（[就绪](#readiness)）。每个环境都需要：
 
-1. **`maxmemory-policy noeviction` 的 Redis。** 每个实例在启动时用 `CONFIG GET` 检查，否则不启动
-   （[Redis 要求](./storage.md#redis-requirements)）。在隐藏了 `CONFIG GET` 的托管 Redis 上，自行设置 `noeviction`，
+1. **`maxmemory-policy noeviction` 的 Redis。** 每个实例在启动时用 `INFO memory` 检查，否则不启动
+   （[Redis 要求](./storage.md#redis-requirements)）。在拒绝 `INFO` 的 Redis 上，自行设置 `noeviction`，
    并设置 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`。
 2. **文档。** 用 `cosec-migrate publish --to-redis <uri> --in <dir>` 发布它们；如果将由控制面管理，再用
    `cosec-migrate bootstrap` 指定第一个管理员。网关、控制面和 `cosec-migrate` 必须使用同一个 Redis 和同一个

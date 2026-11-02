@@ -282,12 +282,12 @@ Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction, so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
-Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG GET maxmemory-policy failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
+Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed or is not allowed), so a global DENY could silently vanish (cosec.authorization.snapshot.eviction-check).
 ```
 
 第一条：某个 Redis 节点不是 `noeviction`。在每个节点上设置 `maxmemory-policy noeviction`。第二条：实例读不到该策略，
-通常是因为 Redis 用户无权执行 `CONFIG GET`，或托管 Redis 隐藏了它；它也会指出检查无法读取的 CoCache 后端（包装过的或
-自定义的后端）。允许 `CONFIG GET`，或者在你已自行设置 `noeviction` 时，设置
+通常是因为 Redis 用户无权执行 `INFO`，或托管 Redis 拒绝了它；它也会指出检查无法读取的 CoCache 后端（包装过的或
+自定义的后端）。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置
 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)（[Redis 要求](./storage.md#redis-requirements)）。
 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`

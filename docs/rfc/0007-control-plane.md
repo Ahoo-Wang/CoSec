@@ -293,7 +293,7 @@ cosec-cocache（CoCacheControlStore）──────────┘      cos
 
 - **头是唯一的权威**（§3 M10，Q4）。数据面只读头；其余数据都可以丢失而不影响任何决策。这一条让"策略缓存永不过期、读失败抛出"的不变量只需要
   覆盖一个缓存，与现在相同。
-- 除影子报告外，新缓存都用 `storeOfRecord()`（`ttl = null`、`ReadFailureMode.THROW`），在任何 customizer 之后施加（`CoSecCacheSpecs.pinnedPolicy` 的做法）；
+- 除影子报告外，新缓存都用 `storeOfRecord()`（`ttl = null`、`ReadFailureMode.THROW`，2026-11-02 起另有 `InvalidateFailureMode.THROW`：晚到的删除重试可能删掉其间的新写入，例如重新写入的修订记录或重新取得的租约，#1188），在任何 customizer 之后施加（`CoSecCacheSpecs.pinnedPolicy` 的做法）；
   `CacheTtlPolicyTest` 扩展到它们。修订记录与变更请求不是数据面的策略数据，但读失败当作"不存在"会让控制面在错误的基准上发布，所以同样抛出。
 - 影子报告有 TTL（窗口最长时长 + 1 天）：它们是可以重跑的观测结果。
 - `docKey` 沿用 `SnapshotKey` 的显式编码（RFC 0003 §4.1：`platform`、`app:<a>`、`tenant:<t>`，拒绝含 `:` 的 id）。所有 key 都经 CoCache 写入，

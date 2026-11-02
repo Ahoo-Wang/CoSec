@@ -199,8 +199,8 @@ class RuntimeAuthorizationProperties {
         FAIL,
 
         /**
-         * Start, and log a warning of what eviction would do: for a managed Redis (such as ElastiCache) that hides
-         * `CONFIG GET` while the operator has set `noeviction` themselves.
+         * Start, and log a warning of what eviction would do: for a Redis that denies `INFO` while the operator has
+         * set `noeviction` themselves.
          */
         WARN,
     }
