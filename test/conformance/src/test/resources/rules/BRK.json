@@ -96,11 +96,25 @@
       "guards": [
         "control:BreakGlassControlTest#a revoke takes the slot another change holds",
         "control:BreakGlassControlTest#revoking an expired binding waits for the slot",
-        "control:BreakGlassControlTest#no change takes the slot of a break-glass revoke",
+        "control:BreakGlassControlTest#a narrowing change does not take the slot of a live revoke",
         "control:RetriedPublishTest#a revoke settles a published holder and takes its slot",
         "control:BreakGlassControlTest#revoking again publishes a stalled revoke of the same binding",
         "control:BreakGlassControlTest#a revoke takes the slot of a stalled revoke",
-        "control:BreakGlassControlTest#a revoke of an expired binding does not hold off a revoke"
+        "control:BreakGlassControlTest#a revoke of an expired binding does not hold off a revoke",
+        "control:BreakGlassControlTest#a revoke of an expired binding does not take the slot of a live revoke",
+        "control:BreakGlassControlTest#a narrowing change takes the slot of a revoke of an expired binding"
+      ]
+    },
+    {
+      "id": "BRK-10",
+      "source": "RFC 0007 §6.1, §8 (RC1-51)",
+      "statement": "Only its author abandons a change that revokes a break-glass binding that still grants; anyone else, the principal it revokes included, is refused (403). Every abandon is recorded as an ABANDONED change event; a break-glass change's abandon needs a REQUIRED change listener and is recorded there before it is stored.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:BreakGlassControlTest#only its author abandons a revoke of a live binding",
+        "control:BreakGlassControlTest#abandoning break-glass is recorded first",
+        "control:BreakGlassControlTest#abandoning any other change is recorded after, best effort"
       ]
     }
   ]

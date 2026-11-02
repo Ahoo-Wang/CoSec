@@ -19,12 +19,21 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
+import java.time.Instant
 
 /**
  * RFC 0007 §10.2: the control API's routes take the request the host pipeline permitted, go through the control
@@ -226,6 +235,42 @@ class ControlHttpTest {
             "/simulate",
             """{"request":{"tenant":"acme","action":"read","resource":"order/1"}}"""
         ).first.assert().isEqualTo(400)
+    }
+
+    /**
+     * R4-1: removing a break-glass binding answers 200 only once the binding no longer grants; a revoke that leaves it
+     * granting is a 409 that names its change's state, never a success.
+     */
+    @Test
+    fun `a break-glass revoke answers 200 only once the binding no longer grants`() {
+        runBlocking {
+            val head = fixture.plane.read(fixture.plato, SnapshotKey.Platform)
+            val glass = Binding(
+                BindingId("glass"),
+                SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("plato")),
+                BindingScope(Match.Any, Match.Any),
+                BuiltinPolicies.ROOT,
+                Instant.parse("2026-11-01T01:00:00Z").toEpochMilli(),
+                breakGlass = true,
+            )
+            fixture.bootstrap(SnapshotKey.Platform, head.policies, head.bindings + glass)
+        }
+        val (revoked, change) = call(
+            "DELETE",
+            "/break-glass/glass",
+            security = plato,
+            query = mapOf("reason" to "done")
+        )
+        revoked.assert().isEqualTo(200)
+        change.get("state").asString().assert().isEqualTo("PUBLISHED")
+        // An ordinary binding is no break-glass binding: the revoke is a DRAFT, and the binding still grants.
+        val (refused, problem) =
+            call("DELETE", "/break-glass/no-delete", security = plato, query = mapOf("reason" to "done"))
+        refused.assert().isEqualTo(409)
+        problem.get("code").asString().assert().isEqualTo("CONFLICT")
+        problem.get(
+            "detail"
+        ).asString().assert().startsWith("binding [no-delete] still grants: change ").endsWith(" is DRAFT")
     }
 
     @Test

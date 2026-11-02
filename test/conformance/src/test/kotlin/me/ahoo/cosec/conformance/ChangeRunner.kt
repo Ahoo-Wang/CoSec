@@ -477,7 +477,6 @@ object ChangeRunner : ScenarioRunner {
             return operators[name] ?: throw ScenarioFormatException("No operator $name")
         }
 
-        /** A transition's change and operator: `"c1"`, or `{ "change": "c1", "by": "bob", ... }`. */
         /**
          * [id] approved by [op] as an instance before RC1-11 stored it: `READY`, the approval naming no credential, written
          * to the store as that instance would, past every check of this one's `approve`.
@@ -498,6 +497,7 @@ object ChangeRunner : ScenarioRunner {
             return approved
         }
 
+        /** A transition's change and operator: `"c1"`, or `{ "change": "c1", "by": "bob", ... }`. */
         private suspend fun target(argument: JsonNode, vararg fields: String): Triple<ChangeId, Operator, JsonNode> {
             if (!argument.isString) {
                 argument.only("change", "by", *fields)

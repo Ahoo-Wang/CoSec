@@ -217,6 +217,23 @@ class ChangeAuthority(
         require(operator, ControlActions.BOUNDARY, boundaryOf(key))
     }
 
+    /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
+    fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
+        val refusal = when {
+            operator.actor == change.author -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
+            else -> approvalRefusal(operator, change)?.let { FORBIDDEN to it }
+                ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
+        }
+        refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
+    }
+
+    /** That [operator] is [change]'s author, who alone [does] it (403). */
+    fun requireAuthor(operator: Operator, change: ChangeRequest, does: String) {
+        if (operator.actor != change.author) {
+            throw ChangeRejectedException(FORBIDDEN, "only the author of change ${change.id.value} $does it")
+        }
+    }
+
     /**
      * Why [operator] may not approve [change] whatever it holds (RFC 0007 §7.5); `null` when it may. An approval is a
      * person's: an API key, a workload's credential, never approves, as break-glass never reaches one (`BRK-8`). A
@@ -645,6 +662,7 @@ class ChangeAuthority(
         const val RECORDED_APPROVAL = "recorded-approval"
         private val RECORDED_METHOD = Identity.Method(RECORDED_APPROVAL)
         const val FORBIDDEN = 403
+        const val CONFLICT = 409
         const val UNAVAILABLE = 503
         const val POLICY = "policy"
         const val BINDING = "binding"

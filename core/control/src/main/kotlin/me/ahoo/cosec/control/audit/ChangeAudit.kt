@@ -100,11 +100,18 @@ class ChangeEvent(
          * not run: the published change may need a person's review (RC1-33). Nothing was rolled back.
          */
         REVIEW_NEEDED,
+
+        /**
+         * A change was abandoned (RC1-51): the operator is who abandoned it, and the note names its author. A
+         * break-glass change's abandon waits for every REQUIRED listener before it takes effect, though the kind is not
+         * [gated]; any other change's reaches the listeners best effort, after.
+         */
+        ABANDONED,
         ;
 
         /**
          * Whether the step waits for every REQUIRED listener before it takes effect (RFC 0007 §10.5, Q21): publishing,
-         * and every step of creating break-glass (§8).
+         * and every step of creating break-glass (§8). Abandoning a break-glass change waits too ([ABANDONED]).
          */
         val gated: Boolean get() = this == PUBLISHING || this == BREAK_GLASS_REQUESTED || this == BREAK_GLASS_APPROVED
     }
@@ -149,8 +156,11 @@ class ChangeListeners(
     /** Whether a REQUIRED listener is configured: creating break-glass needs one (RFC 0007 §8). */
     val hasRequired: Boolean get() = required.isNotEmpty()
 
-    suspend fun publish(event: ChangeEvent) {
-        if (event.kind.gated && required.isNotEmpty()) {
+    suspend fun publish(event: ChangeEvent) = publish(event, event.kind.gated)
+
+    /** As [publish], [gated] by the step rather than by the event's kind alone (a break-glass change's abandon). */
+    internal suspend fun publish(event: ChangeEvent, gated: Boolean) {
+        if (gated && required.isNotEmpty()) {
             deliverRequired(event)
             all.filter { it.delivery != Delivery.REQUIRED }.forEach { later(it, event) }
         } else {

@@ -19,6 +19,8 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.document.PolicyDefinition
@@ -163,6 +165,12 @@ internal class Preemption(
             .toSet()
         return change.kind == ProvenanceKind.BREAK_GLASS && change.operations.isNotEmpty() &&
             change.operations.all { it is Operation.RemoveBinding && it.id in glass }
+    }
+
+    /** Binding [id] of [head] while it grants: there, and not expired. */
+    fun granting(head: Head?, id: BindingId): Binding? {
+        val now = clock.millis()
+        return head?.document?.bindings?.firstOrNull { it.id == id && (it.expiresAt ?: Long.MAX_VALUE) > now }
     }
 
     /** Whether [head] or [candidate], the tenant's own document, defines [policy]. */

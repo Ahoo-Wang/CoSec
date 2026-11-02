@@ -24,8 +24,10 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
+import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
+import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -346,6 +348,93 @@ class PreemptionRaceTest {
             .assert().isEqualTo("conflicted by ${emergency.id.value}, which did not take the slot")
     }
 
+    /** A harness whose platform document has two live break-glass bindings, `g1` and `g2`. */
+    private suspend fun glassHarness(): ChangeHarness {
+        val harness = ChangeHarness(clock, memory, racing, ChangeOptions(shadow = IMMEDIATE_WINDOW))
+        val expiresAt = clock.now.plusSeconds(3600).toEpochMilli()
+        val glass = listOf("g1", "g2").map {
+            Binding(
+                BindingId(it),
+                SubjectRef.Principal(TenantId.PLATFORM, PrincipalId(it)),
+                BindingScope(Match.Any, Match.Any),
+                BuiltinPolicies.ROOT,
+                expiresAt,
+                breakGlass = true,
+            )
+        }
+        harness.revisions.publish(
+            SnapshotKey.Platform,
+            null,
+            StoreFixtures.candidate(SnapshotKey.Platform, emptyList(), glass),
+            StoreFixtures.publication("bootstrap"),
+        )
+        return harness
+    }
+
+    /**
+     * R4-1: two revokes of different live bindings at once. The second takes the slot from the first between its stage
+     * and its head write, and publishes first; the first, `CONFLICTED`, revokes again on the new head. Both bindings go.
+     */
+    @Test
+    fun `two revokes at once both take effect when one preempts the other`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // The first revoke's publish has checked its slot once when the second revokes.
+        racing.afterStage(skip = 2) {
+            breakGlass.revoke(PLATO, BindingId("g2"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        }
+        val first = breakGlass.revoke(PLATO, BindingId("g1"), "compromised")
+        first.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+        breakGlass.grants(BindingId("g1")).assert().isFalse()
+        breakGlass.grants(BindingId("g2")).assert().isFalse()
+    }
+
+    /**
+     * R4-1: as above, but the second revoke publishes between the first's slot read and its slot write: the first meets
+     * a moved head, is `CONFLICTED`, and revokes again on the new head.
+     */
+    @Test
+    fun `two revokes at once both take effect when the head moves under one`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // The first revoke has read the slot to stage when the second revokes.
+        racing.afterStage(skip = 1) {
+            breakGlass.revoke(PLATO, BindingId("g2"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+    }
+
+    /**
+     * R4-1: a revoke that meets a moved head every time revokes again at most three times, then comes back `CONFLICTED`
+     * while the binding still grants, which the HTTP API answers as a 409.
+     */
+    @Test
+    fun `a revoke that keeps conflicting gives up after three more`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        val moves = java.util.concurrent.atomic.AtomicInteger()
+        // Each time a revoke of g1 takes the slot, another writer publishes over the platform document.
+        racing.afterTaken = { holder ->
+            val operations = memory.change(holder)?.value?.operations.orEmpty()
+            if (operations.singleOrNull()?.let { it is Operation.RemoveBinding && it.id == BindingId("g1") } == true) {
+                val n = moves.incrementAndGet()
+                val head = harness.revisions.head(SnapshotKey.Platform)!!
+                harness.revisions.publish(
+                    SnapshotKey.Platform,
+                    head,
+                    StoreFixtures.candidate(SnapshotKey.Platform, head.document.policies + allow("p$n"), head.document.bindings),
+                    StoreFixtures.publication("other $n"),
+                )
+            }
+        }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.CONFLICTED)
+        racing.afterTaken = null
+        moves.get().assert().isEqualTo(4)
+        breakGlass.grants(BindingId("g1")).assert().isTrue()
+    }
+
     /** Runs a race once: after a read of one change, or before a read of a head. */
     private class Racing(private val memory: InMemoryControlStore) : ControlStore by memory {
         /** Whether every write of a staging slot is refused, as if it kept changing. */
@@ -373,8 +462,18 @@ class PreemptionRaceTest {
             return read
         }
 
-        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =
-            !refuseStages && memory.putStage(key, expected, slot)
+        /** What runs after every slot write that names a holder, until it is set back to `null`. */
+        @Volatile
+        var afterTaken: (suspend (ChangeId) -> Unit)? = null
+
+        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean {
+            val written = !refuseStages && memory.putStage(key, expected, slot)
+            val holder = slot.holder
+            if (written && holder != null) {
+                afterTaken?.invoke(holder)
+            }
+            return written
+        }
 
         @Volatile
         private var change: Pair<ChangeId, suspend () -> Unit>? = null

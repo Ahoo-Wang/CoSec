@@ -88,7 +88,9 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * | `POST /break-glass` (201), `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | §8 |
  * | `POST /simulate`, `POST /explain`, `POST /analyze` | §10.3 |
  *
- * A document key is written `platform`, `app:order` or `tenant:acme`.
+ * A document key is written `platform`, `app:order` or `tenant:acme`. `DELETE /break-glass/{bindingId}` answers 200
+ * only when the binding no longer grants on the platform document's head afterwards, whoever removed it; otherwise a 409
+ * that names the state of the caller's change.
  */
 @InternalCoSecApi
 class ControlHttp(private val plane: ControlPlane) {
@@ -284,7 +286,16 @@ class ControlHttp(private val plane: ControlPlane) {
 
         segments.size == 1 && request.method == DELETE -> {
             val reason = request.query["reason"] ?: throw IllegalArgumentException("Revoking break-glass needs a reason.")
-            changeResponse(plane.breakGlass.revoke(operator, BindingId(segments[0]), reason), OK)
+            val binding = BindingId(segments[0])
+            val change = plane.breakGlass.revoke(operator, binding, reason)
+            // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
+            if (plane.breakGlass.grants(binding)) {
+                throw ChangeRejectedException(
+                    CONFLICT,
+                    "binding [${binding.value}] still grants: change ${change.id.value} is ${change.state}"
+                )
+            }
+            changeResponse(change, OK)
         }
 
         segments.size == 1 && verbOf(segments[0]).second == "approve" -> post(request) {
@@ -590,6 +601,7 @@ class ControlHttp(private val plane: ControlPlane) {
         private const val OK = 200
         private const val CREATED = 201
         private const val NOT_FOUND = 404
+        private const val CONFLICT = 409
         private const val ANONYMOUS_REQUEST = "-"
         private val factory = JsonNodeFactory.instance
     }

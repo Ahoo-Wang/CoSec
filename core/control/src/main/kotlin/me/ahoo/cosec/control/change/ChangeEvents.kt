@@ -16,6 +16,7 @@ package me.ahoo.cosec.control.change
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.audit.RevisionRef
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.runtime.document.Actor
 import java.time.Clock
 
@@ -40,3 +41,13 @@ internal fun ChangeRequest.event(
     note = note,
     moved = moved,
 )
+
+/** This change as its abandon records it (RC1-51): the note names its author, as the event's operator names who abandoned it. */
+internal fun ChangeRequest.abandoned(): ChangeRequest = copy(
+    note = "author ${author.tenant.value}/${author.principal.value}: $note"
+)
+
+/** This change as a publish records it: one by a revoker revoking its binding again names them and [again] (R4-5). */
+internal fun ChangeRequest.publishedAgain(publisher: Operator, again: String?): ChangeRequest = again?.let {
+    copy(note = "$note; published again by ${publisher.tenant.value}/${publisher.actor.principal.value}: $it")
+} ?: this

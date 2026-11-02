@@ -352,6 +352,7 @@ public final class me/ahoo/cosec/control/audit/ChangeEvent {
 }
 
 public final class me/ahoo/cosec/control/audit/ChangeEvent$Kind : java/lang/Enum {
+	public static final field ABANDONED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field APPROVED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field BOOTSTRAP Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field BREAK_GLASS_APPROVED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;

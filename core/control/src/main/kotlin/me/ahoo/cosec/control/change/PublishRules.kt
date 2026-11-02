@@ -50,6 +50,22 @@ internal object PublishRules {
         return own?.takeIf { publishedBy(change, it) }
     }
 
+    /** Where a change goes when its window closes or is skipped (RFC 0007 §6.1). */
+    fun afterWindow(change: ChangeRequest): ChangeState =
+        if (change.escalations.all { it.informational }) ChangeState.READY else ChangeState.AWAITING_APPROVAL
+
+    /**
+     * Who published [head] over [change]'s base first, for its failure's record: another change ([change] took its slot,
+     * review L2), a bootstrap, a migration or an older instance; `null` when [head] is not a revision of that base.
+     */
+    fun publishedFirst(change: ChangeRequest, head: Head?): String? {
+        val provenance = head?.document?.provenance ?: return null
+        if (provenance.change == change.id.value || provenance.parent?.digest != change.base.digest?.toString()) {
+            return null
+        }
+        return "revision ${head.revision} was published over the same base first, by ${provenance.change}"
+    }
+
     fun referenced(outcome: PublishOutcome.Referenced): List<Finding> =
         outcome.referrers.map { (policy, referrers) ->
             Finding(
