@@ -90,9 +90,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `cosec-kafka`, a
   `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
-  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG
-  GET maxmemory-policy failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a
-  managed Redis that hides `CONFIG GET`, or a wrapped CoCache backend. If the operator has set `noeviction`, set
+  `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (INFO
+  memory failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a Redis user
+  without `+info`, a Redis that denies `INFO`, or a wrapped CoCache backend. If the operator has set `noeviction`, set
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.

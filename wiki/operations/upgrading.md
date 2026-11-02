@@ -579,8 +579,8 @@ write access to `<prefix>:snapshot:*` and `<prefix>:control:*`. All keys: [Stora
 #### Startup fails when Redis's eviction policy cannot be read {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
 
 At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it is `noeviction`, because an evicted
-platform document could silently drop its DENY statements. When `CONFIG GET` fails or is not allowed, as on some
-managed Redis services, startup fails too, and also when the CoCache backend is a wrapper or a custom backend it
+platform document could silently drop its DENY statements. It reads it from `INFO memory`. When `INFO` fails or is
+not allowed, startup fails too, and also when the CoCache backend is a wrapper or a custom backend it
 cannot read. If you have set `noeviction` yourself, set `cosec.authorization.snapshot.eviction-check=warn`: startup
 goes on and logs a warning that starts with `!!!`.
 
