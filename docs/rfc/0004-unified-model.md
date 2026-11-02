@@ -322,6 +322,9 @@ interface MembershipProvider {
 `RevocableTokenVerifier` 拒绝 `iat < issuedBefore` 的 token。条目保留到 refresh token 的最长寿命（与现在按 token 吊销的 TTL 规则相同）。
 吊销检查的降级行为不变（AGENTS.md 记录的两个例外之一）。这是 RFC 0001 §7.1"紧急撤销"依赖的手段（§3 I17，Q13）。
 
+> **实现说明（2026-11-02，#1188）**：CoCache 6.9 起，没有加载器的缓存读失败默认抛出，所以降级读改由 CoSec 在两个吊销缓存上显式设为
+> `read-failure: degrade`；customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）。降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
+
 ### 4.6 `ScopeResolver`
 
 ```kotlin
