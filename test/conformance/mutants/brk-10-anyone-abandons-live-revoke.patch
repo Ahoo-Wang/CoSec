@@ -1,0 +1,18 @@
+# Rule: BRK-10
+# Mutant: anyone holding cosec:publish abandons a revoke of a live break-glass binding, the principal it revokes included
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index b2a61126..fd4cc2a7 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -470,9 +470,6 @@ class Changes(
+         authority.requireBoundaryOperator(operator, current)
+         if (operator.actor != current.author) {
+             authority.require(operator, current.key, ControlActions.PUBLISH)
+-            if (preemption.revokesBreakGlass(current, revisions.head(current.key))) {
+-                throw ChangeRejectedException(FORBIDDEN, "only its author abandons change ${id.value}, a live revoke")
+-            }
+         }
+         val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
+         if (breakGlass) {
