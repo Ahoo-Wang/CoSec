@@ -476,6 +476,11 @@ class BreakGlassControlTest {
     fun `revoking again publishes a stalled revoke of the same binding`() = runBlocking<Unit> {
         val binding = granted(1)
         val revoke = stalled(binding)
+        // While the audit store is still down, revoking again stops where the first did.
+        audit.failing += ChangeEvent.Kind.PUBLISHING
+        refused { breakGlass.revoke(pia, binding, "compromised, again") }.assert().isEqualTo(503)
+        audit.failing.clear()
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
         val again = breakGlass.revoke(pia, binding, "compromised, again")
         again.id.assert().isEqualTo(revoke)
         again.state.assert().isEqualTo(ChangeState.PUBLISHED)
@@ -549,6 +554,8 @@ class BreakGlassControlTest {
         val live = granted(3)
         val revoke = stalled(live)
         clock.now = inHours(2)
+        breakGlass.grants(expiring).assert().isFalse()
+        breakGlass.grants(live).assert().isTrue()
         refused { breakGlass.revoke(plato, expiring, "tidy") }.assert().isEqualTo(409)
         changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
         store.stage(SnapshotKey.Platform)!!.value.holder.assert().isEqualTo(revoke)
@@ -630,6 +637,33 @@ class BreakGlassControlTest {
         own.id.assert().isNotEqualTo(revoke)
         own.state.assert().isEqualTo(ChangeState.PUBLISHED)
         glass().assert().isNull()
+    }
+
+    /**
+     * R4-2: another call publishes the stalled revoke after this one found it: revoking again answers with that revoke,
+     * published, rather than a new one with nothing left to remove.
+     */
+    @Test
+    fun `revoking again while another call publishes the stalled revoke returns it`() = runBlocking<Unit> {
+        val binding = granted(1)
+        val revoke = stalled(binding)
+        val made = ids.get()
+        afterChange = { changes.publish(rita, revoke).state.assert().isEqualTo(ChangeState.PUBLISHED) }
+        val again = breakGlass.revoke(pia, binding, "compromised, again")
+        again.id.assert().isEqualTo(revoke)
+        again.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        ids.get().assert().isEqualTo(made)
+        glass().assert().isNull()
+    }
+
+    /** A slot whose holder cannot be read is no stalled revoke to pass over: the revoke answers 503. */
+    @Test
+    fun `a stalled revoke that cannot be read fails the revoke`() = runBlocking<Unit> {
+        val binding = granted(1)
+        val revoke = stalled(binding)
+        afterChange = { error("the store is down") }
+        refused { breakGlass.revoke(pia, binding, "compromised, again") }.assert().isEqualTo(503)
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
     }
 
     /**

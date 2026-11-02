@@ -407,6 +407,31 @@ class PreemptionRaceTest {
     }
 
     /**
+     * R4-1: the second revoke takes the slot after the first is `READY` and before its publish reads it again: the
+     * first's publish is refused as `CONFLICTED`, and it revokes again on the new head. Both bindings go.
+     */
+    @Test
+    fun `two revokes at once both take effect when one is preempted before its publish`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // c1, the first revoke, is read by its stage, by its move to READY, and then by its publish.
+        racing.afterChange(ChangeId("c1")) {
+            racing.afterChange(ChangeId("c1")) {
+                racing.afterChange(ChangeId("c1")) {
+                    breakGlass.revoke(
+                        PLATO,
+                        BindingId("g2"),
+                        "compromised"
+                    ).state.assert().isEqualTo(ChangeState.PUBLISHED)
+                }
+            }
+        }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.changes.get(ChangeId("c1")).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+    }
+
+    /**
      * R4-1: a revoke that meets a moved head every time revokes again at most three times, then comes back `CONFLICTED`
      * while the binding still grants, which the HTTP API answers as a 409.
      */
