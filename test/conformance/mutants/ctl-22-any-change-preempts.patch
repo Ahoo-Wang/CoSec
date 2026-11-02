@@ -1,0 +1,23 @@
+# Rule: CTL-22
+# Mutant: any change staged by a holder of cosec:skip-shadow takes a busy slot, a widening one included
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
+index eed12d74..61cdcd49 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
+@@ -138,13 +138,7 @@ internal class Preemption(
+             return false
+         }
+         val candidate = Operations.apply(change.key, head?.document, change.operations).candidate ?: return false
+-        return Narrowing.only(
+-            head?.document,
+-            candidate,
+-            change.operations,
+-            policyOf = { policy -> elsewhere(change.key, policy) },
+-            shadows = { policy -> change.key is SnapshotKey.Tenant && defines(head, candidate, policy) && platform(policy) != null },
+-        )
++        return candidate.owner == candidate.owner
+     }
+ 
+     /** Whether [change] only revokes break-glass bindings [head] has that still grant: an expired one grants nothing. */

@@ -282,7 +282,11 @@ class ControlReviewFixesTest {
             needed,
             walt
         ).assert().isEqualTo("the approval does not say what its approver held")
-        val recorded = unrecorded.copy(approval = unrecorded.approval!!.copy(memberships = pia.memberships))
+        val credentialless = unrecorded.copy(approval = unrecorded.approval!!.copy(memberships = pia.memberships))
+        // Review item 4: an approval that names no credential is one from before the upgrade, or an older instance's.
+        authority.approverProblem(credentialless, needed, walt).assert()
+            .isEqualTo("the approval does not say what credential its approver approved with")
+        val recorded = credentialless.copy(approval = credentialless.approval!!.copy(credentialId = "token-pia"))
         authority.approverProblem(recorded, needed, walt).assert().isNull()
         // A publisher without the request it came in through gives nothing to check the approver in.
         val detached = me.ahoo.cosec.control.authz.Operator(walt.actor, walt.memberships)

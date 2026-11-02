@@ -83,6 +83,18 @@
         "model:ScopeResolverTest#the app is checked before the space"
       ],
       "pending": null
+    },
+    {
+      "id": "SCP-9",
+      "source": "RFC 0007 §7.1 (2026-10-30 revision)",
+      "statement": "A space id beginning with ( is reserved for CoSec: a declared one is Rejected(SPACE_NOT_MEMBER) whatever the principal claims, a document binding in one does not compile, and the control plane writes the default space as (default).",
+      "level": "engine",
+      "pending": null,
+      "guards": [
+        "model:ScopeResolverTest#a reserved space is rejected even for a principal that claims roles in it",
+        "runtime:PolicyDocumentCompilerTest#the platform admin is bound only by the platform, and no binding names a reserved space",
+        "control:ControlAuthorizationTest#resources name one document each"
+      ]
     }
   ]
 }

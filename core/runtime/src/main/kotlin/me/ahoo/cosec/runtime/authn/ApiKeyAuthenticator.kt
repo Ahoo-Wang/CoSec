@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.apikey.ApiKey
@@ -58,6 +59,7 @@ class ApiKeyAuthenticator(
             )
             return AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID, refused)
         }
+        @OptIn(InternalCoSecApi::class)
         val principal = AuthenticatedPrincipal(
             id = PrincipalId(apiKey.principalId),
             tenant = TenantId(apiKey.tenantId),
@@ -69,6 +71,9 @@ class ApiKeyAuthenticator(
                 apiKey.expiresAt,
                 apiKey.roles != null
             ),
+            breakGlass = false,
+            issuedAt = null,
+            apiKeyCredential = true,
         )
         return AuthnResult.Authenticated(principal, method)
     }

@@ -13,9 +13,12 @@
     {
       "id": "TNT-2",
       "source": "RFC 0004 §7.2",
-      "statement": "A tenant document references only its own tenant's or the platform layer's policies; anything else does not compile.",
+      "statement": "A tenant document references only its own tenant's or the platform layer's policies; anything else does not compile. cosec:platform-admin is bound only in the platform document and the platform tenant's (RC1-36).",
       "level": "engine",
-      "pending": null
+      "pending": null,
+      "guards": [
+        "runtime:PolicyDocumentCompilerTest#the platform admin is bound only by the platform, and no binding names a reserved space"
+      ]
     },
     {
       "id": "TNT-3",

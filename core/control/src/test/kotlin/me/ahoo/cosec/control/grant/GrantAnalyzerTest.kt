@@ -587,6 +587,54 @@ class GrantAnalyzerTest {
     }
 
     /**
+     * RC1-35: unauthenticated callers are in the default tenant `(0)`, so an `Anyone` binding there reaches them as well:
+     * whatever the grantor holds, it needs an approval. Elsewhere, `Anyone` is the tenant's principals.
+     */
+    @Test
+    fun `an Anyone grant in the default tenant is never contained`() {
+        val zero = TenantId.DEFAULT
+        val holds = GrantDocument(
+            policies = listOf(policy("all", allow("*"))),
+            bindings = listOf(bind("g", principal("gina", zero), "all")),
+        )
+        val grant = GrantDocument(
+            policies = holds.policies + policy("open", allow("order:read")),
+            bindings = holds.bindings + bind("open", SubjectRef.Anyone, "open"),
+        )
+        val snapshot = GrantSnapshot(
+            platform = GrantDocument.EMPTY,
+            tenants = mapOf(zero to holds),
+            now = GrantFixtures.NOW,
+            unreadApps = Dimension.Only(emptySet()),
+        )
+        val verdicts = analyzer.analyze(
+            grantor(tenant = zero),
+            snapshot,
+            GrantChange(zero, grant)
+        ).verdicts.map { it.second }
+        verdicts.assertUnknown(UnknownReason.ANONYMOUS)
+        // The same grant to a role there, or to Anyone in another tenant, is contained.
+        val toRole =
+            GrantDocument(
+                policies = grant.policies,
+                bindings = holds.bindings + bind("open", role("viewer", zero), "open")
+            )
+        analyzer.analyze(grantor(tenant = zero), snapshot, GrantChange(zero, toRole)).verdicts.map {
+            it.second
+        }.assertContained()
+        val acme =
+            GrantDocument(
+                policies = listOf(policy("all", allow("*"))),
+                bindings = listOf(bind("g", principal("gina"), "all"))
+            )
+        val acmeGrant = GrantDocument(
+            policies = acme.policies + policy("open", allow("order:read")),
+            bindings = acme.bindings + bind("open", SubjectRef.Anyone, "open"),
+        )
+        verdicts(grantor(), snapshot(tenant = acme), acmeGrant).assertContained()
+    }
+
+    /**
      * RC1-9: removing a tenant's own policy re-points its unchanged bindings and attachments to the platform's policy
      * of the same id, which is then granted to them.
      */

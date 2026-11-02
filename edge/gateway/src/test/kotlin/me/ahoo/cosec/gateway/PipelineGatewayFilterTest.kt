@@ -127,6 +127,8 @@ class PipelineGatewayFilterTest {
                 emptyMap(),
                 Identity.Credential(Identity.Method.JWT, "t1", java.time.Instant.now().plusSeconds(3600)),
                 breakGlass = true,
+                issuedAt = null,
+                apiKeyCredential = false,
             ),
             "token",
         )

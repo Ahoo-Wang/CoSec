@@ -367,6 +367,37 @@ class PolicyDocumentCompilerTest {
             .single().assert().contains("which it does not define")
     }
 
+    /**
+     * RC1-36: `cosec:platform-admin` holds `cosec:approve` and `cosec:boundary`, so only the platform document and the
+     * platform tenant's own, as `cosec-migrate bootstrap` writes it, bind it.
+     * RC1-37: spaces beginning with `(` are CoSec's, and no document binds in one.
+     */
+    @Test
+    fun `the platform admin is bound only by the platform, and no binding names a reserved space`() {
+        val admin = """{"id":"a","subject":{"principal":"alice"},"app":"*","space":"*","policy":"cosec:platform-admin"}"""
+        errors(SnapshotKey.Tenant("acme"), ""","bindings":[$admin]""")
+            .assert().containsExactly(
+                "$.bindings[0].policy: [cosec:platform-admin] is bound only by the platform and the platform tenant"
+            )
+        errors(
+            SnapshotKey.App("order"),
+            ""","bindings":[${admin.replace("{\"principal\":\"alice\"}", "{\"role\":\"ops\"}")}]"""
+        )
+            .assert().containsExactly(
+                "$.bindings[0].policy: [cosec:platform-admin] is bound only by the platform and the platform tenant"
+            )
+        val platformAdmin = admin.replace("{\"principal\":\"alice\"}", "{\"principal\":\"alice\",\"tenant\":\"acme\"}")
+        compiler.compile(SnapshotKey.Platform, stored(""","bindings":[$platformAdmin]""")).kind
+            .assert().isEqualTo(DocumentKind.PLATFORM)
+        compiler.compile(SnapshotKey.Tenant("(platform)"), stored(""","bindings":[$admin]""")).kind
+            .assert().isEqualTo(DocumentKind.TENANT)
+        val reserved = """{"id":"r","subject":"*","app":"*","space":"(default)","policy":"p"}"""
+        errors(SnapshotKey.Tenant("acme"), ""","policies":[{"id":"p","statements":[]}],"bindings":[$reserved]""")
+            .assert().containsExactly(
+                "$.bindings[0].space: [(default)] is reserved: space ids beginning with [(] are CoSec's"
+            )
+    }
+
     /** DOC-1: a publisher checks references against the platform it will be read with. */
     @Test
     fun `references to the platform are checked against a given platform`() {

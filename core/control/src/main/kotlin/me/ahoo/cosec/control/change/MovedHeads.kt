@@ -97,11 +97,12 @@ internal class MovedHeads(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         publisher: Operator,
+        unanalyzed: String? = null,
         audit: suspend (HeadsMoved) -> Unit,
     ) = withContext(NonCancellable) {
         try {
             val outcome = withTimeoutOrNull(timeout) {
-                Outcome(detect(published, rechecked, base, candidate, publisher))
+                Outcome(detect(published, rechecked, base, candidate, publisher, unanalyzed))
             }
             val found = when (outcome) {
                 null -> HeadsMoved(
@@ -127,7 +128,9 @@ internal class MovedHeads(
 
     /**
      * What to record about [published], whose last check was [rechecked] of [candidate] over [base] by [publisher];
-     * `null` when every head it was checked with is the one it had.
+     * `null` when every head it was checked with is the one it had. A publish settled by someone else after its write,
+     * a retry or a change taking its slot, is not analyzed again: the check it was published on is gone, and their rights
+     * are not the publisher's, so what moved is [ChangeEvent.Kind.REVIEW_NEEDED], [unanalyzed] saying who (review D2).
      */
     suspend fun detect(
         published: ChangeRequest,
@@ -135,6 +138,7 @@ internal class MovedHeads(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         publisher: Operator,
+        unanalyzed: String? = null,
     ): HeadsMoved? {
         val heads = rechecked.checkedWith.filterKeys { it != published.key }
             .mapNotNull { (key, checked) -> moved(key.toString(), checked) { store.head(key)?.digest } }
@@ -143,6 +147,7 @@ internal class MovedHeads(
         if (moved.isEmpty()) {
             return null
         }
+        unanalyzed?.let { return HeadsMoved(ChangeEvent.Kind.REVIEW_NEEDED, moved, emptyList(), it) }
         return analyzed(published, rechecked, base, candidate, publisher, moved)
     }
 

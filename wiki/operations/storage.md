@@ -230,8 +230,8 @@ first platform document always comes from `cosec-migrate publish`:
    `tenants/<tenantId>.json`, and `report.json`, which records the SHA-256 of each file. It compiles every document
    first, checks each app and tenant document's references against the platform document, and publishes the platform
    document first. It never overwrites: if a document exists, it stops (`--resume` skips documents already published
-   identically). A break-glass binding that expires later than `--break-glass-max-duration` (default `PT4H`) is
-   refused.
+   identically). Documents that hold a break-glass binding are refused, and nothing is written: request break-glass
+   through the control plane after the switch.
 2. **Name the first administrator.**
    `cosec-migrate bootstrap --to-redis redis://host:6379 [--key-prefix cosec] --platform-admin <principalId>` binds
    that principal of the platform tenant to the built-in `cosec:platform-admin` policy in the platform tenant's own
@@ -270,7 +270,9 @@ the app list, `<s>:control:apps:all`, and the head of every app it names. The li
   incomplete again when an app document `<s>:control:list:documents` lists, and that has a head, is missing from it,
   and logs a WARN: an instance or a `cosec-migrate` that does not keep the list published it, during a rolling
   upgrade or after a downgrade. A listed app without a head is one whose first publish stopped before its head write,
-  and does not count; one whose head cannot be read does. The platform's first revision judges the same way.
+  and does not count; one whose head cannot be read does. The platform's first revision judges the same way. Until a
+  reconciliation has succeeded on an instance, its grant analysis runs one before it trusts the list; one that fails
+  leaves the list untrusted until the next.
 
 The analysis trusts only a complete list. When the list is not there, not complete, cannot be read, or holds an
 entry that names no app document (not a valid app id, or `*`), or when an app the change names has a head the list

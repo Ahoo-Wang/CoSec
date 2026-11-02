@@ -100,6 +100,12 @@ enum class UnknownReason {
 
     /** An app document the fragment reaches could not be read, so the grantor's rights there are not known (RC1-4). */
     UNREADABLE,
+
+    /**
+     * The fragment is granted to `Anyone` in the default tenant `(0)`, where every unauthenticated caller is: it reaches
+     * them as well as the tenant's principals, so it always needs an approval (RC1-35).
+     */
+    ANONYMOUS,
 }
 
 /** How far the closest of the grantor's ALLOWs got, in the order the analysis checks (RFC 0007 §7.4.3). */

@@ -1,0 +1,17 @@
+# Rule: TNT-2
+# Mutant: a tenant document binds cosec:platform-admin, so its principals approve and move the boundary of their own document
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.PolicyDocumentCompilerTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+index 04c026a1..a0757088 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+@@ -269,7 +269,7 @@ class PolicyDocumentCompiler(
+                     "[$it] is reserved: space ids beginning with [${ScopeResolver.RESERVED_SPACE_PREFIX}] are CoSec's"
+                 )
+             }
+-            if (binding.policy == BuiltinPolicies.PLATFORM_ADMIN && !platformTenant(document)) {
++            if (binding.policy == BuiltinPolicies.PLATFORM_ADMIN && document.kind == DocumentKind.APP) {
+                 // It holds cosec:approve and cosec:boundary: bound in a tenant's own document, its subjects would be
+                 // the trust root of that document and move its boundary (RC1-36, TNT-2). The platform tenant's own
+                 // document binds it to the platform's principals, as `cosec-migrate bootstrap` writes it.

@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "SCP-9"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "RC1-37: - is no longer the default space's stand-in: a principal with a role in it declares it and is evaluated there.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor@-"
+    ]
+  },
+  "request": {
+    "space": "-"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -47,7 +47,10 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Instant
@@ -60,12 +63,17 @@ import java.util.concurrent.CompletableFuture
  * pipeline authenticates the operator and permits the control API's path, and a second pipeline, over the current
  * heads of [revisions] (always current, so nothing to confirm), answers the [PipelineControlAuthorizer]'s checks.
  */
-class ControlEngine(private val revisions: Revisions) {
+class ControlEngine(
+    private val revisions: Revisions,
+    /** Who answers for an operator whose memberships come from the provider, now and when it is checked again. */
+    private val provider: MembershipProvider? = null,
+) {
     private val checker = AuthorizationChecker(
         Pipeline(
             PipelineComponents(
                 authenticator = Authenticator { AuthnResult.Anonymous },
-                snapshots = SuspendingSnapshotSource(HeadViews(revisions))
+                snapshots = SuspendingSnapshotSource(HeadViews(revisions)),
+                membershipProvider = provider,
             )
         ),
     )
@@ -80,7 +88,8 @@ class ControlEngine(private val revisions: Revisions) {
 
     /**
      * An operator of [tenant], with `role@space` [roles] (a bare role is the default space's), attached [policies] and
-     * token [attributes].
+     * token [attributes]; with [provided], its memberships are what [provider] answers instead. [credential] is how it
+     * authenticated, [issuedAt] when its token was issued.
      */
     fun operator(
         tenant: TenantId,
@@ -88,17 +97,32 @@ class ControlEngine(private val revisions: Revisions) {
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
         attributes: Map<String, Any> = emptyMap(),
+        credential: Identity.Credential? = null,
+        issuedAt: Instant? = null,
+        provided: Boolean = false,
     ): Operator {
         val principal = AuthenticatedPrincipal(
             PrincipalId(id),
             tenant,
-            MembershipClaims.parse(roles, policies),
-            attributes
+            if (provided) {
+                MembershipSource.Provider.UNCAPPED
+            } else {
+                MembershipSource.Claims(
+                    MembershipClaims.parse(roles, policies)
+                )
+            },
+            attributes,
+            credential,
+            breakGlass = false,
+            issuedAt = issuedAt,
+            // A credential named api-key is the runner's API key: so the API key authenticator would say.
+            apiKeyCredential = credential?.method == Identity.Method.API_KEY,
         )
         val host = Pipeline(
             PipelineComponents(
                 authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
                 snapshots = SuspendingSnapshotSource(HOST_VIEWS),
+                membershipProvider = provider,
                 engine = PERMITTING,
             )
         )

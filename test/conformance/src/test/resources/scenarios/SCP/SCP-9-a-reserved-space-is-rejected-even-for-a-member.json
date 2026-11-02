@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "SCP-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "RC1-37: space ids beginning with ( are CoSec's: the principal claims admin in (default), declares it, and is rejected; the control plane writes the default space so.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "roles": [
+      "admin@(default)"
+    ]
+  },
+  "request": {
+    "space": "(default)"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "SPACE_NOT_MEMBER"
+  }
+}
