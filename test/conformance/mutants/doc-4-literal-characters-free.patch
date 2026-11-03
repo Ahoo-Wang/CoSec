@@ -3,7 +3,7 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
-index 66887053..a2ef974f 100644
+index fa9ba2a3..d46ae21e 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
 @@ -262,7 +262,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
@@ -14,4 +14,4 @@ index 66887053..a2ef974f 100644
 +    val units: Int = tokens.size
  
      /** Whether [value] matches; when it does and [captures] is given, the runs' values in it. */
-     fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean =
+     fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean {
