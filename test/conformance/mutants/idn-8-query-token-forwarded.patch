@@ -3,11 +3,11 @@
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 47b8c8a3..d9fda056 100644
+index 3c6ddd10..b8ae7ffb 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-@@ -116,7 +116,7 @@ class PipelineGatewayFilter(
-                         cookiesRewritten = withoutCookieTokens(headers)
+@@ -121,7 +121,7 @@ class PipelineGatewayFilter(
+                         }
                      }
                  }
 -            if (!credentials) {
