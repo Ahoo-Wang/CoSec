@@ -44,6 +44,8 @@ object HttpFactsReader {
         remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
         host: HostScope = NO_HOST,
         requestAttributes: Map<String, String> = emptyMap(),
+        /** The gateway's route app ([HttpFacts.routeApp]), as written. */
+        routeApp: String? = null,
     ): HttpFacts {
         val request = exchange.request
         val headers = HashMap<String, List<String>>(request.headers.size())
@@ -59,6 +61,7 @@ object HttpFactsReader {
             remoteAddress = remoteIpResolver.resolve(exchange),
             host = host,
             requestAttributes = requestAttributes,
+            routeApp = routeApp,
         )
     }
 
@@ -131,7 +134,15 @@ internal fun forwarded(exchange: ServerWebExchange, outcome: Outcome): ServerWeb
     }
     return exchange.mutate().request {
         it.headers { mutable ->
-            outcome.forward.forEach { (name, value) -> if (value == null) mutable.remove(name) else mutable.set(name, value) }
+            outcome.forward.forEach { (name, value) ->
+                if (value == null) {
+                    mutable.remove(
+                        name
+                    )
+                } else {
+                    mutable.set(name, value)
+                }
+            }
         }
     }.build()
 }

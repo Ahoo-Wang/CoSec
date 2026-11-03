@@ -45,7 +45,7 @@ class CoSecGatewayEndpointCheckAutoConfigurationTest {
     @Endpoint(id = "health")
     class HealthEndpoint {
         @ReadOperation
-        fun health(): String = "UP"
+        fun health(): Map<String, String> = mapOf("status" to "UP")
     }
 
     private val gateway = ReactiveWebApplicationContextRunner()
@@ -77,7 +77,9 @@ class CoSecGatewayEndpointCheckAutoConfigurationTest {
     @Test
     fun `the gateway endpoint on the application port fails startup`() {
         val message = failure(gateway.withPropertyValues("management.endpoints.web.exposure.include=health,gateway"))
-        message.assert().contains("Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port")
+        message.assert().contains(
+            "Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port"
+        )
             .contains("[gateway] writes its routes")
             .contains("management.server.port")
             .contains("cosec.gateway.unprotected-endpoints")

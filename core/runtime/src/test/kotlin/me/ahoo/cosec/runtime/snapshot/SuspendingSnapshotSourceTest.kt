@@ -79,7 +79,10 @@ class SuspendingSnapshotSourceTest {
         roleless.withAppFor(scope("shop"), null).assert().isNull()
         ViewKey.of(scope("other"), blocked = false).withAppFor(scope("other"), needing).assert().isNull()
         ViewKey.of(scope(""), blocked = false).withAppFor(scope(""), needing).assert().isNull()
-        ViewKey.of(scope("shop", "admin"), blocked = false).withAppFor(scope("shop", "admin"), needing).assert().isNull()
+        ViewKey.of(
+            scope("shop", "admin"),
+            blocked = false
+        ).withAppFor(scope("shop", "admin"), needing).assert().isNull()
         ViewKey.BLOCKED.withAppFor(scope("shop"), needing).assert().isNull()
     }
 

@@ -1,17 +1,17 @@
 # Rule: SCP-2
-# Mutant: the gateway reads no route app, so on a multi-app gateway the client picks the app and skips its DENYs
+# Mutant: the gateway passes no route app, so on a multi-app gateway the client picks the app and skips its DENYs
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 4e02b538..d1942963 100644
+index 906a90d1..7a7401aa 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-@@ -81,7 +81,7 @@ class PipelineGatewayFilter(
- 
-     /** [route]'s own app, else the gateway's; a value that cannot be an app id throws, and the request fails closed. */
-     private fun hostOf(route: Route): HostScope {
--        val app = route.metadata[APP_METADATA] ?: return host
-+        val app = null ?: return host
-         return HostScope(AppId(app.toString()))
+@@ -77,7 +77,7 @@ class PipelineGatewayFilter(
+             IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity(route).toString(),
+         )
+         // The route's app as written: the pipeline checks it and makes it the host app (RC1-6).
+-        val app = route.metadata[APP_METADATA]?.toString()
++        val app: String? = null
+         return HttpFactsReader.read(exchange, remoteIpResolver, host, attributes, app)
      }
  

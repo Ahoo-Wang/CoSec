@@ -48,7 +48,6 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.test.asserts.assert
-import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
@@ -308,6 +307,7 @@ class PipelineGatewayFilterTest {
         scopes.assert().containsExactly("order")
     }
 
+    /** RC1-6, RC1-15: the gateway passes the route's app as written; the pipeline refuses one that is not an app id. */
     @Test
     fun `a route app that cannot be an app id fails the route's requests`() {
         val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
@@ -315,13 +315,14 @@ class PipelineGatewayFilterTest {
             val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x"))
             exchange.attributes[GATEWAY_ROUTE_ATTR] = route("lb://orders", app = app)
             var called = false
-            assertThrownBy<IllegalArgumentException> {
-                filter.filter(exchange) {
-                    called = true
-                    Mono.empty()
-                }.block(Duration.ofSeconds(5))
-            }
+            filter.filter(exchange) {
+                called = true
+                Mono.empty()
+            }.block(Duration.ofSeconds(5))
             called.assert().describedAs(app).isFalse()
+            exchange.response.statusCode?.value().assert().describedAs(app).isEqualTo(500)
+            exchange.response.bodyAsString.block(Duration.ofSeconds(5)).assert()
+                .contains("\"type\":\"https://cosec.ahoo.me/problems/internal-error\"")
         }
     }
 }

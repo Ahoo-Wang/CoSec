@@ -346,7 +346,12 @@ class FlatEngineTest {
             .isEqualTo(Decision.Indeterminate(Cause.NotLoaded(DocumentKind.APP)))
         decide(flatRequest(app = "other"), allowing, tenant = needing, app = null).assert()
             .isInstanceOf(Decision.Permit::class.java)
-        decide(flatRequest(), allowing, tenant = needing, app = app()).assert().isInstanceOf(Decision.Permit::class.java)
+        decide(
+            flatRequest(),
+            allowing,
+            tenant = needing,
+            app = app()
+        ).assert().isInstanceOf(Decision.Permit::class.java)
     }
 
     /** RC1-17, TNT-4: a tenant's Anyone binding of an app's permission policy resolves it from the app's document. */

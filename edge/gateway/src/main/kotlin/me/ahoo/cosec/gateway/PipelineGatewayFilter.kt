@@ -15,7 +15,6 @@ package me.ahoo.cosec.gateway
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
@@ -44,7 +43,8 @@ import java.net.URI
  *
  * Per route ([Route.getMetadata]):
  * - [APP_METADATA] is the host app of the route's requests (RFC 0004 §4.6, RC1-6), ahead of [host]: a client declares
- *   its app only where neither names one. A value that cannot be an app id fails the route's requests.
+ *   its app only where neither names one. It goes to the pipeline as written ([HttpFacts.routeApp]), which refuses a
+ *   value that cannot be an app id (500).
  * - [IDENTITY_METADATA] decides whether the backend receives what the gateway forwards about the caller (RC1-49):
  *   `true` does, `false` or any other value does not, and without it only a route to a registered service (`lb://`,
  *   `lb:ws://`) does: whoever runs one is inside the trust boundary, any other host might be a third party.
@@ -76,13 +76,9 @@ class PipelineGatewayFilter(
             AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id,
             IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity(route).toString(),
         )
-        return HttpFactsReader.read(exchange, remoteIpResolver, hostOf(route), attributes)
-    }
-
-    /** [route]'s own app, else the gateway's; a value that cannot be an app id throws, and the request fails closed. */
-    private fun hostOf(route: Route): HostScope {
-        val app = route.metadata[APP_METADATA] ?: return host
-        return HostScope(AppId(app.toString()))
+        // The route's app as written: the pipeline checks it and makes it the host app (RC1-6).
+        val app = route.metadata[APP_METADATA]?.toString()
+        return HttpFactsReader.read(exchange, remoteIpResolver, host, attributes, app)
     }
 
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
@@ -153,7 +149,9 @@ class PipelineGatewayFilter(
         private fun withQuery(uri: URI, query: String?): URI {
             val text = uri.toString()
             val end = uri.rawFragment?.let { text.length - it.length - 1 } ?: text.length
-            return URI.create(text.substring(0, text.indexOf('?')) + query?.let { "?$it" }.orEmpty() + text.substring(end))
+            return URI.create(
+                text.substring(0, text.indexOf('?')) + query?.let { "?$it" }.orEmpty() + text.substring(end)
+            )
         }
 
         /**

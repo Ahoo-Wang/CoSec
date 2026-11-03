@@ -1,16 +1,17 @@
 # Rule: SCP-2
 # Mutant: the configured host app wins over the route's cosec-app-id
-# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
-diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 4e02b538..55498a2d 100644
---- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-+++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-@@ -81,6 +81,7 @@ class PipelineGatewayFilter(
- 
-     /** [route]'s own app, else the gateway's; a value that cannot be an app id throws, and the request fails closed. */
-     private fun hostOf(route: Route): HostScope {
-+        if (host.app != null) return host
-         val app = route.metadata[APP_METADATA] ?: return host
-         return HostScope(AppId(app.toString()))
-     }
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 321644c3..37171179 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -294,7 +294,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * the app's DENYs.
+      */
+     private fun routed(facts: HttpFacts): HttpFacts {
+-        val app = facts.routeApp ?: return facts
++        val app = facts.routeApp?.takeIf { facts.host.app == null } ?: return facts
+         check(ScopeResolver.isValidAppId(app)) {
+             "The cosec-app-id of route [${printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])}] " +
+                 "cannot be an app id: blank, *, with ':' or a control character, or longer than " +

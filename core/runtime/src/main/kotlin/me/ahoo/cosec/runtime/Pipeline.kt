@@ -20,10 +20,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Memberships
@@ -37,6 +39,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.DeclaredScope
+import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -268,7 +271,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     private fun eventId(): String = idGenerator.generate()
 
-    private suspend fun decide(facts: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
+    private suspend fun decide(input: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
+        val facts = routed(input)
         val path = PathNormalizer.normalize(facts.rawPath)
             ?: return StatusMapping.invalidRequest(requestId, "path", traceId)
         val parameters = CoSecParameters.read(facts)
@@ -282,6 +286,35 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         val authn = authenticate(credentials(facts))
         return authorize(facts, requestId, traceId, record, path, parameters, action, resource, authn)
     }
+
+    /**
+     * [facts] with the gateway route's app as the host app (RC1-6), under the app id rule (RC1-15). One that cannot be
+     * an app id is an operator's mistake no request can be decided under: it throws, so the request is an unmodelled
+     * error (500), logged, never a request without a host app, whose client would then pick the app and step around
+     * the app's DENYs.
+     */
+    private fun routed(facts: HttpFacts): HttpFacts {
+        val app = facts.routeApp ?: return facts
+        check(ScopeResolver.isValidAppId(app)) {
+            "The cosec-app-id of route [${printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])}] " +
+                "cannot be an app id: blank, *, with ':' or a control character, or longer than " +
+                "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+        }
+        return HttpFacts(
+            facts.method,
+            facts.rawPath,
+            facts.rawQuery,
+            facts.headers,
+            facts.cookies,
+            facts.remoteAddress,
+            HostScope(AppId(app)),
+            facts.requestAttributes,
+        )
+    }
+
+    /** [value] for a log line: control characters escaped, so no configured value can forge one. */
+    private fun printable(value: String?): String =
+        value?.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }?.joinToString("").orEmpty()
 
     /**
      * The rest of [decide], for the request as [authn] authenticated it. A credential whose principal the membership

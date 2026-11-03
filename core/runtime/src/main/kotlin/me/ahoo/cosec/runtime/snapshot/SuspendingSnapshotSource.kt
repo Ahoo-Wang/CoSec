@@ -39,10 +39,12 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
      * lookup on the compiled document: no I/O, and the client's app alone never loads a document.
      */
     internal fun withAppFor(scope: Scope, tenantDocument: CompiledDocument?): ViewKey? {
-        if (app != null || tenant == null || tenantDocument == null || scope.app.value.isEmpty()) {
+        val tenant = tenant ?: return null
+        if (app != null || tenantDocument == null) {
             return null
         }
-        return if (tenantDocument.needsApp(scope.app.value)) ViewKey(tenant, scope.app) else null
+        val wanted = scope.app
+        return if (wanted.value.isNotEmpty() && tenantDocument.needsApp(wanted.value)) ViewKey(tenant, wanted) else null
     }
 
     companion object {

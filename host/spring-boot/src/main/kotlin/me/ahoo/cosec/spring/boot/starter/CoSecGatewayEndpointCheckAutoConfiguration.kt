@@ -48,7 +48,10 @@ import org.springframework.context.annotation.Bean
 class CoSecGatewayEndpointCheckAutoConfiguration {
     /** After every singleton: the endpoints are known only once their beans exist. */
     @Bean
-    fun cosecGatewayEndpointCheck(context: ApplicationContext, properties: GatewayProperties): SmartInitializingSingleton =
+    fun cosecGatewayEndpointCheck(
+        context: ApplicationContext,
+        properties: GatewayProperties
+    ): SmartInitializingSingleton =
         SmartInitializingSingleton {
             val endpoints = context.getBeanProvider(PathMappedEndpoints::class.java).ifAvailable
                 ?: return@SmartInitializingSingleton
