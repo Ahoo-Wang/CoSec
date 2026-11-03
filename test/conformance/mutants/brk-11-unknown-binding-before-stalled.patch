@@ -3,20 +3,24 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-index f4dd2006..a496bd8f 100644
+index c2221a12..d676c3d5 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-@@ -104,12 +104,10 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+@@ -105,14 +105,12 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
          require(reason.isNotBlank()) { "Revoking break-glass needs a reason." }
          val operations = listOf(Operation.RemoveBinding(binding))
          changes.authority.authorize(operator, SnapshotKey.Platform, operations, ProvenanceKind.BREAK_GLASS)
 -        var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: run {
--            if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.none { it.id == binding } != false) {
--                throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
+-            val existing = revisions.head(SnapshotKey.Platform)?.document?.bindings?.firstOrNull { it.id == binding }
+-                ?: throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
+-            if (!existing.breakGlass) {
+-                throw ChangeRejectedException(CONFLICT, "binding [${binding.value}] is not a break-glass binding")
 -            }
 -            revokeOnce(operator, operations, reason)
-+        if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.none { it.id == binding } != false) {
-+            throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
++        val existing = revisions.head(SnapshotKey.Platform)?.document?.bindings?.firstOrNull { it.id == binding }
++            ?: throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
++        if (!existing.breakGlass) {
++            throw ChangeRejectedException(CONFLICT, "binding [${binding.value}] is not a break-glass binding")
          }
 +        var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: revokeOnce(operator, operations, reason)
          repeat(RETRIES) {
