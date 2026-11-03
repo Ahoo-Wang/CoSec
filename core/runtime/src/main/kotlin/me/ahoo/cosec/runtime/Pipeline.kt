@@ -50,6 +50,7 @@ import me.ahoo.cosec.runtime.attribute.FetchedAttributes
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
+import me.ahoo.cosec.runtime.http.CookieHeaders
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
@@ -109,9 +110,10 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * The request headers this pipeline reads a credential from: `Authorization` and the API key header
-     * (`cosec.pipeline.api-key-header`). With the `authorization` query parameter ([withoutQueryToken]), what a gateway
-     * keeps from a route that may not receive the caller's credentials (RC1-5). The `authorization` cookie is not
-     * among them: cookies belong to the browser.
+     * (`cosec.pipeline.api-key-header`). With the `authorization` query parameter ([withoutQueryToken]) and the
+     * `authorization` cookie ([withoutCookieToken]), what a gateway keeps from a route that may not receive the
+     * caller's credentials (RC1-5, R1-4 of #1194's review): a credential the pipeline accepts is one a backend could
+     * replay at the gateway.
      */
     @InternalCoSecApi
     val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)
@@ -123,6 +125,14 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      */
     @InternalCoSecApi
     fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, AUTHORIZATION)
+
+    /**
+     * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;
+     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). This pipeline
+     * reads a token from that cookie, so a backend could replay it at the gateway.
+     */
+    @InternalCoSecApi
+    fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
 
     /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;

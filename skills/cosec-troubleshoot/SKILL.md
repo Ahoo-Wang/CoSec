@@ -236,9 +236,9 @@ header: anonymous. Otherwise never anonymous:
   metadata says `cosec-identity: true`; an `http(s)://` route without it, or with `cosec-identity: false`, gets none.
   Mark the route `cosec-identity: true` if it leads to your own service.
 - A backend that verifies tokens itself gets no credentials (`Authorization`, the API key header, the `authorization`
-  query parameter) unless `cosec.gateway.identity.forward-authorization=true`, and then only on a route that receives
-  the identity. A gateway-mode service that issues no tokens should set `cosec.jwt.enabled=false`, or startup asks for
-  a JWT secret and a token store.
+  query parameter, the `authorization` cookie) unless `cosec.gateway.identity.forward-authorization=true`, and then
+  only on a route that would receive the identity. A gateway-mode service that issues no tokens should set
+  `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
 - On the gateway, a 500 on every request of one route: its metadata `cosec-app-id` is not a valid app id.
 
 ### Change not visible / snapshot lag

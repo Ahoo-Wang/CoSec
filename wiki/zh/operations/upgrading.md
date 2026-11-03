@@ -31,7 +31,8 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **撤销 break-glass 按效果作答**（R4-1）。`DELETE /break-glass/{bindingId}` 只在该绑定在平台文档的头上不再生效之后才返回 `200`，无论是谁删除的。撤销后绑定仍在生效时，现在返回 `409`，`detail` 写明调用方的变更所处的状态（`CONFLICTED` 等），此前返回的是带着该变更的 `200`：把 `200` 当作"已撤销"而不看 `state` 的客户端，需要处理这个 `409`。平台文档中没有的绑定 id 现在返回 `404`；该 id 的绑定不是 break-glass 绑定时（无论是否到期）返回 `409`（`binding [<id>] is not a break-glass binding`）；两者都不提议任何变更，此前都返回带着 `DRAFT` 变更的 `200`（`BRK-11`）。被另一个撤销抢占，或遇到已变化的头的撤销，会再撤销一次，至多再试三次。
 - **放弃变更**（RC1-51、`BRK-10`）。撤销仍在生效的 break-glass 绑定的变更只有其作者能放弃：其他人（包括被撤销的主体）得到 `403`。请改为再撤销一次该绑定，这会发布停住的撤销，或抢走它的暂存槽。每次放弃都记一条新的变更事件 `ABANDONED`；放弃 break-glass 变更需要 REQUIRED 变更监听器（否则 `503`）。处理每一种 `ChangeEvent.Kind` 的变更监听器要加上 `ABANDONED`。
 - **身份转发改为按 scheme 选择加入**（RC1-49、`IDN-7`）。网关只把 `CoSec-Identity` 转发给指向已注册服务的路由（`uri: lb://...`、`lb:ws://...`），或元数据为 `cosec-identity: true` 的路由；`false` 仍然让任何路由都不接收，`true` 以外的值都按 `false` 处理。**经 `http://` 或 `https://` 指向你自己服务的路由不再收到身份，其后的服务看到的是匿名请求**：升级网关之前，给这些路由的元数据加上 `cosec-identity: true`，不要给指向第三方的路由加（[转发身份](../integration/web.md#forwarding-the-identity)）。请求属性 `cosec.identity.forward` 现在在每个被路由的请求上都是 `true` 或 `false`，过去只设为 `false`。
-- **不向下游转发任何凭证**（RC1-5、`IDN-8`）。除 `Authorization` 外，网关还从它转发的每个请求中移除 API key 头（`cosec.pipeline.api-key-header`，无论名称设成什么）和 `authorization` 查询参数。自己读取它们的服务需要 `cosec.gateway.identity.forward-authorization=true`；打开后，这三者现在只发往接收身份的路由，因此指向第三方的路由一个也收不到。放在 `authorization` cookie 中的令牌仍会被转发。
+- **不向下游转发任何凭证**（RC1-5、`IDN-8`）。除 `Authorization` 外，网关还从它转发的每个请求中移除 API key 头（`cosec.pipeline.api-key-header`，无论名称设成什么）和 `authorization` 查询参数。自己读取它们的服务需要 `cosec.gateway.identity.forward-authorization=true`；打开后，它们现在只发往本会接收身份的路由（`lb://`，或 `cosec-identity: true`），因此指向第三方的路由一个也收不到。
+- **`authorization` cookie 也留在网关**（`IDN-8`）。在同一个开关下，网关从它转发的每个 `Cookie` 头中移除它（名称比较不区分大小写），其他 cookie 保留；不再剩下任何 cookie 的头不发送。从这个 cookie 读取令牌的服务需要 `forward-authorization=true`，以及一条本会接收身份的路由。
 - **路由指定它的应用**（RC1-6、`SCP-2`）。路由元数据 `cosec-app-id` 是该路由上请求的应用，优先于 `cosec.authorization.scope.app-id`：在这样的路由上，声明了其他应用的请求为 `403` `scope-rejected`（匿名调用方为 `401`），没有声明的请求取路由的应用、它的角色绑定及其中的 DENY。没有这项元数据的路由沿用网关的宿主应用，或客户端声明的应用。在面向多个应用的网关上，给每条路由指定它的应用。不能作为应用 id 的 `cosec-app-id` 使该路由的每个请求失败。
 - **网关上的 actuator**（RC1-48、`STA-2`）。按策略决策的网关宿主，在其应用端口上（`management.server.port` 未设置，或与 `server.port` 相同）通过 HTTP 暴露了 `health` 以外的 actuator 端点时不再启动：CoSec 授权的是网关的路由，不是这些端点。把 actuator 放到单独的端口上并置于网络策略之后，只暴露 `health`，或在新配置项 `cosec.gateway.unprotected-endpoints` 中列出由其他手段保护的端点；它从不接受 `gateway`（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。`cosec-gateway-server` 和 `k8s/` 只暴露 `health`。
 - **空白的 `CoSec-*` 值与另一个值同时出现即有歧义**（RC1-16、`SCP-4`）：请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=` 现在是 `400` `invalid-request`，过去取 `s1`。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如 `%E3%80%80`）是一个值：单独出现时，它是主体必须在其中有角色的空间。每个参数只发送一次。
@@ -393,14 +394,14 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 | 位置 | 7.x | 8.0 |
 |---|---|---|
-| 网关 | 转发客户端的 `Authorization` 头。 | 对有主体的放行，它在指向已注册服务的路由（`lb://`）上、以及元数据为 `cosec-identity: true` 的其他路由上设置 `CoSec-Identity`；它总是去掉客户端自己发来的。`cosec.gateway.identity.claims` 指定要转发的主体属性；路由元数据 `cosec-identity: false` 让该路由不接收身份。除非 `cosec.gateway.identity.forward-authorization=true`，转发的请求中会去掉 `Authorization` 头、API key 头和 `authorization` 查询参数（[网关身份](./configuration.md#gateway-identity)）。 |
+| 网关 | 转发客户端的 `Authorization` 头。 | 对有主体的放行，它在指向已注册服务的路由（`lb://`）上、以及元数据为 `cosec-identity: true` 的其他路由上设置 `CoSec-Identity`；它总是去掉客户端自己发来的。`cosec.gateway.identity.claims` 指定要转发的主体属性；路由元数据 `cosec-identity: false` 让该路由不接收身份。除非 `cosec.gateway.identity.forward-authorization=true`，转发的请求中会去掉 `Authorization` 头、API key 头、`authorization` 查询参数和 `authorization` cookie（[网关身份](./configuration.md#gateway-identity)）。 |
 | 其后的每个服务 | `cosec.inject.enabled=true` | `cosec.pipeline.mode=gateway`（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）：没有 key、策略、快照或 Redis；除非它签发令牌，否则设置 `cosec.jwt.enabled=false`。只有网关可以访问到该服务（网络策略、私有网络、mTLS）；其他能访问到它的人声称自己是谁就是谁。 |
 | 应用代码 | 从 `SecurityContext` 读取调用方。 | 相同。附加策略不被转发，角色是网关决策时所在作用域中的角色。 |
 
 永不过期的凭证（例如没有 `expires-at` 的 API key）不会被转发：网关对它的放行返回 `500`。给这类 key 设置过期时间，或让它们的路由不转发身份。
 
 在 CoSec 网关之后、自己校验令牌的服务不再收到 `Authorization` 头。要么在网关上设置 `cosec.gateway.identity.forward-authorization=true`，
-并经 `lb://` 或带 `cosec-identity: true` 的路由访问该服务，要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 cookie 中的令牌仍会被转发。
+并经 `lb://` 或带 `cosec-identity: true` 的路由访问该服务，要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 `authorization` cookie 中的令牌在同一个开关下也会被移除。
 
 ### 存储与 Redis {#storage-and-redis}
 

@@ -233,11 +233,14 @@ class PipelineGatewayFilterTest {
                 .header(HttpHeaders.AUTHORIZATION, "token")
                 .header("X-Service-Key", "key")
                 .header("X-API-Key", "other")
+                .header(HttpHeaders.COOKIE, "theme=dark; authorization=c", "Authorization=d")
         }
         val stripping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer(), renamed))
         val stripped = sent(stripping, request())
         stripped.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
         stripped.headers["X-Service-Key"].assert().isNull()
+        // R1-4: the cookie the pipeline reads a token from goes; a header left with no cookie goes too.
+        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
         // Not a credential header of this pipeline: it reads keys from the renamed one only.
         stripped.headers["X-API-Key"].assert().isEqualTo(listOf("other"))
         stripped.uri.rawQuery.assert().isEqualTo("page=2")
@@ -247,12 +250,14 @@ class PipelineGatewayFilterTest {
         val kept = sent(keeping, request())
         kept.headers[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
         kept.headers["X-Service-Key"].assert().isEqualTo(listOf("key"))
+        kept.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark; authorization=c", "Authorization=d"))
         kept.uri.rawQuery.assert().isEqualTo("page=2&authorization=t&%61uthorization=u")
         // A route that does not receive the identity gets none of them either, asked for or not.
         for (route in listOf(route("https://partner.example"), route("lb://orders", identity = false))) {
             val partner = sent(keeping, request(), route)
             partner.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
             partner.headers["X-Service-Key"].assert().isNull()
+            partner.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
             partner.uri.rawQuery.assert().isEqualTo("page=2")
         }
         sent(keeping, request(), route("https://partner.example", identity = true))
@@ -260,6 +265,11 @@ class PipelineGatewayFilterTest {
         // A query without the token is left as it came.
         sent(stripping, get("/orders?q=a%20b")).uri.rawQuery.assert().isEqualTo("q=a%20b")
         sent(stripping, get("/orders?authorization=t")).uri.rawQuery.assert().isNull()
+        // Cookies without the token are left as they came; a request with only the token's cookie sends no Cookie.
+        sent(stripping, get("/orders").header(HttpHeaders.COOKIE, "a=1;b=2")).headers[HttpHeaders.COOKIE]
+            .assert().isEqualTo(listOf("a=1;b=2"))
+        sent(stripping, get("/orders").header(HttpHeaders.COOKIE, "authorization=t")).headers
+            .containsHeader(HttpHeaders.COOKIE).assert().isFalse()
         // The rest of the URI stays as it came: escapes, a fragment, and characters no builder would accept unencoded.
         val raw = sent(stripping, get("/a%2Fb?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
         raw.rawPath.assert().isEqualTo("/a%2Fb")

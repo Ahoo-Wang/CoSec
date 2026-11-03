@@ -119,8 +119,12 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
 - **No credential goes downstream** (RC1-5, `IDN-8`). Besides `Authorization`, the gateway removes the API key header
   (`cosec.pipeline.api-key-header`, under whatever name it gives) and the `authorization` query parameter from every
   request it forwards. A service that reads them itself needs `cosec.gateway.identity.forward-authorization=true`;
-  with it, all three now go only to the routes that receive the identity, so a route to a third party gets none. A
-  token in the `authorization` cookie is still forwarded.
+  with it, they now go only to the routes that would receive the identity (`lb://`, or `cosec-identity: true`), so a
+  route to a third party gets none.
+- **The `authorization` cookie stays at the gateway too** (`IDN-8`). Under the same switch, the gateway removes it from
+  each `Cookie` header it forwards, its name matched ignoring case, and keeps the other cookies; a header left with no
+  cookie is not sent. A service that reads its token from that cookie needs `forward-authorization=true` and a route
+  that would receive the identity.
 - **A route names its app** (RC1-6, `SCP-2`). Route metadata `cosec-app-id` is the app of the route's requests, ahead
   of `cosec.authorization.scope.app-id`: on such a route a request that declares another app is `403`
   `scope-rejected` (`401` for an anonymous caller), and one that declares none gets the route's app, its role
@@ -651,7 +655,7 @@ verified, and the services behind it trust the gateway:
 
 | Where | 7.x | 8.0 |
 |---|---|---|
-| Gateway | Forwarded the client's `Authorization` header. | On a permit with a principal it sets `CoSec-Identity` on a route to a registered service (`lb://`), and on any other route whose metadata says `cosec-identity: true`; it always strips the client's own. `cosec.gateway.identity.claims` names principal attributes to forward; route metadata `cosec-identity: false` keeps a route from receiving it. The `Authorization` header, the API key header and the `authorization` query parameter are removed from forwarded requests unless `cosec.gateway.identity.forward-authorization=true` ([Gateway identity](./configuration.md#gateway-identity)). |
+| Gateway | Forwarded the client's `Authorization` header. | On a permit with a principal it sets `CoSec-Identity` on a route to a registered service (`lb://`), and on any other route whose metadata says `cosec-identity: true`; it always strips the client's own. `cosec.gateway.identity.claims` names principal attributes to forward; route metadata `cosec-identity: false` keeps a route from receiving it. The `Authorization` header, the API key header, the `authorization` query parameter and the `authorization` cookie are removed from forwarded requests unless `cosec.gateway.identity.forward-authorization=true` ([Gateway identity](./configuration.md#gateway-identity)). |
 | Each service behind it | `cosec.inject.enabled=true` | `cosec.pipeline.mode=gateway` ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)): no keys, policies, snapshot or Redis; set `cosec.jwt.enabled=false` unless it issues tokens. Only the gateway may be able to reach the service (network policy, a private network, mTLS); anyone else who can is whoever they claim. |
 | Application code | Read the caller from `SecurityContext`. | The same. Attached policies are not forwarded, and the roles are those of the scope the gateway decided in. |
 
@@ -660,7 +664,8 @@ permits `500`. Give such keys an expiry, or opt their routes out.
 
 A service behind a CoSec gateway that verifies tokens itself no longer receives the `Authorization` header. Either set
 `cosec.gateway.identity.forward-authorization=true` on the gateway and route to the service by `lb://` or with
-`cosec-identity: true`, or switch the service to `cosec.pipeline.mode=gateway`. A token in a cookie is still forwarded.
+`cosec-identity: true`, or switch the service to `cosec.pipeline.mode=gateway`. A token in the `authorization` cookie
+is removed too, under the same switch.
 
 ### Storage and Redis
 

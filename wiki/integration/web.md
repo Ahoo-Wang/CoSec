@@ -292,9 +292,9 @@ Besides the credential, the scope, the action and the resource, conditions can r
 (`http.header.<name>`, `http.origin`, `http.referer` and their hosts), which the client writes, and **request
 attributes**, `request.attributes.<name>`, which the adapter sets and the client cannot. The gateway filter sets
 `request.attributes.cosec.audit.routeId`, the id of the matched route, and `request.attributes.cosec.identity.forward`:
-`true` on a route that [receives the identity](#forwarding-the-identity), `false` on any other. The attribute names, and how a
-header sent more than once is read, are in [Policy language](../policies/language.md); which of them the client
-controls is in [Trust boundaries](../guide/security-model.md#trust-boundaries).
+`true` on a route that [receives the identity](#forwarding-the-identity), `false` on any other. The attribute names,
+and how a header sent more than once is read, are in [Policy language](../policies/language.md); which of them the
+client controls is in [Trust boundaries](../guide/security-model.md#trust-boundaries).
 
 Facts the request does not carry come from `AttributeProvider` beans as **external attributes**,
 `ext.<provider>.<name>`, fetched only when a candidate statement reads them
@@ -335,8 +335,8 @@ from the WebFlux filter in three ways:
 - it loads no route map, so every request is `http:<METHOD>` on `http:path:<path>`;
 - it forwards the outcome's `CoSec-Request-Id` to the downstream service, replacing any value the client sent, so
   the backend's logs share the gateway's request id. On a Permit it also forwards the verified identity to a route
-  that receives it ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's credentials
-  unless `cosec.gateway.identity.forward-authorization=true`.
+  that receives it ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's credentials,
+  whether in a header, the query or a cookie, unless `cosec.gateway.identity.forward-authorization=true`.
 
 **The app of a route.** A route's metadata `cosec-app-id` names the app of its requests, ahead of
 `cosec.authorization.scope.app-id`: on that route, a request that declares another app with `CoSec-App-Id` is
@@ -461,12 +461,15 @@ larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not 
 longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
 without `expires-at`): a service could not bound such an identity.
 
-**Credentials.** The gateway forwards none of the client's credentials: it removes the `Authorization` header, the API
-key header (`cosec.pipeline.api-key-header`, under whatever name that gives it) and the `authorization` query parameter
-from every request it forwards, so a compromised service never sees a token or a key it could replay at the gateway.
-Set `cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or
-call other APIs on the user's behalf: the credentials then go to the routes that receive the identity, and to no
-other. Cookies go downstream as they came, so a token in the `authorization` cookie reaches the service.
+**Credentials.** The gateway forwards none of the client's credentials, no header, query parameter or cookie: from
+every request it forwards it removes the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`,
+under whatever name that gives it), the `authorization` query parameter, and the `authorization` cookie from each
+`Cookie` header, its name matched ignoring case (a header left with no cookie is not sent). A compromised service so
+never sees a token or a key it could replay at the gateway. Other cookies go downstream as they came. Set
+`cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or call
+other APIs on the user's behalf: the credentials then go to the routes that would receive the identity (a `lb://`
+route, or one marked `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` forwards it, and to no
+other.
 
 ### Services behind the gateway
 

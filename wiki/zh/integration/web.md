@@ -250,7 +250,7 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 
 - 它只作用于网关路由：没有路由匹配的请求，以及网关自己的 actuator 端点，都不经 CoSec 授权，因此在应用端口上暴露了 `health` 以外 actuator 端点的网关无法启动（[网关上的 actuator](#actuator-on-a-gateway)）；
 - 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`；
-- 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还把校验过的身份转发给接收身份的路由（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的凭证。
+- 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还把校验过的身份转发给接收身份的路由（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的凭证，无论它在请求头、查询参数还是 cookie 中。
 
 **路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`），没有声明的请求属于路由的应用，该应用的角色绑定（包括其中的 DENY）随之生效。只有在没有 `cosec-app-id` 的路由上、且网关没有设置 `cosec.authorization.scope.app-id` 时，客户端声明的应用才生效。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。`cosec-app-id` 不是合法应用 id 时，该路由的每个请求都会失败。
 
@@ -333,7 +333,7 @@ spring:
 
 **失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、数字或布尔值，或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
-**凭证。** 网关不转发客户端的任何凭证：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）和 `authorization` 查询参数，因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往接收身份的路由，不发往其他路由。Cookie 原样转发，因此放在 `authorization` cookie 中的令牌会到达服务。
+**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送）。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 

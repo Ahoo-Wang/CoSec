@@ -127,14 +127,14 @@ Use `$cosec-policy-author` to write the documents. Storage details: https://cose
 
 ## Services behind a CoSec gateway
 
-The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity
-it verified (tenant, principal, app, space, the roles there, credential id and expiry, and the claims named in
-`cosec.gateway.identity.claims`) to a route that receives it: a route to a registered service (`uri: lb://...`), or
-one whose metadata says `cosec-identity: true`. Any other route, and one marked `cosec-identity: false`, gets none:
-mark your own `http(s)://` services `true`, never a third party. It forwards no credentials (`Authorization`, the API
-key header, the `authorization` query parameter) unless `cosec.gateway.identity.forward-authorization=true`, and then
-only where the identity goes. A credential without expiry (an API key without `expires-at`) makes the gateway answer
-500.
+The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity it
+verified (tenant, principal, app, space, the roles there, credential id and expiry, and the claims named in
+`cosec.gateway.identity.claims`) to a route that receives it: a route to a registered service (`uri: lb://...`), or one
+whose metadata says `cosec-identity: true`. Any other route, and one marked `cosec-identity: false`, gets none: mark
+your own `http(s)://` services `true`, never a third party. It forwards no credentials (`Authorization`, the API key
+header, the `authorization` query parameter, the `authorization` cookie) unless
+`cosec.gateway.identity.forward-authorization=true`, and then only to a route that would receive the identity. A
+credential without expiry (an API key without `expires-at`) makes the gateway answer 500.
 
 On a gateway that fronts several apps, give each route its app with the metadata `cosec-app-id` (it takes precedence
 over `cosec.authorization.scope.app-id`), or the client chooses the app, and with it whose DENYs apply:

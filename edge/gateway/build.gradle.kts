@@ -16,4 +16,6 @@ dependencies {
     implementation(project(":runtime"))
     implementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
     testImplementation("org.springframework:spring-test")
+    // CookieTokenPropertyTest decodes forwarded Cookie headers with the server's own decoder; managed by the Boot BOM.
+    testImplementation("io.netty:netty-codec-http")
 }

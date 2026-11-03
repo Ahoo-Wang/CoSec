@@ -31,6 +31,7 @@ import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
 import org.springframework.core.Ordered
+import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import java.net.URI
@@ -59,8 +60,9 @@ class PipelineGatewayFilter(
     /**
      * `cosec.gateway.identity.forward-authorization`: whether the client's credentials go downstream, to a route that
      * receives the identity only. Off by default: a service behind needs none, and a compromised one then never sees
-     * one. They are the headers and the query parameter the pipeline reads them from ([Pipeline.credentialHeaders],
-     * [Pipeline.withoutQueryToken]): `Authorization`, the API key header and `authorization` (RC1-5).
+     * one. They are the headers, the query parameter and the cookie the pipeline reads them from
+     * ([Pipeline.credentialHeaders], [Pipeline.withoutQueryToken], [Pipeline.withoutCookieToken]): `Authorization`, the
+     * API key header, `authorization` in the query and the `authorization` cookie (RC1-5, R1-4 of #1194's review).
      */
     private val forwardAuthorization: Boolean = false,
 ) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
@@ -68,6 +70,7 @@ class PipelineGatewayFilter(
     Ordered {
     private val credentialHeaders: Set<String> = pipeline.credentialHeaders
     private val withoutQueryToken: (String?) -> String? = pipeline::withoutQueryToken
+    private val withoutCookieToken: (String) -> String? = pipeline::withoutCookieToken
 
     override fun read(exchange: ServerWebExchange): HttpFacts {
         val route = exchange.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
@@ -104,6 +107,7 @@ class PipelineGatewayFilter(
                     }
                     if (!credentials) {
                         credentialHeaders.forEach(headers::remove)
+                        withoutCookieTokens(headers)
                     }
                 }
             if (!credentials) {
@@ -116,6 +120,17 @@ class PipelineGatewayFilter(
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             chain.filter(authorized.mutate().request(downstream.build()).build())
+        }
+    }
+
+    /** Each `Cookie` header without the `authorization` cookie; one left with no cookie goes, and so does the name. */
+    private fun withoutCookieTokens(headers: HttpHeaders) {
+        val cookies = headers[HttpHeaders.COOKIE] ?: return
+        val kept = cookies.mapNotNull(withoutCookieToken)
+        when {
+            kept == cookies -> Unit
+            kept.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
+            else -> headers.put(HttpHeaders.COOKIE, kept)
         }
     }
 

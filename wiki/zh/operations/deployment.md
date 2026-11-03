@@ -49,9 +49,9 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
   任何过滤器删除一次，在发往后端的请求上再删除一次。匿名的 Permit、指向其他 URI 又没有该元数据的路由，以及元数据为
   `cosec-identity: false` 的路由，不带身份。用 `cosec.gateway.identity.enabled=false` 关闭转发；其余
   `cosec.gateway.identity.*` 配置项见[配置](./configuration.md)。
-- **不带凭证**：不带 `Authorization` 头、API key 头和 `authorization` 查询参数，除非设置
-  `cosec.gateway.identity.forward-authorization=true`，即便如此也只发往接收身份的路由。只为要再次校验令牌、或需要用用户的令牌
-  调用其他 API 的后端打开它。Cookie 原样转发。
+- **不带凭证**：不带 `Authorization` 头、API key 头、`authorization` 查询参数和 `authorization` cookie，除非设置
+  `cosec.gateway.identity.forward-authorization=true`，即便如此也只发往本会接收身份的路由。只为要再次校验令牌、或需要用用户的令牌
+  调用其他 API 的后端打开它。其他 cookie 原样转发。
 - **`CoSec-Request-Id`**，网关自己的请求 id。
 
 永不过期的凭证（没有 `expires-at` 的 API key）不会被转发：这样的请求回答 `500`，网关记录

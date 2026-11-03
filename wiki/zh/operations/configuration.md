@@ -112,7 +112,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.gateway.identity.enabled` | boolean | `true` | 把已验证的身份转发给接收身份的路由。关闭后，网关仍然移除客户端的身份。 |
 | `cosec.gateway.identity.claims` | 属性名集合 | 空 | 作为 `claims` 随身份一起转发的主体属性，如 `name` 和 `email`（对 JWT 而言是其 `attributes` 声明中的 key，不是顶层声明）：最多 1024 个字符的字符串、数字和布尔值。其他值使请求失败（`500`）。 |
 | `cosec.gateway.identity.max-size` | data size | `8KB` | 编码后更大的身份使请求失败即拒绝（`500`），而不是被截断。 |
-| `cosec.gateway.identity.forward-authorization` | boolean | `false` | 客户端的凭证是否仍然发往下游：`Authorization` 头、API key 头（`cosec.pipeline.api-key-header`）和 `authorization` 查询参数。关闭时，网关从它转发的每个请求中移除它们：其后的服务不需要凭证。打开时，它们只发往接收身份的路由。只对要再次校验令牌或代表用户调用其他 API 的服务打开。放在 cookie 中的令牌总会被转发。 |
+| `cosec.gateway.identity.forward-authorization` | boolean | `false` | 客户端的凭证是否仍然发往下游：`Authorization` 头、API key 头（`cosec.pipeline.api-key-header`）、`authorization` 查询参数和 `authorization` cookie。关闭时，网关从它转发的每个请求中移除它们（cookie 从每个 `Cookie` 头中移除，其他 cookie 保留）：其后的服务不需要凭证。打开时，它们只发往本会接收身份的路由（`lb://`，或 `cosec-identity: true`），无论 `cosec.gateway.identity.enabled` 是否打开。只对要再次校验令牌或代表用户调用其他 API 的服务打开。 |
 
 永不过期的凭证（没有 `expires-at` 的 API key）无法被转发：它的放行得到 `500`。
 
