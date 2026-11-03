@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.ShadowWindows
 import me.ahoo.cosec.control.store.ControlStore
@@ -243,6 +244,50 @@ class PipelineStarterRedisTest {
         }
     }
 
+    /**
+     * R2-4 of #1194's review: the starter's shadow listener has the installed views. A tenant candidate that binds the
+     * order app's permission to Anyone makes alice's roleless request in `order` read order's document (RC1-17): with
+     * the views the window reports `WIDENED`; without them, `CANDIDATE_ERROR`, which would block every such change.
+     */
+    @Test
+    fun `a tenant candidate that makes a roleless request read an app document widens its window`() {
+        runner.withPropertyValues(
+            "cosec.authorization.shadow.sample-rate=1",
+            "cosec.authorization.shadow.report-interval=100ms",
+        ).run { context ->
+            val client = client(context)
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", ADMIN_ONLY)
+            publish(context, SnapshotKey.App("order"), DocumentKind.APP, "order", ORDER_READ)
+            publish(context, SnapshotKey.Tenant("acme"), DocumentKind.TENANT, "acme", "")
+            val window = "w-${UUID.randomUUID()}"
+            val startedAt = Instant.now()
+            val granting = """{"schema":2,"revision":2,"publishedAt":"2026-10-27T00:00:00Z",""" +
+                """"bindings":[{"id":"reads","subject":"*","app":"order","space":"*","policy":"perm:order/read"}]}"""
+            runBlocking {
+                context.getBean(ControlStore::class.java).putCandidate(
+                    SnapshotKey.Tenant("acme"),
+                    StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, granting.encodeToByteArray())),
+                )
+            }
+            // The window closes as soon as one sample compared.
+            val windows = ShadowWindows(
+                context.getBean(CoCacheShadowReports::class.java),
+                ShadowOptions(Duration.ZERO, 1, Duration.ofHours(1)),
+            )
+            val alice = token(context, "acme", "alice")
+            eventually {
+                // The enforced decision never notices the candidate: the installed tenant grants nothing.
+                client.get().uri("/orders/1").header(HttpHeaders.AUTHORIZATION, alice).header("CoSec-App-Id", "order")
+                    .exchange().expectStatus().isEqualTo(403)
+                val summary = runBlocking { windows.close(ShadowState(window, startedAt), Instant.now()) }
+                summary.assert().isNotNull()
+                summary!!.blocked.assert().isFalse()
+                summary.counts.getValue("WIDENED").assert().isGreaterThan(0)
+                summary.counts.getValue("CANDIDATE_ERROR").assert().isEqualTo(0L)
+            }
+        }
+    }
+
     /** An instance id ends its report's Redis key, so one with a `:` could name another instance's report. */
     @Test
     fun `an instance id outside letters, digits, dot, underscore and dash fails startup`() {
@@ -261,6 +306,13 @@ class PipelineStarterRedisTest {
             """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
             """"bindings":[{"id":"members","subject":"*","app":"*","space":"*","policy":"members"},""" +
             """{"id":"plato","subject":{"principal":"plato","tenant":"(platform)"},"app":"cosec-control","space":"","policy":"cosec:platform-admin"}]"""
+
+        /** Only the platform admin's binding: nothing else is permitted. */
+        const val ADMIN_ONLY = ""","bindings":[{"id":"plato","subject":{"principal":"plato","tenant":"(platform)"},""" +
+            """"app":"cosec-control","space":"","policy":"cosec:platform-admin"}]"""
+
+        /** The order app's permission to read, bound by no one in its own document. */
+        const val ORDER_READ = ""","policies":[{"id":"perm:order/read","statements":[{"effect":"allow","action":"http:GET"}]}]"""
 
         /** A DENY with a three-node condition: more than a platform that allows two nodes compiles. */
         const val TENANT = ""","policies":[{"id":"no-delete","statements":[{"effect":"deny","action":"http:DELETE",""" +
