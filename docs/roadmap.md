@@ -328,10 +328,11 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **B2 第四轮审查的低级问题 R4-1–R4-6 与 RC1-51 合为一个后续 PR**，排在 CoCache 6.10.0 适配之后、批次 C 之前（协调者决定）：都不放行请求，不阻止 B2 合入 | 2026-11-02 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan |
 | **网关也不转发 `authorization` cookie**（#1194 复审 R1-4，由低级提为阻塞）：管道从这个 cookie 读 token，所以它是凭据；与其他凭据同一开关，`forward-authorization=false`（默认）时每条路由都去掉，为 `true` 时只留给接收身份的路由（IDN-7）；其他 cookie 不动 | 2026-11-03 | 维护者："按你推荐"；#1194 |
 | **外部 IdP（OIDC/JWKS、令牌内省、OIDC 登录）放到 8.1，用单独的 RFC 设计**，GA 前不做（重申 RFC 0010 Q2）：以后加入是纯新增，唯一的线上协议改动（C3）已在 GA 前完成；RC 前的公共声明归类不能收掉 RFC 0010 列出的接缝 | 2026-11-03 | 维护者："Add to roadmap"；[RFC 0010](rfc/0010-ga-extension-points.md) §1、Q2 |
+| **RFC 0010 复查：GA 前再加两项**。C4：公共 `data class` 逐个归类，只留永不增长的值，加架构规则，会增长的封闭集合在 KDoc 和 `extending.md` 写明；与 RC 前的公共声明归类合为一步，覆盖所有发布模块。C5：`InstanceStatus` 加格式级别，文档格式的发布门槛随 8.1 第一个文档新字段加入 | 2026-11-03 | 维护者："Write the addendum"；[RFC 0010](rfc/0010-ga-extension-points.md) 2026-11-03 复查、Q4–Q6 |
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类（不收掉 RFC 0010 列出的接缝）→ 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
+- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → 公共声明归类与 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5（覆盖所有发布模块，不收掉 RFC 0010 列出的接缝）→ 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
