@@ -22,7 +22,8 @@ Every request goes through one pipeline, whatever the adapter. Before the engine
 4. resolves the scope (tenant, app, space and the roles there) with `ScopeResolver`. A rejected scope is a deny
    ([Trust boundaries](#trust-boundaries));
 5. reads the snapshot view: the platform document, the document of the scope's tenant, and the app's document when
-   the principal has roles in the scope's app. A blocked request reads the platform document only;
+   the principal has roles in the scope's app, or when the tenant's document binds one of that app's permission
+   policies to `Anyone` or to a principal. A blocked request reads the platform document only;
 6. fetches the external attributes the candidate statements need.
 
 The engine (`FlatEvaluator`) then decides in two passes over the **candidates**, the policies that apply to the
@@ -282,7 +283,7 @@ A grant is only as trustworthy as the inputs it depends on.
 |---|---|---|
 | Principal id, attributes, roles and attached policies | The verified token's claims, or your `MembershipProvider`. An API key gives only its principal and tenant, and the attribute `apiKeyId`; its roles always come from the provider, narrowed to the key's cap | Whoever issues credentials, and whoever runs the membership source |
 | Tenant | The credential (`tenantId` claim, the API key's required tenant); `(0)` for a token without one. An anonymous request is always in `(0)` | Whoever issues credentials |
-| App | `cosec.authorization.scope.app-id` when set (a different `CoSec-App-Id` is rejected); otherwise `CoSec-App-Id` | Your configuration, or the client |
+| App | The host's app when there is one (a different `CoSec-App-Id` is rejected): on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`; otherwise `CoSec-App-Id` | Your configuration, or the client |
 | Space | `CoSec-Space-Id`, accepted only when the principal has a role in that space | The client, among the credential's spaces |
 | Device | `CoSec-Device-Id` | The client |
 | Method, path, query | The HTTP request; the route map turns method and path into an action and a resource | The client, within your route map |
@@ -299,10 +300,11 @@ How `ScopeResolver` checks the scope:
   request is rejected (`SPACE_NOT_MEMBER`), never moved to the default space. `*` is never a space. Without
   `CoSec-Space-Id`, the request is in the default space. An anonymous principal has no roles, so it can only be in
   the default space.
-- **App.** With `cosec.authorization.scope.app-id` set, the host's app applies, and a request that declares another
-  one is rejected (`APP_MISMATCH`). Without it, the declared app applies as sent. A declared app that cannot be an app
-  id (blank, `*`, containing `:` or longer than 128 characters) is rejected either way. The app is checked before the
-  space.
+- **App.** With a host app, the host's app applies, and a request that declares another one is rejected
+  (`APP_MISMATCH`). The host app is, on a gateway, the route's metadata `cosec-app-id`, ahead of
+  `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the declared app applies as
+  sent. A declared app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
+  characters: the rule of a tenant id) is rejected either way. The app is checked before the space.
 - Matching is exact: no trimming, no case folding.
 
 A rejected scope is a Deny: `401` for an anonymous caller, `403` (`scope-rejected`) for an authenticated one.
@@ -310,12 +312,16 @@ A rejected scope is a Deny: `401` for an anonymous caller, `403` (`scope-rejecte
 **The app is the weak spot.** A principal's roles belong to spaces, not to apps. Without a host app, the client
 picks which app document's role bindings apply to those roles. If two apps' role bindings grant on the same actions
 and resources (apps sharing the `http` namespace on one path prefix, say), the client decides which grants apply.
-To keep the app id from widening access:
+It also decides whether an app's DENYs apply: an app's document is read only for requests in that app, so without a
+host app, the DENYs it binds to roles apply only when the client declares that app. A client that declares another
+app, or none, steps around them, while the ALLOWs of the platform and the tenant that are not scoped to an app still
+apply. To keep the app id from widening access:
 
 - set `cosec.authorization.scope.app-id` on every service that serves one app;
-- on a gateway, where one host app covers every route, keep the apps' route maps and resources disjoint, or add a
-  platform DENY per app prefix, such as DENY `http:*` on `http:path:/orders/**` with the condition
-  `{"not": {"eq": ["scope.app", "order"]}}`.
+- on a gateway that fronts several apps, give each route its app with the metadata `cosec-app-id`
+  ([Gateway](../integration/web.md#gateway)). Where a route has none and the gateway has no host app, keep the apps'
+  route maps and resources disjoint, or add a platform DENY per app prefix, such as DENY `http:*` on
+  `http:path:/orders/**` with the condition `{"not": {"eq": ["scope.app", "order"]}}`.
 
 **Client IP.** `max-trusted-index` is the number of proxies in front of the application; the default `1` assumes
 one. CoSec takes that entry counted from the right of `X-Forwarded-For`, which your proxy appended. On a host that
@@ -347,10 +353,17 @@ hold only if the gateway is the only one that can reach the service:
 - Anyone else who can send the service a request can claim any principal, tenant and role. Keep the service
   reachable from the gateway only: a network policy, a private network, or mutual TLS
   ([Services behind the gateway](../operations/deployment.md#services-behind-the-gateway)).
-- The header is not signed. The service refuses one issued longer ago than `cosec.pipeline.gateway.max-age`
+- The gateway sends the header only to a route that receives it: a route to a registered service (`lb://`), or one
+  whose metadata says `cosec-identity: true` ([Forwarding the identity](../integration/web.md#forwarding-the-identity)).
+- The header is not signed, and names no audience: **the trust boundary is the network between the gateway and the
+  services**, not the header. Whoever can send a service a request can write one, and a service that receives one
+  could replay it to another. The service refuses one issued longer ago than `cosec.pipeline.gateway.max-age`
   (60 seconds) plus `cosec.authentication.revocation.skew`, or whose credential has expired, with `401`
   `token-expired`, so a header captured inside the network replays only for that long. One that cannot be read or
-  arrives twice is `400`, never anonymous. A request without the header is anonymous.
+  arrives twice is `400`, never anonymous. A request without the header is anonymous. A signature or an audience would
+  be a new member of the header, and so a new version of it (`v`); 8.0 has neither.
+- A service that decides with policies removes a `CoSec-Identity` a client sent before its handler sees the request,
+  so it never relays one to the services it calls.
 - The service sees what the gateway decided with, nothing more: the roles of that one scope, no policies, and only
   the claims `cosec.gateway.identity.claims` names.
 
@@ -420,6 +433,9 @@ CoSec decides whether a request may reach your handler. It does not:
   [Trust boundaries](#trust-boundaries));
 - keep anyone but the gateway from reaching a service in gateway mode: that is the network's job
   ([Trust boundaries](#trust-boundaries));
+- authorize what no gateway route matches, such as the gateway's actuator endpoints: a gateway refuses to start while
+  one other than `health` is served on its application port
+  ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway));
 - decide which records a handler returns, or which fields: filter data in your own code, and use
   [checks in code](../integration/checks.md) for object-level rules;
 - protect credentials it did not issue: a stolen token is valid until it expires or is revoked;
@@ -433,7 +449,10 @@ Before production:
 
 - Load `cosec.jwt.secret` from a secret store, and keep access tokens short-lived.
 - Set `cosec.authorization.remote-ip.max-trusted-index` to match your proxy chain, `0` on a directly exposed host.
-- Set `cosec.authorization.scope.app-id` on every service that serves one app.
+- Set `cosec.authorization.scope.app-id` on every service that serves one app, and `cosec-app-id` on every route of
+  a gateway that fronts several.
+- On a gateway, mark `cosec-identity: true` only the routes to your own services that are not `lb://`, and serve
+  actuator on a management port.
 - Run Redis with `maxmemory-policy noeviction` ([Storage](../operations/storage.md)).
 - Register a REQUIRED decision listener before anyone needs break-glass.
 - Put DENYs that must always apply in policies without a condition, and never grant on a header the client

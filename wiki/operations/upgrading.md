@@ -15,7 +15,9 @@ observability. This page is the single home of migration steps. Release notes fo
 8.0.0-alpha.2 is a preview with no compatibility promise. These changes since then, from the
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), make the grant
 analysis read the author's rights as enforcement does, so some changes that published alone now wait for approval
-([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents.
+([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents. Those at the gateway and
+the edge of tenant isolation (RC1-5, RC1-6, RC1-15 to RC1-18, RC1-48, RC1-49), from **Identity forwarding** on, change
+what a gateway forwards and to which routes: read them before upgrading a gateway.
 
 - **Token attributes of every type** (RC1-2, `GRT-5`). The analysis reads `subject.attributes.*` as the engine does,
   a boolean or a number as its text. An author whose ALLOW is conditioned on not being `suspended` no longer counts
@@ -107,6 +109,43 @@ analysis read the author's rights as enforcement does, so some changes that publ
   stalled revoke or takes its slot. Every abandon is recorded as a new change event, `ABANDONED`; abandoning a
   break-glass change needs a REQUIRED change listener (`503` otherwise). A change listener that handles every
   `ChangeEvent.Kind` gains `ABANDONED`.
+- **Identity forwarding is opt-in by scheme** (RC1-49, `IDN-7`). The gateway forwards `CoSec-Identity` only to a
+  route to a registered service (`uri: lb://...`, `lb:ws://...`) or one whose metadata says `cosec-identity: true`;
+  `false` still keeps it from any route, and any value but `true` reads as `false`. **A route to one of your services by
+  `http://` or `https://` stops receiving the identity, and the service behind it sees anonymous requests**: before
+  upgrading the gateway, add `cosec-identity: true` to the metadata of those routes, and of no route to a third party
+  ([Forwarding the identity](../integration/web.md#forwarding-the-identity)). The request attribute
+  `cosec.identity.forward` is now `true` or `false` on every routed request, where it was set only to `false`.
+- **No credential goes downstream** (RC1-5, `IDN-8`). Besides `Authorization`, the gateway removes the API key header
+  (`cosec.pipeline.api-key-header`, under whatever name it gives) and the `authorization` query parameter from every
+  request it forwards. A service that reads them itself needs `cosec.gateway.identity.forward-authorization=true`;
+  with it, all three now go only to the routes that receive the identity, so a route to a third party gets none. A
+  token in the `authorization` cookie is still forwarded.
+- **A route names its app** (RC1-6, `SCP-2`). Route metadata `cosec-app-id` is the app of the route's requests, ahead
+  of `cosec.authorization.scope.app-id`: on such a route a request that declares another app is `403`
+  `scope-rejected` (`401` for an anonymous caller), and one that declares none gets the route's app, its role
+  bindings and its DENYs. A route without it keeps the gateway's host app, or the client's. On a gateway that fronts
+  several apps, give each route its app. A `cosec-app-id` that cannot be an app id fails every request of its route.
+- **Actuator on a gateway** (RC1-48, `STA-2`). A gateway host that decides with policies no longer starts while an
+  actuator endpoint other than `health` is exposed over HTTP on its application port (`management.server.port` unset,
+  or the same as `server.port`): CoSec authorizes the gateway's routes, not those endpoints. Serve actuator on its own
+  port behind a network policy, expose only `health`, or list in the new property
+  `cosec.gateway.unprotected-endpoints` the endpoints something else protects; it never accepts `gateway`
+  ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)). `cosec-gateway-server` and `k8s/` expose only
+  `health`.
+- **A blank `CoSec-*` value beside another is ambiguous** (RC1-16, `SCP-4`): `?CoSec-Space-Id=` with the header
+  `CoSec-Space-Id: s1` is now `400` `invalid-request`, where `s1` applied. Blank means ASCII whitespace only, so a value
+  of Unicode spaces, such as `%E3%80%80`, is a value: alone, it is a space the principal must have a role in. Send each
+  parameter once.
+- **App ids refuse control characters** (RC1-15, `SCP-7`), as tenant ids do: a declared app with one is
+  `403` `scope-rejected` (`401` for an anonymous caller), and a host app with one fails startup.
+- **Enforcing hosts drop a client's `CoSec-Identity`** (RC1-18, `IDN-9`). A WebFlux or Spring MVC host in `enforce`
+  mode removes the header from the request its handler sees, so it never relays one a client wrote. Code that read it
+  there read what any client could write; read the `SecurityContext`.
+- **A tenant's grant of an app's permission to `Anyone` or a principal resolves** (RC1-17, `TNT-4`). A request in that
+  app now reads the app's document whatever the principal's roles, so the binding's DENY or ALLOW applies, where
+  every such request was `503`, and so do the app document's rate limit rules. In code, `CompiledDocument.tenant`
+  takes the set `boundApps`, and `CompiledDocument.needsApp` answers it.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,
@@ -612,7 +651,7 @@ verified, and the services behind it trust the gateway:
 
 | Where | 7.x | 8.0 |
 |---|---|---|
-| Gateway | Forwarded the client's `Authorization` header. | Nothing to set: on a permit with a principal it sets `CoSec-Identity`, and it always strips the client's own. `cosec.gateway.identity.claims` names principal attributes to forward; route metadata `cosec-identity: false` opts a route out. The `Authorization` header is removed from forwarded requests unless `cosec.gateway.identity.forward-authorization=true` ([Gateway identity](./configuration.md#gateway-identity)). |
+| Gateway | Forwarded the client's `Authorization` header. | On a permit with a principal it sets `CoSec-Identity` on a route to a registered service (`lb://`), and on any other route whose metadata says `cosec-identity: true`; it always strips the client's own. `cosec.gateway.identity.claims` names principal attributes to forward; route metadata `cosec-identity: false` keeps a route from receiving it. The `Authorization` header, the API key header and the `authorization` query parameter are removed from forwarded requests unless `cosec.gateway.identity.forward-authorization=true` ([Gateway identity](./configuration.md#gateway-identity)). |
 | Each service behind it | `cosec.inject.enabled=true` | `cosec.pipeline.mode=gateway` ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)): no keys, policies, snapshot or Redis; set `cosec.jwt.enabled=false` unless it issues tokens. Only the gateway may be able to reach the service (network policy, a private network, mTLS); anyone else who can is whoever they claim. |
 | Application code | Read the caller from `SecurityContext`. | The same. Attached policies are not forwarded, and the roles are those of the scope the gateway decided in. |
 
@@ -620,8 +659,8 @@ A credential that never expires, such as an API key without `expires-at`, is not
 permits `500`. Give such keys an expiry, or opt their routes out.
 
 A service behind a CoSec gateway that verifies tokens itself no longer receives the `Authorization` header. Either set
-`cosec.gateway.identity.forward-authorization=true` on the gateway, or switch the service to
-`cosec.pipeline.mode=gateway`. A token in a cookie is still forwarded.
+`cosec.gateway.identity.forward-authorization=true` on the gateway and route to the service by `lb://` or with
+`cosec-identity: true`, or switch the service to `cosec.pipeline.mode=gateway`. A token in a cookie is still forwarded.
 
 ### Storage and Redis
 

@@ -41,20 +41,24 @@ docker run -d -p 8080:8080 \
 
 CoSec runs as a Spring Cloud Gateway global filter, which runs on the gateway's routes only. So every routed request
 is authorized, in the `http` namespace (the gateway loads no route map), and the gateway's own actuator endpoints,
-health probes included, are not. Routes are ordinary Spring Cloud Gateway configuration under
+health probes included, are not: the gateway does not start with an actuator endpoint other than `health` on its
+application port ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)). Routes are ordinary Spring Cloud Gateway configuration under
 `spring.cloud.gateway.server.webflux.routes`. How a request becomes an action and a resource, and how outcomes become
 responses, is in [Web integration](../integration/web.md).
 
 What a routed request carries to its backend:
 
-- **`CoSec-Identity`**, on a permit for an authenticated principal: the identity the gateway verified and the scope it
-  decided in. The gateway removes any `CoSec-Identity` a client sent from every request, before any other filter and
-  again on the routed request, whatever `cosec.pipeline.mode` or `cosec.enabled` say. An anonymous permit, and a route
-  whose metadata says `cosec-identity: false`, carry none. Turn forwarding off with
-  `cosec.gateway.identity.enabled=false`; the other `cosec.gateway.identity.*` properties are in
-  [Configuration](./configuration.md).
-- **No `Authorization` header**, unless `cosec.gateway.identity.forward-authorization=true`. Turn it on only for a
-  backend that calls other APIs with the user's token.
+- **`CoSec-Identity`**, on a permit for an authenticated principal, on a route that receives it: a route to a
+  registered service (`lb://`), or one whose metadata says `cosec-identity: true`. It holds the identity the gateway
+  verified and the scope it decided in. The gateway removes any `CoSec-Identity` a client sent from every request,
+  before any other filter and again on the routed request, whatever `cosec.pipeline.mode` or `cosec.enabled` say. An
+  anonymous permit, a route to any other URI without the metadata, and a route whose metadata says
+  `cosec-identity: false` carry none. Turn forwarding off with `cosec.gateway.identity.enabled=false`; the other
+  `cosec.gateway.identity.*` properties are in [Configuration](./configuration.md).
+- **No credentials**: no `Authorization` header, no API key header and no `authorization` query parameter, unless
+  `cosec.gateway.identity.forward-authorization=true`, and then only on a route that receives the identity. Turn it on
+  only for a backend that verifies the token again or calls other APIs with the user's token. Cookies are forwarded
+  as they came.
 - **`CoSec-Request-Id`**, the gateway's own request id.
 
 A credential that never expires (an API key without `expires-at`) is not forwarded: such a request answers `500`, and

@@ -425,7 +425,9 @@ trusts a token without verifying it.
   expiry and revocation, and decides with the same documents.
 
 To decide again, set `cosec.gateway.identity.forward-authorization=true` on the gateway: by default it removes the
-`Authorization` header before forwarding. Give the services and the gateway the same `cosec.jwt.secret`, the same
+`Authorization` header, the API key header and the `authorization` query parameter before forwarding, and even with
+it on, it forwards them only on a route that receives the identity: a `lb://` route, or one marked
+`cosec-identity: true` ([Forwarding the identity](./web.md#forwarding-the-identity)). Give the services and the gateway the same `cosec.jwt.secret`, the same
 Redis, and the same `cosec.authorization.snapshot.key-prefix`, so they read the same documents and the same
 revocations. The gateway sets `CoSec-Request-Id` to its own request id ([Gateway](./web.md#gateway)), so each
 service's outcome carries the same id. Set `cosec.authorization.scope.app-id` on each service, and

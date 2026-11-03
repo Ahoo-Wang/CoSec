@@ -46,8 +46,10 @@ The request cannot be read without ambiguity, so it is refused before authentica
 `BAD_REQUEST`. Causes:
 
 - the path has `.` or `..` segments, or a malformed percent-escape;
-- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different non-blank values, between the
-  header and the query string or within either, or its query value has a malformed percent-escape;
+- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different values, between the header
+  and the query string or within either, a blank one beside a non-blank one included (`?CoSec-Space-Id=` with the
+  header `CoSec-Space-Id: s1`), or its query value has a malformed percent-escape. Send each parameter once, or leave
+  it out;
 - a route map captures a value that would change the resource id's segments;
 - on a service in `cosec.pipeline.mode=gateway`, a `CoSec-Identity` header that cannot be read
   ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
@@ -128,8 +130,9 @@ deciding statement, then explain the request ([Find out what decided](#find-out-
 
 The scope the request declares cannot be granted to this caller:
 
-- `CoSec-App-Id` names an app other than the host's [`cosec.authorization.scope.app-id`](./configuration.md#authorization),
-  or an id that cannot be an app id;
+- `CoSec-App-Id` names an app other than the host's: on a gateway, the route's metadata `cosec-app-id`, else
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization); or an id that cannot be an app id (blank,
+  `*`, with `:` or a control character, or longer than 128 characters);
 - `CoSec-Space-Id` names a space where the principal has no role.
 
 Send the host's app, or none, and a space the principal is a member of
@@ -182,6 +185,9 @@ On a gateway, a permit whose identity cannot be forwarded is a `500` too, logged
 
 - `The credential of [<subject>] never expires: a service could not bound the identity.`: an API key without
   `expires-at` (or a token without `exp`). Give the key an expiry, or set the route's metadata `cosec-identity: false`.
+
+A route whose metadata `cosec-app-id` cannot be an app id (empty, with `:` or a control character, or longer than 128
+characters) answers `500` on every request: fix the metadata ([Gateway](../integration/web.md#gateway)).
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`, `Claim [<name>] is <n> characters,
   over 1024.` or `Claim [<name>] is a <type>, not a string, number or boolean.`: fewer roles or
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity), or a larger `max-size` on the gateway and
@@ -232,6 +238,13 @@ read as anonymous:
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
+
+**Every request is anonymous.** The gateway forwards the identity only to a route that receives it: a route to a
+registered service (`uri: lb://...`), or one whose metadata says `cosec-identity: true`. A route to `http://` or
+`https://` without that metadata, or with `cosec-identity: false`, sends no identity, so the service behind sees
+anonymous requests. Mark the route `cosec-identity: true` when it leads to your own service
+([Forwarding the identity](../integration/web.md#forwarding-the-identity)). A service that verifies the token itself
+and stopped receiving it needs `cosec.gateway.identity.forward-authorization=true` and such a route.
 
 ## Instance is not ready
 
@@ -321,6 +334,25 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
 check, as it needs `cosec-gateway` instead. An application that moved from 7.x's capabilities adds the modules
 themselves ([Modules, artifacts and packages](./upgrading.md#modules-artifacts-and-packages)).
+
+### Startup fails on an exposed actuator endpoint
+
+```text
+Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port, where CoSec does not authorize them: anyone who reaches the gateway reaches them, and [gateway] writes its routes. ... (STA-2, https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-an-exposed-actuator-endpoint).
+cosec.gateway.unprotected-endpoints lists [gateway], which it never accepts: that endpoint writes the gateway's routes. ...
+```
+
+On a Spring Cloud Gateway host, CoSec authorizes the gateway's routes only, and its actuator endpoints are on the
+application port unless `management.server.port` names another. The first message lists the endpoints other than
+`health` exposed there. Do one of:
+
+- serve actuator on its own port, behind a network policy: `management.server.port=8081` (any port but `server.port`);
+- expose fewer endpoints: `management.endpoints.web.exposure.include=health`;
+- list the endpoints something else protects in
+  [`cosec.gateway.unprotected-endpoints`](./configuration.md#gateway), such as `prometheus` behind a network policy.
+
+The second message: `gateway` changes routes, so it is never accepted there; serve it on a management port, or not
+at all ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)).
 
 ### Startup fails on the eviction check
 

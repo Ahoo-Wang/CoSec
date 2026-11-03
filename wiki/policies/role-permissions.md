@@ -67,9 +67,11 @@ The app document of app `order` has the key `app:order`. It holds a [catalog](#p
 }
 ```
 
-A request reads the app document of its app only when the principal holds at least one role in the request's space.
-The app is the one the host is configured for (`cosec.authorization.scope.app-id`), or else the one the request
-declares in `CoSec-App-Id`; who controls these inputs is in the
+A request reads the app document of its app when the principal holds at least one role in the request's space, or
+when its tenant's document binds one of the app's permission policies to `Anyone` or to a principal
+([Tenant role bindings](#tenant-role-bindings)). The app is the host's: on a gateway, the route's metadata
+`cosec-app-id`, else `cosec.authorization.scope.app-id`; without one, the app the request declares in
+`CoSec-App-Id`. Who controls these inputs is in the
 [security model](../guide/security-model.md#trust-boundaries). A request without an app reads no app document, so no
 app role binding applies to it.
 
@@ -164,6 +166,10 @@ A tenant grants roles in its own tenant document, without touching the app docum
 - The policy can be one of the tenant's own policies, a platform policy, or an app's permission policy. An app's
   permission policy needs `app` set to exactly that app: it is then taken from that app's document, read in the same
   request. Any other binding of a permission policy does not compile.
+- A tenant document may bind an app's permission policy to `Anyone` or to one of its principals too, scoped to that
+  app the same way. A request in that app then reads the app's document whatever the principal's roles, so the
+  binding resolves and its DENY or ALLOW applies; it also brings in the app document's
+  [rate limit rules](./rate-limiting.md).
 - Tenant role bindings follow the same [scope rules](#role-grant-scope).
 
 ## Storing catalogs and grants

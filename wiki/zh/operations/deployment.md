@@ -36,19 +36,22 @@ docker run -d -p 8080:8080 \
 ## 网关授权什么 {#what-the-gateway-authorizes}
 
 CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器只作用于网关的路由。因此每个被路由的请求都会被授权，
-在 `http` 命名空间中（网关不加载路由映射），而网关自己的 actuator 端点（包括健康探针）不会。路由就是
+在 `http` 命名空间中（网关不加载路由映射），而网关自己的 actuator 端点（包括健康探针）不会：应用端口上暴露了 `health`
+以外 actuator 端点的网关不会启动（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。路由就是
 `spring.cloud.gateway.server.webflux.routes` 下普通的 Spring Cloud Gateway 配置。请求如何变成动作和资源、结果如何
 变成响应，见 [Web 集成](../integration/web.md)。
 
 被路由的请求向后端带去：
 
-- **`CoSec-Identity`**，在已认证主体的 Permit 上：网关验证过的身份，以及它做决策时的作用域。无论
+- **`CoSec-Identity`**，在已认证主体的 Permit 上，发往接收身份的路由：指向已注册服务的路由（`lb://`），或元数据为
+  `cosec-identity: true` 的路由。它带着网关验证过的身份，以及它做决策时的作用域。无论
   `cosec.pipeline.mode` 或 `cosec.enabled` 怎样设置，网关都会从每个请求中删除客户端发来的 `CoSec-Identity`：先于其他
-  任何过滤器删除一次，在发往后端的请求上再删除一次。匿名的 Permit，以及元数据为 `cosec-identity: false` 的路由，不带
-  身份。用 `cosec.gateway.identity.enabled=false` 关闭转发；其余 `cosec.gateway.identity.*` 配置项见
-  [配置](./configuration.md)。
-- **不带 `Authorization` 头**，除非设置 `cosec.gateway.identity.forward-authorization=true`。只为需要用用户的令牌
-  调用其他 API 的后端打开它。
+  任何过滤器删除一次，在发往后端的请求上再删除一次。匿名的 Permit、指向其他 URI 又没有该元数据的路由，以及元数据为
+  `cosec-identity: false` 的路由，不带身份。用 `cosec.gateway.identity.enabled=false` 关闭转发；其余
+  `cosec.gateway.identity.*` 配置项见[配置](./configuration.md)。
+- **不带凭证**：不带 `Authorization` 头、API key 头和 `authorization` 查询参数，除非设置
+  `cosec.gateway.identity.forward-authorization=true`，即便如此也只发往接收身份的路由。只为要再次校验令牌、或需要用用户的令牌
+  调用其他 API 的后端打开它。Cookie 原样转发。
 - **`CoSec-Request-Id`**，网关自己的请求 id。
 
 永不过期的凭证（没有 `expires-at` 的 API key）不会被转发：这样的请求回答 `500`，网关记录

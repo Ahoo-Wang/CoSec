@@ -109,7 +109,7 @@ sequenceDiagram
 - **路由。** 无法规范化的路径或有歧义的 `CoSec-*` 参数得到 `400`（第 2 步）。[路由映射](./extending.md#route-maps)把匹配到的请求变成作用于类型化资源的 `service:verb` 动作；其他请求则是作用于 `http:path:<path>` 的 `http:<METHOD>`。
 - **认证。** `Authenticator` 把令牌或 API key 变成主体（第 3 步）。被拒绝的凭证按匿名主体求值；认证器失败或超时得到 `503`。
 - **成员关系与 A 阶段。** A 阶段属性（决定要加载什么的属性，例如黑名单）与成员关系一起获取（第 4、5 步）。成员关系来自令牌的声明；对 API key，以及带有 provider 标记的令牌，来自 `MembershipProvider`，并按 key 的上限收窄。提供者不认识或认为已停用的主体，其凭证被拒绝，请求按匿名决策。成员关系来源失败、超时或返回错误类型的成员关系时得到 `503`，绝不当作“没有角色”。
-- **作用域。** `ScopeResolver` 把声明的应用和空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；绑定了应用（`cosec.authorization.scope.app-id`）的服务使用该应用，并拒绝声明了其他应用的请求；默认空间以外的空间要求主体在其中有角色。作用域被拒绝即为拒绝（见[信任边界](../guide/security-model.md#trust-boundaries)）。
+- **作用域。** `ScopeResolver` 把声明的应用和空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；绑定了应用（`cosec.authorization.scope.app-id`，或在网关上路由的 `cosec-app-id`）的服务使用该应用，并拒绝声明了其他应用的请求；默认空间以外的空间要求主体在其中有角色。作用域被拒绝即为拒绝（见[信任边界](../guide/security-model.md#trust-boundaries)）。
 - **快照视图。** 快照源从内存中给出视图（平台文档、应用文档、租户文档），缺什么就加载什么（第 7 步）。被黑名单拦截的请求只加载平台文档。
 - **B 阶段。** 有属性提供者声明 B 阶段属性时，引擎的 `plan` 列出本请求可能读取的外部属性，只获取这些属性，每个提供者并行、各有超时（第 8、9 步）。一个提供者失败，只会让它自己的属性不可用。
 - **决策。** 引擎给出 `Permit`（附带义务）、`Deny` 或 `Indeterminate`（第 10 步）。
@@ -124,7 +124,7 @@ sequenceDiagram
 
 ## 扁平引擎 {#the-flat-engine}
 
-引擎（[`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色时该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
+引擎（[`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（编译后的租户文档持有这个应用集合，判断只需一次查找）该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
 
 ### 候选顺序 {#candidate-order}
 

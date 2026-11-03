@@ -92,26 +92,36 @@ These have no switch:
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A request that declares another app with `CoSec-App-Id` is rejected (`403` `scope-rejected`, `401` for an anonymous caller). Unset, requests declare their app ([Trust boundaries](../guide/security-model.md#trust-boundaries)). |
+| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A request that declares another app with `CoSec-App-Id` is rejected (`403` `scope-rejected`, `401` for an anonymous caller). Unset, requests declare their app ([Trust boundaries](../guide/security-model.md#trust-boundaries)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
 | `cosec.authorization.routes.location` | comma-separated resource locations | `classpath:cosec-routes.json` | The route maps a WebFlux or WebMvc host loads at startup. A location that does not exist, or a map that does not parse, fails startup. Set it empty to run without a route map: every request is then authorized in the `http` namespace. A Spring Cloud Gateway host ignores it and loads no route map. |
 
+## Gateway
+
+`cosec.gateway.*`, on a Spring Cloud Gateway host (`cosec-gateway`) that decides with policies.
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.gateway.unprotected-endpoints` | set of endpoint ids | empty | Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize them, because something else protects them. Any other one but `health` fails startup there (`STA-2`); `gateway`, which changes routes, is never accepted. On a separate `management.server.port` any endpoint may be exposed ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)). |
+
 ## Gateway identity
 
 `cosec.gateway.identity.*`, on a Spring Cloud Gateway host (`cosec-gateway`): what the gateway forwards to the
 services behind it. On a permit with a principal it sets `CoSec-Identity` to the identity it verified (format:
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)).
-It always removes a `CoSec-Identity` the client sent, whatever these properties, the mode or `cosec.enabled` say. A
-route with the metadata `cosec-identity: false` forwards no identity.
+[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)),
+on a route that receives it: a route to a registered service (`lb://`), or one with the metadata
+`cosec-identity: true`. A route with `cosec-identity: false`, or to any other URI without the metadata, receives no
+identity ([Forwarding the identity](../integration/web.md#forwarding-the-identity)). The gateway always removes a
+`CoSec-Identity` the client sent, whatever these properties, the mode or `cosec.enabled` say.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.gateway.identity.enabled` | boolean | `true` | Forward the verified identity. Off, the gateway still strips the client's. |
+| `cosec.gateway.identity.enabled` | boolean | `true` | Forward the verified identity to the routes that receive it. Off, the gateway still strips the client's. |
 | `cosec.gateway.identity.claims` | set of attribute names | empty | Principal attributes forwarded with the identity as `claims`, such as `name` and `email` (for a JWT, keys of its `attributes` claim, not top-level claims): strings of at most 1024 characters, numbers and booleans. Any other value fails the request (`500`). |
 | `cosec.gateway.identity.max-size` | data size | `8KB` | A larger encoded identity fails the request closed (`500`) rather than being cut. |
-| `cosec.gateway.identity.forward-authorization` | boolean | `false` | Whether the client's `Authorization` header still goes downstream. Off, the gateway removes it from every request it forwards: a service behind it needs no token. Turn it on only for services that call other APIs on the user's behalf. A token in a cookie is still forwarded. |
+| `cosec.gateway.identity.forward-authorization` | boolean | `false` | Whether the client's credentials still go downstream: the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`) and the `authorization` query parameter. Off, the gateway removes them from every request it forwards: a service behind it needs none. On, they go only to the routes that receive the identity. Turn it on only for services that verify the token again or call other APIs on the user's behalf. A token in a cookie is always forwarded. |
 
 A credential that never expires (an API key without `expires-at`) cannot be forwarded: its permits are answered `500`.
 
