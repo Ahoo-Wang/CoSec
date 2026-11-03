@@ -251,7 +251,7 @@ internal sealed class GlobToken {
  * condition reads is then captured by a walk forward that gives each run the largest end whose next row holds: as much
  * as the rest allows, the greedy choice the regular expression's backtracking makes, so the values are the same. A
  * literal compared at every position costs its length each time, so a segment costs at most its [units] times the
- * value's length in steps. The table is the evaluation's [GlobScratch]: matching allocates only the captured values.
+ * value's length in steps. The table is the evaluation's ([EvaluationScratch]): matching allocates only the captured values.
  *
  * Without a scratch table, as through the public [HttpPathPattern.matches], [accepts] decides instead: the two-pointer
  * wildcard match, which goes back only to the last run and allocates nothing (review F4 of #1040: backtracking took
@@ -265,8 +265,12 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
     val units: Int = tokens.size + tokens.sumOf { (it as? GlobToken.Literal)?.length ?: 0 }
 
     /** Whether [value] matches; when it does and [captures] is given, the runs' values in it. */
-    fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean =
-        if (scratch == null && captures == null) accepts(value) else table(value, captures, scratch ?: GlobScratch())
+    fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean {
+        if (scratch == null && captures == null) {
+            return accepts(value)
+        }
+        return table(value, captures, scratch ?: EvaluationScratch())
+    }
 
     /**
      * Whether [value] matches. A run matches any number of code points; the other tokens match at one position each,
@@ -320,7 +324,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
      * there (`boundaries` is the row of the other positions, built only when the value has a pair).
      */
     @Suppress("ReturnCount")
-    fun table(value: String, captures: Array<String?>?, scratch: GlobScratch): Boolean {
+    fun table(value: String, captures: Array<String?>?, scratch: EvaluationScratch): Boolean {
         val width = (value.length + WORD_BITS) ushr WORD_SHIFT
         val pairs = scratch.hasPairs(value)
         val table = scratch.words(width * (tokens.size + if (pairs) 2 else 1))
@@ -446,41 +450,5 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
         const val WORD_BITS = 64
         const val WORD_SHIFT = 6
         const val NO_ROW = -1
-    }
-}
-
-/**
- * The table [SegmentGlob.table] works in, one per evaluation and reused across its statements and segments, so
- * matching allocates no table per statement. Not thread-safe: it belongs to the [ResourceTarget] of one evaluation.
- */
-internal class GlobScratch {
-    private var words: LongArray? = null
-
-    // Every statement matches the same segment values of the request's path: the last one's answer is kept.
-    private var scanned: String? = null
-    private var pairs = false
-
-    /** Whether [value] holds a surrogate pair. */
-    fun hasPairs(value: String): Boolean {
-        if (value !== scanned) {
-            pairs = false
-            for (position in 1 until value.length) {
-                if (value[position - 1].isHighSurrogate() && value[position].isLowSurrogate()) {
-                    pairs = true
-                    break
-                }
-            }
-            scanned = value
-        }
-        return pairs
-    }
-
-    /** At least [size] words, with unspecified contents. */
-    fun words(size: Int): LongArray {
-        val current = words
-        if (current != null && current.size >= size) {
-            return current
-        }
-        return LongArray(maxOf(size, (current?.size ?: 0) * 2)).also { words = it }
     }
 }

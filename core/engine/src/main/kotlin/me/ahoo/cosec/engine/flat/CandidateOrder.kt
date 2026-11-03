@@ -14,6 +14,7 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 
 /** Receives the candidates of one request, in [CandidateOrder]. */
@@ -62,6 +63,9 @@ internal interface CandidateVisitor {
  * so a key is never more than its principal (`BND-9`, `IDN-2`, RC1-1).
  */
 internal object CandidateOrder {
+    /** Up to this many attachments are compared pairwise, which allocates nothing. */
+    private const val PAIRWISE = 16
+
     fun forEach(request: FlatRequest, view: SnapshotView, effect: Effect, visitor: CandidateVisitor): Boolean {
         if (visitor.candidate(BuiltinPolicies.blacklist, BindingRef.Builtin)) {
             return true
@@ -128,9 +132,14 @@ internal object CandidateOrder {
         tenant: CompiledDocument?,
         visitor: CandidateVisitor,
     ): Boolean {
-        val attachments = request.attachments
+        val attachments = request.memberships.attachments
+        // A policy claimed twice is attached once (`ALG-9`): a few claims are compared pairwise, many through a set.
+        val claimed = if (attachments.size > PAIRWISE) HashSet<String>(attachments.size * 2) else null
         for (i in attachments.indices) {
             val id = attachments[i].value
+            if (if (claimed == null) claimedBefore(attachments, i) else !claimed.add(id)) {
+                continue
+            }
             val own = tenant?.policy(id)
             val shared = platform.policy(id)
             if (own != null && shared != null && !own.sameContent(shared)) {
@@ -141,6 +150,16 @@ internal object CandidateOrder {
             if (policy == null) {
                 visitor.missing(id)
             } else if (visitor.candidate(policy, policy.attached)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun claimedBefore(attachments: List<PolicyId>, index: Int): Boolean {
+        val id = attachments[index].value
+        for (i in 0 until index) {
+            if (attachments[i].value == id) {
                 return true
             }
         }

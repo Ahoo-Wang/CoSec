@@ -14,8 +14,10 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.pattern.Captures
+import me.ahoo.cosec.engine.pattern.EvaluationScratch
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.ResourceTarget
+import me.ahoo.cosec.engine.pattern.ScratchSource
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
@@ -60,7 +62,8 @@ import me.ahoo.cosec.model.decision.StatementRef
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
     CandidateVisitor,
     ConditionInput,
-    IndexLookup {
+    IndexLookup,
+    ScratchSource {
     protected val authz: AuthzRequest = request.request
     private val host: ConditionInput = request.attributes
     protected val target: ResourceTarget = ResourceTarget(authz.resource)
@@ -103,10 +106,10 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var listCount = 0
 
     /**
-     * The repeated targets ([BoundEntry.repeat]) each pass has evaluated, two bits per slot of the view's documents;
-     * allocated when a pass first reaches one, so a view without them allocates nothing for it.
+     * The glob table and the marks of repeated targets ([BoundEntry.repeat]), made when the evaluation first needs
+     * either: an evaluation of documents with neither glob segments nor repeated targets makes none.
      */
-    private var repeatsEvaluated: LongArray? = null
+    private var scratch: EvaluationScratch? = null
 
     private var pathState = PATH_UNPARSED
     private var subjectRoles: Set<String>? = null
@@ -174,7 +177,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private fun bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
         // The statement captures only for its own condition: a key reading a variable matches with captures here.
         captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
-            rule.statement.resources.firstNotNullOfOrNull { it.match(target) }
+            rule.statement.resources.firstNotNullOfOrNull { it.match(target, this) }
         } else {
             null
         }
@@ -317,7 +320,8 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
 
     /** Whether [bit] was clear; sets it. */
     protected fun firstThrough(bit: Int): Boolean {
-        val words = repeatsEvaluated ?: LongArray(repeatWords()).also { repeatsEvaluated = it }
+        val scratch = scratch()
+        val words = scratch.marks ?: LongArray(repeatWords()).also { scratch.marks = it }
         val word = bit ushr WORD_SHIFT
         val mask = 1L shl bit
         if (words[word] and mask != 0L) {
@@ -326,6 +330,8 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         words[word] = words[word] or mask
         return true
     }
+
+    override fun scratch(): EvaluationScratch = scratch ?: EvaluationScratch().also { scratch = it }
 
     private fun repeatWords(): Int {
         val slots = view.platform.repeats + (view.app?.repeats ?: 0) + (view.tenant?.repeats ?: 0)
@@ -434,11 +440,11 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         for (pattern in statement.resources) {
             try {
                 if (!statement.captures) {
-                    if (pattern.matches(target)) {
+                    if (pattern.matches(target, this)) {
                         return Captures.NONE
                     }
                 } else {
-                    pattern.match(target)?.let { return it }
+                    pattern.match(target, this)?.let { return it }
                 }
             } catch (error: Exception) {
                 failure = failure ?: error

@@ -72,7 +72,7 @@ class HttpPathPattern private constructor(
     fun matches(path: HttpPath): Boolean = matchPath(path, null, null)
 
     /** [matches], deciding glob segments in [scratch], the evaluation's ([SegmentGlob]). */
-    internal fun matches(path: HttpPath, scratch: GlobScratch?): Boolean = matchPath(path, null, scratch)
+    internal fun matches(path: HttpPath, scratch: EvaluationScratch?): Boolean = matchPath(path, null, scratch)
 
     /** The captured variables if [path] matches, otherwise `null`. */
     fun match(path: HttpPath): Captures? = match(path, null)
@@ -81,7 +81,7 @@ class HttpPathPattern private constructor(
      * [match], deciding and capturing glob segments in [scratch], the evaluation's: then it allocates only the captured
      * values. A fresh table is used without one.
      */
-    internal fun match(path: HttpPath, scratch: GlobScratch?): Captures? {
+    internal fun match(path: HttpPath, scratch: EvaluationScratch?): Captures? {
         if (names.isEmpty()) {
             return if (matchPath(path, null, null)) Captures.NONE else null
         }
@@ -105,7 +105,7 @@ class HttpPathPattern private constructor(
         return true
     }
 
-    private fun matchPath(path: HttpPath, captures: Array<String?>?, scratch: GlobScratch?): Boolean {
+    private fun matchPath(path: HttpPath, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean {
         require(path.decodeAndParseSegments == decodeAndParseSegments) {
             "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
                 "needs $decodeAndParseSegments."
@@ -135,7 +135,7 @@ class HttpPathPattern private constructor(
         start: Int,
         path: HttpPath,
         captures: Array<String?>?,
-        scratch: GlobScratch?,
+        scratch: EvaluationScratch?,
     ): Boolean {
         var index = start
         val last = elements.size - 1
@@ -281,18 +281,18 @@ internal sealed class PathElement {
 
     /** An element that matches one segment by its value. */
     sealed class Segment : PathElement() {
-        abstract fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean
+        abstract fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean
     }
 
     /** Compared like `String.equalsIgnoreCase` when case-insensitive, as Spring compares literal segments. */
     class Literal(val text: String, val caseSensitive: Boolean) : Segment() {
-        override fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean =
+        override fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean =
             value.equals(text, ignoreCase = !caseSensitive)
     }
 
     /** A segment with `?` and no `*` or capture: `?` is one UTF-16 character; case folds per character. */
     class SingleChar(private val text: String, private val caseSensitive: Boolean) : Segment() {
-        override fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean {
+        override fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean {
             if (value.length != text.length) {
                 return false
             }
@@ -314,7 +314,7 @@ internal sealed class PathElement {
 
     /** `{name}` as a whole segment: any non-empty value. */
     class Capture(private val variable: Int) : Segment() {
-        override fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean {
+        override fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean {
             if (value.isEmpty()) {
                 return false
             }
@@ -327,7 +327,7 @@ internal sealed class PathElement {
 
     /** A segment with `*` or a capture among other text: see [SegmentGlob]. */
     class Glob(val glob: SegmentGlob) : Segment() {
-        override fun matches(value: String, captures: Array<String?>?, scratch: GlobScratch?): Boolean =
+        override fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean =
             glob.matches(value, captures, scratch)
     }
 }

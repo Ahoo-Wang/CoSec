@@ -331,7 +331,7 @@ class HttpPathPatternTest {
     fun `capturing agrees with backtracking`() {
         val random = Random(8)
         val pieces = listOf("a", "b", "ab", "\uD83D\uDE00", "\uD83D", "\uDE00")
-        val scratch = GlobScratch()
+        val scratch = EvaluationScratch()
         repeat(CASES) {
             val tokens = ArrayList<Reference.Token>()
             var variables = 0

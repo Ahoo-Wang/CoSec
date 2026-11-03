@@ -31,11 +31,14 @@ sealed class ResourcePattern {
 
     abstract fun match(target: ResourceTarget): Captures?
 
-    /**
-     * Whether the resource matches, without capturing: allocates nothing beyond parsing the path once, and a table the
-     * target then keeps when a pattern has a glob segment.
-     */
+    /** Whether the resource matches, without capturing: allocates nothing beyond parsing the path once. */
     abstract fun matches(target: ResourceTarget): Boolean
+
+    /** [match], an evaluation's: glob segments use the table of [scratch]. */
+    internal open fun match(target: ResourceTarget, scratch: ScratchSource): Captures? = match(target)
+
+    /** [matches], an evaluation's: glob segments use the table of [scratch]. */
+    internal open fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean = matches(target)
 
     /** Every resource; captures nothing. */
     object AnyResource : ResourcePattern() {
@@ -55,14 +58,25 @@ sealed class ResourcePattern {
             if (target.resource.type != HTTP_TYPE) {
                 return null
             }
-            return path.match(target.httpPath(path.decodeAndParseSegments), scratch(target))
+            return path.match(target.httpPath(path.decodeAndParseSegments))
         }
 
         override fun matches(target: ResourceTarget): Boolean =
-            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments), scratch(target))
+            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments))
 
-        // Only glob segments use the table: a pattern without one never makes it.
-        private fun scratch(target: ResourceTarget): GlobScratch? = if (path.globUnits > 0) target.scratch() else null
+        override fun match(target: ResourceTarget, scratch: ScratchSource): Captures? {
+            if (target.resource.type != HTTP_TYPE) {
+                return null
+            }
+            return path.match(target.httpPath(path.decodeAndParseSegments), tableOf(scratch))
+        }
+
+        override fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean =
+            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments), tableOf(scratch))
+
+        // Only glob segments use the table: an evaluation whose patterns have none never makes it.
+        private fun tableOf(scratch: ScratchSource): EvaluationScratch? =
+            if (path.globUnits > 0) scratch.scratch() else null
 
         override fun equals(other: Any?): Boolean = other is Http && other.path == path
 
@@ -174,10 +188,6 @@ sealed class ResourcePattern {
 class ResourceTarget(val resource: Resource) {
     private var decoded: HttpPath? = null
     private var raw: HttpPath? = null
-    private var scratch: GlobScratch? = null
-
-    /** The table capturing glob segments works in ([SegmentGlob.capture]), made on first use and then reused. */
-    internal fun scratch(): GlobScratch = scratch ?: GlobScratch().also { scratch = it }
 
     /** The path of an `http` resource. Throws [IllegalArgumentException] for a malformed percent-escape. */
     fun httpPath(decodeAndParseSegments: Boolean): HttpPath =
