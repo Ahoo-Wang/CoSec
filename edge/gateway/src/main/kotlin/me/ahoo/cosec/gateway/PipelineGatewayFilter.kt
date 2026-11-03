@@ -103,7 +103,8 @@ class PipelineGatewayFilter(
             val route = authorized.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             // The caller's credentials go only where its identity may go, and only when asked for (RC1-5, RC1-49).
             val credentials = forwardAuthorization && route != null && receivesIdentity(route)
-            var cookiesRewritten = false
+            // Read before the builder's lambda: one it writes would be boxed, an allocation on every request.
+            val cookies = if (credentials) null else withoutCookieTokens(request.headers)
             val downstream = request.mutate()
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
@@ -113,7 +114,11 @@ class PipelineGatewayFilter(
                     }
                     if (!credentials) {
                         credentialHeaders.forEach(headers::remove)
-                        cookiesRewritten = withoutCookieTokens(headers)
+                        when {
+                            cookies == null -> Unit
+                            cookies.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
+                            else -> headers.put(HttpHeaders.COOKIE, cookies)
+                        }
                     }
                 }
             if (!credentials) {
@@ -126,24 +131,20 @@ class PipelineGatewayFilter(
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             val built = downstream.build()
-            val forwarded = if (cookiesRewritten) WithoutTokenCookies(built, withoutCookieToken) else built
+            val forwarded = if (cookies != null) WithoutTokenCookies(built, withoutCookieToken) else built
             chain.filter(authorized.mutate().request(forwarded).build())
         }
     }
 
     /**
-     * Each `Cookie` header without the `authorization` cookie; one left with no cookie goes, and so does the name.
-     * Whether a header changed: only then does the request handed on need its cookies to agree ([WithoutTokenCookies]).
+     * The `Cookie` headers of [headers] without the `authorization` cookie, a header left with no cookie dropped (an
+     * empty list: no `Cookie` header goes on); null when none names it, so nothing changes and nothing is allocated
+     * beyond the check. Only a request it rewrites needs its cookies to agree ([WithoutTokenCookies]).
      */
-    private fun withoutCookieTokens(headers: HttpHeaders): Boolean {
-        val cookies = headers[HttpHeaders.COOKIE] ?: return false
-        val kept = cookies.mapNotNull(withoutCookieToken)
-        when {
-            kept == cookies -> return false
-            kept.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
-            else -> headers.put(HttpHeaders.COOKIE, kept)
-        }
-        return true
+    private fun withoutCookieTokens(headers: HttpHeaders): List<String>? {
+        val cookies = headers[HttpHeaders.COOKIE] ?: return null
+        if (cookies.all { withoutCookieToken(it) === it }) return null
+        return cookies.mapNotNull(withoutCookieToken)
     }
 
     /**
