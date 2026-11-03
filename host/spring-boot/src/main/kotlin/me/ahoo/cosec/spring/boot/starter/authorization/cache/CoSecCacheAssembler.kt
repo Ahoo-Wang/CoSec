@@ -36,7 +36,10 @@ import org.springframework.beans.factory.ObjectProvider
  *   or degrade a failed Redis read into a miss, nor make any CoSec cache reclaim (delete) a value it cannot read,
  *   such as an unmigrated 6.x revocation;
  * - the storage layout stays CoSec's (`cosec.authorization.cache.key-prefix`): the `key-prefix` property, namespace
- *   and key encoder of a customizer are ignored.
+ *   and key encoder of a customizer are ignored;
+ * - so is everything else that decides what a cache holds and for how long (RC1-45): its codec, loaders, key filter
+ *   and per-entry TTL stay CoSec's. A customizer's key filter on the revoked-token cache would otherwise hide a
+ *   revocation, and a loader or TTL function would turn a store of record into a cache.
  *
  * CoSec does not declare its caches as `CacheSpec` beans, so CoCache does not create them a second time.
  */
@@ -55,11 +58,19 @@ class CoSecCacheAssembler(
             spec.name,
             properties?.policyFor(spec.name, builder.policy) ?: builder.policy
         )
-        return builder.namespace(spec.namespace)
+        builder.namespace(spec.namespace)
             .keyPrefix(spec.keyPrefix)
             .keyEncoder(spec.keyEncoder)
             .policy(policy)
-            .build()
+        builder.codec = spec.codec
+        builder.loader = spec.loader
+        builder.asyncLoader = spec.asyncLoader
+        builder.versionedLoader = spec.versionedLoader
+        builder.versionedAsyncLoader = spec.versionedAsyncLoader
+        builder.versioned = spec.versioned
+        builder.keyFilter = spec.keyFilter
+        builder.ttlOf = spec.ttlOf
+        return builder.build()
     }
 
     fun <K : Any, E : Any> assemble(spec: SetCacheSpec<K, E>): SetCacheSpec<K, E> {
@@ -69,6 +80,7 @@ class CoSecCacheAssembler(
             spec.name,
             properties?.setPolicyFor(spec.name, builder.policy) ?: builder.policy
         )
+        builder.elementCodec = spec.elementCodec
         return builder.namespace(spec.namespace)
             .keyPrefix(spec.keyPrefix)
             .keyEncoder(spec.keyEncoder)

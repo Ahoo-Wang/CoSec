@@ -32,13 +32,10 @@ import java.time.Instant
 data class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
-     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`).
+     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`), under
+     * `<cosec.key-prefix>:api-key`.
      */
     @DefaultValue("memory") var store: Store = Store.MEMORY,
-    /**
-     * Redis key prefix, when [store] is `redis`.
-     */
-    @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
     /**
      * Keys of the in-memory store, by their SHA-256 hash. Ignored with the Redis store.
      */
@@ -48,7 +45,6 @@ data class ApiKeyProperties(
         const val PREFIX: String = "cosec.api-key"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
         const val STORE_KEY: String = "$PREFIX.store"
-        const val DEFAULT_KEY_PREFIX = "cosec:api-key"
     }
 
     enum class Store {

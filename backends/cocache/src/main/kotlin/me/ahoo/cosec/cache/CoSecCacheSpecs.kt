@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.cache
 
+import java.time.Duration
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.codec.jackson.JacksonCodec
 import me.ahoo.cocache.core.CacheSpec
@@ -28,11 +29,11 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
-import java.time.Duration
 
 /**
  * CoSec's CoCache declarations.
@@ -146,6 +147,18 @@ object CoSecCacheSpecs {
     /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
     fun cacheNamespace(keyPrefix: String, cacheName: String): String =
         "${keyPrefix.trimEnd(':')}:${NAMESPACES.getValue(cacheName)}"
+
+    /**
+     * Where a deployment keeps its API keys: `<keyPrefix>:api-key`. Every key a deployment writes lives under its one
+     * prefix (`SNP-9`, RC1-46), so two deployments on one Redis that differ in it share nothing.
+     */
+    fun apiKeyPrefix(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:$API_KEY_FAMILY"
+
+    /** Where a deployment keeps its rate limit counters: `<keyPrefix>:rate-limiter` (`SNP-9`). */
+    fun rateLimiterPrefix(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:$RATE_LIMITER_FAMILY"
+
+    private const val API_KEY_FAMILY = "api-key"
+    private const val RATE_LIMITER_FAMILY = "rate-limiter"
 
     /**
      * Policy and permission caches are the store of record, so:
@@ -278,14 +291,16 @@ object CoSecCacheSpecs {
         .build()
         .failOnForeignFormat()
 
-    /** Revocations are always written with an explicit lifetime, under the policy of [revocation]. */
+    /**
+     * Revocations are always written with an explicit lifetime, under the policy of [revocation], and read with
+     * [CoSecJson.mapper], CoSec's one mapper, not the application's (RC1-44).
+     */
     fun revokedToken(
-        codec: Codec<Boolean>,
         keyPrefix: String = CoSec.COSEC,
         policy: CachePolicy = CachePolicy.DEFAULT
     ): CacheSpec<String, Boolean> = CacheSpec.builder<String, Boolean>(REVOKED_TOKEN_CACHE_NAME)
         .storageLayout(keyPrefix)
-        .codec(codec)
+        .codec(jacksonCodec<Boolean>(CoSecJson.mapper))
         .policy(policy.revocation())
         .build()
 
@@ -295,12 +310,11 @@ object CoSecCacheSpecs {
      * [RevokedSubjectCache.key]; a value is the revocation's `issuedBefore`, in epoch milliseconds.
      */
     fun revokedSubject(
-        codec: Codec<Long>,
         keyPrefix: String = CoSec.COSEC,
         policy: CachePolicy = CachePolicy.DEFAULT
     ): CacheSpec<String, Long> = CacheSpec.builder<String, Long>(REVOKED_SUBJECT_CACHE_NAME)
         .storageLayout(keyPrefix)
-        .codec(codec)
+        .codec(jacksonCodec<Long>(CoSecJson.mapper))
         .policy(policy.revocation())
         .build()
 
@@ -328,7 +342,7 @@ object CoSecCacheSpecs {
         )
         .build()
 
-    inline fun <reified V : Any> jacksonCodec(mapper: ObjectMapper): Codec<V> =
+    internal inline fun <reified V : Any> jacksonCodec(mapper: ObjectMapper): Codec<V> =
         JacksonCodec(mapper, object : TypeReference<V>() {}.type)
 
     private fun <K : Any, V : Any> CacheSpec.Builder<K, V>.storageLayout(keyPrefix: String) = apply {

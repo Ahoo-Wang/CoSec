@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.starter.control
 
-import kotlinx.coroutines.future.await
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -64,6 +63,7 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
@@ -86,6 +86,7 @@ import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import java.time.Instant
 import kotlin.time.toKotlinDuration
+import kotlinx.coroutines.future.await
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
@@ -100,7 +101,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnCoSecEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
-@EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class)
+@EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
 class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -108,12 +109,12 @@ class CoSecControlAutoConfiguration {
         runtime: CacheRuntime,
         heads: PolicySnapshotCache,
         documents: RedisSnapshotDocumentStore,
-        properties: RuntimeAuthorizationProperties,
+        cosec: CoSecProperties,
         control: ControlProperties,
     ): ControlStore = CoCacheControlStore.create(
         runtime,
         heads,
-        properties.snapshot.keyPrefix,
+        cosec.keyPrefix,
         documents::notifyChanged,
         // A change listed but missing this long had its first write fail.
         missingGrace = control.revisions.orphanAge,
@@ -265,7 +266,7 @@ class CoSecControlAutoConfiguration {
         idGenerator: ObjectProvider<IdGenerator>,
         shadowReports: ObjectProvider<CoCacheShadowReports>,
         attributes: AttributeProviders,
-        properties: RuntimeAuthorizationProperties,
+        cosec: CoSecProperties,
         environment: Environment,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
@@ -280,7 +281,7 @@ class CoSecControlAutoConfiguration {
             credentialHeaders = credentialHeaders(environment),
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
-            reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
+            reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, cosec.keyPrefix),
             listeners = listeners,
         )
     }

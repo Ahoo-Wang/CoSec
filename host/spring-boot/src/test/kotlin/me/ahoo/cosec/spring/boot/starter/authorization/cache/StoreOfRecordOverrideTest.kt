@@ -20,6 +20,7 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.SetCacheSpec
+import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
@@ -186,5 +187,37 @@ class StoreOfRecordOverrideTest {
 
     private companion object {
         const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z"}"""
+    }
+
+    /**
+     * RC1-45: a customizer may tune a CoSec cache's policy within what CoSec pins, but never what decides its content:
+     * a key filter on the revoked-token cache would hide revocations, a TTL function or a loader would turn a store of
+     * record into a cache, and another codec would read other bytes.
+     */
+    @Test
+    fun customizersCannotReplaceWhatDecidesACachesContent() {
+        val filtering = object : CacheSpecCustomizer {
+            override fun customize(spec: CacheSpec.Builder<*, *>) {
+                spec.keyFilter { true }
+                @Suppress("UNCHECKED_CAST")
+                (spec as CacheSpec.Builder<Any, Any>).ttlOf { _, _ -> Duration.ofMillis(1) }
+                spec.codec = null
+            }
+
+            override fun customize(spec: SetCacheSpec.Builder<*, *>) {
+                spec.elementCodec = null
+            }
+        }
+        CacheRuntime.builder().backend(InMemoryBackend()).build().use { runtime ->
+            val assembler = CoSecCacheAssembler(runtime, listOf(filtering), null)
+            val spec = CoSecCacheSpecs.revokedToken()
+            val assembled = assembler.assemble(spec)
+            assembled.keyFilter.assert().isNull()
+            assembled.ttlOf.assert().isNull()
+            assembled.loader.assert().isNull()
+            assembled.codec.assert().isSameAs(spec.codec)
+            val set = SetCacheSpec.builder<String, String>("Set").elementCodec(StringCodec).build()
+            assembler.assemble(set).elementCodec.assert().isSameAs(StringCodec)
+        }
     }
 }

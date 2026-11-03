@@ -90,7 +90,7 @@ class Slice(
         )
         .properties(
             "spring.data.redis.url=$redisUri",
-            "cosec.authorization.snapshot.key-prefix=$keyPrefix",
+            "cosec.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=${options.revalidateInterval.toMillis()}ms",
             "cosec.authorization.snapshot.cold-load-timeout=${options.coldLoadTimeout.toMillis()}ms",
             "cosec.authorization.routes.location=",

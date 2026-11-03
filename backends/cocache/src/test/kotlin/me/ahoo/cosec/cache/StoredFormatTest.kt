@@ -53,6 +53,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import tools.jackson.core.JacksonException
 import java.time.Instant
 
 /**
@@ -169,6 +170,23 @@ class StoredFormatTest {
         assertThrows<IllegalArgumentException> {
             MembershipsCodec.decode("""{"roles":{},"attachments":[],"active":true}""".encodeToByteArray())
         }
+    }
+
+    /**
+     * RC1-44 (`DOC-5`): every stored format refuses an object with a duplicate key, the API key's `roles` above all:
+     * read as its last value, `"roles":null` would make a capped key uncapped.
+     */
+    @Test
+    fun `a duplicate key fails every stored format`() {
+        val key = fixture("apiKey").trimEnd()
+        ApiKeyCodec.decode(key).roles.assert().isNotNull()
+        assertThrows<JacksonException> { ApiKeyCodec.decode(key.removeSuffix("}") + ""","roles":null}""") }
+        val memberships = fixture("memberships").trimEnd()
+        assertThrows<JacksonException> {
+            MembershipsCodec.decode((memberships.removeSuffix("}") + ""","attachments":[]}""").encodeToByteArray())
+        }
+        assertThrows<JacksonException> { CoSecJson.mapper.readTree("""{"a":1,"a":2}""") }
+        assertThrows<JacksonException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
     }
 
     @Test

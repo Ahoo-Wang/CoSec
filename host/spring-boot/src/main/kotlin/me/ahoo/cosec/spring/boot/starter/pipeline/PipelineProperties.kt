@@ -163,9 +163,6 @@ class RuntimeAuthorizationProperties {
     }
 
     class Snapshot {
-        /** The Redis namespace of the snapshot documents, shared by every service that reads the same platform. */
-        var keyPrefix: String = CoSec.COSEC
-
         /**
          * How long an instance serves its local copy of a document before it asks Redis again; the one value for the
          * snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.

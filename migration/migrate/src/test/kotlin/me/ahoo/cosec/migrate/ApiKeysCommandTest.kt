@@ -63,7 +63,7 @@ class ApiKeysCommandTest {
     }
 
     private fun apiKeys(out: Path, vararg more: String) = run(
-        "api-keys", "--redis", REDIS, "--api-key-prefix", apiKeyPrefix, "--key-prefix", prefix,
+        "api-keys", "--redis", REDIS, "--key-prefix", prefix,
         "--out", out.toString(), *more,
     )
 

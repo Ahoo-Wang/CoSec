@@ -98,8 +98,7 @@ class PipelineStarterRedisTest {
         )
         .withPropertyValues(
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
-            "cosec.authorization.cache.key-prefix=$keyPrefix",
-            "cosec.authorization.snapshot.key-prefix=$keyPrefix",
+            "cosec.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=200ms",
             "cosec.authorization.routes.location=",
         )

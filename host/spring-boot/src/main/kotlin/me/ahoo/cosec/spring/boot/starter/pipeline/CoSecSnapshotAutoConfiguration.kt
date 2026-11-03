@@ -16,12 +16,6 @@
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.memory.InMemoryBackend
@@ -54,6 +48,7 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import org.springframework.beans.factory.ObjectProvider
@@ -71,6 +66,12 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 import java.time.Clock
 import java.util.UUID
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
@@ -81,7 +82,7 @@ import java.util.UUID
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
-@EnableConfigurationProperties(RuntimeAuthorizationProperties::class)
+@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
@@ -99,9 +100,10 @@ class CoSecSnapshotAutoConfiguration {
             customizers: ObjectProvider<CacheSpecCustomizer>,
             cocacheProperties: ObjectProvider<CoCacheProperties>,
             properties: RuntimeAuthorizationProperties,
+            cosec: CoSecProperties,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
-            val base = CoSecCacheSpecs.policySnapshot(snapshot.keyPrefix, CachePolicy.DEFAULT, snapshot.localMaxAge)
+            val base = CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, CachePolicy.DEFAULT, snapshot.localMaxAge)
             val assembled = cosecCacheAssembler(runtime, customizers, cocacheProperties).assemble(base)
             return runtime.createPolicySnapshotCache(CoSecCacheSpecs.pinPolicySnapshot(assembled, base))
         }
@@ -151,9 +153,9 @@ class CoSecSnapshotAutoConfiguration {
             runtime: CacheRuntime,
             stores: ObjectProvider<CandidateStore>,
             compiler: PlatformCompiler,
-            properties: RuntimeAuthorizationProperties,
+            cosec: CoSecProperties,
         ): CandidateSource {
-            val store = stores.ifUnique ?: CoCacheCandidateStore.create(runtime, properties.snapshot.keyPrefix)
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(runtime, cosec.keyPrefix)
             return CachingCandidateSource(store, compiler::compile)
         }
 
@@ -178,9 +180,9 @@ class CoSecSnapshotAutoConfiguration {
         @ConditionalOnMissingBean
         fun cosecShadowReports(
             runtime: CacheRuntime,
-            properties: RuntimeAuthorizationProperties
+            cosec: CoSecProperties,
         ): CoCacheShadowReports =
-            CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix)
+            CoCacheShadowReports.create(runtime, cosec.keyPrefix)
 
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
