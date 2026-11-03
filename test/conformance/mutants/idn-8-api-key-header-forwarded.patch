@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the gateway removes Authorization only, so the API key header goes downstream
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.QueryParametersTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index d6cb7d9f..026f3a0f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -111,7 +111,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * among them: cookies belong to the browser.
+      */
+     @InternalCoSecApi
+-    val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)
++    val credentialHeaders: Set<String> = setOf(AUTHORIZATION)
+ 
+     /**
+      * [rawQuery] without its `authorization` parameters, however their names are encoded or cased; null when nothing is

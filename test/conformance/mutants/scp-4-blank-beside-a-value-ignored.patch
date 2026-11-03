@@ -1,0 +1,17 @@
+# Rule: SCP-4
+# Mutant: a blank CoSec-* value beside a value is ignored, so a backend reading the blank one is in the default space
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CoSecParametersTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
+index 9a98d99b..6fefd7f0 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
+@@ -67,7 +67,7 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
+ 
+         private fun allAre(value: String, values: List<String>): Boolean {
+             for (index in values.indices) {
+-                if (values[index] != value) {
++                if (values[index] != value && !isBlank(values[index])) {
+                     return false
+                 }
+             }

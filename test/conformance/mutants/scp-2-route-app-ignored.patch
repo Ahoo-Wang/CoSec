@@ -1,0 +1,17 @@
+# Rule: SCP-2
+# Mutant: the gateway reads no route app, so on a multi-app gateway the client picks the app and skips its DENYs
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 4e02b538..d1942963 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -81,7 +81,7 @@ class PipelineGatewayFilter(
+ 
+     /** [route]'s own app, else the gateway's; a value that cannot be an app id throws, and the request fails closed. */
+     private fun hostOf(route: Route): HostScope {
+-        val app = route.metadata[APP_METADATA] ?: return host
++        val app = null ?: return host
+         return HostScope(AppId(app.toString()))
+     }
+ 

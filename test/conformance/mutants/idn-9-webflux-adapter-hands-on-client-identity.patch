@@ -1,0 +1,17 @@
+# Rule: IDN-9
+# Mutant: the WebFlux adapter hands on the request as it came, a client's CoSec-Identity included
+# Tests: :webflux:test --tests me.ahoo.cosec.webflux.PipelineWebFilterTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.WebAdapterParityTest
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
+index 70d55f95..90693508 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
+@@ -146,7 +146,7 @@ class PipelineWebFilter(
+     WebFilter,
+     Ordered {
+     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
+-        filterInternal(exchange) { authorized, outcome -> chain.filter(forwarded(authorized, outcome)) }
++        filterInternal(exchange) { authorized, _ -> chain.filter(authorized) }
+ 
+     override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
+ 

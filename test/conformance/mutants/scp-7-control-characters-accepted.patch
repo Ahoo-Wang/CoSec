@@ -1,0 +1,18 @@
+# Rule: SCP-7
+# Mutant: an app id may hold a control character, which reaches plain-text log lines
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 88c5edfe..32779f63 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -89,8 +89,7 @@ object ScopeResolver {
+      * and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id.
+      */
+     fun isValidAppId(app: String): Boolean =
+-        app.isNotBlank() && app != Match.WILDCARD && !app.contains(':') && app.length <= MAX_APP_ID_LENGTH &&
+-            app.none { it.isISOControl() }
++        app.isNotBlank() && app != Match.WILDCARD && !app.contains(':') && app.length <= MAX_APP_ID_LENGTH
+ 
+     fun resolve(subject: ScopeSubject, declared: DeclaredScope, host: HostScope): ScopeResolution {
+         val hostApp = host.app

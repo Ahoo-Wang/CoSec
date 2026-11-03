@@ -1,0 +1,17 @@
+# Rule: IDN-7
+# Mutant: the pipeline forwards the identity unless a route opts out, so a request no route marks receives it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityForwardingTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index d6cb7d9f..1f029223 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -451,7 +451,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      */
+     private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
+         val security = outcome.security
+-        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "true") {
++        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "false") {
+             return StatusMapping.forwarding(outcome, null)
+         }
+         return try {
