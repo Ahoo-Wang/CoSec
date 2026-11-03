@@ -131,15 +131,7 @@ class PipelineGatewayFilter(
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             val built = downstream.build()
-            val forwarded = if (cookies != null) {
-                WithoutTokenCookies(
-                    built,
-                    withoutCookieToken,
-                    cookies.dropped
-                )
-            } else {
-                built
-            }
+            val forwarded = cookies?.let { WithoutTokenCookies(built, withoutCookieToken, it.dropped) } ?: built
             chain.filter(authorized.mutate().request(forwarded).build())
         }
     }
