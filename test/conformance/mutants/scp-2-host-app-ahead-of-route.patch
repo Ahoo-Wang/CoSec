@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 321644c3..37171179 100644
+index 78a3eb9c..34a1ac11 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 @@ -294,7 +294,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
@@ -12,6 +12,6 @@ index 321644c3..37171179 100644
      private fun routed(facts: HttpFacts): HttpFacts {
 -        val app = facts.routeApp ?: return facts
 +        val app = facts.routeApp?.takeIf { facts.host.app == null } ?: return facts
-         check(ScopeResolver.isValidAppId(app)) {
-             "The cosec-app-id of route [${printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])}] " +
-                 "cannot be an app id: blank, *, with ':' or a control character, or longer than " +
+         if (!ScopeResolver.isValidAppId(app)) {
+             invalidRouteApp(facts)
+         }

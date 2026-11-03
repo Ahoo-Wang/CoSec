@@ -317,7 +317,8 @@ class CompiledDocument private constructor(
                 bindings,
                 boundary = boundary,
                 rateLimits = rateLimits,
-                boundApps = boundApps.toHashSet(),
+                // Almost every tenant binds no app's permissions: the empty set answers without hashing.
+                boundApps = if (boundApps.isEmpty()) emptySet() else boundApps.toHashSet(),
             )
 
         private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {

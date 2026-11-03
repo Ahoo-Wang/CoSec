@@ -52,6 +52,11 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
          * non-blank ones, or a blank one beside a non-blank one. Indexed, so it allocates nothing.
          */
         private fun single(headers: List<String>, query: List<String>?): String? {
+            // Most requests send a parameter once, or not at all: one value can disagree with nothing.
+            if (query == null && headers.size <= 1) {
+                val only = if (headers.isEmpty()) return "" else headers[0]
+                return if (isBlank(only)) "" else only
+            }
             val value = firstNonBlank(headers) ?: query?.let(::firstNonBlank) ?: return ""
             return if (allAre(value, headers) && (query == null || allAre(value, query))) value else null
         }

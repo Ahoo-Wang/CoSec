@@ -3,12 +3,12 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSourceTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
-index b996a50b..c343dbaf 100644
+index 35287df1..826f3019 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
-@@ -44,7 +44,7 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
-             return null
+@@ -45,7 +45,7 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
          }
+         val tenant = tenant ?: return null
          val wanted = scope.app
 -        return if (wanted.value.isNotEmpty() && tenantDocument.needsApp(wanted.value)) ViewKey(tenant, wanted) else null
 +        return if (wanted.value.isNotEmpty() && tenantDocument.needsApp(wanted.value)) null else null

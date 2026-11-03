@@ -295,10 +295,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      */
     private fun routed(facts: HttpFacts): HttpFacts {
         val app = facts.routeApp ?: return facts
-        check(ScopeResolver.isValidAppId(app)) {
-            "The cosec-app-id of route [${printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])}] " +
-                "cannot be an app id: blank, *, with ':' or a control character, or longer than " +
-                "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+        if (!ScopeResolver.isValidAppId(app)) {
+            invalidRouteApp(facts)
         }
         return HttpFacts(
             facts.method,
@@ -311,6 +309,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             facts.requestAttributes,
         )
     }
+
+    /** Why [routed] refuses [facts]: kept out of it, so the path every request takes stays small. */
+    private fun invalidRouteApp(facts: HttpFacts): Nothing = error(
+        "The cosec-app-id of route [${printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])}] " +
+            "cannot be an app id: blank, *, with ':' or a control character, or longer than " +
+            "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+    )
 
     /** [value] for a log line: control characters escaped, so no configured value can forge one. */
     private fun printable(value: String?): String =
