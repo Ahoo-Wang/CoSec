@@ -105,8 +105,10 @@ class SuspendingSnapshotSourceTest {
         }
         val view = SuspendingSnapshotSource(views).view(scope("shop"), blocked = false)
         view.app!!.owner.assert().isEqualTo("shop")
-        // The tenant's document was installed and the app's was not: the app's is loaded, nothing else.
-        peeked.map { it.app?.value }.assert().contains(null, "shop")
+        // The tenant's document was installed and the app's was not: the app's is loaded, nothing else. The installed
+        // path peeks the tenant's view, then the app's; finding no app's, the loading path peeks both again before it
+        // loads (a peek reads memory only, and the second one finds whatever another request installed meanwhile).
+        peeked.map { it.app?.value }.assert().containsExactly(null, "shop", null, "shop")
         loaded.map { it.app?.value }.assert().containsExactly("shop")
         SuspendingSnapshotSource(views).view(scope("other"), blocked = false).app.assert().isNull()
     }
