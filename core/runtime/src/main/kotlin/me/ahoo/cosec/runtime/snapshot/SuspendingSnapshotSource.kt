@@ -83,7 +83,22 @@ interface SnapshotViews {
  * app's although the scope has no roles ([ViewKey.withAppFor], RC1-17), the view with it, the same way.
  */
 class SuspendingSnapshotSource(private val views: SnapshotViews) {
-    suspend fun view(scope: Scope, blocked: Boolean): SnapshotView {
+    /**
+     * The installed view, found without suspending, else the loaded one. Kotlin spills every local a suspend function
+     * has in scope at a suspension point into the continuation each call allocates; [installed] keeps them out of it,
+     * so the second step costs a request no allocation (the JMH A/B of #1194).
+     */
+    suspend fun view(scope: Scope, blocked: Boolean): SnapshotView = installed(scope, blocked) ?: loaded(scope, blocked)
+
+    /** The view when every document it needs is installed; null when one is not. No I/O, no suspension. */
+    private fun installed(scope: Scope, blocked: Boolean): SnapshotView? {
+        val key = ViewKey.of(scope, blocked)
+        val view = views.peek(key) ?: return null
+        val withApp = key.withAppFor(scope, view.tenant) ?: return view
+        return views.peek(withApp)
+    }
+
+    private suspend fun loaded(scope: Scope, blocked: Boolean): SnapshotView {
         val key = ViewKey.of(scope, blocked)
         val view = views.peek(key) ?: views.load(key).await()
         val withApp = key.withAppFor(scope, view.tenant) ?: return view

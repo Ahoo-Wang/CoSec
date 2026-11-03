@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSourceTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
-index 5530b94b..c1a30be0 100644
+index b996a50b..c343dbaf 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource.kt
-@@ -84,7 +84,6 @@ class SuspendingSnapshotSource(private val views: SnapshotViews) {
-     suspend fun view(scope: Scope, blocked: Boolean): SnapshotView {
-         val key = ViewKey.of(scope, blocked)
-         val view = views.peek(key) ?: views.load(key).await()
--        val withApp = key.withAppFor(scope, view.tenant) ?: return view
--        return views.peek(withApp) ?: views.load(withApp).await()
-+        return view
+@@ -44,7 +44,7 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
+             return null
+         }
+         val wanted = scope.app
+-        return if (wanted.value.isNotEmpty() && tenantDocument.needsApp(wanted.value)) ViewKey(tenant, wanted) else null
++        return if (wanted.value.isNotEmpty() && tenantDocument.needsApp(wanted.value)) null else null
      }
- }
+ 
+     companion object {
