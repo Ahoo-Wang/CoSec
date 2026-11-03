@@ -155,7 +155,7 @@ class PipelineGatewayFilterTest {
         )
     )
 
-    private fun route(uri: String, identity: Any? = null, app: String? = null): Route =
+    private fun route(uri: String, identity: Any? = null, app: Any? = null): Route =
         Route.async().id("r").uri(URI.create(uri)).predicate { true }.apply {
             identity?.let { metadata(PipelineGatewayFilter.IDENTITY_METADATA, it) }
             app?.let { metadata(PipelineGatewayFilter.APP_METADATA, it) }
@@ -321,7 +321,9 @@ class PipelineGatewayFilterTest {
     @Test
     fun `a route app that cannot be an app id fails the route's requests`() {
         val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
-        for (app in listOf("", "a:b", "a\nb")) {
+        // R1-7: only a string is an app id; a number, a list or a map is not read as its text.
+        val values = listOf<Any>("", "a:b", "a\nb", 123, true, listOf("billing"), mapOf("id" to "billing"))
+        for (app in values) {
             val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x"))
             exchange.attributes[GATEWAY_ROUTE_ATTR] = route("lb://orders", app = app)
             var called = false
@@ -329,8 +331,8 @@ class PipelineGatewayFilterTest {
                 called = true
                 Mono.empty()
             }.block(Duration.ofSeconds(5))
-            called.assert().describedAs(app).isFalse()
-            exchange.response.statusCode?.value().assert().describedAs(app).isEqualTo(500)
+            called.assert().describedAs("$app").isFalse()
+            exchange.response.statusCode?.value().assert().describedAs("$app").isEqualTo(500)
             exchange.response.bodyAsString.block(Duration.ofSeconds(5)).assert()
                 .contains("\"type\":\"https://cosec.ahoo.me/problems/internal-error\"")
         }

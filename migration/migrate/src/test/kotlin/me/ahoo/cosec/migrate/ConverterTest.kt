@@ -215,6 +215,19 @@ class ConverterTest {
         located(RejectionKind.DOES_NOT_COMPILE).assert().containsExactly("policy:pattern#$.statements[0]")
     }
 
+    /**
+     * SCP-7, R1-6 of #1194's review: a 7.x app id that no 8.0 request could declare names no app document. It is
+     * rejected with the other invalid ids, never a crash of the whole run.
+     */
+    @Test
+    fun `an app id 8_0 cannot read is rejected`() {
+        val ids = listOf(" ", "a\u0000b", "x".repeat(129))
+        val apps = ids.map { app(it, appPermission("p", permission("p")), "clerk" to """["p"]""") }
+        val report = convert(source(apps = apps), Partition.BY_OWNER).report
+        report.rejections.filter { it.kind == RejectionKind.INVALID_ID }.map { it.location }
+            .assert().containsExactlyElementsOf(ids.map { "app:$it" })
+    }
+
     @Test
     fun `a 7x path action decodes with spring-web from the runtime classpath and converts`() {
         // cosec-migrate's own runtime dependency, not a test addition.

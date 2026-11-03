@@ -353,7 +353,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val route = Route.async().id("scenario").uri(URI.create(routeNode.get("uri")?.text() ?: "http://backend"))
             .predicate { true }
         routeNode.get("identity")?.let { route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.booleanValue()) }
-        routeNode.get("app")?.let { route.metadata(PipelineGatewayFilter.APP_METADATA, it.text()) }
+        routeNode.get("app")?.let { route.metadata(PipelineGatewayFilter.APP_METADATA, metadataValue(it)) }
         exchange.attributes[GATEWAY_ROUTE_ATTR] = route.build()
         val filter = PipelineGatewayFilter(
             pipeline,
@@ -382,6 +382,16 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode),
             forwardedCredentials(headers, sentQuery, apiKeyHeader),
         )
+    }
+
+    /** A route metadata value as a configuration binds it: a string, a number, a boolean, a list or a map. */
+    private fun metadataValue(node: JsonNode): Any = when {
+        node.isString -> node.asString()
+        node.isNumber -> node.numberValue()
+        node.isBoolean -> node.booleanValue()
+        node.isArray -> node.values().map(::metadataValue)
+        node.isObject -> node.fields().mapValues { (_, value) -> metadataValue(value) }
+        else -> throw ScenarioFormatException("A route metadata value is a string, number, boolean, list or map: $node")
     }
 
     /** The scenario's request as a client sends it to the gateway. */

@@ -252,7 +252,7 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 - 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`；
 - 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还把校验过的身份转发给接收身份的路由（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的凭证，无论它在请求头、查询参数还是 cookie 中。
 
-**路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`），没有声明的请求属于路由的应用，该应用的角色绑定（包括其中的 DENY）随之生效。只有在没有 `cosec-app-id` 的路由上、且网关没有设置 `cosec.authorization.scope.app-id` 时，客户端声明的应用才生效。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。`cosec-app-id` 不是合法应用 id 时，该路由的每个请求都会失败。
+**路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`），没有声明的请求属于路由的应用，该应用的角色绑定（包括其中的 DENY）随之生效。只有在没有 `cosec-app-id` 的路由上、且网关没有设置 `cosec.authorization.scope.app-id` 时，客户端声明的应用才生效。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。它的值必须是字符串：数字、布尔值、列表或映射不会按其文本读取，因此名为 `2024` 的应用要写成 `cosec-app-id: "2024"`。`cosec-app-id` 不是字符串、或不是合法应用 id 时，该路由的每个请求都会失败（`500`）。
 
 ```yaml
 spring:

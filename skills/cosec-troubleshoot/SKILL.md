@@ -239,7 +239,8 @@ header: anonymous. Otherwise never anonymous:
   query parameter, the `authorization` cookie) unless `cosec.gateway.identity.forward-authorization=true`, and then
   only on a route that would receive the identity. A gateway-mode service that issues no tokens should set
   `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
-- On the gateway, a 500 on every request of one route: its metadata `cosec-app-id` is not a valid app id.
+- On the gateway, a 500 on every request of one route: its metadata `cosec-app-id` is not a valid app id, or not a
+  string (a number, list or map: quote it, one app).
 
 ### Change not visible / snapshot lag
 

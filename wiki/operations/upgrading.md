@@ -129,7 +129,8 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   of `cosec.authorization.scope.app-id`: on such a route a request that declares another app is `403`
   `scope-rejected` (`401` for an anonymous caller), and one that declares none gets the route's app, its role
   bindings and its DENYs. A route without it keeps the gateway's host app, or the client's. On a gateway that fronts
-  several apps, give each route its app. A `cosec-app-id` that cannot be an app id fails every request of its route.
+  several apps, give each route its app. A `cosec-app-id` that is not a string, or cannot be an app id, fails every
+  request of its route: quote a numeric app id.
 - **Actuator on a gateway** (RC1-48, `STA-2`). A gateway host that decides with policies no longer starts while an
   actuator endpoint other than `health` is exposed over HTTP on its application port (`management.server.port` unset,
   or the same as `server.port`): CoSec authorizes the gateway's routes, not those endpoints. Serve actuator on its own

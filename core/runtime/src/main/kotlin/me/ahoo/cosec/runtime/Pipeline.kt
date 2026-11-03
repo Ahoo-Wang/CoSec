@@ -298,15 +298,16 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     /**
-     * [facts] with the gateway route's app as the host app (RC1-6), under the app id rule (RC1-15). One that cannot be
-     * an app id is an operator's mistake no request can be decided under: it throws, so the request is an unmodelled
-     * error (500), logged, never a request without a host app, whose client would then pick the app and step around
-     * the app's DENYs.
+     * [facts] with the gateway route's app as the host app (RC1-6), under the app id rule (RC1-15). One that is not a
+     * string, or cannot be an app id, is an operator's mistake no request can be decided under: it throws, so the
+     * request is an unmodelled error (500), logged, never a request without a host app, whose client would then pick
+     * the app and step around the app's DENYs. A number is not read as its text: `cosec-app-id: 0123` would not be the
+     * app `0123`.
      */
     private fun routed(facts: HttpFacts): HttpFacts {
         val app = facts.routeApp ?: return facts
-        if (!ScopeResolver.isValidAppId(app)) {
-            invalidRouteApp(facts)
+        if (app !is String || !ScopeResolver.isValidAppId(app)) {
+            invalidRouteApp(facts, app)
         }
         return HttpFacts(
             facts.method,
@@ -320,12 +321,23 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         )
     }
 
-    /** Why [routed] refuses [facts]: kept out of it, so the path every request takes stays small. */
-    private fun invalidRouteApp(facts: HttpFacts): Nothing = error(
-        "The cosec-app-id of route [${printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])}] " +
-            "cannot be an app id: blank, *, with ':' or a control character, or longer than " +
-            "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
-    )
+    /**
+     * Why [routed] refuses [facts], whose route app is [app]: kept out of it, so the path every request takes stays
+     * small. The value itself is not written: its type, or why the string cannot be an app id, says what to fix.
+     */
+    private fun invalidRouteApp(facts: HttpFacts, app: Any): Nothing {
+        val routeId = printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])
+        val route = "The cosec-app-id of route [$routeId]"
+        error(
+            if (app is String) {
+                "$route cannot be an app id: blank, *, with ':' or a control character, or longer than " +
+                    "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+            } else {
+                "$route is a ${app.javaClass.name}, not a string: an app id is a string. Quote it in the route's " +
+                    "metadata (cosec-app-id: \"<app id>\"), as a single value."
+            }
+        )
+    }
 
     /** [value] for a log line: control characters escaped, so no configured value can forge one. */
     private fun printable(value: String?): String =

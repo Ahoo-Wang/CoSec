@@ -44,8 +44,8 @@ import java.net.URI
  *
  * Per route ([Route.getMetadata]):
  * - [APP_METADATA] is the host app of the route's requests (RFC 0004 §4.6, RC1-6), ahead of [host]: a client declares
- *   its app only where neither names one. It goes to the pipeline as written ([HttpFacts.routeApp]), which refuses a
- *   value that cannot be an app id (500).
+ *   its app only where neither names one. It goes to the pipeline as configured ([HttpFacts.routeApp]), which refuses
+ *   a value that is not a string, or cannot be an app id (500).
  * - [IDENTITY_METADATA] decides whether the backend receives what the gateway forwards about the caller (RC1-49):
  *   `true` does, `false` or any other value does not, and without it only a route to a registered service (`lb://`,
  *   `lb:ws://`) does: whoever runs one is inside the trust boundary, any other host might be a third party.
@@ -79,8 +79,8 @@ class PipelineGatewayFilter(
             AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id,
             IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity(route).toString(),
         )
-        // The route's app as written: the pipeline checks it and makes it the host app (RC1-6).
-        val app = route.metadata[APP_METADATA]?.toString()
+        // The route's app as configured, of whatever type: the pipeline checks it, and makes it the host app (RC1-6).
+        val app = route.metadata[APP_METADATA]
         return HttpFactsReader.read(exchange, remoteIpResolver, host, attributes, app)
     }
 

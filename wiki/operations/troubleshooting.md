@@ -188,7 +188,9 @@ On a gateway, a permit whose identity cannot be forwarded is a `500` too, logged
 
 A route whose metadata `cosec-app-id` cannot be an app id (empty, `*`, with `:` or a control character, or longer than
 128 characters) answers `500` on every request, logged as `The cosec-app-id of route [<routeId>] cannot be an app id:
-...` with the unmodelled-exception line above: fix the metadata ([Gateway](../integration/web.md#gateway)).
+...` with the unmodelled-exception line above: fix the metadata ([Gateway](../integration/web.md#gateway)). One that
+is not a string (a number, a boolean, a list or a map) does the same, logged as `The cosec-app-id of route [<routeId>]
+is a <type>, not a string: ...`: quote the value, and give one app.
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`, `Claim [<name>] is <n> characters,
   over 1024.` or `Claim [<name>] is a <type>, not a string, number or boolean.`: fewer roles or
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity), or a larger `max-size` on the gateway and

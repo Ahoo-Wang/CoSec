@@ -398,8 +398,8 @@ class ChangeAuthority(
         null
     }
 
-    /** Whether [entry] names an app document: a valid [SnapshotKey.App] id that is not the wildcard ([AppId]). */
-    private fun isAppId(entry: String): Boolean = SnapshotKey.App.isValidAppId(entry) && entry != Match.WILDCARD
+    /** Whether [entry] names an app document: a valid [SnapshotKey.App] id, which the wildcard never is. */
+    private fun isAppId(entry: String): Boolean = SnapshotKey.App.isValidAppId(entry)
 
     /**
      * A WARN that the app list is not to be trusted, at most once per [UNTRUSTED_WARN_INTERVAL]: until

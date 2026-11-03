@@ -22,7 +22,6 @@ import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
 import me.ahoo.cosec.migrate.v7.api.policy.Policy
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyType
-import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -36,6 +35,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
 import me.ahoo.cosec.runtime.document.CatalogPermission
@@ -422,11 +422,12 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
      */
     private fun appPermissionTree(app: Source7x.App): ObjectNode? {
         val appId = app.appId
-        if (appId == Match.WILDCARD || !AppSpacedRoleId.isValidAppId(appId)) {
+        if (!SnapshotKey.App.isValidAppId(appId)) {
             reject(
                 RejectionKind.INVALID_ID,
                 app.location,
-                "app id [$appId] is `*`, empty or contains `:`: 8.0 reads `*` as any app"
+                "app id [$appId] is `*`, blank, longer than ${ScopeResolver.MAX_APP_ID_LENGTH} characters, or contains " +
+                    "`:` or a control character: 8.0 reads `*` as any app, and names no app document by the others",
             )
             return null
         }

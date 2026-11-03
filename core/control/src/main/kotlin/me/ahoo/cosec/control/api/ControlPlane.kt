@@ -337,13 +337,14 @@ class DefaultControlPlane(
     override suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport {
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
-        val keys = listOfNotNull(
-            SnapshotKey.Platform,
-            tenant,
-            query.app?.takeIf {
-                it.isNotEmpty()
-            }?.let { SnapshotKey.App(it) }
-        )
+        val app = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
+            // The data plane never reads such an app (SCP-7): refused, and not echoed, since it may hold control characters.
+            if (!SnapshotKey.App.isValidAppId(app)) {
+                throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-7).")
+            }
+            SnapshotKey.App(app)
+        }
+        val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { revisions.head(it)?.document }
         val found = AccessFindings(query, ResourceTarget(query.resource))

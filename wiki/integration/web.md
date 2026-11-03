@@ -343,8 +343,9 @@ from the WebFlux filter in three ways:
 rejected (`403` `scope-rejected`), and one that declares none is in the route's app, whose role bindings, and DENYs,
 apply. A client's declared app applies only on a route without `cosec-app-id`, on a gateway without
 `cosec.authorization.scope.app-id`. When one gateway fronts several apps, give each route its app; why is in
-[Trust boundaries](../guide/security-model.md#trust-boundaries). A `cosec-app-id` that cannot be an app id fails every
-request of its route.
+[Trust boundaries](../guide/security-model.md#trust-boundaries). The value must be a string: a number, a boolean, a
+list or a map is not read as its text, so write `cosec-app-id: "2024"` for an app named `2024`. A `cosec-app-id` that
+is not a string, or cannot be an app id, fails every request of its route (`500`).
 
 ```yaml
 spring:

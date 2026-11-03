@@ -253,6 +253,17 @@ class ControlPlaneTest {
         plane.analyze(alice, query.copy(app = "billing")).allows.assert().isEmpty()
     }
 
+    /** SCP-7, R1-6 of #1194's review: the control plane takes no app the data plane could never read. */
+    @Test
+    fun `analyze refuses an app that cannot be an app id`() = runBlocking<Unit> {
+        val query = AccessQuery(ACME, "order", "team-a", Action("order", "delete"), Resource("order", "1", emptyMap()))
+        for (app in listOf("a\nforged", "a\u0000b", "a\u007Fb", " ", "*", "a:b", "x".repeat(129))) {
+            refused { plane.analyze(plato, query.copy(app = app)) }.assert().isEqualTo(400)
+        }
+        // A space inside, or a letter outside ASCII, is an app id.
+        plane.analyze(plato, query.copy(app = "order app")).allows.assert().isEmpty()
+    }
+
     companion object {
         val ACME = TenantId("acme")
         val GLOBEX = TenantId("globex")

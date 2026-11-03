@@ -36,7 +36,7 @@ class RouteAppTest {
         engine,
     )
 
-    private fun facts(routeApp: String?, declared: String? = null, host: String? = "shop") = HttpFacts(
+    private fun facts(routeApp: Any?, declared: String? = null, host: String? = "shop") = HttpFacts(
         method = "GET",
         rawPath = "/orders",
         rawQuery = null,
@@ -78,6 +78,28 @@ class RouteAppTest {
             val error = (outcome.basis as Basis.Error).error
             error.message.assert().contains("route [billing\\u000Aroute]").contains("cannot be an app id")
                 .doesNotContain("\n")
+        }
+    }
+
+    /**
+     * R1-7 of #1194's review: only a string is a route app. A number, a list or a map from the route's metadata is not
+     * read as its text (`[billing]`, `{id=billing}` would be a host app no document has): the same 500, decided here,
+     * whose log line names the route, the type and how to fix it, and not the value.
+     */
+    @Test
+    fun `a route app that is not a string fails the request closed, and says to quote it`() {
+        val values = listOf<Any>(123, 1.5, true, listOf("billing"), mapOf("id" to "billing"), mapOf("0" to "billing"))
+        for (app in values) {
+            val before = engine.requests.size
+            val outcome = evaluate(facts(app))
+            outcome.status.assert().describedAs("$app").isEqualTo(500)
+            outcome.problem!!.type.assert().isEqualTo(ProblemType.INTERNAL_ERROR)
+            engine.requests.size.assert().describedAs("$app").isEqualTo(before)
+            val error = (outcome.basis as Basis.Error).error
+            error.message.assert().contains(
+                "route [billing\\u000Aroute]"
+            ).contains("is a ${app.javaClass.name}, not a string")
+                .contains("Quote it").doesNotContain("[billing]").doesNotContain("id=billing").doesNotContain("123")
         }
     }
 }

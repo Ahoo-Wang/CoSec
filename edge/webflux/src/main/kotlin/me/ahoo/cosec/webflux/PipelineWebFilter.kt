@@ -44,8 +44,8 @@ object HttpFactsReader {
         remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
         host: HostScope = NO_HOST,
         requestAttributes: Map<String, String> = emptyMap(),
-        /** The gateway's route app ([HttpFacts.routeApp]), as written. */
-        routeApp: String? = null,
+        /** The gateway's route app ([HttpFacts.routeApp]), as configured, of any type. */
+        routeApp: Any? = null,
     ): HttpFacts {
         val request = exchange.request
         val headers = HashMap<String, List<String>>(request.headers.size())
