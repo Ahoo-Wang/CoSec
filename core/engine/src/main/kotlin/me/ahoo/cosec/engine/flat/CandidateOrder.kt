@@ -221,8 +221,12 @@ internal object CandidateOrder {
         return false
     }
 
-    /** [policy] through [entry], as one of several bindings of its document to it when it is one (`ALG-9`). */
-    private fun candidate(visitor: CandidateVisitor, policy: CompiledPolicy, entry: BoundEntry): Boolean {
+    /**
+     * [policy] through [entry], as one of several bindings of its document to it when it is one (`ALG-9`). Inline: it
+     * runs for every applicable binding, so it costs [visit] a field read and a branch, not a call.
+     */
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun candidate(visitor: CandidateVisitor, policy: CompiledPolicy, entry: BoundEntry): Boolean {
         if (entry.repeat < 0) {
             return visitor.candidate(policy, entry.via)
         }

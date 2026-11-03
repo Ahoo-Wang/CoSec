@@ -64,19 +64,24 @@ sealed class ResourcePattern {
         override fun matches(target: ResourceTarget): Boolean =
             target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments))
 
+        // Only glob segments use the table: a pattern without one takes the plain path, and never makes it.
         override fun match(target: ResourceTarget, scratch: ScratchSource): Captures? {
+            if (path.globUnits == 0) {
+                return match(target)
+            }
             if (target.resource.type != HTTP_TYPE) {
                 return null
             }
-            return path.match(target.httpPath(path.decodeAndParseSegments), tableOf(scratch))
+            return path.match(target.httpPath(path.decodeAndParseSegments), scratch.scratch())
         }
 
-        override fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean =
-            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments), tableOf(scratch))
-
-        // Only glob segments use the table: an evaluation whose patterns have none never makes it.
-        private fun tableOf(scratch: ScratchSource): EvaluationScratch? =
-            if (path.globUnits > 0) scratch.scratch() else null
+        override fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean {
+            if (path.globUnits == 0) {
+                return matches(target)
+            }
+            return target.resource.type == HTTP_TYPE &&
+                path.matches(target.httpPath(path.decodeAndParseSegments), scratch.scratch())
+        }
 
         override fun equals(other: Any?): Boolean = other is Http && other.path == path
 
