@@ -262,4 +262,43 @@ class HttpPathPatternTest {
         HttpPathPattern.compile("/{x}a{y}b").match(HttpPath.parse("/" + "a".repeat(1_000) + "b"))!!["x"].assert()
             .isEqualTo("a".repeat(999))
     }
+
+    /** RC1-8 (`DOC-4`): no normalized path is longer than 2,048 characters, so no pattern needs to be. */
+    @Test
+    fun `a pattern is at most 2048 characters`() {
+        val longest = "/" + "a".repeat(HttpPathPattern.MAX_LENGTH - 1)
+        HttpPathPattern.compile(longest).matches(HttpPath.parse(longest)).assert().isTrue()
+        assertThrownBy<InvalidPatternException> { HttpPathPattern.compile(longest + "a") }
+            .hasMessageContaining("more than ${HttpPathPattern.MAX_LENGTH}")
+    }
+
+    /** RC1-8 (`DOC-4`): a glob segment's parts bound its cost, tokens × length, and the depth its capture recurses. */
+    @Test
+    fun `a glob segment holds at most 16 tokens`() {
+        val sixteen = HttpPathPattern.compile("/{v}a*a*a*a*a*a*a*b")
+        sixteen.globTokens.assert().isEqualTo(HttpPathPattern.MAX_SEGMENT_TOKENS)
+        val value = "a".repeat(255) + "b"
+        sixteen.match(HttpPath.parse("/$value"))!!["v"].assert().isEqualTo("a".repeat(248))
+        assertThrownBy<InvalidPatternException> { HttpPathPattern.compile("/a*a*a*a*a*a*a*a*b") }
+            .hasMessageContaining("17 parts")
+        // Only glob segments have tokens: literals, ?, * and {name} as whole segments, ** and {*name} cost nothing.
+        HttpPathPattern.compile("/a/?b/*/{v}/x*y/**").globTokens.assert().isEqualTo(3)
+    }
+
+    /** RC1-8: `.*.*` matches what `.*` matches, so consecutive `*` within a segment are one token, as in Spring. */
+    @Test
+    fun `consecutive stars in a segment count once`() {
+        val stars = HttpPathPattern.compile("/a" + "*".repeat(2_000) + "b")
+        stars.globTokens.assert().isEqualTo(3)
+        val one = HttpPathPattern.compile("/a*b")
+        for (value in listOf("ab", "axb", "a/b", "abb", "ba", "a", "")) {
+            val path = HttpPath.parse("/$value")
+            stars.matches(path).assert().isEqualTo(one.matches(path))
+        }
+        // A capture next to a star keeps what it captured: only anonymous stars collapse.
+        HttpPathPattern.compile("/{v}***x").match(HttpPath.parse("/abcx"))!!["v"].assert()
+            .isEqualTo(HttpPathPattern.compile("/{v}*x").match(HttpPath.parse("/abcx"))!!["v"])
+        HttpPathPattern.compile("/x***{v}").match(HttpPath.parse("/xabc"))!!["v"].assert()
+            .isEqualTo(HttpPathPattern.compile("/x*{v}").match(HttpPath.parse("/xabc"))!!["v"])
+    }
 }

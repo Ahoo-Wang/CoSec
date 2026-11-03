@@ -1,0 +1,406 @@
+{
+  "rules": [
+    "DOC-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Seventeen such DENYs hold 4,352 glob tokens, over the document's bound of 4,096: the document does not compile, whatever each pattern costs alone.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "globs",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b",
+                "http:path:/{v}a*a*a*a*a*a*a*b"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "globs",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "globs"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "more than 4096"
+  }
+}

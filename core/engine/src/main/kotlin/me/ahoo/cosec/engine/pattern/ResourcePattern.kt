@@ -123,6 +123,13 @@ sealed class ResourcePattern {
         /** The resource type of HTTP requests. */
         const val HTTP_TYPE: String = "http"
         const val HTTP_PREFIX: String = "http:path:"
+
+        /**
+         * The longest resource pattern, in characters (code points): `http:path:` and the longest path pattern,
+         * [HttpPathPattern.MAX_LENGTH], which no request path exceeds; a typed pattern, which matches ids built from such
+         * paths, is held to the same length (RC1-8, `DOC-4`).
+         */
+        const val MAX_LENGTH: Int = HTTP_PREFIX.length + HttpPathPattern.MAX_LENGTH
         private const val ID_SEPARATOR = '/'
 
         /**
@@ -137,6 +144,10 @@ sealed class ResourcePattern {
             if (pattern.startsWith(HTTP_PREFIX)) {
                 val path = pattern.substring(HTTP_PREFIX.length)
                 return Http(HttpPathPattern.compile(path, caseSensitive, decodeAndParseSegments))
+            }
+            val length = pattern.codePointCount(0, pattern.length)
+            if (length > MAX_LENGTH) {
+                throw InvalidPatternException(pattern, MAX_LENGTH, "the pattern is $length characters, more than $MAX_LENGTH")
             }
             if (!caseSensitive || !decodeAndParseSegments) {
                 throw InvalidPatternException(pattern, 0, "only http:path: patterns take path options")

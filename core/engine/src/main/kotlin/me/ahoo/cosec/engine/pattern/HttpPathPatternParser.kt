@@ -13,17 +13,31 @@
 
 package me.ahoo.cosec.engine.pattern
 
-/** Parses an [HttpPathPattern]: its segments, the same way Spring's `InternalPathPatternParser` classifies them. */
+/**
+ * Parses an [HttpPathPattern]: its segments, the same way Spring's `InternalPathPatternParser` classifies them.
+ *
+ * Its cost is bounded (RC1-8, `DOC-4`): a pattern is at most [HttpPathPattern.MAX_LENGTH] characters, consecutive `*`
+ * within a segment count once (`.*.*` matches what `.*` matches, and no capture changes), and a segment that mixes
+ * wildcards or captures with other text holds at most [HttpPathPattern.MAX_SEGMENT_TOKENS] tokens. A glob segment then
+ * takes at most tokens × length steps to match, and its capture recursion is that many frames deep.
+ */
 // Every rejection throws where it is found: `throw invalid(...)` rather than a `Nothing` helper, so coverage sees the line.
 @Suppress("ThrowsCount")
 internal class HttpPathPatternParser(private val pattern: String, private val caseSensitive: Boolean) {
-    class Parsed(val elements: Array<PathElement>, val variableNames: List<String>)
+    /** [globTokens]: the tokens of every glob segment, which a document's budget counts (`DOC-4`). */
+    class Parsed(val elements: Array<PathElement>, val variableNames: List<String>, val globTokens: Int)
 
     private val variableNames = ArrayList<String>()
 
     fun parse(): Parsed {
         if (pattern.isEmpty()) {
             throw invalid(0, "the pattern is empty")
+        }
+        if (pattern.length > HttpPathPattern.MAX_LENGTH) {
+            throw invalid(
+                HttpPathPattern.MAX_LENGTH,
+                "the pattern is ${pattern.length} characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",
+            )
         }
         val elements = ArrayList<PathElement>()
         var restAt = -1
@@ -53,7 +67,8 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         if (restAt > 0 && restAt != elements.size - 1) {
             throw invalid(0, "** and {*name} must be at the start or the end of the pattern")
         }
-        return Parsed(elements.toTypedArray(), variableNames.toList())
+        val globTokens = elements.sumOf { (it as? PathElement.Glob)?.glob?.size ?: 0 }
+        return Parsed(elements.toTypedArray(), variableNames.toList(), globTokens)
     }
 
     private fun segment(begin: Int, end: Int): PathElement {
@@ -71,6 +86,13 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         if (tokens.any { it is GlobToken.Run }) {
             if (tokens.all { it is GlobToken.Run }) {
                 throw invalid(begin, "segment [$text] can match an empty value; add a literal character or ?")
+            }
+            if (tokens.size > HttpPathPattern.MAX_SEGMENT_TOKENS) {
+                throw invalid(
+                    begin,
+                    "segment [$text] has ${tokens.size} parts (*, ?, {name} and the text between them), more than " +
+                        "${HttpPathPattern.MAX_SEGMENT_TOKENS}",
+                )
             }
             return PathElement.Glob(SegmentGlob(tokens.toTypedArray()))
         }
@@ -101,7 +123,10 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
             when (val char = text[index]) {
                 '*', '?' -> {
                     flush()
-                    tokens.add(if (char == '*') GlobToken.Run(-1) else GlobToken.AnyChar)
+                    val repeatsAStar = char == '*' && (tokens.lastOrNull() as? GlobToken.Run)?.variable == -1
+                    if (!repeatsAStar) {
+                        tokens.add(if (char == '*') GlobToken.Run(-1) else GlobToken.AnyChar)
+                    }
                 }
 
                 '{' -> {
@@ -204,6 +229,9 @@ internal sealed class GlobToken {
  */
 internal class SegmentGlob(private val tokens: Array<GlobToken>) {
     private val remembersFailures = tokens.count { it is GlobToken.Run } > 1
+
+    /** How many tokens it has: at most [HttpPathPattern.MAX_SEGMENT_TOKENS]. */
+    val size: Int get() = tokens.size
 
     fun matches(value: String, captures: Array<String?>?): Boolean {
         if (!accepts(value)) {

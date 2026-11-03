@@ -23,6 +23,19 @@
       "statement": "A document whose schema is not this version's format fails to decode, as does one that is not exactly this format (an unknown field, a second operator, a value of the wrong JSON type), and the requests that need it fail closed.",
       "level": "engine",
       "pending": null
+    },
+    {
+      "id": "DOC-4",
+      "source": "RFC 0005 §3.5, §5.2; RC1-8",
+      "statement": "A path pattern's cost is bounded: an `http:path:` pattern longer than 2,048 characters, or with a segment that mixes `*`, `?` or `{name}` with other text in more than 16 parts (consecutive `*` counting once), does not compile, nor does a document whose patterns hold more than 4,096 such parts in all; a typed resource pattern is at most 2,058 characters.",
+      "level": "engine",
+      "guards": [
+        "engine:HttpPathPatternTest#a pattern is at most 2048 characters",
+        "engine:HttpPathPatternTest#a glob segment holds at most 16 tokens",
+        "engine:HttpPathPatternTest#consecutive stars in a segment count once",
+        "engine:CompiledDocumentTest#a document holds at most 4096 glob tokens"
+      ],
+      "pending": null
     }
   ]
 }

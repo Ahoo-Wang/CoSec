@@ -13,9 +13,15 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -117,5 +123,83 @@ class CompiledDocumentTest {
         policy.denies.map { it.index }.assert().containsExactly(1)
         policy.allows.map { it.index }.assert().containsExactly(0, 2)
         BuiltinPolicies.root.attachable.assert().isFalse()
+    }
+
+    /**
+     * RC1-8 (`DOC-4`): the glob tokens of a document's path patterns, across its policies, boundaries and rate limit
+     * rules, bound what matching them all costs one request, whichever are candidates.
+     */
+    @Test
+    fun `a document holds at most 4096 glob tokens`() {
+        val compiler = PolicyCompiler()
+        fun globs(id: String, statements: Int): CompiledPolicy {
+            val policyId = PolicyId(id)
+            return CompiledPolicy(
+                policyId,
+                null,
+                (0 until statements).map { k ->
+                    compiler.statement(policyId, k, StatementSource("s$k", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB))))
+                },
+            )
+        }
+        val full = CompiledDocument.MAX_GLOB_TOKENS / HttpPathPattern.MAX_SEGMENT_TOKENS
+        tenant(globs("a", full / 2), globs("b", full - full / 2)).headersRead.assert().isEmpty()
+        rejects("hold 4112 tokens in all, more than 4096") { tenant(globs("a", full / 2), globs("b", full - full / 2 + 1)) }
+        val rule = compiler.rateLimit(
+            DocumentKind.PLATFORM,
+            "",
+            RateLimitSource("r", StatementSource("r", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB))), null, RateLimitSpec(1.0)),
+        )
+        CompiledDocument.platform(listOf(globs("a", full - 1)), emptyList(), listOf(rule))
+        rejects("more than 4096") { CompiledDocument.platform(listOf(globs("a", full)), emptyList(), listOf(rule)) }
+        // A boundary holds at most 64 statements: 64 of them and the rule's tokens push 192 more statements over.
+        val boundary = globsAllow(compiler, CompiledDocument.MAX_BOUNDARY_STATEMENTS)
+        val rest = full - CompiledDocument.MAX_BOUNDARY_STATEMENTS
+        CompiledDocument.platform(listOf(globs("a", rest - 1)), emptyList(), listOf(rule), listOf(boundary), "boundary")
+        rejects("more than 4096") {
+            CompiledDocument.platform(listOf(globs("a", rest)), emptyList(), listOf(rule), listOf(boundary), "boundary")
+        }
+    }
+
+    /** RC1-38 (`PIP-12`): every header a document's conditions and rate limit keys read, whatever the effect. */
+    @Test
+    fun `a document knows the headers it reads`() {
+        val compiler = PolicyCompiler()
+        val id = PolicyId("h")
+        fun statement(k: Int, effect: Effect, condition: Condition) =
+            compiler.statement(id, k, StatementSource("s$k", effect, listOf("*"), condition = condition))
+        val policy = CompiledPolicy(
+            id,
+            compiler.condition(id, Condition.Exists("http.referer.host")),
+            listOf(
+                statement(0, Effect.DENY, Condition.Eq("http.header.x-deny", Literal.Str("v"))),
+                statement(1, Effect.ALLOW, Condition.Prefix("http.origin.host.labels", Literal.Str("example"))),
+                statement(2, Effect.ALLOW, Condition.Eq("http.header.x-deny", Literal.Str("w"))),
+            ),
+        )
+        val rule = compiler.rateLimit(
+            DocumentKind.TENANT,
+            "acme",
+            RateLimitSource("r", StatementSource("r", Effect.DENY, listOf("*")), "http.header.x-bucket", RateLimitSpec(1.0)),
+        )
+        CompiledDocument.tenant(TenantId("acme"), listOf(policy), emptyList(), listOf(rule)).headersRead.assert()
+            .containsExactlyInAnyOrder("referer", "x-deny", "origin", "x-bucket")
+        platform().headersRead.assert().isEmpty()
+    }
+
+    private fun globsAllow(compiler: PolicyCompiler, statements: Int): CompiledPolicy {
+        val id = PolicyId("boundary")
+        return CompiledPolicy(
+            id,
+            null,
+            (0 until statements).map { k ->
+                compiler.statement(id, k, StatementSource("s$k", Effect.ALLOW, listOf("*"), listOf(ResourceSource(GLOB))))
+            },
+        )
+    }
+
+    private companion object {
+        /** One glob segment of 16 tokens. */
+        const val GLOB = "http:path:/{v}a*a*a*a*a*a*a*b"
     }
 }

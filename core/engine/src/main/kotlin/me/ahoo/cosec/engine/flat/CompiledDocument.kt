@@ -64,6 +64,21 @@ class CompiledDocument private constructor(
     internal val readsExternal: Boolean =
         policies.values.any { it.readsExternal } || rateLimits.any { it.externals.isNotEmpty() }
 
+    /**
+     * The request headers any of its policies, boundaries or rate limit rules (their conditions and keys) reads, in lower
+     * case. A request that sent one of them with different values cannot be decided on its value, whichever statement
+     * reads it: the pipeline answers it 400 before evaluating (`PIP-12`, RC1-38), so the answer does not tell a DENY
+     * from an ALLOW, nor whether the statement applied.
+     */
+    val headersRead: List<String> = HeadersRead.merge(
+        NO_HEADERS,
+        policies.values.map { it.headers } + boundaries.values.map { it.headers } +
+            rateLimits.map { rule ->
+                val key = rule.key?.let(HeadersRead::headerOf)
+                if (key == null) rule.statement.headers else rule.statement.headers + key
+            },
+    ).asList()
+
     /** `Anyone` bindings, by policy id, then binding id. */
     internal val anyone: Array<BoundEntry>
 
@@ -80,6 +95,12 @@ class CompiledDocument private constructor(
     private val breakGlassIds: Set<String>
 
     init {
+        val globTokens = policies.values.sumOf { it.globTokens } + boundaries.values.sumOf { it.globTokens } +
+            rateLimits.sumOf { it.statement.globTokens }
+        require(globTokens <= MAX_GLOB_TOKENS) {
+            "The document's path pattern segments that mix *, ? or {name} with other text hold $globTokens tokens in " +
+                "all, more than $MAX_GLOB_TOKENS"
+        }
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
         require(!(kind == DocumentKind.TENANT && boundary != null && owner == TenantId.PLATFORM.value)) {
             "The platform tenant has no boundary"
@@ -240,6 +261,13 @@ class CompiledDocument private constructor(
 
         /** The most statements a boundary policy may hold (RFC 0007 §7.6). */
         const val MAX_BOUNDARY_STATEMENTS: Int = 64
+
+        /**
+         * The most glob tokens ([me.ahoo.cosec.engine.pattern.HttpPathPattern.MAX_SEGMENT_TOKENS]) one document's path
+         * patterns hold in all (RC1-8, `DOC-4`): a request's path segments are at most 256 characters, so matching every
+         * glob of a document costs at most this many times 256 steps, whichever of its statements are candidates.
+         */
+        const val MAX_GLOB_TOKENS: Int = 4096
 
         /**
          * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.

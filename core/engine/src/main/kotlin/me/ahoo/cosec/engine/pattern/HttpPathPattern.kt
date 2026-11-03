@@ -39,6 +39,8 @@ class HttpPathPattern private constructor(
     private val elements: Array<PathElement>,
     /** The names of the captured variables, in the order [Captures] holds their values. */
     val variableNames: List<String>,
+    /** The tokens of its glob segments: what it costs a document's budget (`DOC-4`). */
+    internal val globTokens: Int,
 ) {
     private val names: Array<String> = variableNames.toTypedArray()
 
@@ -188,8 +190,18 @@ class HttpPathPattern private constructor(
                 decodeAndParseSegments = decodeAndParseSegments,
                 elements = parsed.elements,
                 variableNames = parsed.variableNames,
+                globTokens = parsed.globTokens,
             )
         }
+
+        /** The longest pattern: no normalized path is longer (RC1-8, `DOC-4`). */
+        const val MAX_LENGTH: Int = 2048
+
+        /**
+         * The most tokens of a segment that mixes `*`, `?` or `{name}` with other text, counted after consecutive `*`
+         * collapse into one: each `*`, `?` and `{name}`, and each run of text between them (RC1-8, `DOC-4`).
+         */
+        const val MAX_SEGMENT_TOKENS: Int = 16
     }
 }
 
@@ -294,7 +306,7 @@ internal sealed class PathElement {
     }
 
     /** A segment with `*` or a capture among other text: see [SegmentGlob]. */
-    class Glob(private val glob: SegmentGlob) : Segment() {
+    class Glob(val glob: SegmentGlob) : Segment() {
         override fun matches(value: String, captures: Array<String?>?): Boolean = glob.matches(value, captures)
     }
 }

@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "PIP-12"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "X-Debug sent twice with different values has no single value. A DENY reads it, so the request is refused 400 before evaluation: a 503 would tell the client that a DENY on X-Debug exists.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        },
+        {
+          "id": "no-debug",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "http.header.x-debug",
+                  "1"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "no-debug",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-debug"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Debug": [
+        "0",
+        "1"
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}
