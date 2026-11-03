@@ -1,0 +1,17 @@
+# Rule: SCP-2
+# Mutant: the pipeline reads a route app that is not a string as its text, so [billing] becomes a host app no document has
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 8b2bf7cc..d6fa411b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -305,7 +305,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * app `0123`.
+      */
+     private fun routed(facts: HttpFacts): HttpFacts {
+-        val app = facts.routeApp ?: return facts
++        val app = facts.routeApp?.toString() ?: return facts
+         if (app !is String || !ScopeResolver.isValidAppId(app)) {
+             invalidRouteApp(facts, app)
+         }

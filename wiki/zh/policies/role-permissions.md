@@ -60,7 +60,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 }
 ```
 
-只有当主体在请求空间中至少拥有一个角色时，请求才会读取其应用的应用文档。应用是宿主配置的应用（`cosec.authorization.scope.app-id`），否则是请求在 `CoSec-App-Id` 中声明的应用；谁能控制这些输入，见[安全模型](../guide/security-model.md#trust-boundaries)。没有应用的请求不读取任何应用文档，因此不会有应用的角色绑定适用于它。
+当主体在请求空间中至少拥有一个角色，或者其租户的文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（[租户角色绑定](#tenant-role-bindings)），请求读取其应用的应用文档。应用是宿主的应用：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`；都没有时，是请求在 `CoSec-App-Id` 中声明的应用。谁能控制这些输入，见[安全模型](../guide/security-model.md#trust-boundaries)。没有应用的请求不读取任何应用文档，因此不会有应用的角色绑定适用于它。
 
 ## 权限目录 {#permission-catalogs}
 
@@ -140,6 +140,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 
 - 没有 `tenant` 的角色主体是本租户的角色；指定其他租户无法编译。
 - 策略可以是租户自己的策略、平台策略或应用的权限策略。应用的权限策略要求 `app` 恰好设为该应用：此时从该应用的文档中取得，并在同一请求中读取。权限策略的其他绑定方式都无法编译。
+- 租户文档也可以把应用的权限策略绑定给 `Anyone` 或它自己的某个主体，同样限定到恰好该应用。这样，该应用中的请求无论主体有什么角色都会读取应用文档，于是绑定能够解析，其中的 DENY 或 ALLOW 生效；应用文档的[限流规则](./rate-limiting.md)也随之生效。
 - 租户的角色绑定遵循相同的[作用域规则](#role-grant-scope)。
 
 ## 存储目录和授权 {#storing-catalogs-and-grants}

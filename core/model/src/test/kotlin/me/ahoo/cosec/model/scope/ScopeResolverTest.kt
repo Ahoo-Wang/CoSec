@@ -144,7 +144,9 @@ class ScopeResolverTest {
 
     @Test
     fun `a declared app that cannot be an app id is rejected with or without a host app`() {
-        val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1))
+        // RC1-15: a control character, which would forge a plain-text log line, as a tenant id's would.
+        val controls = listOf("a\nforged", "a\rb", "\u0000", "a\u007Fb", "a\u0085b", "\t")
+        val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1)) + controls
         for (host in listOf(noHost, HostScope(AppId("order")))) {
             for (app in invalid) {
                 rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), host))
@@ -169,7 +171,7 @@ class ScopeResolverTest {
         for (tenant in listOf("", " ")) {
             runCatching { ScopeSubject(TenantId(tenant), true, memberships) }.isFailure.assert().isTrue()
         }
-        for (app in listOf("", " ", "a:b")) {
+        for (app in listOf("", " ", "a:b", "a\nb")) {
             runCatching { HostScope(AppId(app)) }.isFailure.assert().describedAs(app).isTrue()
         }
     }

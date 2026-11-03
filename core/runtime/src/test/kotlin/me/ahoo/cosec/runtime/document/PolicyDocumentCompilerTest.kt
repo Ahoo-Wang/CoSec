@@ -332,6 +332,26 @@ class PolicyDocumentCompilerTest {
             .single().assert().isEqualTo("$.bindings[0].policy: [perm:order/gone] is not defined in this document")
     }
 
+    /**
+     * TNT-4, RC1-17: the apps whose permission policies a tenant grants to Anyone or to a principal, which a request in
+     * them reads whatever its roles; a role binding, or another policy scoped to an app, needs no such app.
+     */
+    @Test
+    fun `a tenant document names the apps its bindings of their permissions need`() {
+        val bindings = listOf(
+            """{"id":"a","subject":"*","app":"order","space":"*","policy":"perm:order/read"}""",
+            """{"id":"p","subject":{"principal":"alice"},"app":"billing","space":"","policy":"perm:billing/pay"}""",
+            """{"id":"r","subject":{"role":"editor"},"app":"shop","space":"*","policy":"perm:shop/sell"}""",
+            """{"id":"o","subject":"*","app":"stock","space":"*","policy":"own"}""",
+        ).joinToString(",")
+        val tenant = compiler.compile(
+            SnapshotKey.Tenant("acme"),
+            stored(""","policies":[{"id":"own","statements":[]}],"bindings":[$bindings]"""),
+        )
+        listOf("order", "billing", "shop", "stock", "").filter(tenant::needsApp).assert()
+            .containsExactly("order", "billing")
+    }
+
     @Test
     fun `a document binds a bounded number of principals`() {
         val limited = PolicyDocumentCompiler(principalBindingLimit = 1)

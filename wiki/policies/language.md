@@ -23,9 +23,10 @@ fails closed: `503` unless a DENY matches ([fail closed](../guide/security-model
 | Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), its `boundary`, rate limit rules. |
 
 The key is how the [control plane](./testing.md) names a document. Every request reads the platform document and the
-document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the
-principal holds at least one role in the request's space; a request the blacklist blocks reads only the platform
-document. A document nobody published reads as empty. Which candidates apply, and in which order, is in the
+document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the principal
+holds at least one role in the request's space, or when the tenant document binds one of the app's permission policies
+to anyone or to a principal; a request the blacklist blocks reads only the platform document. A document nobody
+published reads as empty. Which candidates apply, and in which order, is in the
 [security model](../guide/security-model.md).
 
 A tenant document:
@@ -303,7 +304,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `http.origin`, `http.referer` | String | The `Origin` and `Referer` headers, read as `http.header.*` is. |
 | `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs, in lower case; absent when the value is not a URL with a host. |
 | `http.origin.host.labels`, `http.referer.host.labels` | Labels | That host's labels, reversed (`api.example.com` is `com.example.api`), in lower case; for `prefix`. |
-| `request.attributes.<name>` | String | What the host knows about the request besides HTTP. The gateway sets `request.attributes.cosec.audit.routeId`, the id of the route the request came through, and `request.attributes.cosec.identity.forward` (`false`) on a route whose metadata opts out of identity propagation (`cosec-identity: false`); WebFlux and WebMvc set none. |
+| `request.attributes.<name>` | String | What the host knows about the request besides HTTP. The gateway sets `request.attributes.cosec.audit.routeId`, the id of the route the request came through, and `request.attributes.cosec.identity.forward`: `true` on a route that receives the forwarded identity (a `lb://` route, or one whose metadata says `cosec-identity: true`), `false` on any other; WebFlux and WebMvc set none. |
 | `ext.<provider>.<name>` | declared | An [external attribute](#external-attributes-and-onmissing). |
 
 A path outside this table does not compile.

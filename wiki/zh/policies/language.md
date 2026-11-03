@@ -17,7 +17,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、角色绑定、限流规则。 |
 | 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、限流规则。 |
 
-键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
+键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
 一个租户文档：
 
@@ -266,7 +266,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `http.origin`、`http.referer` | String | `Origin` 和 `Referer` 请求头，读取方式与 `http.header.*` 相同。 |
 | `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写；值不是带主机的 URL 时缺失。 |
 | `http.origin.host.labels`、`http.referer.host.labels` | Labels | 该主机的标签，倒序（`api.example.com` 为 `com.example.api`），小写；供 `prefix` 使用。 |
-| `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；对元数据声明不传播身份（`cosec-identity: false`）的路由，还设置 `request.attributes.cosec.identity.forward`（`false`）。WebFlux 和 WebMvc 不设置任何值。 |
+| `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；还设置 `request.attributes.cosec.identity.forward`：在接收转发身份的路由上（`lb://` 路由，或元数据为 `cosec-identity: true` 的路由）为 `true`，在其他路由上为 `false`。WebFlux 和 WebMvc 不设置任何值。 |
 | `ext.<provider>.<name>` | 声明的类型 | [外部属性](#external-attributes-and-onmissing)。 |
 
 不在此表中的路径无法编译。

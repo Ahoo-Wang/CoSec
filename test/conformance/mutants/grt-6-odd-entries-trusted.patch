@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index 8e89989d..96c91cb5 100644
+index 3342955a..802cf771 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -282,7 +282,7 @@ class ChangeAuthority(
+@@ -383,7 +383,7 @@ class ChangeAuthority(
                  }
              }
  
--            list.entries.any { !isAppId(it) } -> null.also {
-+            list.entries.isEmpty() && list.entries.any { !isAppId(it) } -> null.also {
+-            list.entries.any { !wasAppId(it) } -> null.also {
++            list.entries.isEmpty() && list.entries.any { !wasAppId(it) } -> null.also {
                  untrusted {
                      "The app list has an entry that names no app document: run cosec-migrate repair-references; until " +
                          "then every app a grant reaches is unknown."

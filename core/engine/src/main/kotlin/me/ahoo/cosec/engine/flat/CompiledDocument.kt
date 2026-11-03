@@ -57,6 +57,8 @@ class CompiledDocument private constructor(
     internal val boundary: String? = null,
     /** Its rate limit rules, in document order (RFC 0006 §8.1): a permit's obligations come from them. */
     val rateLimits: List<CompiledRateLimit> = emptyList(),
+    /** For a tenant document, [needsApp]'s apps; empty for the other kinds. */
+    private val boundApps: Set<String> = emptySet(),
 ) {
     /** Whether one of its policies or rate limit rules reads an external attribute (RFC 0006 §5.4.2). */
     internal val readsExternal: Boolean =
@@ -194,6 +196,14 @@ class CompiledDocument private constructor(
         }
     }
 
+    /**
+     * Whether a request in [app] reads that app's document whatever its roles, because this tenant document binds one of
+     * the app's permission policies to `Anyone` or to a principal (RFC 0007 §9.3, RC1-17): without it the binding could
+     * not resolve. A role binding needs no such entry: it applies only with a role in the scope, and then the app's
+     * document is read anyway. One set lookup, so the view key stays O(1) and the hot path does no I/O to decide it.
+     */
+    fun needsApp(app: String): Boolean = app in boundApps
+
     internal fun policy(id: String): CompiledPolicy? = policies[id]
 
     /** The platform's boundary policy [id], or null. */
@@ -288,7 +298,9 @@ class CompiledDocument private constructor(
 
         /**
          * The document of [tenant]: its own policies and bindings, and the platform [boundary] it is held to instead
-         * of the default (only the platform writes it, RFC 0007 Q11).
+         * of the default (only the platform writes it, RFC 0007 Q11). [boundApps] are the apps whose permission
+         * policies [bindings] grant to `Anyone` or to a principal ([needsApp]): the snapshot compiler knows which
+         * policies are an app's, the engine does not.
          */
         fun tenant(
             tenant: TenantId,
@@ -296,6 +308,7 @@ class CompiledDocument private constructor(
             bindings: List<Binding>,
             rateLimits: List<CompiledRateLimit> = emptyList(),
             boundary: String? = null,
+            boundApps: Set<String> = emptySet(),
         ): CompiledDocument =
             CompiledDocument(
                 DocumentKind.TENANT,
@@ -304,6 +317,8 @@ class CompiledDocument private constructor(
                 bindings,
                 boundary = boundary,
                 rateLimits = rateLimits,
+                // Almost every tenant binds no app's permissions: the empty set answers without hashing.
+                boundApps = if (boundApps.isEmpty()) emptySet() else boundApps.toHashSet(),
             )
 
         private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {

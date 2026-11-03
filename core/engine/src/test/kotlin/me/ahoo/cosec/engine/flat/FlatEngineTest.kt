@@ -20,6 +20,7 @@ import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.BindingRef
@@ -331,6 +332,40 @@ class FlatEngineTest {
         decide(flatRequest(), allowing, app = null).assert().isInstanceOf(Decision.Permit::class.java)
         decide(flatRequest(app = "", roles = listOf("editor")), allowing, app = null).assert()
             .isInstanceOf(Decision.Permit::class.java)
+    }
+
+    /** RC1-17: a tenant binding of an app's permission policy to Anyone or a principal needs that app's document. */
+    @Test
+    fun `a tenant binding an app's permission policy without roles needs the app's document`() {
+        val allowing = platform(fixture.policy("a", allow()), bindings = listOf(anyone("g", "a")))
+        val needing = CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), boundApps = setOf("app"))
+        needing.needsApp("app").assert().isTrue()
+        needing.needsApp("other").assert().isFalse()
+        emptyTenant.needsApp("app").assert().isFalse()
+        decide(flatRequest(), allowing, tenant = needing, app = null).assert()
+            .isEqualTo(Decision.Indeterminate(Cause.NotLoaded(DocumentKind.APP)))
+        decide(flatRequest(app = "other"), allowing, tenant = needing, app = null).assert()
+            .isInstanceOf(Decision.Permit::class.java)
+        decide(
+            flatRequest(),
+            allowing,
+            tenant = needing,
+            app = app()
+        ).assert().isInstanceOf(Decision.Permit::class.java)
+    }
+
+    /** RC1-17, TNT-4: a tenant's Anyone binding of an app's permission policy resolves it from the app's document. */
+    @Test
+    fun `a tenant's Anyone binding resolves the app's permission policy`() {
+        val allowing = platform(fixture.policy("a", allow()), bindings = listOf(anyone("g", "a")))
+        val denying = app(fixture.policy("perm:app/no", deny()))
+        val binding = anyone("t", "perm:app/no", app = "app")
+        val tenant = CompiledDocument.tenant(TenantId("acme"), emptyList(), listOf(binding), boundApps = setOf("app"))
+        decide(flatRequest(), allowing, tenant = tenant, app = denying).assert()
+            .isEqualTo(Decision.Deny(ref("perm:app/no", 0, BindingRef.Bound(binding.id, DocumentKind.TENANT))))
+        // Without the app's document the policy is unresolved, never skipped: the request fails closed.
+        decide(flatRequest(), allowing, tenant = tenant, app = null).assert()
+            .isEqualTo(Decision.Indeterminate(Cause.NotLoaded(DocumentKind.APP)))
     }
 
     @Test

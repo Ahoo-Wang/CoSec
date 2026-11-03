@@ -1,0 +1,19 @@
+# Rule: STA-2
+# Mutant: the check reads only operation endpoints, so a controller endpoint, Spring Cloud Gateway's gateway among them, is served on the application port unchecked (R1-2)
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecGatewayEndpointCheckAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
+index d09bce04..48490dba 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
+@@ -56,8 +56,8 @@ class CoSecGatewayEndpointCheckAutoConfiguration {
+             val endpoints = context.getBeanProvider(PathMappedEndpoints::class.java).ifAvailable
+                 ?: return@SmartInitializingSingleton
+             // Every path-mapped endpoint is an exposable one; any other is checked by its path, never skipped.
+-            val exposed = endpoints.map {
+-                (it as? ExposableEndpoint<*>)?.endpointId?.toLowerCaseString() ?: it.rootPath.lowercase()
++            val exposed = endpoints.filterIsInstance<org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint>().map {
++                it.endpointId.toLowerCaseString()
+             }
+             requireProtected(ManagementPortType.get(context.environment), exposed, properties.unprotectedEndpoints)
+         }

@@ -1,0 +1,81 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "R1-1 of #1194's review: simulate reads no more than enforcement. acme binds order's perm:order/read to Anyone in order only: bob's roleless request in billing reads neither order's document nor billing's, and is the implicit deny, never Indeterminate(NotLoaded) and never order's permit.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "apps": {
+      "order": {
+        "policies": [
+          {
+            "id": "perm:order/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": "*",
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/read"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "billing",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Deny"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

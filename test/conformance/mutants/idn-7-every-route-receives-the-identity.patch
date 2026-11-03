@@ -1,0 +1,17 @@
+# Rule: IDN-7
+# Mutant: a route without cosec-identity metadata receives the identity whatever its URI, as before RC1-49
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 4e02b538..701e6b26 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -152,7 +152,7 @@ class PipelineGatewayFilter(
+          * registered service ([LOAD_BALANCED]).
+          */
+         internal fun receivesIdentity(route: Route): Boolean = when (val opted = route.metadata[IDENTITY_METADATA]) {
+-            null -> route.uri.scheme == LOAD_BALANCED
++            null -> true
+             else -> opted.toString() == "true"
+         }
+     }

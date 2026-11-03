@@ -103,6 +103,17 @@ class SnapshotDocumentCodecTest {
         assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode(text.encodeToByteArray()) }
     }
 
+    /**
+     * RC1-15, round 4 of #1194's review: a stored field name never reaches a message raw. A repeated name is refused by
+     * the strict parser first, whose message names nothing; the codec's own check, which quotes the name, escapes it.
+     */
+    @Test
+    fun aRepeatedFieldNameIsNeverQuotedRaw() {
+        val text = """{"schema":2,"a\u0001b":1,"a\u0001b":2,"revision":4,"publishedAt":"2026-10-21T08:00:00Z"}"""
+        val error = assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode(text.encodeToByteArray()) }
+        error.message!!.any { it.isISOControl() }.assert().isFalse()
+    }
+
     /** Round 2: only UTF-8 without a byte order mark, so stored entries keep meaningful byte offsets. */
     @Test
     fun rejectsBodiesThatAreNotUtf8() {

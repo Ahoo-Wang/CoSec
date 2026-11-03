@@ -1,0 +1,89 @@
+{
+  "rules": [
+    "TNT-4"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same Anyone binding of order's DENY, on a request in shop: the binding is not in scope there, no app document is read, and the platform's ALLOW permits.",
+  "documents": {
+    "apps": {
+      "order": {
+        "policies": [
+          {
+            "id": "perm:order/no-reads",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET"
+              }
+            ]
+          },
+          {
+            "id": "perm:order/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "no-reads",
+            "subject": "*",
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/no-reads"
+          }
+        ]
+      }
+    },
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-App-Id": "shop"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

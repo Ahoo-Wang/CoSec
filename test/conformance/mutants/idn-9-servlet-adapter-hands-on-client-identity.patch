@@ -1,0 +1,17 @@
+# Rule: IDN-9
+# Mutant: the servlet adapter hands on the request as it came, a client's CoSec-Identity included
+# Tests: :webmvc:test --tests me.ahoo.cosec.servlet.PipelineServletFilterTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.WebAdapterParityTest
+
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt
+index 499df25a..c53eac42 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt
+@@ -87,7 +87,7 @@ class PipelineServletFilter(
+         val outcome = runBlocking(BridgeContextContributor.capture(contributors)) { pipeline.evaluate(facts) }
+         try {
+             if (write(servletRequest, servletResponse, outcome)) {
+-                chain.doFilter(ForwardedHeadersRequest.of(servletRequest, outcome.forward), response)
++                chain.doFilter(request, response)
+             }
+         } finally {
+             SecurityContextHolder.remove()

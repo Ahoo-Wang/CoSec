@@ -825,8 +825,8 @@ public final class me/ahoo/cosec/runtime/event/RequestSummary {
 }
 
 public final class me/ahoo/cosec/runtime/event/ShadowListener : me/ahoo/cosec/runtime/event/DecisionListener {
-	public fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;)V
-	public synthetic fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/runtime/snapshot/SnapshotViews;)V
+	public synthetic fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/runtime/snapshot/SnapshotViews;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;
 	public fun onDecision (Lme/ahoo/cosec/runtime/event/DecisionEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -903,8 +903,8 @@ public final class me/ahoo/cosec/runtime/http/HttpAttributes : me/ahoo/cosec/mod
 }
 
 public final class me/ahoo/cosec/runtime/http/HttpFacts {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/runtime/http/Headers;Lme/ahoo/cosec/runtime/http/Cookies;Ljava/lang/String;Lme/ahoo/cosec/model/scope/HostScope;Ljava/util/Map;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/runtime/http/Headers;Lme/ahoo/cosec/runtime/http/Cookies;Ljava/lang/String;Lme/ahoo/cosec/model/scope/HostScope;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/runtime/http/Headers;Lme/ahoo/cosec/runtime/http/Cookies;Ljava/lang/String;Lme/ahoo/cosec/model/scope/HostScope;Ljava/util/Map;Ljava/lang/Object;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/runtime/http/Headers;Lme/ahoo/cosec/runtime/http/Cookies;Ljava/lang/String;Lme/ahoo/cosec/model/scope/HostScope;Ljava/util/Map;Ljava/lang/Object;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getCookies ()Lme/ahoo/cosec/runtime/http/Cookies;
 	public final fun getHeaders ()Lme/ahoo/cosec/runtime/http/Headers;
 	public final fun getHost ()Lme/ahoo/cosec/model/scope/HostScope;
@@ -913,6 +913,7 @@ public final class me/ahoo/cosec/runtime/http/HttpFacts {
 	public final fun getRawQuery ()Ljava/lang/String;
 	public final fun getRemoteAddress ()Ljava/lang/String;
 	public final fun getRequestAttributes ()Ljava/util/Map;
+	public final fun getRouteApp ()Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/runtime/http/PathNormalizer {

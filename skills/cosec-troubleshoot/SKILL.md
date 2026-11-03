@@ -1,6 +1,6 @@
 ---
 name: cosec-troubleshoot
-description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
+description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps, actuator endpoints on a gateway), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
 ---
 
 # CoSec Troubleshooting
@@ -38,11 +38,11 @@ Indeterminate in an explanation.
 
 | Status | Problem `type` slug | Meaning |
 |---|---|---|
-| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query), or a route-map capture that cannot be a resource id segment. The engine never saw it. |
+| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), or a route-map capture that cannot be a resource id segment. The engine never saw it. |
 | 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
 | 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
 | 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
-| 403 | `scope-rejected` | `CoSec-App-Id` differs from the host's app (or is not a valid app id), or `CoSec-Space-Id` names a space where the principal has no role. |
+| 403 | `scope-rejected` | `CoSec-App-Id` differs from the host's app (on a gateway the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`), or is not a valid app id (blank, `*`, `:` or a control character, over 128 characters), or `CoSec-Space-Id` names a space where the principal has no role. |
 | 429 | `too-many-requests` | Permitted, but a rate limit rule's bucket is exhausted; `Retry-After` and `RateLimit-*` headers. |
 | 503 | `unavailable` | No decision could be made (Indeterminate), the authenticator's dependency failed, or `cosec.pipeline.timeout` passed. Never retried by a `Retry-After`. |
 | 500 | `internal-error` | An exception nothing modelled: a CoSec defect. Read the server log. |
@@ -87,6 +87,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
+- **`Actuator endpoints [<ids>] are exposed over HTTP on the gateway's application port, where CoSec does not
+  authorize them`** (STA-2): a gateway host serves actuator on its application port (`management.server.port` unset or
+  equal to `server.port`) with an endpoint other than `health` exposed. Serve actuator on its own port behind a network
+  policy (`management.server.port`), expose only `health`, or list the endpoints something else protects in
+  `cosec.gateway.unprotected-endpoints`. **`cosec.gateway.unprotected-endpoints lists [gateway], which it never
+  accepts`**: the `gateway` endpoint changes routes; serve it on a management port, or not at all.
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-an-exposed-actuator-endpoint
 - **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `cosec-kafka`, a
   `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
 - **`The control plane checks its approvers' revocations, but no revocation reader is available`**: enable CoSec's
@@ -224,10 +231,16 @@ header: anonymous. Otherwise never anonymous:
   plus the skew. Check clocks.
 - On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
   key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
-  (at most 1024 characters), number or boolean. Route metadata `cosec-identity: false` opts a route out.
-- A backend that verifies tokens itself gets no `Authorization` header unless
-  `cosec.gateway.identity.forward-authorization=true`. A gateway-mode service that issues no tokens should set
+  (at most 1024 characters), number or boolean.
+- Every request anonymous behind the gateway: the gateway forwards the identity only to a `lb://` route or one whose
+  metadata says `cosec-identity: true`; an `http(s)://` route without it, or with `cosec-identity: false`, gets none.
+  Mark the route `cosec-identity: true` if it leads to your own service.
+- A backend that verifies tokens itself gets no credentials (`Authorization`, the API key header, the `authorization`
+  query parameter, the `authorization` cookie) unless `cosec.gateway.identity.forward-authorization=true`, and then
+  only on a route that would receive the identity. A gateway-mode service that issues no tokens should set
   `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
+- On the gateway, a 500 on every request of one route: its metadata `cosec-app-id` is not a valid app id, or not a
+  string (a number, list or map: quote it, one app).
 
 ### Change not visible / snapshot lag
 
@@ -251,7 +264,8 @@ header: anonymous. Otherwise never anonymous:
 Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
 document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);
 404 no such document, change or route; 409 the change's `base` revision is stale, the document is staged by another
-change, or the change is in another state; 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
+change, or the change is in another state (409 `change-unreadable`: an earlier build wrote that change for an app that
+cannot be an app id; remove its record); 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
 does not match; 422 the candidate does not compile, refers to a missing policy, or uses a reserved id prefix
 (`cosec:`, `g:`, `r:`); 428 a DENY with `onMissing: nomatch` needs a confirmation; 503 the decision or store could not
 be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebMvc a body over

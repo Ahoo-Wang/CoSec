@@ -1,0 +1,17 @@
+# Rule: IDN-7
+# Mutant: cosec-identity: false does not keep the identity from a lb:// route
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 4e02b538..3f7af6ad 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -153,7 +153,7 @@ class PipelineGatewayFilter(
+          */
+         internal fun receivesIdentity(route: Route): Boolean = when (val opted = route.metadata[IDENTITY_METADATA]) {
+             null -> route.uri.scheme == LOAD_BALANCED
+-            else -> opted.toString() == "true"
++            else -> opted.toString() == "true" || route.uri.scheme == LOAD_BALANCED
+         }
+     }
+ }

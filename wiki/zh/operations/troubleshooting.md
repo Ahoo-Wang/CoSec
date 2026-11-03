@@ -42,8 +42,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求无法被无歧义地读取，因此在认证之前就被拒绝。审计事件的 `kind` 为 `BAD_REQUEST`。原因：
 
 - 路径含有 `.` 或 `..` 段，或者有格式错误的百分号转义；
-- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的非空值（在请求头和查询字符串之间，或在其中
-  任一处之内），或者它的查询值有格式错误的百分号转义；
+- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的值（在请求头和查询字符串之间，或在其中
+  任一处之内），空白值与非空白值同时出现也算（例如请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=`），或者它的查询值有格式错误的百分号转义。每个参数只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
 - 在 `cosec.pipeline.mode=gateway` 的服务上，`CoSec-Identity` 头无法读取（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
@@ -112,8 +112,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 请求声明的作用域不能授予这个调用方：
 
-- `CoSec-App-Id` 指定的应用不是宿主的 [`cosec.authorization.scope.app-id`](./configuration.md#authorization)，或者
-  是一个不能作为应用 id 的值；
+- `CoSec-App-Id` 指定的应用不是宿主的应用：在网关上是路由元数据 `cosec-app-id`，否则是
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)；或者是一个不能作为应用 id 的值（空白、`*`、含 `:` 或控制字符、或超过 128 个字符）；
 - `CoSec-Space-Id` 指定的空间中主体没有任何角色。
 
 发送宿主的应用或者不发送，并发送主体是其成员的空间（[信任边界](../guide/security-model.md#trust-boundaries)）。
@@ -162,6 +162,8 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 - `The credential of [<subject>] never expires: a service could not bound the identity.`：没有 `expires-at` 的 API key（或没有
   `exp` 的令牌）。给 key 设置过期时间，或把该路由的元数据设为 `cosec-identity: false`。
+
+元数据 `cosec-app-id` 不能作为应用 id（为空、`*`、含 `:` 或控制字符、或超过 128 个字符）的路由，每个请求都回答 `500`，并随上面那条未建模异常的日志记下 `The cosec-app-id of route [<routeId>] cannot be an app id: ...`：修正该元数据（[网关](../integration/web.md#gateway)）。值不是字符串（数字、布尔值、列表或映射）时也是如此，日志为 `The cosec-app-id of route [<routeId>] is a <type>, not a string: ...`：给值加上引号，并只写一个应用。
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`、`Claim [<name>] is <n> characters, over 1024.`
   或 `Claim [<name>] is a <type>, not a string, number or boolean.`：减少角色或
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity)，或在网关和服务上都调大 `max-size`。
@@ -203,6 +205,8 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
 
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
+
+**每个请求都是匿名的。** 网关只把身份转发给接收身份的路由：指向已注册服务的路由（`uri: lb://...`），或元数据为 `cosec-identity: true` 的路由。指向 `http://` 或 `https://` 又没有该元数据的路由，或元数据为 `cosec-identity: false` 的路由，不发送身份，所以其后的服务看到的是匿名请求。路由指向你自己的服务时，给它标上 `cosec-identity: true`（[转发身份](../integration/web.md#forwarding-the-identity)）。自己校验令牌、而不再收到令牌的服务，需要 `cosec.gateway.identity.forward-authorization=true` 以及这样的路由。
 
 ## 实例未就绪 {#instance-is-not-ready}
 
@@ -277,6 +281,21 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。从 7.x capability 迁移过来的应用要自己添加这些模块（[模块、制品与包](./upgrading.md#modules-artifacts-and-packages)）。
+
+### 暴露了 actuator 端点导致启动失败 {#startup-fails-on-an-exposed-actuator-endpoint}
+
+```text
+Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port, where CoSec does not authorize them: anyone who reaches the gateway reaches them, and [gateway] writes its routes. ... (STA-2, https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-an-exposed-actuator-endpoint).
+cosec.gateway.unprotected-endpoints lists [gateway], which it never accepts: that endpoint writes the gateway's routes. ...
+```
+
+在 Spring Cloud Gateway 宿主上，CoSec 只授权网关的路由；除非 `management.server.port` 指定了其他端口，它的 actuator 端点都在应用端口上。第一条消息列出在那里暴露的、`health` 以外的端点。任选其一：
+
+- 把 actuator 放到单独的端口上，并置于网络策略之后：`management.server.port=8081`（`server.port` 以外的任何端口）；
+- 少暴露一些端点：`management.endpoints.web.exposure.include=health`；
+- 在 [`cosec.gateway.unprotected-endpoints`](./configuration.md#gateway) 中列出由其他手段保护的端点，例如位于网络策略之后的 `prometheus`。
+
+第二条消息：`gateway` 会修改路由，所以那里从不接受它；把它放在管理端口上，或者完全不暴露（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。
 
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 
@@ -372,6 +391,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误，或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。 | 修正请求；`detail` 指出问题。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。 | |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
+| `409` `change-unreadable` | 该变更的记录由之前的构建为一个不能作为应用 id 的应用写入（空白、`*`、含控制字符或超过 128 个字符）；控制面所在的主机在每一轮维护中记录 `Change [<id>] is skipped: it is of [<key>], which no document key can name`。它既无法查看也无法放弃。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-2)。 |
 | `410` | 请求的修订没有保留。 | |
 | `428` | 发布需要确认影子窗口的计数。 | 带上该窗口的 `ack` 再次发布。 |
 | `503` | 动作的授权无法决定（没有平台文档、Redis 不可用）、存储无法读取、发布时读不到审批人的吊销（日志中写着 `the revocations of the approver could not be read`；变更保留其审批），或者 `REQUIRED` 变更监听器没有记录一个受控步骤。没有 `REQUIRED` 变更监听器时使用 break-glass：`break-glass needs a REQUIRED change listener, and none is configured`。 | 恢复 Redis 或监听器的存储（[控制面变更日志](./observability.md#control-plane-change-log)）。 |

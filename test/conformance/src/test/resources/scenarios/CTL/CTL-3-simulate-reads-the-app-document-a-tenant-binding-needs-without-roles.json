@@ -1,0 +1,142 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "R1-1 of #1194's review, RC1-17: bob has no role in order. acme binds order's perm:order/read to Anyone, globex to bob himself: enforcement reads order's document for his request, and so does simulate, which permits by order's policy, not Indeterminate. A change of acme that removes the binding reads no app document: its candidate is the implicit deny, with no cause.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "apps": {
+      "order": {
+        "policies": [
+          {
+            "id": "perm:order/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": "*",
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/read"
+          }
+        ]
+      },
+      "globex": {
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": {
+              "principal": "bob"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/read"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "order",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "globex",
+          "principal": "bob",
+          "roles": [],
+          "app": "order",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removeBinding": "reads"
+          }
+        ]
+      }
+    },
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "order",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        },
+        "candidate": "c1"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by perm:order/read",
+      "Permit by perm:order/read",
+      "CHECKED",
+      "Permit by perm:order/read; candidate Deny"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

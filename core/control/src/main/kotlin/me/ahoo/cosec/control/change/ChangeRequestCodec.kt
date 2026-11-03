@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -34,6 +35,7 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -45,7 +47,10 @@ import java.time.Instant
 /**
  * Change requests and staging slots as JSON, for every [me.ahoo.cosec.control.store.ControlStore]. Entries inside
  * operations are written as the document format writes them ([PolicyDocumentCodec]), so a stored change reads back
- * with the same entries, digests included. Reading is strict: anything else is a [SnapshotFormatException].
+ * with the same entries, digests included. Reading is strict: anything else is a [SnapshotFormatException], whose
+ * message escapes control characters, except a change whose own document is an app no key can name, which earlier builds
+ * wrote: that is an [UnnamedDocumentException], a format error of that record alone, which a store lists and a reader
+ * skips (`ControlStore.openChanges`). A head it was checked with of such an app is dropped from `checkedWith`.
  */
 object ChangeRequestCodec {
     private val factory = JsonNodeFactory.instance
@@ -320,7 +325,10 @@ object ChangeRequestCodec {
             "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
             "checkedApps",
         )
-        val key = documentKey(node.need("key").text())
+        val key = node.need("key").text().let { text ->
+            if (SnapshotKeyText.isUnnamedApp(text)) throw UnnamedDocumentException(SnapshotKeyText.printable(text))
+            documentKey(text)
+        }
         val (kind, owner) = Revisions.ownerOf(key)
         val base = node.need("base").also { it.only("revision", "digest") }
         return ChangeRequest(
@@ -343,9 +351,11 @@ object ChangeRequestCodec {
                 )
             },
             candidate = node.get("candidate")?.text(),
-            checkedWith = node.need("checkedWith").properties().associate { (name, value) ->
-                documentKey(name) to (if (value.isNull) null else digest(value.text()))
-            },
+            // A head read of an app no key can name now cannot move: that document can no longer be written (R2-1).
+            checkedWith = node.need(
+                "checkedWith"
+            ).properties().filterNot { (name, _) -> SnapshotKeyText.isUnnamedApp(name) }
+                .associate { (name, value) -> documentKey(name) to (if (value.isNull) null else digest(value.text())) },
             createdAt = Instant.parse(node.need("createdAt").text()),
             updatedAt = Instant.parse(node.need("updatedAt").text()),
             skipShadow = node.get("skipShadow")?.text(),
@@ -476,7 +486,7 @@ object ChangeRequestCodec {
     private fun read(bytes: ByteArray): JsonNode = try {
         reader.readTree(bytes) ?: malformed("empty")
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A change request is not JSON: ${error.originalMessage}", error)
+        throw SnapshotFormatException("A change request is not JSON: ${printable(error.originalMessage)}", error)
     }
 
     /** Model and codec errors are format errors: a stored value this instance cannot read is never read as absent. */
@@ -485,9 +495,9 @@ object ChangeRequestCodec {
     } catch (error: SnapshotFormatException) {
         throw error
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A change request is malformed: ${error.originalMessage}", error)
+        throw SnapshotFormatException("A change request is malformed: ${printable(error.originalMessage)}", error)
     } catch (error: IllegalArgumentException) {
-        throw SnapshotFormatException("A change request is malformed: ${error.message}", error)
+        throw SnapshotFormatException("A change request is malformed: ${printable(error.message)}", error)
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")
@@ -500,8 +510,11 @@ object ChangeRequestCodec {
         if (unknown.isNotEmpty()) malformed("unknown fields $unknown")
     }
 
+    /** [text], stored content quoted in a message, with its control characters escaped (RC1-15). */
+    private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
+
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
-        "A change request is malformed: $reason."
+        "A change request is malformed: ${printable(reason)}."
     )
 
     private val DIGEST = Regex("^[0-9a-f]{40}$")

@@ -66,8 +66,9 @@ patterns, and its condition. A window allows `permitsPerSecond × windowSeconds`
 Which rules a request is held to:
 
 - the platform document's rules, for every permitted request;
-- the app document's rules, when the request read that document: it has an app and the principal holds a role in the
-  request's space ([Role permissions](./role-permissions.md#app-documents));
+- the app document's rules, when the request read that document: it has an app, and the principal holds a role in the
+  request's space or the tenant's document binds one of the app's permission policies to `Anyone` or to a principal
+  ([Role permissions](./role-permissions.md#app-documents));
 - the tenant document's rules, for requests of that tenant.
 
 They run in that order, and in document order within a document. Each matching rule spends one permit. The first rule

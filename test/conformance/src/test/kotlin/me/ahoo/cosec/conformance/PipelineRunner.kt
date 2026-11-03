@@ -123,6 +123,7 @@ import me.ahoo.cosec.testkit.textOrNull
 import org.springframework.cloud.gateway.filter.headers.HttpHeadersFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
+import org.springframework.http.HttpCookie
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
@@ -132,6 +133,7 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.net.URI
+import java.net.URLDecoder
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -278,8 +280,11 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         if (cancelAt != null) {
             return cancelled(pipeline, facts, reached)
         }
-        node.get("gateway")?.let { return throughGateway(pipeline, http, it) }
-        return answered(runBlocking { pipeline.evaluate(facts) })
+        node.get("gateway")?.let {
+            val apiKeyHeader = node.get("options")?.get("apiKeyHeader")?.text() ?: DEFAULT_API_KEY_HEADER
+            return throughGateway(pipeline, http, facts.host, it, apiKeyHeader)
+        }
+        return answered(runBlocking { pipeline.evaluate(facts) }, node.has("identity"))
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -319,37 +324,48 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         caller.cancelAndJoin()
         val answer = outcome
         when {
-            answer != null -> answered(answer)
+            answer != null -> answered(answer, false)
             cancelled -> Outcome.Cancelled
             else -> error("The pipeline neither answered nor was cancelled.")
         }
     }
 
     /**
-     * `"gateway": { "route": { "identity": false } }`: the request goes through a Spring Cloud Gateway host's own filters,
-     * the identity strip, the pipeline's gateway filter, and the last hop, and the outcome's `identity` is what the
-     * backend would receive. The route's metadata may opt it out of identity forwarding.
+     * `"gateway": { "route": { "uri": "lb://backend", "identity": false, "app": "billing" }, "forwardAuthorization": true }`:
+     * the request goes through a Spring Cloud Gateway host's own filters, the identity strip, the pipeline's gateway
+     * filter, and the last hop, and the outcome's `identity` is what the backend would receive, and its `credentials`
+     * which of the caller's credentials reach it ([forwardedCredentials]). The route goes to `uri` (`http://backend`
+     * when absent); its metadata may say whether it receives the identity (`identity`, RC1-49) and name its app (`app`,
+     * `cosec-app-id`, RC1-6). The host app of the gateway is `http.hostApp`; `http.cookies` are sent as the client's
+     * cookies, each in a `Cookie` header of its own after any `http.headers` gives.
      */
-    private fun throughGateway(pipeline: Pipeline, http: JsonNode, gateway: JsonNode): Outcome {
-        gateway.only("route")
-        val request = MockServerHttpRequest.method(
-            HttpMethod.valueOf(http.get("method")?.text() ?: "GET"),
-            URI.create(http.get("path")?.text() ?: "/orders"),
-        )
-        http.get("headers")?.fields().orEmpty().forEach { (name, value) ->
-            request.header(name, *(if (value.isArray) value.strings() else listOf(value.text())).toTypedArray())
-        }
-        val exchange = MockServerWebExchange.from(request)
-        val route = Route.async().id("scenario").uri(URI.create("http://backend")).predicate { true }
-        gateway.get("route")?.let {
-            it.only("identity")
-            route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.required("identity").booleanValue())
-        }
+    private fun throughGateway(
+        pipeline: Pipeline,
+        http: JsonNode,
+        host: HostScope,
+        gateway: JsonNode,
+        apiKeyHeader: String,
+    ): Outcome {
+        gateway.only("route", "forwardAuthorization")
+        val exchange = MockServerWebExchange.from(gatewayRequest(http))
+        val routeNode = gateway.get("route") ?: EMPTY
+        routeNode.only("identity", "uri", "app")
+        val route = Route.async().id("scenario").uri(URI.create(routeNode.get("uri")?.text() ?: "http://backend"))
+            .predicate { true }
+        routeNode.get("identity")?.let { route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.booleanValue()) }
+        routeNode.get("app")?.let { route.metadata(PipelineGatewayFilter.APP_METADATA, metadataValue(it)) }
         exchange.attributes[GATEWAY_ROUTE_ATTR] = route.build()
+        val filter = PipelineGatewayFilter(
+            pipeline,
+            host = host,
+            forwardAuthorization = gateway.get("forwardAuthorization")?.bool() ?: false,
+        )
         var sent: HttpHeaders? = null
+        var sentQuery: String? = null
         IdentityStripFilter().filter(exchange) { stripped ->
-            PipelineGatewayFilter(pipeline).filter(stripped) { routed ->
+            filter.filter(stripped) { routed ->
                 sent = HttpHeadersFilter.filterRequest(listOf(IdentityHeadersFilter()), routed)
+                sentQuery = routed.request.uri.rawQuery
                 Mono.empty()
             }
         }.block(java.time.Duration.ofSeconds(5))
@@ -359,11 +375,84 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             val type = CoSecJson.mapper.readTree(body).get("type")?.text()?.substringAfterLast('/')
             return Outcome.Answered(exchange.response.statusCode?.value() ?: 0, false, type)
         }
-        return Outcome.Answered(200, true, null, true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode))
+        return Outcome.Answered(
+            200,
+            true,
+            null,
+            true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode),
+            forwardedCredentials(headers, sentQuery, apiKeyHeader),
+        )
     }
 
-    private fun answered(outcome: PipelineOutcome): Outcome =
-        Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug, forwarded(outcome))
+    /** A route metadata value as a configuration binds it: a string, a number, a boolean, a list or a map. */
+    private fun metadataValue(node: JsonNode): Any = when {
+        node.isString -> node.asString()
+        node.isNumber -> node.numberValue()
+        node.isBoolean -> node.booleanValue()
+        node.isArray -> node.values().map(::metadataValue)
+        node.isObject -> node.fields().mapValues { (_, value) -> metadataValue(value) }
+        else -> throw ScenarioFormatException("A route metadata value is a string, number, boolean, list or map: $node")
+    }
+
+    /** The scenario's request as a client sends it to the gateway. */
+    private fun gatewayRequest(http: JsonNode): MockServerHttpRequest.BaseBuilder<*> {
+        val query = http.get("query")?.textOrNull()?.let { "?$it" }.orEmpty()
+        val request = MockServerHttpRequest.method(
+            HttpMethod.valueOf(http.get("method")?.text() ?: "GET"),
+            URI.create((http.get("path")?.text() ?: "/orders") + query),
+        )
+        http.get("headers")?.fields().orEmpty().forEach { (name, value) ->
+            request.header(name, *(if (value.isArray) value.strings() else listOf(value.text())).toTypedArray())
+        }
+        cookies(http).forEach { (name, values) ->
+            values.forEach { value ->
+                request.cookie(HttpCookie(name, value))
+                // The mock writes no Cookie header of its own once one is given: written here, as a client would.
+                request.header(HttpHeaders.COOKIE, "$name=$value")
+            }
+        }
+        return request
+    }
+
+    /**
+     * The caller's credentials in what the backend receives, found here and never by asking the pipeline what it
+     * removes (R1-3 of #1194's review), each matched ignoring case: `authorization` and [apiKeyHeader], lowercased,
+     * for those headers; `query:authorization` when a pair of [rawQuery] names it, its name percent-decoded;
+     * `cookie:authorization` when a `Cookie` header names it, `;` and `,` both separating cookies.
+     */
+    private fun forwardedCredentials(headers: HttpHeaders, rawQuery: String?, apiKeyHeader: String): List<String> {
+        val found = ArrayList<String>()
+        if (headers.containsHeader(HttpHeaders.AUTHORIZATION)) found += AUTHORIZATION
+        if (headers.containsHeader(apiKeyHeader)) found += apiKeyHeader.lowercase()
+        val queryNames = rawQuery?.split('&').orEmpty().map { pair ->
+            val name = pair.substringBefore('=')
+            try {
+                URLDecoder.decode(name, Charsets.UTF_8)
+            } catch (_: IllegalArgumentException) {
+                name
+            }
+        }
+        if (queryNames.any { it.equals(AUTHORIZATION, ignoreCase = true) }) found += "query:$AUTHORIZATION"
+        val cookieNames = headers[HttpHeaders.COOKIE].orEmpty().flatMap { it.split(';', ',') }
+            .map { it.substringBefore('=').trim() }
+        if (cookieNames.any { it.equals(AUTHORIZATION, ignoreCase = true) }) found += "cookie:$AUTHORIZATION"
+        return found.sorted()
+    }
+
+    /** `http.cookies`: `{ "name": "value" }` or `{ "name": ["value", ...] }`. */
+    private fun cookies(http: JsonNode): Map<String, List<String>> =
+        http.get("cookies")?.fields().orEmpty().mapValues { (_, value) ->
+            if (value.isArray) value.strings() else listOf(value.text())
+        }
+
+    /** The outcome; with [gateway], a gateway's pipeline that forwards identities, also what it forwards. */
+    private fun answered(outcome: PipelineOutcome, gateway: Boolean): Outcome =
+        Outcome.Answered(
+            outcome.status,
+            outcome.proceed,
+            outcome.problem?.type?.slug,
+            if (gateway) forwarded(outcome) else false to null,
+        )
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
         node.only(
@@ -683,7 +772,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     /**
      * What a gateway forwards, when it forwards identities: `{ "tenant", "sub", "app", "space", "roles", "jti" }`, or
-     * null when it strips the header; absent when the pipeline forwards nothing.
+     * null when it strips the header; absent when the pipeline forwards nothing. Only for a pipeline with an issuer: every
+     * permit of the pipeline strips a client's header (RC1-18), which the adapters' parity test checks.
      */
     private fun forwarded(outcome: PipelineOutcome): Pair<Boolean, JsonNode?> {
         if (IdentityCodec.HEADER !in outcome.forward) {
@@ -817,7 +907,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun facts(node: JsonNode): HttpFacts {
-        node.only("method", "path", "query", "headers", "hostApp", "requestAttributes")
+        node.only("method", "path", "query", "headers", "cookies", "hostApp", "requestAttributes")
         val headers = node.get("headers")?.fields().orEmpty().mapValues { (_, value) ->
             if (value.isArray) value.strings() else listOf(value.text())
         }
@@ -826,7 +916,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             rawPath = node.get("path")?.text() ?: "/orders",
             rawQuery = node.get("query")?.textOrNull(),
             headers = Headers.of(headers),
-            cookies = Cookies.EMPTY,
+            cookies = Cookies.of(cookies(node)),
             remoteAddress = REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
             requestAttributes = node.get(
@@ -841,6 +931,10 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private companion object {
         const val REQUEST_ID = "scenario-request"
+
+        /** The credential names the gateway oracle looks for, written here rather than read from the pipeline. */
+        const val AUTHORIZATION = "authorization"
+        const val DEFAULT_API_KEY_HEADER = "X-API-Key"
         const val REMOTE_ADDRESS = "10.0.0.1"
         val DEFAULT_REQUIRED_TIMEOUT = 1.seconds
 

@@ -56,7 +56,10 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
-exists. The control host logs why at `INFO`, with the problem's `requestId`
+exists. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
+abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
+an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
+host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
 
 ## Validating policies
@@ -68,7 +71,7 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:` or a control character, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
 | `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to (a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
@@ -115,6 +118,13 @@ The answer has `enforced`, `candidate` when one was asked for, and `differs`. Ea
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
 full trace of candidates. Statements from documents you may not read are left out and counted as `redacted`.
 
+A simulation reads the documents enforcement reads: the platform's, the tenant's, and the app's when the request has
+roles in its app or the tenant document binds one of that app's permission policies to `Anyone` or to a principal
+([Policy language](./language.md)). For a change of the tenant document, the candidate decides that: a change that
+adds such a binding reads the app document, one that removes the last of them no longer does. A tenant document that
+does not compile reads as unresolved, so its bindings make the request read no app document, as on the data plane;
+a `candidate` of a document the request did not read is `400`.
+
 A simulation has no token attributes and fetches no external attributes: a statement that reads `ext.*` finds it
 missing and follows its `onMissing`, so it is usually Indeterminate here.
 
@@ -122,8 +132,10 @@ missing and follows its `onMissing`, so it is usually Indeterminate here.
 
 `explain` takes the same `request` and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
-kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Its fields and
-how to find the request are in [Checks in code](../integration/checks.md).
+kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
+document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
+revisions it answers with are those it read: no `app` when it read no app document. Its fields and how to find the
+request are in [Checks in code](../integration/checks.md).
 
 ## Changes
 
@@ -205,7 +217,9 @@ abandoning a break-glass change needs a REQUIRED change listener, which records 
 sample of live requests a second time with the candidate in place of the current document, and report how each came
 out; the candidate never affects a real decision. A candidate is compared only on requests that read its document
 (a tenant's on that tenant's requests, an app's on requests that read that app document, the platform's on all), and
-only by an instance that has installed the candidate's base revision.
+only by an instance that has installed the candidate's base revision. A tenant candidate is compared on the documents a
+request would read once it is published: one that binds an app's permission policy to `Anyone` or a principal brings in
+that app's installed document where the request read none, and one that removes the last such binding leaves it out.
 
 | Outcome | Means |
 |---|---|
@@ -215,7 +229,7 @@ only by an instance that has installed the candidate's base revision.
 | `NARROWED` | Enforcement permitted; the candidate does not. |
 | `BECAME_INDETERMINATE` | The candidate is Indeterminate where enforcement was not, for a reason other than a missing attribute. |
 | `CANDIDATE_INDETERMINATE` | The candidate reads an external attribute the request did not fetch (a shadow evaluation fetches none). |
-| `CANDIDATE_ERROR` | An instance cannot compile or evaluate the candidate. |
+| `CANDIDATE_ERROR` | An instance cannot compile or evaluate the candidate, or cannot read an app document the candidate makes the request read. |
 | `BASE_MISMATCH` | The instance has another revision of the document installed: not compared, not a sample. |
 
 The window closes:

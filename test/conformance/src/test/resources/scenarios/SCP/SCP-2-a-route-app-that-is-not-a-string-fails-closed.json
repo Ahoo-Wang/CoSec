@@ -1,0 +1,89 @@
+{
+  "rules": [
+    "SCP-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "R1-7 of #1194's review: the route's metadata says cosec-app-id: [billing], a list. Only a string is an app id: the list is not read as its text, [billing], a host app no document has, under which alice's declared shop would be rejected and billing's DENY never apply. The request fails closed as an unmodelled error, as for an app id the rule refuses.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    },
+    "apps": {
+      "billing": {
+        "policies": [
+          {
+            "id": "perm:billing/no-reads",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:clerk",
+            "subject": {
+              "role": "clerk"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm:billing/no-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/invoices",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-App-Id": "shop"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 500,
+    "type": "internal-error"
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://billing",
+      "app": [
+        "billing"
+      ]
+    }
+  }
+}

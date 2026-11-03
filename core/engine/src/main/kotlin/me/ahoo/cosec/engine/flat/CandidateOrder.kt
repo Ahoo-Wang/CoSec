@@ -67,7 +67,7 @@ internal object CandidateOrder {
         if (visit(platform.anyone, request, platform, visitor)) {
             return true
         }
-        if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor)) {
+        if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor, app)) {
             return true
         }
         if (principal != null && principal(principal, request, platform, tenantDocument, effect, visitor, app)) {
@@ -156,8 +156,9 @@ internal object CandidateOrder {
     }
 
     /**
-     * [app] resolves a tenant role binding to that app's permission policy (RFC 0007 §9.3, N1): the binding is scoped to
-     * the app, so it is in scope only on a request whose view read that app's document.
+     * [app] resolves a tenant binding, of `Anyone`, a principal or a role, to that app's permission policy (RFC 0007
+     * §9.3, N1): the binding is scoped to the app, so it is in scope only on a request in that app, whose view reads
+     * that app's document, roles or not (`CompiledDocument.needsApp`, RC1-17).
      */
     private fun visit(
         entries: Array<BoundEntry>?,

@@ -23,8 +23,9 @@ import me.ahoo.cosec.model.scope.Scope
  * is built, plus what this request could not read. Building one copies nothing.
  *
  * A document that does not exist is an empty [CompiledDocument], not null: null means it was not loaded. The engine
- * fails closed on a document it needs and was not given: [tenant] always, [app] when the scope has roles and an app
- * (§7.4). It then reports [Cause.NotLoaded] unless a DENY matched, so a blocked request needs only [platform].
+ * fails closed on a document it needs and was not given: [tenant] always, [app] when the scope has an app and either
+ * roles or a tenant binding of that app's permission policies to `Anyone` or a principal ([CompiledDocument.needsApp],
+ * RC1-17) (§7.4). It then reports [Cause.NotLoaded] unless a DENY matched, so a blocked request needs only [platform].
  *
  * [unresolved] holds what the caller could not read, such as [Cause.SourceUnavailable]: the evaluation is
  * indeterminate unless a DENY matches. It is used as given, not copied.
@@ -85,7 +86,8 @@ class SnapshotView(
     internal fun notLoaded(scope: Scope): Cause.NotLoaded? =
         when {
             tenant == null -> NOT_LOADED_TENANT
-            app == null && scope.roles.isNotEmpty() && scope.app.value.isNotEmpty() -> NOT_LOADED_APP
+            app == null && scope.app.value.isNotEmpty() &&
+                (scope.roles.isNotEmpty() || tenant.needsApp(scope.app.value)) -> NOT_LOADED_APP
             else -> null
         }
 

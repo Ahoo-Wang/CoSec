@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.CompileError
 import me.ahoo.cosec.engine.flat.CompileException
@@ -149,6 +152,7 @@ class PolicyDocumentCompiler(
                         document.bindings,
                         rateLimits,
                         document.boundary?.value,
+                        boundApps(document),
                     )
             }
         } catch (error: IllegalArgumentException) {
@@ -356,6 +360,18 @@ class PolicyDocumentCompiler(
     }
 
     companion object {
+        /**
+         * The apps whose permission policies a tenant [document] binds to `Anyone` or to a principal: a request in one of
+         * them reads that app's document whatever its roles, or the binding could never resolve (RC1-17). The one
+         * computation of it: the compiled tenant document answers `CompiledDocument.needsApp` from it, and the control
+         * plane reads it from a document it has not compiled (`ViewDocuments`). [permissionError] has checked that each
+         * such binding is scoped to exactly the policy's app.
+         */
+        @InternalCoSecApi
+        fun boundApps(document: PolicyDocument): Set<String> = document.bindings
+            .filter { it.subject !is SubjectRef.Role && it.policy.value.startsWith(PERMISSION_PREFIX) }
+            .mapNotNullTo(HashSet()) { (it.scope.app as? Match.Exactly)?.value?.value }
+
         /**
          * The compiler every document compiles with when [platform] is the platform document (RFC 0007 §3.1 N3): its
          * condition limits, or the defaults, and the external attributes it declares ahead of those the host's providers

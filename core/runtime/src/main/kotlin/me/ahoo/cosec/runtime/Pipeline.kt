@@ -20,10 +20,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Memberships
@@ -37,6 +39,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.DeclaredScope
+import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -47,6 +50,7 @@ import me.ahoo.cosec.runtime.attribute.FetchedAttributes
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
+import me.ahoo.cosec.runtime.http.CookieHeaders
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
@@ -103,6 +107,39 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     private val identity = components.identity
     private val memberships = MembershipResolver(components.membershipProvider, options.membershipTimeout)
     private val rateLimitFailures = RateLimitFailures()
+
+    /**
+     * The request headers this pipeline reads a credential from: `Authorization` and the API key header
+     * (`cosec.pipeline.api-key-header`). With the `authorization` query parameter ([withoutQueryToken]) and the
+     * `authorization` cookie ([withoutCookieToken]), what a gateway keeps from a route that may not receive the
+     * caller's credentials (RC1-5, R1-4 of #1194's review): a credential the pipeline accepts is one a backend could
+     * replay at the gateway.
+     */
+    @InternalCoSecApi
+    val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)
+
+    /**
+     * [rawQuery] without its `authorization` parameters, however their names are encoded or cased; null when nothing is
+     * left, and [rawQuery] itself when it has none (RC1-5). Whether or not this pipeline reads a token there
+     * (`cosec.pipeline.allow-query-token`), a backend might.
+     */
+    @InternalCoSecApi
+    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, AUTHORIZATION)
+
+    /**
+     * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;
+     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). This pipeline
+     * reads a token from that cookie, so a backend could replay it at the gateway.
+     */
+    @InternalCoSecApi
+    fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
+
+    /**
+     * Whether [cookieHeader], one `Cookie` header value, has an `authorization` cookie [withoutCookieToken] removes:
+     * exactly when it changes [cookieHeader]. Allocates nothing, so a gateway asks it of every header first.
+     */
+    @InternalCoSecApi
+    fun namesCookieToken(cookieHeader: String): Boolean = CookieHeaders.names(cookieHeader, AUTHORIZATION)
 
     /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
@@ -251,7 +288,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     private fun eventId(): String = idGenerator.generate()
 
-    private suspend fun decide(facts: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
+    private suspend fun decide(input: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
+        val facts = routed(input)
         val path = PathNormalizer.normalize(facts.rawPath)
             ?: return StatusMapping.invalidRequest(requestId, "path", traceId)
         val parameters = CoSecParameters.read(facts)
@@ -265,6 +303,52 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         val authn = authenticate(credentials(facts))
         return authorize(facts, requestId, traceId, record, path, parameters, action, resource, authn)
     }
+
+    /**
+     * [facts] with the gateway route's app as the host app (RC1-6), under the app id rule (RC1-15). One that is not a
+     * string, or cannot be an app id, is an operator's mistake no request can be decided under: it throws, so the
+     * request is an unmodelled error (500), logged, never a request without a host app, whose client would then pick
+     * the app and step around the app's DENYs. A number is not read as its text: `cosec-app-id: 0123` would not be the
+     * app `0123`.
+     */
+    private fun routed(facts: HttpFacts): HttpFacts {
+        val app = facts.routeApp ?: return facts
+        if (app !is String || !ScopeResolver.isValidAppId(app)) {
+            invalidRouteApp(facts, app)
+        }
+        return HttpFacts(
+            facts.method,
+            facts.rawPath,
+            facts.rawQuery,
+            facts.headers,
+            facts.cookies,
+            facts.remoteAddress,
+            HostScope(AppId(app)),
+            facts.requestAttributes,
+        )
+    }
+
+    /**
+     * Why [routed] refuses [facts], whose route app is [app]: kept out of it, so the path every request takes stays
+     * small. The value itself is not written: its type, or why the string cannot be an app id, says what to fix.
+     */
+    private fun invalidRouteApp(facts: HttpFacts, app: Any): Nothing {
+        val routeId = printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])
+        val route = "The cosec-app-id of route [$routeId]"
+        error(
+            if (app is String) {
+                "$route cannot be an app id: blank, *, with ':' or a control character, or longer than " +
+                    "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+            } else {
+                "$route is a ${app.javaClass.name}, not a string: an app id is a string. Quote it in the route's " +
+                    "metadata (cosec-app-id: \"<app id>\"), as a single value."
+            }
+        )
+    }
+
+    /** [value] for a log line: control characters escaped, so no configured value can forge one. */
+    private fun printable(value: String?): String =
+        value?.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }?.joinToString("").orEmpty()
 
     /**
      * The rest of [decide], for the request as [authn] authenticated it. A credential whose principal the membership
@@ -428,13 +512,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * At a gateway that forwards the verified identity: what [outcome] tells the service behind, always naming the
-     * header, so whatever the client sent is never forwarded. The identity on a permit with a principal unless the
-     * route opts out ([IdentityIssuer.FORWARD_ATTRIBUTE]); otherwise none. An identity too large to forward fails the
-     * request closed (500).
+     * header, so whatever the client sent is never forwarded. The identity on a permit with a principal, only to a route
+     * the gateway marks as receiving it ([IdentityIssuer.FORWARD_ATTRIBUTE] `true`, RC1-49); otherwise none, so a
+     * request no gateway route marks forwards nothing. An identity too large to forward fails the request closed (500).
      */
     private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
         val security = outcome.security
-        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "false") {
+        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "true") {
             return StatusMapping.forwarding(outcome, null)
         }
         return try {

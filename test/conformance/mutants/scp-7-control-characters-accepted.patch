@@ -1,0 +1,17 @@
+# Rule: SCP-7
+# Mutant: an app id may hold a control character, which reaches plain-text log lines
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index d931277a..58265427 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -96,7 +96,7 @@ object ScopeResolver {
+         var blank = true
+         for (index in app.indices) {
+             val c = app[index]
+-            if (c == ':' || c.isISOControl()) {
++            if (c == ':') {
+                 return false
+             }
+             blank = blank && c.isWhitespace()

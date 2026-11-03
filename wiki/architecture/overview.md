@@ -208,8 +208,9 @@ sequenceDiagram
   anonymous. A membership source that fails, times out or answers the wrong kind of memberships is a `503`, never "no
   roles".
 - **Scope.** `ScopeResolver` turns the declared app and space into a checked scope (step 6): the tenant is the
-  principal's (the default tenant when anonymous); a service bound to an app (`cosec.authorization.scope.app-id`) uses
-  that app and rejects a request that declares another; a space other than the default needs a role in it. A rejected
+  principal's (the default tenant when anonymous); a service bound to an app (`cosec.authorization.scope.app-id`, or
+  on a gateway a route's `cosec-app-id`) uses that app and rejects a request that declares another; a space other than
+  the default needs a role in it. A rejected
   scope is a deny ([trust boundaries](../guide/security-model.md#trust-boundaries)).
 - **Snapshot view.** The snapshot source answers the view (platform, app and tenant documents) from memory, or loads
   what is missing (step 7). A blocked request loads only the platform document.
@@ -246,9 +247,10 @@ permit there.
 The engine
 ([`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt))
 evaluates one request against one `SnapshotView`: the compiled platform document, plus the tenant's document and, when
-the scope has roles in an app, that app's document. It reads no clock (the request carries its time) and does no I/O
-(external attributes arrive with the request). The view must belong to the request's tenant and app; the engine refuses
-any other.
+the scope has roles in an app or the tenant's document binds one of the app's permission policies to `Anyone` or a
+principal (a set the compiled tenant document holds, so deciding it is one lookup), that app's document. It reads no
+clock (the request carries its time) and does no I/O (external attributes arrive with the request). The view must belong
+to the request's tenant and app; the engine refuses any other.
 
 ### Candidate order
 

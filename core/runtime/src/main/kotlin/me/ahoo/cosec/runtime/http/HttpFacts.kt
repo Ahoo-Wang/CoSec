@@ -30,10 +30,20 @@ class HttpFacts(
     val cookies: Cookies,
     /** The peer address, before any forwarded-for resolution. */
     val remoteAddress: String,
-    /** The app the host is configured for (RFC 0004 §4.6); for the gateway, the route's. */
+    /**
+     * The app the host is configured for (RFC 0004 §4.6, [HostScope]): `cosec.authorization.scope.app-id`. On a gateway,
+     * [routeApp] takes precedence (RC1-6).
+     */
     val host: HostScope,
     /** What the host knows about the request besides HTTP, such as the gateway's route id. */
     val requestAttributes: Map<String, String> = emptyMap(),
+    /**
+     * On a gateway, the matched route's metadata `cosec-app-id` as configured, of whatever type the configuration gave
+     * it: unchecked, as adapters only translate. The pipeline makes it the host app ahead of [host], and refuses the
+     * request as an unmodelled error (500) when it is not a [String] (a number, a list or a map, R1-7 of #1194's review)
+     * or cannot be an app id (RC1-6, RC1-15). Null elsewhere, and for a route without it.
+     */
+    val routeApp: Any? = null,
 )
 
 /** Request headers. Names are case-insensitive (RFC 9110 §5.1). */

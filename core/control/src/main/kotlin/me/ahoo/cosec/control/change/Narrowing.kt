@@ -187,7 +187,7 @@ internal class Preemption(
         }
         val prefix = PolicyDocumentCompiler.PERMISSION_PREFIX
         val app = policy.value.removePrefix(prefix).substringBefore('/')
-        if (!policy.value.startsWith(prefix) || app.isEmpty()) {
+        if (!policy.value.startsWith(prefix) || !SnapshotKey.App.isValidAppId(app)) {
             return null
         }
         return revisions.head(SnapshotKey.App(app))?.document?.policies?.firstOrNull { it.id == policy }

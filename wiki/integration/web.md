@@ -207,7 +207,7 @@ The client sends the `CoSec-*` parameters as headers or as query parameters of t
 
 | Parameter | Meaning | Conditions read it as |
 |---|---|---|
-| `CoSec-App-Id` | The app the request is for. Ignored in favour of `cosec.authorization.scope.app-id` when that is set; a different value is then rejected. | `scope.app` |
+| `CoSec-App-Id` | The app the request is for. Ignored in favour of the host's app when there is one: on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`; a different value is then rejected. | `scope.app` |
 | `CoSec-Space-Id` | The space within the app. Accepted only when the principal has a role in it; empty means the default space. | `scope.space` (and `scope.roles`, the roles there) |
 | `CoSec-Device-Id` | The caller's device. Informational unless a policy or the blacklist reads it. | `environment.device` |
 | `CoSec-Request-Id` | Header only: the request id ([Response headers](#response-headers)). | |
@@ -215,11 +215,13 @@ The client sends the `CoSec-*` parameters as headers or as query parameters of t
 Rules for reading them:
 
 - Header names match ignoring case; query parameter names match exactly.
-- A parameter may be sent several times, in the header, in the query or both, as long as every non-blank value is
-  the same. Blank values are ignored.
+- A parameter may be sent several times, in the header, in the query or both, as long as every value is the same.
+  When every value is blank (empty, or ASCII whitespace only), the parameter is not sent.
 - Two different values, anywhere, make the request ambiguous: the pipeline and your handler could read different
-  scopes. It is refused with `400` `invalid-request`. So is a `CoSec-*` query value with a malformed
-  percent-escape.
+  scopes. It is refused with `400` `invalid-request`. A blank value beside a non-blank one is different too: a handler
+  that read the blank one would be in the default space. Blank means ASCII whitespace only, so a value of Unicode
+  spaces, such as `%E3%80%80`, which `trim()` keeps, is a value. A `CoSec-*` query value with a malformed
+  percent-escape is refused the same way.
 - A request body is never read: an authorization filter does not read request bodies.
 
 How `ScopeResolver` checks the app and space, and what the client therefore controls, is in
@@ -289,10 +291,10 @@ socket address. The IP is never resolved through reverse DNS.
 Besides the credential, the scope, the action and the resource, conditions can read what the HTTP request carries
 (`http.header.<name>`, `http.origin`, `http.referer` and their hosts), which the client writes, and **request
 attributes**, `request.attributes.<name>`, which the adapter sets and the client cannot. The gateway filter sets
-`request.attributes.cosec.audit.routeId`, the id of the matched route, and `request.attributes.cosec.identity.forward`
-(`false`) on a route that [opts out](#forwarding-the-identity) of identity forwarding. The attribute names, and how a
-header sent more than once is read, are in [Policy language](../policies/language.md); which of them the client
-controls is in [Trust boundaries](../guide/security-model.md#trust-boundaries).
+`request.attributes.cosec.audit.routeId`, the id of the matched route, and `request.attributes.cosec.identity.forward`:
+`true` on a route that [receives the identity](#forwarding-the-identity), `false` on any other. The attribute names,
+and how a header sent more than once is read, are in [Policy language](../policies/language.md); which of them the
+client controls is in [Trust boundaries](../guide/security-model.md#trust-boundaries).
 
 Facts the request does not carry come from `AttributeProvider` beans as **external attributes**,
 `ext.<provider>.<name>`, fetched only when a candidate statement reads them
@@ -328,16 +330,37 @@ On Spring Cloud Gateway, `PipelineGatewayFilter` authorizes the request before a
 from the WebFlux filter in three ways:
 
 - it runs on gateway routes only: a request no route matches, and the gateway's own actuator endpoints, are not
-  authorized by CoSec. Protect actuator with the management port or network policy;
+  authorized by CoSec, so a gateway that exposes an actuator endpoint other than `health` on its application port does
+  not start ([Actuator on a gateway](#actuator-on-a-gateway));
 - it loads no route map, so every request is `http:<METHOD>` on `http:path:<path>`;
 - it forwards the outcome's `CoSec-Request-Id` to the downstream service, replacing any value the client sent, so
-  the backend's logs share the gateway's request id. On a Permit it also forwards the verified identity
-  ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's `Authorization` header unless
-  `cosec.gateway.identity.forward-authorization=true`.
+  the backend's logs share the gateway's request id. On a Permit it also forwards the verified identity to a route
+  that receives it ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's credentials,
+  whether in a header, the query or a cookie, unless `cosec.gateway.identity.forward-authorization=true`.
 
-The host app (`cosec.authorization.scope.app-id`) is one value for the whole gateway, not one per route. When one
-gateway fronts several apps, read [Trust boundaries](../guide/security-model.md#trust-boundaries) on keeping the
-client-declared app from widening access.
+**The app of a route.** A route's metadata `cosec-app-id` names the app of its requests, ahead of
+`cosec.authorization.scope.app-id`: on that route, a request that declares another app with `CoSec-App-Id` is
+rejected (`403` `scope-rejected`), and one that declares none is in the route's app, whose role bindings, and DENYs,
+apply. A client's declared app applies only on a route without `cosec-app-id`, on a gateway without
+`cosec.authorization.scope.app-id`. When one gateway fronts several apps, give each route its app; why is in
+[Trust boundaries](../guide/security-model.md#trust-boundaries). The value must be a string: a number, a boolean, a
+list or a map is not read as its text, so write `cosec-app-id: "2024"` for an app named `2024`. A `cosec-app-id` that
+is not a string, or cannot be an app id, fails every request of its route (`500`).
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: billing
+              uri: lb://billing
+              predicates:
+                - Path=/billing/**
+              metadata:
+                cosec-app-id: billing
+```
 
 A service behind the gateway either trusts the identity the gateway forwards
 ([Services behind the gateway](#services-behind-the-gateway)), or runs its own pipeline and verifies the token again
@@ -356,22 +379,36 @@ Configure routes and CoSec through standard Spring configuration; the image read
 defaults are in
 [`src/dist/config/application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml).
 Kustomize manifests for Kubernetes are in [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s): a `dev` overlay
-to try CoSec out and a `production` one to start from ([Kubernetes](../operations/deployment.md#kubernetes)).
+to try CoSec out and a `production` one to start from ([Kubernetes](../operations/deployment.md#kubernetes)). The
+image exposes only the `health` actuator endpoint.
+
+### Actuator on a gateway
+
+The gateway filter authorizes the gateway's routes, so the gateway's own actuator endpoints are not under CoSec. Served
+on the application port, they are open to whoever reaches the gateway; the `gateway` endpoint even changes routes, so
+anyone could point a route of your users' requests, and their identity, at a host of their choosing. A gateway host
+that decides with policies therefore does not start while an actuator endpoint other than `health` is exposed over
+HTTP on its application port: `management.server.port` unset, or the same as `server.port` (`STA-2`;
+[troubleshooting](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)).
+
+- Serve actuator on its own port, behind a network policy, with `management.server.port`; there any endpoint may be
+  exposed.
+- Or expose only `health` (`management.endpoints.web.exposure.include`, Spring Boot's default).
+- Or list in `cosec.gateway.unprotected-endpoints` the endpoints something else protects on the application port.
+  It never accepts `gateway`.
 
 ### Forwarding the identity
 
-On a Permit for an authenticated principal, the gateway tells the downstream service who it verified, in the
-`CoSec-Identity` header. The service then needs no secret, keys, documents or Redis of its own. This is on by default
-(`cosec.gateway.identity.enabled`).
+On a Permit for an authenticated principal, the gateway tells the downstream service of a route that receives it who
+it verified, in the `CoSec-Identity` header. The service then needs no secret, keys, documents or Redis of its own.
+This is on by default (`cosec.gateway.identity.enabled`).
 
-**A client cannot forge it.** Every gateway host removes any `CoSec-Identity` the client sends before any other
-filter runs (`IdentityStripFilter`), and again at the last hop, after every route filter (`IdentityHeadersFilter`),
-which sends only the value the pipeline forwarded. Both run whatever `cosec.pipeline.mode` or `cosec.enabled` say,
-so a route filter that adds the header cannot forward one either. A condition on `http.header.cosec-identity` does
-not compile.
-
-**No identity is forwarded** for an anonymous Permit, a refused request, a route whose metadata opts out, or with
-`cosec.gateway.identity.enabled=false`. Opt a route out when its backend is a third party:
+**Which routes receive it.** A route whose metadata says `cosec-identity: true`, and, without that metadata, a route to
+a registered service (`uri: lb://...` or `lb:ws://...`): whoever runs a service registered for discovery is inside
+your trust boundary. Any other route receives no identity, a route added at run time included, so its backend sees an
+anonymous request: an `http://` or `https://` route to one of your services needs `cosec-identity: true`.
+`cosec-identity: false` keeps the identity from any route, `lb://` included, and any value but `true` reads as
+`false`:
 
 ```yaml
 spring:
@@ -380,13 +417,28 @@ spring:
       server:
         webflux:
           routes:
+            - id: orders
+              uri: https://orders.internal.example.com
+              predicates:
+                - Path=/orders/**
+              metadata:
+                cosec-identity: true
             - id: partner
-              uri: https://partner.example.com
+              uri: https://partner.example.com   # no metadata: no identity
               predicates:
                 - Path=/partner/**
-              metadata:
-                cosec-identity: false
 ```
+
+**A client cannot forge it.** Every gateway host removes any `CoSec-Identity` the client sends before any other
+filter runs (`IdentityStripFilter`), and again at the last hop, after every route filter (`IdentityHeadersFilter`),
+which sends only the value the pipeline forwarded. Both run whatever `cosec.pipeline.mode` or `cosec.enabled` say,
+so a route filter that adds the header cannot forward one either. A WebFlux or Spring MVC host that decides with
+policies (`cosec.pipeline.mode=enforce`) removes it too, before your handler sees the request, so a service that
+calls on to services behind a gateway cannot relay one a client wrote. A condition on `http.header.cosec-identity`
+does not compile.
+
+**No identity is forwarded** for an anonymous Permit, a refused request, a route that does not receive it, or with
+`cosec.gateway.identity.enabled=false`.
 
 **What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is
 [`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json).
@@ -410,9 +462,19 @@ larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not 
 longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
 without `expires-at`): a service could not bound such an identity.
 
-**`Authorization`.** The gateway removes the client's `Authorization` header before forwarding, so a compromised
-service never sees a token. Set `cosec.gateway.identity.forward-authorization=true` only when the services behind it
-verify the token again or call other APIs on the user's behalf.
+**Credentials.** The gateway forwards none of the client's credentials, no header, query parameter or cookie: from
+every request it forwards it removes the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`,
+under whatever name that gives it), the `authorization` query parameter, and the `authorization` cookie from each
+`Cookie` header, its name matched ignoring case (a header left with no cookie is not sent), and from the cookies a
+later filter or a `forward:` route's handler reads. A compromised service so never sees a token or a key it could
+replay at the gateway. Other cookies go downstream as they came, each pair byte for byte; the token's pair goes with
+one `;`, so no empty pair is left, and a header left with only empty pairs is not sent. A header whose leading
+`$Version` pair hides the token behind a `,` goes whole, with the cookies read from it, since its other pairs would
+read differently. Set
+`cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or call
+other APIs on the user's behalf: the credentials then go to the routes that would receive the identity (a `lb://`
+route, or one marked `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` forwards it, and to no
+other.
 
 ### Services behind the gateway
 

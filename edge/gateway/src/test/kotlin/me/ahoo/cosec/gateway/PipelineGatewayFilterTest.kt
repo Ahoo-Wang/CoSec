@@ -23,6 +23,7 @@ import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -32,8 +33,10 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -48,13 +51,17 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
+import org.springframework.http.HttpCookie
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
+import org.springframework.http.server.reactive.ServerHttpRequest
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import reactor.core.publisher.Mono
 import java.net.URI
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
 
 /** The gateway bridge: the route id reaches the pipeline, and a permitted request goes downstream with its id. */
 class PipelineGatewayFilterTest {
@@ -134,25 +141,53 @@ class PipelineGatewayFilterTest {
         )
     }
 
-    private fun pipeline(authenticator: Authenticator, issuer: IdentityIssuer?) = Pipeline(
-        PipelineComponents(authenticator, SuspendingSnapshotSource(Views), engine = permit, identity = issuer)
+    private fun pipeline(
+        authenticator: Authenticator,
+        issuer: IdentityIssuer?,
+        options: PipelineOptions = PipelineOptions(),
+        engine: FlatEngine = permit,
+    ) = Pipeline(
+        PipelineComponents(
+            authenticator,
+            SuspendingSnapshotSource(Views),
+            engine = engine,
+            identity = issuer,
+            options = options
+        )
     )
 
-    /** What the backend receives of [request] through [filter]. */
+    private fun route(uri: String, identity: Any? = null, app: Any? = null): Route =
+        Route.async().id("r").uri(URI.create(uri)).predicate { true }.apply {
+            identity?.let { metadata(PipelineGatewayFilter.IDENTITY_METADATA, it) }
+            app?.let { metadata(PipelineGatewayFilter.APP_METADATA, it) }
+        }.build()
+
+    private val lb = route("lb://orders")
+
+    /** A GET of [uri] as written: `MockServerHttpRequest.get` would encode its escapes again. */
+    private fun get(uri: String) = MockServerHttpRequest.method(HttpMethod.GET, URI.create(uri))
+
+    /** What the backend receives of [request] through [filter], on [route]. */
+    private fun sent(
+        filter: PipelineGatewayFilter,
+        request: MockServerHttpRequest.BaseBuilder<*>,
+        route: Route? = lb,
+    ): ServerHttpRequest {
+        val exchange = MockServerWebExchange.from(request)
+        route?.let { exchange.attributes[GATEWAY_ROUTE_ATTR] = it }
+        var sent: ServerHttpRequest? = null
+        filter.filter(exchange) { next ->
+            sent = next.request
+            Mono.empty()
+        }.block(Duration.ofSeconds(5))
+        return sent!!
+    }
+
     private fun forwarded(
         filter: PipelineGatewayFilter,
         request: MockServerHttpRequest.BaseBuilder<*>,
-        route: Route? = null
-    ): HttpHeaders {
-        val exchange = MockServerWebExchange.from(request)
-        route?.let { exchange.attributes[GATEWAY_ROUTE_ATTR] = it }
-        var headers: HttpHeaders? = null
-        filter.filter(exchange) { next ->
-            headers = next.request.headers
-            Mono.empty()
-        }.block(Duration.ofSeconds(5))
-        return headers!!
-    }
+        route: Route? = lb,
+    ): HttpHeaders = sent(filter, request, route).headers
 
     @Test
     fun `a client's identity never reaches a backend, whatever the pipeline forwards`() {
@@ -165,19 +200,181 @@ class PipelineGatewayFilterTest {
         )[IdentityCodec.HEADER].assert().isNull()
         val verified = forwarded(PipelineGatewayFilter(pipeline(alice, IdentityIssuer())), forged())
         IdentityCodec.decode(verified.getFirst(IdentityCodec.HEADER)!!).subject.assert().isEqualTo("alice")
+        // Without a route (a global filter always has one), nothing marks the request as receiving it.
+        forwarded(PipelineGatewayFilter(pipeline(alice, IdentityIssuer())), forged(), null)[IdentityCodec.HEADER]
+            .assert().isNull()
     }
 
+    /** IDN-7, RC1-49: opt-in by scheme; metadata `true` opts any route in, `false` (or anything else) opts out. */
     @Test
-    fun `a route may opt out, and the Authorization header stays at the gateway unless asked for`() {
-        val thirdParty = Route.async().id("partner").uri(URI.create("http://partner")).predicate { true }
-            .metadata(PipelineGatewayFilter.IDENTITY_METADATA, false).build()
-        val request = { MockServerHttpRequest.get("/orders").header(HttpHeaders.AUTHORIZATION, "token") }
+    fun `only a load-balanced route, or one marked true, receives the identity`() {
         val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
-        forwarded(filter, request(), thirdParty)[IdentityCodec.HEADER].assert().isNull()
-        // Least privilege: a service behind needs no token, so the client's stays at the gateway unless asked for.
-        forwarded(filter, request())[HttpHeaders.AUTHORIZATION].assert().isNull()
+        val request = { MockServerHttpRequest.get("/orders").header(IdentityCodec.HEADER, "forged") }
+        fun identityOn(route: Route) = forwarded(filter, request(), route).getFirst(IdentityCodec.HEADER)
+            ?.let { IdentityCodec.decode(it).subject }
+        identityOn(route("lb://orders")).assert().isEqualTo("alice")
+        identityOn(route("lb:ws://orders")).assert().isEqualTo("alice")
+        identityOn(route("https://partner.example")).assert().isNull()
+        identityOn(route("http://orders.internal")).assert().isNull()
+        identityOn(route("https://orders.internal", identity = true)).assert().isEqualTo("alice")
+        identityOn(route("https://orders.internal", identity = "true")).assert().isEqualTo("alice")
+        identityOn(route("lb://orders", identity = false)).assert().isNull()
+        identityOn(route("lb://orders", identity = "false")).assert().isNull()
+        identityOn(route("lb://orders", identity = "TRUE")).assert().isNull()
+        identityOn(route("lb://orders", identity = "yes")).assert().isNull()
+        identityOn(route("LB://orders")).assert().isNull()
+    }
+
+    /** IDN-8, RC1-5: no credential goes downstream by default, the API key header under its configured name included. */
+    @Test
+    fun `the caller's credentials stay at the gateway unless asked for, and then go only where the identity goes`() {
+        val renamed = PipelineOptions(apiKeyHeader = "X-Service-Key")
+        val request = {
+            get("/orders?page=2&authorization=t&%61uthorization=u")
+                .header(HttpHeaders.AUTHORIZATION, "token")
+                .header("X-Service-Key", "key")
+                .header("X-API-Key", "other")
+                .header(HttpHeaders.COOKIE, "theme=dark; authorization=c", "Authorization=d")
+        }
+        val stripping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer(), renamed))
+        val stripped = sent(stripping, request())
+        stripped.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
+        stripped.headers["X-Service-Key"].assert().isNull()
+        // R1-4: the cookie the pipeline reads a token from goes; a header left with no cookie goes too.
+        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
+        // Not a credential header of this pipeline: it reads keys from the renamed one only.
+        stripped.headers["X-API-Key"].assert().isEqualTo(listOf("other"))
+        stripped.uri.rawQuery.assert().isEqualTo("page=2")
+        stripped.uri.path.assert().isEqualTo("/orders")
+
+        val keeping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer(), renamed), forwardAuthorization = true)
+        val kept = sent(keeping, request())
+        kept.headers[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
+        kept.headers["X-Service-Key"].assert().isEqualTo(listOf("key"))
+        kept.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark; authorization=c", "Authorization=d"))
+        kept.uri.rawQuery.assert().isEqualTo("page=2&authorization=t&%61uthorization=u")
+        // A route that does not receive the identity gets none of them either, asked for or not.
+        for (route in listOf(route("https://partner.example"), route("lb://orders", identity = false))) {
+            val partner = sent(keeping, request(), route)
+            partner.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
+            partner.headers["X-Service-Key"].assert().isNull()
+            partner.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
+            partner.uri.rawQuery.assert().isEqualTo("page=2")
+        }
+        sent(keeping, request(), route("https://partner.example", identity = true))
+            .headers[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
+        // A query without the token is left as it came.
+        sent(stripping, get("/orders?q=a%20b")).uri.rawQuery.assert().isEqualTo("q=a%20b")
+        sent(stripping, get("/orders?authorization=t")).uri.rawQuery.assert().isNull()
+        // Cookies without the token are left as they came; a request with only the token's cookie sends no Cookie.
+        sent(stripping, get("/orders").header(HttpHeaders.COOKIE, "a=1;b=2")).headers[HttpHeaders.COOKIE]
+            .assert().isEqualTo(listOf("a=1;b=2"))
+        sent(stripping, get("/orders").header(HttpHeaders.COOKIE, "authorization=t")).headers
+            .containsHeader(HttpHeaders.COOKIE).assert().isFalse()
+        // The rest of the URI stays as it came: escapes, a fragment, and characters no builder would accept unencoded.
+        val raw = sent(stripping, get("/a%2Fb?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
+        raw.rawPath.assert().isEqualTo("/a%2Fb")
+        raw.rawQuery.assert().isEqualTo("x=%E4%B8%AD&y=中")
+        raw.rawFragment.assert().isEqualTo("frag")
+    }
+
+    /**
+     * R2-3 of #1194's review: what a later filter, or a `forward:` route's local handler, reads as the request's cookies
+     * agrees with the `Cookie` headers handed on: Spring keeps the cookies the server parsed, so without the decorator
+     * they would still hold the token. Under each switch value, and on a route that does not receive the identity.
+     */
+    @Test
+    fun `the cookies a later filter reads agree with the headers handed on`() {
+        val request = {
+            get("/orders").cookie(HttpCookie("authorization", "c"), HttpCookie("theme", "dark"))
+        }
+        fun cookies(sent: org.springframework.http.server.reactive.ServerHttpRequest) =
+            sent.cookies.mapValues { (_, values) -> values.map { it.value } }
+        val stripping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        val stripped = sent(stripping, request())
+        cookies(stripped).assert().isEqualTo(mapOf("theme" to listOf("dark")))
+        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
         val keeping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()), forwardAuthorization = true)
-        forwarded(keeping, request())[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
+        cookies(
+            sent(keeping, request())
+        ).assert().isEqualTo(mapOf("authorization" to listOf("c"), "theme" to listOf("dark")))
+        cookies(
+            sent(keeping, request(), route("https://partner.example"))
+        ).assert().isEqualTo(mapOf("theme" to listOf("dark")))
+        // A pair the header rewrite drops whole goes from the cookies too, whatever the server parsed it as.
+        val hidden = sent(stripping, get("/orders").cookie(HttpCookie("a", "1, authorization=x"), HttpCookie("b", "2")))
+        cookies(hidden).assert().isEqualTo(mapOf("b" to listOf("2")))
+        // R3-5: a `$Version` header that hid the token behind a `,` goes whole, and so does every cookie read from it.
+        val versioned = sent(
+            stripping,
+            get("/orders").header(HttpHeaders.COOKIE, "\$Version=1, authorization=t;a=b").cookie(HttpCookie("a", "b")),
+        )
+        versioned.headers.containsHeader(HttpHeaders.COOKIE).assert().isFalse()
+        cookies(versioned).assert().isEmpty()
+        // Nothing to rewrite: the request is handed on as it was, its cookies untouched.
+        cookies(sent(stripping, get("/orders").cookie(HttpCookie("theme", "dark")))).assert()
+            .isEqualTo(mapOf("theme" to listOf("dark")))
+    }
+
+    /** SCP-2, RC1-6: each route's app is its requests' host app, ahead of the gateway's; the client's only without. */
+    @Test
+    fun `two routes of different apps are each their own app`() {
+        val scopes = CopyOnWriteArrayList<String>()
+        val recording = object : FlatEngine {
+            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
+                scopes += request.scope.app.value
+                return permit.evaluate(request, snapshot, trace)
+            }
+        }
+        val shop = HostScope(AppId("shop"))
+        val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer(), engine = recording), host = shop)
+        val orders = route("lb://orders", app = "order")
+        val billing = route("lb://billing", app = "billing")
+        val plain = route("lb://plain")
+        fun status(route: Route, declared: String? = null): Int? {
+            val exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/x").apply { declared?.let { header("CoSec-App-Id", it) } }
+            )
+            exchange.attributes[GATEWAY_ROUTE_ATTR] = route
+            filter.filter(exchange) { Mono.empty() }.block(Duration.ofSeconds(5))
+            return exchange.response.statusCode?.value()
+        }
+        status(orders).assert().isNull()
+        status(billing).assert().isNull()
+        status(plain).assert().isNull()
+        scopes.assert().containsExactly("order", "billing", "shop")
+        // The route's app is the host's: another declared app is rejected, as against a configured one.
+        status(orders, "billing").assert().isEqualTo(403)
+        status(billing, "billing").assert().isNull()
+        status(plain, "order").assert().isEqualTo(403)
+        // Without a route app or a host app, the client's declared app applies.
+        val open = PipelineGatewayFilter(pipeline(alice, IdentityIssuer(), engine = recording))
+        scopes.clear()
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x").header("CoSec-App-Id", "order"))
+        exchange.attributes[GATEWAY_ROUTE_ATTR] = plain
+        open.filter(exchange) { Mono.empty() }.block(Duration.ofSeconds(5))
+        scopes.assert().containsExactly("order")
+    }
+
+    /** RC1-6, RC1-15: the gateway passes the route's app as written; the pipeline refuses one that is not an app id. */
+    @Test
+    fun `a route app that cannot be an app id fails the route's requests`() {
+        val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        // R1-7: only a string is an app id; a number, a list or a map is not read as its text.
+        val values = listOf<Any>("", "a:b", "a\nb", 123, true, listOf("billing"), mapOf("id" to "billing"))
+        for (app in values) {
+            val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x"))
+            exchange.attributes[GATEWAY_ROUTE_ATTR] = route("lb://orders", app = app)
+            var called = false
+            filter.filter(exchange) {
+                called = true
+                Mono.empty()
+            }.block(Duration.ofSeconds(5))
+            called.assert().describedAs("$app").isFalse()
+            exchange.response.statusCode?.value().assert().describedAs("$app").isEqualTo(500)
+            exchange.response.bodyAsString.block(Duration.ofSeconds(5)).assert()
+                .contains("\"type\":\"https://cosec.ahoo.me/problems/internal-error\"")
+        }
     }
 }
 

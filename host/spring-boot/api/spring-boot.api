@@ -2,6 +2,15 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration {
 	public fun <init> ()V
 }
 
+public class me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration$Companion;
+	public fun <init> ()V
+	public fun cosecGatewayEndpointCheck (Lorg/springframework/context/ApplicationContext;Lme/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration$Companion {
+}
+
 public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$Companion;
 	public fun <init> ()V
@@ -904,7 +913,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 	public static final field SHADOW_LISTENER Ljava/lang/String;
 	public fun <init> ()V
 	public fun cosecCandidateSource (Lme/ahoo/cocache/core/CacheRuntime;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/snapshot/PlatformCompiler;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/shadow/CandidateSource;
-	public fun cosecShadowListener (Lme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/event/ShadowListener;
+	public fun cosecShadowListener (Lme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)Lme/ahoo/cosec/runtime/event/ShadowListener;
 	public fun cosecShadowRecorder (Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;
 	public fun cosecShadowReporting (Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting;
 	public fun cosecShadowReports (Lme/ahoo/cocache/core/CacheRuntime;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;
@@ -931,6 +940,18 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayIdentityPro
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayIdentityProperties$Companion {
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties$Companion;
+	public static final field PREFIX Ljava/lang/String;
+	public static final field UNPROTECTED_ENDPOINTS_KEY Ljava/lang/String;
+	public fun <init> ()V
+	public final fun getUnprotectedEndpoints ()Ljava/util/Set;
+	public final fun setUnprotectedEndpoints (Ljava/util/Set;)V
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties$Companion {
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties {

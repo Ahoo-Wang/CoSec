@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the gateway leaves the Cookie headers alone, so the authorization cookie the pipeline reads a token from goes downstream
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index e3c75b6c..9766cc95 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -104,7 +104,7 @@ class PipelineGatewayFilter(
+             // The caller's credentials go only where its identity may go, and only when asked for (RC1-5, RC1-49).
+             val credentials = forwardAuthorization && route != null && receivesIdentity(route)
+             // Read before the builder's lambda: one it writes would be boxed, an allocation on every request.
+-            val cookies = if (credentials) null else withoutCookieTokens(request.headers)
++            val cookies: CookieRewrite? = null
+             val downstream = request.mutate()
+                 .headers { headers ->
+                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.

@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
@@ -22,7 +26,8 @@ import java.util.concurrent.CompletableFuture
 
 /**
  * The documents one evaluation needs (RFC 0004 §7.4): always the platform document; unless the request is blocked,
- * the [tenant]'s; and the [app]'s when the scope has roles in an app. Null means not needed.
+ * the [tenant]'s; and the [app]'s when the scope has roles in an app, or when the tenant's document binds one of that
+ * app's permission policies to `Anyone` or to a principal ([withAppFor], RC1-17). Null means not needed.
  */
 class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
     override fun equals(other: Any?): Boolean = other is ViewKey && other.tenant == tenant && other.app == app
@@ -31,17 +36,39 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
 
     override fun toString(): String = "ViewKey(tenant=${tenant?.value}, app=${app?.value})"
 
+    /**
+     * This key with [scope]'s app, when this key reads no app and [tenantDocument], the tenant's document it read,
+     * needs that app's document whatever the roles; null otherwise. The rule is [ViewDocuments.appOf], which the control
+     * plane applies too; here it is one set lookup on the compiled document ([CompiledDocument.needsApp]): no I/O, and the
+     * client's app alone never loads a document.
+     */
+    internal fun withAppFor(scope: Scope, tenantDocument: CompiledDocument?): ViewKey? {
+        // Most keys already read the app (a scope with roles): one field read, and done.
+        if (app != null || tenantDocument == null) {
+            return null
+        }
+        val tenant = tenant ?: return null
+        val wanted = ViewDocuments.appOf(scope) { tenantDocument.needsApp(it) } ?: return null
+        return ViewKey(tenant, wanted)
+    }
+
     companion object {
         /** A blocked request reads only the platform document, where the blacklist rule is (RFC 0004 §4.7). */
         val BLOCKED = ViewKey(null, null)
 
+        /**
+         * The documents [scope] reads as far as its roles decide ([ViewDocuments.appOf] before the tenant's document is
+         * read); [withAppFor] completes it once that document is.
+         */
         fun of(scope: Scope, blocked: Boolean): ViewKey {
             if (blocked) {
                 return BLOCKED
             }
-            val app = scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }
-            return ViewKey(scope.tenant, app)
+            return ViewKey(scope.tenant, ViewDocuments.appOf(scope) { false })
         }
+
+        /** The view of [tenant] with [app]'s document: what the shadow comparison reads for a tenant candidate. */
+        internal fun of(tenant: TenantId, app: AppId): ViewKey = ViewKey(tenant, app)
     }
 }
 
@@ -62,10 +89,30 @@ interface SnapshotViews {
     fun load(key: ViewKey): CompletableFuture<SnapshotView>
 }
 
-/** RFC 0006 §5.5.1: the installed view without suspending, else the loaded one. */
+/**
+ * RFC 0006 §5.5.1: the installed view without suspending, else the loaded one. When the tenant's document needs the
+ * app's although the scope has no roles ([ViewKey.withAppFor], RC1-17), the view with it, the same way.
+ */
 class SuspendingSnapshotSource(private val views: SnapshotViews) {
-    suspend fun view(scope: Scope, blocked: Boolean): SnapshotView {
+    /**
+     * The installed view, found without suspending, else the loaded one. Kotlin spills every local a suspend function
+     * has in scope at a suspension point into the continuation each call allocates; [installed] keeps them out of it,
+     * so the second step costs a request no allocation (the JMH A/B of #1194).
+     */
+    suspend fun view(scope: Scope, blocked: Boolean): SnapshotView = installed(scope, blocked) ?: loaded(scope, blocked)
+
+    /** The view when every document it needs is installed; null when one is not. No I/O, no suspension. */
+    private fun installed(scope: Scope, blocked: Boolean): SnapshotView? {
         val key = ViewKey.of(scope, blocked)
-        return views.peek(key) ?: views.load(key).await()
+        val view = views.peek(key) ?: return null
+        val withApp = key.withAppFor(scope, view.tenant) ?: return view
+        return views.peek(withApp)
+    }
+
+    private suspend fun loaded(scope: Scope, blocked: Boolean): SnapshotView {
+        val key = ViewKey.of(scope, blocked)
+        val view = views.peek(key) ?: views.load(key).await()
+        val withApp = key.withAppFor(scope, view.tenant) ?: return view
+        return views.peek(withApp) ?: views.load(withApp).await()
     }
 }

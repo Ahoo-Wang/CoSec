@@ -269,28 +269,34 @@ class DefaultControlPlane(
         val tenant = SnapshotKey.Tenant(request.tenant.value)
         authority.require(operator, tenant, ControlActions.SIMULATE)
         val scope = resolved(request) ?: return rejected(request)
-        val keys = simulator.keys(scope)
-        val heads = keys.associateWith { revisions.head(it)?.document }
-        val redaction = redaction(operator, keys)
-        val enforced = simulator.evaluate(request, scope, documents(heads))
+        // The tenant's document first: with the scope, it decides whether the app's is read, as enforcement decides.
+        val tenantHead = revisions.head(tenant)?.document
+        val keys = simulator.keys(scope, tenantHead)
+        val heads = keys.associateWith { if (it == tenant) tenantHead else revisions.head(it)?.document }
+        val enforced = simulator.decide(request, scope, documents(heads))
         val proposed = candidate?.let { id ->
             val change = get(operator, id)
             authority.require(operator, change.key, ControlActions.SIMULATE)
-            if (change.key !in keys) {
+            // What the view read, not what [keys] fetched: an app the tenant binds is not read when it does not compile.
+            if (change.key !in enforced.read) {
                 throw ChangeRejectedException(
                     BAD_REQUEST,
                     "change ${id.value} is of [${change.key}], which this request does not read"
                 )
             }
             val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
-            simulator.evaluate(request, scope, documents(heads + (change.key to document)))
+            // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
+            val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
+            val proposedHeads = fetched.associateWith { heads[it] ?: revisions.head(it)?.document } + (change.key to document)
+            simulator.decide(request, scope, documents(proposedHeads))
         }
+        val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
         return Simulation(
-            redaction.decision(enforced.decision),
-            redaction.trace(enforced),
-            proposed?.let { redaction.decision(it.decision) },
-            proposed?.let { redaction.trace(it) },
-            proposed != null && proposed.decision != enforced.decision,
+            redaction.decision(enforced.evaluation.decision),
+            redaction.trace(enforced.evaluation),
+            proposed?.let { redaction.decision(it.evaluation.decision) },
+            proposed?.let { redaction.trace(it.evaluation) },
+            proposed != null && proposed.evaluation.decision != enforced.evaluation.decision,
         )
     }
 
@@ -302,40 +308,43 @@ class DefaultControlPlane(
             val rejected = rejected(request)
             return Explanation(at ?: SnapshotVersion(0, null, 0), rejected.enforced, null)
         }
-        val keys = simulator.keys(scope)
-        val documents = if (at == null) {
-            keys.associateWith { revisions.head(it)?.document }
+        // The tenant's document at the revision decided on first: it decides, by enforcement's rule, whether the app's
+        // was read (RC1-17), so the app revision an audit event recorded is the one explained.
+        suspend fun documentAt(key: SnapshotKey): PolicyDocument? = if (at == null) {
+            revisions.head(key)?.document
         } else {
-            keys.associateWith { key ->
-                val revision = when (key) {
-                    SnapshotKey.Platform -> at.platform
-                    is SnapshotKey.App -> at.app
-                    else -> at.tenant
-                }
-                revision?.takeIf { it > 0 }?.let { retained(key, it) }
+            val revision = when (key) {
+                SnapshotKey.Platform -> at.platform
+                is SnapshotKey.App -> at.app
+                else -> at.tenant
             }
+            revision?.takeIf { it > 0 }?.let { retained(key, it) }
         }
-        val evaluation = simulator.evaluate(request, scope, documents(documents))
-        val redaction = redaction(operator, keys)
-        val version = SnapshotVersion(
-            documents[SnapshotKey.Platform]?.revision ?: 0,
-            keys.firstOrNull { it is SnapshotKey.App }?.let { documents[it]?.revision ?: 0 },
-            documents[tenant]?.revision ?: 0,
+        val tenantDocument = documentAt(tenant)
+        val keys = simulator.keys(scope, tenantDocument)
+        val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
+        // The revisions the view read (R2-5): an app's only when it took the app's document.
+        val decided = simulator.decide(request, scope, documents(documents))
+        val redaction = redaction(operator, decided.read)
+        return Explanation(
+            decided.version,
+            redaction.decision(decided.evaluation.decision),
+            redaction.trace(decided.evaluation),
         )
-        return Explanation(version, redaction.decision(evaluation.decision), redaction.trace(evaluation))
     }
 
     @ExperimentalCoSecApi
     override suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport {
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
-        val keys = listOfNotNull(
-            SnapshotKey.Platform,
-            tenant,
-            query.app?.takeIf {
-                it.isNotEmpty()
-            }?.let { SnapshotKey.App(it) }
-        )
+        val app = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
+            // The data plane never reads such an app (SCP-7): refused, and not echoed, since it may hold control characters.
+            if (!SnapshotKey.App.isValidAppId(app)) {
+                throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-7).")
+            }
+            SnapshotKey.App(app)
+        }
+        val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { revisions.head(it)?.document }
         val found = AccessFindings(query, ResourceTarget(query.resource))

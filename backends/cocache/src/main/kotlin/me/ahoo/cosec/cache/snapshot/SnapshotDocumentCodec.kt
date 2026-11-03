@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.JsonParser
 import tools.jackson.core.JsonToken
@@ -162,6 +163,7 @@ internal object SnapshotDocumentCodec : Codec<SnapshotDocument> {
         }
     }
 
+    /** Stored content quoted in [reason] has its control characters escaped: the message reaches log lines (RC1-15). */
     private fun malformed(reason: String): Nothing =
-        throw SnapshotFormatException("Snapshot document is malformed: $reason.")
+        throw SnapshotFormatException("Snapshot document is malformed: ${SnapshotKeyText.printable(reason)}.")
 }

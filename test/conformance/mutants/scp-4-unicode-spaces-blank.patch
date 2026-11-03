@@ -1,0 +1,16 @@
+# Rule: SCP-4
+# Mutant: blank is Unicode-aware, so a value of Unicode spaces, which trim() keeps, reads as not sent
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CoSecParametersTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
+index 9a98d99b..a85ed027 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
+@@ -76,6 +76,7 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
+ 
+         /** Empty, or only ASCII whitespace (tab, line feed, form feed, carriage return, space), never Unicode spaces. */
+         internal fun isBlank(value: String): Boolean {
++            if (value.isBlank()) return true
+             for (index in value.indices) {
+                 when (value[index]) {
+                     ' ', '\t', '\n', '\u000C', '\r' -> continue

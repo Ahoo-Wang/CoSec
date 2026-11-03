@@ -1,0 +1,40 @@
+# Rule: IDN-8
+# Mutant: the token test searches for each part's "," and "=" from the part to the end of the header, so a client's 8 KB Cookie header costs the gateway millions of character reads (quadratic)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CookieHeadersTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+index 18e85f3c..cba205a6 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+@@ -63,21 +63,19 @@ internal object CookieHeaders {
+      * event loop, and a client writes the header (an index search from each part would make it quadratic).
+      */
+     fun names(header: CharSequence, name: String): Boolean {
+-        var partStart = 0
+-        var nameEnd = -1
+-        var index = 0
+-        while (index <= header.length) {
+-            val char = if (index < header.length) header[index] else ';'
+-            if (char == ';' || char == ',') {
+-                if (isName(header, partStart, if (nameEnd < 0) index else nameEnd, name)) {
++        var pair = 0
++        while (pair <= header.length) {
++            val pairEnd = header.indexOf(';', pair).let { if (it < 0) header.length else it }
++            var part = pair
++            while (part <= pairEnd) {
++                val partEnd = header.indexOf(',', part).let { if (it < 0 || it > pairEnd) pairEnd else it }
++                val nameEnd = header.indexOf('=', part).let { if (it < 0 || it > partEnd) partEnd else it }
++                if (isName(header, part, nameEnd, name)) {
+                     return true
+                 }
+-                partStart = index + 1
+-                nameEnd = -1
+-            } else if (char == '=' && nameEnd < 0) {
+-                nameEnd = index
++                part = partEnd + 1
+             }
+-            index++
++            pair = pairEnd + 1
+         }
+         return false
+     }

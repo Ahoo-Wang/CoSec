@@ -36,4 +36,25 @@ internal object QueryParameters {
         }
         return values
     }
+
+    /**
+     * [rawQuery] without the pairs whose name is [name] after decoding, ignoring case: removing too much is safe, a
+     * backend that reads the name another way must not find it. A name that does not decode is compared as written.
+     * Null when no pair is left; [rawQuery] itself when it has none.
+     */
+    fun without(rawQuery: String?, name: String): String? {
+        if (rawQuery.isNullOrEmpty() || ('%' !in rawQuery && !rawQuery.contains(name, ignoreCase = true))) {
+            return rawQuery
+        }
+        val pairs = rawQuery.split('&')
+        val kept = pairs.filterNot { pair ->
+            val raw = pair.substringBefore('=')
+            (PercentDecoder.decode(raw, plusIsSpace = true) ?: raw).equals(name, ignoreCase = true)
+        }
+        return when {
+            kept.size == pairs.size -> rawQuery
+            kept.isEmpty() -> null
+            else -> kept.joinToString("&")
+        }
+    }
 }

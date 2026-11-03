@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: explain decides whether the app document was read by the head tenant, as simulate does, not by the tenant revision it explains
+# Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index f25b749a..e41a04ba 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -321,7 +321,7 @@ class DefaultControlPlane(
+             revision?.takeIf { it > 0 }?.let { retained(key, it) }
+         }
+         val tenantDocument = documentAt(tenant)
+-        val keys = simulator.keys(scope, tenantDocument)
++        val keys = simulator.keys(scope, revisions.head(tenant)?.document)
+         val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
+         // The revisions the view read (R2-5): an app's only when it took the app's document.
+         val decided = simulator.decide(request, scope, documents(documents))

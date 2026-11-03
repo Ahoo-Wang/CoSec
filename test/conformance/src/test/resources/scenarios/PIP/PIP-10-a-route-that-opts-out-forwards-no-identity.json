@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "alice is permitted on a route whose metadata says cosec-identity: false, and the client sends a CoSec-Identity of its own: the backend receives no identity at all. Through the gateway host's filters.",
+  "description": "alice is permitted on a route to lb://backend whose metadata says cosec-identity: false, and the client sends a CoSec-Identity of its own: the backend receives no identity at all. Through the gateway host's filters.",
   "documents": {
     "platform": {
       "policies": [
@@ -56,6 +56,7 @@
   },
   "gateway": {
     "route": {
+      "uri": "lb://backend",
       "identity": false
     }
   }
