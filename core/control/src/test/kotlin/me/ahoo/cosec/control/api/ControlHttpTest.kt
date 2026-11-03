@@ -46,6 +46,9 @@ class ControlHttpTest {
     private val alice = fixture.engine.security(ControlPlaneTest.ACME, "alice", roles = listOf("admin", "ops@team-a"))
     private val plato = fixture.engine.security(TenantId.PLATFORM, "plato")
 
+    /** A platform principal bound to nothing: no `cosec:read` on the platform document. */
+    private val pia = fixture.engine.security(TenantId.PLATFORM, "pia")
+
     private fun call(
         method: String,
         path: String,
@@ -89,6 +92,8 @@ class ControlHttpTest {
             body.get("detail").asString().assert().contains("An operator removes its record").doesNotContain("a\u0001b")
                 .doesNotContain("\\u0001")
             call(method, path, security = alice).first.assert().describedAs(path).isEqualTo(404)
+            // R4-1: a platform principal who may not read the platform document is anyone else too.
+            call(method, path, security = pia).first.assert().describedAs(path).isEqualTo(404)
         }
     }
 

@@ -165,6 +165,9 @@ class PipelineGatewayFilter(
      * it ([withoutCookieToken]), would go, and when a header that went whole ([dropped]) holds it, by name and value
      * as Netty reads its pairs (R3-5): a `$Version` header that hid the token goes with every cookie in it. Built only
      * for a request whose headers were rewritten.
+     *
+     * Accepted: matching by name and value also removes an identical cookie that a kept header carries too. Only
+     * non-token cookies are affected, and only in that exotic case; removing too much is the safe direction.
      */
     private class WithoutTokenCookies(
         request: ServerHttpRequest,
@@ -186,8 +189,9 @@ class PipelineGatewayFilter(
 
             /**
              * The name and value of each pair of [header] as Netty's `ServerCookieDecoder` reads them: the name after
-             * what it skips (whitespace and `,`), up to `=`, without trailing whitespace; the value up to the next `;`,
-             * a double-quoted one unwrapped. Every pair, `$`-named ones too: a pair Netty skipped matches no cookie.
+             * what it skips (whitespace and `,`), up to `=`, exactly (Netty's `substring(nameBegin, nameEnd)`, R4-2);
+             * the value up to the next `;`, a double-quoted one unwrapped. Every pair, `$`-named ones too: a pair Netty
+             * skipped matches no cookie.
              */
             fun pairsOf(header: String): List<Pair<String, String>> = header.split(';').mapNotNull { pair ->
                 val text = pair.trimStart { it in SKIPPED }
@@ -198,7 +202,7 @@ class PipelineGatewayFilter(
                 } else {
                     value
                 }
-                text.substringBefore('=').trimEnd() to unwrapped
+                text.substringBefore('=') to unwrapped
             }
         }
     }

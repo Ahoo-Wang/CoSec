@@ -33,8 +33,6 @@ dependencies {
     testImplementation("io.projectreactor:reactor-test")
     // RFC 0003 §6: the snapshot store must not block a non-blocking caller.
     testImplementation("io.projectreactor.tools:blockhound")
-    // CoCacheControlStoreTest reads what a skipped back-reference member logs; the version is the Boot BOM's.
-    testImplementation("ch.qos.logback:logback-classic")
 }
 
 tasks.withType<Test>().configureEach {

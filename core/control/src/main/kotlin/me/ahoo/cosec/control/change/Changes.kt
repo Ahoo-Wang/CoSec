@@ -232,13 +232,17 @@ class Changes(
      * tells nothing of which exist. What the decision cannot equalize is the store read of a change that exists.
      */
     suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest {
+        // The decision on the platform document, when an unreadable change made it already: the 404 path reuses it.
+        var platformRead: ControlDecision? = null
         val stored = try {
             stored(id)
         } catch (e: UnnamedDocumentException) {
             // A change of an app no key can name (R3-4 of #1194's review), and an app document is the platform's: its
             // principals who may read the platform learn it is there (409); anyone else gets what a missing change gets.
-            if (operator.platform && authority.decide(operator, SnapshotKey.Platform, ControlActions.READ) == ControlDecision.PERMIT) {
-                throw e
+            if (operator.platform) {
+                val decision = authority.decide(operator, SnapshotKey.Platform, ControlActions.READ)
+                if (decision == ControlDecision.PERMIT) throw e
+                platformRead = decision
             }
             null
         }
@@ -247,7 +251,7 @@ class Changes(
             return expired(reachable)
         }
         val key = reachable?.key ?: if (operator.platform) SnapshotKey.Platform else SnapshotKey.Tenant(operator.tenant.value)
-        val decision = authority.decide(operator, key, ControlActions.READ)
+        val decision = platformRead ?: authority.decide(operator, key, ControlActions.READ)
         if (decision == ControlDecision.PERMIT && reachable != null) {
             return expired(reachable)
         }
