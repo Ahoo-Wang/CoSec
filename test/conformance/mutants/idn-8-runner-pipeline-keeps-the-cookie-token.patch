@@ -3,7 +3,7 @@
 # Tests: :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 3a6059ab..339d616f 100644
+index 8695757e..f838acb6 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 @@ -132,7 +132,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
@@ -14,4 +14,4 @@ index 3a6059ab..339d616f 100644
 +    fun withoutCookieToken(cookieHeader: String): String? = cookieHeader
  
      /**
-      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
+      * Whether [cookieHeader], one `Cookie` header value, has an `authorization` cookie [withoutCookieToken] removes:
