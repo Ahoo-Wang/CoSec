@@ -220,6 +220,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1185 | `fix(control)!`：RC 修复批次 B2，信任根、审批、break-glass 与变更审计（RC1-10–13、27–31、35–37 与 B1 审查留下的四项）；规则 APR-7、APR-8、BDY-2、BRK-9、CTL-22、GRT-7、SCP-9 与 21 个变异体；四轮独立审查，第四轮留下的低级问题 R4-1–R4-6 与新发现 RC1-51 转入一个后续 PR | ✅ 2026-11-02 合入（`6064936b`） |
 | #1190 | B2 之后的共享文档：RFC 0007 的 B2 实现说明、审查记录（RC1-12 措辞、RC1-36 偏离、R4-1–R4-6、新发现 RC1-51） | ✅ 已合入 |
 | #1188 | CoCache 6.7.0 → 6.10.0：6.9 起读失败与删除失败模式默认不设置（没有加载器的缓存都抛出），撤销缓存显式设 `degrade`（PIP-7），权威存储的缓存另钉 `InvalidateFailureMode.THROW`（6.7 的 `RETRY` 晚到的删除可能删掉其间的新写入），成员关系缓存的删除仍重试；`SNP-3` 的淘汰检查改读 `INFO memory`（需要 `+info`）；`cosec-cocache` 的 ABI 只增 25 行 | ✅ 2026-11-02 合入（`d10bd61e`） |
+| #1191 | #1188 之后的共享文档（RFC 0003、0004、0007、0008 与路线图） | ✅ 已合入 |
+| #1192 | `fix(control)!`：B2 后续，R4-1–R4-6 与 RC1-51：撤销先授权再读槽；并发抢占或头移动后最多再撤销 3 次；`DELETE /break-glass/{id}` 只在绑定不再生效时答 2xx，平台头上没有该 id 的绑定即 404，不是 break-glass 绑定即 409；撤销仍在生效绑定的变更只有作者能放弃，每次放弃写 `ABANDONED` 事件（break-glass 的为 REQUIRED）；规则 BRK-10、BRK-11；两轮独立审查加协调者核实最后一轮 | ✅ 2026-11-02 合入（`a0d0ad63`） |
 
 **2026-11-02 状态（接手者从这里继续）**：
 
@@ -228,11 +230,12 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1185 RC 修复批次 B2 | ✅ 已合入（`6064936b`）。第四轮复审（只读子会话，`0e13948c..0373f6d5`）：N1–N7 成立，四个变异体被失败的测试杀死，没有新的高或中问题；六个低级问题 R4-1–R4-6，另发现既有问题 RC1-51（低） | — |
 | B2 合入后的共享文档 | ✅ #1190 | — |
 | #1188 CoCache 6.7.0 → 6.10.0 | ✅ 已合入（`d10bd61e`），协调者对照代码审查；共享文档随 #1188 之后的文档 PR | — |
-| B2 后续 PR | 实现会话进行中（2026-11-02 起）：R4-1–R4-6 与 RC1-51，按审查记录的 "Left by B2's review" 与派发时协调者的决定（R4-1：并发抢占后最多重试 3 次，`DELETE /break-glass/{id}` 只在绑定不再生效时答 2xx，否则 409；RC1-51：撤销仍在生效绑定的变更只有作者能放弃，每次放弃写 `ABANDONED` 事件，break-glass 的为 REQUIRED） | 草稿 PR 全绿后由只读会话复审，无高或中问题即合入；之后是批次 C |
-| 批次 C、D 与其余 RC 前事项 | 未开始 | 见 §10；批次 D 含 RC1-50 与失效通知测试的竞态 |
+| B2 后续 PR | ✅ #1192 | — |
+| 批次 C（网关） | 下一个派发 | RC1-5、6、15–19、48、49，按审查记录 Fix plan 的决定；实现会话做，只读会话复审 |
+| 批次 D 与其余 RC 前事项 | 未开始 | 见 §10；批次 D 含 RC1-50 与失效通知测试的竞态 |
 | #866、#1163 | Renovate，与 main 冲突 | 等 Renovate rebase；#1163 是运行时依赖，须维护者确认 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：B2 后续 PR（R4-1–R4-6、RC1-51，进行中）→ 批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -326,7 +329,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（R4-1–R4-6、RC1-51，进行中）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
+- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
