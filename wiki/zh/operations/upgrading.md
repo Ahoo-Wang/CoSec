@@ -38,7 +38,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **空白的 `CoSec-*` 值与另一个值同时出现即有歧义**（RC1-16、`SCP-4`）：请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=` 现在是 `400` `invalid-request`，过去取 `s1`。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如 `%E3%80%80`）是一个值：单独出现时，它是主体必须在其中有角色的空间。每个参数只发送一次。
 - **应用 id 拒绝控制字符**（RC1-15、`SCP-7`），与租户 id 相同：声明的应用含控制字符时为 `403` `scope-rejected`（匿名调用方为 `401`），宿主应用含控制字符时启动失败。
 - **按策略决策的宿主丢弃客户端的 `CoSec-Identity`**（RC1-18、`IDN-9`）。`enforce` 模式的 WebFlux 或 Spring MVC 宿主会从处理器看到的请求中移除该头，因此它从不转递客户端写的身份。在那里读取它的代码读到的是任何客户端都能写的内容；请读取 `SecurityContext`。
-- **租户把应用权限授给 `Anyone` 或某个主体的绑定现在能解析**（RC1-17、`TNT-4`）。该应用中的请求现在无论主体有什么角色都读取应用文档，因此绑定中的 DENY 或 ALLOW 生效（过去这样的请求都是 `503`），应用文档的限流规则也随之生效。代码中，`CompiledDocument.tenant` 接收集合 `boundApps`，由 `CompiledDocument.needsApp` 回答。
+- **租户把应用权限授给 `Anyone` 或某个主体的绑定现在能解析**（RC1-17、`TNT-4`）。该应用中的请求现在无论主体有什么角色都读取应用文档，因此绑定中的 DENY 或 ALLOW 生效（过去这样的请求都是 `503`），应用文档的限流规则也随之生效。`simulate`、`explain` 和影子窗口按同一规则读取它（`CTL-3`）。代码中，`CompiledDocument.tenant` 接收集合 `boundApps`，由 `CompiledDocument.needsApp` 回答；自行构造的 `ShadowListener` 需要已安装的视图（`views`），才能比较让请求读取应用文档的租户候选，没有视图时上报 `CANDIDATE_ERROR`。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}

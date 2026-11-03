@@ -115,6 +115,11 @@ The answer has `enforced`, `candidate` when one was asked for, and `differs`. Ea
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
 full trace of candidates. Statements from documents you may not read are left out and counted as `redacted`.
 
+A simulation reads the documents enforcement reads: the platform's, the tenant's, and the app's when the request has
+roles in its app or the tenant document binds one of that app's permission policies to `Anyone` or to a principal
+([Policy language](./language.md)). For a change of the tenant document, the candidate decides that: a change that
+adds such a binding reads the app document, one that removes the last of them no longer does.
+
 A simulation has no token attributes and fetches no external attributes: a statement that reads `ext.*` finds it
 missing and follows its `onMissing`, so it is usually Indeterminate here.
 
@@ -122,8 +127,9 @@ missing and follows its `onMissing`, so it is usually Indeterminate here.
 
 `explain` takes the same `request` and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
-kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Its fields and
-how to find the request are in [Checks in code](../integration/checks.md).
+kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
+document was read is decided as enforcement decided it, with the tenant document at its recorded revision. Its fields
+and how to find the request are in [Checks in code](../integration/checks.md).
 
 ## Changes
 
@@ -205,7 +211,9 @@ abandoning a break-glass change needs a REQUIRED change listener, which records 
 sample of live requests a second time with the candidate in place of the current document, and report how each came
 out; the candidate never affects a real decision. A candidate is compared only on requests that read its document
 (a tenant's on that tenant's requests, an app's on requests that read that app document, the platform's on all), and
-only by an instance that has installed the candidate's base revision.
+only by an instance that has installed the candidate's base revision. A tenant candidate is compared on the documents a
+request would read once it is published: one that binds an app's permission policy to `Anyone` or a principal brings in
+that app's installed document where the request read none, and one that removes the last such binding leaves it out.
 
 | Outcome | Means |
 |---|---|
@@ -215,7 +223,7 @@ only by an instance that has installed the candidate's base revision.
 | `NARROWED` | Enforcement permitted; the candidate does not. |
 | `BECAME_INDETERMINATE` | The candidate is Indeterminate where enforcement was not, for a reason other than a missing attribute. |
 | `CANDIDATE_INDETERMINATE` | The candidate reads an external attribute the request did not fetch (a shadow evaluation fetches none). |
-| `CANDIDATE_ERROR` | An instance cannot compile or evaluate the candidate. |
+| `CANDIDATE_ERROR` | An instance cannot compile or evaluate the candidate, or cannot read an app document the candidate makes the request read. |
 | `BASE_MISMATCH` | The instance has another revision of the document installed: not compared, not a sample. |
 
 The window closes:

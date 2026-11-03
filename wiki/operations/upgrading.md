@@ -149,8 +149,10 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   there read what any client could write; read the `SecurityContext`.
 - **A tenant's grant of an app's permission to `Anyone` or a principal resolves** (RC1-17, `TNT-4`). A request in that
   app now reads the app's document whatever the principal's roles, so the binding's DENY or ALLOW applies, where
-  every such request was `503`, and so do the app document's rate limit rules. In code, `CompiledDocument.tenant`
-  takes the set `boundApps`, and `CompiledDocument.needsApp` answers it.
+  every such request was `503`, and so do the app document's rate limit rules. `simulate`, `explain` and shadow
+  windows read it by the same rule (`CTL-3`). In code, `CompiledDocument.tenant` takes the set `boundApps`, and
+  `CompiledDocument.needsApp` answers it; a `ShadowListener` built by hand needs the installed views (`views`) to compare
+  a tenant candidate that makes a request read an app document, and reports `CANDIDATE_ERROR` without them.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,
