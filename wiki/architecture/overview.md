@@ -304,9 +304,11 @@ holds them:
   bounded pool (`compile-threads`); a full queue fails the load closed. Installs of one key happen in the order their
   loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
-  demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed.
+  demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed. Ids the
+  store holds no document for are kept apart, at most 256 per family, and evict only each other (`SNP-7`).
 - **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
-  conditional read of the store of record, which transfers no body when the digest is unchanged. Change notifications
+  conditional read of the store of record, which transfers no body when the digest is unchanged. It is the only bound on
+  a lost change notification, so it cannot be turned off and is at most 5 minutes (`SNP-6`). Change notifications
   from the store trigger a reload sooner. A cold key is read once (possibly from a local copy) and then confirmed by a
   conditional read at once.
 - **Fail closed.** A read that fails while a document is installed keeps the installed revision, and the lag is

@@ -83,6 +83,10 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   (one segment, captured) or a final `**`; or `http:path:<pattern>` (Spring-like: literals, `?`, `*`, `{name}`,
   `**` and `{*name}` at the start or end; no `{name:regex}`). An object form adds `caseSensitive` and
   `decodeAndParseSegments` (both default `true`) to an `http:path:` pattern.
+- Pattern bounds (DOC-4; over one, the document does not compile): an `http:path:` pattern is at most 2,048
+  characters; a segment that mixes `*`, `?` or `{name}` with text (`report-*.pdf`) has at most 16 parts, consecutive
+  `*` counting once; one document's such segments hold at most 4,096 parts in all. Prefer whole-segment `*`, `{name}`
+  and `**`, which cost nothing.
 - A DENY on a bare type (`order`) does not compile: it would only cover the empty id. Write `order/**`.
 - How a request gets its action: on WebFlux and WebMvc hosts a route map (`cosec-routes.json`) maps method and path to
   `service:verb` on a typed resource (`order/{orderId}`); any request no route matches keeps `http:<METHOD>` on
@@ -121,8 +125,8 @@ use `not`. Attributes:
   `http.referer.host` (lower case), `*.host.labels`, `request.attributes.<name>` (the gateway sets
   `request.attributes.cosec.audit.routeId`, its route id, and `cosec.identity.forward`: `true` on routes that receive
   the forwarded identity, `false` on the others; WebFlux and WebMvc set none). A header sent more than once
-  with different values has no value: a DENY on it is Indeterminate (503), an ALLOW on it does not match; identical
-  copies read as one. **No attribute reference may read a credential header**, neither a condition nor a rate limit `key`:
+  with different values has no value: when any document of the request's view reads it, whatever the effect, the
+  request is answered 400 `invalid-request` before evaluation (PIP-12); identical copies read as one. **No attribute reference may read a credential header**, neither a condition nor a rate limit `key`:
   `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, `cosec-identity` (any case)
   do not compile. Headers are client input:
   never treat one as identity;

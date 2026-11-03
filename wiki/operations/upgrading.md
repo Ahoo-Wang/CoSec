@@ -190,7 +190,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   different values, and any statement, policy condition, boundary or rate limit key of the documents its view reads
   reads that header (`Origin` and `Referer` included), the pipeline answers `400` `invalid-request` before evaluating,
   where a DENY on it made the request `503` and an ALLOW on it did not match. Identical repeats are one value
-  ([Web](../integration/web.md#status-codes)).
+  ([Web](../integration/web.md#responses-and-status-codes)).
 - **A malformed `roles`, `policies` or `attributes` claim is an invalid token** (`PIP-6`): `401` `token-invalid`, evaluated
   as anonymous, where it was a `500`.
 - **Duplicate keys are refused everywhere** (RC1-44, `DOC-5`). Every stored format (API keys, memberships, shadow

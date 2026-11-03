@@ -140,7 +140,10 @@ sequenceDiagram
 - **变更立即到达每个实例**，通过 CoCache 的失效消息（第 2 到 5 步）。实例绕过本地副本自己读取 Redis，编译新修订并
   装入。进行中的请求继续使用它开始时的修订：一次求值绝不会混用一个文档的不同修订。
 - **丢失的消息由重新确认兜底**（第 6、7 步）：每隔 [`revalidate-interval`](./configuration.md#snapshot)（10 秒），
-  每个已装入的文档用一次条件读确认，未变化时不传输任何内容。
+  每个已装入的文档用一次对 Redis 的条件读确认（从不使用本地副本），未变化时不传输任何内容。失效消息丢失时，它是变化唯一的界，
+  因此不能关闭，最长 5 分钟（`SNP-6`）。
+- **没有文档的 id** 与文档分开记住，每个文档族最多 256 个：声明随机应用 id 的客户端会让实例为每个 id 读一次 Redis，但
+  绝不会把已装入的文档挤出去（`SNP-7`）。
 - **滞后**是 Redis 上一次确认某个文档以来的时间。只要 Redis 有应答，它就低于重新确认间隔。超过 `lag-warn`（60 秒）
   时实例以 `WARN` 记录 `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过
   `lag-escalate`（5 分钟）时以 `ERROR` 记录 `... is stale: not confirmed for <lag>.`，每个文档每分钟最多一次。
@@ -171,6 +174,11 @@ sequenceDiagram
 | 限流计数器 | `strictFailure: true` 的规则得到 **`503`**；其他规则被跳过，请求继续（[限流](../policies/rate-limiting.md)）。 |
 | 控制面 | 存储读取失败就是失败，绝不当作"不存在"：控制 API 返回 `503`，不发布任何内容。 |
 | 影子报告 | 实例记录写入失败，并在下一个周期重写；在此期间窗口保持打开。 |
+
+**重新连接之后。** 连接断开期间，Lettuce 缓冲交给它的命令，重新连接时在一把每次写命令都要获取的锁下把它们全部写出。
+这时发送命令的请求（包括在事件循环上的）要等到缓冲写完，而缓冲默认没有上限。要限制这段等待，用
+`LettuceClientConfigurationBuilderCustomizer` 给应用的 Lettuce 客户端设置 `requestQueueSize`，或在断开期间拒绝命令。
+CoSec 不改动这个客户端：它由应用共享。
 
 吊销检查和没有 `strictFailure` 的限流规则是失败即拒绝的两个已记录的例外（[安全模型](../guide/security-model.md)）。
 `503` 在响应和审计中是什么样子，见[故障排查](./troubleshooting.md#unavailable)。

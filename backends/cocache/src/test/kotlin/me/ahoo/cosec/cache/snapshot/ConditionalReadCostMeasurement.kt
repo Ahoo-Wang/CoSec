@@ -126,9 +126,12 @@ class ConditionalReadCostMeasurement {
         return SnapshotDocument(2, 1, Instant.parse(PUBLISHED), body.encodeToByteArray())
     }
 
-    private fun label(bytes: Int): String = if (bytes >= MIB) "%.1f MiB".format(
-        bytes.toDouble() / MIB
-    ) else "${bytes / KIB} KiB"
+    private fun label(bytes: Int): String {
+        if (bytes < MIB) {
+            return "${bytes / KIB} KiB"
+        }
+        return "%.1f MiB".format(bytes.toDouble() / MIB)
+    }
 
     private companion object {
         const val KIB = 1024

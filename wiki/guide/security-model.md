@@ -331,8 +331,9 @@ clients reach directly, set it to `0`, or a client can write any address into th
 **Headers are client input.** Conditions can read request headers (`http.header.<name>`), `Origin` and `Referer`
 (`http.origin`, `http.referer` and their hosts): the client writes all of them. A DENY on a header is a hint the
 client can drop, and an ALLOW on one is a grant the client can claim. A header sent more than once with different
-values has no single value: a DENY on it is Indeterminate (`503`) and an ALLOW on it does not match
-([Attributes](../policies/language.md#attributes)). Request attributes (`request.attributes.<name>`, such as the
+values has no single value: when a document the request is decided on reads it, the request is `400` before
+evaluation, whatever the statement's effect, so the answer reveals neither a DENY nor which header it reads
+([Headers](../policies/language.md#headers), `PIP-12`). Request attributes (`request.attributes.<name>`, such as the
 gateway's route id) are set by the host, not the client.
 
 No attribute reference can read the headers that carry credentials: `authorization`, `proxy-authorization`,

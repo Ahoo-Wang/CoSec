@@ -158,7 +158,10 @@ sequenceDiagram
   the revision it started with: one evaluation never mixes revisions of a document.
 - **Lost messages are caught by revalidation** (steps 6 and 7): every
   [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) each installed document is confirmed with a
-  conditional read that transfers nothing when it is unchanged.
+  conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. It is the only bound on a
+  change whose invalidation message was lost, so it cannot be turned off and is at most 5 minutes (`SNP-6`).
+- **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
+  random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers it stays below the revalidate
   interval. Past `lag-warn` (60 seconds) the instance logs
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past `lag-escalate`
@@ -195,6 +198,12 @@ sequenceDiagram
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
 | The control plane | A store read that fails is a failure, never "absent": the control API answers `503` and publishes nothing. |
 | Shadow reports | The instance logs the failed write and writes again on its next cycle; the window stays open meanwhile. |
+
+**After a reconnect.** While its connection is down, Lettuce buffers the commands it is given, and when it reconnects
+it writes them all under a lock that every command write takes. A request that sends a command then, on an event loop
+too, waits until that buffer is flushed, and the buffer is unbounded by default. To bound the wait, set
+`requestQueueSize`, or reject commands while disconnected, on the application's Lettuce client with a
+`LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it.
 
 The revocation check and rate-limit rules without `strictFailure` are the documented exceptions to failing closed
 ([Security model](../guide/security-model.md)). How a `503` reads in the response and the audit is in

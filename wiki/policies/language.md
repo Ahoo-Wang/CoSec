@@ -223,6 +223,23 @@ A resource may be a pattern object with options, for `http:path:` patterns only:
 | `caseSensitive` | `true` | `false` compares literals ignoring ASCII case. |
 | `decodeAndParseSegments` | `true` | `true` matches each segment by its percent-decoded value without `;` parameters; `false` by its text as received, except that `%2F` reads as `/`. |
 
+### Path pattern bounds
+
+What matching a document's patterns costs one request is bounded (`DOC-4`), as conditions are ([Limits](#limits)).
+A pattern over a bound does not compile:
+
+| Bound | Limit |
+|---|---|
+| An `http:path:` pattern | at most 2,048 characters after `http:path:`, the longest path the pipeline accepts |
+| A typed resource pattern | at most 2,058 characters |
+| A segment that mixes `*`, `?` or `{name}` with other text, such as `report-*.pdf` | at most 16 parts: each `*`, `?` and `{name}`, and each run of text between them. Consecutive `*` count once: `a**b` is `a*b` |
+| All such segments of one document, across its policies, boundaries and rate limit rules | at most 4,096 parts in all |
+
+A literal segment, `*` or `{name}` as a whole segment, `**` and `{*name}` cost nothing: only a segment mixing them with
+text is matched by searching. The bounds are fixed in 8.0. On the data plane a stored document over them is installed
+as failed, so the requests that read it fail closed. A segment matches in at most its parts times its length steps, so
+with these bounds a whole document's patterns cost a request about a millisecond at worst.
+
 ## Path variables
 
 `{name}` in a typed or HTTP pattern, and `{*name}` in an HTTP pattern, capture a variable. Only the statement whose
@@ -327,8 +344,10 @@ every document, on the data plane and in the control plane, with that header ref
 it for a condition.
 
 A header sent more than once reads as its value when every copy is the same. When the copies differ, the header has no
-single value, and a statement that reads it errs: a DENY on it makes the request Indeterminate (`503`) unless another
-DENY matches, and an ALLOW on it does not match. The first or last copy never decides.
+single value, and the first or last copy never decides: the pipeline answers the request `400` `invalid-request`
+before evaluating it, when any statement, policy condition, boundary or rate limit `key` of the documents the request
+is decided on reads that header (`PIP-12`). It does so whatever the statement's effect and whether it could apply to
+the request, so the answer tells a client neither that a DENY reads the header nor which.
 
 ### Matching roles
 
