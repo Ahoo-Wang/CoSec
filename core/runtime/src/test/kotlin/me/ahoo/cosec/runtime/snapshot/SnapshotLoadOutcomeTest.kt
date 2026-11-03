@@ -13,16 +13,17 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CyclicBarrier
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
-import java.util.concurrent.TimeUnit
 
 /**
  * Each request is answered exactly once, by the shared load or by its timeout, and the outcome is recorded before the
@@ -109,7 +110,11 @@ class SnapshotLoadOutcomeTest {
 
     @Test
     fun timeoutThatCannotBeScheduledFailsClosedOnce() {
-        val stopped = ScheduledThreadPoolExecutor(1).apply { shutdown() }
+        // Only the timeout is refused: the periodic pass cannot be turned off (SNP-6), so a source needs a scheduler.
+        val stopped = object : ScheduledThreadPoolExecutor(1) {
+            override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> =
+                throw RejectedExecutionException("stopped")
+        }
         testSource(store, metrics = metrics, scheduler = stopped).use { source ->
             val answer = source.load()
 
@@ -120,6 +125,7 @@ class SnapshotLoadOutcomeTest {
             store.releaseAll()
             policiesOutcomes().assert().containsExactly(LoadOutcome.FAILED)
         }
+        stopped.shutdownNow()
     }
 
     @Test

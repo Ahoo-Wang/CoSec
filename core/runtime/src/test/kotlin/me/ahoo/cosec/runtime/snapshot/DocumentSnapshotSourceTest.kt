@@ -45,7 +45,7 @@ class DocumentSnapshotSourceTest {
     private fun source(
         store: SnapshotDocumentStore,
         compiler: SnapshotCompiler<Compiled> = FakeCompiler(),
-        options: SnapshotOptions = SnapshotOptions(revalidateInterval = Duration.ZERO),
+        options: SnapshotOptions = SnapshotOptions(revalidateInterval = QUIET_PASS),
         metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
     ) = SnapshotSource(
         store,
@@ -120,7 +120,7 @@ class DocumentSnapshotSourceTest {
         val store = ControllableStore()
         store.publish(SnapshotKey.Platform, 1)
         listOf(TENANT_A, TENANT_B, APP_A, APP_B).forEach { store.publish(it, 1) }
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 2, maxTenants = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxTenants = 1)
         source(store, options = options).use { source ->
             source.loadAll(listOf(TENANT_A, APP_A)).join()
             source.loadAll(listOf(TENANT_B, APP_B)).join()
@@ -130,6 +130,36 @@ class DocumentSnapshotSourceTest {
             source.holds(APP_B).assert().isTrue()
             source.evict(APP_A).assert().isTrue()
             source.evict(TENANT_A).assert().isFalse()
+        }
+    }
+
+    /** RC1-7: ids a client chooses, with no document behind them, evict only each other (`SNP-7`). */
+    @Test
+    fun `a flood of ids without a document never evicts a document`() {
+        val store = ControllableStore()
+        store.publish(SnapshotKey.Platform, 1)
+        listOf(TENANT_A, APP_A, APP_B).forEach { store.publish(it, 1) }
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxTenants = 1, maxAbsent = 3)
+        source(store, options = options).use { source ->
+            source.loadAll(listOf(TENANT_A, APP_A, APP_B)).join()
+            val apps = (1..FLOOD).map { SnapshotKey.App("absent-app-$it") }
+            val tenants = (1..FLOOD).map { SnapshotKey.Tenant("absent-tenant-$it") }
+            apps.zip(tenants).forEach { (app, tenant) ->
+                source.loadAll(listOf(tenant, app)).join().scoped.forEach {
+                    it.state.assert().isSameAs(DocumentState.Absent)
+                }
+            }
+            awaitCondition { apps.count(source::holds) <= 3 && tenants.count(source::holds) <= 3 }
+            listOf(TENANT_A, APP_A, APP_B).forEach { source.holds(it).assert().isTrue() }
+            // The most recently used absent entries stay: a repeated id is answered without reading the store again.
+            source.holds(apps.last()).assert().isTrue()
+            source.holds(tenants.last()).assert().isTrue()
+            // A document beyond its own bound still evicts the least recently used document.
+            store.publish(SnapshotKey.App("third"), 1)
+            source.loadAll(listOf(SnapshotKey.App("third"))).join()
+            awaitCondition { !source.holds(APP_A) }
+            source.holds(APP_B).assert().isTrue()
+            source.holds(apps.last()).assert().isTrue()
         }
     }
 
@@ -159,7 +189,7 @@ class DocumentSnapshotSourceTest {
         store.publish(SnapshotKey.Platform, 1)
         store.publish(TENANT_A, 1)
         val options = SnapshotOptions(
-            revalidateInterval = Duration.ZERO,
+            revalidateInterval = QUIET_PASS,
             failClosedTenants = setOf("tenant-a"),
             failClosedMaxLag = Duration.ofMinutes(1),
         )
@@ -211,7 +241,7 @@ class DocumentSnapshotSourceTest {
         DocumentSnapshots.source(
             store,
             PolicyDocumentCompiler(),
-            SnapshotOptions(revalidateInterval = Duration.ZERO)
+            SnapshotOptions(revalidateInterval = QUIET_PASS)
         ).use { source ->
             val set = source.loadAll(listOf(TENANT_A, TENANT_B)).join()
             (set.shared.state as DocumentState.Present<CompiledDocument>).compiled.kind.assert().isEqualTo(
@@ -233,5 +263,9 @@ class DocumentSnapshotSourceTest {
             check(System.nanoTime() < deadline) { "Condition not met in time." }
             Thread.onSpinWait()
         }
+    }
+
+    private companion object {
+        const val FLOOD = 50
     }
 }

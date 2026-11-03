@@ -130,18 +130,21 @@ class Snapshot<out P : Any, out A : Any> internal constructor(
 
 /**
  * One kind of scoped document a [SnapshotSource] holds, by id: app documents by app id, tenant documents by tenant id.
- * Each family keeps at most [maxEntries] documents and evicts the least recently used idle one beyond it.
+ * Each family keeps at most [maxEntries] documents and evicts the least recently used idle one beyond it; entries for
+ * documents the store does not hold are kept apart, at most [maxAbsent] of them (`SNP-7`).
  */
 internal class SnapshotFamily<out A : Any>(
     val kind: SnapshotKind,
     val compiler: SnapshotCompiler<A>,
     val maxEntries: Int,
+    val maxAbsent: Int = SnapshotOptions.DEFAULT_MAX_ABSENT,
 ) {
     init {
         require(
             kind == SnapshotKind.APP || kind == SnapshotKind.TENANT
         ) { "A family holds app or tenant documents, not $kind." }
         require(maxEntries > 0) { "maxEntries must be positive." }
+        require(maxAbsent > 0) { "maxAbsent must be positive." }
     }
 
     /** The id [key] names in this family. */

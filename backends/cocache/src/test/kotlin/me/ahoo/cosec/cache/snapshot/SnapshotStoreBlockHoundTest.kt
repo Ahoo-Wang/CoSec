@@ -29,7 +29,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import reactor.blockhound.BlockHound
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
@@ -119,7 +118,7 @@ class SnapshotStoreBlockHoundTest {
                 DocumentSnapshots.source(
                     node.store,
                     SnapshotCompiler { _, document -> document.revision },
-                    SnapshotOptions(revalidateInterval = Duration.ZERO),
+                    SnapshotOptions(),
                 ).use { source ->
                     val loading = onNonBlockingThread { source.load("app") }
                     loading.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).version.scoped.assert().isEqualTo(1L)

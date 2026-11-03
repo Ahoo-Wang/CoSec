@@ -46,7 +46,7 @@ class SnapshotReviewFixesTest {
     @Test
     fun coldLoadOfASeenKeyNeverInstallsAnOlderLocalCopy() {
         val metrics = RecordingMetrics()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 1)
         testSource(store, options = options, metrics = metrics).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
@@ -84,7 +84,7 @@ class SnapshotReviewFixesTest {
 
     @Test
     fun throwingLoadMetricStillAnswersTimedOutRequests() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, coldLoadTimeout = Duration.ofMillis(20))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, coldLoadTimeout = Duration.ofMillis(20))
         testSource(store, options = options, metrics = ThrowingMetrics()).use { source ->
             store.hold = true
             val answer = source.load().get(10, TimeUnit.SECONDS)
@@ -150,15 +150,21 @@ class SnapshotReviewFixesTest {
         }
     }
 
+    /**
+     * A [VirtualMachineError] while compiling installs the revision as failed (RC1-43, `SNP-8`), so requests fail closed
+     * rather than retry the compilation each; the next load compiles it again, and the key is not wedged.
+     */
     @Test
     fun virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey() {
         val compiler = FakeCompiler()
         compiler.failure = OutOfMemoryError("test")
         testSource(store, compiler = compiler, compileExecutor = null).use { source ->
             source.load().get(10, TimeUnit.SECONDS).policies.assert().isInstanceOf(DocumentState.Failed::class.java)
-            source.peek().assert().isNull()
+            source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
 
             compiler.failure = null
+            // The load after any still in flight, which may have compiled before the failure was cleared.
+            source.reload(SnapshotKey.Platform).get(10, TimeUnit.SECONDS)
             source.load().get(10, TimeUnit.SECONDS).policiesCompiled.revision.assert().isEqualTo(1)
         }
     }
@@ -179,7 +185,7 @@ class SnapshotReviewFixesTest {
 
     @Test
     fun storeThatNeverAnswersFailsTheLoadAndFreesTheKey() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, storeReadTimeout = Duration.ofMillis(50))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, storeReadTimeout = Duration.ofMillis(50))
         testSource(store, options = options).use { source ->
             store.hold = true
 

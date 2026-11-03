@@ -275,7 +275,20 @@ class ShadowReporting(reporter: ShadowReporter) : AutoCloseable {
     }
 }
 
-internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOptions = SnapshotOptions(
+/**
+ * The source's options. A `revalidate-interval` out of bounds fails startup naming the property (`SNP-6`, RC1-50): the
+ * periodic pass is the only bound on a change whose invalidation was lost, so it cannot be turned off.
+ */
+internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOptions {
+    SnapshotOptions.revalidateIntervalProblem(revalidateInterval, lagWarn, failClosed.tenants, failClosed.maxLag)?.let {
+        throw IllegalStateException("$REVALIDATE_INTERVAL_PROPERTY ($revalidateInterval) $it.")
+    }
+    return options()
+}
+
+internal const val REVALIDATE_INTERVAL_PROPERTY = "cosec.authorization.snapshot.revalidate-interval"
+
+private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions = SnapshotOptions(
     revalidateInterval = revalidateInterval,
     lagWarn = lagWarn,
     lagEscalate = lagEscalate,
