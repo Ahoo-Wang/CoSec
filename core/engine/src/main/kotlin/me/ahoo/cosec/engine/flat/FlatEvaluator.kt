@@ -437,14 +437,17 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     @Suppress("TooGenericExceptionCaught")
     private fun resource(statement: CompiledStatement): Captures? {
         var failure: Exception? = null
+        // Only glob segments use the evaluation's table: a statement without one matches through the plain calls, as
+        // before the table, one call less deep on the hot path.
+        val globs = statement.globUnits > 0
         for (pattern in statement.resources) {
             try {
                 if (!statement.captures) {
-                    if (pattern.matches(target, this)) {
+                    if (if (globs) pattern.matches(target, this) else pattern.matches(target)) {
                         return Captures.NONE
                     }
                 } else {
-                    pattern.match(target, this)?.let { return it }
+                    (if (globs) pattern.match(target, this) else pattern.match(target))?.let { return it }
                 }
             } catch (error: Exception) {
                 failure = failure ?: error
