@@ -326,13 +326,38 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **RC1-36 的偏离**：`cosec:platform-admin` 可以绑定在平台文档与平台租户自己的文档中，租户与 app 文档中的绑定编译失败（`bootstrap` 把第一位管理员绑定在平台租户文档中，拒绝它会把所有管理员锁在外面） | 2026-11-01 | [RFC 0007](rfc/0007-control-plane.md) 的 B2 实现说明、[RC 审查](security/8.0-rc-review.md) 的 Fix plan |
 | **默认按协调者的推荐推进，重要决策与维护者讨论**（重申 2026-10-28 的决定） | 2026-11-02 | 仅记在本文；维护者："默认按你推荐，重要决策跟我讨论。" |
 | **B2 第四轮审查的低级问题 R4-1–R4-6 与 RC1-51 合为一个后续 PR**，排在 CoCache 6.10.0 适配之后、批次 C 之前（协调者决定）：都不放行请求，不阻止 B2 合入 | 2026-11-02 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan |
+| **网关也不转发 `authorization` cookie**（#1194 复审 R1-4，由低级提为阻塞）：管道从这个 cookie 读 token，所以它是凭据；与其他凭据同一开关，`forward-authorization=false`（默认）时每条路由都去掉，为 `true` 时只留给接收身份的路由（IDN-7）；其他 cookie 不动 | 2026-11-03 | 维护者："按你推荐"；#1194 |
+| **外部 IdP（OIDC/JWKS、令牌内省、OIDC 登录）放到 8.1，用单独的 RFC 设计**，GA 前不做（重申 RFC 0010 Q2）：以后加入是纯新增，唯一的线上协议改动（C3）已在 GA 前完成；RC 前的公共声明归类不能收掉 RFC 0010 列出的接缝 | 2026-11-03 | 维护者："Add to roadmap"；[RFC 0010](rfc/0010-ga-extension-points.md) §1、Q2 |
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
+- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类（不收掉 RFC 0010 列出的接缝）→ 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
 - （已由 2026-10-29 的决定取代：不再逐个补做已合入 PR 的两轮审查，改为对 RC 候选提交做两轮整体审查，见 [RFC 0008 §3.9](rfc/0008-conformance-and-direct-build.md) 修订。）
+
+GA 之后（8.1），在 8.0 GA 之前不派发：
+
+- **外部身份提供者（IdP）的 RFC**，8.1 的第一份设计（2026-11-03 决定）。范围：
+  - 资源服务器模式：用 JWKS 验签，issuer 映射到租户，校验 audience，声明经平台文档里的显式映射才成为角色（[RFC 0009](rfc/0009-identity-and-credentials.md) §4.3）；
+  - 不透明 token 的内省（RFC 7662）；
+  - `cosec-login`/`cosec-social` 里的 OIDC 授权码登录。
+
+  SAML 不做，交给 Keycloak 一类的代理型 IdP。
+  - **接缝**：都是新增，见 [RFC 0010](rfc/0010-ga-extension-points.md) §1：
+    - 新的 `Authenticator` 实现；
+    - `MembershipProvider` 带声明的默认方法重载；
+    - 平台文档的可选映射字段；
+    - `RejectReason` 的新常量。
+  - **设计时要回答**：
+    - JWKS 的获取与缓存不阻塞事件循环；
+    - JWKS 不可用时 fail closed，以及已缓存密钥能用多久；
+    - 算法白名单（防算法混淆）；
+    - 拒绝 `jku`/`x5u`（防 SSRF）；
+    - 密钥轮换；
+    - 一个部署同时接受 CoSec 自己的 token 和外部 token 时怎么组合认证器；
+    - 拒绝带 `act` 的 token：这道闸门今天只在 `cosec-jwt` 的 `Jwts.toPrincipal`，要移到每个认证器都经过的地方。
+- **委托（RFC 8693 `act`）**，[RFC 0009](rfc/0009-identity-and-credentials.md) 已定在 8.1：外部 IdP 的 token exchange 是它的主要来源，两份 RFC 一起排期。
