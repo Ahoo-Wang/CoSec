@@ -465,8 +465,10 @@ without `expires-at`): a service could not bound such an identity.
 **Credentials.** The gateway forwards none of the client's credentials, no header, query parameter or cookie: from
 every request it forwards it removes the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`,
 under whatever name that gives it), the `authorization` query parameter, and the `authorization` cookie from each
-`Cookie` header, its name matched ignoring case (a header left with no cookie is not sent). A compromised service so
-never sees a token or a key it could replay at the gateway. Other cookies go downstream as they came. Set
+`Cookie` header, its name matched ignoring case (a header left with no cookie is not sent), and from the cookies a
+later filter or a `forward:` route's handler reads. A compromised service so never sees a token or a key it could
+replay at the gateway. Other cookies go downstream as they came, each pair and separator as received; a header whose
+leading `$Version` pair hides the token behind a `,` goes whole, since its other pairs would read differently. Set
 `cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or call
 other APIs on the user's behalf: the credentials then go to the routes that would receive the identity (a `lb://`
 route, or one marked `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` forwards it, and to no

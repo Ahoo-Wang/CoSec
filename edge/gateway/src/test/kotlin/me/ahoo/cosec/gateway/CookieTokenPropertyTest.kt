@@ -91,6 +91,8 @@ class CookieTokenPropertyTest {
     private val names = listOf(
         "authorization", "Authorization", "AUTHORIZATION", "aUtHoRiZaTiOn",
         "theme", "sid", "a", "authorizations", "xauthorization", "auth",
+        // RFC 2965 attributes: Netty skips `$`-named pairs only in a header that starts with `$Version` (R2-6).
+        "\$Version", "\$version", "\$Path", "\$Domain",
     )
     private val values = listOf("t", "dark", "\"quoted\"", "\"\"", "", "a b", "x=y", "\"un", "1 ")
     private val around = listOf("", "", " ", "  ", "\t")
@@ -142,6 +144,11 @@ class CookieTokenPropertyTest {
 
     @Test
     fun `no forwarded cookie header names the token, and every other cookie decodes as it did`() {
+        // The review's case: trimming the leading space made the header start with `$Version`, and Netty then dropped
+        // the `$Version` and `$Path` cookies it read before.
+        val example = listOf(" \$Version=1; authorization=t; \$Path=/; a=b")
+        forwarded(example)!!.flatMap(::strict).assert()
+            .isEqualTo(listOf("\$Version" to "1", "\$Path" to "/", "a" to "b"))
         val random = Random(20261103)
         repeat(iterations) { iteration ->
             val headers = List(random.nextInt(1, 4)) { random.header() }
@@ -154,20 +161,20 @@ class CookieTokenPropertyTest {
                     lax(header).none { isToken(it.first) }.assert().isTrue()
                     splitting(header).none(::isToken).assert().isTrue()
                 }
-                val kept = sent.orEmpty().flatMap(::lax)
-                val expected = original.flatMap(::lax).filterNot { isToken(it.first) }
-                if (headers.none { it.commas }) {
-                    kept.assert().isEqualTo(expected)
-                    sent.orEmpty().flatMap(
-                        ::strict
-                    ).assert().isEqualTo(original.flatMap(::strict).filterNot { isToken(it.first) })
-                } else {
-                    // A pair that hid the token behind a `,` went whole: what is left is still as it was, in order.
-                    var at = 0
-                    kept.forEach { cookie ->
-                        while (at < expected.size && expected[at] != cookie) at++
-                        (at < expected.size).assert().isTrue()
-                        at++
+                // Every other cookie decodes as it did, under either decoder: same names, values and order (R2-6).
+                for (decode in listOf(::lax, ::strict)) {
+                    val kept = sent.orEmpty().flatMap(decode)
+                    val expected = original.flatMap(decode).filterNot { isToken(it.first) }
+                    if (headers.none { it.commas }) {
+                        kept.assert().isEqualTo(expected)
+                    } else {
+                        // A pair that hid the token behind a `,` went whole: what is left is as it was, in order.
+                        var at = 0
+                        kept.forEach { cookie ->
+                            while (at < expected.size && expected[at] != cookie) at++
+                            (at < expected.size).assert().isTrue()
+                            at++
+                        }
                     }
                 }
                 if (original.none { it.contains("authorization", ignoreCase = true) }) {

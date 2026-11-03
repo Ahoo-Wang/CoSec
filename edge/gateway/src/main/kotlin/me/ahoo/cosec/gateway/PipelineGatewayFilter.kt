@@ -31,7 +31,12 @@ import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
 import org.springframework.core.Ordered
+import org.springframework.http.HttpCookie
 import org.springframework.http.HttpHeaders
+import org.springframework.http.server.reactive.ServerHttpRequest
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator
+import org.springframework.util.LinkedMultiValueMap
+import org.springframework.util.MultiValueMap
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import java.net.URI
@@ -98,6 +103,7 @@ class PipelineGatewayFilter(
             val route = authorized.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             // The caller's credentials go only where its identity may go, and only when asked for (RC1-5, RC1-49).
             val credentials = forwardAuthorization && route != null && receivesIdentity(route)
+            var cookiesRewritten = false
             val downstream = request.mutate()
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
@@ -107,7 +113,7 @@ class PipelineGatewayFilter(
                     }
                     if (!credentials) {
                         credentialHeaders.forEach(headers::remove)
-                        withoutCookieTokens(headers)
+                        cookiesRewritten = withoutCookieTokens(headers)
                     }
                 }
             if (!credentials) {
@@ -119,19 +125,45 @@ class PipelineGatewayFilter(
             }
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
-            chain.filter(authorized.mutate().request(downstream.build()).build())
+            val built = downstream.build()
+            val forwarded = if (cookiesRewritten) WithoutTokenCookies(built, withoutCookieToken) else built
+            chain.filter(authorized.mutate().request(forwarded).build())
         }
     }
 
-    /** Each `Cookie` header without the `authorization` cookie; one left with no cookie goes, and so does the name. */
-    private fun withoutCookieTokens(headers: HttpHeaders) {
-        val cookies = headers[HttpHeaders.COOKIE] ?: return
+    /**
+     * Each `Cookie` header without the `authorization` cookie; one left with no cookie goes, and so does the name.
+     * Whether a header changed: only then does the request handed on need its cookies to agree ([WithoutTokenCookies]).
+     */
+    private fun withoutCookieTokens(headers: HttpHeaders): Boolean {
+        val cookies = headers[HttpHeaders.COOKIE] ?: return false
         val kept = cookies.mapNotNull(withoutCookieToken)
         when {
-            kept == cookies -> Unit
+            kept == cookies -> return false
             kept.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
             else -> headers.put(HttpHeaders.COOKIE, kept)
         }
+        return true
+    }
+
+    /**
+     * [request] whose parsed cookies agree with its rewritten `Cookie` headers (R2-3 of #1194's review): Spring keeps
+     * the cookies the server parsed from the headers as received, so a later filter, or a `forward:` route's local
+     * handler, would still read the token from them. A cookie goes when its pair, as the rule rewriting the headers reads
+     * it ([withoutCookieToken]), would go. Built only for a request whose headers were rewritten.
+     */
+    private class WithoutTokenCookies(
+        request: ServerHttpRequest,
+        withoutCookieToken: (String) -> String?,
+    ) : ServerHttpRequestDecorator(request) {
+        private val cookies: MultiValueMap<String, HttpCookie> = LinkedMultiValueMap<String, HttpCookie>().apply {
+            request.cookies.forEach { (name, values) ->
+                val kept = values.filter { withoutCookieToken("$name=${it.value}") != null }
+                if (kept.isNotEmpty()) put(name, kept)
+            }
+        }
+
+        override fun getCookies(): MultiValueMap<String, HttpCookie> = cookies
     }
 
     override fun getOrder(): Int = AUTHORIZATION_GATEWAY_FILTER_ORDER

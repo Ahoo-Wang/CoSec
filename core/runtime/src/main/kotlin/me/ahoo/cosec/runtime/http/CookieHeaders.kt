@@ -19,25 +19,35 @@ internal object CookieHeaders {
      * [header], one `Cookie` header value, without the cookies named [name], ignoring case and the whitespace around
      * the name: removing too much is safe, a backend that reads the header another way must not find it. A pair is what
      * lies between two `;`, as decoders read it (a value ends at the next `;`, quoted or not); a pair one of whose
-     * `,`-separated parts names [name] goes whole, for decoders that also separate cookies at `,`. The pairs kept are
-     * written as received, less the whitespace before them that decoders skip, and joined by `; `, so each decodes as
-     * it did. Null when none is left; [header] itself when none goes.
+     * `,`-separated parts names [name] goes whole, for decoders that also separate cookies at `,`.
+     *
+     * Only the text of the pairs that go is removed: every `;` stays, and the pairs kept go on exactly as they came,
+     * whitespace included, so each decodes as it did (R2-6 of #1194's review). Netty reads a header that starts with
+     * `$Version` from just after its first `;`, skipping that pair: a header that came to start with `$Version`, or
+     * lost the `;` after it, would decode its `$`-named pairs otherwise. So a header whose leading `$Version` pair goes
+     * (it hid [name] behind a `,`) goes whole: no rewrite would keep how Netty reads the rest. Null then, and when only
+     * separators and whitespace are left; [header] itself when no pair goes.
      */
     fun without(header: String, name: String): String? {
         if (!header.contains(name, ignoreCase = true)) {
             return header
         }
         val pairs = header.split(';')
-        val kept = pairs.filterNot { pair ->
+        val named = pairs.map { pair ->
             pair.split(',').any { part -> part.substringBefore('=').trim().equals(name, ignoreCase = true) }
         }
-        if (kept.size == pairs.size) {
+        if (named.none { it }) {
             return header
         }
-        val written = kept.map { it.trimStart(*SKIPPED) }.filter { it.isNotEmpty() }
-        return if (written.isEmpty()) null else written.joinToString("; ")
+        if (pairs.indices.all { named[it] || pairs[it].isBlank() }) {
+            return null
+        }
+        if (named.first() && header.startsWith(RFC2965_VERSION, ignoreCase = true)) {
+            return null
+        }
+        return pairs.indices.joinToString(";") { if (named[it]) "" else pairs[it] }
     }
 
-    /** What decoders skip before a pair (Netty's `ServerCookieDecoder`, RFC 6265 §5.4's `OWS`): never part of it. */
-    private val SKIPPED = charArrayOf(' ', '\t', '\n', '\u000B', '\u000C', '\r')
+    /** What Netty's `ServerCookieDecoder` reads at the very start of a header as RFC 2965's, case ignored. */
+    private const val RFC2965_VERSION = "\$Version"
 }

@@ -51,6 +51,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
+import org.springframework.http.HttpCookie
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.server.reactive.ServerHttpRequest
@@ -240,7 +241,7 @@ class PipelineGatewayFilterTest {
         stripped.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
         stripped.headers["X-Service-Key"].assert().isNull()
         // R1-4: the cookie the pipeline reads a token from goes; a header left with no cookie goes too.
-        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
+        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark;"))
         // Not a credential header of this pipeline: it reads keys from the renamed one only.
         stripped.headers["X-API-Key"].assert().isEqualTo(listOf("other"))
         stripped.uri.rawQuery.assert().isEqualTo("page=2")
@@ -257,7 +258,7 @@ class PipelineGatewayFilterTest {
             val partner = sent(keeping, request(), route)
             partner.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
             partner.headers["X-Service-Key"].assert().isNull()
-            partner.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
+            partner.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark;"))
             partner.uri.rawQuery.assert().isEqualTo("page=2")
         }
         sent(keeping, request(), route("https://partner.example", identity = true))
@@ -275,6 +276,37 @@ class PipelineGatewayFilterTest {
         raw.rawPath.assert().isEqualTo("/a%2Fb")
         raw.rawQuery.assert().isEqualTo("x=%E4%B8%AD&y=中")
         raw.rawFragment.assert().isEqualTo("frag")
+    }
+
+    /**
+     * R2-3 of #1194's review: what a later filter, or a `forward:` route's local handler, reads as the request's cookies
+     * agrees with the `Cookie` headers handed on: Spring keeps the cookies the server parsed, so without the decorator
+     * they would still hold the token. Under each switch value, and on a route that does not receive the identity.
+     */
+    @Test
+    fun `the cookies a later filter reads agree with the headers handed on`() {
+        val request = {
+            get("/orders").cookie(HttpCookie("authorization", "c"), HttpCookie("theme", "dark"))
+        }
+        fun cookies(sent: org.springframework.http.server.reactive.ServerHttpRequest) =
+            sent.cookies.mapValues { (_, values) -> values.map { it.value } }
+        val stripping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        val stripped = sent(stripping, request())
+        cookies(stripped).assert().isEqualTo(mapOf("theme" to listOf("dark")))
+        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
+        val keeping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()), forwardAuthorization = true)
+        cookies(
+            sent(keeping, request())
+        ).assert().isEqualTo(mapOf("authorization" to listOf("c"), "theme" to listOf("dark")))
+        cookies(
+            sent(keeping, request(), route("https://partner.example"))
+        ).assert().isEqualTo(mapOf("theme" to listOf("dark")))
+        // A pair the header rewrite drops whole goes from the cookies too, whatever the server parsed it as.
+        val hidden = sent(stripping, get("/orders").cookie(HttpCookie("a", "1, authorization=x"), HttpCookie("b", "2")))
+        cookies(hidden).assert().isEqualTo(mapOf("b" to listOf("2")))
+        // Nothing to rewrite: the request is handed on as it was, its cookies untouched.
+        cookies(sent(stripping, get("/orders").cookie(HttpCookie("theme", "dark")))).assert()
+            .isEqualTo(mapOf("theme" to listOf("dark")))
     }
 
     /** SCP-2, RC1-6: each route's app is its requests' host app, ahead of the gateway's; the client's only without. */
