@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.servlet
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -38,9 +39,11 @@ import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
+import java.util.Collections
 import java.util.concurrent.CompletableFuture
 
 /** The servlet bridge (RFC 0006 §7.3): writes the outcome it is given and always clears the holder. */
@@ -100,6 +103,50 @@ class PipelineServletFilterTest {
             )
         }
         onEventLoop.get().assert().isInstanceOf(IllegalStateException::class.java)
+    }
+
+    /** IDN-9, RC1-18: the handler of an enforcing host never sees a `CoSec-Identity` a client sent. */
+    @Test
+    fun aPermitHandsOnNoClientIdentity() {
+        val request = MockHttpServletRequest("GET", "/orders")
+        request.addHeader("CoSec-Identity", "forged")
+        request.addHeader("X-Other", "kept")
+        var handed: HttpServletRequest? = null
+        PipelineServletFilter(pipeline(permit)).doFilter(request, MockHttpServletResponse()) { req, _ ->
+            handed = req as HttpServletRequest
+        }
+        val seen = handed!!
+        seen.getHeader("cosec-identity").assert().isNull()
+        Collections.list(seen.getHeaders("CoSec-Identity")).assert().isEmpty()
+        Collections.list(seen.headerNames).map { it.lowercase() }.assert().contains("x-other")
+            .doesNotContain("cosec-identity")
+        seen.getHeader("X-Other").assert().isEqualTo("kept")
+        seen.getIntHeader("CoSec-Identity").assert().isEqualTo(-1)
+        seen.getDateHeader("CoSec-Identity").assert().isEqualTo(-1)
+        seen.getSecurityContext().assert().isNotNull()
+        // Without one, the request is handed on as it came: nothing to wrap.
+        val plain = MockHttpServletRequest("GET", "/orders")
+        PipelineServletFilter(pipeline(permit)).doFilter(plain, MockHttpServletResponse()) { req, _ ->
+            handed = req as HttpServletRequest
+        }
+        handed.assert().isSameAs(plain)
+    }
+
+    /** What the wrapper answers for a header the gate sets, which no gate of CoSec does on a servlet host today. */
+    @Test
+    fun aForwardedValueReplacesTheClients() {
+        val request = MockHttpServletRequest("GET", "/orders")
+        request.addHeader("X-Set", "client")
+        request.addHeader("X-Number", "1")
+        val wrapped = ForwardedHeadersRequest.of(request, mapOf("x-set" to "gate", "X-Number" to "2", "X-New" to "n"))
+        wrapped.getHeader("X-Set").assert().isEqualTo("gate")
+        Collections.list(wrapped.getHeaders("X-Set")).assert().containsExactly("gate")
+        wrapped.getIntHeader("x-number").assert().isEqualTo(2)
+        wrapped.getHeader("X-New").assert().isEqualTo("n")
+        Collections.list(wrapped.headerNames).map { it.lowercase() }.sorted().assert()
+            .containsExactly("x-new", "x-number", "x-set")
+        assertThrownBy<IllegalArgumentException> { wrapped.getDateHeader("X-Set") }
+        wrapped.getHeader("X-Absent").assert().isNull()
     }
 
     @Test

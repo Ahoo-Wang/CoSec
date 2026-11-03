@@ -119,6 +119,23 @@ abstract class ReactivePipelineBridge(
     }
 }
 
+/**
+ * [exchange] with [Outcome.forward] applied to the request the chain sees: the headers the gate sets on it or removes,
+ * such as a `CoSec-Identity` a client sent to an enforcing host (RC1-18). [exchange] itself when that changes nothing,
+ * so a request without such a header is not copied.
+ */
+internal fun forwarded(exchange: ServerWebExchange, outcome: Outcome): ServerWebExchange {
+    val headers = exchange.request.headers
+    if (outcome.forward.none { (name, value) -> value != null || headers.containsHeader(name) }) {
+        return exchange
+    }
+    return exchange.mutate().request {
+        it.headers { mutable ->
+            outcome.forward.forEach { (name, value) -> if (value == null) mutable.remove(name) else mutable.set(name, value) }
+        }
+    }.build()
+}
+
 /** The WebFlux filter over the coroutine pipeline (RFC 0006 §7.3). */
 class PipelineWebFilter(
     pipeline: RequestGate,
@@ -129,7 +146,7 @@ class PipelineWebFilter(
     WebFilter,
     Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
-        filterInternal(exchange) { authorized, _ -> chain.filter(authorized) }
+        filterInternal(exchange) { authorized, outcome -> chain.filter(forwarded(authorized, outcome)) }
 
     override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
 

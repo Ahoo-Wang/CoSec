@@ -18,6 +18,7 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletRequestWrapper
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.context.SecurityContext
@@ -34,6 +35,7 @@ import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import reactor.core.scheduler.Schedulers
 import java.util.Collections
+import java.util.Enumeration
 
 /** Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once. */
 internal object ServletHttpFactsReader {
@@ -85,7 +87,7 @@ class PipelineServletFilter(
         val outcome = runBlocking(BridgeContextContributor.capture(contributors)) { pipeline.evaluate(facts) }
         try {
             if (write(servletRequest, servletResponse, outcome)) {
-                chain.doFilter(request, response)
+                chain.doFilter(ForwardedHeadersRequest.of(servletRequest, outcome.forward), response)
             }
         } finally {
             SecurityContextHolder.remove()
@@ -108,6 +110,65 @@ class PipelineServletFilter(
         SecurityContextHolder.setContext(securityContext)
         request.setSecurityContext(securityContext)
         return true
+    }
+}
+
+/**
+ * The request the chain sees, with [Outcome.forward] applied: the headers the gate sets on it, or removes, such as a
+ * `CoSec-Identity` a client sent to an enforcing host (RC1-18). Header names match ignoring case, as servlet
+ * containers match them.
+ */
+internal class ForwardedHeadersRequest private constructor(
+    request: HttpServletRequest,
+    private val forward: Map<String, String?>,
+) : HttpServletRequestWrapper(request) {
+    /** Whether [name] is one of [forward]'s, and its value there: null when the gate removes it. */
+    private fun forwarded(name: String): Pair<Boolean, String?> {
+        for ((forwardedName, value) in forward) {
+            if (forwardedName.equals(name, ignoreCase = true)) {
+                return true to value
+            }
+        }
+        return false to null
+    }
+
+    override fun getHeader(name: String): String? {
+        val (named, value) = forwarded(name)
+        return if (named) value else super.getHeader(name)
+    }
+
+    override fun getHeaders(name: String): Enumeration<String> {
+        val (named, value) = forwarded(name)
+        return if (named) Collections.enumeration(listOfNotNull(value)) else super.getHeaders(name)
+    }
+
+    override fun getHeaderNames(): Enumeration<String> {
+        val names = Collections.list(super.getHeaderNames()).filterNot { forwarded(it).first }
+        return Collections.enumeration(names + forward.filterValues { it != null }.keys)
+    }
+
+    override fun getIntHeader(name: String): Int {
+        val (named, value) = forwarded(name)
+        return if (named) value?.toInt() ?: -1 else super.getIntHeader(name)
+    }
+
+    override fun getDateHeader(name: String): Long {
+        val (named, value) = forwarded(name)
+        return when {
+            !named -> super.getDateHeader(name)
+            value == null -> -1
+            else -> throw IllegalArgumentException("Header [$name] is not a date.")
+        }
+    }
+
+    companion object {
+        /** [request] with [forward] applied; [request] itself when that changes nothing, so it is not wrapped. */
+        fun of(request: HttpServletRequest, forward: Map<String, String?>): HttpServletRequest =
+            if (forward.none { (name, value) -> value != null || request.getHeader(name) != null }) {
+                request
+            } else {
+                ForwardedHeadersRequest(request, forward)
+            }
     }
 }
 

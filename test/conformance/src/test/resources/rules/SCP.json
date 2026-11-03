@@ -12,13 +12,16 @@
     },
     {
       "id": "SCP-2",
-      "source": "RFC 0004 §4.6",
-      "statement": "When the host is configured with an app, a different declared app is Rejected(APP_MISMATCH), and without a declaration the host's app applies (C4); without a host app the declared app applies.",
+      "source": "RFC 0004 §4.6 (RC1-6)",
+      "statement": "When the host has an app, a different declared app is Rejected(APP_MISMATCH), and without a declaration the host's app applies (C4); only without a host app does the declared app apply. On a gateway the host app of a route's requests is the route's metadata cosec-app-id, ahead of cosec.authorization.scope.app-id.",
       "level": "engine",
       "properties": [
         "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential"
       ],
-      "pending": null
+      "pending": null,
+      "guards": [
+        "gateway:PipelineGatewayFilterTest#two routes of different apps are each their own app"
+      ]
     },
     {
       "id": "SCP-3",
@@ -32,13 +35,15 @@
     },
     {
       "id": "SCP-4",
-      "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1",
-      "statement": "When the header and the query parameter of the same CoSec-* parameter differ, the request cannot be read unambiguously and is answered 400.",
+      "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1 (RC1-16)",
+      "statement": "When the values of one CoSec-* parameter differ, between the header and the query parameter or within either, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
       "level": "pipeline",
       "guards": [
         "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
         "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
-        "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike"
+        "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "runtime:CoSecParametersTest#aBlankValueBesideAValueIsAmbiguous",
+        "runtime:CoSecParametersTest#unicodeSpacesAreAValue"
       ],
       "pending": null
     },
@@ -66,8 +71,8 @@
     },
     {
       "id": "SCP-7",
-      "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26)",
-      "statement": "A declared app that cannot be an app id (blank, *, containing ':' or longer than 128 characters) is Rejected(APP_MISMATCH), with or without a host app.",
+      "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26; RC1-15)",
+      "statement": "A declared app that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app.",
       "level": "engine",
       "guards": [
         "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app"

@@ -30,7 +30,10 @@ class HttpFacts(
     val cookies: Cookies,
     /** The peer address, before any forwarded-for resolution. */
     val remoteAddress: String,
-    /** The app the host is configured for (RFC 0004 §4.6); for the gateway, the route's. */
+    /**
+     * The app the host serves (RFC 0004 §4.6, [HostScope]): on a gateway, the route's metadata `cosec-app-id`, else
+     * `cosec.authorization.scope.app-id` (RC1-6).
+     */
     val host: HostScope,
     /** What the host knows about the request besides HTTP, such as the gateway's route id. */
     val requestAttributes: Map<String, String> = emptyMap(),

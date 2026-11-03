@@ -278,8 +278,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         if (cancelAt != null) {
             return cancelled(pipeline, facts, reached)
         }
-        node.get("gateway")?.let { return throughGateway(pipeline, http, it) }
-        return answered(runBlocking { pipeline.evaluate(facts) })
+        node.get("gateway")?.let { return throughGateway(pipeline, http, facts.host, it) }
+        return answered(runBlocking { pipeline.evaluate(facts) }, node.has("identity"))
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -319,37 +319,50 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         caller.cancelAndJoin()
         val answer = outcome
         when {
-            answer != null -> answered(answer)
+            answer != null -> answered(answer, false)
             cancelled -> Outcome.Cancelled
             else -> error("The pipeline neither answered nor was cancelled.")
         }
     }
 
     /**
-     * `"gateway": { "route": { "identity": false } }`: the request goes through a Spring Cloud Gateway host's own filters,
-     * the identity strip, the pipeline's gateway filter, and the last hop, and the outcome's `identity` is what the
-     * backend would receive. The route's metadata may opt it out of identity forwarding.
+     * `"gateway": { "route": { "uri": "lb://backend", "identity": false, "app": "billing" }, "forwardAuthorization": true }`:
+     * the request goes through a Spring Cloud Gateway host's own filters, the identity strip, the pipeline's gateway
+     * filter, and the last hop, and the outcome's `identity` is what the backend would receive, and its `credentials`
+     * which of the caller's credentials reach it: the `authorization` and API key headers by name, and
+     * `query:authorization`. The route goes to `uri` (`http://backend` when absent); its metadata may say whether it
+     * receives the identity (`identity`, RC1-49) and name its app (`app`, `cosec-app-id`, RC1-6). The host app of the
+     * gateway is `http.hostApp`.
      */
-    private fun throughGateway(pipeline: Pipeline, http: JsonNode, gateway: JsonNode): Outcome {
-        gateway.only("route")
+    private fun throughGateway(pipeline: Pipeline, http: JsonNode, host: HostScope, gateway: JsonNode): Outcome {
+        gateway.only("route", "forwardAuthorization")
+        val query = http.get("query")?.textOrNull()?.let { "?$it" }.orEmpty()
         val request = MockServerHttpRequest.method(
             HttpMethod.valueOf(http.get("method")?.text() ?: "GET"),
-            URI.create(http.get("path")?.text() ?: "/orders"),
+            URI.create((http.get("path")?.text() ?: "/orders") + query),
         )
         http.get("headers")?.fields().orEmpty().forEach { (name, value) ->
             request.header(name, *(if (value.isArray) value.strings() else listOf(value.text())).toTypedArray())
         }
         val exchange = MockServerWebExchange.from(request)
-        val route = Route.async().id("scenario").uri(URI.create("http://backend")).predicate { true }
-        gateway.get("route")?.let {
-            it.only("identity")
-            route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.required("identity").booleanValue())
-        }
+        val routeNode = gateway.get("route") ?: EMPTY
+        routeNode.only("identity", "uri", "app")
+        val route = Route.async().id("scenario").uri(URI.create(routeNode.get("uri")?.text() ?: "http://backend"))
+            .predicate { true }
+        routeNode.get("identity")?.let { route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.booleanValue()) }
+        routeNode.get("app")?.let { route.metadata(PipelineGatewayFilter.APP_METADATA, it.text()) }
         exchange.attributes[GATEWAY_ROUTE_ATTR] = route.build()
+        val filter = PipelineGatewayFilter(
+            pipeline,
+            host = host,
+            forwardAuthorization = gateway.get("forwardAuthorization")?.bool() ?: false,
+        )
         var sent: HttpHeaders? = null
+        var sentQuery: String? = null
         IdentityStripFilter().filter(exchange) { stripped ->
-            PipelineGatewayFilter(pipeline).filter(stripped) { routed ->
+            filter.filter(stripped) { routed ->
                 sent = HttpHeadersFilter.filterRequest(listOf(IdentityHeadersFilter()), routed)
+                sentQuery = routed.request.uri.rawQuery
                 Mono.empty()
             }
         }.block(java.time.Duration.ofSeconds(5))
@@ -359,11 +372,25 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             val type = CoSecJson.mapper.readTree(body).get("type")?.text()?.substringAfterLast('/')
             return Outcome.Answered(exchange.response.statusCode?.value() ?: 0, false, type)
         }
-        return Outcome.Answered(200, true, null, true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode))
+        val credentials = pipeline.credentialHeaders.filter { headers.containsHeader(it) }.map { it.lowercase() } +
+            listOfNotNull("query:authorization".takeIf { pipeline.withoutQueryToken(sentQuery) != sentQuery })
+        return Outcome.Answered(
+            200,
+            true,
+            null,
+            true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode),
+            credentials.sorted(),
+        )
     }
 
-    private fun answered(outcome: PipelineOutcome): Outcome =
-        Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug, forwarded(outcome))
+    /** The outcome; with [gateway], a gateway's pipeline that forwards identities, also what it forwards. */
+    private fun answered(outcome: PipelineOutcome, gateway: Boolean): Outcome =
+        Outcome.Answered(
+            outcome.status,
+            outcome.proceed,
+            outcome.problem?.type?.slug,
+            if (gateway) forwarded(outcome) else false to null,
+        )
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
         node.only(
@@ -683,7 +710,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     /**
      * What a gateway forwards, when it forwards identities: `{ "tenant", "sub", "app", "space", "roles", "jti" }`, or
-     * null when it strips the header; absent when the pipeline forwards nothing.
+     * null when it strips the header; absent when the pipeline forwards nothing. Only for a pipeline with an issuer: every
+     * permit of the pipeline strips a client's header (RC1-18), which the adapters' parity test checks.
      */
     private fun forwarded(outcome: PipelineOutcome): Pair<Boolean, JsonNode?> {
         if (IdentityCodec.HEADER !in outcome.forward) {

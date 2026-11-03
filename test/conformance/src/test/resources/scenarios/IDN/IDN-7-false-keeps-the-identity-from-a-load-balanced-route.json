@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "IDN-7"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A route to lb://backend whose metadata says cosec-identity: false: false always wins, so its backend receives no identity.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": null
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://backend",
+      "identity": false
+    }
+  }
+}

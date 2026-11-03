@@ -105,6 +105,23 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     private val rateLimitFailures = RateLimitFailures()
 
     /**
+     * The request headers this pipeline reads a credential from: `Authorization` and the API key header
+     * (`cosec.pipeline.api-key-header`). With the `authorization` query parameter ([withoutQueryToken]), what a gateway
+     * keeps from a route that may not receive the caller's credentials (RC1-5). The `authorization` cookie is not
+     * among them: cookies belong to the browser.
+     */
+    @InternalCoSecApi
+    val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)
+
+    /**
+     * [rawQuery] without its `authorization` parameters, however their names are encoded or cased; null when nothing is
+     * left, and [rawQuery] itself when it has none (RC1-5). Whether or not this pipeline reads a token there
+     * (`cosec.pipeline.allow-query-token`), a backend might.
+     */
+    @InternalCoSecApi
+    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, AUTHORIZATION)
+
+    /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
      * everything else, a defect included, becomes one. An [Error] propagates too: the host answers it (§7.4).
      */
@@ -428,13 +445,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * At a gateway that forwards the verified identity: what [outcome] tells the service behind, always naming the
-     * header, so whatever the client sent is never forwarded. The identity on a permit with a principal unless the
-     * route opts out ([IdentityIssuer.FORWARD_ATTRIBUTE]); otherwise none. An identity too large to forward fails the
-     * request closed (500).
+     * header, so whatever the client sent is never forwarded. The identity on a permit with a principal, only to a route
+     * the gateway marks as receiving it ([IdentityIssuer.FORWARD_ATTRIBUTE] `true`, RC1-49); otherwise none, so a
+     * request no gateway route marks forwards nothing. An identity too large to forward fails the request closed (500).
      */
     private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
         val security = outcome.security
-        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "false") {
+        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "true") {
             return StatusMapping.forwarding(outcome, null)
         }
         return try {

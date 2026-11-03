@@ -32,7 +32,11 @@ class ScopeSubject(val tenant: TenantId, val authenticated: Boolean, val members
 /** The scope the client asks for, from `CoSec-App-Id` and `CoSec-Space-Id`. Empty means not declared. */
 class DeclaredScope(val app: String, val space: String)
 
-/** The app the host is configured for; for the gateway, the route's. Null when the host does not say. */
+/**
+ * The app the host serves (RFC 0004 §4.6): on a gateway, the route's metadata `cosec-app-id`, else
+ * `cosec.authorization.scope.app-id`; on any other host, that property (RC1-6). Null when neither names one: only then
+ * does the client's declared app apply.
+ */
 class HostScope(val app: AppId?) {
     init {
         require(app == null || ScopeResolver.isValidAppId(app.value)) { "Host app id [${app?.value}] is not valid." }
@@ -52,8 +56,8 @@ sealed interface ScopeResolution {
  * `model/` next to the internal constructor of [Scope].
  *
  * - Tenant: the subject's. An anonymous subject is always in [TenantId.DEFAULT] and has no roles, whatever it is given.
- * - App: the host's, when it has one; a declared app that differs is [ScopeResolution.Rejected.Reason.APP_MISMATCH].
- *   Otherwise the declared one, as in 7.x. A declared app that cannot be an app id (see [isValidAppId]) is
+ * - App: the host's ([HostScope]: a gateway route's, else the configured one), when it has one; a declared app that
+ *   differs is [ScopeResolution.Rejected.Reason.APP_MISMATCH]. Otherwise the declared one, as in 7.x. A declared app that cannot be an app id (see [isValidAppId]) is
  *   [ScopeResolution.Rejected.Reason.APP_MISMATCH] too, whether or not the host has an app.
  * - Space: an empty declaration is [SpaceId.DEFAULT]. Any other space needs at least one role there, or it is
  *   [ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER]: falling back to the default space would let the backend act in a
@@ -81,10 +85,12 @@ object ScopeResolver {
 
     /**
      * Whether [app] can name an app: not blank, not [Match.WILDCARD], no `:` (it separates document key parts, as in
-     * `SnapshotKey.App`) and at most [MAX_APP_ID_LENGTH] characters.
+     * `SnapshotKey.App`), no control character (an app id reaches plain-text log lines, which it must not forge, RC1-15)
+     * and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id.
      */
     fun isValidAppId(app: String): Boolean =
-        app.isNotBlank() && app != Match.WILDCARD && !app.contains(':') && app.length <= MAX_APP_ID_LENGTH
+        app.isNotBlank() && app != Match.WILDCARD && !app.contains(':') && app.length <= MAX_APP_ID_LENGTH &&
+            app.none { it.isISOControl() }
 
     fun resolve(subject: ScopeSubject, declared: DeclaredScope, host: HostScope): ScopeResolution {
         val hostApp = host.app

@@ -14,6 +14,8 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -63,6 +65,46 @@ class SuspendingSnapshotSourceTest {
         withApp.hashCode().assert().isEqualTo(ViewKey.of(scope("shop", "admin"), blocked = false).hashCode())
         withApp.assert().isNotEqualTo(ViewKey.BLOCKED)
         withApp.toString().assert().isEqualTo("ViewKey(tenant=tenant-a, app=shop)")
+    }
+
+    /** RC1-17: the tenant's own bindings of an app's permission policies need the app's document, roles or not. */
+    @Test
+    fun aTenantThatBindsAnAppsPolicyNeedsItsDocument() {
+        val needing = CompiledDocument.tenant(tenant, emptyList(), emptyList(), boundApps = setOf("shop"))
+        val plain = CompiledDocument.tenant(tenant, emptyList(), emptyList())
+        val roleless = ViewKey.of(scope("shop"), blocked = false)
+        roleless.app.assert().isNull()
+        roleless.withAppFor(scope("shop"), needing).assert().isEqualTo(ViewKey.of(scope("shop", "admin"), false))
+        roleless.withAppFor(scope("shop"), plain).assert().isNull()
+        roleless.withAppFor(scope("shop"), null).assert().isNull()
+        ViewKey.of(scope("other"), blocked = false).withAppFor(scope("other"), needing).assert().isNull()
+        ViewKey.of(scope(""), blocked = false).withAppFor(scope(""), needing).assert().isNull()
+        ViewKey.of(scope("shop", "admin"), blocked = false).withAppFor(scope("shop", "admin"), needing).assert().isNull()
+        ViewKey.BLOCKED.withAppFor(scope("shop"), needing).assert().isNull()
+    }
+
+    @Test
+    fun theViewOfATenantThatNeedsTheAppHasIt() = runTest {
+        val needing = CompiledDocument.tenant(tenant, emptyList(), emptyList(), boundApps = setOf("shop"))
+        val peeked = ArrayList<ViewKey>()
+        val loaded = ArrayList<ViewKey>()
+        val views = object : SnapshotViews {
+            fun view(key: ViewKey) = SnapshotView(
+                CompiledDocument.platform(emptyList(), emptyList()),
+                key.app?.let { CompiledDocument.app(it, emptyList(), emptyList()) },
+                needing,
+            )
+
+            override fun peek(key: ViewKey): SnapshotView? = view(key).takeIf { key.app == null }.also { peeked += key }
+
+            override fun load(key: ViewKey): CompletableFuture<SnapshotView> =
+                CompletableFuture.completedFuture(view(key)).also { loaded += key }
+        }
+        val view = SuspendingSnapshotSource(views).view(scope("shop"), blocked = false)
+        view.app!!.owner.assert().isEqualTo("shop")
+        peeked.map { it.app?.value }.assert().containsExactly(null, "shop")
+        loaded.map { it.app?.value }.assert().containsExactly("shop")
+        SuspendingSnapshotSource(views).view(scope("other"), blocked = false).app.assert().isNull()
     }
 
     @Test

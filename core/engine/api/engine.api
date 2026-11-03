@@ -103,6 +103,7 @@ public final class me/ahoo/cosec/engine/flat/CompiledDocument {
 	public final fun getOwner ()Ljava/lang/String;
 	public final fun getRateLimits ()Ljava/util/List;
 	public final fun isBreakGlass (Lme/ahoo/cosec/model/decision/BindingRef;)Z
+	public final fun needsApp (Ljava/lang/String;)Z
 }
 
 public final class me/ahoo/cosec/engine/flat/CompiledDocument$Companion {
@@ -110,8 +111,8 @@ public final class me/ahoo/cosec/engine/flat/CompiledDocument$Companion {
 	public static synthetic fun app-oi15snw$default (Lme/ahoo/cosec/engine/flat/CompiledDocument$Companion;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
 	public final fun platform (Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
 	public static synthetic fun platform$default (Lme/ahoo/cosec/engine/flat/CompiledDocument$Companion;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
-	public final fun tenant-0z56MyY (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
-	public static synthetic fun tenant-0z56MyY$default (Lme/ahoo/cosec/engine/flat/CompiledDocument$Companion;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
+	public final fun tenant-QX5skPM (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ljava/util/Set;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
+	public static synthetic fun tenant-QX5skPM$default (Lme/ahoo/cosec/engine/flat/CompiledDocument$Companion;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ljava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
 }
 
 public final class me/ahoo/cosec/engine/flat/CompiledPolicy {

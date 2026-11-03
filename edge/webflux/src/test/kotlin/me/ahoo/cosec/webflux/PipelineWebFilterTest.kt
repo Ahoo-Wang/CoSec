@@ -93,6 +93,29 @@ class PipelineWebFilterTest {
         exchange.response.headers.getFirst("CoSec-Request-Id").assert().isNotNull()
     }
 
+    /** IDN-9, RC1-18: the handler of an enforcing host never sees a `CoSec-Identity` a client sent. */
+    @Test
+    fun aPermitHandsOnNoClientIdentity() {
+        val forged = MockServerWebExchange.from(
+            MockServerHttpRequest.get("/orders").header("CoSec-Identity", "forged").header("X-Other", "kept")
+        )
+        var handed: org.springframework.http.HttpHeaders? = null
+        PipelineWebFilter(pipeline(permit)).filter(forged) { authorized ->
+            handed = authorized.request.headers
+            Mono.empty()
+        }.block(Duration.ofSeconds(5))
+        handed!!.containsHeader("CoSec-Identity").assert().isFalse()
+        handed!!.getFirst("X-Other").assert().isEqualTo("kept")
+        // Without one, the request is handed on as it came: nothing to copy.
+        val plain = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
+        var request: org.springframework.http.server.reactive.ServerHttpRequest? = null
+        PipelineWebFilter(pipeline(permit)).filter(plain) { authorized ->
+            request = authorized.request
+            Mono.empty()
+        }.block(Duration.ofSeconds(5))
+        request.assert().isSameAs(plain.request)
+    }
+
     @Test
     fun aDenyWritesTheEncodedProblem() {
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))

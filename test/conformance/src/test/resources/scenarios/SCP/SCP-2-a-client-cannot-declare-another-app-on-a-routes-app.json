@@ -1,0 +1,87 @@
+{
+  "rules": [
+    "SCP-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RC1-6: on a route of billing, alice declares CoSec-App-Id: shop to step around billing's DENYs: the route's app is the host's, so another declared app is rejected.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    },
+    "apps": {
+      "billing": {
+        "policies": [
+          {
+            "id": "perm:billing/no-reads",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:clerk",
+            "subject": {
+              "role": "clerk"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm:billing/no-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/invoices",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-App-Id": "shop"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 403,
+    "type": "scope-rejected"
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://billing",
+      "app": "billing"
+    }
+  }
+}

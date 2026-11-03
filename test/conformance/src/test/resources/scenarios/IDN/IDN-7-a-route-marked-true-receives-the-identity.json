@@ -1,0 +1,72 @@
+{
+  "rules": [
+    "IDN-7"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice is permitted on a route to https://orders.internal whose metadata says cosec-identity: true: the route opted in, so its backend receives the verified identity.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": {
+      "tenant": "acme",
+      "sub": "alice",
+      "app": "",
+      "space": "",
+      "jti": "t1",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "gateway": {
+    "route": {
+      "uri": "https://orders.internal",
+      "identity": true
+    }
+  }
+}

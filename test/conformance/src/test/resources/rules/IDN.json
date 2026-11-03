@@ -57,6 +57,41 @@
         "jwt:JwtTokenVerifierTest#refreshingADelegationTokenIsRefused",
         "runtime:TokenAuthenticatorTest#rejectedTokensNameWhy"
       ]
+    },
+    {
+      "id": "IDN-7",
+      "source": "RFC 0006 §7.3 (RC1-49)",
+      "statement": "A gateway forwards the verified CoSec-Identity only to a route that receives it: one whose metadata cosec-identity is exactly true, or one without that metadata whose URI is a registered service (lb://, lb:ws://). Metadata false, or any other value, keeps it from the route whatever its URI, and so does a request no route marks: such a route's backend receives no identity.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "gateway:PipelineGatewayFilterTest#only a load-balanced route, or one marked true, receives the identity",
+        "runtime:IdentityForwardingTest#a request no route marks as receiving the identity forwards none"
+      ]
+    },
+    {
+      "id": "IDN-8",
+      "source": "RFC 0006 §7.3 (RC1-5)",
+      "statement": "A gateway forwards none of the caller's credentials downstream unless cosec.gateway.identity.forward-authorization is on, and then only to a route that receives the identity (IDN-7): not the Authorization header, not the API key header under the name cosec.pipeline.api-key-header gives it, and not the authorization query parameter, however its name is encoded or cased.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "gateway:PipelineGatewayFilterTest#the caller's credentials stay at the gateway unless asked for, and then go only where the identity goes",
+        "runtime:QueryParametersTest#the authorization parameter goes, however its name is written"
+      ]
+    },
+    {
+      "id": "IDN-9",
+      "source": "RFC 0006 §7.3 (RC1-18)",
+      "statement": "On a host that decides with policies (cosec.pipeline.mode=enforce), no adapter hands a handler a CoSec-Identity header a client sent: every permit of the pipeline strips it, and WebMvc, WebFlux and the gateway apply that alike. A service behind a gateway (mode gateway) keeps the header its gateway sent.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "spring-boot:WebAdapterParityTest#the three adapters hand on no client identity",
+        "webflux:PipelineWebFilterTest#aPermitHandsOnNoClientIdentity",
+        "webmvc:PipelineServletFilterTest#aPermitHandsOnNoClientIdentity",
+        "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none"
+      ]
     }
   ]
 }

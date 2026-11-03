@@ -13,7 +13,9 @@
 
 package me.ahoo.cosec.gateway
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
@@ -30,8 +32,8 @@ import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
 import org.springframework.core.Ordered
-import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
+import org.springframework.web.util.UriComponentsBuilder
 import reactor.core.publisher.Mono
 
 /**
@@ -39,28 +41,48 @@ import reactor.core.publisher.Mono
  * answer identically (`WebAdapterParityTest`). The route id goes into the request attributes, and a permitted request
  * goes downstream with its `CoSec-Request-Id` and the headers the outcome forwards ([Outcome.forward]): the verified
  * `CoSec-Identity`, or none. A `CoSec-Identity` the client sent never reaches the pipeline nor a backend.
+ *
+ * Per route ([Route.getMetadata]):
+ * - [APP_METADATA] is the host app of the route's requests (RFC 0004 §4.6, RC1-6), ahead of [host]: a client declares
+ *   its app only where neither names one. A value that cannot be an app id fails the route's requests.
+ * - [IDENTITY_METADATA] decides whether the backend receives what the gateway forwards about the caller (RC1-49):
+ *   `true` does, `false` or any other value does not, and without it only a route to a registered service (`lb://`,
+ *   `lb:ws://`) does: whoever runs one is inside the trust boundary, any other host might be a third party.
  */
+@OptIn(InternalCoSecApi::class)
 class PipelineGatewayFilter(
     pipeline: Pipeline,
     contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
+    /** `cosec.authorization.scope.app-id`: the host app of a route without [APP_METADATA]. */
     private val host: HostScope = HttpFactsReader.NO_HOST,
     /**
-     * `cosec.gateway.identity.forward-authorization`: whether the client's `Authorization` header goes downstream. Off
-     * by default: a service behind needs no token, and a compromised one then never sees one.
+     * `cosec.gateway.identity.forward-authorization`: whether the client's credentials go downstream, to a route that
+     * receives the identity only. Off by default: a service behind needs none, and a compromised one then never sees
+     * one. They are the headers and the query parameter the pipeline reads them from ([Pipeline.credentialHeaders],
+     * [Pipeline.withoutQueryToken]): `Authorization`, the API key header and `authorization` (RC1-5).
      */
     private val forwardAuthorization: Boolean = false,
 ) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
     GlobalFilter,
     Ordered {
+    private val credentialHeaders: Set<String> = pipeline.credentialHeaders
+    private val withoutQueryToken: (String?) -> String? = pipeline::withoutQueryToken
+
     override fun read(exchange: ServerWebExchange): HttpFacts {
         val route = exchange.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             ?: return HttpFactsReader.read(exchange, remoteIpResolver, host)
-        val attributes = mutableMapOf(AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id)
-        if (route.metadata[IDENTITY_METADATA]?.toString() == "false") {
-            attributes[IdentityIssuer.FORWARD_ATTRIBUTE] = "false"
-        }
-        return HttpFactsReader.read(exchange, remoteIpResolver, host, attributes)
+        val attributes = mapOf(
+            AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id,
+            IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity(route).toString(),
+        )
+        return HttpFactsReader.read(exchange, remoteIpResolver, hostOf(route), attributes)
+    }
+
+    /** [route]'s own app, else the gateway's; a value that cannot be an app id throws, and the request fails closed. */
+    private fun hostOf(route: Route): HostScope {
+        val app = route.metadata[APP_METADATA] ?: return host
+        return HostScope(AppId(app.toString()))
     }
 
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
@@ -73,21 +95,31 @@ class PipelineGatewayFilter(
             }
         }.build()
         return filterInternal(stripped) { authorized, outcome ->
-            val downstream = authorized.request.mutate()
+            val request = authorized.request
+            val route = authorized.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
+            // The caller's credentials go only where its identity may go, and only when asked for (RC1-5, RC1-49).
+            val credentials = forwardAuthorization && route != null && receivesIdentity(route)
+            val downstream = request.mutate()
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
                     headers.set(CoSecParameters.REQUEST_ID, outcome.requestId)
                     outcome.forward.forEach { (name, value) ->
                         if (value == null) headers.remove(name) else headers.set(name, value)
                     }
-                    if (!forwardAuthorization) {
-                        headers.remove(HttpHeaders.AUTHORIZATION)
+                    if (!credentials) {
+                        credentialHeaders.forEach(headers::remove)
                     }
                 }
-                .build()
+            if (!credentials) {
+                val query = request.uri.rawQuery
+                val kept = withoutQueryToken(query)
+                if (kept != query) {
+                    downstream.uri(UriComponentsBuilder.fromUri(request.uri).replaceQuery(kept).build(true).toUri())
+                }
+            }
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
-            chain.filter(authorized.mutate().request(downstream).build())
+            chain.filter(authorized.mutate().request(downstream.build()).build())
         }
     }
 
@@ -101,7 +133,27 @@ class PipelineGatewayFilter(
          */
         const val AUTHORIZATION_GATEWAY_FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10
 
-        /** Route metadata: `false` keeps the route's backend from receiving `CoSec-Identity`, as for a third party. */
+        /**
+         * Route metadata: `true` sends the route's backend the verified `CoSec-Identity` (and, with
+         * `forward-authorization`, the caller's credentials), `false` never does; without it, only a `lb://` route
+         * receives them (RC1-49).
+         */
         const val IDENTITY_METADATA = "cosec-identity"
+
+        /** Route metadata: the app of the route's requests, ahead of `cosec.authorization.scope.app-id` (RC1-6). */
+        const val APP_METADATA = "cosec-app-id"
+
+        /** The scheme of a route to a registered service, as Spring Cloud Gateway's load balancer reads it. */
+        private const val LOAD_BALANCED = "lb"
+
+        /**
+         * Whether [route]'s backend receives what the gateway forwards about the caller: its metadata
+         * [IDENTITY_METADATA] when it has one, exactly `true` (a Boolean or the string); without it, a route to a
+         * registered service ([LOAD_BALANCED]).
+         */
+        internal fun receivesIdentity(route: Route): Boolean = when (val opted = route.metadata[IDENTITY_METADATA]) {
+            null -> route.uri.scheme == LOAD_BALANCED
+            else -> opted.toString() == "true"
+        }
     }
 }

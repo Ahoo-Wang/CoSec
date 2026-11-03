@@ -38,6 +38,10 @@ object GuardAllowlist {
             "architecture:ObligationDispatchTest#obligations are dispatched by an exhaustive when without else",
             "architecture:ObligationDispatchTest#no runtime code skips a kind of obligation",
             "runtime:PipelineTest#anUnhandledKindUnderVersionSkewIs500",
+            "spring-boot:WebAdapterParityTest#the three adapters hand on no client identity",
+            "webflux:PipelineWebFilterTest#aPermitHandsOnNoClientIdentity",
+            "webmvc:PipelineServletFilterTest#aPermitHandsOnNoClientIdentity",
+            "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none",
         ),
         "startup" to setOf(
             "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
@@ -53,6 +57,10 @@ object GuardAllowlist {
             "cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
             "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
             "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn",
+            "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#the gateway endpoint on the application port fails startup",
+            "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#endpoints on a separate management port start",
+            "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#a listed endpoint starts, but gateway is never accepted",
+            "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#health alone starts",
         ),
         "timing" to setOf(
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",

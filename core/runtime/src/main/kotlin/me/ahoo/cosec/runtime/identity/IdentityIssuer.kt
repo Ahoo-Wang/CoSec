@@ -51,7 +51,11 @@ class IdentityIssuer(
     }
 
     companion object {
-        /** A request attribute the gateway sets to `false` for a route whose metadata opts out (`cosec-identity: false`). */
+        /**
+         * A request attribute the gateway sets on every routed request: `true` for a route that receives the identity
+         * (a `lb://` route, or metadata `cosec-identity: true`), `false` otherwise (RC1-49). Without it, nothing is
+         * forwarded.
+         */
         const val FORWARD_ATTRIBUTE = "cosec.identity.forward"
     }
 }

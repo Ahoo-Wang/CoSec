@@ -2,6 +2,15 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration {
 	public fun <init> ()V
 }
 
+public class me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration$Companion;
+	public fun <init> ()V
+	public fun cosecGatewayEndpointCheck (Lorg/springframework/context/ApplicationContext;Lme/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration$Companion {
+}
+
 public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$Companion;
 	public fun <init> ()V
@@ -931,6 +940,18 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayIdentityPro
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayIdentityProperties$Companion {
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties$Companion;
+	public static final field PREFIX Ljava/lang/String;
+	public static final field UNPROTECTED_ENDPOINTS_KEY Ljava/lang/String;
+	public fun <init> ()V
+	public final fun getUnprotectedEndpoints ()Ljava/util/Set;
+	public final fun setUnprotectedEndpoints (Ljava/util/Set;)V
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayProperties$Companion {
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties {

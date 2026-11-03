@@ -48,8 +48,8 @@ sealed interface SnapshotKey {
         companion object {
             /**
              * A tenant id names exactly one Redis key: the rule of a declared app id (`ScopeResolver.isValidAppId`, #1024:
-             * not blank, not `*`, no `:`, bounded length) and no control characters, so no id can reach another key,
-             * a key pattern or a log line it does not own. `(platform)` and `(0)` are valid and encoded as they are.
+             * not blank, not `*`, no `:`, bounded length, and no control characters, RC1-15), so no id can reach another
+             * key, a key pattern or a log line it does not own. `(platform)` and `(0)` are valid and encoded as they are.
              */
             fun isValidTenantId(tenantId: String): Boolean =
                 ScopeResolver.isValidAppId(tenantId) && tenantId.none { it.isISOControl() }

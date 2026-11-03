@@ -21,6 +21,7 @@ public final class me/ahoo/cosec/gateway/IdentityStripFilter$Companion {
 }
 
 public final class me/ahoo/cosec/gateway/PipelineGatewayFilter : me/ahoo/cosec/webflux/ReactivePipelineBridge, org/springframework/cloud/gateway/filter/GlobalFilter, org/springframework/core/Ordered {
+	public static final field APP_METADATA Ljava/lang/String;
 	public static final field AUTHORIZATION_GATEWAY_FILTER_ORDER I
 	public static final field Companion Lme/ahoo/cosec/gateway/PipelineGatewayFilter$Companion;
 	public static final field IDENTITY_METADATA Ljava/lang/String;

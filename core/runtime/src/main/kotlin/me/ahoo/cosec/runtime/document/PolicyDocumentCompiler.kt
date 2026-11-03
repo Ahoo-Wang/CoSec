@@ -149,12 +149,22 @@ class PolicyDocumentCompiler(
                         document.bindings,
                         rateLimits,
                         document.boundary?.value,
+                        boundApps(document),
                     )
             }
         } catch (error: IllegalArgumentException) {
             throw DocumentCompileException(name, listOf(CompileError("$", error.message ?: "invalid")), error)
         }
     }
+
+    /**
+     * The apps whose permission policies a tenant [document] binds to `Anyone` or to a principal: a request in one of
+     * them reads that app's document whatever its roles, or the binding could never resolve (RC1-17). [permissionError]
+     * has checked that each such binding is scoped to exactly the policy's app.
+     */
+    private fun boundApps(document: PolicyDocument): Set<String> = document.bindings
+        .filter { it.subject !is SubjectRef.Role && it.policy.value.startsWith(PERMISSION_PREFIX) }
+        .mapNotNullTo(HashSet()) { (it.scope.app as? Match.Exactly)?.value?.value }
 
     /**
      * Fails with [DocumentCompileException] when an app or tenant [document] binds a policy that neither it nor
