@@ -3,15 +3,15 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest :conformance:test
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
-index 7dbc6b93..b957b690 100644
+index 06b69b7b..c5c6f9a6 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
-@@ -97,7 +97,7 @@ class CompiledDocument private constructor(
-     init {
-         val globTokens = policies.values.sumOf { it.globTokens } + boundaries.values.sumOf { it.globTokens } +
-             rateLimits.sumOf { it.statement.globTokens }
--        require(globTokens <= MAX_GLOB_TOKENS) {
-+        require(globTokens >= 0) {
-             "The document's path pattern segments that mix *, ? or {name} with other text hold $globTokens tokens in " +
-                 "all, more than $MAX_GLOB_TOKENS"
-         }
+@@ -280,7 +280,7 @@ class CompiledDocument private constructor(
+             }
+             val globTokens = policies.values.sumOf { it.globTokens } + boundaries.values.sumOf { it.globTokens } +
+                 rateLimits.sumOf { it.statement.globTokens }
+-            require(globTokens <= MAX_GLOB_TOKENS) {
++            require(globTokens >= 0) {
+                 "The document's path pattern segments that mix *, ? or {name} with other text hold $globTokens tokens " +
+                     "in all, more than $MAX_GLOB_TOKENS"
+             }
