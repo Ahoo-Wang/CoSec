@@ -16,6 +16,7 @@ package me.ahoo.cosec.engine.flat
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
@@ -66,7 +67,36 @@ class FlatRequest(
     val attributes: ConditionInput = AbsentAttributes,
     /** The external attributes fetched for the [AttributePlan] (RFC 0006 §5.4); none by default. */
     val external: ExternalValues = ExternalValues.NONE,
-)
+) {
+    /**
+     * [memberships]' attachments in claim order, a policy claimed twice once (`ALG-9`): the same attachment, so
+     * evaluating it again could change nothing, and a list repeating one costly policy would multiply its cost.
+     */
+    internal val attachments: List<PolicyId> = distinct(memberships.attachments)
+
+    private companion object {
+        /** Up to this many attachments are compared pairwise, which allocates nothing; more go through a set. */
+        const val PAIRWISE = 16
+
+        fun distinct(attachments: List<PolicyId>): List<PolicyId> {
+            if (attachments.size < 2) {
+                return attachments
+            }
+            if (attachments.size > PAIRWISE) {
+                val distinct = attachments.distinctBy { it.value }
+                return if (distinct.size == attachments.size) attachments else distinct
+            }
+            for (i in 1 until attachments.size) {
+                for (j in 0 until i) {
+                    if (attachments[i].value == attachments[j].value) {
+                        return attachments.distinctBy { it.value }
+                    }
+                }
+            }
+            return attachments
+        }
+    }
+}
 
 /** A host that has no attributes of its own: every read is absent. */
 object AbsentAttributes : ConditionInput {

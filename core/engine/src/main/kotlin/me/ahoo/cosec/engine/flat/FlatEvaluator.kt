@@ -29,6 +29,7 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
 
@@ -100,6 +101,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var firstList: IntArray? = null
     private var lists: Array<IntArray?>? = null
     private var listCount = 0
+
+    /**
+     * The repeated targets ([BoundEntry.repeat]) each pass has evaluated, two bits per slot of the view's documents;
+     * allocated when a pass first reaches one, so a view without them allocates nothing for it.
+     */
+    private var repeatsEvaluated: LongArray? = null
 
     private var pathState = PATH_UNPARSED
     private var subjectRoles: Set<String>? = null
@@ -287,6 +294,42 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             }
         }
         return false
+    }
+
+    /**
+     * `ALG-9`: a pass evaluates a policy once for all the bindings of one document that reach it. The later ones can
+     * change nothing: scope and expiry are checked per binding before this, a statement's result depends only on the
+     * request and the policy ([step]), and the first error and the first skipped ALLOW are kept already. So a document
+     * that binds one costly policy many times costs one evaluation, and a policy costs at most one per document.
+     */
+    override fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean =
+        firstThrough(repeatBit(via, slot)) && candidate(policy, via)
+
+    /** The bit of [slot] of [via]'s document in the current pass. */
+    protected fun repeatBit(via: BindingRef.Bound, slot: Int): Int {
+        val before = when (via.document) {
+            DocumentKind.PLATFORM -> 0
+            DocumentKind.APP -> view.platform.repeats
+            DocumentKind.TENANT -> view.platform.repeats + (view.app?.repeats ?: 0)
+        }
+        return 2 * (before + slot) + if (pass === Effect.DENY) 0 else 1
+    }
+
+    /** Whether [bit] was clear; sets it. */
+    protected fun firstThrough(bit: Int): Boolean {
+        val words = repeatsEvaluated ?: LongArray(repeatWords()).also { repeatsEvaluated = it }
+        val word = bit ushr WORD_SHIFT
+        val mask = 1L shl bit
+        if (words[word] and mask != 0L) {
+            return false
+        }
+        words[word] = words[word] or mask
+        return true
+    }
+
+    private fun repeatWords(): Int {
+        val slots = view.platform.repeats + (view.app?.repeats ?: 0) + (view.tenant?.repeats ?: 0)
+        return (2 * slots + WORD_BITS - 1) ushr WORD_SHIFT
     }
 
     /**
@@ -715,6 +758,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         private const val GUARD_ERROR = 3
         private const val INITIAL_GUARDS = 4
         private const val INITIAL_LISTS = 8
+
+        private const val WORD_BITS = 64
+        private const val WORD_SHIFT = 6
 
         private const val PATH_UNPARSED = 0
         private const val PATH_PARSED = 1

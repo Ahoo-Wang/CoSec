@@ -21,6 +21,13 @@ internal interface CandidateVisitor {
     /** [policy] applies through [via]. Returns true to stop. */
     fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean
 
+    /**
+     * [policy] applies through [via], one of several bindings of its document that reach it ([BoundEntry.repeat] is
+     * [slot]). An evaluator need not evaluate it again through the later ones (`ALG-9`); listing them all, this calls
+     * [candidate]. Returns true to stop.
+     */
+    fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean = candidate(policy, via)
+
     /** A binding that would apply to the request had it not expired. */
     fun expired(via: BindingRef.Bound)
 
@@ -36,7 +43,8 @@ internal interface CandidateVisitor {
  *
  * 0. the blacklist rule;
  * 1. platform `Anyone` bindings, then 2. tenant ones, by policy id;
- * 3. attachments in claim order, then principal bindings of the platform and the tenant, by binding id;
+ * 3. attachments in claim order (a policy claimed twice once), then principal bindings of the platform and the tenant,
+ *    by binding id;
  * 4. role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a
  *    role in document (grant) order;
  * 5. break-glass bindings of the principal, by binding id, last.
@@ -120,7 +128,7 @@ internal object CandidateOrder {
         tenant: CompiledDocument?,
         visitor: CandidateVisitor,
     ): Boolean {
-        val attachments = request.memberships.attachments
+        val attachments = request.attachments
         for (i in attachments.indices) {
             val id = attachments[i].value
             val own = tenant?.policy(id)
@@ -187,7 +195,9 @@ internal object CandidateOrder {
                 ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
             if (policy == null) {
                 visitor.missing(entry.policyId)
-            } else if (visitor.candidate(policy, entry.via)) {
+            } else if (
+                if (entry.repeat < 0) visitor.candidate(policy, entry.via) else visitor.repeated(policy, entry.via, entry.repeat)
+            ) {
                 return true
             }
         }

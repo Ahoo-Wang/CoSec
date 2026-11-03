@@ -87,6 +87,12 @@ class CompiledDocument private constructor(
     /** The ids of the break-glass bindings. */
     private val breakGlassIds: Set<String>
 
+    /**
+     * How many policy ids several of its bindings name ([BoundEntry.repeat]): a pass evaluates each such policy once,
+     * whatever the number of bindings (`ALG-9`).
+     */
+    internal val repeats: Int
+
     init {
         checkGlobBudget(policies, boundaries, rateLimits)
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
@@ -104,10 +110,11 @@ class CompiledDocument private constructor(
         for (rule in rateLimits) {
             require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
         }
+        val slots = repeatSlots(bindings)
         val ids = HashSet<String>()
         for (binding in bindings) {
             require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
-            val entry = entry(binding)
+            val entry = entry(binding, slots[binding.policy.value] ?: NOT_REPEATED)
             when (val subject = binding.subject) {
                 SubjectRef.Anyone -> anyone += entry
                 is SubjectRef.Principal -> {
@@ -123,6 +130,31 @@ class CompiledDocument private constructor(
         this.principals = principals.sortedById()
         this.roles = roles.mapValues { it.value.toTypedArray() }
         this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
+        this.repeats = slots.size
+    }
+
+    /**
+     * A slot for each policy id several of [bindings] name, in binding order; none for an id bound once. Two bindings of
+     * one document that name an id and both resolve resolve to the same policy: the document's own, else the
+     * platform's, else that of the one app both are scoped to ([CandidateOrder]), since one scoped to any app finds
+     * only the platform's.
+     */
+    private fun repeatSlots(bindings: List<Binding>): Map<String, Int> {
+        if (bindings.size < 2) {
+            return emptyMap()
+        }
+        val counts = HashMap<String, Int>(bindings.size * 2)
+        for (binding in bindings) {
+            counts.merge(binding.policy.value, 1, Int::plus)
+        }
+        val slots = HashMap<String, Int>()
+        for (binding in bindings) {
+            val id = binding.policy.value
+            if (counts.getValue(id) > 1 && id !in slots) {
+                slots[id] = slots.size
+            }
+        }
+        return slots
     }
 
     /**
@@ -132,7 +164,7 @@ class CompiledDocument private constructor(
     fun isBreakGlass(via: BindingRef): Boolean =
         via is BindingRef.Bound && via.document == kind && via.id.value in breakGlassIds
 
-    private fun entry(binding: Binding): BoundEntry {
+    private fun entry(binding: Binding, repeat: Int): BoundEntry {
         // The candidate order reads role bindings from app and tenant documents and everything else from platform and
         // tenant documents (RFC 0004 §4.3, §6.3). A binding anywhere else would never be a candidate: a DENY lost.
         when (kind) {
@@ -178,6 +210,7 @@ class CompiledDocument private constructor(
             space = binding.scope.space.exactSpace(),
             roleTenant = (binding.subject as? SubjectRef.Role)?.tenant?.value,
             expiresAt = binding.expiresAt ?: Long.MAX_VALUE,
+            repeat = repeat,
         )
     }
 
@@ -225,6 +258,8 @@ class CompiledDocument private constructor(
     internal fun role(role: String): Array<BoundEntry>? = roles[role]
 
     companion object {
+        private const val NOT_REPEATED = -1
+
         // Plain comparators: kotlin.comparisons is not among the packages the engine may use (EnginePurityTest).
         private val BY_ID = Comparator<BoundEntry> { a, b -> a.via.id.value.compareTo(b.via.id.value) }
         private val BY_POLICY_THEN_ID = Comparator<BoundEntry> { a, b ->
@@ -405,4 +440,10 @@ internal class BoundEntry(
     val roleTenant: String?,
     /** Applies while the request time is before it. */
     val expiresAt: Long,
+    /**
+     * The slot of its policy id among the document's [CompiledDocument.repeats] when other bindings of the document name
+     * it too, else -1. Such a binding is a candidate only while its pass has not evaluated the policy through
+     * another one (`ALG-9`): the results depend on the request and the policy, never on the binding.
+     */
+    val repeat: Int,
 )
