@@ -1,0 +1,17 @@
+# Rule: SCP-2
+# Mutant: the gateway hands on a route app that is not a string as its text, deciding in the adapter what the pipeline should refuse
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 9319fe04..872b2286 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -80,7 +80,7 @@ class PipelineGatewayFilter(
+             IdentityIssuer.FORWARD_ATTRIBUTE to receivesIdentity(route).toString(),
+         )
+         // The route's app as configured, of whatever type: the pipeline checks it, and makes it the host app (RC1-6).
+-        val app = route.metadata[APP_METADATA]
++        val app = route.metadata[APP_METADATA]?.toString()
+         return HttpFactsReader.read(exchange, remoteIpResolver, host, attributes, app)
+     }
+ 

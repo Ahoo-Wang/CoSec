@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 78a3eb9c..34a1ac11 100644
+index 8b2bf7cc..4837efe9 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -294,7 +294,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-      * the app's DENYs.
+@@ -305,7 +305,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * app `0123`.
       */
      private fun routed(facts: HttpFacts): HttpFacts {
 -        val app = facts.routeApp ?: return facts
 +        val app = facts.routeApp?.takeIf { facts.host.app == null } ?: return facts
-         if (!ScopeResolver.isValidAppId(app)) {
-             invalidRouteApp(facts)
+         if (app !is String || !ScopeResolver.isValidAppId(app)) {
+             invalidRouteApp(facts, app)
          }
