@@ -84,6 +84,7 @@
         "runtime:CookieHeadersTest#the authorization cookie goes, however its name is cased or spaced",
         "runtime:CookieHeadersTest#kept pairs go on as they came",
         "runtime:CookieHeadersTest#no empty pair is made",
+        "runtime:CookieHeadersTest#names reads a header in linear time",
         "gateway:PipelineGatewayFilterTest#the cookies a later filter reads agree with the headers handed on"
       ]
     },

@@ -58,37 +58,47 @@ internal object CookieHeaders {
 
     /**
      * Whether [header] has a pair [without] removes: one of its `,`-separated parts names [name], ignoring case and the
-     * whitespace around the name; exactly when [without] changes [header]. Without allocating: the gateway asks it of
-     * every `Cookie` header it forwards, and most name no such cookie.
+     * whitespace around the name; exactly when [without] changes [header]. One forward pass that reads each character a
+     * bounded number of times, and allocates nothing: the gateway asks it of every `Cookie` header it forwards, on the
+     * event loop, and a client writes the header (an index search from each part would make it quadratic).
      */
-    fun names(header: String, name: String): Boolean {
-        if (!header.contains(name, ignoreCase = true)) {
-            return false
-        }
-        var pair = 0
-        while (pair <= header.length) {
-            val pairEnd = header.indexOf(';', pair).let { if (it < 0) header.length else it }
-            var part = pair
-            while (part <= pairEnd) {
-                val partEnd = header.indexOf(',', part).let { if (it < 0 || it > pairEnd) pairEnd else it }
-                val nameEnd = header.indexOf('=', part).let { if (it < 0 || it > partEnd) partEnd else it }
-                if (isName(header, part, nameEnd, name)) {
+    fun names(header: CharSequence, name: String): Boolean {
+        var partStart = 0
+        var nameEnd = -1
+        var index = 0
+        while (index <= header.length) {
+            val char = if (index < header.length) header[index] else ';'
+            if (char == ';' || char == ',') {
+                if (isName(header, partStart, if (nameEnd < 0) index else nameEnd, name)) {
                     return true
                 }
-                part = partEnd + 1
+                partStart = index + 1
+                nameEnd = -1
+            } else if (char == '=' && nameEnd < 0) {
+                nameEnd = index
             }
-            pair = pairEnd + 1
+            index++
         }
         return false
     }
 
     /** Whether `header[from until to]`, trimmed as [String.trim] trims, is [name], case ignored. */
-    private fun isName(header: String, from: Int, to: Int, name: String): Boolean {
+    private fun isName(header: CharSequence, from: Int, to: Int, name: String): Boolean {
         var start = from
         var end = to
         while (start < end && header[start].isWhitespace()) start++
         while (end > start && header[end - 1].isWhitespace()) end--
-        return end - start == name.length && header.regionMatches(start, name, 0, name.length, ignoreCase = true)
+        if (end - start != name.length) {
+            return false
+        }
+        var offset = 0
+        while (offset < name.length) {
+            if (!header[start + offset].equals(name[offset], ignoreCase = true)) {
+                return false
+            }
+            offset++
+        }
+        return true
     }
 
     /** Whether [pair] holds no cookie: only what Netty's decoder skips between pairs, whitespace and `,`. */

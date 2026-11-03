@@ -97,6 +97,41 @@ class CookieHeadersTest {
         }
     }
 
+    /** Counts the characters [names][CookieHeaders.names] reads: no timing, so the test cannot be flaky. */
+    private class Counting(private val text: String) : CharSequence {
+        var reads = 0L
+
+        override val length: Int get() = text.length
+
+        override fun get(index: Int): Char = text[index].also { reads++ }
+
+        override fun subSequence(startIndex: Int, endIndex: Int): CharSequence = text.subSequence(startIndex, endIndex)
+    }
+
+    /**
+     * The gateway asks [CookieHeaders.names] of every `Cookie` header a client sends, on the event loop. Worst-case
+     * shapes of Reactor Netty's 8 KB header limit, each with `authorization` in it but naming no such cookie, so the
+     * whole header is read: names reads each character a bounded number of times. A search from each part to the end
+     * of the header would read millions (DoS amplification at the edge).
+     */
+    @Test
+    fun `names reads a header in linear time`() {
+        val size = 8 * 1024
+        val shapes = mapOf(
+            "commas" to ",".repeat(size) + "xauthorization",
+            "semicolons" to ";".repeat(size) + "xauthorization",
+            "alternating" to ";,".repeat(size / 2) + "xauthorization",
+            "a name-like run" to "authorization".repeat(size / 13) + "x",
+            "spaces" to " ,".repeat(size / 2) + "xauthorization",
+            "names without values" to "authorizationx,".repeat(size / 15),
+        )
+        for ((shape, header) in shapes) {
+            val counting = Counting(header)
+            CookieHeaders.names(counting, "authorization").assert().describedAs(shape).isFalse()
+            counting.reads.assert().describedAs(shape).isLessThanOrEqualTo(4L * header.length + 64)
+        }
+    }
+
     @Test
     fun `a header without it is the same header`() {
         val header = "a=1;b=2"
