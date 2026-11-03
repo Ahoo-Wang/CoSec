@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: a glob after a leading ** counts once, though it is tried against two segments
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 66887053..e776e8b8 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -59,7 +59,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+         if (restAt > 0 && restAt != elements.size - 1) {
+             throw invalid(0, "** and {*name} must be at the start or the end of the pattern")
+         }
+-        val globUnits = elements.sumOf { (it as? PathElement.Glob)?.glob?.units ?: 0 } * if (restAt == 0) 2 else 1
++        val globUnits = elements.sumOf { (it as? PathElement.Glob)?.glob?.units ?: 0 }
+         return Parsed(elements.toTypedArray(), variableNames.toList(), globUnits)
+     }
+ 

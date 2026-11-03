@@ -1,0 +1,17 @@
+# Rule: ALG-9
+# Mutant: a policy claimed many times as an attachment is evaluated once per claim
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RepeatedBindingsTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt
+index 80c7b059..a60f08a0 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt
+@@ -72,7 +72,7 @@ class FlatRequest(
+      * [memberships]' attachments in claim order, a policy claimed twice once (`ALG-9`): the same attachment, so
+      * evaluating it again could change nothing, and a list repeating one costly policy would multiply its cost.
+      */
+-    internal val attachments: List<PolicyId> = distinct(memberships.attachments)
++    internal val attachments: List<PolicyId> = memberships.attachments
+ 
+     private companion object {
+         /** Up to this many attachments are compared pairwise, which allocates nothing; more go through a set. */
