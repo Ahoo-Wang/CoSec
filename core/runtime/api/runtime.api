@@ -1381,6 +1381,7 @@ public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions {
 
 public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions$Companion {
 	public final fun getMAX_REVALIDATE_INTERVAL ()Ljava/time/Duration;
+	public final fun getMIN_REVALIDATE_INTERVAL ()Ljava/time/Duration;
 }
 
 public final class me/ahoo/cosec/runtime/snapshot/SnapshotSource : java/lang/AutoCloseable {
