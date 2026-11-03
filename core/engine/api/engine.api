@@ -99,6 +99,8 @@ public final class me/ahoo/cosec/engine/flat/CompileException : java/lang/Illega
 public final class me/ahoo/cosec/engine/flat/CompiledDocument {
 	public static final field Companion Lme/ahoo/cosec/engine/flat/CompiledDocument$Companion;
 	public static final field MAX_BOUNDARY_STATEMENTS I
+	public static final field MAX_GLOB_TOKENS I
+	public final fun getHeadersRead ()Ljava/util/List;
 	public final fun getKind ()Lme/ahoo/cosec/model/decision/DocumentKind;
 	public final fun getOwner ()Ljava/lang/String;
 	public final fun getRateLimits ()Ljava/util/List;
@@ -352,6 +354,8 @@ public final class me/ahoo/cosec/engine/pattern/HttpPath$Companion {
 
 public final class me/ahoo/cosec/engine/pattern/HttpPathPattern {
 	public static final field Companion Lme/ahoo/cosec/engine/pattern/HttpPathPattern$Companion;
+	public static final field MAX_LENGTH I
+	public static final field MAX_SEGMENT_TOKENS I
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCaseSensitive ()Z
 	public final fun getDecodeAndParseSegments ()Z
@@ -402,6 +406,7 @@ public abstract class me/ahoo/cosec/engine/pattern/ResourcePattern {
 	public static final field Companion Lme/ahoo/cosec/engine/pattern/ResourcePattern$Companion;
 	public static final field HTTP_PREFIX Ljava/lang/String;
 	public static final field HTTP_TYPE Ljava/lang/String;
+	public static final field MAX_LENGTH I
 	public abstract fun getVariableNames ()Ljava/util/List;
 	public abstract fun match (Lme/ahoo/cosec/engine/pattern/ResourceTarget;)Lme/ahoo/cosec/engine/pattern/Captures;
 	public abstract fun matches (Lme/ahoo/cosec/engine/pattern/ResourceTarget;)Z
