@@ -130,11 +130,13 @@ class PipelineGatewayFilter(
             }
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
-            val built = downstream.build()
-            val forwarded = cookies?.let { WithoutTokenCookies(built, withoutCookieToken, it.dropped) } ?: built
-            chain.filter(authorized.mutate().request(forwarded).build())
+            chain.filter(authorized.mutate().request(handedOn(downstream.build(), cookies)).build())
         }
     }
+
+    /** [request], whose cookies agree with its `Cookie` headers when [cookies] rewrote them ([WithoutTokenCookies]). */
+    private fun handedOn(request: ServerHttpRequest, cookies: CookieRewrite?): ServerHttpRequest =
+        if (cookies == null) request else WithoutTokenCookies(request, withoutCookieToken, cookies.dropped)
 
     /** The `Cookie` headers that go on ([kept], none: no `Cookie` header), and those dropped whole ([dropped]). */
     private class CookieRewrite(val kept: List<String>, val dropped: List<String>)
