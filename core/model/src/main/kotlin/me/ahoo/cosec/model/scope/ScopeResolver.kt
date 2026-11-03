@@ -86,11 +86,23 @@ object ScopeResolver {
     /**
      * Whether [app] can name an app: not blank, not [Match.WILDCARD], no `:` (it separates document key parts, as in
      * `SnapshotKey.App`), no control character (an app id reaches plain-text log lines, which it must not forge, RC1-15)
-     * and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id.
+     * and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id. One pass over the characters: every request
+     * checks its app here, and the keys of its tenant's documents through the same rule.
      */
-    fun isValidAppId(app: String): Boolean =
-        app.isNotBlank() && app != Match.WILDCARD && !app.contains(':') && app.length <= MAX_APP_ID_LENGTH &&
-            app.none { it.isISOControl() }
+    fun isValidAppId(app: String): Boolean {
+        if (app.isEmpty() || app.length > MAX_APP_ID_LENGTH || app == Match.WILDCARD) {
+            return false
+        }
+        var blank = true
+        for (index in app.indices) {
+            val c = app[index]
+            if (c == ':' || c.isISOControl()) {
+                return false
+            }
+            blank = blank && c.isWhitespace()
+        }
+        return !blank
+    }
 
     fun resolve(subject: ScopeSubject, declared: DeclaredScope, host: HostScope): ScopeResolution {
         val hostApp = host.app

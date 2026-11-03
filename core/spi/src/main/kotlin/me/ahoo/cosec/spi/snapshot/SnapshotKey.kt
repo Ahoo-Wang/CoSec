@@ -51,8 +51,7 @@ sealed interface SnapshotKey {
              * not blank, not `*`, no `:`, bounded length, and no control characters, RC1-15), so no id can reach another
              * key, a key pattern or a log line it does not own. `(platform)` and `(0)` are valid and encoded as they are.
              */
-            fun isValidTenantId(tenantId: String): Boolean =
-                ScopeResolver.isValidAppId(tenantId) && tenantId.none { it.isISOControl() }
+            fun isValidTenantId(tenantId: String): Boolean = ScopeResolver.isValidAppId(tenantId)
         }
     }
 
