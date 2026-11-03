@@ -58,6 +58,7 @@ object GuardAllowlist {
             "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
             "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn",
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#the gateway endpoint on the application port fails startup",
+            "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#controller endpoints are checked as every other endpoint is",
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#endpoints on a separate management port start",
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#a listed endpoint starts, but gateway is never accepted",
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#health alone starts",

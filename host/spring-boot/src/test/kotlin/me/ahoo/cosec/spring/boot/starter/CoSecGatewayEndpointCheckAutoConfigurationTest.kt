@@ -18,22 +18,40 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfiguration
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointAutoConfiguration
+import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
+import org.springframework.boot.actuate.endpoint.web.annotation.ControllerEndpoint
+import org.springframework.boot.actuate.endpoint.web.annotation.RestControllerEndpoint
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
+import org.springframework.cloud.gateway.actuate.GatewayControllerEndpoint
+import org.springframework.cloud.gateway.route.InMemoryRouteDefinitionRepository
+import org.springframework.cloud.gateway.route.RouteLocator
+import org.springframework.web.bind.annotation.GetMapping
+import reactor.core.publisher.Flux
 
 /**
  * `STA-2` (RC1-48): an actuator endpoint other than `health` on a gateway's application port, where CoSec does not
- * authorize it, fails startup unless listed; `gateway`, which writes routes, never may be. The endpoints are stand-ins
- * with the ids of the real ones: what the check reads is which ids Actuator exposes over HTTP, and on which port.
+ * authorize it, fails startup unless listed; `gateway`, which writes routes, never may be. `gateway` is Spring Cloud
+ * Gateway's own endpoint, a controller endpoint (`@RestControllerEndpoint`, R1-2 of #1194's review); the others are
+ * stand-ins, of every kind a reactive host discovers: what the check reads is which ids Actuator exposes over HTTP,
+ * and on which port. A servlet endpoint (`@ServletEndpoint`) is discovered on a servlet host only, never on a gateway.
  */
+@Suppress("DEPRECATION", "removal")
 class CoSecGatewayEndpointCheckAutoConfigurationTest {
-    @Endpoint(id = "gateway")
-    class GatewayEndpoint {
-        @ReadOperation
+    /** A controller endpoint, as Spring Cloud Gateway's is. */
+    @RestControllerEndpoint(id = "routes-admin")
+    class RoutesAdminEndpoint {
+        @GetMapping("/")
         fun routes(): List<String> = emptyList()
+    }
+
+    @ControllerEndpoint(id = "console")
+    class ConsoleEndpoint {
+        @GetMapping("/")
+        fun console(): Map<String, String> = mapOf("console" to "up")
     }
 
     @Endpoint(id = "env")
@@ -56,9 +74,27 @@ class CoSecGatewayEndpointCheckAutoConfigurationTest {
                 CoSecGatewayEndpointCheckAutoConfiguration::class.java,
             )
         )
-        .withBean(GatewayEndpoint::class.java)
+        .withBean(GatewayControllerEndpoint::class.java, { gatewayEndpoint() })
         .withBean(EnvEndpoint::class.java)
         .withBean(HealthEndpoint::class.java)
+
+    /** Spring Cloud Gateway's `gateway` endpoint, over an empty route repository. */
+    private fun gatewayEndpoint(): GatewayControllerEndpoint {
+        val routes = InMemoryRouteDefinitionRepository()
+        return GatewayControllerEndpoint(
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            routes,
+            RouteLocator { Flux.empty() },
+            routes,
+            WebEndpointProperties(),
+        )
+    }
+
+    private val controllers = gateway
+        .withBean(RoutesAdminEndpoint::class.java)
+        .withBean(ConsoleEndpoint::class.java)
 
     private fun failure(runner: ReactiveWebApplicationContextRunner): String {
         var message = ""
@@ -95,6 +131,25 @@ class CoSecGatewayEndpointCheckAutoConfigurationTest {
         ).assert().contains("Actuator endpoints [env, gateway]")
         failure(gateway.withPropertyValues("management.endpoints.web.exposure.include=env"))
             .assert().contains("Actuator endpoints [env]")
+    }
+
+    @Test
+    fun `controller endpoints are checked as every other endpoint is`() {
+        failure(controllers.withPropertyValues("management.endpoints.web.exposure.include=health,routes-admin"))
+            .assert().contains("Actuator endpoints [routes-admin]")
+        failure(controllers.withPropertyValues("management.endpoints.web.exposure.include=console"))
+            .assert().contains("Actuator endpoints [console]")
+        failure(controllers.withPropertyValues("management.endpoints.web.exposure.include=*"))
+            .assert().contains("Actuator endpoints [console, env, gateway, routes-admin]")
+        starts(
+            controllers.withPropertyValues(
+                "management.endpoints.web.exposure.include=routes-admin,console",
+                "cosec.gateway.unprotected-endpoints=routes-admin,console",
+            )
+        )
+        starts(
+            controllers.withPropertyValues("management.endpoints.web.exposure.include=*", "management.server.port=9090")
+        )
     }
 
     @Test
