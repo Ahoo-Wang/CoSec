@@ -248,9 +248,9 @@ The engine
 ([`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt))
 evaluates one request against one `SnapshotView`: the compiled platform document, plus the tenant's document and, when
 the scope has roles in an app or the tenant's document binds one of the app's permission policies to `Anyone` or a
-principal (a set the compiled tenant document holds, so deciding it is one lookup), that app's document. It reads no clock (the request carries its time) and does no I/O
-(external attributes arrive with the request). The view must belong to the request's tenant and app; the engine refuses
-any other.
+principal (a set the compiled tenant document holds, so deciding it is one lookup), that app's document. It reads no
+clock (the request carries its time) and does no I/O (external attributes arrive with the request). The view must belong
+to the request's tenant and app; the engine refuses any other.
 
 ### Candidate order
 

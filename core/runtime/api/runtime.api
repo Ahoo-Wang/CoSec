@@ -825,8 +825,8 @@ public final class me/ahoo/cosec/runtime/event/RequestSummary {
 }
 
 public final class me/ahoo/cosec/runtime/event/ShadowListener : me/ahoo/cosec/runtime/event/DecisionListener {
-	public fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;)V
-	public synthetic fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/runtime/snapshot/SnapshotViews;)V
+	public synthetic fun <init> (Ljava/lang/String;DLme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/engine/flat/FlatEngine;Lme/ahoo/cosec/runtime/snapshot/SnapshotViews;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;
 	public fun onDecision (Lme/ahoo/cosec/runtime/event/DecisionEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

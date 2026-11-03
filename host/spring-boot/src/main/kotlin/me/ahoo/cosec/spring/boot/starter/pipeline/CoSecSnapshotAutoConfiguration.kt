@@ -163,7 +163,15 @@ class CoSecSnapshotAutoConfiguration {
             candidates: CandidateSource,
             recorder: ShadowRecorder,
             properties: RuntimeAuthorizationProperties,
-        ): ShadowListener = ShadowListener(SHADOW_LISTENER, properties.shadow.sampleRate, candidates, recorder)
+            source: SnapshotSource<CompiledDocument, CompiledDocument>,
+        ): ShadowListener = ShadowListener(
+            SHADOW_LISTENER,
+            properties.shadow.sampleRate,
+            candidates,
+            recorder,
+            // The installed documents, as the pipeline reads them: a tenant candidate may need an app document (RC1-17).
+            views = DocumentSnapshotViews(source, platformRequired = true),
+        )
 
         /** Shared with the control plane on a host that runs it, which reads the reports this writes. */
         @Bean

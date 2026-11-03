@@ -269,9 +269,11 @@ class DefaultControlPlane(
         val tenant = SnapshotKey.Tenant(request.tenant.value)
         authority.require(operator, tenant, ControlActions.SIMULATE)
         val scope = resolved(request) ?: return rejected(request)
-        val keys = simulator.keys(scope)
-        val heads = keys.associateWith { revisions.head(it)?.document }
-        val redaction = redaction(operator, keys)
+        // The tenant's document first: with the scope, it decides whether the app's is read, as enforcement decides.
+        val tenantHead = revisions.head(tenant)?.document
+        val keys = simulator.keys(scope, tenantHead)
+        val heads = keys.associateWith { if (it == tenant) tenantHead else revisions.head(it)?.document }
+        var read = keys
         val enforced = simulator.evaluate(request, scope, documents(heads))
         val proposed = candidate?.let { id ->
             val change = get(operator, id)
@@ -283,8 +285,12 @@ class DefaultControlPlane(
                 )
             }
             val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
-            simulator.evaluate(request, scope, documents(heads + (change.key to document)))
+            // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
+            read = if (change.key == tenant) simulator.keys(scope, document) else keys
+            val proposedHeads = read.associateWith { heads[it] ?: revisions.head(it)?.document } + (change.key to document)
+            simulator.evaluate(request, scope, documents(proposedHeads))
         }
+        val redaction = redaction(operator, (keys + read).distinct())
         return Simulation(
             redaction.decision(enforced.decision),
             redaction.trace(enforced),
@@ -302,19 +308,21 @@ class DefaultControlPlane(
             val rejected = rejected(request)
             return Explanation(at ?: SnapshotVersion(0, null, 0), rejected.enforced, null)
         }
-        val keys = simulator.keys(scope)
-        val documents = if (at == null) {
-            keys.associateWith { revisions.head(it)?.document }
+        // The tenant's document at the revision decided on first: it decides, by enforcement's rule, whether the app's
+        // was read (RC1-17), so the app revision an audit event recorded is the one explained.
+        suspend fun documentAt(key: SnapshotKey): PolicyDocument? = if (at == null) {
+            revisions.head(key)?.document
         } else {
-            keys.associateWith { key ->
-                val revision = when (key) {
-                    SnapshotKey.Platform -> at.platform
-                    is SnapshotKey.App -> at.app
-                    else -> at.tenant
-                }
-                revision?.takeIf { it > 0 }?.let { retained(key, it) }
+            val revision = when (key) {
+                SnapshotKey.Platform -> at.platform
+                is SnapshotKey.App -> at.app
+                else -> at.tenant
             }
+            revision?.takeIf { it > 0 }?.let { retained(key, it) }
         }
+        val tenantDocument = documentAt(tenant)
+        val keys = simulator.keys(scope, tenantDocument)
+        val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
         val evaluation = simulator.evaluate(request, scope, documents(documents))
         val redaction = redaction(operator, keys)
         val version = SnapshotVersion(

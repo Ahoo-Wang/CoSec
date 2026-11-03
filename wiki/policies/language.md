@@ -23,9 +23,10 @@ fails closed: `503` unless a DENY matches ([fail closed](../guide/security-model
 | Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), its `boundary`, rate limit rules. |
 
 The key is how the [control plane](./testing.md) names a document. Every request reads the platform document and the
-document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the
-principal holds at least one role in the request's space, or when the tenant document binds one of the app's
-permission policies to anyone or to a principal; a request the blacklist blocks reads only the platform document. A document nobody published reads as empty. Which candidates apply, and in which order, is in the
+document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the principal
+holds at least one role in the request's space, or when the tenant document binds one of the app's permission policies
+to anyone or to a principal; a request the blacklist blocks reads only the platform document. A document nobody
+published reads as empty. Which candidates apply, and in which order, is in the
 [security model](../guide/security-model.md).
 
 A tenant document:

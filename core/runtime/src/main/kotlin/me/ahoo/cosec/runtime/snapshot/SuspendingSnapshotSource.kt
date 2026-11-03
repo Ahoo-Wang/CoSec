@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
@@ -35,8 +38,9 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
 
     /**
      * This key with [scope]'s app, when this key reads no app and [tenantDocument], the tenant's document it read,
-     * needs that app's document whatever the roles ([CompiledDocument.needsApp]); null otherwise. Decided by one set
-     * lookup on the compiled document: no I/O, and the client's app alone never loads a document.
+     * needs that app's document whatever the roles; null otherwise. The rule is [ViewDocuments.appOf], which the control
+     * plane applies too; here it is one set lookup on the compiled document ([CompiledDocument.needsApp]): no I/O, and the
+     * client's app alone never loads a document.
      */
     internal fun withAppFor(scope: Scope, tenantDocument: CompiledDocument?): ViewKey? {
         // Most keys already read the app (a scope with roles): one field read, and done.
@@ -44,21 +48,27 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
             return null
         }
         val tenant = tenant ?: return null
-        val wanted = scope.app
-        return if (wanted.value.isNotEmpty() && tenantDocument.needsApp(wanted.value)) ViewKey(tenant, wanted) else null
+        val wanted = ViewDocuments.appOf(scope) { tenantDocument.needsApp(it) } ?: return null
+        return ViewKey(tenant, wanted)
     }
 
     companion object {
         /** A blocked request reads only the platform document, where the blacklist rule is (RFC 0004 §4.7). */
         val BLOCKED = ViewKey(null, null)
 
+        /**
+         * The documents [scope] reads as far as its roles decide ([ViewDocuments.appOf] before the tenant's document is
+         * read); [withAppFor] completes it once that document is.
+         */
         fun of(scope: Scope, blocked: Boolean): ViewKey {
             if (blocked) {
                 return BLOCKED
             }
-            val app = scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }
-            return ViewKey(scope.tenant, app)
+            return ViewKey(scope.tenant, ViewDocuments.appOf(scope) { false })
         }
+
+        /** The view of [tenant] with [app]'s document: what the shadow comparison reads for a tenant candidate. */
+        internal fun of(tenant: TenantId, app: AppId): ViewKey = ViewKey(tenant, app)
     }
 }
 

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -45,6 +48,7 @@ import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
+import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
@@ -138,12 +142,19 @@ class Simulator(
         )
     }
 
-    /** The documents of [scope]: the platform's, the tenant's, and the app's when the scope has roles in an app. */
-    fun keys(scope: Scope): List<SnapshotKey> = listOfNotNull(
-        SnapshotKey.Platform,
-        SnapshotKey.Tenant(scope.tenant.value),
-        scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }?.let { SnapshotKey.App(it.value) },
-    )
+    /**
+     * The documents a request in [scope] reads, by enforcement's rule ([ViewDocuments.appOf], RC1-17): the platform's,
+     * the tenant's, and the app's when the scope has roles in an app or [tenant], the tenant's document the request is
+     * decided with, binds one of the app's permission policies to `Anyone` or to a principal.
+     */
+    fun keys(scope: Scope, tenant: PolicyDocument?): List<SnapshotKey> {
+        val app = ViewDocuments.appOf(scope) { tenant != null && it in PolicyDocumentCompiler.boundApps(tenant) }
+        return listOfNotNull(
+            SnapshotKey.Platform,
+            SnapshotKey.Tenant(scope.tenant.value),
+            app?.let { SnapshotKey.App(it.value) },
+        )
+    }
 
     /**
      * The view enforcement would read (`DocumentSnapshotViews` with `platformRequired`): an absent platform document is
@@ -159,19 +170,24 @@ class Simulator(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        val app = scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }
+        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's, as before.
+        val tenantCauses = ArrayList<Cause>(0)
+        val tenant = documentOf(documents.tenant, compiler, tenantCauses) {
+            CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
+        }
+        val app = ViewDocuments.appOf(scope) { tenant?.needsApp(it) == true }
+        val appDocument = app?.let { id ->
+            documentOf(
+                documents.app,
+                compiler,
+                unresolved
+            ) { CompiledDocument.app(AppId(id.value), emptyList(), emptyList()) }
+        }
+        unresolved += tenantCauses
         return SnapshotView(
             platform,
-            app?.let { id ->
-                documentOf(
-                    documents.app,
-                    compiler,
-                    unresolved
-                ) { CompiledDocument.app(AppId(id.value), emptyList(), emptyList()) }
-            },
-            documentOf(documents.tenant, compiler, unresolved) {
-                CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
-            },
+            appDocument,
+            tenant,
             unresolved,
             version = ViewVersion(
                 documents.platform?.revision ?: 0,

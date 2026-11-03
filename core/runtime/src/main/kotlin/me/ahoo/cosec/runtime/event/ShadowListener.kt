@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.event
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -29,6 +33,9 @@ import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowSample
+import me.ahoo.cosec.runtime.snapshot.SnapshotViews
+import me.ahoo.cosec.runtime.snapshot.ViewDocuments
+import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.ThreadLocalRandom
 import kotlin.coroutines.cancellation.CancellationException
@@ -57,6 +64,11 @@ class ShadowListener(
     private val candidates: CandidateSource,
     private val recorder: ShadowRecorder,
     private val engine: FlatEngine = CoSecFlatEngine,
+    /**
+     * The installed documents, for the app document a tenant candidate makes a request read that its live view did not
+     * ([ViewDocuments.appOf], RC1-17). Without them such a candidate cannot be compared: [ShadowOutcome.CANDIDATE_ERROR].
+     */
+    private val views: SnapshotViews? = null,
 ) : DecisionListener {
     init {
         require(sampleRate in 0.0..1.0) { "The shadow sample rate is between 0 and 1, not $sampleRate." }
@@ -82,7 +94,7 @@ class ShadowListener(
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun compare(
+    private suspend fun compare(
         replay: ReplayHandle,
         enforced: Decision,
         key: SnapshotKey,
@@ -94,7 +106,13 @@ class ShadowListener(
             return
         }
         val decided = try {
-            engine.evaluate(replay.request, replaced(replay.view, key, candidate.document), TraceLevel.OFF).decision
+            val view = candidateView(replay, key, candidate.document)
+            if (view == null) {
+                log.debug { "The candidate of window ${candidate.window} needs an app document no view source gives." }
+                recorder.record(candidate.window, ShadowOutcome.CANDIDATE_ERROR, installed, null)
+                return
+            }
+            engine.evaluate(replay.request, view, TraceLevel.OFF).decision
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -124,6 +142,38 @@ class ShadowListener(
         view.app?.let { add(SnapshotKey.App(it.owner) to view.version?.app) }
         view.tenant?.let { add(SnapshotKey.Tenant(it.owner) to view.version?.tenant) }
     }
+
+    /**
+     * The view [document], the candidate of [key], is evaluated on, as enforcement would read it once the candidate is
+     * published: the replay's view with [key]'s document replaced and, for a tenant candidate, with the app document the
+     * one rule ([ViewDocuments.appOf]) makes the request read with that tenant document. One it needs and the view lacks
+     * is read from the installed documents ([views]); one it no longer needs is left out. Null when one is needed and
+     * there is no [views].
+     */
+    private suspend fun candidateView(
+        replay: ReplayHandle,
+        key: SnapshotKey,
+        document: CompiledDocument
+    ): SnapshotView? {
+        val view = replaced(replay.view, key, document)
+        if (key !is SnapshotKey.Tenant) {
+            return view
+        }
+        val scope = replay.request.scope
+        val app = ViewDocuments.appOf(scope) { document.needsApp(it) }
+        return when {
+            app == null -> if (view.app == null) view else withApp(view, null)
+            view.app != null -> view
+            else -> {
+                val source = views ?: return null
+                val withApp = ViewKey.of(scope.tenant, app)
+                withApp(view, (source.peek(withApp) ?: source.load(withApp).await()).app)
+            }
+        }
+    }
+
+    private fun withApp(view: SnapshotView, app: CompiledDocument?): SnapshotView =
+        SnapshotView(view.platform, app, view.tenant, view.unresolved, view.version)
 
     /** A new view: [view] with [key]'s document replaced. The enforced view is never changed. */
     private fun replaced(view: SnapshotView, key: SnapshotKey, document: CompiledDocument): SnapshotView {
