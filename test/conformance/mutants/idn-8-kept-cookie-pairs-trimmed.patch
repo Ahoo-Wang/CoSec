@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CookieHeadersTest :gateway:test --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
-index 997dc19c..a634518b 100644
+index 7edb5a5d..6c91d414 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
-@@ -45,7 +45,7 @@ internal object CookieHeaders {
-         if (named.first() && header.startsWith(RFC2965_VERSION, ignoreCase = true)) {
+@@ -48,7 +48,7 @@ internal object CookieHeaders {
              return null
          }
--        return pairs.indices.joinToString(";") { if (named[it]) "" else pairs[it] }
-+        return pairs.indices.filterNot { named[it] }.joinToString("; ") { pairs[it].trimStart() }
-     }
- 
-     /** What Netty's `ServerCookieDecoder` reads at the very start of a header as RFC 2965's, case ignored. */
+         val kept = pairs.filterIndexed { i, _ -> !named[i] }
+-        val written = kept.joinToString(";")
++        val written = kept.joinToString(";") { it.trimStart() }
+         return when {
+             rfc2965 && kept.size == 1 -> "$written;"
+             named.first() && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> " $written"

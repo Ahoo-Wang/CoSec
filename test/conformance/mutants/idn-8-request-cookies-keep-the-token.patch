@@ -3,14 +3,14 @@
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 3c6ddd10..11620354 100644
+index b882737c..00a800d7 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 @@ -131,7 +131,7 @@ class PipelineGatewayFilter(
              // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
              outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
              val built = downstream.build()
--            val forwarded = if (cookies != null) WithoutTokenCookies(built, withoutCookieToken) else built
+-            val forwarded = cookies?.let { WithoutTokenCookies(built, withoutCookieToken, it.dropped) } ?: built
 +            val forwarded = built
              chain.filter(authorized.mutate().request(forwarded).build())
          }

@@ -1,0 +1,26 @@
+# Rule: SCP-7
+# Mutant: a back-reference set with one member of an app no key can name fails to decode whole, so a publish that binds its policy fails until Redis is edited
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.control.CoCacheControlStoreTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/ControlCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/ControlCacheSpecs.kt
+index 25fcf0d2..9953627d 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/ControlCacheSpecs.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/ControlCacheSpecs.kt
+@@ -314,15 +314,8 @@ internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
+     override fun decode(bytes: ByteArray): Set<SnapshotKey> =
+         read(bytes, WHAT).items(WHAT).mapNotNullTo(LinkedHashSet()) { item ->
+             val text = item.text(WHAT)
+-            SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
+-                log.warn {
+-                    "A back-reference set names [${SnapshotKeyText.printable(text)}], which no document key can name " +
+-                        "(SCP-7): that member is skipped."
+-                }
+-                null
+-            } else {
+-                malformed(WHAT, "[$text] is not a document key")
+-            }
++            SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")
++
+         }
+ 
+     private val log = KotlinLogging.logger {}
