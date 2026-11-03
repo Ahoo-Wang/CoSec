@@ -180,7 +180,7 @@ CoSec registers no meters for the documents an instance holds. To see whether in
 
 The control plane emits a change event for every step of a change: `PROPOSED`, `CHECKED`, `SHADOW_STARTED`,
 `SHADOWED`, `APPROVED`, `REJECTED`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `BREAK_GLASS_REQUESTED`,
-`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`. An event names the change, the document, the operator, the base and candidate
+`BREAK_GLASS_APPROVED`, `REVOKED`, `HEADS_MOVED`, `REVIEW_NEEDED`, `ABANDONED`. An event names the change, the document, the operator, the base and candidate
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them.
 
@@ -193,9 +193,18 @@ content. Change listeners receive them.
   all of them together) before the step takes effect, or the step does not happen and the control API
   answers `503`. Every other event, and every event to a `BEST_EFFORT` listener, is delivered afterwards; a failure is
   logged as `Change listener [<name>] could not record <event>.` The revision record is the durable record of what was
-  published.
+  published. A gated event says the step was about to happen, not that it did: a check after it can still refuse the
+  step (a `409` when the change moved meanwhile), as after a `BREAK_GLASS_APPROVED` or an `ABANDONED`. The change's
+  state, and for a publish the revision history, say what happened.
+- **A note is free text**, part of it the change's author's (the reason of a proposal, a request or a revoke): read who
+  did a step from the event's `operator`, never from its note.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
+- **`ABANDONED` names who abandoned a change and, in its note, its author** (`author <tenant>/<principal>: <note>`).
+  Abandoning a break-glass change is gated like `PUBLISHING`: it needs a `REQUIRED` change listener (`503` without
+  one), which records it before the change is stored as abandoned. Abandoning any other change is recorded afterwards.
+- **`REVOKED` of a stalled revoke published again** names the revoker who revoked again, and its note adds their
+  reason (`<first reason>; published again by <tenant>/<principal>: <reason>`), as does its `PUBLISHING`.
 - **`HEADS_MOVED` and `REVIEW_NEEDED` follow a `PUBLISHED`** when another document the change was checked with moved
   before its write landed ([What a publish compares](./storage.md#what-a-publish-compares)). Each names the heads that
   moved (`moved`: the document, or `list:apps` for the app list, the digest it was checked with, the digest it has

@@ -91,7 +91,7 @@ class Changes(
     /** The headers the host reads credentials from besides the fixed ones (`CND-5`), as enforcement compiles with them. */
     credentialHeaders: Set<String> = emptySet(),
     private val checks: ChangeChecks = ChangeChecks(options, attributes, credentialHeaders),
-    private val authority: ChangeAuthority = ChangeAuthority(authorizer, options),
+    internal val authority: ChangeAuthority = ChangeAuthority(authorizer, options),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),
     /** Who hears of every step (RFC 0007 §10.5); publishing and break-glass wait for the REQUIRED ones. */
@@ -108,7 +108,9 @@ class Changes(
 
     private val candidates = CandidateChecks(checks, context, authority, clock, options)
 
-    private val preemption = Preemption(revisions, authority, clock)
+    internal val preemption = Preemption(revisions, authority, clock)
+
+    private val slots = StagingSlots(store, clock, options)
 
     /**
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
@@ -270,7 +272,7 @@ class Changes(
      */
     suspend fun rebase(author: Operator, id: ChangeId): ChangeRequest {
         val change = visible(author, id)
-        requireAuthor(author, change)
+        authority.requireAuthor(author, change, "rebases")
         requireState(change, REBASABLE)
         authority.authorize(author, change.key, change.operations, change.kind, touchesBreakGlass(change))
         return transition(id, REBASABLE) { current ->
@@ -303,7 +305,7 @@ class Changes(
             return transition(
                 id,
                 setOf(ChangeState.CHECKED)
-            ) { it.copy(state = afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT) }
+            ) { it.copy(state = PublishRules.afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT) }
         }
         val now = clock.instant()
         val state = ShadowState("${id.value}@${now.toEpochMilli()}", now)
@@ -320,7 +322,7 @@ class Changes(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            releaseSlot(change)
+            slots.release(change)
             throw ChangeRejectedException(UNAVAILABLE, "the candidate of [${change.key}] could not be staged", e)
         }
         return transition(id, setOf(ChangeState.CHECKED)) { it.copy(state = ChangeState.SHADOWING, shadow = state) }
@@ -356,9 +358,9 @@ class Changes(
             transition(id, setOf(ChangeState.SHADOWING)) { it.copy(shadow = seen) }
         }
         val closed = transition(id, setOf(ChangeState.SHADOWING)) {
-            it.copy(state = afterWindow(it), shadow = seen.copy(closed = summary))
+            it.copy(state = PublishRules.afterWindow(it), shadow = seen.copy(closed = summary))
         }
-        withdraw(closed)
+        slots.withdraw(closed)
         audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)
         return closed
     }
@@ -382,7 +384,9 @@ class Changes(
         }
         requireState(change, setOf(ChangeState.CHECKED))
         takeSlot(operator, change, revisions.head(change.key))
-        return transition(id, setOf(ChangeState.CHECKED)) { it.copy(state = afterWindow(it), skipShadow = reason) }
+        return transition(id, setOf(ChangeState.CHECKED)) {
+            it.copy(state = PublishRules.afterWindow(it), skipShadow = reason)
+        }
     }
 
     /**
@@ -398,7 +402,7 @@ class Changes(
         val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
         requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
-        requireApprovable(operator, change, candidate)
+        authority.requireApprovable(operator, change, candidate)
         val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
         if (breakGlass) {
             requireAudit(true)
@@ -432,16 +436,6 @@ class Changes(
         }.also { if (!breakGlass) audit(ChangeEvent.Kind.APPROVED, it, operator.actor) }
     }
 
-    /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
-    private fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
-        val refusal = when {
-            operator.actor == change.author -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
-            else -> authority.approvalRefusal(operator, change)?.let { FORBIDDEN to it }
-                ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
-        }
-        refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
-    }
-
     /**
      * Rejects an `AWAITING_APPROVAL` change: [operator] holds `cosec:approve` on the document, and is a platform
      * principal when the change sets a boundary (`BDY-2`). Its slot is released.
@@ -455,7 +449,7 @@ class Changes(
         val rejected = transition(id, setOf(ChangeState.AWAITING_APPROVAL)) {
             it.copy(state = ChangeState.REJECTED, findings = it.findings + Finding(APPROVAL, "$", reason, FORBIDDEN))
         }
-        releaseSlot(rejected)
+        slots.release(rejected)
         audit(ChangeEvent.Kind.REJECTED, rejected, operator.actor)
         return rejected
     }
@@ -463,21 +457,34 @@ class Changes(
     /**
      * Abandons a change that is not finished; its slot is released. Its author may, and so may whoever holds
      * `cosec:publish` on the document, which the change may be holding up; a change that sets a boundary, only a
-     * platform principal (`BDY-2`).
+     * platform principal (`BDY-2`). A revoke of a break-glass binding that still grants, only its author (RC1-51): the
+     * principal it revokes holds `cosec:publish` through that binding, and nobody else needs to, since a new revoke
+     * takes its slot (`BRK-9`).
+     *
+     * Every abandon is recorded ([ChangeEvent.Kind.ABANDONED], its note naming the change's author). A break-glass
+     * change's needs a REQUIRED change listener and is recorded there before it is stored, as its approval is (RC1-30);
+     * any other change's is recorded after, best effort.
      */
     suspend fun abandon(operator: Operator, id: ChangeId): ChangeRequest {
         val current = visible(operator, id)
         authority.requireBoundaryOperator(operator, current)
         if (operator.actor != current.author) {
             authority.require(operator, current.key, ControlActions.PUBLISH)
+            if (preemption.revokesBreakGlass(current, revisions.head(current.key))) {
+                throw ChangeRejectedException(FORBIDDEN, "only its author abandons change ${id.value}, a live revoke")
+            }
         }
-        val change = transition(
-            id,
-            ChangeState.entries.filterNot {
-                it.terminal
-            }.toSet()
-        ) { it.copy(state = ChangeState.ABANDONED) }
-        releaseSlot(change)
+        val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
+        if (breakGlass) {
+            requireState(current, OPEN)
+            requireAudit(true)
+            audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
+        }
+        val change = transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
+        slots.release(change)
+        if (!breakGlass) {
+            audit(ChangeEvent.Kind.ABANDONED, change.abandoned(), operator.actor)
+        }
         return change
     }
 
@@ -494,9 +501,18 @@ class Changes(
      *
      * From the head write on, it does not respond to cancellation: the change is settled, its outcome audited and what
      * moved meanwhile recorded, unless a store or a listener fails; what moved is recorded even then. The checks and
-     * the writes before the head's respond to it.
+     * the writes before the head's respond to it. A head write that meets this change's own revision, written by another
+     * call meanwhile, leaves the change to that call to settle and record (R4-2), and returns it as it stands.
+     *
+     * [again] is the reason of a revoker who publishes a stalled revoke by revoking its binding again ([BreakGlass]):
+     * the publish's records name them and it (R4-5).
      */
-    suspend fun publish(publisher: Operator, id: ChangeId, ack: ShadowAck? = null): ChangeRequest {
+    suspend fun publish(
+        publisher: Operator,
+        id: ChangeId,
+        ack: ShadowAck? = null,
+        again: String? = null
+    ): ChangeRequest {
         val change = visible(publisher, id)
         authority.require(publisher, change.key, ControlActions.PUBLISH)
         requireState(change, setOf(ChangeState.READY))
@@ -531,10 +547,10 @@ class Changes(
         // round trip between that read and the write, plus any pause of this instance between them (a GC, say); the
         // write is conditional on the base, not on the slot. A change preempted within it still publishes, and the one
         // that took the slot conflicts on the moved base ([movedOn]).
-        if (!holdsSlot(change)) {
+        if (!slots.holds(change)) {
             return settle(change, ChangeState.CONFLICTED)
         }
-        audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
+        audit(ChangeEvent.Kind.PUBLISHING, change.publishedAgain(publisher, again), publisher.actor)
         var published: ChangeRequest? = null
         var slotLost = false
         val outcome = revisions.publish(
@@ -542,23 +558,44 @@ class Changes(
             head,
             candidate,
             PublishRules.publication(change, publisher, rechecked),
-            precondition = { holdsSlot(change).also { slotLost = !it } },
+            precondition = { slots.holds(change).also { slotLost = !it } },
         ) {
-            published = written(change, it, rechecked, head?.document, candidate, publisher)
+            published = written(change, it, rechecked, head?.document, candidate, publisher, again)
         }
-        val settled = when (outcome) {
-            is PublishOutcome.Published -> return checkNotNull(published) { "[${change.key}] was written unsettled." }
-            // A change preempted before its head write is CONFLICTED already, by the one that took its slot, whether
-            // it found the slot gone or met the head that change wrote (review N5).
-            is PublishOutcome.Conflicted -> settle(change, ChangeState.CONFLICTED, from = LOST)
-            is PublishOutcome.Referenced -> settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
+        return when (outcome) {
+            is PublishOutcome.Published -> checkNotNull(published) { "[${change.key}] was written unsettled." }
+            else -> unwritten(change, outcome, slotLost, publisher, again)
         }
-        val note = PublishRules.unwrittenNote(outcome, slotLost) ?: settled.note
-        audit(PublishRules.outcomeOf(change, settled), settled.copy(note = note), publisher.actor)
-        return settled
     }
 
-    private suspend fun holdsSlot(change: ChangeRequest): Boolean = store.stage(change.key)?.value?.holder == change.id
+    /**
+     * [change], whose publish wrote no head ([outcome]; [slotLost] when it found the slot gone right before the write),
+     * settled and recorded. A head write that met this change's own revision, written by another call meanwhile, leaves
+     * it to that call to settle and record (R4-2): it comes back as it stands.
+     */
+    private suspend fun unwritten(
+        change: ChangeRequest,
+        outcome: PublishOutcome,
+        slotLost: Boolean,
+        publisher: Operator,
+        again: String?,
+    ): ChangeRequest {
+        val head = revisions.head(change.key)
+        if (outcome is PublishOutcome.Conflicted && PublishRules.ownRevision(revisions, change, head) != null) {
+            return read(change.id).value
+        }
+        val settled = if (outcome is PublishOutcome.Referenced) {
+            settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
+        } else {
+            // A change preempted before its head write is CONFLICTED already, by the one that took its slot, whether
+            // it found the slot gone or met the head that change wrote (review N5).
+            settle(change, ChangeState.CONFLICTED, from = LOST)
+        }
+        val note = PublishRules.unwrittenNote(outcome, slotLost) ?: settled.note
+        val recorded = settled.copy(note = note).publishedAgain(publisher, again)
+        audit(PublishRules.outcomeOf(change, settled), recorded, publisher.actor)
+        return settled
+    }
 
     /**
      * [change], `CONFLICTED`: its document is no longer at its base. When the head is a revision of the same base, by
@@ -566,12 +603,8 @@ class Changes(
      */
     private suspend fun movedOn(change: ChangeRequest, head: Head?, publisher: Operator): ChangeRequest {
         val settled = settle(change, ChangeState.CONFLICTED)
-        val provenance = head?.document?.provenance
-        if (provenance != null && provenance.change != change.id.value &&
-            provenance.parent?.digest == change.base.digest?.toString()
-        ) {
-            val note = "revision ${head.revision} was published over the same base first, by ${provenance.change}"
-            audit(ChangeEvent.Kind.FAILED, settled.copy(note = note), publisher.actor)
+        PublishRules.publishedFirst(change, head)?.let {
+            audit(ChangeEvent.Kind.FAILED, settled.copy(note = it), publisher.actor)
         }
         return settled
     }
@@ -588,6 +621,7 @@ class Changes(
         base: PolicyDocument?,
         candidate: PolicyDocument,
         publisher: Operator,
+        again: String?,
     ): ChangeRequest {
         var settled: ChangeRequest? = null
         var mine = true
@@ -598,7 +632,7 @@ class Changes(
                 mine = false
                 return read(change.id).value
             }
-            audit(PublishRules.outcomeOf(change, settled), settled, publisher.actor)
+            audit(PublishRules.outcomeOf(change, settled), settled.publishedAgain(publisher, again), publisher.actor)
             return settled
         } finally {
             if (mine) recordMoved(settled ?: change, rechecked, base, candidate, publisher)
@@ -616,7 +650,7 @@ class Changes(
             if (read(change.id).value.state == ChangeState.PUBLISHED) return null
             throw e
         }
-        releaseSlot(settled)
+        slots.release(settled)
         return settled
     }
 
@@ -673,23 +707,6 @@ class Changes(
         }
     }
 
-    /** Withdraws the candidate of [change]'s window, if it is still the staged one; a failure only leaves it to compare. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun withdraw(change: ChangeRequest) {
-        val window = change.shadow?.window ?: return
-        try {
-            if (store.candidate(change.key)?.window == window) {
-                store.putCandidate(change.key, null)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.warn(
-                e
-            ) { "Withdrawing the candidate of window $window failed; instances count it as a base mismatch once it is stale." }
-        }
-    }
-
     /**
      * The candidate [id] would publish on the current head (RFC 0007 §10.3 `simulate`), or null when its operations no
      * longer apply there. Nothing is written.
@@ -699,27 +716,21 @@ class Changes(
         return candidates.applied(change, revisions.head(change.key)?.document).first
     }
 
-    /** Tells the listeners (RFC 0007 §10.5); a REQUIRED one that cannot record a gated step stops it (503). */
+    /**
+     * Tells the listeners (RFC 0007 §10.5); a REQUIRED one that cannot record a [gated] step stops it (503). A step is
+     * gated by its event's kind, or by what it does to its change (a break-glass change's abandon, RC1-51).
+     */
     private suspend fun audit(
         kind: ChangeEvent.Kind,
         change: ChangeRequest,
         operator: Actor,
         moved: List<MovedHead> = emptyList(),
+        gated: Boolean = kind.gated,
     ) {
         try {
-            listeners.publish(change.event(kind, operator, clock, moved))
+            listeners.publish(change.event(kind, operator, clock, moved), gated)
         } catch (e: ChangeAuditException) {
             throw ChangeRejectedException(UNAVAILABLE, e.message.orEmpty(), e)
-        }
-    }
-
-    /** Where a change goes when its window closes or is skipped (RFC 0007 §6.1). */
-    private fun afterWindow(change: ChangeRequest): ChangeState =
-        if (change.escalations.all { it.informational }) ChangeState.READY else ChangeState.AWAITING_APPROVAL
-
-    private fun requireAuthor(operator: Operator, change: ChangeRequest) {
-        if (operator.actor != change.author) {
-            throw ChangeRejectedException(FORBIDDEN, "only the author of change ${change.id.value} rebases it")
         }
     }
 
@@ -736,7 +747,7 @@ class Changes(
         val settled = transition(change.id, if (state == ChangeState.PUBLISHED) ChangeState.entries.toSet() else from) {
             it.copy(state = state, findings = findings, publishedRevision = published ?: it.publishedRevision)
         }
-        releaseSlot(settled)
+        slots.release(settled)
         return settled
     }
 
@@ -749,7 +760,7 @@ class Changes(
             return change
         }
         val expired = transition(change.id, setOf(change.state)) { it.copy(state = ChangeState.EXPIRED) }
-        releaseSlot(expired)
+        slots.release(expired)
         return expired
     }
 
@@ -797,7 +808,7 @@ class Changes(
                     taken = true
                     return
                 }
-                val held = holder?.let { store.change(it)?.value }?.takeIf(::stillStaged)
+                val held = holder?.let { store.change(it)?.value }?.takeIf(slots::stillStaged)
                 if (held != null) {
                     val own = PublishRules.ownRevision(
                         revisions,
@@ -850,30 +861,13 @@ class Changes(
     private suspend fun preempted(conflicted: ChangeRequest, by: ChangeRequest, operator: Operator, taken: Boolean) {
         val note = if (taken) "preempted by ${by.id.value}" else "conflicted by ${by.id.value}, which did not take the slot"
         try {
-            withdraw(conflicted)
+            slots.withdraw(conflicted)
             audit(ChangeEvent.Kind.FAILED, conflicted.copy(note = note), operator.actor)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // The holder is CONFLICTED already, so it publishes nothing: only the withdrawal or its record failed.
             log.warn(e) { "Change ${conflicted.id.value} lost its slot to ${by.id.value}, unrecorded." }
-        }
-    }
-
-    private fun stillStaged(holder: ChangeRequest): Boolean =
-        holder.state.staged && !clock.instant().isAfter(holder.createdAt.plus(options.expireAfter))
-
-    /** Releases the slot [change] holds, and withdraws its candidate. */
-    private suspend fun releaseSlot(change: ChangeRequest) {
-        withdraw(change)
-        repeat(MAX_ATTEMPTS) {
-            val current = store.stage(change.key) ?: return
-            if (current.value.holder != change.id) {
-                return
-            }
-            if (store.putStage(change.key, current.digest, StageSlot.FREE)) {
-                return
-            }
         }
     }
 
@@ -893,6 +887,7 @@ class Changes(
         const val APPROVAL = "APPROVAL"
         val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
         val STAGED = ChangeState.entries.filter { it.staged }.toSet()
+        val OPEN = ChangeState.entries.filterNot { it.terminal }.toSet()
         val UNPUBLISHED = ChangeState.entries.toSet() - ChangeState.PUBLISHED
         val LOST = setOf(ChangeState.READY, ChangeState.CONFLICTED)
     }

@@ -1,0 +1,17 @@
+# Rule: BRK-10
+# Mutant: a break-glass change is abandoned whether or not its REQUIRED change listener records it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index b2a61126..ae0ed712 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -478,7 +478,7 @@ class Changes(
+         if (breakGlass) {
+             requireState(current, OPEN)
+             requireAudit(true)
+-            audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
++            audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = false)
+         }
+         val change = transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
+         slots.release(change)

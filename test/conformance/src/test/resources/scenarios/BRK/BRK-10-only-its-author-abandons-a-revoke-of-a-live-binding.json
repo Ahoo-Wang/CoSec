@@ -1,0 +1,268 @@
+{
+  "rules": [
+    "BRK-10"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-51: rita's revoke of plato's live break-glass binding is READY in the slot. plato, the principal it revokes, holds cosec:publish and may not abandon it, nor may pia; on an instance without a REQUIRED change listener, not even rita, its author, may.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "fence",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "acme-approver",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:approve",
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:boundary"
+              ],
+              "resource": [
+                "doc/tenant/acme",
+                "doc/tenant/acme/**",
+                "scope/acme/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "break-glass-requester",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:breakglass",
+                "cosec:publish"
+              ],
+              "resource": "doc/platform"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "kim",
+          "subject": {
+            "principal": "kim",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "rita",
+          "subject": {
+            "principal": "rita",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "break-glass-requester"
+        },
+        {
+          "id": "carol",
+          "subject": {
+            "principal": "carol",
+            "tenant": "acme"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "acme-approver"
+        },
+        {
+          "id": "glass",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-11-01T02:00:00Z"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "approvers",
+            "subject": {
+              "role": "approver"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "acme-approver"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "carol": {
+      "tenant": "acme"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)",
+      "credential": {
+        "token": "t-pia",
+        "issuedAt": "2026-10-31T23:00:00Z"
+      }
+    },
+    "kim": {
+      "tenant": "(platform)",
+      "credential": "api-key"
+    },
+    "rita": {
+      "tenant": "(platform)"
+    },
+    "dave": {
+      "tenant": "acme",
+      "roles": [
+        "approver"
+      ],
+      "provider": true
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "rita",
+        "document": "platform",
+        "kind": "BREAK_GLASS",
+        "operations": [
+          {
+            "removeBinding": "glass"
+          }
+        ]
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "rita"
+      }
+    },
+    {
+      "abandon": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "abandon": {
+        "change": "c1",
+        "by": "pia"
+      }
+    },
+    {
+      "unaudited": true
+    },
+    {
+      "abandon": {
+        "change": "c1",
+        "by": "rita"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "rita"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "refused 403",
+      "refused 403",
+      "unaudited",
+      "refused 503",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    }
+  }
+}

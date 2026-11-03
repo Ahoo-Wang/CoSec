@@ -19,12 +19,22 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
+import java.time.Instant
 
 /**
  * RFC 0007 §10.2: the control API's routes take the request the host pipeline permitted, go through the control
@@ -228,6 +238,67 @@ class ControlHttpTest {
         ).first.assert().isEqualTo(400)
     }
 
+    /**
+     * R4-1, `BRK-11`: removing a break-glass binding answers 200 only once the binding no longer grants; a revoke that
+     * leaves it granting is a 409 that names its change's state, never a success; a binding the head does not have is a
+     * 404 (review F-1).
+     */
+    @Test
+    fun `a break-glass revoke answers 200 only once the binding no longer grants`() {
+        runBlocking {
+            val head = fixture.plane.read(fixture.plato, SnapshotKey.Platform)
+            val glass = Binding(
+                BindingId("glass"),
+                SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("plato")),
+                BindingScope(Match.Any, Match.Any),
+                BuiltinPolicies.ROOT,
+                Instant.parse("2026-11-01T01:00:00Z").toEpochMilli(),
+                breakGlass = true,
+            )
+            // An ordinary binding with an expiry, which has passed.
+            val contractor = Binding(
+                BindingId("contractor"),
+                SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("carl")),
+                BindingScope(Match.Any, Match.Any),
+                PolicyId("no-delete"),
+                Instant.parse("2026-10-31T23:00:00Z").toEpochMilli(),
+            )
+            fixture.bootstrap(SnapshotKey.Platform, head.policies, head.bindings + glass + contractor)
+        }
+        // F-1: a mistyped id is a 404 without detail, and leaves no change behind.
+        val made = fixture.ids.get()
+        val (missing, notFound) = call(
+            "DELETE",
+            "/break-glass/glas",
+            security = plato,
+            query = mapOf("reason" to "done")
+        )
+        missing.assert().isEqualTo(404)
+        notFound.has("detail").assert().isFalse()
+        fixture.ids.get().assert().isEqualTo(made)
+        val (revoked, change) = call(
+            "DELETE",
+            "/break-glass/glass",
+            security = plato,
+            query = mapOf("reason" to "done")
+        )
+        revoked.assert().isEqualTo(200)
+        change.get("state").asString().assert().isEqualTo("PUBLISHED")
+        // Revoked, the id is no longer on the head.
+        call("DELETE", "/break-glass/glass", security = plato, query = mapOf("reason" to "done")).first
+            .assert().isEqualTo(404)
+        // Review F-10: an ordinary binding, live or expired, is no break-glass binding: a 409 at once, nothing proposed.
+        val before = fixture.ids.get()
+        for (ordinary in listOf("no-delete", "contractor")) {
+            val (refused, problem) =
+                call("DELETE", "/break-glass/$ordinary", security = plato, query = mapOf("reason" to "done"))
+            refused.assert().describedAs(ordinary).isEqualTo(409)
+            problem.get("code").asString().assert().isEqualTo("CONFLICT")
+            problem.get("detail").asString().assert().isEqualTo("binding [$ordinary] is not a break-glass binding")
+        }
+        fixture.ids.get().assert().isEqualTo(before)
+    }
+
     @Test
     fun `break-glass over HTTP is refused without a REQUIRED change listener`() {
         val (status, problem) = call(
@@ -239,12 +310,13 @@ class ControlHttpTest {
         status.assert().isEqualTo(503)
         problem.has("detail").assert().isFalse()
         call("DELETE", "/break-glass/glass", security = plato).first.assert().isEqualTo(400)
+        // No such binding: a 404, and nothing proposed.
         call(
             "DELETE",
             "/break-glass/glass",
             security = plato,
             query = mapOf("reason" to "done")
-        ).first.assert().isIn(200, 201, 409, 422)
+        ).first.assert().isEqualTo(404)
         call("POST", "/break-glass/c9:approve", """{"candidate":"x"}""", security = plato).first.assert().isEqualTo(404)
     }
 }

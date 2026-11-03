@@ -1,0 +1,18 @@
+# Rule: BRK-11
+# Mutant: a revoke of an ordinary binding is proposed anyway, and answers 200 with its DRAFT when that binding has expired
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest --tests me.ahoo.cosec.control.api.ControlHttpTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
+index c2221a12..b720fa70 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
+@@ -108,9 +108,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+         var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: run {
+             val existing = revisions.head(SnapshotKey.Platform)?.document?.bindings?.firstOrNull { it.id == binding }
+                 ?: throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
+-            if (!existing.breakGlass) {
+-                throw ChangeRejectedException(CONFLICT, "binding [${binding.value}] is not a break-glass binding")
+-            }
+             revokeOnce(operator, operations, reason)
+         }
+         repeat(RETRIES) {

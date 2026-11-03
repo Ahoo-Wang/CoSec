@@ -18,6 +18,8 @@ package me.ahoo.cosec.conformance
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.SimulatedRequest
@@ -112,6 +114,7 @@ import java.time.Instant
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
  *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
+ *            { "revokeBreakGlass": { "change": "c2", "by": "rita", "binding": "glass" } },  // DELETE /break-glass/glass
  *            { "revoke": "t1" },               // that token is revoked; { "revokeTokens": "pia" }: every token of pia's
  *            { "provide": { "operator": "dave", "roles": [] } },   // what the provider answers for dave from now on
  *            { "unaudited": true } ],          // later steps run on an instance without a REQUIRED change listener
@@ -162,10 +165,12 @@ object ChangeRunner : ScenarioRunner {
         }
         private val engine = ControlEngine(revisions, provider)
         private val authorized = node.has("operators")
-        private val operators = node.get("operators")?.fields().orEmpty().entries.associate { (name, operator) ->
+
+        /** Each operator's request as the host pipeline permitted it: what the control API's routes take. */
+        private val securities = node.get("operators")?.fields().orEmpty().entries.associate { (name, operator) ->
             operator.only("tenant", "roles", "policies", "attributes", "credential", "provider")
             val credential = operator.get("credential")
-            name to engine.operator(
+            name to engine.security(
                 TenantId(operator.required("tenant").text()),
                 name,
                 operator.get("roles")?.strings().orEmpty(),
@@ -178,6 +183,7 @@ object ChangeRunner : ScenarioRunner {
                 provided = operator.get("provider")?.bool() == true,
             )
         }
+        private val operators = securities.mapValues { (_, security) -> Operator.of(security)!! }
 
         /** Revoked token ids, and the instant before which an operator's tokens are revoked. */
         private val revokedTokens = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -288,6 +294,8 @@ object ChangeRunner : ScenarioRunner {
                     simulate(argument)
                 } else if (action in CREDENTIAL_STEPS) {
                     credentials(action, argument)
+                } else if (action == "revokeBreakGlass") {
+                    revoke(argument)
                 } else if (action == "rateLimits") {
                     val head = revisions.head(documentKey(argument.text()))
                     "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
@@ -331,6 +339,25 @@ object ChangeRunner : ScenarioRunner {
             "approveAsBefore" -> target(argument).let { (id, op) -> approvedAsBefore(id, op) }
 
             else -> transition(action, argument)
+        }
+
+        /**
+         * `DELETE /break-glass/{binding}` through the control API (RFC 0007 §10.2): `{ "change": "c2", "by": "rita",
+         * "binding": "glass" }`, the change it would make named `change`. Its result is the status, then the state of
+         * the change it answers with, if any (`200 PUBLISHED`, `409`, `404`).
+         */
+        private suspend fun revoke(argument: JsonNode): String {
+            argument.only("change", "by", "binding")
+            val by = argument.required("by").text()
+            val security = securities[by] ?: throw ScenarioFormatException("No operator $by")
+            next = ChangeId(argument.required("change").text())
+            documents += SnapshotKey.Platform
+            val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(authorizer)))
+            val path = "/break-glass/${argument.required("binding").text()}"
+            val response = http.handle(ControlHttpRequest("DELETE", path, mapOf("reason" to "scenario")), security)
+            val body = CoSecJson.mapper.readTree(response.body).takeIf { response.status / 100 == 2 }
+            body?.let { named[it.required("id").text()] = changes.get(ChangeId(it.required("id").text())) }
+            return listOfNotNull(response.status.toString(), body?.required("state")?.text()).joinToString(" ")
         }
 
         private suspend fun transition(action: String, argument: JsonNode): ChangeRequest {
@@ -477,7 +504,6 @@ object ChangeRunner : ScenarioRunner {
             return operators[name] ?: throw ScenarioFormatException("No operator $name")
         }
 
-        /** A transition's change and operator: `"c1"`, or `{ "change": "c1", "by": "bob", ... }`. */
         /**
          * [id] approved by [op] as an instance before RC1-11 stored it: `READY`, the approval naming no credential, written
          * to the store as that instance would, past every check of this one's `approve`.
@@ -498,6 +524,7 @@ object ChangeRunner : ScenarioRunner {
             return approved
         }
 
+        /** A transition's change and operator: `"c1"`, or `{ "change": "c1", "by": "bob", ... }`. */
         private suspend fun target(argument: JsonNode, vararg fields: String): Triple<ChangeId, Operator, JsonNode> {
             if (!argument.isString) {
                 argument.only("change", "by", *fields)

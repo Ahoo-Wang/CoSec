@@ -1,0 +1,17 @@
+# Rule: BRK-11
+# Mutant: a revoke the head moved under before it was proposed or staged is not made again
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
+index f4dd2006..2e8cc9d6 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
+@@ -133,7 +133,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+      * or staged. One that ended `CONFLICTED`, or met a moved head, may be made [again].
+      */
+     private class Attempt(val change: ChangeRequest?, val moved: ChangeRejectedException? = null) {
+-        val again: Boolean get() = moved != null || change?.state == ChangeState.CONFLICTED
++        val again: Boolean get() = change?.state == ChangeState.CONFLICTED
+ 
+         fun outcome(): ChangeRequest = change ?: throw checkNotNull(moved)
+     }

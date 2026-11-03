@@ -37,6 +37,7 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -100,7 +101,19 @@ class ControlEngine(
         credential: Identity.Credential? = null,
         issuedAt: Instant? = null,
         provided: Boolean = false,
-    ): Operator {
+    ): Operator = Operator.of(security(tenant, id, roles, policies, attributes, credential, issuedAt, provided))!!
+
+    /** The request of [operator]'s principal that the host pipeline permitted: what the control API's routes take. */
+    fun security(
+        tenant: TenantId,
+        id: String,
+        roles: List<String> = emptyList(),
+        policies: List<String> = emptyList(),
+        attributes: Map<String, Any> = emptyMap(),
+        credential: Identity.Credential? = null,
+        issuedAt: Instant? = null,
+        provided: Boolean = false,
+    ): RequestSecurity {
         val principal = AuthenticatedPrincipal(
             PrincipalId(id),
             tenant,
@@ -128,7 +141,7 @@ class ControlEngine(
         )
         val outcome = runBlocking { host.evaluate(FACTS) }
         check(outcome.proceed) { "The host pipeline did not permit the control API: ${outcome.status}" }
-        return Operator.of(outcome.security!!)!!
+        return outcome.security!!
     }
 
     /** Compiles the current heads on every load, as a source that confirms every document before a check would. */

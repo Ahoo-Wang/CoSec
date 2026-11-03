@@ -36,6 +36,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
 | `POST /changes/{id}:rebase`、`:shadow`、`:skip-shadow`、`:approve`、`:reject`、`:abandon`、`:publish` | 推进变更。 |
+| `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
 错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
@@ -151,7 +152,7 @@ flowchart LR
     X -->|rebase| D
 ```
 
-一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃。
+一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，撤销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
 
 ## 在影子模式中试运行变更 {#trying-changes-in-shadow-mode}
 
@@ -186,14 +187,14 @@ flowchart LR
 
 一个文档的暂存槽同一时间只由一个变更持有：它在影子窗口中、等待审批或已就绪时都占着槽；同一文档的其他变更要等待（`409`）。紧急情况不能排队：有两类变更可以抢占槽。
 
-- **撤销 break-glass**，只要该绑定尚未到期，总是可以。撤销仍在生效的绑定的变更持槽时，只有另一个这样的撤销能抢走它的暂存槽，所以被撤销的主体无法用自己的变更拖住它；撤销已过期绑定的变更持槽时则挡不住任何变更。发布中途停住的撤销（其 REQUIRED 监听器的存储不可用）以 `READY` 留在槽中：再撤销一次该绑定会把它发布出去；看不到它的撤销人用自己的撤销变更抢走它的槽；`POST /changes/{id}:publish` 或 `:abandon` 也能清掉它。撤销只有经一个记录它的 REQUIRED 变更监听器才能发布；该监听器的存储不可用时，改为吊销该主体的令牌（`TokenRevoker.revokeSubject`），这不需要监听器。
+- **撤销 break-glass**，只要该绑定尚未到期，总是可以。撤销仍在生效的绑定的变更持槽时，只有另一个这样的撤销能抢走它的暂存槽，也只有其作者能放弃它（`BRK-10`），所以被撤销的主体无法用自己的变更拖住它。撤销已过期的绑定并不紧急，因为该绑定已不授予任何权限：这样的撤销像普通变更一样等待暂存槽、持有暂存槽，撤销仍在生效的绑定的变更或只收窄的变更能抢走它，其他变更仍要等待。发布中途停住的撤销（其 REQUIRED 监听器的存储不可用）以 `READY` 留在槽中：再撤销一次该绑定会把它发布出去，其 `REVOKED` 事件写明是你、出于什么原因；看不到它的撤销人用自己的撤销变更抢走它的槽；`POST /changes/{id}:publish` 也能清掉它。两个撤销同时进行时可能互相抢占：以 `CONFLICTED` 结束的撤销（被抢占，或遇到已变化的头），或在提议、暂存之前头就变化了的撤销，只要其绑定仍在生效，就在新的头上再撤销一次，至多再试三次。`DELETE /break-glass/{bindingId}` 只在该绑定不再生效之后才返回 `200`，无论是谁删除的；平台文档中没有该 id 的绑定时（输错了 id，或已被删除）返回 `404`；该 id 的绑定不是 break-glass 绑定时（无论是否到期）返回 `409`（普通绑定请用变更删除）；其他情况返回 `409`，`detail` 写明你的变更所处的状态。返回 `404` 或遇到普通绑定时都不提议任何变更。没有生效的撤销永远不会看起来像已生效；反过来的情况可能出现一次：另一个调用恰在你的撤销提议时删除了同一个绑定，你的调用返回 `409`，重试则返回 `404`（`BRK-11`）。撤销只有经一个记录它的 REQUIRED 变更监听器才能发布；该监听器的存储不可用时，改为吊销该主体的令牌（`TokenRevoker.revokeSubject`），这不需要监听器。
 - **只收窄的变更**，由在该文档上持有 `cosec:skip-shadow` 的人暂存或跳过影子。每个操作都必须属于下列之一：删除一条绑定，被绑定的策略只含 ALLOW；把一条只含 ALLOW 的可附加策略改为不可附加，语句不变；新增一条只含 DENY 的策略，或新增一条指向这种策略的绑定。删除 DENY、把含 DENY 的策略改为不可附加、替换任何已有条目，或对租户与平台都定义的策略 id 所做的操作，都会放宽或可能放宽，与其他变更一样等待。
 
 拉黑一个主体、设备或地址不是文档变更：黑名单在请求时读取（[安全模型](../guide/security-model.md#blacklist)），不需要等待暂存槽。
 
 原先持有槽的变更在槽转手之前就被标为 `CONFLICTED`，无论它此时处于哪个状态（其间可能已被审批或窗口已关闭），影子候选被撤回，并以 `FAILED` 记录，备注为 `preempted by <change>`；变基后可以再试。持有者因存储故障无法被标记时，它保留暂存槽，想抢占的变更被拒绝（`503`）；放弃了的抢占把持有者的失败记为 `conflicted by <change>, which did not take the slot`。修订链上已能看到其修订的 `READY` 持有者（写入成功但答复丢失的发布），由来取这个暂存槽的变更结算为 `PUBLISHED`，并以它的发布人身份记录，之后暂存槽空出：普通的暂存也能取得它。
 
-发布只在其变更仍持有暂存槽时继续：在写 `PUBLISHING` 记录之前检查一次，写头之前再检查一次；槽已不在时，记一条失败，写明 `another change took the staging slot before the head write`；取走槽的变更先发布了时，写明 `the document moved before the head write`。最后一次读取与写头之间还隔着一次存储往返，再加上发布实例在这两步之间的任何停顿（例如 GC），被抢占的变更在这段时间里仍会发布；取走其暂存槽的变更随后在已变化的基准上冲突，它的失败记录写明先到的是哪个修订、由谁发布。
+发布只在其变更仍持有暂存槽时继续：在写 `PUBLISHING` 记录之前检查一次，写头之前再检查一次；槽已不在时，记一条失败，写明 `another change took the staging slot before the head write`；那次检查之后头变化了时（取走槽的变更先发布了，或 bootstrap、迁移、旧实例写了头），写明 `the document moved before the head write`。最后一次读取与写头之间还隔着一次存储往返，再加上发布实例在这两步之间的任何停顿（例如 GC），被抢占的变更在这段时间里仍会发布；取走其暂存槽的变更随后在已变化的基准上冲突，它的失败记录写明先到的是哪个修订、由谁发布。写头时遇到的若是本变更自己的修订（同一变更的另一次发布刚刚写下），则不记失败，按变更当前的样子作答，由写下这个修订的那次发布来结算它。
 
 ## 审批 {#approval}
 

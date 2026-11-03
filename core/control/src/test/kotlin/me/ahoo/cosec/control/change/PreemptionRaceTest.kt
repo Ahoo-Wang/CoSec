@@ -17,15 +17,22 @@ package me.ahoo.cosec.control.change
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.ControlHttpRequest
+import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
+import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
+import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -39,6 +46,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -346,6 +354,237 @@ class PreemptionRaceTest {
             .assert().isEqualTo("conflicted by ${emergency.id.value}, which did not take the slot")
     }
 
+    /** A harness whose platform document has two live break-glass bindings, `g1` and `g2`. */
+    private suspend fun glassHarness(): ChangeHarness {
+        val harness = ChangeHarness(clock, memory, racing, ChangeOptions(shadow = IMMEDIATE_WINDOW))
+        val expiresAt = clock.now.plusSeconds(3600).toEpochMilli()
+        val glass = listOf("g1", "g2").map {
+            Binding(
+                BindingId(it),
+                SubjectRef.Principal(TenantId.PLATFORM, PrincipalId(it)),
+                BindingScope(Match.Any, Match.Any),
+                BuiltinPolicies.ROOT,
+                expiresAt,
+                breakGlass = true,
+            )
+        }
+        harness.revisions.publish(
+            SnapshotKey.Platform,
+            null,
+            StoreFixtures.candidate(SnapshotKey.Platform, emptyList(), glass),
+            StoreFixtures.publication("bootstrap"),
+        )
+        return harness
+    }
+
+    /**
+     * R4-1: two revokes of different live bindings at once. The second takes the slot from the first between its stage
+     * and its head write, and publishes first; the first, `CONFLICTED`, revokes again on the new head. Both bindings go.
+     */
+    @Test
+    fun `two revokes at once both take effect when one preempts the other`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // The first revoke's publish has checked its slot once when the second revokes.
+        racing.afterStage(skip = 2) {
+            breakGlass.revoke(PLATO, BindingId("g2"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        }
+        val first = breakGlass.revoke(PLATO, BindingId("g1"), "compromised")
+        first.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+        breakGlass.grants(BindingId("g1")).assert().isFalse()
+        breakGlass.grants(BindingId("g2")).assert().isFalse()
+    }
+
+    /**
+     * R4-1: as above, but the second revoke publishes between the first's slot read and its slot write: the first meets
+     * a moved head, is `CONFLICTED`, and revokes again on the new head.
+     */
+    @Test
+    fun `two revokes at once both take effect when the head moves under one`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // The first revoke has read the slot to stage when the second revokes.
+        racing.afterStage(skip = 1) {
+            breakGlass.revoke(PLATO, BindingId("g2"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+    }
+
+    /**
+     * R4-1: the second revoke takes the slot after the first is `READY` and before its publish reads it again: the
+     * first's publish is refused as `CONFLICTED`, and it revokes again on the new head. Both bindings go.
+     */
+    @Test
+    fun `two revokes at once both take effect when one is preempted before its publish`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // c1, the first revoke, is read by its stage, by its move to READY, and then by its publish.
+        racing.afterChange(ChangeId("c1")) {
+            racing.afterChange(ChangeId("c1")) {
+                racing.afterChange(ChangeId("c1")) {
+                    breakGlass.revoke(
+                        PLATO,
+                        BindingId("g2"),
+                        "compromised"
+                    ).state.assert().isEqualTo(ChangeState.PUBLISHED)
+                }
+            }
+        }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.changes.get(ChangeId("c1")).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+    }
+
+    /** Publishes over the platform document's head as another writer would (a bootstrap, an older instance). */
+    private suspend fun publishOver(harness: ChangeHarness, without: BindingId? = null) {
+        val head = harness.revisions.head(SnapshotKey.Platform)!!
+        harness.revisions.publish(
+            SnapshotKey.Platform,
+            head,
+            StoreFixtures.candidate(
+                SnapshotKey.Platform,
+                head.document.policies + allow("other-${head.revision}"),
+                head.document.bindings.filter { it.id != without },
+            ),
+            StoreFixtures.publication("other"),
+        )
+    }
+
+    /**
+     * Review F-5: the head moves between the revoke's read of it and its proposal's: the proposal is refused, and the
+     * revoke is made again on the new head, as one that ended `CONFLICTED` would be.
+     */
+    @Test
+    fun `a revoke whose head moves before it is proposed is made again`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        // The head is read whether the binding is there, then as the revoke's base, then by the proposal.
+        racing.beforeHead {
+            racing.beforeHead {
+                racing.beforeHead {
+                    breakGlass.revoke(
+                        PLATO,
+                        BindingId("g2"),
+                        "compromised"
+                    ).state.assert().isEqualTo(ChangeState.PUBLISHED)
+                }
+            }
+        }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        // The second revoke is c1; the first was proposed only once the head had moved.
+        harness.changes.get(ChangeId("c1")).operations.single().let { it as Operation.RemoveBinding }.id
+            .assert().isEqualTo(BindingId("g2"))
+        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.none { it.breakGlass }.assert().isTrue()
+    }
+
+    /**
+     * Review F-5: the head moves between the revoke's proposal and its stage while another change holds the slot, so
+     * it cannot preempt on a stale base: it stays `CHECKED`, and is made again on the new head, which preempts.
+     */
+    @Test
+    fun `a revoke whose head moves before it is staged is made again`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        val holder = harness.changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(harness),
+            listOf(Operation.PutPolicy(allow("slow"))),
+            "slow"
+        )
+        harness.changes.stage(PLATO, holder.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        // c2, the revoke, is first read by its stage: another writer publishes over the head right then.
+        racing.afterChange(ChangeId("c2")) { publishOver(harness) }
+        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.changes.get(ChangeId("c2")).state.assert().isEqualTo(ChangeState.CHECKED)
+        harness.changes.get(holder.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
+        breakGlass.grants(BindingId("g1")).assert().isFalse()
+    }
+
+    /** The control API over [harness], and a request of plato's the host pipeline permitted. */
+    private fun http(harness: ChangeHarness) =
+        ControlHttp(DefaultControlPlane(harness.changes, harness.revisions, ChangeAuthority(PERMIT_ALL)))
+
+    private val plato = EngineAuthority(Revisions(memory, clock)).security(TenantId.PLATFORM, "plato")
+
+    /**
+     * `DELETE /break-glass/{binding}` through [http]: its status, and the state of the change it answers with, or the
+     * problem's detail.
+     */
+    private suspend fun delete(harness: ChangeHarness, binding: String): Pair<Int, String?> {
+        val response = http(harness).handle(
+            ControlHttpRequest("DELETE", "/break-glass/$binding", mapOf("reason" to "compromised")),
+            plato
+        )
+        val body = CoSecJson.mapper.readTree(response.body)
+        return response.status to (body.get("state") ?: body.get("detail"))?.asString()
+    }
+
+    /**
+     * Review F-8: a revoke ends `CONFLICTED` because another writer removed its binding meanwhile. It is not made again:
+     * the binding grants nothing, no other change is made, and `DELETE` answers 200 with it.
+     */
+    @Test
+    fun `a revoke whose binding another writer removed is not made again`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        // c1, the revoke, is read by its stage, by its move to READY, and then by its publish.
+        racing.afterChange(ChangeId("c1")) {
+            racing.afterChange(ChangeId("c1")) {
+                racing.afterChange(ChangeId("c1")) { publishOver(harness, without = BindingId("g1")) }
+            }
+        }
+        delete(harness, "g1").assert().isEqualTo(200 to "CONFLICTED")
+        memory.change(ChangeId("c2")).assert().isNull()
+    }
+
+    /** Review F-8: as above, but the binding expired meanwhile: it grants nothing, so it is not revoked again. */
+    @Test
+    fun `a revoke whose binding expired meanwhile is not made again`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        racing.afterChange(ChangeId("c1")) {
+            racing.afterChange(ChangeId("c1")) {
+                racing.afterChange(ChangeId("c1")) {
+                    clock.now = clock.now.plusSeconds(7200)
+                    publishOver(harness)
+                }
+            }
+        }
+        delete(harness, "g1").assert().isEqualTo(200 to "CONFLICTED")
+        memory.change(ChangeId("c2")).assert().isNull()
+    }
+
+    /**
+     * R4-1, `BRK-11`: a revoke that meets a moved head every time revokes again at most three times, then comes back
+     * `CONFLICTED` while the binding still grants, which the HTTP API answers as a 409, never a 200.
+     */
+    @Test
+    fun `a revoke that keeps conflicting gives up after three more`() = runBlocking<Unit> {
+        val harness = glassHarness()
+        val breakGlass = BreakGlass(harness.changes, harness.revisions)
+        val moves = java.util.concurrent.atomic.AtomicInteger()
+        // Each time a revoke of g1 takes the slot, another writer publishes over the platform document.
+        racing.afterTaken = { holder ->
+            val operations = memory.change(holder)?.value?.operations.orEmpty()
+            if (operations.singleOrNull()?.let { it is Operation.RemoveBinding && it.id == BindingId("g1") } == true) {
+                val n = moves.incrementAndGet()
+                val head = harness.revisions.head(SnapshotKey.Platform)!!
+                harness.revisions.publish(
+                    SnapshotKey.Platform,
+                    head,
+                    StoreFixtures.candidate(SnapshotKey.Platform, head.document.policies + allow("p$n"), head.document.bindings),
+                    StoreFixtures.publication("other $n"),
+                )
+            }
+        }
+        // Through the control API: c1 to c4 each conflict, and the binding still grants, so a 409 names the last.
+        delete(harness, "g1").assert().isEqualTo(409 to "binding [g1] still grants: change c4 is CONFLICTED")
+        racing.afterTaken = null
+        moves.get().assert().isEqualTo(4)
+        breakGlass.grants(BindingId("g1")).assert().isTrue()
+    }
+
     /** Runs a race once: after a read of one change, or before a read of a head. */
     private class Racing(private val memory: InMemoryControlStore) : ControlStore by memory {
         /** Whether every write of a staging slot is refused, as if it kept changing. */
@@ -373,8 +612,18 @@ class PreemptionRaceTest {
             return read
         }
 
-        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =
-            !refuseStages && memory.putStage(key, expected, slot)
+        /** What runs after every slot write that names a holder, until it is set back to `null`. */
+        @Volatile
+        var afterTaken: (suspend (ChangeId) -> Unit)? = null
+
+        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean {
+            val written = !refuseStages && memory.putStage(key, expected, slot)
+            val holder = slot.holder
+            if (written && holder != null) {
+                afterTaken?.invoke(holder)
+            }
+            return written
+        }
 
         @Volatile
         private var change: Pair<ChangeId, suspend () -> Unit>? = null

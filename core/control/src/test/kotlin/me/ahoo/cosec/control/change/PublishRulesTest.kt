@@ -65,6 +65,23 @@ class PublishRulesTest {
         PublishRules.publishedBy(change.copy(base = Base(1, head.digest)), head).assert().isFalse()
     }
 
+    /** Review L2: who published over the change's base first, for its failure's record; nothing for its own head. */
+    @Test
+    fun `a head of the same base by another change is named`() = runBlocking<Unit> {
+        PublishRules.publishedFirst(change, null).assert().isNull()
+        harness.revisions.publish(
+            SnapshotKey.Platform,
+            null,
+            StoreFixtures.candidate(SnapshotKey.Platform),
+            Publication("c9", ProvenanceKind.PUBLISH, PLATO.actor),
+        )
+        val head = harness.revisions.head(SnapshotKey.Platform)!!
+        PublishRules.publishedFirst(change, head)
+            .assert().isEqualTo("revision 1 was published over the same base first, by c9")
+        PublishRules.publishedFirst(change.copy(id = ChangeId("c9")), head).assert().isNull()
+        PublishRules.publishedFirst(change.copy(base = Base(1, head.digest)), head).assert().isNull()
+    }
+
     @Test
     fun `a publication names the window and the approver of what needed one`() {
         val approval = Approval(PLATO.actor, Instant.EPOCH, "d", emptyList())

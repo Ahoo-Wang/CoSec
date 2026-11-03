@@ -419,10 +419,10 @@ principal sets a tenant's boundary`.
 | Status | Cause | Fix |
 |---|---|---|
 | `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
-| `403` | The operator may not take this action on this document, or the hard rules forbid it: the author approving their own change, someone else rebasing it. | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
+| `403` | The operator may not take this action on this document, or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type, or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). | Fix the request; `detail` names the problem. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. | |
-| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and nothing takes a revoke's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), or the shadow window is open or blocked. | Rebase, wait for the other change, or read the window's summary. |
+| `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
 | `410` | The revision asked for is not kept. | |
 | `428` | Publishing needs an acknowledgement of the shadow window's counts. | Publish again with the `ack` of that window. |
 | `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, an approver's revocations could not be read on publish (`the revocations of the approver could not be read` in the log; the change keeps its approval), or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |
@@ -455,15 +455,34 @@ for a check, `412` for an `ifMatch` that does not hold).
   person's token; with `an approval names the approver's credential, and this one names none`: approve with a
   credential that has an id, such as CoSec's token.
 - **A `FAILED` change event on a publish that met another change at the slot**: `another change took the staging
-  slot before the head write` or `the document moved before the head write` (the change was preempted while it
-  published; nothing was written), `revision <n> was published over the same base first, by <id>` (another publish
-  over the same base came first: the change it preempted, within one store round trip, a bootstrap, a migration or an
-  older instance; rebase it), or `conflicted by <id>, which did not take the slot` (a preemption gave up after marking
-  the holder; rebase the holder).
+  slot before the head write` (the change was preempted while it published; nothing was written), `the document moved
+  before the head write` (the head moved after the change's last slot check, by the change that took its slot, a
+  bootstrap, a migration, or an older instance, which may have been publishing this same change; nothing was written),
+  `revision <n> was published over the same base first, by <id>` (another publish over the same base came first: the
+  change it preempted, within one store round trip, a bootstrap, a migration or an older instance; rebase it), or
+  `conflicted by <id>, which did not take the slot` (a preemption gave up after marking the holder; rebase the holder).
+  A publish of this version that meets its own change's revision, written by a concurrent publish of the same change,
+  records no failure.
 - **A revoke answers `503` and the break-glass binding is still there**: its publish stopped (the REQUIRED change
   listener did not record `PUBLISHING`), and the revoke stays `READY` in the platform document's slot. Revoke the
   binding again once the listener's store answers: that publishes it; a revoker who may not read it revokes with a
-  change of its own, which takes its slot. Revoking the principal's tokens works meanwhile.
+  change of its own, which takes its slot. Revoking the principal's tokens works meanwhile. Only the revoke's author
+  can abandon it (`403` for anyone else, `BRK-10`), and doing so needs the same listener (`503`).
+- **`DELETE /break-glass/{bindingId}` answers `409` `binding [<id>] still grants: change <id> is <state>`**: the revoke
+  did not take effect, and the binding still grants. `CONFLICTED`: other revokes or writes kept moving the platform
+  document, and the revoke gave up after three more tries; revoke again, and revoke the principal's tokens meanwhile.
+  `DRAFT`: read the change's `findings`.
+- **`DELETE /break-glass/{bindingId}` answers `409` `binding [<id>] is not a break-glass binding`**: the platform
+  document's binding of that id is an ordinary one, live or expired, and nothing was proposed. Remove it with a change
+  ([Testing policies](../policies/testing.md)).
+- **`DELETE /break-glass/{bindingId}` answers `409` `[platform] is at revision <n>, not <m>`**: another write moved the
+  platform document just as the revoke was proposed, which may have been another call revoking the same binding. Check
+  whether the binding is still there: retry (a `404` means it is gone), or read `GET /documents/platform`.
+- **`DELETE /break-glass/{bindingId}` answers `404`**: the platform document has no binding of that id, and nothing
+  was proposed. Check the id (`GET /documents/platform` lists the bindings). A `404` on a retry, after a first call
+  that timed out or failed, means the binding was removed, by that call or another: the platform document's revision
+  history shows which revision removed it. Like every `404` of the control API it carries no `detail`; the control
+  host logs `the platform document has no binding [<id>]` at `INFO`.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):

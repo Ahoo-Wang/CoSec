@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.change
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.engine.flat.StatementSource
@@ -24,11 +25,14 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
+import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
 import me.ahoo.cosec.runtime.document.CatalogPermission
@@ -319,6 +323,15 @@ class ChangesTest {
         assertThrownBy<ChangeRejectedException> { runBlocking { changes.get(ChangeId("missing")) } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(404)
         assertThrownBy<IllegalArgumentException> { ChangeId("a:b") }
+    }
+
+    @Test
+    fun `only its author rebases a change`() = runBlocking<Unit> {
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
+        val bob = Operator(Actor(TenantId("acme"), PrincipalId("bob")), NO_MEMBERSHIPS)
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.rebase(bob, change.id) } }
+            .extracting { (it as ChangeRejectedException).status }.isEqualTo(403)
+        changes.rebase(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.CHECKED)
     }
 
     /** Changes keep a document's rate limit rules (RFC 0006 §8): no operation changes them yet, so nothing drops them. */

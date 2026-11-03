@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 91e67243..6f3cb6a9 100644
+index b2a61126..55a99635 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -415,7 +415,6 @@ class Changes(
-         requireApprovable(operator, change, candidate)
+@@ -405,7 +405,6 @@ class Changes(
+         authority.requireApprovable(operator, change, candidate)
          val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
          if (breakGlass) {
 -            requireAudit(true)

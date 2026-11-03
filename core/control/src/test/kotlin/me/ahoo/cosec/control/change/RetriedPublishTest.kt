@@ -28,14 +28,19 @@ import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -62,12 +67,20 @@ class RetriedPublishTest {
     /** What runs once right after the next head write, before its answer: another call meanwhile. */
     @Volatile
     private var afterHead: (suspend () -> Unit)? = null
+
+    /** What runs once right before the next head write: another call meanwhile. */
+    @Volatile
+    private var beforeHead: (suspend () -> Unit)? = null
     private val store = object : ControlStore by memory {
         override suspend fun putHead(
             key: SnapshotKey,
             expected: SnapshotDigest?,
             document: SnapshotDocument
         ): HeadWrite {
+            beforeHead?.let { race ->
+                beforeHead = null
+                race()
+            }
             val written = memory.putHead(key, expected, document)
             afterHead?.let { race ->
                 afterHead = null
@@ -246,7 +259,128 @@ class RetriedPublishTest {
         listeners.cancel()
     }
 
+    /** Right before the next head write, [change] is published by another call, whose answer is lost: still READY. */
+    private fun publishedMeanwhile(change: ChangeId) {
+        beforeHead = {
+            loseReply = true
+            val failure = try {
+                changes.publish(PIA, change)
+                null
+            } catch (e: IllegalStateException) {
+                e
+            }
+            failure.assert().isNotNull()
+        }
+    }
+
+    /**
+     * R4-2: two calls publish one change at once. The one whose head write meets the change's own revision, written by
+     * the other before that one settled it, leaves the change to it: not CONFLICTED, no FAILED, the change as it stands.
+     */
+    @Test
+    fun `a publish that meets its own revision leaves the change to the call that wrote it`() = runBlocking<Unit> {
+        val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
+        changes.skipShadow(PLATO, change.id, "test")
+        publishedMeanwhile(change.id)
+        changes.publish(PLATO, change.id).state.assert().isEqualTo(ChangeState.READY)
+        revisions.head(ACME)!!.document.provenance!!.publishedBy.assert().isEqualTo(PIA.actor)
+        // Whichever call comes next settles it, as the one that wrote it would have.
+        changes.publish(PLATO, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        delivered(ChangeEvent.Kind.PUBLISHED)
+        Thread.sleep(200)
+        events.none { it.change == change.id && it.kind == ChangeEvent.Kind.FAILED }.assert().isTrue()
+        listeners.cancel()
+    }
+
+    /**
+     * R4-2: revoking a binding again while another call publishes the same stalled revoke comes back with that revoke,
+     * not with a new one that finds nothing left to remove.
+     */
+    @Test
+    fun `revoking again while another call publishes the stalled revoke returns that revoke`() = runBlocking<Unit> {
+        glass()
+        val revoke = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.RemoveBinding(BindingId("glass"))),
+            "compromised",
+            ProvenanceKind.BREAK_GLASS
+        )
+        changes.stage(PLATO, revoke.id).state.assert().isEqualTo(ChangeState.READY)
+        val made = ids.get()
+        publishedMeanwhile(revoke.id)
+        val breakGlass = BreakGlass(changes, revisions)
+        val again = breakGlass.revoke(PLATO, BindingId("glass"), "compromised, again")
+        again.id.assert().isEqualTo(revoke.id)
+        ids.get().assert().isEqualTo(made)
+        breakGlass.grants(BindingId("glass")).assert().isFalse()
+        Thread.sleep(200)
+        events.none { it.change == revoke.id && it.kind == ChangeEvent.Kind.FAILED }.assert().isTrue()
+        listeners.cancel()
+    }
+
+    /**
+     * Review L1: a change taking the slot settles a READY holder whose revision the chain shows. What moved under the
+     * holder is recorded as needing review, naming who settled it: not analyzed again with that one's rights (review D2).
+     */
+    @Test
+    fun `a change taking the slot records what moved under the holder it settles`() = runBlocking<Unit> {
+        val held = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
+        lost(held)
+        // What the holder was checked with moves before another change takes its slot.
+        revisions.publish(
+            SnapshotKey.Platform,
+            null,
+            StoreFixtures.candidate(SnapshotKey.Platform, listOf(allow("platform")), emptyList()),
+            StoreFixtures.publication("bootstrap")
+        )
+        events.clear()
+        val ban = changes.propose(PLATO, ACME, 1, BAN, "ban")
+        changes.skipShadow(PLATO, ban.id, "incident").state.assert().isEqualTo(ChangeState.READY)
+        changes.get(held.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        delivered(
+            ChangeEvent.Kind.REVIEW_NEEDED
+        ).single { it.change == held.id && it.kind == ChangeEvent.Kind.REVIEW_NEEDED }
+            .note.assert().isEqualTo("settled by (platform)/plato while taking the slot, not re-analyzed")
+        listeners.cancel()
+    }
+
+    /** A live break-glass binding [BindingId] `glass` of rita, in the platform document's first revision. */
+    private suspend fun glass() {
+        val expiresAt = clock.now.plusSeconds(3600).toEpochMilli()
+        val glass = Binding(
+            BindingId("glass"),
+            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("rita")),
+            BindingScope(Match.Any, Match.Any),
+            BuiltinPolicies.ROOT,
+            expiresAt,
+            breakGlass = true,
+        )
+        revisions.publish(
+            SnapshotKey.Platform,
+            null,
+            StoreFixtures.candidate(SnapshotKey.Platform, emptyList(), listOf(glass)),
+            StoreFixtures.publication("bootstrap")
+        )
+    }
+
     private companion object {
         val PIA = Operator(Actor(TenantId.PLATFORM, PrincipalId("pia")), NO_MEMBERSHIPS)
+
+        /** A new DENY and its binding: a change that only narrows. */
+        val BAN = listOf(
+            Operation.PutPolicy(
+                PolicyDefinition(
+                    PolicyId("ban"),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.DENY, listOf("order:delete")))
+                )
+            ),
+            Operation.PutBinding(
+                Binding(BindingId("ban"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("ban"))
+            ),
+        )
     }
 }
