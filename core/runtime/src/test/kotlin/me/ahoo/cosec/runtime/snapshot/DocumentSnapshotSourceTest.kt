@@ -221,6 +221,9 @@ class DocumentSnapshotSourceTest {
         assertThrownBy<IllegalArgumentException> { SnapshotFamily(SnapshotKind.TENANT, FakeCompiler(), 0) }
         assertThrownBy<IllegalArgumentException> { SnapshotFamily(SnapshotKind.TENANT, FakeCompiler(), 1).idOf(APP_A) }
         assertThrownBy<IllegalArgumentException> { SnapshotOptions(maxTenants = 0) }
+        assertThrownBy<IllegalArgumentException> { SnapshotOptions(maxAbsent = 0) }
+        val noAbsent = { SnapshotFamily(SnapshotKind.TENANT, FakeCompiler(), 1, maxAbsent = 0) }
+        assertThrownBy<IllegalArgumentException> { noAbsent() }
     }
 
     @Test
