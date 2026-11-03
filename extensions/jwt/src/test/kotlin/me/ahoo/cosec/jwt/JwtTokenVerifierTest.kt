@@ -150,7 +150,10 @@ class JwtTokenVerifierTest {
                 assertFalse(thrown is TokenExpiredException)
             }
         }
-        for (token in listOf(signed { withClaim("attributes", "region") }, signed { withClaim("attributes", listOf("a")) })) {
+        for (token in listOf(
+            signed { withClaim("attributes", "region") },
+            signed { withClaim("attributes", listOf("a")) }
+        )) {
             assertThrows(TokenVerificationException::class.java) {
                 jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token))
             }

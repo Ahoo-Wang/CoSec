@@ -47,8 +47,8 @@ any CoCache customizer or `cocache.*` property, so no configuration can weaken t
 
 ### Redis keys
 
-`<s>` is [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot) (`cosec` by default) with a trailing
-`:` removed. `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
+`<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
+key a deployment writes lives under it (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
 contain `:`, so a key names one document only.
 
 | Key | Written by | Contents |
@@ -66,18 +66,16 @@ contain `:`, so a key names one document only.
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:instances` | every data-plane instance | each instance's installed revisions and their lag; expires 2 minutes after its last write, and entries older than a minute are ignored |
-| `<c>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
-| `<c>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
-| `<m>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
-| `<k>:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
-| `cosec:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
+| `<s>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
+| `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
+| `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
+| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
+| `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
 
-- `<c>` is [`cosec.authorization.cache.key-prefix`](./configuration.md#cache), `<k>` is
-  [`cosec.api-key.key-prefix`](./configuration.md#api-keys) (`cosec:api-key`), and `<m>` is the prefix the
-  application gives the membership cache (`cosec` by default), each with a trailing `:` removed. They do **not**
-  follow `<s>`. The rate limiter's prefix `cosec:rate-limiter` is fixed. When several deployments share one Redis, give
-  each its own prefixes, and its own rate-limit rule ids.
-- Every key except the rate-limit counters and the API keys is a CoCache value. Each CoCache namespace has its own
+- When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
+  key, so an API key one issues is never accepted by the other, and their rate limit counters stay apart.
+- Every key except the rate-limit counters, the API keys and the OAuth states is a CoCache value. Each CoCache namespace has its own
   invalidation channel, `cocache:inv:<namespace>` (for example `cocache:inv:cosec:snapshot`), so deployments with
   different prefixes stay apart on one Redis.
 
@@ -210,7 +208,7 @@ document's revision chain starts with their first write:
 - the **control plane** (`cosec-control` with `cosec-cocache`), at runtime, through change requests;
 - **`cosec-migrate`**, for the first documents of a deployment and for the move from 7.x.
 
-Both write on the Redis and under the `cosec.authorization.snapshot.key-prefix` the instances read. A publish writes
+Both write on the Redis and under the `cosec.key-prefix` the instances read. A publish writes
 the revision record first, then replaces the head with a compare-and-set on the base revision's digest, so a reader
 sees the old head or the new one, never a mix, and two publishers never overwrite each other: the second one is told
 the base moved.

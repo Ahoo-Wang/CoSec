@@ -147,7 +147,11 @@ sealed class ResourcePattern {
             }
             val length = pattern.codePointCount(0, pattern.length)
             if (length > MAX_LENGTH) {
-                throw InvalidPatternException(pattern, MAX_LENGTH, "the pattern is $length characters, more than $MAX_LENGTH")
+                throw InvalidPatternException(
+                    pattern,
+                    MAX_LENGTH,
+                    "the pattern is $length characters, more than $MAX_LENGTH"
+                )
             }
             if (!caseSensitive || !decodeAndParseSegments) {
                 throw InvalidPatternException(pattern, 0, "only http:path: patterns take path options")

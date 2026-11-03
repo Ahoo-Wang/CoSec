@@ -13,6 +13,10 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKind
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CyclicBarrier
@@ -20,10 +24,6 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spi.snapshot.SnapshotKind
-import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Test
 
 /**
  * Each request is answered exactly once, by the shared load or by its timeout, and the outcome is recorded before the

@@ -256,7 +256,11 @@ class SnapshotRevalidationTest {
         SnapshotOptions(revalidateInterval = failClosed, failClosedMaxLag = failClosed)
             .revalidateInterval.assert().isEqualTo(failClosed)
         assertThrows<IllegalArgumentException> {
-            SnapshotOptions(revalidateInterval = failClosed, failClosedTenants = setOf("strict"), failClosedMaxLag = failClosed)
+            SnapshotOptions(
+                revalidateInterval = failClosed,
+                failClosedTenants = setOf("strict"),
+                failClosedMaxLag = failClosed
+            )
         }
     }
 }

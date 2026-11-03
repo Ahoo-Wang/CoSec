@@ -90,7 +90,9 @@ class SnapshotFailClosedPropertyTest {
                 if (body == "p$revision") {
                     entry.state.assert().isInstanceOf(DocumentState.Present::class.java)
                 } else {
-                    entry.state.assert().describedAs("revision $revision ($body)").isInstanceOf(DocumentState.Failed::class.java)
+                    entry.state.assert().describedAs(
+                        "revision $revision ($body)"
+                    ).isInstanceOf(DocumentState.Failed::class.java)
                 }
             }
         }

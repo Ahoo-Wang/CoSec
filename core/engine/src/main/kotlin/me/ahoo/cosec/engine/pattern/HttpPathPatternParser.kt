@@ -30,15 +30,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
     private val variableNames = ArrayList<String>()
 
     fun parse(): Parsed {
-        if (pattern.isEmpty()) {
-            throw invalid(0, "the pattern is empty")
-        }
-        if (pattern.length > HttpPathPattern.MAX_LENGTH) {
-            throw invalid(
-                HttpPathPattern.MAX_LENGTH,
-                "the pattern is ${pattern.length} characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",
-            )
-        }
+        checkLength()
         val elements = ArrayList<PathElement>()
         var restAt = -1
         var begin = 0
@@ -69,6 +61,18 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         }
         val globTokens = elements.sumOf { (it as? PathElement.Glob)?.glob?.size ?: 0 }
         return Parsed(elements.toTypedArray(), variableNames.toList(), globTokens)
+    }
+
+    private fun checkLength() {
+        if (pattern.isEmpty()) {
+            throw invalid(0, "the pattern is empty")
+        }
+        if (pattern.length > HttpPathPattern.MAX_LENGTH) {
+            throw invalid(
+                HttpPathPattern.MAX_LENGTH,
+                "the pattern is ${pattern.length} characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",
+            )
+        }
     }
 
     private fun segment(begin: Int, end: Int): PathElement {

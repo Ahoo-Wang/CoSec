@@ -1036,7 +1036,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             } catch (error: VirtualMachineError) {
                 // RC1-43: a document that compiles on the control plane can overflow a smaller data-plane stack. Ending
                 // the load as a transient failure would keep the previous revision, and a new DENY would never apply.
-                val failure = SnapshotUnavailableException(key, "revision ${document.revision} cannot be compiled", error)
+                val failure = SnapshotUnavailableException(
+                    key,
+                    "revision ${document.revision} cannot be compiled",
+                    error
+                )
                 val failed = SnapshotEntry(
                     key,
                     DocumentState.Failed(failure),

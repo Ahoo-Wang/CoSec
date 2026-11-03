@@ -40,7 +40,8 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 
 ### Redis key {#redis-keys}
 
-`<s>` 是 [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot)（默认 `cosec`），去掉末尾的 `:`。
+`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
+key 都在它之下（`SNP-9`）。
 `<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:`，所以一个 key
 只对应一个文档。
 
@@ -59,17 +60,16 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<s>:shadow:report:<window>:<instance>` | 仅数据面实例 `<instance>` | 该实例对一个影子窗口的累计报告；每次写入替换上一次的；最后一次写入 8 天后过期 |
 | `<s>:shadow:reporters:<window>` | 每个数据面实例 | 对 `<window>` 报告过的实例 id；过期时间同上 |
 | `<s>:shadow:status:instances` | 每个数据面实例 | 每个实例已装入的修订及其滞后；最后一次写入 2 分钟后过期，超过一分钟的条目被忽略 |
-| `<c>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
-| `<c>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
-| `<m>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
-| `<k>:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
-| `cosec:rate-limiter:<ruleId>:<bucket>:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期 |
+| `<s>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
+| `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
+| `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
+| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期 |
+| `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`；3 分钟后过期 |
 
-- `<c>` 是 [`cosec.authorization.cache.key-prefix`](./configuration.md#cache)，`<k>` 是
-  [`cosec.api-key.key-prefix`](./configuration.md#api-keys)（`cosec:api-key`），`<m>` 是应用给成员关系缓存的前缀
-  （默认 `cosec`），都去掉末尾的 `:`。它们 **不** 跟随 `<s>`。限流器的前缀 `cosec:rate-limiter` 是固定的。多个部署共用
-  一个 Redis 时，给每个部署各自的前缀以及各自的限流规则 id。
-- 除限流计数器和 API key 以外，每个 key 都是 CoCache 值。每个 CoCache 命名空间有自己的失效通道
+- 多个部署共用一个 Redis 时，给每个部署各自的 `cosec.key-prefix`：前缀不同，就不共享任何 key，一个部署签发的 API key
+  不会被另一个接受，限流计数器也互不相干。
+- 除限流计数器、API key 和 OAuth 状态以外，每个 key 都是 CoCache 值。每个 CoCache 命名空间有自己的失效通道
   `cocache:inv:<namespace>`（例如 `cocache:inv:cosec:snapshot`），所以前缀不同的部署在同一个 Redis 上互不干扰。
 
 ### Redis 要求 {#redis-requirements}
@@ -182,7 +182,7 @@ sequenceDiagram
 - **控制面**（`cosec-control` 加 `cosec-cocache`），在运行时通过变更请求写入；
 - **`cosec-migrate`**，用于部署的最初文档以及从 7.x 迁移。
 
-两者都写入实例读取的那个 Redis，并使用同一个 `cosec.authorization.snapshot.key-prefix`。一次发布先写修订记录，再以
+两者都写入实例读取的那个 Redis，并使用同一个 `cosec.key-prefix`。一次发布先写修订记录，再以
 基准修订的摘要做比较并设置来替换头部，所以读者看到的要么是旧头部、要么是新头部，绝不会是混合；两个发布者也绝不会互相
 覆盖：后一个会被告知基准已经变了。
 

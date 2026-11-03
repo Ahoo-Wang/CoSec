@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.cache
 
-import java.time.Duration
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.codec.jackson.JacksonCodec
 import me.ahoo.cocache.core.CacheSpec
@@ -34,6 +33,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
+import java.time.Duration
 
 /**
  * CoSec's CoCache declarations.

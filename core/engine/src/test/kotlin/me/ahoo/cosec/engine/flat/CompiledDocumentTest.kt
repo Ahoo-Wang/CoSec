@@ -138,17 +138,28 @@ class CompiledDocumentTest {
                 policyId,
                 null,
                 (0 until statements).map { k ->
-                    compiler.statement(policyId, k, StatementSource("s$k", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB))))
+                    compiler.statement(
+                        policyId,
+                        k,
+                        StatementSource("s$k", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB)))
+                    )
                 },
             )
         }
         val full = CompiledDocument.MAX_GLOB_TOKENS / HttpPathPattern.MAX_SEGMENT_TOKENS
         tenant(globs("a", full / 2), globs("b", full - full / 2)).headersRead.assert().isEmpty()
-        rejects("hold 4112 tokens in all, more than 4096") { tenant(globs("a", full / 2), globs("b", full - full / 2 + 1)) }
+        rejects(
+            "hold 4112 tokens in all, more than 4096"
+        ) { tenant(globs("a", full / 2), globs("b", full - full / 2 + 1)) }
         val rule = compiler.rateLimit(
             DocumentKind.PLATFORM,
             "",
-            RateLimitSource("r", StatementSource("r", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB))), null, RateLimitSpec(1.0)),
+            RateLimitSource(
+                "r",
+                StatementSource("r", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB))),
+                null,
+                RateLimitSpec(1.0)
+            ),
         )
         CompiledDocument.platform(listOf(globs("a", full - 1)), emptyList(), listOf(rule))
         rejects("more than 4096") { CompiledDocument.platform(listOf(globs("a", full)), emptyList(), listOf(rule)) }
@@ -180,7 +191,12 @@ class CompiledDocumentTest {
         val rule = compiler.rateLimit(
             DocumentKind.TENANT,
             "acme",
-            RateLimitSource("r", StatementSource("r", Effect.DENY, listOf("*")), "http.header.x-bucket", RateLimitSpec(1.0)),
+            RateLimitSource(
+                "r",
+                StatementSource("r", Effect.DENY, listOf("*")),
+                "http.header.x-bucket",
+                RateLimitSpec(1.0)
+            ),
         )
         CompiledDocument.tenant(TenantId("acme"), listOf(policy), emptyList(), listOf(rule)).headersRead.assert()
             .containsExactlyInAnyOrder("referer", "x-deny", "origin", "x-bucket")
@@ -193,7 +209,11 @@ class CompiledDocumentTest {
             id,
             null,
             (0 until statements).map { k ->
-                compiler.statement(id, k, StatementSource("s$k", Effect.ALLOW, listOf("*"), listOf(ResourceSource(GLOB))))
+                compiler.statement(
+                    id,
+                    k,
+                    StatementSource("s$k", Effect.ALLOW, listOf("*"), listOf(ResourceSource(GLOB)))
+                )
             },
         )
     }
