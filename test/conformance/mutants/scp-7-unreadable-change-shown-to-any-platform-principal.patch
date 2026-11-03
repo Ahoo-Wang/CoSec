@@ -1,0 +1,21 @@
+# Rule: SCP-7
+# Mutant: a change that no longer reads is a 409 to every platform principal, whether or not it may read the platform document, so one bound to nothing learns it exists
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index fe41e569..7c0ef315 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -239,11 +239,7 @@ class Changes(
+         } catch (e: UnnamedDocumentException) {
+             // A change of an app no key can name (R3-4 of #1194's review), and an app document is the platform's: its
+             // principals who may read the platform learn it is there (409); anyone else gets what a missing change gets.
+-            if (operator.platform) {
+-                val decision = authority.decide(operator, SnapshotKey.Platform, ControlActions.READ)
+-                if (decision == ControlDecision.PERMIT) throw e
+-                platformRead = decision
+-            }
++            if (operator.platform) throw e
+             null
+         }
+         val reachable = stored?.takeIf { TenantIsolation.allows(operator, it.key) }
