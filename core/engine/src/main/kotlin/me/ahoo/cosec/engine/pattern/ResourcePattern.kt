@@ -31,7 +31,10 @@ sealed class ResourcePattern {
 
     abstract fun match(target: ResourceTarget): Captures?
 
-    /** Whether the resource matches, without capturing: allocates nothing beyond parsing the path once. */
+    /**
+     * Whether the resource matches, without capturing: allocates nothing beyond parsing the path once, and a table the
+     * target then keeps when a pattern has a glob segment.
+     */
     abstract fun matches(target: ResourceTarget): Boolean
 
     /** Every resource; captures nothing. */
@@ -52,11 +55,14 @@ sealed class ResourcePattern {
             if (target.resource.type != HTTP_TYPE) {
                 return null
             }
-            return path.match(target.httpPath(path.decodeAndParseSegments))
+            return path.match(target.httpPath(path.decodeAndParseSegments), scratch(target))
         }
 
         override fun matches(target: ResourceTarget): Boolean =
-            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments))
+            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments), scratch(target))
+
+        // Only glob segments use the table: a pattern without one never makes it.
+        private fun scratch(target: ResourceTarget): GlobScratch? = if (path.globUnits > 0) target.scratch() else null
 
         override fun equals(other: Any?): Boolean = other is Http && other.path == path
 
@@ -168,6 +174,10 @@ sealed class ResourcePattern {
 class ResourceTarget(val resource: Resource) {
     private var decoded: HttpPath? = null
     private var raw: HttpPath? = null
+    private var scratch: GlobScratch? = null
+
+    /** The table capturing glob segments works in ([SegmentGlob.capture]), made on first use and then reused. */
+    internal fun scratch(): GlobScratch = scratch ?: GlobScratch().also { scratch = it }
 
     /** The path of an `http` resource. Throws [IllegalArgumentException] for a malformed percent-escape. */
     fun httpPath(decodeAndParseSegments: Boolean): HttpPath =

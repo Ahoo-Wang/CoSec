@@ -44,18 +44,25 @@ import org.openjdk.jmh.annotations.State
 
 /**
  * The most a tenant administrator's path patterns can cost one request (RC1-8, `DOC-4`): a document that spends its
- * whole glob budget, [CompiledDocument.MAX_GLOB_TOKENS], on DENYs bound to `Anyone` whose patterns have no literal
- * start, so every one is a candidate for every path. Each holds one segment of [HttpPathPattern.MAX_SEGMENT_TOKENS]
- * tokens, `/{v}a*a*a*a*a*a*a*b`, and the request's path is one segment of 256 characters, the longest
- * `PathNormalizer` lets through.
+ * whole glob budget, [CompiledDocument.MAX_GLOB_UNITS], on DENYs bound to `Anyone` whose patterns have no literal
+ * start, so every one is a candidate for every path. The request's path is one segment of 256 characters, the longest
+ * `PathNormalizer` lets through. No statement decides: the evaluation reads every candidate and ends in an implicit deny.
  *
- * `scenario`: `captures`, the path is `a…ab`, which every pattern matches, and each DENY's condition reads
- * `resource.var.v` and is false, so every match is captured as well; `nomatch`, the path is `a…a`, which every pattern
- * scans to its end and rejects. No statement decides: the evaluation reads every candidate and ends in an implicit deny.
+ * `scenario`, each the worst case of one path (review M2 of #1200); literals are case-insensitive, which compares slower:
+ * - `literal`: the segment `*ab*` against `a…a`. A literal followed by a run is compared at every position, and this length
+ *   costs the most per unit.
+ * - `capture-literal`: `{v}ab*`, its value read by the condition, against `a…a`.
+ * - `alternating`: `{v}a*a*a*a*a*a*a*b` against `a…ab`, which matches and is captured: seven literal rows at every
+ *   position, and a 248-character value per statement.
+ * - `captures`: `*{a}*{c}*{d}*{e}*{f}*{g}*{h}x{v}` against `xa…a`, which matches and is captured. Its only literal
+ *   sits at the start, which made the backtracking this replaced give up every end of every run: 232 ms per request.
+ * - `bindings`: `captures`, its policy bound 64 times (review M1): each pass evaluates it once (`ALG-9`).
+ *
+ * The conditions read `resource.var.v` and are false, or, for `literal`, read the device id and are false.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class GlobBoundBenchmark {
-    @Param("captures", "nomatch")
+    @Param("literal", "capture-literal", "alternating", "captures", "bindings")
     lateinit var scenario: String
 
     private lateinit var request: FlatRequest
@@ -65,26 +72,35 @@ open class GlobBoundBenchmark {
     fun setup() {
         val compiler = PolicyCompiler()
         val id = PolicyId("globs")
-        val pattern = "http:path:/{v}" + "a*".repeat(SEGMENT_STARS) + "b"
-        check(HttpPathPattern.compile(pattern.removePrefix("http:path:")).globTokens == HttpPathPattern.MAX_SEGMENT_TOKENS)
-        val condition = if (scenario == "captures") Condition.Eq("resource.var.v", Literal.Str("never")) else null
-        val statements = (0 until STATEMENTS).map { k ->
-            compiler.statement(
-                id,
-                k,
-                StatementSource("s$k", Effect.DENY, listOf("http:GET"), listOf(ResourceSource(pattern)), condition),
-            )
+        val a = "a".repeat(SEGMENT_LENGTH)
+        val (pattern, path) = when (scenario) {
+            "literal" -> "/*ab*" to "/$a"
+            "capture-literal" -> "/{v}ab*" to "/$a"
+            "alternating" -> "/{v}a*a*a*a*a*a*a*b" to "/" + a.drop(1) + "b"
+            "captures", "bindings" -> "/*{a}*{c}*{d}*{e}*{f}*{g}*{h}x{v}" to "/x" + a.drop(1)
+            else -> error("Unknown scenario $scenario")
+        }
+        val units = HttpPathPattern.compile(pattern).globUnits
+        val condition = if (scenario == "literal") {
+            Condition.Eq("environment.device", Literal.Str("never"))
+        } else {
+            Condition.Eq("resource.var.v", Literal.Str("never"))
+        }
+        val resource = ResourceSource("http:path:$pattern", caseSensitive = false)
+        val statements = (0 until CompiledDocument.MAX_GLOB_UNITS / units).map { k ->
+            compiler.statement(id, k, StatementSource("s$k", Effect.DENY, listOf("http:GET"), listOf(resource), condition))
         }
         val policy = CompiledPolicy(id, null, statements)
-        check(policy.globTokens == CompiledDocument.MAX_GLOB_TOKENS)
-        val binding = Binding(BindingId("all"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), id)
+        check(CompiledDocument.MAX_GLOB_UNITS - policy.globUnits < units)
+        val bindings = (0 until if (scenario == "bindings") BINDINGS else 1).map {
+            Binding(BindingId("b$it"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), id)
+        }
         view = SnapshotView(
             CompiledDocument.platform(emptyList(), emptyList()),
             null,
-            CompiledDocument.tenant(TenantId("acme"), listOf(policy), listOf(binding)),
+            CompiledDocument.tenant(TenantId("acme"), listOf(policy), bindings),
         )
-        val last = if (scenario == "captures") "b" else "a"
-        request = request("/" + "a".repeat(SEGMENT_LENGTH - 1) + last)
+        request = request(path)
         val decision = evaluate().decision
         check(decision == Decision.Deny(null)) { "Scenario $scenario decided $decision" }
     }
@@ -117,9 +133,7 @@ open class GlobBoundBenchmark {
     }
 
     private companion object {
-        /** `{v}`, then seven `a*` pairs, then `b`: 16 tokens. */
-        const val SEGMENT_STARS = 7
-        const val STATEMENTS = CompiledDocument.MAX_GLOB_TOKENS / HttpPathPattern.MAX_SEGMENT_TOKENS
         const val SEGMENT_LENGTH = 256
+        const val BINDINGS = 64
     }
 }

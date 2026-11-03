@@ -99,7 +99,7 @@ public final class me/ahoo/cosec/engine/flat/CompileException : java/lang/Illega
 public final class me/ahoo/cosec/engine/flat/CompiledDocument {
 	public static final field Companion Lme/ahoo/cosec/engine/flat/CompiledDocument$Companion;
 	public static final field MAX_BOUNDARY_STATEMENTS I
-	public static final field MAX_GLOB_TOKENS I
+	public static final field MAX_GLOB_UNITS I
 	public final fun getHeadersRead ()Ljava/util/List;
 	public final fun getKind ()Lme/ahoo/cosec/model/decision/DocumentKind;
 	public final fun getOwner ()Ljava/lang/String;

@@ -195,13 +195,19 @@ internal object CandidateOrder {
                 ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
             if (policy == null) {
                 visitor.missing(entry.policyId)
-            } else if (
-                if (entry.repeat < 0) visitor.candidate(policy, entry.via) else visitor.repeated(policy, entry.via, entry.repeat)
-            ) {
+            } else if (candidate(visitor, policy, entry)) {
                 return true
             }
         }
         return false
+    }
+
+    /** [policy] through [entry], as one of several bindings of its document to it when it is one (`ALG-9`). */
+    private fun candidate(visitor: CandidateVisitor, policy: CompiledPolicy, entry: BoundEntry): Boolean {
+        if (entry.repeat < 0) {
+            return visitor.candidate(policy, entry.via)
+        }
+        return visitor.repeated(policy, entry.via, entry.repeat)
     }
 
     private fun inScope(entry: BoundEntry, tenant: String, app: String, space: String): Boolean =

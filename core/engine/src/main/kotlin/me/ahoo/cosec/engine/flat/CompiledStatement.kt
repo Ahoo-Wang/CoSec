@@ -53,8 +53,8 @@ class CompiledStatement internal constructor(
     internal val externals: Array<Attribute> =
         condition?.let { ConditionAttributes.of(it).filter(Attribute::external).distinct().toTypedArray() } ?: NO_ATTRIBUTES
 
-    /** The tokens of its resources' glob segments, which the document's budget counts (`DOC-4`). */
-    internal val globTokens: Int = resources.sumOf { (it as? ResourcePattern.Http)?.path?.globTokens ?: 0 }
+    /** The tokens and literal characters of its resources' glob segments, which the document's budget counts (`DOC-4`). */
+    internal val globUnits: Int = resources.sumOf { (it as? ResourcePattern.Http)?.path?.globUnits ?: 0 }
 
     /** The request headers [condition] reads (`PIP-12`). */
     internal val headers: Array<String> = condition?.let { HeadersRead.of(ConditionAttributes.of(it)) } ?: NO_HEADERS

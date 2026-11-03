@@ -58,8 +58,8 @@ class CompiledPolicy(
     internal val externals: Array<Attribute> =
         condition?.let { ConditionAttributes.of(it).filter(Attribute::external).distinct().toTypedArray() } ?: NO_ATTRIBUTES
 
-    /** The tokens of its statements' glob segments (`DOC-4`). */
-    internal val globTokens: Int = this.statements.sumOf { it.globTokens }
+    /** The glob units of its statements (`DOC-4`). */
+    internal val globUnits: Int = this.statements.sumOf { it.globUnits }
 
     /** The request headers its condition and its statements' conditions read (`PIP-12`). */
     internal val headers: Array<String> = HeadersRead.merge(

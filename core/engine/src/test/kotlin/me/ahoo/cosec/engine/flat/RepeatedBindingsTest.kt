@@ -152,13 +152,15 @@ class RepeatedBindingsTest {
         fixture.log.clear()
         val trace = CoSecFlatEngine.evaluate(flatRequest(), view, TraceLevel.FULL).trace!!
         fixture.log.calls.assert().containsExactly("rule:p.0", "rule:p.1")
-        trace.candidates.drop(1).map { "${it.ref.name}:${(it.via as BindingRef.Bound).id.value}:${it.outcome}:${it.afterDecision}" }
-            .assert().containsExactly(
-                "p.0:g1:CONDITION_MISS:false",
-                "p.0:g2:CONDITION_MISS:false",
-                "p.1:g1:MATCHED:false",
-                "p.1:g2:MATCHED:true",
-            )
+        val lines = trace.candidates.drop(1).map {
+            "${it.ref.name}:${(it.via as BindingRef.Bound).id.value}:${it.outcome}:${it.afterDecision}"
+        }
+        lines.assert().containsExactly(
+            "p.0:g1:CONDITION_MISS:false",
+            "p.0:g2:CONDITION_MISS:false",
+            "p.1:g1:MATCHED:false",
+            "p.1:g2:MATCHED:true",
+        )
     }
 
     @Test

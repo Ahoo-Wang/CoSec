@@ -19,6 +19,7 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.DocumentKind
 
@@ -304,7 +305,10 @@ class CompiledDocument private constructor(
             return if (names.isEmpty()) emptyList() else names.toList()
         }
 
-        /** `DOC-4`: the glob tokens of every pattern of the document, at most [MAX_GLOB_TOKENS]. Free when empty. */
+        /**
+         * `DOC-4`: the glob units of every pattern of the document, at most [MAX_GLOB_UNITS]. A rate limit rule whose key
+         * reads a captured variable counts twice: its statement is matched, then captured for the key. Free when empty.
+         */
         private fun checkGlobBudget(
             policies: Map<String, CompiledPolicy>,
             boundaries: Map<String, CompiledPolicy>,
@@ -313,11 +317,11 @@ class CompiledDocument private constructor(
             if (policies.isEmpty() && boundaries.isEmpty() && rateLimits.isEmpty()) {
                 return
             }
-            val globTokens = policies.values.sumOf { it.globTokens } + boundaries.values.sumOf { it.globTokens } +
-                rateLimits.sumOf { it.statement.globTokens }
-            require(globTokens <= MAX_GLOB_TOKENS) {
-                "The document's path pattern segments that mix *, ? or {name} with other text hold $globTokens tokens " +
-                    "in all, more than $MAX_GLOB_TOKENS"
+            val units = policies.values.sumOf { it.globUnits } + boundaries.values.sumOf { it.globUnits } +
+                rateLimits.sumOf { it.statement.globUnits * if (it.key?.kind == Attribute.Kind.RESOURCE_VAR) 2 else 1 }
+            require(units <= MAX_GLOB_UNITS) {
+                "The document's path pattern segments that mix *, ? or {name} with other text hold $units tokens " +
+                    "and literal characters in all, more than $MAX_GLOB_UNITS"
             }
         }
 
@@ -325,11 +329,15 @@ class CompiledDocument private constructor(
         const val MAX_BOUNDARY_STATEMENTS: Int = 64
 
         /**
-         * The most glob tokens ([me.ahoo.cosec.engine.pattern.HttpPathPattern.MAX_SEGMENT_TOKENS]) one document's path
-         * patterns hold in all (RC1-8, `DOC-4`): a request's path segments are at most 256 characters, so matching every
-         * glob of a document costs at most this many times 256 steps, whichever of its statements are candidates.
+         * The most glob units one document's path patterns hold in all (RC1-8, `DOC-4`): the tokens of every segment
+         * that mixes `*`, `?` or `{name}` with other text
+         * ([me.ahoo.cosec.engine.pattern.HttpPathPattern.MAX_SEGMENT_TOKENS]) and the characters of its literals, twice
+         * after a leading `**` and for a rate limit rule keyed by a captured variable. Matching such a segment takes at
+         * most its units times the path segment's length in steps, and the pipeline accepts no segment longer than 256
+         * characters. A pass evaluates a policy once for each document that binds it, however often (`ALG-9`), so this
+         * bounds what matching one document's patterns costs a request; `GlobBoundBenchmark` measures it at the bound.
          */
-        const val MAX_GLOB_TOKENS: Int = 4096
+        const val MAX_GLOB_UNITS: Int = 2048
 
         /**
          * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.

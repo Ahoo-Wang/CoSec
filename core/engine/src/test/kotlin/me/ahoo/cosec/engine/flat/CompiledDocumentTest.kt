@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -126,11 +125,12 @@ class CompiledDocumentTest {
     }
 
     /**
-     * RC1-8 (`DOC-4`): the glob tokens of a document's path patterns, across its policies, boundaries and rate limit
-     * rules, bound what matching them all costs one request, whichever are candidates.
+     * RC1-8 (`DOC-4`): the glob units of a document's path patterns, across its policies, boundaries and rate limit
+     * rules, bound what matching them all costs one request, whichever are candidates. A rule whose key reads a
+     * captured variable counts twice: it is matched, then captured.
      */
     @Test
-    fun `a document holds at most 4096 glob tokens`() {
+    fun `a document holds at most its glob budget`() {
         val compiler = PolicyCompiler()
         fun globs(id: String, statements: Int): CompiledPolicy {
             val policyId = PolicyId(id)
@@ -146,28 +146,36 @@ class CompiledDocumentTest {
                 },
             )
         }
-        val full = CompiledDocument.MAX_GLOB_TOKENS / HttpPathPattern.MAX_SEGMENT_TOKENS
+        val max = CompiledDocument.MAX_GLOB_UNITS
+        val full = max / GLOB_UNITS
+        globs("a", 1).globUnits.assert().isEqualTo(GLOB_UNITS)
         tenant(globs("a", full / 2), globs("b", full - full / 2)).headersRead.assert().isEmpty()
         rejects(
-            "hold 4112 tokens in all, more than 4096"
+            "hold ${max + GLOB_UNITS} tokens and literal characters in all, more than $max"
         ) { tenant(globs("a", full / 2), globs("b", full - full / 2 + 1)) }
-        val rule = compiler.rateLimit(
+        fun rule(key: String?) = compiler.rateLimit(
             DocumentKind.PLATFORM,
             "",
             RateLimitSource(
                 "r",
                 StatementSource("r", Effect.DENY, listOf("*"), listOf(ResourceSource(GLOB))),
-                null,
+                key,
                 RateLimitSpec(1.0)
             ),
         )
+        val rule = rule(null)
         CompiledDocument.platform(listOf(globs("a", full - 1)), emptyList(), listOf(rule))
-        rejects("more than 4096") { CompiledDocument.platform(listOf(globs("a", full)), emptyList(), listOf(rule)) }
-        // A boundary holds at most 64 statements: 64 of them and the rule's tokens push 192 more statements over.
+        rejects("more than $max") { CompiledDocument.platform(listOf(globs("a", full)), emptyList(), listOf(rule)) }
+        val keyed = rule("resource.var.v")
+        CompiledDocument.platform(listOf(globs("a", full - 2)), emptyList(), listOf(keyed))
+        rejects("more than $max") {
+            CompiledDocument.platform(listOf(globs("a", full - 1)), emptyList(), listOf(keyed))
+        }
+        // A boundary's statements count as a policy's do.
         val boundary = globsAllow(compiler, CompiledDocument.MAX_BOUNDARY_STATEMENTS)
         val rest = full - CompiledDocument.MAX_BOUNDARY_STATEMENTS
         CompiledDocument.platform(listOf(globs("a", rest - 1)), emptyList(), listOf(rule), listOf(boundary), "boundary")
-        rejects("more than 4096") {
+        rejects("more than $max") {
             CompiledDocument.platform(listOf(globs("a", rest)), emptyList(), listOf(rule), listOf(boundary), "boundary")
         }
     }
@@ -219,7 +227,8 @@ class CompiledDocumentTest {
     }
 
     private companion object {
-        /** One glob segment of 16 tokens. */
-        const val GLOB = "http:path:/{v}a*a*a*a*a*a*a*b"
+        /** One glob segment of 10 tokens and 6 literal characters: 16 units. */
+        const val GLOB = "http:path:/{v}a*a*a*a*ab"
+        const val GLOB_UNITS = 16
     }
 }
