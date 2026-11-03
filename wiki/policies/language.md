@@ -237,8 +237,9 @@ A pattern over a bound does not compile:
 
 A literal segment, `*` or `{name}` as a whole segment, `**` and `{*name}` cost nothing: only a segment mixing them with
 text is matched by searching. The bounds are fixed in 8.0. On the data plane a stored document over them is installed
-as failed, so the requests that read it fail closed. A segment matches in at most its parts times its length steps, so
-with these bounds a whole document's patterns cost a request about a millisecond at worst.
+as failed, so the requests that read it fail closed. A segment matches in at most its parts times its length steps: a
+document that spends its whole budget on patterns every path is a candidate for costs a request about half a
+millisecond and allocates about 1 MB at worst (`GlobBoundBenchmark`, on a CI runner).
 
 ## Path variables
 
