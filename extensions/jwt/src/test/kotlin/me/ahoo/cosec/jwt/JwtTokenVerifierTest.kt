@@ -130,6 +130,40 @@ class JwtTokenVerifierTest {
     }
 
     /**
+     * A `roles` or `policies` claim that is not an array of strings, or an `attributes` claim that is not an object, is
+     * an invalid token (401, `PIP-6`), never a principal with fewer roles than it was given, and never a 500. Absent
+     * claims are empty, as before.
+     */
+    @Test
+    fun malformedRoleAndPolicyClaimsAreInvalid() {
+        for (claim in listOf("roles", "policies")) {
+            for (token in listOf(
+                signed { withClaim(claim, "admin") },
+                signed { withNullClaim(claim) },
+                signed { withClaim(claim, mapOf("admin" to true)) },
+                signed { withClaim(claim, listOf(1, 2)) },
+                signed { withClaim(claim, 42) },
+            )) {
+                val thrown = assertThrows(TokenVerificationException::class.java) {
+                    jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token))
+                }
+                assertFalse(thrown is TokenExpiredException)
+            }
+        }
+        for (token in listOf(signed { withClaim("attributes", "region") }, signed { withClaim("attributes", listOf("a")) })) {
+            assertThrows(TokenVerificationException::class.java) {
+                jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token))
+            }
+        }
+        val principal = jwtTokenVerifier.verify<TokenPrincipal>(
+            SimpleAccessToken(signed { withClaim("roles", listOf("admin")).withClaim("policies", listOf("p1")) })
+        )
+        principal.roles.assert().containsExactly("admin")
+        principal.policies.assert().containsExactly("p1")
+        jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(signed {})).roles.assert().isEmpty()
+    }
+
+    /**
      * RC1-26: [JwtTokenVerifier] is CoSec's own verifier, so the tokens it verifies may use break-glass, and their
      * credential is named `jwt`; the same token through a verifier that wraps it is not CoSec's, and may not.
      */

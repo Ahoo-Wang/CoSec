@@ -66,12 +66,13 @@
     {
       "id": "PIP-6",
       "source": "RFC 0006 §5.3.2, §6.1 (K2, Q2)",
-      "statement": "A credential that is invalid, expired or revoked is evaluated as anonymous: a permit proceeds, and a deny answers 401 with the token-* problem type that names why (token-invalid, token-expired, token-revoked), never unauthorized.",
+      "statement": "A credential that is invalid (a token whose `roles` or `policies` claim is not an array of strings, or whose `attributes` claim is not an object, included), expired or revoked is evaluated as anonymous: a permit proceeds, and a deny answers 401 with the token-* problem type that names why (token-invalid, token-expired, token-revoked), never unauthorized.",
       "level": "pipeline",
       "guards": [
         "runtime:TokenAuthenticatorTest#rejectedTokensNameWhy",
         "runtime:PipelineTest#rejectedCredentialsDenyWithTheirReason",
-        "runtime:PipelineTest#rejectedCredentialsAreEvaluatedAsAnonymous"
+        "runtime:PipelineTest#rejectedCredentialsAreEvaluatedAsAnonymous",
+        "jwt:JwtTokenVerifierTest#malformedRoleAndPolicyClaimsAreInvalid"
       ],
       "pending": null
     },

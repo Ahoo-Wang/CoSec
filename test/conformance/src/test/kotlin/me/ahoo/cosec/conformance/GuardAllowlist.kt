@@ -42,6 +42,8 @@ object GuardAllowlist {
             "webflux:PipelineWebFilterTest#aPermitHandsOnNoClientIdentity",
             "webmvc:PipelineServletFilterTest#aPermitHandsOnNoClientIdentity",
             "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none",
+            "cocache:StoredFormatTest#a duplicate key fails every stored format",
+            "control:ControlHttpTest#a body with a duplicate key is refused",
         ),
         "startup" to setOf(
             "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
@@ -62,6 +64,13 @@ object GuardAllowlist {
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#endpoints on a separate management port start",
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#a listed endpoint starts, but gateway is never accepted",
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#health alone starts",
+            "cocache:CacheTtlPolicyTest#aSnapshotCacheBuiltOutsideTheStarterIsPinned",
+            "spring-boot:StoreOfRecordOverrideTest#customizersCannotReplaceWhatDecidesACachesContent",
+            "spring-boot:CoSecPipelineAutoConfigurationTest#a revalidate-interval that turns off or unbinds the periodic pass fails startup",
+            "runtime:SnapshotRevalidationTest#theRevalidationIntervalCannotTurnThePassOffOrUnbindIt",
+            "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",
+            "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
+            "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
         ),
         "timing" to setOf(
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",
@@ -72,6 +81,11 @@ object GuardAllowlist {
             "runtime:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
             "runtime:SnapshotRecompileTest#a document failed by a recompile keeps retrying while the store stays down",
             "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again",
+            "runtime:SnapshotFailClosedPropertyTest#absentEntriesNeverEvictDocuments",
+            "runtime:DocumentSnapshotSourceTest#a flood of ids without a document never evicts a document",
+            "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
+            "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
+            "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
         ),
     )
 }

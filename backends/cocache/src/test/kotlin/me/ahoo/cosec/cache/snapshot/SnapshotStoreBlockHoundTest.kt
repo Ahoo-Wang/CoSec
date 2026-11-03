@@ -42,13 +42,24 @@ import kotlin.coroutines.startCoroutine
  * and every store entry point, a writer publishing through it, and a [SnapshotSource] cold load over the store, runs
  * on such a thread against real Redis. Only these threads are watched, so other tests in the JVM are unaffected.
  *
- * Two waits are allowed, each exactly where it happens:
+ * Three waits are allowed, each exactly where it happens:
  * - logback's console appender lock: the logging setup of the test JVMs, not the code under test;
  * - `ScheduledThreadPoolExecutor$DelayedWorkQueue.offer`: a cold load arms its timeout on the caller's thread, and
  *   scheduling a delayed task takes the queue's lock for one heap insertion, never across I/O. Every JDK way to schedule
  *   a delayed task (including handing it to the scheduler thread, which offers to the same kind of queue) takes such a
  *   lock, Reactor's own timers on an event loop included, so it is a bounded wait, not blocking I/O (RFC 0003 §5.3).
  *   Without the allowance, the test failed only when the lock happened to be contended: flaky, not a finding.
+ * - `io.lettuce.core.protocol.SharedLock.incrementWriters`, and nothing else of Lettuce: every command write
+ *   (`DefaultEndpoint.write`) takes this `ReentrantLock` to count itself as a writer, for a compare-and-set and a map
+ *   update, then lets go before any I/O. Two threads writing on one connection at once, such as a caller issuing a
+ *   read while the event loop issues the follow-up of another, can park on it for that long; the cold-load test caught
+ *   it once on CI (#1164). Lettuce ships no BlockHound integration and declines to change this
+ *   ([lettuce#2510](https://github.com/redis/lettuce/issues/2510): "by design"; its maintainer suggests excluding
+ *   `SharedLock`). The allowance also hides a longer wait: the lock is held exclusively while the connection activates,
+ *   deactivates or drains its queued commands, and a reconnect flushes every command buffered while disconnected under
+ *   it, so a writer on an event loop waits for that flush, bounded by `ClientOptions.requestQueueSize` (unbounded by
+ *   default). `wiki/operations/storage.md` tells operators how to bound it; the starter does not change the
+ *   application's Lettuce client, which it shares. Every other wait on a watched thread still fails the test.
  */
 class SnapshotStoreBlockHoundTest {
     /** Runs [block] on a fresh watched thread and returns its result. */
@@ -167,6 +178,8 @@ class SnapshotStoreBlockHoundTest {
                 .allowBlockingCallsInside("ch.qos.logback.core.OutputStreamAppender", "writeBytes")
                 // A bounded lock around one heap insertion when a timeout is armed (see the class comment).
                 .allowBlockingCallsInside("java.util.concurrent.ScheduledThreadPoolExecutor\$DelayedWorkQueue", "offer")
+                // Lettuce's writer count around each command write, and only that (see the class comment).
+                .allowBlockingCallsInside("io.lettuce.core.protocol.SharedLock", "incrementWriters")
                 .blockingMethodCallback { method ->
                     violations += "${Thread.currentThread().name}: $method\n" +
                         Throwable().stackTrace.take(STACK_DEPTH).joinToString("\n") { "    at $it" }

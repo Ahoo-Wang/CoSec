@@ -36,6 +36,17 @@
         "engine:CompiledDocumentTest#a document holds at most 4096 glob tokens"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-5",
+      "source": "RFC 0011 D3; RC1-44",
+      "statement": "Every stored format CoSec reads, and every control-plane request body, refuses an object with a duplicate key: CoSec's one mapper reads them all with duplicate detection, so no value is read as whichever of two came last.",
+      "level": "build",
+      "guards": [
+        "cocache:StoredFormatTest#a duplicate key fails every stored format",
+        "control:ControlHttpTest#a body with a duplicate key is refused"
+      ],
+      "pending": null
     }
   ]
 }

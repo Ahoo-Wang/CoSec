@@ -31,6 +31,8 @@ import java.time.Instant
  * Must not block the calling thread, which may be an event loop: an implementation that needs a blocking client moves
  * the call to its own bounded executor (§7.7). Report a failed dependency as [AuthnResult.Unavailable] rather than by
  * throwing; the pipeline treats a thrown exception the same way, and both deny with 503.
+ * Its timeout is cooperative: the pipeline cancels a late call and waits for it to return, so a blocking client goes
+ * in `runInterruptible(myDispatcher)` and keeps timeouts of its own (RC1-14, `wiki/architecture/extending.md`).
  */
 @CoSecSpi
 fun interface Authenticator {

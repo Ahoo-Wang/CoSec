@@ -255,6 +255,37 @@ class CoSecPipelineAutoConfigurationTest {
             }
     }
 
+    /**
+     * RC1-50 (`SNP-6`): the periodic revalidation is the only bound on a lost invalidation, so an interval that turns
+     * it off or leaves it unbounded fails startup, naming the property: zero, a negative one, over 5 minutes, at or
+     * over `lag-warn`, and at or over `fail-closed.max-lag` with fail-closed tenants.
+     */
+    @Test
+    fun `a revalidate-interval that turns off or unbinds the periodic pass fails startup`() {
+        val property = "cosec.authorization.snapshot.revalidate-interval"
+        for (values in listOf(
+            listOf("$property=0"),
+            listOf("$property=-1s"),
+            listOf("$property=6m", "cosec.authorization.snapshot.lag-warn=10m", "cosec.authorization.snapshot.lag-escalate=10m"),
+            listOf("$property=60s"),
+            listOf(
+                "$property=30s",
+                "cosec.authorization.snapshot.fail-closed.tenants=strict",
+                "cosec.authorization.snapshot.fail-closed.max-lag=30s",
+            ),
+        )) {
+            runner.withPropertyValues(*values.toTypedArray()).run { context ->
+                context.startupFailure.assert().describedAs(values.first()).isNotNull()
+                context.startupFailure!!.stackTraceToString().assert().contains(property)
+            }
+        }
+        runner.withPropertyValues(
+            "$property=5m",
+            "cosec.authorization.snapshot.lag-warn=6m",
+            "cosec.authorization.snapshot.lag-escalate=10m",
+        ).run { context -> context.startupFailure.assert().isNull() }
+    }
+
     @Test
     fun `Redis that may evict snapshots fails startup unless told to warn`() {
         val evicting = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "allkeys-lru"))

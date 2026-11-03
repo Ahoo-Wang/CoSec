@@ -182,7 +182,8 @@ class CacheTtlPolicyTest {
             created.ttlOf.assert().isNull()
             created.namespace.assert().isEqualTo("outside:snapshot")
             // The filter that called every key absent is gone: a written document reads back.
-            val document = SnapshotDocument(2, 1, Instant.parse("2026-11-03T00:00:00Z"), "{}".encodeToByteArray())
+            val body = """{"schema":2,"revision":1,"publishedAt":"2026-11-03T00:00:00Z","policies":[],"bindings":[]}"""
+            val document = SnapshotDocument(2, 1, Instant.parse("2026-11-03T00:00:00Z"), body.encodeToByteArray())
             cache.put(SnapshotKey.Platform, document)
             cache.get(SnapshotKey.Platform)!!.revision.assert().isEqualTo(1)
         }
