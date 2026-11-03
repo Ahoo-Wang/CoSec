@@ -3,7 +3,7 @@
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index 4e02b538..504c8d3a 100644
+index 0e74d6fa..b8df1f5d 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 @@ -110,7 +110,7 @@ class PipelineGatewayFilter(

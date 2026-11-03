@@ -261,6 +261,11 @@ class PipelineGatewayFilterTest {
         // A query without the token is left as it came.
         sent(stripping, get("/orders?q=a%20b")).uri.rawQuery.assert().isEqualTo("q=a%20b")
         sent(stripping, get("/orders?authorization=t")).uri.rawQuery.assert().isNull()
+        // The rest of the URI stays as it came: escapes, a fragment, and characters no builder would accept unencoded.
+        val raw = sent(stripping, get("/a%2Fb?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
+        raw.rawPath.assert().isEqualTo("/a%2Fb")
+        raw.rawQuery.assert().isEqualTo("x=%E4%B8%AD&y=中")
+        raw.rawFragment.assert().isEqualTo("frag")
     }
 
     /** SCP-2, RC1-6: each route's app is its requests' host app, ahead of the gateway's; the client's only without. */

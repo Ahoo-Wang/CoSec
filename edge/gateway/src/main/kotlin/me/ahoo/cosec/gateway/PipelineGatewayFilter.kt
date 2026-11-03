@@ -33,8 +33,8 @@ import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
-import org.springframework.web.util.UriComponentsBuilder
 import reactor.core.publisher.Mono
+import java.net.URI
 
 /**
  * The gateway filter over the coroutine pipeline (RFC 0006 §7.3): the same bridge as the WebFlux filter, so the two
@@ -114,7 +114,7 @@ class PipelineGatewayFilter(
                 val query = request.uri.rawQuery
                 val kept = withoutQueryToken(query)
                 if (kept != query) {
-                    downstream.uri(UriComponentsBuilder.fromUri(request.uri).replaceQuery(kept).build(true).toUri())
+                    downstream.uri(withQuery(request.uri, kept))
                 }
             }
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
@@ -145,6 +145,16 @@ class PipelineGatewayFilter(
 
         /** The scheme of a route to a registered service, as Spring Cloud Gateway's load balancer reads it. */
         private const val LOAD_BALANCED = "lb"
+
+        /**
+         * [uri] with its raw query replaced by [query], none when null: the rest of the text as received, so nothing is
+         * encoded or checked again (a query of the original URI less some pairs is as valid as the original).
+         */
+        private fun withQuery(uri: URI, query: String?): URI {
+            val text = uri.toString()
+            val end = uri.rawFragment?.let { text.length - it.length - 1 } ?: text.length
+            return URI.create(text.substring(0, text.indexOf('?')) + query?.let { "?$it" }.orEmpty() + text.substring(end))
+        }
 
         /**
          * Whether [route]'s backend receives what the gateway forwards about the caller: its metadata
