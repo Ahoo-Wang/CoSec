@@ -718,10 +718,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             put(key, body)
         }
         val clock = MovingClock(Instant.parse(NOW))
+        val maxLag = java.time.Duration.ofSeconds(failClosed.required("maxLagSeconds").asLong())
+        // The periodic pass cannot be turned off (SNP-6): the longest the bounds allow, so it never runs within a
+        // scenario, which moves the clock itself.
         val options = SnapshotOptions(
-            revalidateInterval = java.time.Duration.ZERO,
+            revalidateInterval = minOf(SnapshotOptions().lagWarn, maxLag).minusSeconds(1),
             failClosedTenants = failClosed.required("tenants").strings().toSet(),
-            failClosedMaxLag = java.time.Duration.ofSeconds(failClosed.required("maxLagSeconds").asLong()),
+            failClosedMaxLag = maxLag,
         )
         val compiler = PlatformCompiler(attributes.catalog)
         val source = DocumentSnapshots.source(store, compiler, options, clock).also(compiler::bind)

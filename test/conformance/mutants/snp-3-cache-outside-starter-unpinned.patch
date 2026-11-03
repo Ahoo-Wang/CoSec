@@ -1,0 +1,17 @@
+# Rule: SNP-3
+# Mutant: createPolicySnapshotCache creates the spec as given, so a cache built outside the starter may expire and degrade
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.CacheTtlPolicyTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
+index 76100a22..5dfb9166 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
+@@ -109,7 +109,7 @@ fun CacheRuntime.createPolicySnapshotCache(spec: CacheSpec<SnapshotKey, Snapshot
+     pinned.keyFilter = null
+     pinned.ttlOf = null
+     pinned.versioned = false
+-    val created = pinned.build()
++    val created = spec
+     return PolicySnapshotCache(
+         create(created),
+         created.namespace,

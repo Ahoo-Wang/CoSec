@@ -74,7 +74,8 @@
         "spring-boot:CoSecPipelineAutoConfigurationTest#a revalidate-interval that turns off or unbinds the periodic pass fails startup",
         "runtime:SnapshotRevalidationTest#theRevalidationIntervalCannotTurnThePassOffOrUnbindIt",
         "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",
-        "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument"
+        "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
+        "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy"
       ],
       "pending": null
     },

@@ -1,0 +1,17 @@
+# Rule: SNP-9
+# Mutant: the rate limiter counts under the fixed cosec:rate-limiter prefix, shared by every deployment
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.DeploymentKeyPrefixTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
+index 9e9ff61e..aefc69c4 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
+@@ -107,7 +107,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
+             @Bean
+             @ConditionalOnMissingBean
+             fun cosecRedisRateLimiter(template: ReactiveStringRedisTemplate, cosec: CoSecProperties): RateLimiter =
+-                ReactiveRedisRateLimiter(template, CoSecCacheSpecs.rateLimiterPrefix(cosec.keyPrefix))
++                ReactiveRedisRateLimiter(template)
+         }
+ 
+         @Bean

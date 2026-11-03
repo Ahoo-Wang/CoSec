@@ -1,0 +1,17 @@
+# Rule: PIP-6
+# Mutant: a roles claim that is not an array reads as no roles instead of an invalid token
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index a5d68592..af7eb111 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -95,7 +95,7 @@ internal object Jwts {
+             return emptySet()
+         }
+         val values = claim.asList(Any::class.java)
+-            ?: throw TokenVerificationException("The token's [$name] claim is not an array.")
++            ?: return emptySet()
+         return values.mapTo(LinkedHashSet()) {
+             it as? String ?: throw TokenVerificationException("The token's [$name] claim holds a value that is not a string.")
+         }

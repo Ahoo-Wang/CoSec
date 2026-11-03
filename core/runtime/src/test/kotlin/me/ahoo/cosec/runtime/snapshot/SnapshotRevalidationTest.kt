@@ -223,6 +223,21 @@ class SnapshotRevalidationTest {
         }
     }
 
+    /** `SNP-6`: revalidation asks the store of record, never a local copy that may predate the change it missed. */
+    @Test
+    fun revalidationAsksTheStoreNeverALocalCopy() {
+        testSource(store).use { source ->
+            source.load().join()
+            store.dropNotifications = true
+            store.localCopies[SnapshotKey.Platform] = document(1)
+            store.put(SnapshotKey.Platform, document(2))
+
+            source.revalidate().join()
+
+            source.peek()!!.policiesCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
     /** RC1-50: the periodic pass is the only bound on a lost invalidation, so it can be neither off nor unbounded. */
     @Test
     fun theRevalidationIntervalCannotTurnThePassOffOrUnbindIt() {

@@ -1,0 +1,17 @@
+# Rule: SNP-6
+# Mutant: the periodic revalidation is scheduled far beyond any interval, so a lost invalidation is never recovered
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 8ab96d44..e9da009a 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -430,7 +430,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+ 
+     private fun schedulePeriodic(): ScheduledFuture<*> {
+         val millis = options.revalidateInterval.toMillis()
+-        return scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
++        return scheduler.scheduleWithFixedDelay(::periodicTick, millis * 1000, millis * 1000, TimeUnit.MILLISECONDS)
+     }
+ 
+     /** Never lets anything escape: a throwing task would silently cancel the periodic schedule. */

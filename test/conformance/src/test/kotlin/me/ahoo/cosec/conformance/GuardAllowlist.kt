@@ -70,6 +70,7 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#theRevalidationIntervalCannotTurnThePassOffOrUnbindIt",
             "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",
             "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
+            "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
         ),
         "timing" to setOf(
