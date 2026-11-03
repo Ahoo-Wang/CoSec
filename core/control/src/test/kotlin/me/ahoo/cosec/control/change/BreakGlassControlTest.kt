@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -46,6 +47,8 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -70,7 +73,24 @@ class BreakGlassControlTest {
     /** What runs once right after the next read of a change, before its answer: another call meanwhile. */
     @Volatile
     private var afterChange: (suspend () -> Unit)? = null
+
+    /** Whether the next head write goes through and then fails, as a reply lost on the way back. */
+    @Volatile
+    private var loseReply = false
     private val store: ControlStore = object : ControlStore by memory {
+        override suspend fun putHead(
+            key: SnapshotKey,
+            expected: SnapshotDigest?,
+            document: SnapshotDocument
+        ): HeadWrite {
+            val written = memory.putHead(key, expected, document)
+            if (loseReply) {
+                loseReply = false
+                error("the reply was lost")
+            }
+            return written
+        }
+
         override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
             memory.stage(key).also { slotReads.incrementAndGet() }
 
@@ -614,8 +634,56 @@ class BreakGlassControlTest {
         val reads = slotReads.get()
         refused { breakGlass.revoke(nobody, binding, "mine") }.assert().isEqualTo(403)
         refused { breakGlass.revoke(alice, binding, "mine") }.assert().isEqualTo(403)
+        // Nor does it learn whether a binding exists: a binding there is not is a 403 too.
+        refused { breakGlass.revoke(nobody, BindingId("nothing-here"), "mine") }.assert().isEqualTo(403)
         slotReads.get().assert().isEqualTo(reads)
         changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+    }
+
+    /**
+     * Review F-1 (`BRK-11`): a binding the platform document does not have, a mistyped id say, is a 404: nothing is
+     * proposed, so no change is left behind for the caller to take for the revoke it meant.
+     */
+    @Test
+    fun `revoking a binding the head does not have is a 404`() = runBlocking<Unit> {
+        val binding = granted(1)
+        val made = ids.get()
+        refused { breakGlass.revoke(rita, BindingId(binding.value + "1"), "compromised") }.assert().isEqualTo(404)
+        ids.get().assert().isEqualTo(made)
+        breakGlass.grants(binding).assert().isTrue()
+    }
+
+    /**
+     * Review F-1: a revoke whose publish wrote the head but lost its answer is READY in the slot while the head no
+     * longer has the binding: revoking again finds it and settles it published, not a 404.
+     */
+    @Test
+    fun `revoking again after a lost answer settles the revoke`() = runBlocking<Unit> {
+        val binding = granted(1)
+        loseReply = true
+        val lost = try {
+            breakGlass.revoke(rita, binding, "compromised")
+            null
+        } catch (e: IllegalStateException) {
+            e
+        }
+        lost.assert().isNotNull()
+        glass().assert().isNull()
+        val revoke = store.stage(SnapshotKey.Platform)!!.value.holder!!
+        changes.get(revoke).state.assert().isEqualTo(ChangeState.READY)
+        val again = breakGlass.revoke(rita, binding, "compromised, again")
+        again.id.assert().isEqualTo(revoke)
+        again.state.assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    /** Review F-1: a binding that has expired is still on the head, and revoking it tidies it away. */
+    @Test
+    fun `revoking an expired binding tidies it away`() = runBlocking<Unit> {
+        val binding = granted(1)
+        clock.now = inHours(2)
+        breakGlass.grants(binding).assert().isFalse()
+        breakGlass.revoke(rita, binding, "tidy").state.assert().isEqualTo(ChangeState.PUBLISHED)
+        glass().assert().isNull()
     }
 
     /**

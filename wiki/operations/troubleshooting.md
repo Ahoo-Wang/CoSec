@@ -473,6 +473,11 @@ for a check, `412` for an `ifMatch` that does not hold).
   document, and the revoke gave up after three more tries; revoke again, and revoke the principal's tokens meanwhile.
   `DRAFT`: read the change's `findings`; an ordinary binding is not revoked as break-glass (`V5`), remove it with a
   change instead.
+- **`DELETE /break-glass/{bindingId}` answers `404`**: the platform document has no binding of that id, and nothing
+  was proposed. Check the id (`GET /documents/platform` lists the bindings). A `404` on a retry, after a first call
+  that timed out or failed, means the binding was removed, by that call or another: the platform document's revision
+  history shows which revision removed it. Like every `404` of the control API it carries no `detail`; the control
+  host logs `the platform document has no binding [<id>]` at `INFO`.
 - **Every tenant grant over every app waits for approval** (`UNREADABLE`) after an upgrade, with
   `The app list is missing or incomplete: run cosec-migrate repair-references; ...` at `WARN` (at most once a minute, at
   startup too):

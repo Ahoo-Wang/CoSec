@@ -238,8 +238,9 @@ class ControlHttpTest {
     }
 
     /**
-     * R4-1: removing a break-glass binding answers 200 only once the binding no longer grants; a revoke that leaves it
-     * granting is a 409 that names its change's state, never a success.
+     * R4-1, `BRK-11`: removing a break-glass binding answers 200 only once the binding no longer grants; a revoke that
+     * leaves it granting is a 409 that names its change's state, never a success; a binding the head does not have is a
+     * 404 (review F-1).
      */
     @Test
     fun `a break-glass revoke answers 200 only once the binding no longer grants`() {
@@ -255,6 +256,17 @@ class ControlHttpTest {
             )
             fixture.bootstrap(SnapshotKey.Platform, head.policies, head.bindings + glass)
         }
+        // F-1: a mistyped id is a 404 without detail, and leaves no change behind.
+        val made = fixture.ids.get()
+        val (missing, notFound) = call(
+            "DELETE",
+            "/break-glass/glas",
+            security = plato,
+            query = mapOf("reason" to "done")
+        )
+        missing.assert().isEqualTo(404)
+        notFound.has("detail").assert().isFalse()
+        fixture.ids.get().assert().isEqualTo(made)
         val (revoked, change) = call(
             "DELETE",
             "/break-glass/glass",
@@ -263,6 +275,9 @@ class ControlHttpTest {
         )
         revoked.assert().isEqualTo(200)
         change.get("state").asString().assert().isEqualTo("PUBLISHED")
+        // Revoked, the id is no longer on the head.
+        call("DELETE", "/break-glass/glass", security = plato, query = mapOf("reason" to "done")).first
+            .assert().isEqualTo(404)
         // An ordinary binding is no break-glass binding: the revoke is a DRAFT, and the binding still grants.
         val (refused, problem) =
             call("DELETE", "/break-glass/no-delete", security = plato, query = mapOf("reason" to "done"))
@@ -284,12 +299,13 @@ class ControlHttpTest {
         status.assert().isEqualTo(503)
         problem.has("detail").assert().isFalse()
         call("DELETE", "/break-glass/glass", security = plato).first.assert().isEqualTo(400)
+        // No such binding: a 404, and nothing proposed.
         call(
             "DELETE",
             "/break-glass/glass",
             security = plato,
             query = mapOf("reason" to "done")
-        ).first.assert().isIn(200, 201, 409, 422)
+        ).first.assert().isEqualTo(404)
         call("POST", "/break-glass/c9:approve", """{"candidate":"x"}""", security = plato).first.assert().isEqualTo(404)
     }
 }

@@ -66,7 +66,9 @@ class ControlPlaneTest {
     private val store = InMemoryControlStore(clock)
     private val revisions = Revisions(store, clock)
     val engine = EngineAuthority(revisions)
-    private val ids = AtomicInteger()
+
+    /** How many changes were made. */
+    val ids = AtomicInteger()
     private val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
     val changes = Changes(
         store,

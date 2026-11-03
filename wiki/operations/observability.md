@@ -193,7 +193,11 @@ content. Change listeners receive them.
   all of them together) before the step takes effect, or the step does not happen and the control API
   answers `503`. Every other event, and every event to a `BEST_EFFORT` listener, is delivered afterwards; a failure is
   logged as `Change listener [<name>] could not record <event>.` The revision record is the durable record of what was
-  published.
+  published. A gated event says the step was about to happen, not that it did: a check after it can still refuse the
+  step (a `409` when the change moved meanwhile), as after a `BREAK_GLASS_APPROVED` or an `ABANDONED`. The change's
+  state, and for a publish the revision history, say what happened.
+- **A note is free text**, part of it the change's author's (the reason of a proposal, a request or a revoke): read who
+  did a step from the event's `operator`, never from its note.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
 - **`ABANDONED` names who abandoned a change and, in its note, its author** (`author <tenant>/<principal>: <note>`).

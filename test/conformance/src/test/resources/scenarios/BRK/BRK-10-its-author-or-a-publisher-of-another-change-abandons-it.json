@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "RC1-51: rita abandons her own revoke of plato's live binding; once that binding has expired, plato abandons rita's revoke of it; pia abandons plato's ordinary change. Each is recorded.",
+  "description": "RC1-51: rita abandons her own revoke of plato's live binding; once that binding has expired, plato abandons rita's revoke of it; pia abandons plato's ordinary change. Each is abandoned; the ABANDONED events themselves are guarded by BreakGlassControlTest.",
   "documents": {
     "platform": {
       "policies": [

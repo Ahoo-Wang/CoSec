@@ -173,7 +173,9 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 - **`PUBLISHING`、`BREAK_GLASS_REQUESTED` 和 `BREAK_GLASS_APPROVED` 是受控的：** 每个 `REQUIRED` 变更监听器都必须在
   [`cosec.control.audit.required-timeout`](./configuration.md#control-plane)（5 秒，所有监听器合计）内记录该事件，这一步才会生效，否则这一步不会发生，控制 API 返回 `503`。其他事件，以及发给 `BEST_EFFORT` 监听器的
   所有事件，都在之后投递；失败记录为 `Change listener [<name>] could not record <event>.` 修订记录是已发布内容的持久
-  记录。
+  记录。受控事件说明这一步即将发生，而不是已经发生：它之后的检查仍可能拒绝这一步（变更在此期间变化了时返回 `409`），
+  `BREAK_GLASS_APPROVED` 或 `ABANDONED` 之后都可能如此。发生了什么以变更的状态为准，发布则另以修订历史为准。
+- **备注是自由文本**，其中一部分出自变更的作者（提议、申请或撤销的原因）：某一步是谁做的，看事件的 `operator`，不要看备注。
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
 - **`ABANDONED` 指明是谁放弃了变更，并在备注中写明变更的作者**（`author <tenant>/<principal>: <note>`）。放弃

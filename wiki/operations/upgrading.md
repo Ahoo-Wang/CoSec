@@ -98,7 +98,9 @@ analysis read the author's rights as enforcement does, so some changes that publ
   the binding no longer grants on the platform document's head, whoever removed it. A revoke that leaves it granting
   is now `409`, its `detail` naming the state of the caller's change (`CONFLICTED`, `DRAFT`, ...), where it was `200`
   with that change before: a client that read `200` as "revoked" without looking at `state` must handle the `409`. A
-  revoke preempted by another revoke, or meeting a moved head, revokes again, at most three more times.
+  binding id the platform document does not have is now `404`, and nothing is proposed, where it was `200` with a
+  `DRAFT` change (`BRK-11`). A revoke preempted by another revoke, or meeting a moved head, revokes again, at most
+  three more times.
 - **Abandoning** (RC1-51, `BRK-10`). Only its author abandons a revoke of a break-glass binding that still grants:
   anyone else, the principal it revokes included, is `403`. Revoke the binding again instead, which publishes the
   stalled revoke or takes its slot. Every abandon is recorded as a new change event, `ABANDONED`; abandoning a

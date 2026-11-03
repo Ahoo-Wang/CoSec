@@ -279,7 +279,8 @@ holder that cannot be marked `CONFLICTED` keeps it (503). A revoke that answered
 READY in the slot: revoke the binding again once the listener answers, which publishes it. Only its author abandons a
 revoke of a live binding (403 for anyone else, the principal it revokes included). `DELETE /break-glass/{bindingId}`
 answers 409 `binding [<id>] still grants: change <id> is <state>` when the revoke did not take effect: revoke again if
-it is `CONFLICTED`, read its `findings` if it is `DRAFT`. A publish retried after its answer was lost reports
+it is `CONFLICTED`, read its `findings` if it is `DRAFT`. It answers 404 when the platform document has no binding of
+that id: check the id; a 404 on a retry means the binding was removed (the revision history says by which revision). A publish retried after its answer was lost reports
 `PUBLISHED`, and so does a holder whose answer was lost when another change comes for its slot. A 403 on `:approve`
 with `this one names none` in the log: approve with a credential that has an id. A 503 on publish with `the revocations
 of the approver could not be read`: the revocation store failed; the change keeps its approval. `FAILED` events with

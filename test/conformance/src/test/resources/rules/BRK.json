@@ -108,13 +108,32 @@
     {
       "id": "BRK-10",
       "source": "RFC 0007 §6.1, §8 (RC1-51)",
-      "statement": "Only its author abandons a change that revokes a break-glass binding that still grants; anyone else, the principal it revokes included, is refused (403). Every abandon is recorded as an ABANDONED change event; a break-glass change's abandon needs a REQUIRED change listener and is recorded there before it is stored.",
+      "statement": "Only its author abandons a change that revokes a break-glass binding that still grants; anyone else, the principal it revokes included, is refused (403, or 404 for one who may not see the change). Every abandon is recorded as an ABANDONED change event; a break-glass change's abandon needs a REQUIRED change listener and is recorded there before it is stored.",
       "level": "control",
       "pending": null,
       "guards": [
         "control:BreakGlassControlTest#only its author abandons a revoke of a live binding",
         "control:BreakGlassControlTest#abandoning break-glass is recorded first",
         "control:BreakGlassControlTest#abandoning any other change is recorded after, best effort"
+      ]
+    },
+    {
+      "id": "BRK-11",
+      "source": "RFC 0007 §8, §10.2 (B2 follow-up: R4-1, review F-1, F-5, F-8)",
+      "statement": "DELETE /break-glass/{bindingId} answers 2xx only when, after the call, the binding no longer grants on the platform document's head, whoever removed it; 404 when that head has no binding of that id and no stalled revoke of it holds the slot, and nothing is proposed; 409 otherwise. A revoke that ends CONFLICTED, or that the head moved under before it was proposed or staged, is made again at most three more times, and only while the binding is still a live break-glass binding.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlHttpTest#a break-glass revoke answers 200 only once the binding no longer grants",
+        "control:BreakGlassControlTest#revoking a binding the head does not have is a 404",
+        "control:BreakGlassControlTest#revoking again after a lost answer settles the revoke",
+        "control:BreakGlassControlTest#revoking an expired binding tidies it away",
+        "control:PreemptionRaceTest#two revokes at once both take effect when one preempts the other",
+        "control:PreemptionRaceTest#a revoke whose head moves before it is proposed is made again",
+        "control:PreemptionRaceTest#a revoke whose head moves before it is staged is made again",
+        "control:PreemptionRaceTest#a revoke whose binding another writer removed is not made again",
+        "control:PreemptionRaceTest#a revoke whose binding expired meanwhile is not made again",
+        "control:PreemptionRaceTest#a revoke that keeps conflicting gives up after three more"
       ]
     }
   ]
