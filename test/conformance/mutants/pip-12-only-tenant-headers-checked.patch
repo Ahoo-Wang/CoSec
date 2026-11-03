@@ -1,5 +1,5 @@
 # Rule: PIP-12
-# Mutant: the precheck looks only at the platform document, so a tenant's ALLOW reading a repeated header is decided
+# Mutant: the precheck looks only at the tenant document, so a platform statement reading a repeated header is decided
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.HostAttributesPipelineTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
