@@ -85,8 +85,9 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   `decodeAndParseSegments` (both default `true`) to an `http:path:` pattern.
 - Pattern bounds (DOC-4; over one, the document does not compile): an `http:path:` pattern is at most 2,048
   characters; a segment that mixes `*`, `?` or `{name}` with text (`report-*.pdf`) has at most 16 parts, consecutive
-  `*` counting once; one document's such segments hold at most 4,096 parts in all. Prefer whole-segment `*`, `{name}`
-  and `**`, which cost nothing.
+  `*` counting once; one document's such segments hold at most 2,048 glob units in all, a unit per part and per
+  character of their text (`report-*.pdf` is 14), twice after a leading `**`. Prefer whole-segment `*`, `{name}` and
+  `**`, which cost nothing, and keep the text in glob segments short.
 - A DENY on a bare type (`order`) does not compile: it would only cover the empty id. Write `order/**`.
 - How a request gets its action: on WebFlux and WebMvc hosts a route map (`cosec-routes.json`) maps method and path to
   `service:verb` on a typed resource (`order/{orderId}`); any request no route matches keeps `http:<METHOD>` on

@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
@@ -25,7 +26,6 @@ import org.springframework.core.env.MapPropertySource
 import org.springframework.core.env.StandardEnvironment
 import org.springframework.core.env.SystemEnvironmentPropertySource
 import org.springframework.core.io.ByteArrayResource
-import org.junit.jupiter.api.io.TempDir
 import java.net.URLClassLoader
 import java.nio.file.Path
 import kotlin.io.path.createDirectories

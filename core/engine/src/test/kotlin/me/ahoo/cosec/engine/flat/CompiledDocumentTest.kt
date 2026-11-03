@@ -218,7 +218,12 @@ class CompiledDocumentTest {
                 compiler.statement(
                     boundaryId,
                     0,
-                    StatementSource("s0", Effect.ALLOW, listOf("*"), condition = Condition.Exists("http.header.x-zone")),
+                    StatementSource(
+                        "s0",
+                        Effect.ALLOW,
+                        listOf("*"),
+                        condition = Condition.Exists("http.header.x-zone")
+                    ),
                 ),
             ),
         )

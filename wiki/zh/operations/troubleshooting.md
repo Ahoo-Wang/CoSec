@@ -45,8 +45,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的值（在请求头和查询字符串之间，或在其中
   任一处之内），空白值与非空白值同时出现也算（例如请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=`），或者它的查询值有格式错误的百分号转义。每个参数只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
-- 某个请求头以不同的值发送了多次，而决策所依据的文档在条件或限流 key 中读取它，无论语句的效果是什么（`PIP-12`）。这一项在认证和
-  确定作用域之后、文档已知时检查。只发送一次该请求头，或只用一个值；
+- 某个请求头以不同的值发送了多次，而决策所依据的文档在条件、边界或限流规则中读取它，无论语句的效果是什么，也无论它是否适用于本请求（`PIP-12`）。这一项在认证和
+  确定作用域之后、文档已知时检查。只发送一次该请求头，或只用一个值。最常见的是代理会追加的请求头，例如 `X-Forwarded-For`：两层代理各追加一行时，视图中读取它的文档使每个请求都为 `400`，即使读取它的语句只覆盖 `DELETE` 而请求是 `GET`；平台的语句会对每个租户这样做。让代理发送合并后的一行，或者通过宿主只解析一次的 `environment.ip` 读取客户端地址；
 - 在 `cosec.pipeline.mode=gateway` 的服务上，`CoSec-Identity` 头无法读取（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 修复客户端（[Web 集成](../integration/web.md)）。在控制 API 上，`400` 会在 `detail` 中说明问题
@@ -232,8 +232,8 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - 条件读取的 `ext.*` 属性既没有在平台文档中声明，也没有宿主的属性提供者提供。变更按控制面宿主的属性提供者编译。
 - 路径模式超出开销上界（`DOC-4`，[策略语言](../policies/language.md#path-pattern-bounds)）：`the pattern is <n> characters, more
   than 2048`；`segment [<s>] has <n> parts (*, ?, {name} and the text between them), more than 16`，其中连续的 `*` 算一个；
-  或者在 `$` 处的 `The document's path pattern segments that mix *, ? or {name} with other text hold <n> tokens in all, more
-  than 4096`。把长的通配段拆成整段（单独占一段的 `*` 或 `{name}` 不计开销），或把多条语句的模式合并成更少的几条。在数据面上，
+  或者在 `$` 处的 `The document's path pattern segments that mix *, ? or {name} with other text hold <n> tokens and literal
+  characters in all, more than 2048`。把长的通配段拆成整段（单独占一段的 `*` 或 `{name}` 不计开销），让通配段中的文本保持简短，或把多条语句的模式合并成更少的几条；前导 `**` 之后的片段计两次。在数据面上，
   超出上界的已存储文档会被装入为失败，读取它的请求回答 `503`。
 
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
@@ -326,9 +326,19 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the periodic revalidation cannot be turned off.
 ```
 
-失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：必须为正、不超过
+失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：至少 1 秒（每一轮都从 Redis 读取每个已安装的文档）、不超过
 5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。要为大文档节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
+
+### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
+
+```text
+CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With the old values and cosec.key-prefix (b), these families move:
+  token revocations and memberships: cosec: -> b:
+  ...
+```
+
+环境中仍然设置了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 或 `cosec.api-key.key-prefix`，它们已被 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代（`SNP-9`）。无论 [`cosec.unknown-properties`](./configuration.md#unknown-properties) 如何设置，启动都会失败：旧布局可能把令牌吊销和 API key 保存在与现在读取的前缀不同的前缀下，而没人读取的吊销会让被它吊销的令牌再次通过。消息列出会移动的 key 族，根据旧值和当前的 `cosec.key-prefix` 计算得出。先把令牌吊销和 API key 复制到新的 key 下（`COPY`，或保留过期时间的 `RENAME`），把 `cosec.key-prefix` 设为快照文档所在的前缀，然后移除旧配置项（[升级](./upgrading.md#from-8-0-0-alpha-2)）。
 
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 

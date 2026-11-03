@@ -166,8 +166,9 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `CompiledDocument.needsApp` answers it; a `ShadowListener` built by hand needs the installed views (`views`) to
   compare a tenant candidate that makes a request read an app document, and reports `CANDIDATE_ERROR` without them.
 - **One key prefix** (RC1-46, `SNP-9`). [`cosec.key-prefix`](./configuration.md#key-prefix) replaces
-  `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix`,
-  which are now unknown properties and fail startup. Every key lives under it: API keys under `<p>:api-key`, rate
+  `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix`.
+  An environment that still sets one of them fails startup whatever `cosec.unknown-properties` says, and the message
+  lists the families that move under the current `cosec.key-prefix`, from where to where. Every key lives under it: API keys under `<p>:api-key`, rate
   limit counters under `<p>:rate-limiter` and the social login's OAuth states under `<p>:oauth:state`, which were fixed
   ([Redis keys](./storage.md#redis-keys)). With the defaults every key stays where it was. A deployment that set one
   of the three sets `cosec.key-prefix` to its snapshot prefix instead; **revocations and API keys kept under another
@@ -175,17 +176,22 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   under the new prefix (`COPY`, or `RENAME`, which keeps its expiry). Memberships fill again on their own.
   `cosec-migrate api-keys` no longer takes `--api-key-prefix`: it converts the keys under `<--key-prefix>:api-key`.
 - **`revalidate-interval` cannot turn the periodic pass off** (RC1-50, `SNP-6`). The pass is the only bound on a
-  change whose invalidation message was lost, so `cosec.authorization.snapshot.revalidate-interval` must be positive,
-  at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else
+  change whose invalidation message was lost, so `cosec.authorization.snapshot.revalidate-interval` must be at least
+  `1s` (each pass reads every installed document from Redis), at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else
   fails startup naming the property, and `SnapshotOptions` refuses the same. Replace a `0` with an interval within the
   bounds; a longer one lowers what revalidation costs Redis ([Storage](./storage.md#what-revalidation-costs-redis)).
 - **Path patterns have cost bounds** (RC1-8, `DOC-4`). An `http:path:` pattern is at most 2,048 characters, a segment
   that mixes `*`, `?` or `{name}` with other text holds at most 16 parts (consecutive `*` count once), a document's
-  patterns hold at most 4,096 such parts in all, and a typed pattern is at most 2,058 characters
+  such segments hold at most 2,048 glob units in all (their parts and the characters of their text, twice after a
+  leading `**` and for a rate limit rule keyed by a captured variable), and a typed pattern is at most 2,058 characters
   ([Policy language](../policies/language.md#path-pattern-bounds)). The control plane answers a change over them with
   a `COMPILE` finding (`422`) at the pattern or at `$`. A document published before with such a pattern no longer
   compiles on an upgraded instance, and every request that reads it fails closed: rewrite it and publish before
   upgrading the data plane.
+- **A policy is evaluated once per pass for each document that binds it** (`ALG-9`), however many of the document's
+  bindings apply, and a policy claimed twice among the attachments is attached once. The decision and the statement
+  and binding it reports do not change: the first binding in candidate order reports. A trace lists the later bindings
+  with the first one's outcomes, without evaluating them again.
 - **A repeated header that a document reads is `400`** (RC1-38, `PIP-12`). When a request sends a header with
   different values, and any statement, policy condition, boundary or rate limit key of the documents its view reads
   reads that header (`Origin` and `Referer` included), the pipeline answers `400` `invalid-request` before evaluating,

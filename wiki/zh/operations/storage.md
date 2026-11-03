@@ -38,6 +38,8 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 - **CoSec 无法解码的值使读取失败，并留在 Redis 中。** 它永远不会被回收（删除），因为回收会删掉唯一的副本。用普通
   Redis 命令写入的值就属于这种值：只通过控制面或 `cosec-migrate` 写入文档（[发布文档](#publishing-documents)）。
 
+**CoCache 定制器还能改变什么。** CoSec 还会在它们之后恢复决定缓存内容的部分：命名空间、key 编码、编解码器、加载器、key 过滤器和按条目的生存期。无法读取的吊销使读取失败；成员关系总会过期，不带抖动，读取失败时失败即拒绝。缓存策略的其余部分仍由应用决定：每个缓存的 `localMaxAge`、`degradedLocalMaxAge`、本地缓存的大小和 `expireAfterAccess`、`refreshWindow`、`lease`、`load`，以及成员关系以外的 `ttlJitter`；两个吊销缓存还有 `absentTtl`、`readFailure` 和 `invalidateFailure`；成员关系还有 `ttl`（永不为空）、`absentTtl` 和 `invalidateFailure`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销缓存上更长的 `localMaxAge`、`degradedLocalMaxAge` 或 `absentTtl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authorization.cache.token.local-max-age`，30 秒）；更长的成员关系 `ttl` 会让已移除的角色多生效这么久。`cocache.*` 配置项同样能改变它们。
+
 ### Redis key {#redis-keys}
 
 `<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
@@ -190,6 +192,10 @@ sequenceDiagram
 这时发送命令的请求（包括在事件循环上的）要等到缓冲写完，而缓冲默认没有上限。要限制这段等待，用
 `LettuceClientConfigurationBuilderCustomizer` 给应用的 Lettuce 客户端设置 `requestQueueSize`，或在断开期间拒绝命令。
 CoSec 不改动这个客户端：它由应用共享。
+
+**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入 `max-apps`、`max-tenants`，也不计入没有文档的 id：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在 `cold-load-timeout` 之后回答 `503`。因此在这样的故障期间，一个以很高速率声明新应用 id 的客户端最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。
+
+**没有文档的应用共用 256 个位置。** 实例记住的没有文档的 id 每个族最多 256 个（`SNP-7`），由所有租户共用。声明大量随机 `CoSec-App-Id` 的客户端会挤出那些确实没有应用文档的真实应用，于是这些应用中的请求会再次读取 Redis（不需要编译），直到它们重新被记住。这仍然失败即拒绝，但对 `fail-closed.tenants` 中的租户，这种应用从本地副本加载的条目按 `local-max-age` 的年龄计：当 `fail-closed.max-lag` 小于 `local-max-age` 时，它的请求回答 `503`，直到 Redis 随即确认它。租户 id 来自凭证，因此租户族不能被这样淹没。
 
 吊销检查和没有 `strictFailure` 的限流规则是失败即拒绝的两个已记录的例外（[安全模型](../guide/security-model.md)）。
 `503` 在响应和审计中是什么样子，见[故障排查](./troubleshooting.md#unavailable)。

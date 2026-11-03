@@ -43,8 +43,10 @@ class RemovedKeyPrefixesTest {
         val message = runner.failure("${RemovedKeyPrefixes.SNAPSHOT}=b", "cosec.unknown-properties=warn")!!
         message.assert().contains("CoSec no longer reads ${RemovedKeyPrefixes.SNAPSHOT}")
         message.assert().contains("cosec.key-prefix (cosec)")
-        message.assert().contains("snapshot documents, control-plane records, candidates and shadow reports: b: -> cosec:")
-        message.assert().doesNotContain("token revocations")
+        message.assert().contains(
+            "snapshot documents, control-plane records, candidates and shadow reports: b: -> cosec:"
+        )
+        message.assert().doesNotContain("token revocations and memberships:")
         message.assert().contains("cosec.unknown-properties does not turn this check off")
         message.assert().contains(RemovedKeyPrefixes.DOCUMENTATION)
     }
@@ -53,7 +55,7 @@ class RemovedKeyPrefixesTest {
     fun `the message names the families that move under the new prefix`() {
         // RC1-46's deployment B, which set only the snapshot prefix, now sets cosec.key-prefix to it.
         val message = runner.failure("${RemovedKeyPrefixes.SNAPSHOT}=b", "cosec.key-prefix=b:")!!
-        message.assert().doesNotContain("snapshot documents")
+        message.assert().doesNotContain("snapshot documents, control-plane records")
         message.assert().contains("token revocations and memberships: cosec: -> b:")
         message.assert().contains("API keys: cosec:api-key -> b:api-key")
         message.assert().contains("rate limit counters and the social login's OAuth states: cosec: -> b:")
@@ -70,7 +72,10 @@ class RemovedKeyPrefixesTest {
 
     @Test
     fun `a removed prefix set to what the new one gives still fails, moving nothing`() {
-        val message = runner.failure("${RemovedKeyPrefixes.CACHE}=cosec", "${RemovedKeyPrefixes.API_KEY}=cosec:api-key")!!
+        val message = runner.failure(
+            "${RemovedKeyPrefixes.CACHE}=cosec",
+            "${RemovedKeyPrefixes.API_KEY}=cosec:api-key"
+        )!!
         message.assert().contains("no family moves")
         message.assert().contains("${RemovedKeyPrefixes.CACHE}, ${RemovedKeyPrefixes.API_KEY}")
     }

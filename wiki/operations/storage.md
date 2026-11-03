@@ -45,6 +45,18 @@ any CoCache customizer or `cocache.*` property, so no configuration can weaken t
   reclaim would delete the only copy. A value written with plain Redis commands is such a value: write documents only
   through the control plane or `cosec-migrate` ([Publishing documents](#publishing-documents)).
 
+**What a CoCache customizer can still change.** CoSec also restores, after them, what decides what a cache holds: its
+namespace, key encoding, codec, loaders, key filter and per-entry lifetime. Unreadable revocations fail the read, and
+memberships always expire, without jitter, and fail closed on a failed read. The rest of the cache policy stays the
+application's: on every cache `localMaxAge`, `degradedLocalMaxAge`, the local cache's size and `expireAfterAccess`,
+`refreshWindow`, `lease`, `load` and, but for memberships, `ttlJitter`; on the two revocation caches `absentTtl`,
+`readFailure` and `invalidateFailure` too; on memberships `ttl` (never none), `absentTtl` and `invalidateFailure`. None
+of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer
+`localMaxAge`, `degradedLocalMaxAge` or `absentTtl` on the revocation caches keeps a revoked token accepted that much
+longer when the revocation's invalidation message is lost (`cosec.authorization.cache.token.local-max-age`, 30 seconds,
+is the default bound), and a longer membership `ttl` keeps a removed role applied that long. The `cocache.*`
+properties reach them as well.
+
 ### Redis keys
 
 `<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
@@ -218,6 +230,19 @@ it writes them all under a lock that every command write takes. A request that s
 too, waits until that buffer is flushed, and the buffer is unbounded by default. To bound the wait, set
 `requestQueueSize`, or reject commands while disconnected, on the application's Lettuce client with a
 `LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it.
+
+**Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither `max-apps`,
+`max-tenants` nor the ids without a document until its load ends: it fails after the store read timeout (30 seconds)
+while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So a client that declares
+new app ids at a high rate keeps up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
+during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
+
+**Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
+family (`SNP-7`), are shared by every tenant. A client that declares many random `CoSec-App-Id`s pushes out the real apps
+that have no app document, so a request in one of them reads Redis again, without compiling anything, until it is
+remembered again. That fails closed, but for a tenant in `fail-closed.tenants` such an app's entry loaded from the
+local copy counts as `local-max-age` old: with `fail-closed.max-lag` below `local-max-age`, its requests answer `503`
+until Redis confirms it, at once. Tenant ids come from credentials, so the tenant family cannot be flooded this way.
 
 The revocation check and rate-limit rules without `strictFailure` are the documented exceptions to failing closed
 ([Security model](../guide/security-model.md)). How a `503` reads in the response and the audit is in

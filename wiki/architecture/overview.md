@@ -284,7 +284,11 @@ when several match. At a high level:
 
 The exact rules, including break-glass and the boundary, are in the
 [security model](../guide/security-model.md). A policy with many statements is indexed by action, resource and condition keys, so a candidate
-costs only the statements that could match. Untraced evaluation records nothing and allocates almost nothing; the traced
+costs only the statements that could match. A policy that several bindings of one document reach is evaluated once per
+pass (`ALG-9`): a binding whose policy id others of its document name too gets a slot when the document compiles, and
+the evaluator marks the slots a pass has evaluated in a bitset it allocates only when it reaches one, so a document
+without such bindings costs nothing for it. Path patterns are bounded per document (`DOC-4`,
+[path pattern bounds](../policies/language.md#path-pattern-bounds)). Untraced evaluation records nothing and allocates almost nothing; the traced
 evaluator, used for decision events at `cosec.pipeline.trace-level` and for `explain`, is a separate class so the hot
 path carries no trace code.
 

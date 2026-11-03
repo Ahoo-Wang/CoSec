@@ -84,6 +84,12 @@ denied.
 The order never changes the kind of decision, only which statement is reported when several match: the DENY pass
 always visits every candidate before the ALLOW pass starts.
 
+A policy that several bindings of one document reach is evaluated once per pass, through the first of them in this
+order, and a policy claimed twice among the attachments is attached once (`ALG-9`): its statements give the same
+results through every binding, so the later ones could change nothing. The first one reports the match, or records the
+error. So many bindings of a policy cost no more than one, and a policy costs a pass at most one evaluation for each
+document that binds it.
+
 ### Policy conditions
 
 A policy may have its own `condition`. It is evaluated at most once per request, and only once one of the policy's

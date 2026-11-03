@@ -38,7 +38,7 @@ Indeterminate in an explanation.
 
 | Status | Problem `type` slug | Meaning |
 |---|---|---|
-| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit key, whatever its effect; PIP-12). The engine never saw it. |
+| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit rule, whatever its effect; PIP-12): typically `X-Forwarded-For` from two proxies that each append a line; have them send one line, or read `environment.ip`. The engine never saw it. |
 | 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
 | 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
 | 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
@@ -64,12 +64,18 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 ## Startup failures
 
 - **`cosec.authorization.snapshot.revalidate-interval (<value>) must be ...`**: the periodic revalidation is the only
-  bound on a lost invalidation (SNP-6), so the interval must be positive, at most 5 minutes, less than `lag-warn`,
-  and, with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never suggest
-  turning revalidation off. `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
-  `cosec.api-key.key-prefix` are unknown since the RC: one `cosec.key-prefix` replaced them (SNP-9).
+  bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, less than
+  `lag-warn`, and, with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
+  suggest turning revalidation off.
+- **`CoSec no longer reads cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
+  `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and startup fails whatever
+  `cosec.unknown-properties` says. The message lists the families that move from where to where. Have the token
+  revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
+  left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
+  `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
 - **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
-  parts (consecutive `*` count once), or more than 4,096 glob parts in one document. The control plane answers a
+  parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
+  characters of its text, twice after a leading `**`). The control plane answers a
   `COMPILE` finding; on the data plane the stored document is installed as failed and its requests are 503.
 
 - **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by `<key> -> <replacement>` lines:

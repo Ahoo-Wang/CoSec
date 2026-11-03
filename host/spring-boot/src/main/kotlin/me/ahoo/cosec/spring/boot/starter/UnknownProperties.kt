@@ -18,11 +18,11 @@ package me.ahoo.cosec.spring.boot.starter
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
-import tools.jackson.core.StreamReadFeature
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
+import tools.jackson.core.StreamReadFeature
 
 private val log = KotlinLogging.logger {}
 

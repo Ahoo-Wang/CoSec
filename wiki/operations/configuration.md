@@ -76,6 +76,9 @@ These have no switch:
 Every key a deployment writes to Redis lives under one prefix (`SNP-9`): snapshot documents, control-plane records,
 shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states
 ([Redis keys](./storage.md#redis-keys)). Two deployments on one Redis that use different prefixes share nothing.
+It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
+`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, whatever `cosec.unknown-properties`
+says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
@@ -154,7 +157,7 @@ of your own replaces both.
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read: the longest a change whose invalidation message was lost goes unseen (`SNP-6`). Positive, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read: the longest a change whose invalidation message was lost goes unseen (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |

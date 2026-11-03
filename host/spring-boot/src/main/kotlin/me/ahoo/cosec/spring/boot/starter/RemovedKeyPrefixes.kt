@@ -71,9 +71,9 @@ internal object RemovedKeyPrefixes {
         }
         val properties = set.joinToString(", ")
         val where = if (moves.isEmpty()) {
-            "With them and $KEY_PREFIX ($now), no family moves.\n"
+            "With the old values and $KEY_PREFIX ($now), no family moves.\n"
         } else {
-            "With them and $KEY_PREFIX ($now), these families move:\n" + moves.joinToString("") { "  $it\n" } +
+            "With the old values and $KEY_PREFIX ($now), these families move:\n" + moves.joinToString("") { "  $it\n" } +
                 "Copy the token revocations and the API keys under the new prefix before starting this version (COPY, " +
                 "or RENAME, which keeps their expiry): a token revoked under the old prefix would be accepted again, " +
                 "and the API keys refused. Memberships, counters and OAuth states fill again on their own. Set " +

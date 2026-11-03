@@ -52,8 +52,12 @@ The request cannot be read without ambiguity, so it is refused before authentica
   it out;
 - a route map captures a value that would change the resource id's segments;
 - a header was sent more than once with different values, and a document the request is decided on reads it, in a
-  condition or a rate limit key, whichever the statement's effect (`PIP-12`). This one is checked after authentication
-  and the scope, once the documents are known. Send the header once, or with one value;
+  condition, a boundary or a rate limit rule, whichever the statement's effect and whether it applies to this request
+  (`PIP-12`). This one is checked after authentication and the scope, once the documents are known. Send the header
+  once, or with one value. A header proxies append to, such as `X-Forwarded-For`, is the usual case: two proxies that
+  each add a line make every request of a view whose documents read it a `400`, even a `GET` when the statement that
+  reads it covers only `DELETE`, and a platform statement does this for every tenant. Have the proxies send one
+  combined line, or read the client address as `environment.ip`, which the host resolves once;
 - on a service in `cosec.pipeline.mode=gateway`, a `CoSec-Identity` header that cannot be read
   ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
@@ -281,8 +285,9 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
 - A path pattern over a cost bound (`DOC-4`, [Policy language](../policies/language.md#path-pattern-bounds)):
   `the pattern is <n> characters, more than 2048`; `segment [<s>] has <n> parts (*, ?, {name} and the text between
   them), more than 16`, where consecutive `*` count once; or, at `$`, `The document's path pattern segments that mix
-  *, ? or {name} with other text hold <n> tokens in all, more than 4096`. Split a long glob into whole segments
-  (`*` or `{name}` alone in a segment costs nothing), or fold several statements' patterns into fewer. On the data
+  *, ? or {name} with other text hold <n> tokens and literal characters in all, more than 2048`. Split a long glob
+  into whole segments (`*` or `{name}` alone in a segment costs nothing), keep the text of a glob segment short, or
+  fold several statements' patterns into fewer; a segment after a leading `**` counts twice. On the data
   plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
 
 ## Shadow window blocked by a candidate error
@@ -391,10 +396,28 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 ```
 
 The periodic revalidation is the only bound on a document change whose invalidation message was lost (`SNP-6`), so it
-cannot be off or unbounded. The message says which bound the value breaks: positive, at most 5 minutes, less than
-`lag-warn`, and with `fail-closed.tenants` less than `fail-closed.max-lag`
+cannot be off or unbounded. The message says which bound the value breaks: at least 1 second (each pass reads every
+installed document from Redis), at most 5 minutes, less than `lag-warn`, and with `fail-closed.tenants` less than
+`fail-closed.max-lag`
 ([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on large documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
+
+### Startup fails on a removed key prefix
+
+```text
+CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With the old values and cosec.key-prefix (b), these families move:
+  token revocations and memberships: cosec: -> b:
+  ...
+```
+
+The environment still sets `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` or
+`cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). Startup fails
+whatever [`cosec.unknown-properties`](./configuration.md#unknown-properties) says: the old layout may keep token revocations and API
+keys under another prefix than the one now read, and a revocation nobody reads lets the token it revoked through
+again. The message lists the families that would move, computed from the old values and the current
+`cosec.key-prefix`. Copy the token revocations and the API keys to their new keys first (`COPY`, or `RENAME`, which
+keeps their expiry), set `cosec.key-prefix` to where the snapshot documents are, then remove the old properties
+([Upgrading](./upgrading.md#from-8-0-0-alpha-2)).
 
 ### Startup fails without a token store
 
