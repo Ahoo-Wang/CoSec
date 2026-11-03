@@ -21,6 +21,7 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -158,8 +159,7 @@ object ShadowCodec {
      * skipped, with a WARN; the rest of the instance's status is kept.
      */
     private fun unnamed(instance: String, key: String): Boolean {
-        val app = key.removePrefix(APP)
-        val unnamed = key.startsWith(APP) && app.isNotEmpty() && ':' !in app && !SnapshotKey.App.isValidAppId(app)
+        val unnamed = SnapshotKeyText.isUnnamedApp(key)
         if (unnamed) {
             log.warn {
                 "Instance [${printable(instance)}] reports [${printable(key)}] installed, which no document key can " +
@@ -169,11 +169,8 @@ object ShadowCodec {
         return unnamed
     }
 
-    /** [text] for a log line: a control character as its `\uXXXX` escape. */
-    private fun printable(text: String): String =
-        text.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }.joinToString("")
-
-    private const val APP = "app:"
+    /** [text], stored content quoted in a message or a log line, with its control characters escaped (RC1-15). */
+    private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
 
     private val log = KotlinLogging.logger {}
 
@@ -189,7 +186,7 @@ object ShadowCodec {
     private fun read(bytes: ByteArray): JsonNode = try {
         reader.readTree(bytes) ?: malformed("empty")
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A shadow value is not JSON: ${error.originalMessage}", error)
+        throw SnapshotFormatException("A shadow value is not JSON: ${printable(error.originalMessage)}", error)
     }
 
     private inline fun <T> guarded(block: () -> T): T = try {
@@ -197,11 +194,11 @@ object ShadowCodec {
     } catch (error: SnapshotFormatException) {
         throw error
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${error.originalMessage}", error)
+        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.originalMessage)}", error)
     } catch (error: IllegalArgumentException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${error.message}", error)
+        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.message)}", error)
     } catch (error: java.time.format.DateTimeParseException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${error.message}", error)
+        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.message)}", error)
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")
@@ -220,6 +217,6 @@ object ShadowCodec {
     }
 
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
-        "A shadow value is malformed: $reason."
+        "A shadow value is malformed: ${printable(reason)}."
     )
 }

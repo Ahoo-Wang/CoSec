@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.cache.control
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
@@ -40,6 +41,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -181,11 +183,15 @@ private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUP
 private fun read(bytes: ByteArray, what: String): JsonNode = try {
     reader.readTree(bytes) ?: throw SnapshotFormatException("The $what is empty.")
 } catch (error: JacksonException) {
-    throw SnapshotFormatException("The $what is not JSON: ${error.originalMessage}", error)
+    throw SnapshotFormatException(
+        "The $what is not JSON: ${SnapshotKeyText.printable(error.originalMessage.orEmpty())}",
+        error
+    )
 }
 
+/** Stored content quoted in [reason] has its control characters escaped: the message reaches log lines (RC1-15). */
 private fun malformed(what: String, reason: String): Nothing = throw SnapshotFormatException(
-    "The $what is malformed: $reason."
+    "The $what is malformed: ${SnapshotKeyText.printable(reason)}."
 )
 
 private fun JsonNode.field(name: String, what: String): JsonNode = get(name) ?: malformed(what, "[$name] is missing")
@@ -299,11 +305,27 @@ internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
         return CoSecJson.mapper.writeValueAsBytes(array)
     }
 
+    /**
+     * A member that is an app key earlier builds wrote and the app id rule now refuses is skipped, with a WARN (R3-1 of
+     * #1194's review): such a document can no longer be read or published, and so can never drop its own reference,
+     * while one such member would make every write and check of the set fail. Dropping it is safe: an extra referrer
+     * only ever blocks a deletion. Anything else that is not a document key is still malformed.
+     */
     override fun decode(bytes: ByteArray): Set<SnapshotKey> =
-        read(bytes, WHAT).items(WHAT).mapTo(LinkedHashSet()) { item ->
+        read(bytes, WHAT).items(WHAT).mapNotNullTo(LinkedHashSet()) { item ->
             val text = item.text(WHAT)
-            SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")
+            SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
+                log.warn {
+                    "A back-reference set names [${SnapshotKeyText.printable(text)}], which no document key can name " +
+                        "(SCP-7): that member is skipped."
+                }
+                null
+            } else {
+                malformed(WHAT, "[$text] is not a document key")
+            }
         }
+
+    private val log = KotlinLogging.logger {}
 }
 
 /**

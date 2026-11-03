@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.cache.control
 
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.Cache
@@ -42,13 +44,18 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
+import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -57,6 +64,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -109,6 +117,58 @@ class CoCacheControlStoreTest {
         checkedWith = emptyMap(),
         createdAt = Instant.parse("2026-11-01T00:00:00Z"),
         updatedAt = Instant.parse("2026-11-01T00:00:00Z"),
+    )
+
+    /**
+     * R3-1 of #1194's review: an app document an earlier build published under an id the app id rule now refuses left
+     * itself in the back-reference set of a platform policy it binds. That member is skipped, with an escaped WARN, so
+     * a publish that binds the policy still writes the set, and the member is gone with it.
+     */
+    @Test
+    fun `a back-reference set naming an app no key can name still takes a new referrer`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        SnapshotNode(backend, newKeyPrefix()).use { node ->
+            val store = store(node)
+            val revisions = Revisions(store, Clock.systemUTC())
+            val shared = PolicyId("shared")
+            revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
+            CacheRuntime.builder().backend(backend).build().use { raw ->
+                raw.create(
+                    CacheSpec.builder<ReferenceKey, ByteArray>("RawReferences")
+                        .namespace(
+                            CoSecCacheSpecs.cacheNamespace(node.keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
+                        )
+                        .keyPrefix("")
+                        .keyEncoder(ReferenceKeyEncoder)
+                        .codec(RawCodec)
+                        .policy(CachePolicy.DEFAULT.storeOfRecord())
+                        .build()
+                ).put(ReferenceKey(SnapshotKey.Platform, shared), """["app:a\u0001b"]""".encodeToByteArray())
+            }
+            val logged = ListAppender<ILoggingEvent>().apply { start() }
+            val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
+            root.addAppender(logged)
+            try {
+                val outcome = revisions.publish(
+                    SnapshotKey.Tenant("acme"),
+                    null,
+                    document(DocumentKind.TENANT, "acme", BINDS_SHARED),
+                    BOOTSTRAP,
+                )
+                outcome.assert().isInstanceOf(PublishOutcome.Published::class.java)
+            } finally {
+                root.detachAppender(logged)
+            }
+            store.referrers(SnapshotKey.Platform, shared)!!.value.assert().containsExactly(SnapshotKey.Tenant("acme"))
+            val warning = logged.list.map { it.formattedMessage }.single { "back-reference set names" in it }
+            warning.assert().contains("app:a\\u0001b").doesNotContain("\u0001")
+        }
+    }
+
+    private fun document(kind: DocumentKind, owner: String, body: String) = PolicyDocumentCodec.decode(
+        kind,
+        owner,
+        """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z"$body}""".encodeToByteArray(),
     )
 
     /**
@@ -407,5 +467,16 @@ class CoCacheControlStoreTest {
         ReferenceKeyEncoder.encode(
             ReferenceKey(SnapshotKey.Platform, PolicyId("cosec:root"))
         ).assert().isEqualTo("platform:cosec:root")
+    }
+
+    private companion object {
+        val BOOTSTRAP = Publication(
+            "bootstrap",
+            ProvenanceKind.BOOTSTRAP,
+            Actor(TenantId.PLATFORM, PrincipalId("plato"))
+        )
+        const val SHARED = ""","policies":[{"id":"shared","statements":[{"effect":"allow","action":"order:read"}]}]"""
+        const val BINDS_SHARED =
+            ""","bindings":[{"id":"reads","subject":"*","app":"order","space":"*","policy":"shared"}]"""
     }
 }
