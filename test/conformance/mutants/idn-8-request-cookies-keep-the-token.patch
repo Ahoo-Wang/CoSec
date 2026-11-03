@@ -3,15 +3,15 @@
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest
 
 diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-index b882737c..00a800d7 100644
+index e3c75b6c..84e6adef 100644
 --- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
 +++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
-@@ -131,7 +131,7 @@ class PipelineGatewayFilter(
-             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
-             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
-             val built = downstream.build()
--            val forwarded = cookies?.let { WithoutTokenCookies(built, withoutCookieToken, it.dropped) } ?: built
-+            val forwarded = built
-             chain.filter(authorized.mutate().request(forwarded).build())
-         }
-     }
+@@ -136,7 +136,7 @@ class PipelineGatewayFilter(
+ 
+     /** [request], whose cookies agree with its `Cookie` headers when [cookies] rewrote them ([WithoutTokenCookies]). */
+     private fun handedOn(request: ServerHttpRequest, cookies: CookieRewrite?): ServerHttpRequest =
+-        if (cookies == null) request else WithoutTokenCookies(request, withoutCookieToken, cookies.dropped)
++        request
+ 
+     /** The `Cookie` headers that go on ([kept], none: no `Cookie` header), and those dropped whole ([dropped]). */
+     private class CookieRewrite(val kept: List<String>, val dropped: List<String>)
