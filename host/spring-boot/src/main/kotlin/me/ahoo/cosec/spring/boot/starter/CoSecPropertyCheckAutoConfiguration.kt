@@ -18,11 +18,15 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.core.env.ConfigurableEnvironment
 
-/** Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured. */
+/**
+ * Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured, and on a
+ * removed key prefix ([RemovedKeyPrefixes]) whatever `cosec.unknown-properties` says.
+ */
 @AutoConfiguration
 class CoSecPropertyCheckAutoConfiguration {
     @Bean
     fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): InitializingBean = InitializingBean {
+        RemovedKeyPrefixes.check(environment)
         val mode = environment.getProperty(UnknownProperties.MODE_KEY, "fail")
         UnknownProperties.load(javaClass.classLoader).check(environment, warn = mode.equals("warn", ignoreCase = true))
     }

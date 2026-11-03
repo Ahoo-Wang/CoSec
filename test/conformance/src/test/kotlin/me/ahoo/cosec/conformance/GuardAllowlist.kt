@@ -72,6 +72,9 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
             "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
+            "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
+            "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
+            "spring-boot:RemovedKeyPrefixesTest#every removed prefix counts, by any of its names",
         ),
         "timing" to setOf(
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",

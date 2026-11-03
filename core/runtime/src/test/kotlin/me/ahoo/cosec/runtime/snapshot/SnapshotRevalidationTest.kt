@@ -51,7 +51,7 @@ class SnapshotRevalidationTest {
 
     @Test
     fun f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL)
         appSource(
             store,
             FakeCompiler(),
@@ -243,6 +243,11 @@ class SnapshotRevalidationTest {
     fun theRevalidationIntervalCannotTurnThePassOffOrUnbindIt() {
         assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ZERO) }
         assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ofSeconds(-1)) }
+        // A floor of a second (review L1 of #1200): below a millisecond the schedule could not even run.
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ofNanos(500_000)) }
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ofMillis(999)) }
+        SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL).revalidateInterval.assert()
+            .isEqualTo(Duration.ofSeconds(1))
         val longest = SnapshotOptions.MAX_REVALIDATE_INTERVAL
         val lag = longest.multipliedBy(2)
         SnapshotOptions(revalidateInterval = longest, lagWarn = lag, lagEscalate = lag)

@@ -276,7 +276,7 @@ class SnapshotSourceTest {
 
     @Test
     fun periodicRevalidationRunsOnItsOwn() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL)
         appSource(store, FakeCompiler(), FakeCompiler(), options).use { source ->
             source.load().join()
             val afterLoad = store.conditionalReads.get()

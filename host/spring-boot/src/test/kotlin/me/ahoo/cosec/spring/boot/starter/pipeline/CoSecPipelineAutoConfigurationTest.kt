@@ -257,8 +257,8 @@ class CoSecPipelineAutoConfigurationTest {
 
     /**
      * RC1-50 (`SNP-6`): the periodic revalidation is the only bound on a lost invalidation, so an interval that turns
-     * it off or leaves it unbounded fails startup, naming the property: zero, a negative one, over 5 minutes, at or
-     * over `lag-warn`, and at or over `fail-closed.max-lag` with fail-closed tenants.
+     * it off or leaves it unbounded fails startup, naming the property: zero, a negative one, one under a second, over
+     * 5 minutes, at or over `lag-warn`, and at or over `fail-closed.max-lag` with fail-closed tenants.
      */
     @Test
     fun `a revalidate-interval that turns off or unbinds the periodic pass fails startup`() {
@@ -266,6 +266,9 @@ class CoSecPipelineAutoConfigurationTest {
         for (values in listOf(
             listOf("$property=0"),
             listOf("$property=-1s"),
+            // Below the floor of a second (review L1 of #1200).
+            listOf("$property=500us"),
+            listOf("$property=1ms"),
             listOf(
                 "$property=6m",
                 "cosec.authorization.snapshot.lag-warn=10m",

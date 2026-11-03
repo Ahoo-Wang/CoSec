@@ -25,7 +25,7 @@ import java.time.Duration
 data class SnapshotOptions(
     /**
      * How often every installed document is revalidated with a conditional read: the bound on how long a change whose
-     * invalidation was lost, or whose reload failed, goes unseen (`SNP-6`). Positive, at most
+     * invalidation was lost, or whose reload failed, goes unseen (`SNP-6`). At least [MIN_REVALIDATE_INTERVAL], at most
      * [MAX_REVALIDATE_INTERVAL], less than [lagWarn], and less than [failClosedMaxLag] when [failClosedTenants] are set.
      */
     val revalidateInterval: Duration = Duration.ofSeconds(10),
@@ -92,6 +92,12 @@ data class SnapshotOptions(
          */
         val MAX_REVALIDATE_INTERVAL: Duration = Duration.ofMinutes(5)
 
+        /**
+         * The shortest [revalidateInterval]: every pass reads every installed document from the store, so a shorter one
+         * would keep Redis busy for nothing (review L1 of #1200), and below a millisecond the schedule cannot run at all.
+         */
+        val MIN_REVALIDATE_INTERVAL: Duration = Duration.ofSeconds(1)
+
         const val DEFAULT_MAX_ABSENT: Int = 256
 
         /**
@@ -108,6 +114,9 @@ data class SnapshotOptions(
         ): String? = when {
             revalidateInterval.isNegative || revalidateInterval.isZero ->
                 "must be positive: the periodic revalidation cannot be turned off"
+
+            revalidateInterval < MIN_REVALIDATE_INTERVAL ->
+                "must be at least $MIN_REVALIDATE_INTERVAL: each pass reads every installed document from the store"
 
             revalidateInterval > MAX_REVALIDATE_INTERVAL -> "must be at most $MAX_REVALIDATE_INTERVAL"
             revalidateInterval >= lagWarn -> "must be less than the lag warning threshold ($lagWarn)"
