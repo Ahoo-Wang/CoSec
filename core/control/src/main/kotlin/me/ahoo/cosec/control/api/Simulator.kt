@@ -108,7 +108,15 @@ class Simulator(
         return ScopeResolver.resolve(subject, DeclaredScope(request.app, request.space), HostScope(null))
     }
 
-    fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation {
+    fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation =
+        decide(request, scope, documents).evaluation
+
+    /**
+     * [evaluate], with what its view read (R2-5 of #1194's review): [keys] says which documents to fetch from the raw
+     * tenant document, but when that document does not compile the view, as enforcement's, reads no app document for a
+     * roleless request. What a caller reports or checks against is what the view read.
+     */
+    internal fun decide(request: SimulatedRequest, scope: Scope, documents: Documents): Decided {
         val memberships = MembershipClaims.parse(request.roles, request.policies)
         val subject = Subject(
             id = request.principal ?: ANONYMOUS,
@@ -129,7 +137,8 @@ class Simulator(
             resource = request.resource,
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),
         )
-        return engine.evaluate(
+        val view = view(scope, documents)
+        val evaluation = engine.evaluate(
             FlatRequest(
                 authz,
                 scope,
@@ -137,8 +146,22 @@ class Simulator(
                 request.time,
                 HttpAttributes(Headers.of(request.headers), request.requestAttributes),
             ),
-            view(scope, documents),
+            view,
             TraceLevel.FULL
+        )
+        return Decided(evaluation, scope, view.version!!)
+    }
+
+    /** An evaluation, and the documents its view read with their revisions. */
+    internal class Decided(val evaluation: FlatEvaluation, scope: Scope, version: ViewVersion) {
+        /** The revisions the view read: an app's only when it took the app's document (its revision, 0 for none). */
+        val version = SnapshotVersion(version.platform, version.app, version.tenant ?: 0)
+
+        /** The documents the view read: the platform's, the tenant's, and the app's when it took it. */
+        val read: List<SnapshotKey> = listOfNotNull(
+            SnapshotKey.Platform,
+            SnapshotKey.Tenant(scope.tenant.value),
+            version.app?.let { SnapshotKey.App(scope.app.value) },
         )
     }
 

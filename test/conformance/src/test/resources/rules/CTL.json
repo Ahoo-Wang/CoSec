@@ -25,7 +25,7 @@
     {
       "id": "CTL-3",
       "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998)",
-      "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow. simulate, explain and a shadow window's comparison decide on the documents enforcement reads, by its one rule (ViewDocuments): the platform's, the tenant's, and the app's when the scope has roles in that app or the tenant document decided with (the head, the candidate, or the revision explained) binds one of that app's permission policies to Anyone or a principal; never more.",
+      "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow. simulate, explain and a shadow window's comparison decide on the documents enforcement reads, by its one rule (ViewDocuments): the platform's, the tenant's, and the app's when the scope has roles in that app or the tenant document decided with (the head, the candidate, or the revision explained) binds one of that app's permission policies to Anyone or a principal; never more. What explain reports as the revisions decided on, and the documents simulate takes a candidate of, are those the view read: a tenant document that does not compile makes a roleless request read no app document.",
       "level": "control",
       "pending": null,
       "guards": [
@@ -34,6 +34,8 @@
         "control:AppDocumentDecisionsTest#simulate reads the app document the tenant's binding needs, as enforcement does",
         "control:AppDocumentDecisionsTest#a simulated tenant change that adds such a binding reads the app document too",
         "control:AppDocumentDecisionsTest#explain decides at the app revision an audit event recorded",
+        "control:AppDocumentDecisionsTest#explain decides the app document by the tenant revision it explains",
+        "control:AppDocumentDecisionsTest#what explain reports and simulate checks is what the view read",
         "runtime:ShadowAppDocumentTest#a tenant candidate that grants an app permission reads the app document and widens",
         "runtime:ShadowAppDocumentTest#a tenant candidate that revokes it reads no app document and narrows",
         "runtime:ShadowAppDocumentTest#withoutViewsSuchACandidateIsAnError"

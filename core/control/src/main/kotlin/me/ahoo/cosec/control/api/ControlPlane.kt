@@ -273,12 +273,12 @@ class DefaultControlPlane(
         val tenantHead = revisions.head(tenant)?.document
         val keys = simulator.keys(scope, tenantHead)
         val heads = keys.associateWith { if (it == tenant) tenantHead else revisions.head(it)?.document }
-        var read = keys
-        val enforced = simulator.evaluate(request, scope, documents(heads))
+        val enforced = simulator.decide(request, scope, documents(heads))
         val proposed = candidate?.let { id ->
             val change = get(operator, id)
             authority.require(operator, change.key, ControlActions.SIMULATE)
-            if (change.key !in keys) {
+            // What the view read, not what [keys] fetched: an app the tenant binds is not read when it does not compile.
+            if (change.key !in enforced.read) {
                 throw ChangeRejectedException(
                     BAD_REQUEST,
                     "change ${id.value} is of [${change.key}], which this request does not read"
@@ -286,17 +286,17 @@ class DefaultControlPlane(
             }
             val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
             // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
-            read = if (change.key == tenant) simulator.keys(scope, document) else keys
-            val proposedHeads = read.associateWith { heads[it] ?: revisions.head(it)?.document } + (change.key to document)
-            simulator.evaluate(request, scope, documents(proposedHeads))
+            val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
+            val proposedHeads = fetched.associateWith { heads[it] ?: revisions.head(it)?.document } + (change.key to document)
+            simulator.decide(request, scope, documents(proposedHeads))
         }
-        val redaction = redaction(operator, (keys + read).distinct())
+        val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
         return Simulation(
-            redaction.decision(enforced.decision),
-            redaction.trace(enforced),
-            proposed?.let { redaction.decision(it.decision) },
-            proposed?.let { redaction.trace(it) },
-            proposed != null && proposed.decision != enforced.decision,
+            redaction.decision(enforced.evaluation.decision),
+            redaction.trace(enforced.evaluation),
+            proposed?.let { redaction.decision(it.evaluation.decision) },
+            proposed?.let { redaction.trace(it.evaluation) },
+            proposed != null && proposed.evaluation.decision != enforced.evaluation.decision,
         )
     }
 
@@ -323,14 +323,14 @@ class DefaultControlPlane(
         val tenantDocument = documentAt(tenant)
         val keys = simulator.keys(scope, tenantDocument)
         val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
-        val evaluation = simulator.evaluate(request, scope, documents(documents))
-        val redaction = redaction(operator, keys)
-        val version = SnapshotVersion(
-            documents[SnapshotKey.Platform]?.revision ?: 0,
-            keys.firstOrNull { it is SnapshotKey.App }?.let { documents[it]?.revision ?: 0 },
-            documents[tenant]?.revision ?: 0,
+        // The revisions the view read (R2-5): an app's only when it took the app's document.
+        val decided = simulator.decide(request, scope, documents(documents))
+        val redaction = redaction(operator, decided.read)
+        return Explanation(
+            decided.version,
+            redaction.decision(decided.evaluation.decision),
+            redaction.trace(decided.evaluation),
         )
-        return Explanation(version, redaction.decision(evaluation.decision), redaction.trace(evaluation))
     }
 
     @ExperimentalCoSecApi

@@ -118,7 +118,9 @@ full trace of candidates. Statements from documents you may not read are left ou
 A simulation reads the documents enforcement reads: the platform's, the tenant's, and the app's when the request has
 roles in its app or the tenant document binds one of that app's permission policies to `Anyone` or to a principal
 ([Policy language](./language.md)). For a change of the tenant document, the candidate decides that: a change that
-adds such a binding reads the app document, one that removes the last of them no longer does.
+adds such a binding reads the app document, one that removes the last of them no longer does. A tenant document that
+does not compile reads as unresolved, so its bindings make the request read no app document, as on the data plane;
+a `candidate` of a document the request did not read is `400`.
 
 A simulation has no token attributes and fetches no external attributes: a statement that reads `ext.*` finds it
 missing and follows its `onMissing`, so it is usually Indeterminate here.
@@ -128,8 +130,9 @@ missing and follows its `onMissing`, so it is usually Indeterminate here.
 `explain` takes the same `request` and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
 kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
-document was read is decided as enforcement decided it, with the tenant document at its recorded revision. Its fields
-and how to find the request are in [Checks in code](../integration/checks.md).
+document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
+revisions it answers with are those it read: no `app` when it read no app document. Its fields and how to find the
+request are in [Checks in code](../integration/checks.md).
 
 ## Changes
 

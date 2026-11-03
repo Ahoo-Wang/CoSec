@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
+import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
@@ -50,6 +51,7 @@ import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.util.concurrent.atomic.AtomicInteger
@@ -171,6 +173,70 @@ class AppDocumentDecisionsTest {
         val now = plane.explain(plato, bob())
         now.version.assert().isEqualTo(SnapshotVersion(1, 2, 1))
         now.decision.decision.assert().isEqualTo("Deny")
+    }
+
+    /**
+     * R2-2 of #1194's review: whether the app document was read is decided with the tenant document at the revision
+     * explained, not the head's. The head drops the binding; the audited permit is still explained as a permit.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = ["anyone", "bob"])
+    fun `explain decides the app document by the tenant revision it explains`(subject: String) = runBlocking<Unit> {
+        bootstrap(listOf(grant(subject)))
+        publish(TENANT, emptyList(), emptyList())
+        val audited = plane.explain(plato, bob(), SnapshotVersion(1, 1, 1))
+        audited.decision.decision.assert().isEqualTo("Permit")
+        audited.decision.by!!.policy.assert().isEqualTo("perm:order/read")
+        audited.version.assert().isEqualTo(SnapshotVersion(1, 1, 1))
+        val now = plane.explain(plato, bob())
+        now.decision.decision.assert().isEqualTo("Deny")
+        now.decision.cause.assert().isNull()
+        now.version.assert().isEqualTo(SnapshotVersion(1, null, 2))
+    }
+
+    /**
+     * R2-5 of #1194's review: a tenant document that does not compile names the app in its raw bindings, but neither
+     * enforcement nor the simulated view reads the app document for a roleless request, its tenant being unresolved.
+     * `explain` reports no app revision, and `simulate` takes no app candidate, for a document the view did not read.
+     */
+    @Test
+    fun `what explain reports and simulate checks is what the view read`() = runBlocking<Unit> {
+        val broken = PolicyDefinition(
+            PolicyId("broken"),
+            false,
+            null,
+            listOf(
+                StatementSource(
+                    "",
+                    Effect.ALLOW,
+                    listOf("order:read"),
+                    emptyList(),
+                    me.ahoo.cosec.model.condition.Condition.Eq(
+                        "no.such.attribute",
+                        me.ahoo.cosec.model.condition.Literal.Str("x"),
+                    ),
+                )
+            ),
+        )
+        bootstrap(emptyList())
+        publish(TENANT, listOf(broken), listOf(grant("anyone")))
+        val explained = plane.explain(plato, bob())
+        explained.decision.decision.assert().isEqualTo("Indeterminate")
+        explained.version.assert().isEqualTo(SnapshotVersion(1, null, 2))
+        val appChange = changes.propose(
+            plato,
+            SnapshotKey.App("order"),
+            1,
+            listOf(Operation.RemovePolicy(read.id)),
+            "drop"
+        )
+        val refused = try {
+            plane.simulate(plato, bob(), appChange.id)
+            null
+        } catch (e: ChangeRejectedException) {
+            e.status
+        }
+        refused.assert().isEqualTo(400)
     }
 
     private companion object {
