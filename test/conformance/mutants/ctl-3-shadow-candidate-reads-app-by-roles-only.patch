@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: a shadow window compares a tenant candidate without the app document it makes a roleless request read
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowAppDocumentTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt
+index 4b46c81d..ffc8faa5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt
+@@ -160,7 +160,7 @@ class ShadowListener(
+             return view
+         }
+         val scope = replay.request.scope
+-        val app = ViewDocuments.appOf(scope) { document.needsApp(it) }
++        val app = ViewDocuments.appOf(scope) { false }
+         return when {
+             app == null -> if (view.app == null) view else withApp(view, null)
+             view.app != null -> view
