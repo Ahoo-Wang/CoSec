@@ -65,6 +65,33 @@ class ControlHttpTest {
         body.has("detail").assert().isFalse()
     }
 
+    /**
+     * R3-4 of #1194's review: a change of an app no key can name (an earlier build wrote it) no longer reads. Shown or
+     * abandoned, it is a deliberate 409 that says an operator removes its record, never the stored id; to an operator who
+     * may not read the platform's documents, it is what a missing change is.
+     */
+    @Test
+    fun `a change that no longer reads is a 409 to the platform and a 404 to anyone else`() {
+        val id = runBlocking {
+            fixture.changes.propose(
+                fixture.plato,
+                me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform,
+                1,
+                emptyList(),
+                "odd"
+            )
+        }.id
+        fixture.unreadable += id
+        for ((method, path) in listOf("GET" to "/changes/${id.value}", "POST" to "/changes/${id.value}:abandon")) {
+            val (status, body) = call(method, path, security = plato)
+            status.assert().describedAs(path).isEqualTo(409)
+            body.get("type").asString().assert().isEqualTo("https://cosec.ahoo.me/problems/change-unreadable")
+            body.get("detail").asString().assert().contains("An operator removes its record").doesNotContain("a\u0001b")
+                .doesNotContain("\\u0001")
+            call(method, path, security = alice).first.assert().describedAs(path).isEqualTo(404)
+        }
+    }
+
     @Test
     fun `a change goes through the routes, each step authorized`() {
         val proposal = """{"document":"tenant:acme","base":1,"note":"more",""" +

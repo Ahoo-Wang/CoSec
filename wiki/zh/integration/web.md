@@ -333,7 +333,7 @@ spring:
 
 **失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、数字或布尔值，或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
-**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对和分隔符都与收到时相同；开头的 `$Version` 键值对用 `,` 藏了令牌的头整个移除，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
+**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。开头的 `$Version` 键值对用 `,` 藏了令牌的头整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 

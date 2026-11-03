@@ -116,8 +116,8 @@ class PipelineGatewayFilter(
                         credentialHeaders.forEach(headers::remove)
                         when {
                             cookies == null -> Unit
-                            cookies.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
-                            else -> headers.put(HttpHeaders.COOKIE, cookies)
+                            cookies.kept.isEmpty() -> headers.remove(HttpHeaders.COOKIE)
+                            else -> headers.put(HttpHeaders.COOKIE, cookies.kept)
                         }
                     }
                 }
@@ -131,40 +131,82 @@ class PipelineGatewayFilter(
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             val built = downstream.build()
-            val forwarded = if (cookies != null) WithoutTokenCookies(built, withoutCookieToken) else built
+            val forwarded = if (cookies != null) {
+                WithoutTokenCookies(
+                    built,
+                    withoutCookieToken,
+                    cookies.dropped
+                )
+            } else {
+                built
+            }
             chain.filter(authorized.mutate().request(forwarded).build())
         }
     }
 
+    /** The `Cookie` headers that go on ([kept], none: no `Cookie` header), and those dropped whole ([dropped]). */
+    private class CookieRewrite(val kept: List<String>, val dropped: List<String>)
+
     /**
-     * The `Cookie` headers of [headers] without the `authorization` cookie, a header left with no cookie dropped (an
-     * empty list: no `Cookie` header goes on); null when none names it, so nothing changes and nothing is allocated
-     * beyond the check. Only a request it rewrites needs its cookies to agree ([WithoutTokenCookies]).
+     * The `Cookie` headers of [headers] without the `authorization` cookie, a header left with no cookie dropped; null
+     * when none names it, so nothing changes and nothing is allocated beyond the check. Only a request it rewrites needs
+     * its cookies to agree ([WithoutTokenCookies]).
      */
-    private fun withoutCookieTokens(headers: HttpHeaders): List<String>? {
+    private fun withoutCookieTokens(headers: HttpHeaders): CookieRewrite? {
         val cookies = headers[HttpHeaders.COOKIE] ?: return null
         if (cookies.all { withoutCookieToken(it) === it }) return null
-        return cookies.mapNotNull(withoutCookieToken)
+        val kept = ArrayList<String>(cookies.size)
+        val dropped = ArrayList<String>(0)
+        for (cookie in cookies) {
+            val rewritten = withoutCookieToken(cookie)
+            if (rewritten == null) dropped += cookie else kept += rewritten
+        }
+        return CookieRewrite(kept, dropped)
     }
 
     /**
      * [request] whose parsed cookies agree with its rewritten `Cookie` headers (R2-3 of #1194's review): Spring keeps
      * the cookies the server parsed from the headers as received, so a later filter, or a `forward:` route's local
      * handler, would still read the token from them. A cookie goes when its pair, as the rule rewriting the headers reads
-     * it ([withoutCookieToken]), would go. Built only for a request whose headers were rewritten.
+     * it ([withoutCookieToken]), would go, and when a header that went whole ([dropped]) holds it, by name and value
+     * as Netty reads its pairs (R3-5): a `$Version` header that hid the token goes with every cookie in it. Built only
+     * for a request whose headers were rewritten.
      */
     private class WithoutTokenCookies(
         request: ServerHttpRequest,
         withoutCookieToken: (String) -> String?,
+        dropped: List<String>,
     ) : ServerHttpRequestDecorator(request) {
         private val cookies: MultiValueMap<String, HttpCookie> = LinkedMultiValueMap<String, HttpCookie>().apply {
+            val inDropped = if (dropped.isEmpty()) emptySet() else dropped.flatMapTo(HashSet(), ::pairsOf)
             request.cookies.forEach { (name, values) ->
-                val kept = values.filter { withoutCookieToken("$name=${it.value}") != null }
+                val kept = values.filter { withoutCookieToken("$name=${it.value}") != null && (name to it.value) !in inDropped }
                 if (kept.isNotEmpty()) put(name, kept)
             }
         }
 
         override fun getCookies(): MultiValueMap<String, HttpCookie> = cookies
+
+        private companion object {
+            private const val SKIPPED = "\t\n\u000B\u000C\r ,"
+
+            /**
+             * The name and value of each pair of [header] as Netty's `ServerCookieDecoder` reads them: the name after
+             * what it skips (whitespace and `,`), up to `=`, without trailing whitespace; the value up to the next `;`,
+             * a double-quoted one unwrapped. Every pair, `$`-named ones too: a pair Netty skipped matches no cookie.
+             */
+            fun pairsOf(header: String): List<Pair<String, String>> = header.split(';').mapNotNull { pair ->
+                val text = pair.trimStart { it in SKIPPED }
+                if ('=' !in text) return@mapNotNull null
+                val value = text.substringAfter('=')
+                val unwrapped = if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+                    value.substring(1, value.length - 1)
+                } else {
+                    value
+                }
+                text.substringBefore('=').trimEnd() to unwrapped
+            }
+        }
     }
 
     override fun getOrder(): Int = AUTHORIZATION_GATEWAY_FILTER_ORDER

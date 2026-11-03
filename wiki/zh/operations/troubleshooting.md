@@ -391,6 +391,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误，或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。 | 修正请求；`detail` 指出问题。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。 | |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
+| `409` `change-unreadable` | 该变更的记录由之前的构建为一个不能作为应用 id 的应用写入（空白、`*`、含控制字符或超过 128 个字符）；控制面所在的主机在每一轮维护中记录 `Change [<id>] is skipped: it is of [<key>], which no document key can name`。它既无法查看也无法放弃。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-2)。 |
 | `410` | 请求的修订没有保留。 | |
 | `428` | 发布需要确认影子窗口的计数。 | 带上该窗口的 `ack` 再次发布。 |
 | `503` | 动作的授权无法决定（没有平台文档、Redis 不可用）、存储无法读取、发布时读不到审批人的吊销（日志中写着 `the revocations of the approver could not be read`；变更保留其审批），或者 `REQUIRED` 变更监听器没有记录一个受控步骤。没有 `REQUIRED` 变更监听器时使用 break-glass：`break-glass needs a REQUIRED change listener, and none is configured`。 | 恢复 Redis 或监听器的存储（[控制面变更日志](./observability.md#control-plane-change-log)）。 |

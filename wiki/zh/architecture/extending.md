@@ -282,7 +282,7 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
-- `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。
+- `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。如果某个变更属于应用 id 规则拒绝的应用（之前的构建写入的），它的记录不再可读，`change(id)` 会抛出 `UnnamedDocumentException`，`ChangeRequestCodec` 解码这种记录时也是如此：无法知道它是否已经结束，所以它继续列出，`openChanges()` 也不能因它而失败。维护任务跳过它；由运维人员移除它的记录。
 - `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它。
 
 与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。

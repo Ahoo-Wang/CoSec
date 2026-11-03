@@ -24,9 +24,9 @@ import org.junit.jupiter.api.Test
 class CookieHeadersTest {
     @Test
     fun `the authorization cookie goes, however its name is cased or spaced`() {
-        CookieHeaders.without("theme=dark; authorization=t", "authorization").assert().isEqualTo("theme=dark;")
-        CookieHeaders.without("a=1;Authorization=t;b=2", "authorization").assert().isEqualTo("a=1;;b=2")
-        CookieHeaders.without("a=1; AUTHORIZATION =t ; b=2", "authorization").assert().isEqualTo("a=1;; b=2")
+        CookieHeaders.without("theme=dark; authorization=t", "authorization").assert().isEqualTo("theme=dark")
+        CookieHeaders.without("a=1;Authorization=t;b=2", "authorization").assert().isEqualTo("a=1;b=2")
+        CookieHeaders.without("a=1; AUTHORIZATION =t ; b=2", "authorization").assert().isEqualTo("a=1; b=2")
         CookieHeaders.without("authorization=\"t\"", "authorization").assert().isNull()
         CookieHeaders.without("authorization", "authorization").assert().isNull()
         CookieHeaders.without("authorization=t; authorization=u", "authorization").assert().isNull()
@@ -34,18 +34,35 @@ class CookieHeadersTest {
     }
 
     /**
-     * R2-6 of #1194's review: what is kept goes on exactly as it came, whitespace included, and the first pair's going
-     * leaves its `;` in place, so Netty reads every `$`-named pair as it did.
+     * R3-2 of #1194's review: each pair that goes takes one `;` with it, so no empty pair is made, which Python's
+     * `SimpleCookie` would stop at, losing every cookie after it.
+     */
+    @Test
+    fun `no empty pair is made`() {
+        CookieHeaders.without("authorization=t; session=s", "authorization").assert().isEqualTo(" session=s")
+        CookieHeaders.without("a=1; authorization=t; b=2", "authorization").assert().isEqualTo("a=1; b=2")
+        // R3-6: a pair of whitespace and `,` alone holds no cookie; a header left with only such pairs is not sent.
+        CookieHeaders.without("authorization=t;,", "authorization").assert().isNull()
+        CookieHeaders.without("authorization=t; , ;\t", "authorization").assert().isNull()
+        // An empty pair the header had stays: it is not this rewrite's to drop.
+        CookieHeaders.without("a=1;;authorization=t;b=2", "authorization").assert().isEqualTo("a=1;;b=2")
+    }
+
+    /**
+     * R2-6 of #1194's review: the pairs kept go on byte for byte, and Netty, which reads a header that starts with
+     * `$Version` from just after its first `;`, reads every one as it did.
      */
     @Test
     fun `kept pairs go on as they came`() {
-        CookieHeaders.without("a=1 ;authorization=t;  b=2", "authorization").assert().isEqualTo("a=1 ;;  b=2")
-        CookieHeaders.without(" \tAUTHORIZATION =t ; a=1", "authorization").assert().isEqualTo("; a=1")
+        CookieHeaders.without("a=1 ;authorization=t;  b=2", "authorization").assert().isEqualTo("a=1 ;  b=2")
+        CookieHeaders.without(" \tAUTHORIZATION =t ; a=1", "authorization").assert().isEqualTo(" a=1")
         CookieHeaders.without(" \$Version=1; authorization=t; \$Path=/; a=b", "authorization")
-            .assert().isEqualTo(" \$Version=1;; \$Path=/; a=b")
-        CookieHeaders.without("authorization=t;\$Version=1;a=b", "authorization").assert().isEqualTo(";\$Version=1;a=b")
+            .assert().isEqualTo(" \$Version=1; \$Path=/; a=b")
+        // A kept `$Version` pair that comes to the head gets a space, or Netty would read the header as RFC 2965.
+        CookieHeaders.without("authorization=t;\$Version=1;a=b", "authorization").assert().isEqualTo(" \$Version=1;a=b")
         // Netty skips a leading `$Version` up to its `;`: that `;` stays, or `$Version` would decode as a cookie.
         CookieHeaders.without("\$Version=1;authorization=t", "authorization").assert().isEqualTo("\$Version=1;")
+        CookieHeaders.without("\$Version=1;authorization=t;a=b", "authorization").assert().isEqualTo("\$Version=1;a=b")
         // A leading `$Version` pair that hides the token goes, and with it the whole header: Netty would read the rest
         // without RFC 2965, and decode `$Path` pairs it skipped.
         CookieHeaders.without("\$version=1, authorization=t;a=b;\$Path=/", "authorization").assert().isNull()
@@ -53,8 +70,8 @@ class CookieHeadersTest {
 
     @Test
     fun `a pair that hides it behind a comma or a quote goes whole`() {
-        CookieHeaders.without("a=1, authorization=t; b=2", "authorization").assert().isEqualTo("; b=2")
-        CookieHeaders.without("a=\"x;authorization=t\"; b=2", "authorization").assert().isEqualTo("a=\"x;; b=2")
+        CookieHeaders.without("a=1, authorization=t; b=2", "authorization").assert().isEqualTo(" b=2")
+        CookieHeaders.without("a=\"x;authorization=t\"; b=2", "authorization").assert().isEqualTo("a=\"x; b=2")
     }
 
     @Test
@@ -68,6 +85,6 @@ class CookieHeadersTest {
 
     @Test
     fun `the pipeline removes the cookie it reads a token from`() {
-        PipelineFixtures.pipeline().withoutCookieToken("theme=dark; authorization=t").assert().isEqualTo("theme=dark;")
+        PipelineFixtures.pipeline().withoutCookieToken("theme=dark; authorization=t").assert().isEqualTo("theme=dark")
     }
 }

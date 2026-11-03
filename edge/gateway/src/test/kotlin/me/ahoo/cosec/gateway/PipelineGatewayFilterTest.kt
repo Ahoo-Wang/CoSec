@@ -241,7 +241,7 @@ class PipelineGatewayFilterTest {
         stripped.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
         stripped.headers["X-Service-Key"].assert().isNull()
         // R1-4: the cookie the pipeline reads a token from goes; a header left with no cookie goes too.
-        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark;"))
+        stripped.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
         // Not a credential header of this pipeline: it reads keys from the renamed one only.
         stripped.headers["X-API-Key"].assert().isEqualTo(listOf("other"))
         stripped.uri.rawQuery.assert().isEqualTo("page=2")
@@ -258,7 +258,7 @@ class PipelineGatewayFilterTest {
             val partner = sent(keeping, request(), route)
             partner.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
             partner.headers["X-Service-Key"].assert().isNull()
-            partner.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark;"))
+            partner.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
             partner.uri.rawQuery.assert().isEqualTo("page=2")
         }
         sent(keeping, request(), route("https://partner.example", identity = true))
@@ -304,6 +304,13 @@ class PipelineGatewayFilterTest {
         // A pair the header rewrite drops whole goes from the cookies too, whatever the server parsed it as.
         val hidden = sent(stripping, get("/orders").cookie(HttpCookie("a", "1, authorization=x"), HttpCookie("b", "2")))
         cookies(hidden).assert().isEqualTo(mapOf("b" to listOf("2")))
+        // R3-5: a `$Version` header that hid the token behind a `,` goes whole, and so does every cookie read from it.
+        val versioned = sent(
+            stripping,
+            get("/orders").header(HttpHeaders.COOKIE, "\$Version=1, authorization=t;a=b").cookie(HttpCookie("a", "b")),
+        )
+        versioned.headers.containsHeader(HttpHeaders.COOKIE).assert().isFalse()
+        cookies(versioned).assert().isEmpty()
         // Nothing to rewrite: the request is handed on as it was, its cookies untouched.
         cookies(sent(stripping, get("/orders").cookie(HttpCookie("theme", "dark")))).assert()
             .isEqualTo(mapOf("theme" to listOf("dark")))

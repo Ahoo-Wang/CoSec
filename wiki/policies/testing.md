@@ -56,7 +56,10 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
-exists. The control host logs why at `INFO`, with the problem's `requestId`
+exists. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
+abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
+an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
+host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
 
 ## Validating policies

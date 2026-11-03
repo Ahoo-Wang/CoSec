@@ -149,11 +149,13 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   now a `V2` finding (`400`) at `$.bindings[i].app`, and since the whole candidate is checked, a document that still
   holds one cannot publish any other change: its next change must remove it, and a change that only removes it is
   valid. `analyze` answers `400` for such an app. **Before upgrading the control plane**, remove the tenant bindings in
-  such apps, and abandon the open changes of such app documents. What is left behind stops nothing, but stays: a
-  document that keeps such a binding still reads, and the binding grants nothing, since no request is ever in that
-  app; an open change of such an app no longer reads, so it can no longer be shown or abandoned, and maintenance skips
-  it with a WARN on every pass; an instance's status entry or an app list entry naming such an app is skipped, with
-  a WARN for the status entry.
+  such apps, abandon the open changes of such app documents, and empty the app documents published under such ids
+  (publish each with no policies and no bindings), which drops their back-references. What is left behind stops
+  nothing, but stays: a document that keeps such a binding still reads, and the binding grants nothing, since no
+  request is ever in that app; an open change of such an app no longer reads, so the control API answers it `409`
+  `change-unreadable`, it can be neither shown nor abandoned, and maintenance skips it with a WARN on every pass until
+  its record is removed; an instance's status entry, an app list entry or a back-reference naming such an app is
+  skipped, with a WARN for the status entry and the back-reference.
 - **Enforcing hosts drop a client's `CoSec-Identity`** (RC1-18, `IDN-9`). A WebFlux or Spring MVC host in `enforce`
   mode removes the header from the request its handler sees, so it never relays one a client wrote. Code that read it
   there read what any client could write; read the `SecurityContext`.

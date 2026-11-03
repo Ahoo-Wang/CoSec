@@ -264,7 +264,8 @@ header: anonymous. Otherwise never anonymous:
 Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
 document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);
 404 no such document, change or route; 409 the change's `base` revision is stale, the document is staged by another
-change, or the change is in another state; 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
+change, or the change is in another state (409 `change-unreadable`: an earlier build wrote that change for an app that
+cannot be an app id; remove its record); 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
 does not match; 422 the candidate does not compile, refers to a missing policy, or uses a reserved id prefix
 (`cosec:`, `g:`, `r:`); 428 a DENY with `onMissing: nomatch` needs a confirmation; 503 the decision or store could not
 be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebMvc a body over

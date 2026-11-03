@@ -24,15 +24,19 @@ import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.allow
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.control.store.UnnamedDocumentException
+import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
@@ -63,7 +67,18 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class ControlPlaneTest {
     private val clock = MutableClock()
-    private val store = InMemoryControlStore(clock)
+    private val memory = InMemoryControlStore(clock)
+
+    /** Changes whose stored record no longer reads, as one of an app an earlier build named (R3-4 of #1194's review). */
+    val unreadable = HashSet<ChangeId>()
+    private val store: ControlStore = object : ControlStore by memory {
+        override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
+            // Wrapped, as a store's cache may wrap what its codec threw.
+            throw IllegalStateException("decoding", UnnamedDocumentException("app:a\\u0001b"))
+        } else {
+            memory.change(id)
+        }
+    }
     private val revisions = Revisions(store, clock)
     val engine = EngineAuthority(revisions)
 

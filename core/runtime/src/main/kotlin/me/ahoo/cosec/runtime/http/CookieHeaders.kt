@@ -21,12 +21,13 @@ internal object CookieHeaders {
      * lies between two `;`, as decoders read it (a value ends at the next `;`, quoted or not); a pair one of whose
      * `,`-separated parts names [name] goes whole, for decoders that also separate cookies at `,`.
      *
-     * Only the text of the pairs that go is removed: every `;` stays, and the pairs kept go on exactly as they came,
-     * whitespace included, so each decodes as it did (R2-6 of #1194's review). Netty reads a header that starts with
-     * `$Version` from just after its first `;`, skipping that pair: a header that came to start with `$Version`, or
-     * lost the `;` after it, would decode its `$`-named pairs otherwise. So a header whose leading `$Version` pair goes
-     * (it hid [name] behind a `,`) goes whole: no rewrite would keep how Netty reads the rest. Null then, and when only
-     * separators and whitespace are left; [header] itself when no pair goes.
+     * Each pair that goes takes one `;` with it, and the pairs kept go on byte for byte, joined by `;` as they were
+     * (R2-6, R3-2 of #1194's review): no empty pair is made, which RFC 6265 has none of and Python's `SimpleCookie` stops
+     * at, and each kept pair decodes as it did. Netty reads a header that starts with `$Version` from just after its first
+     * `;`, so two corrections keep its reading: a leading `$Version` pair left alone keeps its `;`, and a kept pair that
+     * starts with `$Version` and comes to the head gets a space before it. A header whose leading `$Version` pair goes
+     * (it hid [name] behind a `,`) goes whole: no rewrite keeps how Netty reads the rest. Null then, and when only empty
+     * pairs, of whitespace and `,` alone, are left (R3-6); [header] itself when no pair goes.
      */
     fun without(header: String, name: String): String? {
         if (!header.contains(name, ignoreCase = true)) {
@@ -39,14 +40,26 @@ internal object CookieHeaders {
         if (named.none { it }) {
             return header
         }
-        if (pairs.indices.all { named[it] || pairs[it].isBlank() }) {
+        val rfc2965 = header.startsWith(RFC2965_VERSION, ignoreCase = true)
+        if (named.first() && rfc2965) {
             return null
         }
-        if (named.first() && header.startsWith(RFC2965_VERSION, ignoreCase = true)) {
+        if (pairs.indices.all { named[it] || isEmpty(pairs[it]) }) {
             return null
         }
-        return pairs.indices.joinToString(";") { if (named[it]) "" else pairs[it] }
+        val kept = pairs.filterIndexed { i, _ -> !named[i] }
+        val written = kept.joinToString(";")
+        return when {
+            rfc2965 && kept.size == 1 -> "$written;"
+            named.first() && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> " $written"
+            else -> written
+        }
     }
+
+    /** Whether [pair] holds no cookie: only what Netty's decoder skips between pairs, whitespace and `,`. */
+    private fun isEmpty(pair: String): Boolean = pair.all { it in SEPARATORS }
+
+    private const val SEPARATORS = "\t\n\u000B\u000C\r ,"
 
     /** What Netty's `ServerCookieDecoder` reads at the very start of a header as RFC 2965's, case ignored. */
     private const val RFC2965_VERSION = "\$Version"

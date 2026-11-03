@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Duration
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -142,7 +143,11 @@ class ControlMaintenance(
         null
     } catch (e: Exception) {
         val unnamed = UnnamedDocumentException.of(e) ?: throw e
-        log.warn { "Change [${id.value}] is skipped: ${unnamed.message} Abandon it, or remove its record." }
+        log.warn {
+            "Change [${SnapshotKeyText.printable(id.value)}] is skipped: it is of [${unnamed.key}], which no document key " +
+                "can name (SCP-7), so it can be neither read, shown nor abandoned. Remove its record from the control " +
+                "store (with cosec-cocache, the key <key-prefix>:control:change:<id>)."
+        }
         null
     }
 

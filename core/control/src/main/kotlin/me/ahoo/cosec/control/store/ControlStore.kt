@@ -125,6 +125,10 @@ interface ControlStore : CandidateStore {
      * and removed once a write makes the change terminal. A removal that failed is made up here: ids whose change is
      * terminal are dropped when this is read, and so are ids whose change has been missing for longer than a write can
      * take (a first write that failed). Callers still read each change and go by its state.
+     *
+     * A change whose record no longer reads because it is of an app no document key can name (its [change] throws
+     * [UnnamedDocumentException], as [me.ahoo.cosec.control.change.ChangeRequestCodec] does) cannot be known to be
+     * terminal: it stays listed, and this must not fail for it. Callers skip it; an operator removes its record.
      */
     suspend fun openChanges(): Set<ChangeId>
 

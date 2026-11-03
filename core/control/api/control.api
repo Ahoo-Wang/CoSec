@@ -1516,12 +1516,10 @@ public final class me/ahoo/cosec/control/store/StoredDocument {
 
 public final class me/ahoo/cosec/control/store/UnnamedDocumentException : me/ahoo/cosec/model/CoSecException {
 	public static final field Companion Lme/ahoo/cosec/control/store/UnnamedDocumentException$Companion;
-	public fun <init> (Ljava/lang/String;)V
 	public final fun getKey ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/control/store/UnnamedDocumentException$Companion {
-	public final fun of (Ljava/lang/Throwable;)Lme/ahoo/cosec/control/store/UnnamedDocumentException;
 }
 
 public final class me/ahoo/cosec/control/store/Versioned {

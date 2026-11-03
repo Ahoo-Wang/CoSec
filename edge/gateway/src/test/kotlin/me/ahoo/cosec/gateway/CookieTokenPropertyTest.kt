@@ -139,6 +139,19 @@ class CookieTokenPropertyTest {
 
     private fun lax(header: String) = ServerCookieDecoder.LAX.decodeAll(header).map { it.name() to it.value() }
 
+    /**
+     * The empty pairs of [header], decoder aside: those of nothing but whitespace and `,`, a trailing one apart (no
+     * pair follows it). RFC 6265 has none, and Python's `SimpleCookie` stops at the first (R3-2).
+     */
+    private fun emptyPairs(header: String): Int =
+        header.split(';').dropLast(1).count { pair -> pair.all { it.isWhitespace() || it == ',' } }
+
+    private fun hasCookie(header: String): Boolean = header.split(';').any { pair ->
+        pair.any {
+            !it.isWhitespace() && it != ','
+        }
+    }
+
     /** A decoder of the older kind: `;` and `,` both separate cookies, and names are trimmed. */
     private fun splitting(header: String) = header.split(';', ',').map { it.substringBefore('=').trim() }
 
@@ -155,8 +168,15 @@ class CookieTokenPropertyTest {
             val original = headers.map { it.text }
             val sent = forwarded(original)
             try {
+                // R3-2, R3-6: one header at a time, the rewrite makes no empty pair its original did not have, and
+                // leaves no header without a cookie.
+                original.forEach { header ->
+                    forwarded(listOf(header))?.single()?.let { rewritten ->
+                        emptyPairs(rewritten).assert().isLessThanOrEqualTo(emptyPairs(header))
+                    }
+                }
                 sent?.forEach { header ->
-                    header.isBlank().assert().isFalse()
+                    hasCookie(header).assert().isTrue()
                     strict(header).none { isToken(it.first) }.assert().isTrue()
                     lax(header).none { isToken(it.first) }.assert().isTrue()
                     splitting(header).none(::isToken).assert().isTrue()
