@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 5ed4c2b8..7fcc4590 100644
+index f25b749a..bae0558f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 @@ -286,7 +286,7 @@ class DefaultControlPlane(
              }
              val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
              // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
--            read = if (change.key == tenant) simulator.keys(scope, document) else keys
-+            read = keys
-             val proposedHeads = read.associateWith { heads[it] ?: revisions.head(it)?.document } + (change.key to document)
-             simulator.evaluate(request, scope, documents(proposedHeads))
+-            val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
++            val fetched = keys
+             val proposedHeads = fetched.associateWith { heads[it] ?: revisions.head(it)?.document } + (change.key to document)
+             simulator.decide(request, scope, documents(proposedHeads))
          }
