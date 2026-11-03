@@ -1,7 +1,7 @@
 # RFC 0010：GA 前的扩展性检查——企业级 API 安全网关场景
 
-> 状态：已确认（2026-10-28） · 上位文档：[RFC 0001](0001-target-architecture.md) P9；[RFC 0009](0009-identity-and-credentials.md) ·
-> 基线：`main` @ `c9553ad4`（#1132） · 交付：§3 的三项在 8.0 GA 之前合入 · 范围：`runtime/`、`core/`、`spring-boot-starter/`、`conformance/`
+> 状态：已确认（2026-10-28；2026-11-03 复查已确认） · 上位文档：[RFC 0001](0001-target-architecture.md) P9；[RFC 0009](0009-identity-and-credentials.md) ·
+> 基线：`main` @ `c9553ad4`（#1132），复查 @ `e82abdee` · 交付：§3 的各项在 8.0 GA 之前合入（C4、C5 由复查加入） · 范围：`runtime/`、`core/`、`spring-boot-starter/`、`conformance/`；C4 覆盖所有发布模块
 
 ## 0. 原则
 
@@ -56,21 +56,62 @@
 >
 > 非数组 `roles`/`policies` 声明返回 500 是缺陷，修成 401 不是破坏性变更，放进 RC 前的修复批。
 
+> **2026-11-03 复查（对照 `main` @ `e82abdee`，在 RFC 0011 的模块重组与 RC 修复批次 B1、B2 之后）**：§1 的接缝仍然成立：
+> - `Authenticator`、`TokenVerifier` 是 `cosec-spi` 里的 `@CoSecSpi`；
+> - `Credentials`、`AuthenticatedPrincipal` 是普通类，主构造器为 `internal`，可以用次构造器加字段；
+> - 根构建仍有 `-Xjvm-default=all-compatibility`；
+> - C1–C3 已合入。
+>
+> 有两处不成立，一处要写明：
+>
+> 1. **公共 `data class` 加不了字段。** 上文"其余的等真正要加字段时再处理"在 ABI 校验之后行不通。
+>    - 给 data class 加字段会同时改变主构造器和 `copy`：次构造器保得住前者，保不住后者（Kotlin 不允许手写 `copy`）。GA 后这就是删掉 ABI 文件里的一行，PR 要带 `!`。10-29 的约束 1 因此只对普通类成立。
+>    - 发布模块 ABI 文件里的公共 `data class`：`cosec-model` 19 个，`cosec-runtime` 27 个，`cosec-control` 29 个，`cosec-spi` 8 个，`cosec-engine` 3 个，`cosec-api` 4 个，starter 的属性类 9 个。
+>    - 其中已知会加字段的：
+>      - `Identity` 与 `Identity.Credential`：委托的 `actor`。§1 只看了 `AuthenticatedPrincipal`。
+>      - `PipelineComponents`：新端口，如请求签名的 nonce 存储。
+>      - `SnapshotOptions`。
+>      - `Audit*Data`：`actor`、`peer`。
+>      - `InstanceStatus`：第 2 条。
+>      - 控制面 API 的返回类型。
+>      - starter 的属性类：每个新的 `cosec.*` 属性都要加字段。
+>
+>    → §3 C4。
+> 2. **文档格式没有升级门槛。**
+>    - 文档是严格读取的：未知字段即拒绝，故意如此。而配额、外部 IdP 的声明映射，都要给文档加字段。
+>    - 控制面先发布带新字段的平台文档，还没升级的实例就编译不了它。平台文档是必需的，于是整个滚动升级期间所有请求都 fail closed：不会放行，但全面中断。
+>    - 控制面已经收到每个实例的 `InstanceStatus`（RFC 0007 §6.5），缺的是实例能读的格式级别。状态的编解码也是严格的：8.1 再给它加字段，8.0 的控制面就读不了新实例的状态。
+>
+>    → §3 C5。
+> 3. **会增长的封闭集合要写明。**
+>    - §1 计划给 `RejectReason`、`Attribute.Kind`、`ProblemType` 加常量，给 `Obligation` 加子类；`ChangeEvent.Kind` 已经加了 `ABANDONED`（#1192）。
+>    - 加成员不破坏 ABI。但应用里不带 `else` 的穷尽 `when`，重新编译会失败；旧二进制遇到新值，会抛 `NoWhenBranchMatchedException`。
+>    - 10-29 说"`MembershipAnswer` 等 sealed 类型 GA 后不加子类型"，和 §1 里 `Obligation` 那一行冲突。以写明的为准：每个会增长的集合写在它的 KDoc 和 `wiki/architecture/extending.md` 里；监听器和存储实现不得穷尽匹配这些集合。没写明的集合，GA 后不加成员。
+>
+>    → §3 C4。
+>
+> `CoSec-Identity` 的严格解码与部署顺序，已由 10-29 的约束 2 写明，不需要改动。
+>
+> 公共面越小，以后能自由修改的就越多。`cosec-runtime` 有 161 个公共类型（含嵌套类型），`cosec-control` 148 个，`cosec-model` 135 个，`cosec-spi` 90 个，GA 时全部冻结。所以 C4 的归类覆盖所有发布模块，不只是 engine 和 runtime。
+
 ## 2. 唯一的安全问题
 
 `runtime/.../Pipeline.kt` 处理义务时跳过 `RateLimit` 以外的种类（`if (obligation !is Obligation.RateLimit) continue`）。今天只有 `RateLimit` 一种，
 不会出问题；但以后加入字段脱敏之类的义务时，任何没有同步更新的处理路径都会**静默忽略**它，策略要求的限制不生效。这违反 fail closed。
 
-## 3. GA 前的三项改动
+## 3. GA 前的改动
 
 | 编号 | 改动 | 成本 |
 |---|---|---|
 | C1 | `Pipeline` 对 sealed `Obligation` 用穷尽的 `when`（不带 `else`）分派，不跳过任何种类：新增一种义务时，处理路径不更新就编译不过；模型比管道新（版本错配）时请求以 500 失败，绝不放行。新规则 `OBL-3`（构建级），由 `ObligationDispatchTest` 守护 | 几行与一个架构测试 |
 | C2 | `cosec.control.http.base-path` 默认改为 `/cosec/control`，路由固定在 `{base-path}/v1/...`，覆盖 `base-path` 不再丢掉版本 | 一个默认值与路由前缀 |
 | C3 | `Identity.Method` 接受任何非空值（约定 `jwt`、`apikey`）：外部 IdP 落地后，网关发出新的方法名时，8.0 的下游不会把它当作格式错误 | 解码器一处 |
+| C4 | 公共 `data class` 逐个归类：<br>- 永不增长的值（id、字面量、`SnapshotKey.App` 这类）：保留。<br>- 可能增长的记录：主构造器改为 `internal`，加 `@ConsistentCopyVisibility`（`copy` 随之变为 internal），对外只留次构造器或工厂；或者改成普通类。<br>- 应用用不到的：改为 `internal` 或 `@InternalCoSecApi`。<br>`test/architecture` 加一条规则：发布模块的公共 `data class` 必须在审过的值类型白名单里。会增长的封闭集合写在 KDoc 和 `extending.md` 里。10-29 的约束 1 随之改为：公共类加字段只用次构造器，公共 `data class` 只能是白名单里的值。这一项与 RC 前的公共声明归类合为一步，范围是所有发布模块 | 每个类一处机械改动，一个架构测试；GA 前改 ABI 文件不算破坏 |
+| C5 | `InstanceStatus` 加上实例能读的文档格式级别（8.0 为 `1`），状态的编解码要求它。发布门槛等 8.1 第一次给文档加字段时再加，那时是纯新增：格式描述符标出每个字段从哪一级开始，控制面算出文档需要的级别；有活着的实例（按 RFC 0007 §6.5 的存活规则）报的级别更低，就拒绝发布 | 一个字段 |
 
-三项合成一个 PR（`fix!`），排在 RFC 0008 PR-5（死代码清理）之后、RFC 0009 之前。文档：`wiki/operations/configuration.md`（`base-path`）、
-`wiki/integration/web.md`（版本错配时的 500）、`wiki/operations/upgrading.md`。
+C1–C3 合成一个 PR（`fix!`），排在 RFC 0008 PR-5（死代码清理）之后、RFC 0009 之前。文档：`wiki/operations/configuration.md`（`base-path`）、
+`wiki/integration/web.md`（版本错配时的 500）、`wiki/operations/upgrading.md`。C4、C5 由 2026-11-03 的复查加入，放在 RC 前的公共声明归类那一步做
+（[路线图](../roadmap.md) §10）。文档：`wiki/architecture/extending.md`（会增长的集合）、`wiki/operations/upgrading.md`（改了形状的公共类型）。
 
 ## 4. 决定记录
 
@@ -79,3 +120,6 @@
 | Q1 | GA 前只做"不做会静默放行"和"几乎零成本"的改动；不为未来功能预先抽象公共 SPI | 2026-10-28 |
 | Q2 | 密钥轮换、外部 IdP、委托、配额、mTLS、请求签名等在功能到来时设计接口 | 2026-10-28 |
 | Q3 | C1 采用穷尽 `when`（方案 C）而非运行时拒绝分支：漏处理在编译期暴露，运行时只剩版本错配一种情况 | 2026-10-28 |
+| Q4 | 撤回 §1 的"其余 data class 等真正要加字段时再处理"：公共 `data class` 在 GA 前归类（C4），只留永不增长的值 | 2026-11-03 |
+| Q5 | 文档格式的升级门槛：GA 前只在 `InstanceStatus` 加格式级别（C5），门槛本身随 8.1 第一个文档新字段加入 | 2026-11-03 |
+| Q6 | 封闭集合以写明为准：写明会增长的才增长，取代 10-29 "sealed 类型 GA 后不加子类型"的笼统说法 | 2026-11-03 |
