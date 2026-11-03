@@ -70,14 +70,7 @@ class CompiledDocument private constructor(
      * reads it: the pipeline answers it 400 before evaluating (`PIP-12`, RC1-38), so the answer does not tell a DENY
      * from an ALLOW, nor whether the statement applied.
      */
-    val headersRead: List<String> = HeadersRead.merge(
-        NO_HEADERS,
-        policies.values.map { it.headers } + boundaries.values.map { it.headers } +
-            rateLimits.map { rule ->
-                val key = rule.key?.let(HeadersRead::headerOf)
-                if (key == null) rule.statement.headers else rule.statement.headers + key
-            },
-    ).asList()
+    val headersRead: List<String> = headersOf(policies, boundaries, rateLimits)
 
     /** `Anyone` bindings, by policy id, then binding id. */
     internal val anyone: Array<BoundEntry>
@@ -95,12 +88,7 @@ class CompiledDocument private constructor(
     private val breakGlassIds: Set<String>
 
     init {
-        val globTokens = policies.values.sumOf { it.globTokens } + boundaries.values.sumOf { it.globTokens } +
-            rateLimits.sumOf { it.statement.globTokens }
-        require(globTokens <= MAX_GLOB_TOKENS) {
-            "The document's path pattern segments that mix *, ? or {name} with other text hold $globTokens tokens in " +
-                "all, more than $MAX_GLOB_TOKENS"
-        }
+        checkGlobBudget(policies, boundaries, rateLimits)
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
         require(!(kind == DocumentKind.TENANT && boundary != null && owner == TenantId.PLATFORM.value)) {
             "The platform tenant has no boundary"
@@ -258,6 +246,45 @@ class CompiledDocument private constructor(
                 Match.Any -> null
                 is Match.Exactly -> value.value
             }
+
+        /**
+         * [headersRead] of a document of [policies], [boundaries] and [rateLimits]. An empty document, which a view
+         * builds per request for an app or tenant with no stored document, allocates nothing here.
+         */
+        private fun headersOf(
+            policies: Map<String, CompiledPolicy>,
+            boundaries: Map<String, CompiledPolicy>,
+            rateLimits: List<CompiledRateLimit>,
+        ): List<String> {
+            if (policies.isEmpty() && boundaries.isEmpty() && rateLimits.isEmpty()) {
+                return emptyList()
+            }
+            val names = LinkedHashSet<String>()
+            policies.values.forEach { names.addAll(it.headers) }
+            boundaries.values.forEach { names.addAll(it.headers) }
+            for (rule in rateLimits) {
+                names.addAll(rule.statement.headers)
+                rule.key?.let(HeadersRead::headerOf)?.let(names::add)
+            }
+            return if (names.isEmpty()) emptyList() else names.toList()
+        }
+
+        /** `DOC-4`: the glob tokens of every pattern of the document, at most [MAX_GLOB_TOKENS]. Free when empty. */
+        private fun checkGlobBudget(
+            policies: Map<String, CompiledPolicy>,
+            boundaries: Map<String, CompiledPolicy>,
+            rateLimits: List<CompiledRateLimit>,
+        ) {
+            if (policies.isEmpty() && boundaries.isEmpty() && rateLimits.isEmpty()) {
+                return
+            }
+            val globTokens = policies.values.sumOf { it.globTokens } + boundaries.values.sumOf { it.globTokens } +
+                rateLimits.sumOf { it.statement.globTokens }
+            require(globTokens <= MAX_GLOB_TOKENS) {
+                "The document's path pattern segments that mix *, ? or {name} with other text hold $globTokens tokens " +
+                    "in all, more than $MAX_GLOB_TOKENS"
+            }
+        }
 
         /** The most statements a boundary policy may hold (RFC 0007 §7.6). */
         const val MAX_BOUNDARY_STATEMENTS: Int = 64
