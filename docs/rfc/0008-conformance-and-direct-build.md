@@ -201,6 +201,14 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 >
 > **实现说明（2026-10-27，#1097）**：登记表新增 `startup` 级别：与 `build` 一样，它的规则由所列的测试守护，没有场景在该级别运行（`RuleCoverageTest`）。`SNP-3`（启动时检查 `noeviction`）改为 `startup`，不再 `pending`。
 
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：登记表的变动：
+> - 新增 `IDN-7`（身份转发按 scheme 选择加入）。
+> - 新增 `IDN-8`（凭据不下行：头、查询参数、cookie）。它由属性测试守护，场景运行器自己判断哪些凭据到了后端：用字面名字，查询与 cookie 也自己解析，不借用被测的函数。
+> - 新增 `IDN-9`（执法放行清掉客户端的 `CoSec-Identity`，`build` 级，由三个适配器的一致性测试守护）。
+> - 新增 `STA-2`（网关上暴露的 Actuator 端点，`startup` 级）。
+> - 修订 `SCP-2`、`SCP-4`、`SCP-7`、`TNT-4`、`PIP-10`、`CTL-3`。
+> - 场景格式新增 `explain` 一步，用来驱动控制面的 `explain`。
+
 ### 3.3 场景语料
 
 每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：
