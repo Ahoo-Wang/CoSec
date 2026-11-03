@@ -1,0 +1,16 @@
+# Rule: CTL-3
+# Mutant: the starter's shadow listener has no installed views, so every window of a tenant change that makes a roleless request read an app document is CANDIDATE_ERROR and blocked
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.PipelineStarterRedisTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+index 1b388abd..d738befe 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+@@ -170,7 +170,6 @@ class CoSecSnapshotAutoConfiguration {
+             candidates,
+             recorder,
+             // The installed documents, as the pipeline reads them: a tenant candidate may need an app document (RC1-17).
+-            views = DocumentSnapshotViews(source, platformRequired = true),
+         )
+ 
+         /** Shared with the control plane on a host that runs it, which reads the reports this writes. */

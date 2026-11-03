@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the gateway rewrites the Cookie headers only, so a later filter or a forward: route's handler still reads the token from the request's cookies
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 47b8c8a3..c6a06ffe 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -126,7 +126,7 @@ class PipelineGatewayFilter(
+             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
+             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
+             val built = downstream.build()
+-            val forwarded = if (cookiesRewritten) WithoutTokenCookies(built, withoutCookieToken) else built
++            val forwarded = built
+             chain.filter(authorized.mutate().request(forwarded).build())
+         }
+     }

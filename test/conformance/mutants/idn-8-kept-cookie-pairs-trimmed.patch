@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the rewrite trims the pairs it keeps, so a header can come to start with $Version and Netty then reads its other $-named pairs differently
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CookieHeadersTest :gateway:test --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+index 997dc19c..a634518b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+@@ -45,7 +45,7 @@ internal object CookieHeaders {
+         if (named.first() && header.startsWith(RFC2965_VERSION, ignoreCase = true)) {
+             return null
+         }
+-        return pairs.indices.joinToString(";") { if (named[it]) "" else pairs[it] }
++        return pairs.indices.filterNot { named[it] }.joinToString("; ") { pairs[it].trimStart() }
+     }
+ 
+     /** What Netty's `ServerCookieDecoder` reads at the very start of a header as RFC 2965's, case ignored. */
