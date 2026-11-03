@@ -1,0 +1,21 @@
+# Rule: BRK-11
+# Mutant: a break-glass revoke over HTTP answers 200 whether or not the binding still grants
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index c251c83d..63737f67 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -290,12 +290,6 @@ class ControlHttp(private val plane: ControlPlane) {
+             val binding = BindingId(segments[0])
+             val change = plane.breakGlass.revoke(operator, binding, reason)
+             // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
+-            if (plane.breakGlass.grants(binding)) {
+-                throw ChangeRejectedException(
+-                    CONFLICT,
+-                    "binding [${binding.value}] still grants: change ${change.id.value} is ${change.state}"
+-                )
+-            }
+             changeResponse(change, OK)
+         }
+ 

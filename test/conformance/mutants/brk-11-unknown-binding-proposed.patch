@@ -1,0 +1,18 @@
+# Rule: BRK-11
+# Mutant: a revoke of a binding the platform document does not have is proposed anyway, and answers 200 with its DRAFT
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest --tests me.ahoo.cosec.control.api.ControlHttpTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
+index f4dd2006..993c9574 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
+@@ -105,9 +105,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+         val operations = listOf(Operation.RemoveBinding(binding))
+         changes.authority.authorize(operator, SnapshotKey.Platform, operations, ProvenanceKind.BREAK_GLASS)
+         var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: run {
+-            if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.none { it.id == binding } != false) {
+-                throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
+-            }
+             revokeOnce(operator, operations, reason)
+         }
+         repeat(RETRIES) {
