@@ -26,14 +26,17 @@
     },
     {
       "id": "DOC-4",
-      "source": "RFC 0005 §3.5, §5.2; RC1-8",
-      "statement": "A path pattern's cost is bounded: an `http:path:` pattern longer than 2,048 characters, or with a segment that mixes `*`, `?` or `{name}` with other text in more than 16 parts (consecutive `*` counting once), does not compile, nor does a document whose patterns hold more than 4,096 such parts in all; a typed resource pattern is at most 2,058 characters.",
+      "source": "RFC 0005 §3.5, §5.2; RC1-8; review M2 of #1200",
+      "statement": "A path pattern's cost is bounded: an `http:path:` pattern longer than 2,048 characters, or with a segment that mixes `*`, `?` or `{name}` with other text in more than 16 parts (consecutive `*` counting once), does not compile, nor does a document whose patterns hold more than 2,048 glob units in all: the parts and literal characters of such segments, counted twice after a leading `**` or `{*name}` and for a rate limit rule keyed by a captured variable. A typed resource pattern is at most 2,058 characters.",
       "level": "engine",
       "guards": [
         "engine:HttpPathPatternTest#a pattern is at most 2048 characters",
         "engine:HttpPathPatternTest#a glob segment holds at most 16 tokens",
         "engine:HttpPathPatternTest#consecutive stars in a segment count once",
-        "engine:CompiledDocumentTest#a document holds at most 4096 glob tokens"
+        "engine:HttpPathPatternTest#a glob after a leading rest costs twice and is tried at two starts",
+        "engine:HttpPathPatternTest#capturing agrees with backtracking",
+        "engine:CompiledDocumentTest#a document holds at most its glob budget",
+        "engine:ActionResourcePatternTest#a typed pattern is at most 2058 characters"
       ],
       "pending": null
     },

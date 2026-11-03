@@ -209,6 +209,31 @@ class CompiledDocumentTest {
         CompiledDocument.tenant(TenantId("acme"), listOf(policy), emptyList(), listOf(rule)).headersRead.assert()
             .containsExactlyInAnyOrder("referer", "x-deny", "origin", "x-bucket")
         platform().headersRead.assert().isEmpty()
+        // A boundary's statements and a rate limit rule's condition read headers too (review L2 of #1200).
+        val boundaryId = PolicyId("b")
+        val boundary = CompiledPolicy(
+            boundaryId,
+            null,
+            listOf(
+                compiler.statement(
+                    boundaryId,
+                    0,
+                    StatementSource("s0", Effect.ALLOW, listOf("*"), condition = Condition.Exists("http.header.x-zone")),
+                ),
+            ),
+        )
+        val conditioned = compiler.rateLimit(
+            DocumentKind.PLATFORM,
+            "",
+            RateLimitSource(
+                "plan",
+                StatementSource("plan", Effect.DENY, listOf("*"), condition = Condition.Exists("http.header.x-plan")),
+                null,
+                RateLimitSpec(1.0)
+            ),
+        )
+        CompiledDocument.platform(emptyList(), emptyList(), listOf(conditioned), listOf(boundary), "b").headersRead
+            .assert().containsExactlyInAnyOrder("x-zone", "x-plan")
     }
 
     private fun globsAllow(compiler: PolicyCompiler, statements: Int): CompiledPolicy {
