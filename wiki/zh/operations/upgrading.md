@@ -194,7 +194,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
-`--key-prefix` 是 8.0 的快照前缀，与 `cosec.authorization.snapshot.key-prefix` 相同。
+`--key-prefix` 是部署的前缀，与 [`cosec.key-prefix`](./configuration.md#key-prefix) 相同。
 
 `publish` 之后，只通过控制面修改策略。再次运行 `convert` 和 `publish` 不会更新已存在的文档。
 
@@ -271,7 +271,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 7.x 的限流规则文件（`cosec.limiter.*`）已删除。`convert --rate-limit-rules` 把规则翻译成平台文档的限流规则。与 7.x 一样，规则作用于策略
 放行的请求：第一条耗尽的规则返回 `429`，被拒绝的请求不消耗许可。带 `strictFailure` 的规则在限流器失败时，现在返回 `503` 而不是 `429`（R3）。
-存在 `ReactiveStringRedisTemplate` bean 时，Redis 限流器使用相同的 key（`cosec:rate-limiter:<rule>:<bucket>:<window>`）；否则每个实例
+存在 `ReactiveStringRedisTemplate` bean 时，Redis 限流器使用相同的 key（`cosec:rate-limiter:<rule>:<bucket>:<window>`，位于 `cosec.key-prefix` 下）；否则每个实例
 各自计数。见[限流](../policies/rate-limiting.md)。
 
 ### 响应与状态码 {#responses-and-status-codes}
@@ -370,7 +370,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 - **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
 - **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
 
-**转换已存储的 key。** `cosec-migrate api-keys` 读取 `--api-key-prefix`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
+**转换已存储的 key。** `cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
 
 ```bash
 cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
@@ -608,7 +608,7 @@ key 代表它之下的每个 key。
 | `cosec.api-key.store-blocking` | 已删除。 |
 | `cosec.jwt.token-revocation.enabled` | 已删除：吊销始终开启（[令牌吊销始终开启](#token-revocation-is-always-on)）。 |
 
-`cosec.authorization.cache.key-prefix` 和 `cosec.authorization.cache.token.*` 保留。
+`cosec.authorization.cache.token.*` 保留。`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix` 由 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代，它是一个部署写入的每个 key 的前缀。
 
 新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别、模式）、`cosec.gateway.identity.*`、`cosec.unknown-properties`、
 `cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、

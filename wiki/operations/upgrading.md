@@ -414,7 +414,7 @@ never overwrites 8.0 data.
 
 Writes are one per document. If one fails, the message names the documents already written; run again with
 `--resume`, which skips a document already published with the same content and refuses one with different content.
-`--key-prefix` is the 8.0 snapshot prefix, the same as `cosec.authorization.snapshot.key-prefix`.
+`--key-prefix` is the deployment's prefix, the same as [`cosec.key-prefix`](./configuration.md#key-prefix).
 
 After `publish`, change policies through the control plane only. Running `convert` and `publish` again does not update
 documents that exist.
@@ -521,7 +521,7 @@ templates inside `eq` conditions translate (D2).
 7.x rate limit rule files (`cosec.limiter.*`) are gone. `convert --rate-limit-rules` translates the rules into the
 platform document's rate limits. A rule applies to a request the policies permit, as in 7.x: the first exhausted rule
 answers `429`, and denied requests spend nothing. A rule with `strictFailure` whose limiter fails now answers `503`
-instead of `429` (R3). The Redis limiter uses the same keys (`cosec:rate-limiter:<rule>:<bucket>:<window>`) when a
+instead of `429` (R3). The Redis limiter uses the same keys (`cosec:rate-limiter:<rule>:<bucket>:<window>`, under `cosec.key-prefix`) when a
 `ReactiveStringRedisTemplate` bean exists; otherwise each instance counts alone. See
 [Rate limiting](../policies/rate-limiting.md).
 
@@ -654,8 +654,8 @@ principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0
   `attributes` and `toPrincipal()` are gone, `tenantId` is required and `roles: Set<String>?` is the cap, with no
   default.
 
-**Converting stored keys.** `cosec-migrate api-keys` reads every key under `--api-key-prefix` (default
-`cosec:api-key`) and writes `api-keys-report.json` to `--out`. Export what each principal holds now, as a JSON array
+**Converting stored keys.** `cosec-migrate api-keys` reads every key under `<--key-prefix>:api-key` (default
+`cosec:api-key`), where the deployment reads them, and writes `api-keys-report.json` to `--out`. Export what each principal holds now, as a JSON array
 of `{"tenant", "principal", "roles": ["role", "role@space", ...]}`, and pass it as `--memberships`:
 
 ```bash
@@ -960,7 +960,8 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.api-key.store-blocking` | Removed. |
 | `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
 
-`cosec.authorization.cache.key-prefix` and `cosec.authorization.cache.token.*` remain.
+`cosec.authorization.cache.token.*` remains. `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix` are
+replaced by [`cosec.key-prefix`](./configuration.md#key-prefix), the prefix of every key a deployment writes.
 
 New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level, mode),
 `cosec.gateway.identity.*`, `cosec.unknown-properties`, `cosec.authorization.scope.app-id`,

@@ -98,7 +98,9 @@ class ConditionalReadCostMeasurement {
         for (line in info.lineSequence()) {
             val name = line.substringAfter("cmdstat_", "").substringBefore(':')
             if (name.startsWith("eval") || name.startsWith("fcall")) {
-                val fields = line.substringAfter(':').split(',').associate { it.substringBefore('=') to it.substringAfter('=') }
+                val fields = line.substringAfter(
+                    ':'
+                ).split(',').associate { it.substringBefore('=') to it.substringAfter('=') }
                 calls += fields.getValue("calls").toLong()
                 usec += fields.getValue("usec").toLong()
             }
@@ -115,14 +117,18 @@ class ConditionalReadCostMeasurement {
         var i = 0
         while (policies.length < size) {
             if (i > 0) policies.append(',')
-            policies.append("""{"id":"p$i","statements":[{"effect":"deny","action":"http:GET","resource":"http:path:/r$i/**"}]}""")
+            policies.append(
+                """{"id":"p$i","statements":[{"effect":"deny","action":"http:GET","resource":"http:path:/r$i/**"}]}"""
+            )
             i++
         }
         val body = """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED","policies":[$policies],"bindings":[]}"""
         return SnapshotDocument(2, 1, Instant.parse(PUBLISHED), body.encodeToByteArray())
     }
 
-    private fun label(bytes: Int): String = if (bytes >= MIB) "%.1f MiB".format(bytes.toDouble() / MIB) else "${bytes / KIB} KiB"
+    private fun label(bytes: Int): String = if (bytes >= MIB) "%.1f MiB".format(
+        bytes.toDouble() / MIB
+    ) else "${bytes / KIB} KiB"
 
     private companion object {
         const val KIB = 1024

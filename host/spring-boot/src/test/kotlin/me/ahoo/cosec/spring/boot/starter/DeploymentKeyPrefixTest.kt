@@ -109,7 +109,9 @@ class DeploymentKeyPrefixTest {
             context.getBean(ApiKeyReader::class.java).assert().isInstanceOf(RedisApiKeyReader::class.java)
             context.getBean(ApiKeyReader::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
             context.getBean(RateLimiter::class.java).assert().isInstanceOf(ReactiveRedisRateLimiter::class.java)
-            context.getBean(RateLimiter::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:rate-limiter")
+            context.getBean(
+                RateLimiter::class.java
+            ).field<String>("keyPrefix").assert().isEqualTo("$prefix:rate-limiter")
         }
         // The social login's OAuth states, whose configuration needs a login provider to run.
         val states = CoSecSocialAuthenticationAutoConfiguration(SocialAuthenticationProperties())

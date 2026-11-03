@@ -104,7 +104,7 @@ published ([The first documents](./storage.md#the-first-documents)), and reports
    `noeviction` yourself and `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`.
 2. **The documents.** Publish them with `cosec-migrate publish --to-redis <uri> --in <dir>`, then name the first
    administrator with `cosec-migrate bootstrap` if a control plane will manage them. The gateway, the control plane and
-   `cosec-migrate` must use the same Redis and the same `cosec.authorization.snapshot.key-prefix`.
+   `cosec-migrate` must use the same Redis and the same `cosec.key-prefix` (`--key-prefix`).
 3. **Instance ids, if you lock Redis down per instance.** The gateway takes part in shadow windows by default, with a
    random instance id. To give each pod its own Redis user, set `COSEC_AUTHORIZATION_SHADOW_INSTANCE_ID` per pod
    ([Who may write which keys](./storage.md#who-may-write-which-keys)).

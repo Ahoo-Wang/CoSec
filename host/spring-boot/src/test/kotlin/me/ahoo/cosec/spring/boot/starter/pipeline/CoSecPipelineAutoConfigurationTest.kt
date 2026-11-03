@@ -266,7 +266,11 @@ class CoSecPipelineAutoConfigurationTest {
         for (values in listOf(
             listOf("$property=0"),
             listOf("$property=-1s"),
-            listOf("$property=6m", "cosec.authorization.snapshot.lag-warn=10m", "cosec.authorization.snapshot.lag-escalate=10m"),
+            listOf(
+                "$property=6m",
+                "cosec.authorization.snapshot.lag-warn=10m",
+                "cosec.authorization.snapshot.lag-escalate=10m"
+            ),
             listOf("$property=60s"),
             listOf(
                 "$property=30s",

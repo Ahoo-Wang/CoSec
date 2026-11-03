@@ -45,6 +45,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的值（在请求头和查询字符串之间，或在其中
   任一处之内），空白值与非空白值同时出现也算（例如请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=`），或者它的查询值有格式错误的百分号转义。每个参数只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
+- 某个请求头以不同的值发送了多次，而决策所依据的文档在条件或限流 key 中读取它，无论语句的效果是什么（`PIP-12`）。这一项在认证和
+  确定作用域之后、文档已知时检查。只发送一次该请求头，或只用一个值；
 - 在 `cosec.pipeline.mode=gateway` 的服务上，`CoSec-Identity` 头无法读取（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 修复客户端（[Web 集成](../integration/web.md)）。在控制 API 上，`400` 会在 `detail` 中说明问题
@@ -67,8 +69,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 - **令牌：** 签发方和本服务必须使用相同的 [`cosec.jwt.secret` 和 `cosec.jwt.algorithm`](./configuration.md#jwt)。
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
-- **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key
-  设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
+- **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），`roles` 或 `policies` 声明不是字符串数组，`attributes`
+  声明不是对象，或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key 设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -184,10 +186,10 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **实例访问不到 Redis。** 它继续使用已装入的内容做决策，超过 `lag-warn`（60 秒）后以 `WARN` 记录
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过 `lag-escalate`（5 分钟）后以
   `ERROR` 记录 `... is stale: not confirmed for <lag>.`。恢复 Redis。
-- **实例错过了失效消息。** 它会在 [`revalidate-interval`](./configuration.md#snapshot)（10 秒）内跟上。Redis 正常而
-  间隔更长，说明周期确认被关掉了（`revalidate-interval: 0`）。
+- **实例错过了失效消息。** 它会在 [`revalidate-interval`](./configuration.md#snapshot)（默认 10 秒，最多 5 分钟）内跟上。
+  周期确认不能关闭：Redis 正常而间隔更长，说明实例的确认轮次在失败，它的日志会写明原因。
 - **实例读的是另一个命名空间。** 所有实例和控制面必须共用
-  [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot) 和同一个 Redis。
+  [`cosec.key-prefix`](./configuration.md#key-prefix) 和同一个 Redis。
 - **Redis 丢了写入。** 故障切换后实例可能以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`：重新发布这个变更。
 
@@ -228,6 +230,11 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``：`http.header.` 之后的名称含有 ASCII
   字母、数字和 ``!#$%&'*+-.^_`|~`` 之外的字符，例如空格或形似字母。
 - 条件读取的 `ext.*` 属性既没有在平台文档中声明，也没有宿主的属性提供者提供。变更按控制面宿主的属性提供者编译。
+- 路径模式超出开销上界（`DOC-4`，[策略语言](../policies/language.md#path-pattern-bounds)）：`the pattern is <n> characters, more
+  than 2048`；`segment [<s>] has <n> parts (*, ?, {name} and the text between them), more than 16`，其中连续的 `*` 算一个；
+  或者在 `$` 处的 `The document's path pattern segments that mix *, ? or {name} with other text hold <n> tokens in all, more
+  than 4096`。把长的通配段拆成整段（单独占一段的 `*` 或 `{name}` 不计开销），或把多条语句的模式合并成更少的几条。在数据面上，
+  超出上界的已存储文档会被装入为失败，读取它的请求回答 `503`。
 
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
 
@@ -312,6 +319,16 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档
 会被读成不存在，其中的 DENY 语句不再生效。
+
+### 重新确认间隔导致启动失败 {#startup-fails-on-the-revalidation-interval}
+
+```text
+cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the periodic revalidation cannot be turned off.
+```
+
+失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：必须为正、不超过
+5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。要为大文档节省
+Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
 
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 

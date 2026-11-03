@@ -51,6 +51,9 @@ The request cannot be read without ambiguity, so it is refused before authentica
   header `CoSec-Space-Id: s1`), or its query value has a malformed percent-escape. Send each parameter once, or leave
   it out;
 - a route map captures a value that would change the resource id's segments;
+- a header was sent more than once with different values, and a document the request is decided on reads it, in a
+  condition or a rate limit key, whichever the statement's effect (`PIP-12`). This one is checked after authentication
+  and the scope, once the documents are known. Send the header once, or with one value;
 - on a service in `cosec.pipeline.mode=gateway`, a `CoSec-Identity` header that cannot be read
   ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
@@ -75,8 +78,9 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 
 - **Token:** the issuer and this service must share [`cosec.jwt.secret` and `cosec.jwt.algorithm`](./configuration.md#jwt).
   With `cosec.jwt.enabled=false` every token is rejected.
-- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), or an
-  `attributes` claim that names `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
+- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), a `roles` or
+  `policies` claim that is not an array of strings, an `attributes` claim that is not an object, or one that names
+  `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
   rename the attribute ([Authentication](../integration/authentication.md#tokens)).
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
@@ -218,10 +222,10 @@ plane published.
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN` after `lag-warn` (60 seconds),
   `... is stale: not confirmed for <lag>.` at `ERROR` after `lag-escalate` (5 minutes). Restore Redis.
 - **The instance missed an invalidation message.** It catches up within
-  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds). A longer gap with Redis healthy means the periodic
-  pass is off (`revalidate-interval: 0`).
+  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds by default, at most 5 minutes). The pass cannot be
+  turned off: a longer gap with Redis healthy means the instance's revalidation pass is failing; its log says why.
 - **The instance reads another namespace.** Every instance and the control plane must share
-  [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot) and the Redis.
+  [`cosec.key-prefix`](./configuration.md#key-prefix) and the Redis.
 - **Redis lost the write.** After a failover the instance may log
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`: publish the change again.
 
@@ -274,6 +278,12 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
   a character outside ASCII letters, digits and ``!#$%&'*+-.^_`|~``, such as a space or a look-alike letter.
 - A condition on an `ext.*` attribute the platform document does not declare and no attribute provider of the host
   serves. A change is compiled against the attribute providers of the control host.
+- A path pattern over a cost bound (`DOC-4`, [Policy language](../policies/language.md#path-pattern-bounds)):
+  `the pattern is <n> characters, more than 2048`; `segment [<s>] has <n> parts (*, ?, {name} and the text between
+  them), more than 16`, where consecutive `*` count once; or, at `$`, `The document's path pattern segments that mix
+  *, ? or {name} with other text hold <n> tokens in all, more than 4096`. Split a long glob into whole segments
+  (`*` or `{name}` alone in a segment costs nothing), or fold several statements' patterns into fewer. On the data
+  plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
 
 ## Shadow window blocked by a candidate error
 
@@ -373,6 +383,18 @@ you have set `noeviction` yourself, set
 With `warn` the instance starts and logs the same text at `WARN`, starting with `!!!` and ending with
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really
 evicts, an app or tenant document loaded after it was evicted is read as absent, and its DENY statements stop applying.
+
+### Startup fails on the revalidation interval
+
+```text
+cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the periodic revalidation cannot be turned off.
+```
+
+The periodic revalidation is the only bound on a document change whose invalidation message was lost (`SNP-6`), so it
+cannot be off or unbounded. The message says which bound the value breaks: positive, at most 5 minutes, less than
+`lag-warn`, and with `fail-closed.tenants` less than `fail-closed.max-lag`
+([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on large documents, raise it within those
+bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 
 ### Startup fails without a token store
 

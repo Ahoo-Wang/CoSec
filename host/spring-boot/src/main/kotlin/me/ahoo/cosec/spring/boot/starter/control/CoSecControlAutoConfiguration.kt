@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.control
 
+import kotlinx.coroutines.future.await
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -86,7 +87,6 @@ import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import java.time.Instant
 import kotlin.time.toKotlinDuration
-import kotlinx.coroutines.future.await
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on

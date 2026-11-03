@@ -63,8 +63,14 @@ class ApiKeysCommandTest {
     }
 
     private fun apiKeys(out: Path, vararg more: String) = run(
-        "api-keys", "--redis", REDIS, "--key-prefix", prefix,
-        "--out", out.toString(), *more,
+        "api-keys",
+        "--redis",
+        REDIS,
+        "--key-prefix",
+        prefix,
+        "--out",
+        out.toString(),
+        *more,
     )
 
     private fun report(out: Path) = CoSecJson.mapper.readTree(
