@@ -222,7 +222,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1188 | CoCache 6.7.0 → 6.10.0：6.9 起读失败与删除失败模式默认不设置（没有加载器的缓存都抛出），撤销缓存显式设 `degrade`（PIP-7），权威存储的缓存另钉 `InvalidateFailureMode.THROW`（6.7 的 `RETRY` 晚到的删除可能删掉其间的新写入），成员关系缓存的删除仍重试；`SNP-3` 的淘汰检查改读 `INFO memory`（需要 `+info`）；`cosec-cocache` 的 ABI 只增 25 行 | ✅ 2026-11-02 合入（`d10bd61e`） |
 | #1191 | #1188 之后的共享文档（RFC 0003、0004、0007、0008 与路线图） | ✅ 已合入 |
 | #1192 | `fix(control)!`：B2 后续，R4-1–R4-6 与 RC1-51：撤销先授权再读槽；并发抢占或头移动后最多再撤销 3 次；`DELETE /break-glass/{id}` 只在绑定不再生效时答 2xx，平台头上没有该 id 的绑定即 404，不是 break-glass 绑定即 409；撤销仍在生效绑定的变更只有作者能放弃，每次放弃写 `ABANDONED` 事件（break-glass 的为 REQUIRED）；规则 BRK-10、BRK-11；两轮独立审查加协调者核实最后一轮 | ✅ 2026-11-02 合入（`a0d0ad63`） |
-| #1194 | `fix(gateway)!`：RC 修复批次 C，网关与租户隔离的边缘（RC1-5、6、15–19、48、49）：身份转发按 scheme 选择加入，凭据（头、查询参数、`authorization` cookie）不下行，执法放行清掉客户端的 `CoSec-Identity`，路由 app 先于配置，网关上暴露的 Actuator 端点启动失败，租户把 app 的 `perm:` 策略绑给 `Anyone` 或主体时读取 app 文档，控制面与执法读同一组文档；规则 IDN-7、IDN-8、IDN-9、STA-2 与 SCP-2/4/7、TNT-4、PIP-10、CTL-3 的修订；JMH 分摊定位后吞吐回到 `main` 的 A/A 区间；四轮独立审查，所有发现在本 PR 内修完 | ✅ 2026-11-03 合入 |
+| #1194 | `fix(gateway)!`：RC 修复批次 C，网关与租户隔离的边缘（RC1-5、6、15–19、48、49）：身份转发按 scheme 选择加入，凭据（头、查询参数、`authorization` cookie）不下行，执法放行清掉客户端的 `CoSec-Identity`，路由 app 先于配置，网关上暴露的 Actuator 端点启动失败，租户把 app 的 `perm:` 策略绑给 `Anyone` 或主体时读取 app 文档，控制面与执法读同一组文档；规则 IDN-7、IDN-8、IDN-9、STA-2 与 SCP-2/4/7、TNT-4、PIP-10、CTL-3 的修订；JMH 分摊定位后吞吐回到 `main` 的 A/A 区间；四轮独立审查，所有发现在本 PR 内修完 | ✅ 2026-11-03 合入（`8bc0e6e1`） |
 | #1197、#1198 | 外部 IdP 放到 8.1 并单独写 RFC；网关也去掉 `authorization` cookie 的决定；RFC 0010 复查（C4 公共 data class 归类、C5 实例状态的格式级别） | ✅ 已合入 |
 | #1199 | #1194 之后的共享文档（RFC 0004、0006、0007、0008、0011，审查记录与路线图） | ✅ 已合入 |
 
@@ -235,7 +235,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1188 CoCache 6.7.0 → 6.10.0 | ✅ 已合入（`d10bd61e`），协调者对照代码审查；共享文档随 #1188 之后的文档 PR | — |
 | B2 后续 PR | ✅ #1192 | — |
 | 批次 C（网关） | ✅ #1194，四轮独立复审，所有发现在 PR 内修完；共享文档 #1199 | — |
-| 批次 D（DoS、快照、泄露） | 下一个派发 | 见 §10 与审查记录 Fix plan；含 RC1-50 与失效通知测试的竞态；实现会话做，只读会话复审 |
+| 批次 D（DoS、快照、泄露） | D1 实现中，草稿 #1200（变异体、CI JMH 与条件读取的测量未完） | 见 §10 与审查记录 Fix plan；含 RC1-50 与失效通知测试的竞态；实现会话做，只读会话复审 |
 | #866、#1163 | Renovate，与 main 冲突 | 等 Renovate rebase；#1163 是运行时依赖，须维护者确认 |
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
