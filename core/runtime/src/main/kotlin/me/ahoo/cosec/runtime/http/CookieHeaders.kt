@@ -30,7 +30,7 @@ internal object CookieHeaders {
      * pairs, of whitespace and `,` alone, are left (R3-6); [header] itself when no pair goes.
      */
     fun without(header: String, name: String): String? {
-        if (!header.contains(name, ignoreCase = true)) {
+        if (!names(header, name)) {
             return header
         }
         val pairs = header.split(';')
@@ -54,6 +54,41 @@ internal object CookieHeaders {
             named.first() && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> " $written"
             else -> written
         }
+    }
+
+    /**
+     * Whether [header] has a pair [without] removes: one of its `,`-separated parts names [name], ignoring case and the
+     * whitespace around the name; exactly when [without] changes [header]. Without allocating: the gateway asks it of
+     * every `Cookie` header it forwards, and most name no such cookie.
+     */
+    fun names(header: String, name: String): Boolean {
+        if (!header.contains(name, ignoreCase = true)) {
+            return false
+        }
+        var pair = 0
+        while (pair <= header.length) {
+            val pairEnd = header.indexOf(';', pair).let { if (it < 0) header.length else it }
+            var part = pair
+            while (part <= pairEnd) {
+                val partEnd = header.indexOf(',', part).let { if (it < 0 || it > pairEnd) pairEnd else it }
+                val nameEnd = header.indexOf('=', part).let { if (it < 0 || it > partEnd) partEnd else it }
+                if (isName(header, part, nameEnd, name)) {
+                    return true
+                }
+                part = partEnd + 1
+            }
+            pair = pairEnd + 1
+        }
+        return false
+    }
+
+    /** Whether `header[from until to]`, trimmed as [String.trim] trims, is [name], case ignored. */
+    private fun isName(header: String, from: Int, to: Int, name: String): Boolean {
+        var start = from
+        var end = to
+        while (start < end && header[start].isWhitespace()) start++
+        while (end > start && header[end - 1].isWhitespace()) end--
+        return end - start == name.length && header.regionMatches(start, name, 0, name.length, ignoreCase = true)
     }
 
     /** Whether [pair] holds no cookie: only what Netty's decoder skips between pairs, whitespace and `,`. */

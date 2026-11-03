@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.gateway
 
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -77,15 +80,14 @@ class CookieTokenPropertyTest {
             )
     }
 
-    private val filter = PipelineGatewayFilter(
-        Pipeline(
-            PipelineComponents(
-                Authenticator { AuthnResult.Anonymous },
-                SuspendingSnapshotSource(Views),
-                engine = permit
-            )
+    private val pipeline = Pipeline(
+        PipelineComponents(
+            Authenticator { AuthnResult.Anonymous },
+            SuspendingSnapshotSource(Views),
+            engine = permit
         )
     )
+    private val filter = PipelineGatewayFilter(pipeline)
     private val route = Route.async().id("r").uri(URI.create("lb://orders")).predicate { true }.build()
 
     private val names = listOf(
@@ -168,6 +170,12 @@ class CookieTokenPropertyTest {
             val original = headers.map { it.text }
             val sent = forwarded(original)
             try {
+                // The gateway's fast path asks namesCookieToken, without allocating: it holds exactly when the rewrite
+                // changes the header.
+                original.forEach { header ->
+                    pipeline.namesCookieToken(header).assert()
+                        .describedAs(header).isEqualTo(pipeline.withoutCookieToken(header) != header)
+                }
                 // R3-2, R3-6: one header at a time, the rewrite makes no empty pair its original did not have, and
                 // leaves no header without a cookie.
                 original.forEach { header ->

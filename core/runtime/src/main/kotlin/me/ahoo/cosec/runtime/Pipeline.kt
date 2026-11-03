@@ -135,6 +135,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
 
     /**
+     * Whether [cookieHeader], one `Cookie` header value, has an `authorization` cookie [withoutCookieToken] removes:
+     * exactly when it changes [cookieHeader]. Allocates nothing, so a gateway asks it of every header first.
+     */
+    @InternalCoSecApi
+    fun namesCookieToken(cookieHeader: String): Boolean = CookieHeaders.names(cookieHeader, AUTHORIZATION)
+
+    /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
      * everything else, a defect included, becomes one. An [Error] propagates too: the host answers it (§7.4).
      */

@@ -74,6 +74,29 @@ class CookieHeadersTest {
         CookieHeaders.without("a=\"x;authorization=t\"; b=2", "authorization").assert().isEqualTo("a=\"x; b=2")
     }
 
+    /** The gateway's fast path: whether the rewrite would change the header, without allocating. */
+    @Test
+    fun `names says whether the rewrite changes the header`() {
+        val named = listOf(
+            "authorization=t",
+            "a=1; Authorization=t",
+            " \tAUTHORIZATION =t ; a=1",
+            "a=1, authorization=t; b=2",
+            "authorization",
+            "x;authorization",
+            "a=\"x;authorization=t\"",
+            "\$version=1, authorization=t;a=b",
+        )
+        val unnamed =
+            listOf("", "a=1;b=2", "authorizations=1", "xauthorization=2", "a=authorization", "auth=1; ization=2")
+        for (header in named + unnamed) {
+            CookieHeaders.names(header, "authorization").assert().describedAs(header).isEqualTo(header in named)
+            (CookieHeaders.without(header, "authorization") != header).assert().describedAs(
+                header
+            ).isEqualTo(header in named)
+        }
+    }
+
     @Test
     fun `a header without it is the same header`() {
         val header = "a=1;b=2"

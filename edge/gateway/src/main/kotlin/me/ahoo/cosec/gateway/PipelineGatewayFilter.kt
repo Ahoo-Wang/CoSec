@@ -76,6 +76,7 @@ class PipelineGatewayFilter(
     private val credentialHeaders: Set<String> = pipeline.credentialHeaders
     private val withoutQueryToken: (String?) -> String? = pipeline::withoutQueryToken
     private val withoutCookieToken: (String) -> String? = pipeline::withoutCookieToken
+    private val namesCookieToken: (String) -> Boolean = pipeline::namesCookieToken
 
     override fun read(exchange: ServerWebExchange): HttpFacts {
         val route = exchange.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
@@ -148,11 +149,11 @@ class PipelineGatewayFilter(
      */
     private fun withoutCookieTokens(headers: HttpHeaders): CookieRewrite? {
         val cookies = headers[HttpHeaders.COOKIE] ?: return null
-        if (cookies.all { withoutCookieToken(it) === it }) return null
+        if (cookies.none(namesCookieToken)) return null
         val kept = ArrayList<String>(cookies.size)
         val dropped = ArrayList<String>(0)
         for (cookie in cookies) {
-            val rewritten = withoutCookieToken(cookie)
+            val rewritten = if (namesCookieToken(cookie)) withoutCookieToken(cookie) else cookie
             if (rewritten == null) dropped += cookie else kept += rewritten
         }
         return CookieRewrite(kept, dropped)
