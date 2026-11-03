@@ -120,7 +120,7 @@
     {
       "id": "BRK-11",
       "source": "RFC 0007 §8, §10.2 (B2 follow-up: R4-1, review F-1, F-5, F-8)",
-      "statement": "DELETE /break-glass/{bindingId} answers 2xx only when, after the call, the binding no longer grants on the platform document's head, whoever removed it; 404 when that head has no binding of that id and no stalled revoke of it holds the slot, and nothing is proposed; 409 otherwise. A revoke that ends CONFLICTED, or that the head moved under before it was proposed or staged, is made again at most three more times, and only while the binding is still a live break-glass binding.",
+      "statement": "DELETE /break-glass/{bindingId} answers 2xx only when, after the call, the binding no longer grants on the platform document's head, whoever removed it; 404 when that head has no binding of that id and no stalled revoke of it that the caller may see holds the slot; 409 when the binding there is not a break-glass binding, live or expired; and 409 otherwise. Nothing is proposed for a 404 or for a binding that is not a break-glass binding. A revoke that ends CONFLICTED, or that the head moved under before it was proposed or staged, is made again at most three more times, and only while the binding is still a live break-glass binding. A call that loses the race to another call removing the same binding may answer 409 although the binding no longer grants; a retry then answers 404.",
       "level": "control",
       "pending": null,
       "guards": [

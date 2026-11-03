@@ -96,10 +96,11 @@ analysis read the author's rights as enforcement does, so some changes that publ
   `binding` parameter; approving break-glass needs a REQUIRED change listener (`503` otherwise, `BRK-3`).
 - **Revoking break-glass answers by its effect** (R4-1). `DELETE /break-glass/{bindingId}` answers `200` only once
   the binding no longer grants on the platform document's head, whoever removed it. A revoke that leaves it granting
-  is now `409`, its `detail` naming the state of the caller's change (`CONFLICTED`, `DRAFT`, ...), where it was `200`
-  with that change before: a client that read `200` as "revoked" without looking at `state` must handle the `409`. A
-  binding id the platform document does not have is now `404`, and nothing is proposed, where it was `200` with a
-  `DRAFT` change (`BRK-11`). A revoke preempted by another revoke, or meeting a moved head, revokes again, at most
+  is now `409`, its `detail` naming the state of the caller's change (`CONFLICTED`, ...), where it was `200` with that
+  change before: a client that read `200` as "revoked" without looking at `state` must handle the `409`. A binding id
+  the platform document does not have is now `404`, and a binding of that id that is not a break-glass binding, live or
+  expired, `409` (`binding [<id>] is not a break-glass binding`); neither proposes anything, where both answered `200`
+  with a `DRAFT` change (`BRK-11`). A revoke preempted by another revoke, or meeting a moved head, revokes again, at most
   three more times.
 - **Abandoning** (RC1-51, `BRK-10`). Only its author abandons a revoke of a break-glass binding that still grants:
   anyone else, the principal it revokes included, is `403`. Revoke the binding again instead, which publishes the

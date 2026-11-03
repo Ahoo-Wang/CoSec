@@ -91,7 +91,8 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
      * A revoke of [binding] that holds the slot `READY`, its publish stopped (its REQUIRED listener's store was down,
      * say), is published instead, its records naming [operator] and [reason] too (review N1, R4-5). Only an [operator]
      * who may not see that revoke revokes with a change of their own, which takes the slot from it. Without such a
-     * revoke, a [binding] the platform document's head does not have is a 404, and nothing is proposed (`BRK-11`).
+     * revoke, a [binding] the platform document's head does not have is a 404, and one that is not a break-glass
+     * binding there, live or expired, a 409: nothing is proposed (`BRK-11`).
      *
      * A revoke that ends `CONFLICTED`, preempted by another revoke or meeting a moved head, or that could not be
      * proposed or staged because the head moved under it, is made again on the new head while [binding] is still a live
@@ -105,8 +106,10 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
         val operations = listOf(Operation.RemoveBinding(binding))
         changes.authority.authorize(operator, SnapshotKey.Platform, operations, ProvenanceKind.BREAK_GLASS)
         var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: run {
-            if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.none { it.id == binding } != false) {
-                throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
+            val existing = revisions.head(SnapshotKey.Platform)?.document?.bindings?.firstOrNull { it.id == binding }
+                ?: throw ChangeRejectedException(NOT_FOUND, "the platform document has no binding [${binding.value}]")
+            if (!existing.breakGlass) {
+                throw ChangeRejectedException(CONFLICT, "binding [${binding.value}] is not a break-glass binding")
             }
             revokeOnce(operator, operations, reason)
         }

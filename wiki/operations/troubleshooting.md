@@ -471,8 +471,13 @@ for a check, `412` for an `ifMatch` that does not hold).
 - **`DELETE /break-glass/{bindingId}` answers `409` `binding [<id>] still grants: change <id> is <state>`**: the revoke
   did not take effect, and the binding still grants. `CONFLICTED`: other revokes or writes kept moving the platform
   document, and the revoke gave up after three more tries; revoke again, and revoke the principal's tokens meanwhile.
-  `DRAFT`: read the change's `findings`; an ordinary binding is not revoked as break-glass (`V5`), remove it with a
-  change instead.
+  `DRAFT`: read the change's `findings`.
+- **`DELETE /break-glass/{bindingId}` answers `409` `binding [<id>] is not a break-glass binding`**: the platform
+  document's binding of that id is an ordinary one, live or expired, and nothing was proposed. Remove it with a change
+  ([Testing policies](../policies/testing.md)).
+- **`DELETE /break-glass/{bindingId}` answers `409` `[platform] is at revision <n>, not <m>`**: another write moved the
+  platform document just as the revoke was proposed, which may have been another call revoking the same binding. Check
+  whether the binding is still there: retry (a `404` means it is gone), or read `GET /documents/platform`.
 - **`DELETE /break-glass/{bindingId}` answers `404`**: the platform document has no binding of that id, and nothing
   was proposed. Check the id (`GET /documents/platform` lists the bindings). A `404` on a retry, after a first call
   that timed out or failed, means the binding was removed, by that call or another: the platform document's revision

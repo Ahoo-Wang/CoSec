@@ -509,13 +509,17 @@ class PreemptionRaceTest {
 
     private val plato = EngineAuthority(Revisions(memory, clock)).security(TenantId.PLATFORM, "plato")
 
-    /** `DELETE /break-glass/{binding}` through [http]: its status, and the state of the change it answers with. */
+    /**
+     * `DELETE /break-glass/{binding}` through [http]: its status, and the state of the change it answers with, or the
+     * problem's detail.
+     */
     private suspend fun delete(harness: ChangeHarness, binding: String): Pair<Int, String?> {
         val response = http(harness).handle(
             ControlHttpRequest("DELETE", "/break-glass/$binding", mapOf("reason" to "compromised")),
             plato
         )
-        return response.status to CoSecJson.mapper.readTree(response.body).get("state")?.asString()
+        val body = CoSecJson.mapper.readTree(response.body)
+        return response.status to (body.get("state") ?: body.get("detail"))?.asString()
     }
 
     /**
@@ -552,8 +556,8 @@ class PreemptionRaceTest {
     }
 
     /**
-     * R4-1: a revoke that meets a moved head every time revokes again at most three times, then comes back `CONFLICTED`
-     * while the binding still grants, which the HTTP API answers as a 409.
+     * R4-1, `BRK-11`: a revoke that meets a moved head every time revokes again at most three times, then comes back
+     * `CONFLICTED` while the binding still grants, which the HTTP API answers as a 409, never a 200.
      */
     @Test
     fun `a revoke that keeps conflicting gives up after three more`() = runBlocking<Unit> {
@@ -574,7 +578,8 @@ class PreemptionRaceTest {
                 )
             }
         }
-        breakGlass.revoke(PLATO, BindingId("g1"), "compromised").state.assert().isEqualTo(ChangeState.CONFLICTED)
+        // Through the control API: c1 to c4 each conflict, and the binding still grants, so a 409 names the last.
+        delete(harness, "g1").assert().isEqualTo(409 to "binding [g1] still grants: change c4 is CONFLICTED")
         racing.afterTaken = null
         moves.get().assert().isEqualTo(4)
         breakGlass.grants(BindingId("g1")).assert().isTrue()

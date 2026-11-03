@@ -51,7 +51,7 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
 | `POST /changes/{id}:rebase`, `:shadow`, `:skip-shadow`, `:approve`, `:reject`, `:abandon`, `:publish` | Move a change on. |
-| `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise ([Taking a busy slot](#taking-a-busy-slot)). |
+| `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise, an ordinary binding of that id included ([Taking a busy slot](#taking-a-busy-slot)). |
 | `POST /simulate`, `POST /explain`, `POST /analyze` | Decide or analyze without changing anything. |
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
@@ -259,9 +259,11 @@ change of that document waits (`409`). An emergency must not: two kinds of chang
   `CONFLICTED`, preempted or meeting a moved head, or that the head moved under before it was proposed or staged,
   revokes again on the new head while its binding still grants, at most three more times.
   `DELETE /break-glass/{bindingId}` answers `200` only once the binding no longer grants, whoever removed it; `404`
-  when the platform document has no binding of that id (a typo, or one already removed), and nothing is proposed; and
-  `409` otherwise, its `detail` naming the state of your change: a revoke that did not take effect never looks like one
-  that did (`BRK-11`). Revoking publishes only through a REQUIRED change listener that records it;
+  when the platform document has no binding of that id (a typo, or one already removed); `409` when the binding of that
+  id is not a break-glass binding, live or expired (remove an ordinary binding with a change); and `409` otherwise, its
+  `detail` naming the state of your change. Nothing is proposed for a `404`, nor for an ordinary binding. A revoke that
+  did not take effect never looks like one that did; the reverse can happen once, when another call removes the same
+  binding as yours is proposed: yours answers `409`, and a retry answers `404` (`BRK-11`). Revoking publishes only through a REQUIRED change listener that records it;
   while that listener's store is down, revoke the principal's tokens instead (`TokenRevoker.revokeSubject`), which
   needs no listener.
 - **A change that only narrows**, staged or skipped by a holder of `cosec:skip-shadow` on the document. Every

@@ -90,8 +90,9 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  *
  * A document key is written `platform`, `app:order` or `tenant:acme`. `DELETE /break-glass/{bindingId}` answers 200
  * only when the binding no longer grants on the platform document's head afterwards, whoever removed it; 404 when that
- * head has no binding of that id, nor a stalled revoke of it; otherwise a 409 that names the state of the caller's
- * change (`BRK-11`).
+ * head has no binding of that id and no stalled revoke of it that the caller may see holds the slot; 409 when the
+ * binding there is not a break-glass binding, or still grants after the revoke, naming the state of the caller's change
+ * (`BRK-11`).
  */
 @InternalCoSecApi
 class ControlHttp(private val plane: ControlPlane) {

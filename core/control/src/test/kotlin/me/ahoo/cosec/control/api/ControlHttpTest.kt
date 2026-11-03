@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
@@ -254,7 +255,15 @@ class ControlHttpTest {
                 Instant.parse("2026-11-01T01:00:00Z").toEpochMilli(),
                 breakGlass = true,
             )
-            fixture.bootstrap(SnapshotKey.Platform, head.policies, head.bindings + glass)
+            // An ordinary binding with an expiry, which has passed.
+            val contractor = Binding(
+                BindingId("contractor"),
+                SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("carl")),
+                BindingScope(Match.Any, Match.Any),
+                PolicyId("no-delete"),
+                Instant.parse("2026-10-31T23:00:00Z").toEpochMilli(),
+            )
+            fixture.bootstrap(SnapshotKey.Platform, head.policies, head.bindings + glass + contractor)
         }
         // F-1: a mistyped id is a 404 without detail, and leaves no change behind.
         val made = fixture.ids.get()
@@ -278,14 +287,16 @@ class ControlHttpTest {
         // Revoked, the id is no longer on the head.
         call("DELETE", "/break-glass/glass", security = plato, query = mapOf("reason" to "done")).first
             .assert().isEqualTo(404)
-        // An ordinary binding is no break-glass binding: the revoke is a DRAFT, and the binding still grants.
-        val (refused, problem) =
-            call("DELETE", "/break-glass/no-delete", security = plato, query = mapOf("reason" to "done"))
-        refused.assert().isEqualTo(409)
-        problem.get("code").asString().assert().isEqualTo("CONFLICT")
-        problem.get(
-            "detail"
-        ).asString().assert().startsWith("binding [no-delete] still grants: change ").endsWith(" is DRAFT")
+        // Review F-10: an ordinary binding, live or expired, is no break-glass binding: a 409 at once, nothing proposed.
+        val before = fixture.ids.get()
+        for (ordinary in listOf("no-delete", "contractor")) {
+            val (refused, problem) =
+                call("DELETE", "/break-glass/$ordinary", security = plato, query = mapOf("reason" to "done"))
+            refused.assert().describedAs(ordinary).isEqualTo(409)
+            problem.get("code").asString().assert().isEqualTo("CONFLICT")
+            problem.get("detail").asString().assert().isEqualTo("binding [$ordinary] is not a break-glass binding")
+        }
+        fixture.ids.get().assert().isEqualTo(before)
     }
 
     @Test
