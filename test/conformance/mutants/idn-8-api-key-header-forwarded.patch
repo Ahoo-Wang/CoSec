@@ -3,11 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.QueryParametersTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index d6cb7d9f..026f3a0f 100644
+index 3a6059ab..aad6de87 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -111,7 +111,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-      * among them: cookies belong to the browser.
+@@ -116,7 +116,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * replay at the gateway.
       */
      @InternalCoSecApi
 -    val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)

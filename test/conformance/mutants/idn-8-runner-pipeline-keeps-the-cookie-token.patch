@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the pipeline returns the Cookie header unchanged; the conformance runner alone must see the authorization cookie reach the backend
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 3a6059ab..339d616f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -132,7 +132,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * reads a token from that cookie, so a backend could replay it at the gateway.
+      */
+     @InternalCoSecApi
+-    fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
++    fun withoutCookieToken(cookieHeader: String): String? = cookieHeader
+ 
+     /**
+      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;

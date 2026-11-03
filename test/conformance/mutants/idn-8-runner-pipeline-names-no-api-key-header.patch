@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the pipeline names only Authorization among its credential headers; R1-3: the conformance runner alone must see the API key header reach the backend
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 3a6059ab..aad6de87 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -116,7 +116,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * replay at the gateway.
+      */
+     @InternalCoSecApi
+-    val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)
++    val credentialHeaders: Set<String> = setOf(AUTHORIZATION)
+ 
+     /**
+      * [rawQuery] without its `authorization` parameters, however their names are encoded or cased; null when nothing is

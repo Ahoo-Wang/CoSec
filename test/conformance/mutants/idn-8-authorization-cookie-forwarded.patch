@@ -1,0 +1,16 @@
+# Rule: IDN-8
+# Mutant: the gateway leaves the Cookie headers alone, so the authorization cookie the pipeline reads a token from goes downstream
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 2ccdacaf..d26b5999 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -107,7 +107,6 @@ class PipelineGatewayFilter(
+                     }
+                     if (!credentials) {
+                         credentialHeaders.forEach(headers::remove)
+-                        withoutCookieTokens(headers)
+                     }
+                 }
+             if (!credentials) {
