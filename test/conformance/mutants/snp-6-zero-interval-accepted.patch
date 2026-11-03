@@ -3,15 +3,19 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfigurationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
-index 6e2e8201..21c4e20c 100644
+index 16191a26..93fb04c8 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
-@@ -106,7 +106,7 @@ data class SnapshotOptions(
+@@ -112,10 +112,10 @@ data class SnapshotOptions(
              failClosedTenants: Set<String>,
              failClosedMaxLag: Duration,
          ): String? = when {
 -            revalidateInterval.isNegative || revalidateInterval.isZero ->
 +            revalidateInterval.isNegative ->
                  "must be positive: the periodic revalidation cannot be turned off"
+ 
+-            revalidateInterval < MIN_REVALIDATE_INTERVAL ->
++            !revalidateInterval.isZero && revalidateInterval < MIN_REVALIDATE_INTERVAL ->
+                 "must be at least $MIN_REVALIDATE_INTERVAL: each pass reads every installed document from the store"
  
              revalidateInterval > MAX_REVALIDATE_INTERVAL -> "must be at most $MAX_REVALIDATE_INTERVAL"
