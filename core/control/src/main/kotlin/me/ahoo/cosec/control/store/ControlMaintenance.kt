@@ -128,11 +128,21 @@ class ControlMaintenance(
     private suspend fun openChanges(): List<ChangeRequest> =
         store.openChanges().mapNotNull { current(it) }.filterNot { it.state.terminal }
 
-    /** [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists. */
+    /**
+     * [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists, and when
+     * it is a change of an app no document key can name ([UnnamedDocumentException], R2-1 of #1194's review): that
+     * record alone is skipped, with a WARN. Skipping it costs reclamation nothing: the only revisions it rests on are
+     * of that app's document, which no key names and [ControlStore.documents] never lists.
+     */
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun current(id: ChangeId): ChangeRequest? = try {
         changes.get(id)
     } catch (e: ChangeRejectedException) {
         if (e.status != NOT_FOUND) throw e
+        null
+    } catch (e: Exception) {
+        val unnamed = UnnamedDocumentException.of(e) ?: throw e
+        log.warn { "Change [${id.value}] is skipped: ${unnamed.message} Abandon it, or remove its record." }
         null
     }
 

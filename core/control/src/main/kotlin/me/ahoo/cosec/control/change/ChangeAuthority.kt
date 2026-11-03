@@ -330,7 +330,9 @@ class ChangeAuthority(
         now: Instant,
     ): GrantAnalysis = try {
         val tenant = TenantId(key.tenantId)
-        val named = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
+        // An app no key can name has no document, and no request is ever in it: it holds nothing (R2-1 of #1194's review).
+        val named = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp)
+            .filterTo(LinkedHashSet()) { SnapshotKey.App.isValidAppId(it.value) }
         var listed = listedApps(documents)
         val apps = LinkedHashMap<AppId, PolicyDocument?>()
         val unread = HashSet<AppId>()
@@ -365,8 +367,10 @@ class ChangeAuthority(
 
     /**
      * Every app document there is, from the app list; `null`, every app unknown, when the list is not there, is not
-     * complete, cannot be read, or has an entry that does not name an app document (RC1-4). An entry is never dropped:
-     * one the analysis cannot read could be an app document it would miss.
+     * complete, cannot be read, or has an entry that never named an app document (RC1-4). Such an entry is never
+     * dropped: one the analysis cannot read could be an app document it would miss. An entry earlier builds listed and
+     * the app id rule now refuses (blank, a control character, too long; R2-1 of #1194's review) is: no key names its
+     * document, and no request is ever in that app, so the analysis misses nothing by it.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun listedApps(documents: ChangeChecks.Context): Set<AppId>? = try {
@@ -379,14 +383,14 @@ class ChangeAuthority(
                 }
             }
 
-            list.entries.any { !isAppId(it) } -> null.also {
+            list.entries.any { !wasAppId(it) } -> null.also {
                 untrusted {
                     "The app list has an entry that names no app document: run cosec-migrate repair-references; until " +
                         "then every app a grant reaches is unknown."
                 }
             }
 
-            else -> list.entries.mapTo(LinkedHashSet(), ::AppId)
+            else -> list.entries.filter(::isAppId).mapTo(LinkedHashSet(), ::AppId)
         }
     } catch (e: CancellationException) {
         throw e
@@ -400,6 +404,9 @@ class ChangeAuthority(
 
     /** Whether [entry] names an app document: a valid [SnapshotKey.App] id, which the wildcard never is. */
     private fun isAppId(entry: String): Boolean = SnapshotKey.App.isValidAppId(entry)
+
+    /** Whether [entry] named an app document under the rule of earlier builds: any id but `*` without `:`. */
+    private fun wasAppId(entry: String): Boolean = entry.isNotEmpty() && ':' !in entry && entry != Match.WILDCARD
 
     /**
      * A WARN that the app list is not to be trusted, at most once per [UNTRUSTED_WARN_INTERVAL]: until

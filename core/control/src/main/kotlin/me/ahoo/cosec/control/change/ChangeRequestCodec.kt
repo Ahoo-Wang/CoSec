@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -320,7 +321,10 @@ object ChangeRequestCodec {
             "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
             "checkedApps",
         )
-        val key = documentKey(node.need("key").text())
+        val key = node.need("key").text().let { text ->
+            if (unnamed(text)) throw UnnamedDocumentException(printable(text))
+            documentKey(text)
+        }
         val (kind, owner) = Revisions.ownerOf(key)
         val base = node.need("base").also { it.only("revision", "digest") }
         return ChangeRequest(
@@ -343,9 +347,9 @@ object ChangeRequestCodec {
                 )
             },
             candidate = node.get("candidate")?.text(),
-            checkedWith = node.need("checkedWith").properties().associate { (name, value) ->
-                documentKey(name) to (if (value.isNull) null else digest(value.text()))
-            },
+            // A head read of an app no key can name now cannot move: that document can no longer be written (R2-1).
+            checkedWith = node.need("checkedWith").properties().filterNot { (name, _) -> unnamed(name) }
+                .associate { (name, value) -> documentKey(name) to (if (value.isNull) null else digest(value.text())) },
             createdAt = Instant.parse(node.need("createdAt").text()),
             updatedAt = Instant.parse(node.need("updatedAt").text()),
             skipShadow = node.get("skipShadow")?.text(),
@@ -460,6 +464,21 @@ object ChangeRequestCodec {
             else -> malformed("unknown operation [$op]")
         }
     }
+
+    /**
+     * Whether [text] is an app key earlier builds wrote (any id without `:`) that the app id rule now refuses (blank,
+     * `*`, a control character, too long; R2-1 of #1194's review): no document key can name it.
+     */
+    private fun unnamed(text: String): Boolean {
+        val app = text.removePrefix(APP)
+        return text.startsWith(APP) && app.isNotEmpty() && ':' !in app && !SnapshotKey.App.isValidAppId(app)
+    }
+
+    /** [text] for a message or a log line: a control character as its `\uXXXX` escape. */
+    private fun printable(text: String): String =
+        text.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }.joinToString("")
+
+    private const val APP = "app:"
 
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform

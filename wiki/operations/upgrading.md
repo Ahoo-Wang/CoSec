@@ -144,6 +144,16 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   parameter once.
 - **App ids refuse control characters** (RC1-15, `SCP-7`), as tenant ids do: a declared app with one is
   `403` `scope-rejected` (`401` for an anonymous caller), and a host app with one fails startup.
+- **The control plane takes only app ids** (`SCP-7`). An app id is not blank, not `*`, has no `:` and no control
+  character, and has at most 128 characters; earlier builds took any app without `:`. A binding in any other app is
+  now a `V2` finding (`400`) at `$.bindings[i].app`, and since the whole candidate is checked, a document that still
+  holds one cannot publish any other change: its next change must remove it, and a change that only removes it is
+  valid. `analyze` answers `400` for such an app. **Before upgrading the control plane**, remove the tenant bindings in
+  such apps, and abandon the open changes of such app documents. What is left behind stops nothing, but stays: a
+  document that keeps such a binding still reads, and the binding grants nothing, since no request is ever in that
+  app; an open change of such an app no longer reads, so it can no longer be shown or abandoned, and maintenance skips
+  it with a WARN on every pass; an instance's status entry or an app list entry naming such an app is skipped, with
+  a WARN for the status entry.
 - **Enforcing hosts drop a client's `CoSec-Identity`** (RC1-18, `IDN-9`). A WebFlux or Spring MVC host in `enforce`
   mode removes the header from the request its handler sees, so it never relays one a client wrote. Code that read it
   there read what any client could write; read the `SecurityContext`.
@@ -151,8 +161,8 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   app now reads the app's document whatever the principal's roles, so the binding's DENY or ALLOW applies, where
   every such request was `503`, and so do the app document's rate limit rules. `simulate`, `explain` and shadow
   windows read it by the same rule (`CTL-3`). In code, `CompiledDocument.tenant` takes the set `boundApps`, and
-  `CompiledDocument.needsApp` answers it; a `ShadowListener` built by hand needs the installed views (`views`) to compare
-  a tenant candidate that makes a request read an app document, and reports `CANDIDATE_ERROR` without them.
+  `CompiledDocument.needsApp` answers it; a `ShadowListener` built by hand needs the installed views (`views`) to
+  compare a tenant candidate that makes a request read an app document, and reports `CANDIDATE_ERROR` without them.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

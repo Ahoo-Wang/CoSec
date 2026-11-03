@@ -590,9 +590,11 @@ class Revisions(
         for (binding in document.bindings) {
             if (binding.policy in own) continue
             references += SnapshotKey.Platform to binding.policy
-            val app = binding.scope.app
-            if (document.kind == DocumentKind.TENANT && app is Match.Exactly) {
-                references += SnapshotKey.App(app.value.value) to binding.policy
+            val app = (binding.scope.app as? Match.Exactly)?.value?.value
+            // An app no key can name has no document to refer to (R2-1 of #1194's review): earlier builds stored such
+            // bindings, and the head that holds one must still publish the change that drops it.
+            if (document.kind == DocumentKind.TENANT && app != null && SnapshotKey.App.isValidAppId(app)) {
+                references += SnapshotKey.App(app) to binding.policy
             }
         }
         document.boundary?.let { references += SnapshotKey.Platform to it }

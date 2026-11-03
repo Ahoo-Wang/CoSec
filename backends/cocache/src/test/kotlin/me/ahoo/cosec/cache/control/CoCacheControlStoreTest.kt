@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.control
 
 import kotlinx.coroutines.runBlocking
@@ -20,8 +22,14 @@ import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.test.HookedBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.cache.snapshot.RawCodec
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisTarget
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
@@ -29,12 +37,14 @@ import me.ahoo.cosec.cache.snapshot.newKeyPrefix
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
+import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -100,6 +110,45 @@ class CoCacheControlStoreTest {
         createdAt = Instant.parse("2026-11-01T00:00:00Z"),
         updatedAt = Instant.parse("2026-11-01T00:00:00Z"),
     )
+
+    /**
+     * R2-1 of #1194's review: a stored open change of an app no document key can name (an earlier build wrote it) does
+     * not read, so it is not known to be terminal: the listing keeps it, without failing, and each caller skips it.
+     */
+    @Test
+    fun `an open change of an app no key can name stays listed and does not fail the listing`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        SnapshotNode(backend, newKeyPrefix()).use { node ->
+            val store = store(node)
+            store.putChange(null, change("c1", ChangeState.DRAFT)).assert().isTrue()
+            store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
+            val written = ChangeRequestCodec.encode(change("c1", ChangeState.DRAFT)).decodeToString()
+                .replace("\"key\":\"tenant:acme\"", "\"key\":\"app:a\\u0001b\"")
+            CacheRuntime.builder().backend(backend).build().use { raw ->
+                raw.create(
+                    CacheSpec.builder<ChangeId, ByteArray>("RawChange")
+                        .namespace(
+                            CoSecCacheSpecs.cacheNamespace(node.keyPrefix, CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME)
+                        )
+                        .keyPrefix("")
+                        .keyEncoder { it.value }
+                        .codec(RawCodec)
+                        .policy(CachePolicy.DEFAULT.storeOfRecord())
+                        .build()
+                ).put(ChangeId("c1"), written.encodeToByteArray())
+            }
+            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
+            // However CoCache wraps what the codec threw.
+            @Suppress("TooGenericExceptionCaught")
+            val error = try {
+                store.change(ChangeId("c1"))
+                null
+            } catch (e: Exception) {
+                e
+            }
+            UnnamedDocumentException.of(error!!)!!.key.assert().isEqualTo("app:a\\u0001b")
+        }
+    }
 
     @Test
     fun `indexed documents and open changes are listed, terminal ones are not`() = runBlocking<Unit> {
