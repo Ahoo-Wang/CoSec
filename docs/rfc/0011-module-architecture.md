@@ -174,6 +174,11 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 
 RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保留为薄契约模块）不变，内容按 §3 收窄。
 
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：D2 的启动检查多了一个 `STA-2`，与 `STA-1` 并列。它由 `CoSecGatewayEndpointCheckAutoConfiguration` 实现，在启动时检查网关宿主：
+> - **检查条件：** 执法模式，且 CoSec 打开。
+> - **失败条件：** 应用端口上通过 HTTP 暴露了 `health` 以外的 Actuator 端点，除非 `cosec.gateway.unprotected-endpoints` 列出了它。`gateway` 端点在任何端口上都不能列入。
+> - **按真实端点检查：** 包括 Spring Cloud Gateway 自己的 `@RestControllerEndpoint`。
+
 ## 7. 交付
 
 | PR | 内容 | 前置 |
