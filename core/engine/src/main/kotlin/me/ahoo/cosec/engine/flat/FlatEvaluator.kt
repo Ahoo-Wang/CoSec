@@ -324,7 +324,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         val words = scratch.marks ?: LongArray(repeatWords()).also { scratch.marks = it }
         val word = bit ushr WORD_SHIFT
         val mask = 1L shl bit
-        if (words[word] and mask != 0L) {
+        if ((words[word] and mask) != 0L) {
             return false
         }
         words[word] = words[word] or mask

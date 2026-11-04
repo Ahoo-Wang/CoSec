@@ -21,10 +21,6 @@ package me.ahoo.cosec.engine.pattern
 internal class EvaluationScratch {
     private var words: LongArray? = null
 
-    // Every statement matches the same segment values of the request's path: the last one's answer is kept.
-    private var scanned: String? = null
-    private var pairs = false
-
     /** The evaluator's marks of repeated targets, two bits per slot; null until a pass reaches one. */
     var marks: LongArray? = null
 
@@ -35,21 +31,6 @@ internal class EvaluationScratch {
             return current
         }
         return LongArray(maxOf(size, (current?.size ?: 0) * 2)).also { words = it }
-    }
-
-    /** Whether [value] holds a surrogate pair. */
-    fun hasPairs(value: String): Boolean {
-        if (value !== scanned) {
-            pairs = false
-            for (position in 1 until value.length) {
-                if (value[position - 1].isHighSurrogate() && value[position].isLowSurrogate()) {
-                    pairs = true
-                    break
-                }
-            }
-            scanned = value
-        }
-        return pairs
     }
 }
 

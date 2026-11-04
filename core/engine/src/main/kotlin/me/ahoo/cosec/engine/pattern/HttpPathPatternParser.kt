@@ -326,7 +326,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
     @Suppress("ReturnCount")
     fun table(value: String, captures: Array<String?>?, scratch: EvaluationScratch): Boolean {
         val width = (value.length + WORD_BITS) ushr WORD_SHIFT
-        val pairs = scratch.hasPairs(value)
+        val pairs = hasPairs(value)
         val table = scratch.words(width * (tokens.size + if (pairs) 2 else 1))
         val boundaries = if (pairs) boundaries(value, table, (tokens.size + 1) * width, width) else NO_ROW
         val end = tokens.size * width
@@ -340,7 +340,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
                 is GlobToken.Run -> runRow(table, row, width, boundaries)
             }
         }
-        if (table[0] and 1L == 0L) {
+        if ((table[0] and 1L) == 0L) {
             return false
         }
         if (captures == null) {
@@ -395,7 +395,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
         // A pair is one code point: from its first half, the next row is read two characters on.
         for (start in 0 until value.length - 1) {
             if (value[start].isHighSurrogate() && value[start + 1].isLowSurrogate()) {
-                val holds = table[next + ((start + 2) ushr WORD_SHIFT)] and (1L shl (start + 2)) != 0L
+                val holds = (table[next + ((start + 2) ushr WORD_SHIFT)] and (1L shl (start + 2))) != 0L
                 val word = row + (start ushr WORD_SHIFT)
                 table[word] = if (holds) table[word] or (1L shl start) else table[word] and (1L shl start).inv()
             }
@@ -438,6 +438,12 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
         }
         return row
     }
+
+    /**
+     * Whether [value] holds a surrogate pair: then it counts fewer code points than characters. A Latin-1 string, as
+     * every ASCII path is, holds none, and the JDK answers that without reading it.
+     */
+    private fun hasPairs(value: String): Boolean = value.codePointCount(0, value.length) < value.length
 
     private fun nextCodePoint(value: String, position: Int): Int =
         if (value[position].isHighSurrogate() && position + 1 < value.length && value[position + 1].isLowSurrogate()) {
