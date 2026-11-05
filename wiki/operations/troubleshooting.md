@@ -405,8 +405,9 @@ bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 ### Startup fails on a removed key prefix
 
 ```text
-CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With the old values and cosec.key-prefix (b), these families move:
-  token revocations and memberships: cosec: -> b:
+CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
+  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
+  API keys: cosec:api-key -> b:api-key
   ...
 ```
 
@@ -414,8 +415,8 @@ The environment still sets `cosec.authorization.snapshot.key-prefix`, `cosec.aut
 `cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). Startup fails
 whatever [`cosec.unknown-properties`](./configuration.md#unknown-properties) says: the old layout may keep token revocations and API
 keys under another prefix than the one now read, and a revocation nobody reads lets the token it revoked through
-again. The message lists the families that would move, computed from the old values and the current
-`cosec.key-prefix`. Copy the token revocations and the API keys to their new keys first (`COPY`, or `RENAME`, which
+again. The message lists the families that would move, computed from the old values and the
+`cosec.key-prefix` to set: the current one, or, while it is unset, the snapshot documents' prefix. Copy the token revocations and the API keys to their new keys first (`COPY`, or `RENAME`, which
 keeps their expiry), set `cosec.key-prefix` to where the snapshot documents are, then remove the old properties
 ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)).
 

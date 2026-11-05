@@ -333,12 +333,13 @@ Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalid
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
 
 ```text
-CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With the old values and cosec.key-prefix (b), these families move:
-  token revocations and memberships: cosec: -> b:
+CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
+  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
+  API keys: cosec:api-key -> b:api-key
   ...
 ```
 
-环境中仍然设置了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 或 `cosec.api-key.key-prefix`，它们已被 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代（`SNP-9`）。无论 [`cosec.unknown-properties`](./configuration.md#unknown-properties) 如何设置，启动都会失败：旧布局可能把令牌吊销和 API key 保存在与现在读取的前缀不同的前缀下，而没人读取的吊销会让被它吊销的令牌再次通过。消息列出会移动的 key 族，根据旧值和当前的 `cosec.key-prefix` 计算得出。先把令牌吊销和 API key 复制到新的 key 下（`COPY`，或保留过期时间的 `RENAME`），把 `cosec.key-prefix` 设为快照文档所在的前缀，然后移除旧配置项（[升级](./upgrading.md#from-8-0-0-alpha-2)）。
+环境中仍然设置了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 或 `cosec.api-key.key-prefix`，它们已被 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代（`SNP-9`）。无论 [`cosec.unknown-properties`](./configuration.md#unknown-properties) 如何设置，启动都会失败：旧布局可能把令牌吊销和 API key 保存在与现在读取的前缀不同的前缀下，而没人读取的吊销会让被它吊销的令牌再次通过。消息列出会移动的 key 族，根据旧值和应设置的 `cosec.key-prefix` 计算得出：已设置时为当前值，未设置时为快照文档的前缀。先把令牌吊销和 API key 复制到新的 key 下（`COPY`，或保留过期时间的 `RENAME`），把 `cosec.key-prefix` 设为快照文档所在的前缀，然后移除旧配置项（[升级](./upgrading.md#from-8-0-0-alpha-2)）。
 
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 

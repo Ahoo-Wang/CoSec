@@ -51,16 +51,22 @@ internal object RemovedKeyPrefixes {
         if (set.isEmpty()) {
             return null
         }
-        val now = (read(KEY_PREFIX) ?: CoSec.COSEC).trimEnd(':')
+        val explicit = read(KEY_PREFIX)?.trimEnd(':')
         val snapshot = (read(SNAPSHOT) ?: CoSec.COSEC).trimEnd(':')
         val cache = (read(CACHE) ?: CoSec.COSEC).trimEnd(':')
-        val apiKeys = read(API_KEY) ?: OLD_API_KEY_PREFIX
+        val apiKeys = (read(API_KEY) ?: OLD_API_KEY_PREFIX).trimEnd(':')
+        // The moves are those of the prefix this message asks for: unset, it must become the snapshot documents' one,
+        // or the deployment loses them (review round 2 of #1200, M1).
+        val now = explicit ?: snapshot
         val moves = buildList {
             if (snapshot != now) {
                 add("snapshot documents, control-plane records, candidates and shadow reports: $snapshot: -> $now:")
             }
             if (cache != now) {
-                add("token revocations and memberships: $cache: -> $now:")
+                add(
+                    "token revocations and memberships: $cache: -> $now: (the memberships of a membership cache the " +
+                        "application made itself are under its own prefix)",
+                )
             }
             if (apiKeys != "$now:$API_KEYS") {
                 add("API keys: $apiKeys -> $now:$API_KEYS")
@@ -70,14 +76,19 @@ internal object RemovedKeyPrefixes {
             }
         }
         val properties = set.joinToString(", ")
+        val against = when {
+            explicit != null -> "With the old values and $KEY_PREFIX ($now)"
+            now == CoSec.COSEC -> "With the old values and $KEY_PREFIX unset ($now)"
+            else -> "With $KEY_PREFIX set to $now, the snapshot documents' prefix, as it must be"
+        }
         val where = if (moves.isEmpty()) {
-            "With the old values and $KEY_PREFIX ($now), no family moves.\n"
+            "$against, no family moves.\n"
         } else {
-            "With the old values and $KEY_PREFIX ($now), these families move:\n" + moves.joinToString("") { "  $it\n" } +
+            "$against, these families move:\n" + moves.joinToString("") { "  $it\n" } +
                 "Copy the token revocations and the API keys under the new prefix before starting this version (COPY, " +
                 "or RENAME, which keeps their expiry): a token revoked under the old prefix would be accepted again, " +
-                "and the API keys refused. Memberships, counters and OAuth states fill again on their own. Set " +
-                "$KEY_PREFIX to the snapshot documents' prefix.\n"
+                "and the API keys refused. Memberships, counters and OAuth states fill again on their own." +
+                (if (now == snapshot) "" else " Set $KEY_PREFIX to the snapshot documents' prefix ($snapshot).") + "\n"
         }
         return "CoSec no longer reads $properties: every key a deployment writes lives under $KEY_PREFIX. " + where +
             "Then remove $properties; ${UnknownProperties.MODE_KEY} does not turn this check off. See $DOCUMENTATION"

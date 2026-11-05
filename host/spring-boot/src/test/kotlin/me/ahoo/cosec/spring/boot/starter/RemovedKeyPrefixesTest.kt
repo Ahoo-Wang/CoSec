@@ -40,26 +40,33 @@ class RemovedKeyPrefixesTest {
 
     @Test
     fun `a removed prefix fails startup even when unknown properties only warn`() {
+        // RC1-46's deployment B, upgraded with its configuration unchanged: the moves are those of the prefix it must
+        // set, its snapshot prefix, so the revocations are listed before anyone edits anything (round 2 of #1200, M1).
         val message = runner.failure("${RemovedKeyPrefixes.SNAPSHOT}=b", "cosec.unknown-properties=warn")!!
         message.assert().contains("CoSec no longer reads ${RemovedKeyPrefixes.SNAPSHOT}")
-        message.assert().contains("cosec.key-prefix (cosec)")
-        message.assert().contains(
-            "snapshot documents, control-plane records, candidates and shadow reports: b: -> cosec:"
-        )
-        message.assert().doesNotContain("token revocations and memberships:")
+        message.assert().contains("cosec.key-prefix set to b, the snapshot documents' prefix, as it must be")
+        message.assert().contains("token revocations and memberships: cosec: -> b:")
+        message.assert().contains("API keys: cosec:api-key -> b:api-key")
+        message.assert().contains("rate limit counters and the social login's OAuth states: cosec: -> b:")
+        message.assert().doesNotContain("snapshot documents, control-plane records")
         message.assert().contains("cosec.unknown-properties does not turn this check off")
         message.assert().contains(RemovedKeyPrefixes.DOCUMENTATION)
     }
 
     @Test
     fun `the message names the families that move under the new prefix`() {
-        // RC1-46's deployment B, which set only the snapshot prefix, now sets cosec.key-prefix to it.
+        // Deployment B once it sets cosec.key-prefix to its snapshot prefix, the old key still there: the same moves.
         val message = runner.failure("${RemovedKeyPrefixes.SNAPSHOT}=b", "cosec.key-prefix=b:")!!
+        message.assert().contains("With the old values and cosec.key-prefix (b), these families move:")
         message.assert().doesNotContain("snapshot documents, control-plane records")
         message.assert().contains("token revocations and memberships: cosec: -> b:")
         message.assert().contains("API keys: cosec:api-key -> b:api-key")
         message.assert().contains("rate limit counters and the social login's OAuth states: cosec: -> b:")
         message.assert().contains("Copy the token revocations and the API keys under the new prefix")
+        // Another prefix than the snapshot documents' moves them too, and the message says where they are.
+        val elsewhere = runner.failure("${RemovedKeyPrefixes.SNAPSHOT}=b", "cosec.key-prefix=c")!!
+        elsewhere.assert().contains("snapshot documents, control-plane records, candidates and shadow reports: b: -> c:")
+        elsewhere.assert().contains("Set cosec.key-prefix to the snapshot documents' prefix (b).")
     }
 
     @Test
@@ -74,8 +81,9 @@ class RemovedKeyPrefixesTest {
     fun `a removed prefix set to what the new one gives still fails, moving nothing`() {
         val message = runner.failure(
             "${RemovedKeyPrefixes.CACHE}=cosec",
-            "${RemovedKeyPrefixes.API_KEY}=cosec:api-key"
+            "${RemovedKeyPrefixes.API_KEY}=cosec:api-key:"
         )!!
+        // A trailing `:` was ignored before as now, so `cosec:api-key:` is where the keys already are.
         message.assert().contains("no family moves")
         message.assert().contains("${RemovedKeyPrefixes.CACHE}, ${RemovedKeyPrefixes.API_KEY}")
     }
