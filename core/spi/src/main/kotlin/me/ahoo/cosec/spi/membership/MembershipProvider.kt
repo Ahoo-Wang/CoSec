@@ -28,6 +28,8 @@ import me.ahoo.cosec.model.TenantId
  * with 503; it never counts as "no memberships", because no roles also means no `inRole` DENY matches.
  *
  * A suspend function, like every data-plane SPI (RFC 0006 Q11).
+ * Its timeout is cooperative: the pipeline cancels a late call and waits for it to return, so a blocking client goes
+ * in `runInterruptible(myDispatcher)` and keeps timeouts of its own (RC1-14, `wiki/architecture/extending.md`).
  */
 @CoSecSpi
 fun interface MembershipProvider {

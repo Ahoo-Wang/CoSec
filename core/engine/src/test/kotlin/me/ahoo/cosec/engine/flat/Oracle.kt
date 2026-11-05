@@ -130,7 +130,8 @@ object Oracle {
             tenant?.let { add(it, DocumentKind.TENANT, applying(it, anyone).sortedWith(byPolicy)) }
             val subject = request.request.subject
             if (subject.authenticated && (effect == Effect.DENY || subject.principalBindings)) {
-                request.memberships.attachments.forEach { attach(tenant, it) }
+                // A policy claimed twice is attached once (ALG-9).
+                request.memberships.attachments.distinct().forEach { attach(tenant, it) }
                 add(platform, DocumentKind.PLATFORM, applying(platform, principal).sortedWith(byId))
                 tenant?.let { add(it, DocumentKind.TENANT, applying(it, principal).sortedWith(byId)) }
             }

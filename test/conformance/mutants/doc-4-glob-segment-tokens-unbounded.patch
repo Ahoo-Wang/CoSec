@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: a glob segment may hold any number of tokens
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 6eb561e9..20984598 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -87,7 +87,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+             if (tokens.all { it is GlobToken.Run }) {
+                 throw invalid(begin, "segment [$text] can match an empty value; add a literal character or ?")
+             }
+-            if (tokens.size > HttpPathPattern.MAX_SEGMENT_TOKENS) {
++            if (tokens.size > Int.MAX_VALUE - 1) {
+                 throw invalid(
+                     begin,
+                     "segment [$text] has ${tokens.size} parts (*, ?, {name} and the text between them), more than " +

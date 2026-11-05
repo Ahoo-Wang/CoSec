@@ -84,6 +84,12 @@ denied.
 The order never changes the kind of decision, only which statement is reported when several match: the DENY pass
 always visits every candidate before the ALLOW pass starts.
 
+A policy that several bindings of one document reach is evaluated once per pass, through the first of them in this
+order, and a policy claimed twice among the attachments is attached once (`ALG-9`): its statements give the same
+results through every binding, so the later ones could change nothing. The first one reports the match, or records the
+error. So many bindings of a policy cost no more than one, and a policy costs a pass at most one evaluation for each
+document that binds it, plus one evaluation for the attachments.
+
 ### Policy conditions
 
 A policy may have its own `condition`. It is evaluated at most once per request, and only once one of the policy's
@@ -331,8 +337,9 @@ clients reach directly, set it to `0`, or a client can write any address into th
 **Headers are client input.** Conditions can read request headers (`http.header.<name>`), `Origin` and `Referer`
 (`http.origin`, `http.referer` and their hosts): the client writes all of them. A DENY on a header is a hint the
 client can drop, and an ALLOW on one is a grant the client can claim. A header sent more than once with different
-values has no single value: a DENY on it is Indeterminate (`503`) and an ALLOW on it does not match
-([Attributes](../policies/language.md#attributes)). Request attributes (`request.attributes.<name>`, such as the
+values has no single value: when a document the request is decided on reads it, the request is `400` before
+evaluation, whatever the statement's effect, so the answer reveals neither a DENY nor which header it reads
+([Headers](../policies/language.md#headers), `PIP-12`). Request attributes (`request.attributes.<name>`, such as the
 gateway's route id) are set by the host, not the client.
 
 No attribute reference can read the headers that carry credentials: `authorization`, `proxy-authorization`,

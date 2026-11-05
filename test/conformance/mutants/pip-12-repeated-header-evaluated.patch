@@ -1,0 +1,17 @@
+# Rule: PIP-12
+# Mutant: a header a document reads, sent with different values, is evaluated: a DENY on it answers 503
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.HostAttributesPipelineTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 79e4b625..3111a197 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -409,7 +409,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+         record?.resolved(scope, view)
+         // RC1-38 (PIP-12): a header a document reads, sent with different values, has no value to decide on. Refused for
+         // every such header, whichever statement reads it, so the answer does not tell a DENY from an ALLOW.
+-        if (HttpAttributes.ambiguousHeader(facts.headers, view) != null) {
++        if (false && HttpAttributes.ambiguousHeader(facts.headers, view) != null) {
+             return StatusMapping.invalidRequest(requestId, "header", traceId)
+         }
+ 

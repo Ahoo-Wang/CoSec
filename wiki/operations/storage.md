@@ -45,10 +45,21 @@ them ([Precedence](./configuration.md#precedence)):
   reclaim would delete the only copy. A value written with plain Redis commands is such a value: write documents only
   through the control plane or `cosec-migrate` ([Publishing documents](#publishing-documents)).
 
+**What a CoCache customizer can still change.** CoSec locks what decides what a cache holds: its key prefix, namespace,
+key encoding, codec, data source, key filter and per-entry lifetime ([Precedence](./configuration.md#precedence)).
+Unreadable revocations fail the read, and memberships always expire, without jitter, and fail closed on a failed read.
+The rest of the cache policy stays the application's, through customizers and `cocache.*` properties: on every cache
+the local cache's size and `expireAfterAccess`, and but for the snapshot store `local-max-age`; on the two revocation
+tables `absent-ttl` and `unknown-read`; on memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and
+`invalidate-failure`. None of these replaces what a cache holds, but some lengthen how long an instance acts on what it
+read. A longer `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
+when the revocation's invalidation message is lost (`cosec.authorization.cache.token.local-max-age`, 30 seconds, is the
+default bound), and a longer membership `ttl` keeps a removed role applied that long.
+
 ### Redis keys
 
-`<s>` is [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot) (`cosec` by default) with a trailing
-`:` removed. `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
+`<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
+key a deployment writes lives under it (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
 contain `:`, so a key names one document only.
 
 | Key | Written by | Contents |
@@ -66,23 +77,22 @@ contain `:`, so a key names one document only.
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:instances` | every data-plane instance | each instance's installed revisions and their lag; expires 2 minutes after its last write, and entries older than a minute are ignored |
-| `<c>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
-| `<c>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
-| `<m>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
-| `<k>:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
-| `cosec:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
+| `<s>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
+| `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
+| `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
+| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
+| `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
 
-- `<c>` is [`cosec.authorization.cache.key-prefix`](./configuration.md#cache), `<k>` is
-  [`cosec.api-key.key-prefix`](./configuration.md#api-keys) (`cosec:api-key`), and `<m>` is the prefix the
-  application gives the membership cache (`cosec` by default), each with a trailing `:` removed. They do **not**
-  follow `<s>`. The rate limiter's prefix `cosec:rate-limiter` is fixed. When several deployments share one Redis, give
-  each its own prefixes, and its own rate-limit rule ids.
-- Every key except the rate-limit counters and the API keys is a CoCache 8 value. CoCache splits each key path at its
-  last `:` before the entry: `<s>:control:revision` is the key prefix `<s>:control:` and the namespace `revision`.
-  Each one has its own invalidation channel, `{key prefix}inv:{namespace}`: `<s>:inv:snapshot`, `<s>:inv:candidate`,
-  `<s>:control:inv:revision`, `<s>:shadow:inv:report`, `<c>:token:inv:revoked`, `<c>:token:subject:inv:revoked`,
-  `<m>:inv:membership`. A channel sits under the same prefix as its keys, so deployments with different prefixes stay
-  apart on one Redis, and an ACL rule on `<s>:control:*` covers both the control plane's keys and its channels.
+- When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
+  key, so an API key one issues is never accepted by the other, and their rate limit counters stay apart.
+- Every key except the rate-limit counters, the API keys and the OAuth states is a CoCache 8 value. CoCache splits each
+  key path at its last `:` before the entry: `<s>:control:revision` is the key prefix `<s>:control:` and the namespace
+  `revision`. Each one has its own invalidation channel, `{key prefix}inv:{namespace}`: `<s>:inv:snapshot`,
+  `<s>:inv:candidate`, `<s>:control:inv:revision`, `<s>:shadow:inv:report`, `<s>:token:inv:revoked`,
+  `<s>:token:subject:inv:revoked`, `<s>:inv:membership`. A channel sits under the same prefix as its keys, so deployments
+  with different prefixes stay apart on one Redis, and an ACL rule on `<s>:control:*` covers both the control plane's
+  keys and its channels.
 
 ### Redis requirements
 
@@ -102,8 +112,8 @@ contain `:`, so a key names one document only.
     [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) to the policy you have set (`noeviction`).
 - **Redis client.** CoCache builds its own Lettuce client from `spring.data.redis.*`; the versions, topologies and
   ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The startup checks
-  need `INFO` (`+info`), which CoCache's list includes. Channels follow the key prefixes: allow `&<s>:*` (and `&<c>:*`,
-  `&<m>:*` when those prefixes differ), or each `&{key prefix}inv:*` above. With
+  need `INFO` (`+info`), which CoCache's list includes. Channels follow the key prefixes: allow `&<s>:*`, or each
+  `&{key prefix}inv:*` above. With
   `cocache.redis.channel-mode: pubsub`, also allow CoCache's probe, `~cocache:!probe:*` and `&cocache:!probe:*`, which
   does not follow the prefix. Each cache publishes an empty frame to its channel when it is created, so a missing
   channel permission fails startup, naming the pattern to allow.
@@ -171,7 +181,10 @@ sequenceDiagram
   the revision it started with: one evaluation never mixes revisions of a document.
 - **Lost messages are caught by revalidation** (steps 6 and 7): every
   [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) each installed document is confirmed with a
-  conditional read that transfers nothing when it is unchanged.
+  conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. It is the only bound on a
+  change whose invalidation message was lost, so it cannot be turned off and is at most 5 minutes (`SNP-6`).
+- **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
+  random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers it stays below the revalidate
   interval. Past `lag-warn` (60 seconds) the instance logs
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past `lag-escalate`
@@ -192,6 +205,20 @@ sequenceDiagram
   reads the same, and logs `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`. Publish the
   lost change again.
 
+### What revalidation costs Redis
+
+A conditional read hashes the whole stored document on Redis's main thread to compare digests, so an unchanged document
+still costs Redis time in proportion to its size: about 12 µs at 1 KiB, 0.4 ms at 128 KiB, 2.9 ms at 1 MiB and 12 ms at
+4 MiB, and while a node hashes, it runs no other command
+([measurement](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)). The load on a node is
+about instances × the cost of every document each holds ÷ `revalidate-interval`: 100 instances revalidating a 1 MiB
+platform document every 10 seconds take about 3 % of it.
+
+- Raise [`revalidate-interval`](./configuration.md#snapshot), at most 5 minutes and below `lag-warn` (raise that too):
+  the cost falls in proportion, and an instance that missed an invalidation message catches up as much later.
+- Keep the platform document small. Every instance holds it; tenant-specific policies belong in tenant documents, which
+  only the instances serving the tenant hold.
+
 ## When Redis is unavailable
 
 | What | Behavior |
@@ -209,6 +236,25 @@ sequenceDiagram
 | The control plane | A store read that fails is a failure, never "absent": the control API answers `503` and publishes nothing. |
 | Shadow reports | The instance logs the failed write and writes again on its next cycle; the window stays open meanwhile. |
 
+**After a reconnect.** While its connection is down, Lettuce buffers the commands it is given, and when it reconnects
+it writes them all under a lock that every command write takes. A request that sends a command then, on an event loop
+too, waits until that buffer is flushed, and the buffer is unbounded by default. To bound the wait, set
+`requestQueueSize`, or reject commands while disconnected, on the application's Lettuce client with a
+`LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it.
+
+**Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither `max-apps`,
+`max-tenants` nor the ids without a document until its load ends: it fails after the store read timeout (30 seconds)
+while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So a client that declares
+new app ids at a high rate keeps up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
+during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
+
+**Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
+family (`SNP-7`), are shared by every tenant. A client that declares many random `CoSec-App-Id`s pushes out the real apps
+that have no app document, so a request in one of them reads Redis again, without compiling anything, until it is
+remembered again. That fails closed, but for a tenant in `fail-closed.tenants` such an app's entry loaded from the
+local copy counts as `local-max-age` old: with `fail-closed.max-lag` below `local-max-age`, its requests answer `503`
+until Redis confirms it, at once. Tenant ids come from credentials, so the tenant family cannot be flooded this way.
+
 The revocation check and rate-limit rules without `strictFailure` are the documented exceptions to failing closed
 ([Security model](../guide/security-model.md)). How a `503` reads in the response and the audit is in
 [Troubleshooting](./troubleshooting.md#unavailable).
@@ -221,7 +267,7 @@ document's revision chain starts with their first write:
 - the **control plane** (`cosec-control` with `cosec-cocache`), at runtime, through change requests;
 - **`cosec-migrate`**, for the first documents of a deployment and for the move from 7.x.
 
-Both write on the Redis and under the `cosec.authorization.snapshot.key-prefix` the instances read. A publish writes
+Both write on the Redis and under the `cosec.key-prefix` the instances read. A publish writes
 the revision record first, then replaces the head with a compare-and-set on the base revision's digest, so a reader
 sees the old head or the new one, never a mix, and two publishers never overwrite each other: the second one is told
 the base moved.

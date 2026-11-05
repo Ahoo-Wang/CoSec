@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "ALG-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A failing DENY bound twice is evaluated once: the first binding records the error that makes the request indeterminate, as when it is bound once.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "d",
+          "fault": "the condition cannot be read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:b",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d"
+        },
+        {
+          "id": "g:a",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MatcherFailed",
+      "at": {
+        "policy": "d",
+        "statement": 0,
+        "via": {
+          "binding": "g:a",
+          "document": "platform"
+        }
+      },
+      "guard": true
+    }
+  }
+}

@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.api.CacheReadException
+import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.StoreSpec
@@ -184,6 +185,45 @@ class StoreOfRecordOverrideTest {
                         PolicyField.UNKNOWN_READ
                     ).assert().isEqualTo("throw")
             }
+    }
+
+    /**
+     * RC1-45: a customizer may tune a CoSec cache's policy within what CoSec locks, but never what decides its content:
+     * a key filter on the revoked-token table would hide revocations, a TTL function would make a store of record
+     * expire, and another codec would read other bytes. CoCache refuses a customizer that changes a locked layout field,
+     * so the application fails to start rather than run with it.
+     */
+    @Test
+    fun customizersCannotReplaceWhatDecidesACachesContent() {
+        val changes = listOf<Pair<String, (StoreSpec.Builder<*, *>) -> Unit>>(
+            "key filter" to { it.keyFilter { true } },
+            "ttl function" to {
+                @Suppress("UNCHECKED_CAST")
+                (it as StoreSpec.Builder<Any, Any>).ttlOf { _, _ -> Duration.ofMillis(1) }
+            },
+            "codec" to {
+                @Suppress("UNCHECKED_CAST")
+                (it as StoreSpec.Builder<Any, Any>).codec(object : Codec<Any> {
+                    override fun encode(value: Any): ByteArray = error("not CoSec's codec")
+
+                    override fun decode(bytes: ByteArray): Any = error("not CoSec's codec")
+                })
+            },
+        )
+        changes.forEach { (what, change) ->
+            val customizer = object : CacheSpecCustomizer {
+                override fun supports(
+                    cacheName: String
+                ): Boolean = cacheName == CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
+
+                override fun customize(spec: StoreSpec.Builder<*, *>) = change(spec)
+            }
+            contextRunner.withBean(CacheSpecCustomizer::class.java, { customizer }).run { context ->
+                assertThat(context).describedAs(what).hasFailed()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME in it }.assert().describedAs(what).isTrue()
+            }
+        }
     }
 
     private companion object {

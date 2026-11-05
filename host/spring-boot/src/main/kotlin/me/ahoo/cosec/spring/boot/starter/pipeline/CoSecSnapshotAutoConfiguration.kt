@@ -51,6 +51,7 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.SmartInitializingSingleton
@@ -77,7 +78,7 @@ import java.util.UUID
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
-@EnableConfigurationProperties(RuntimeAuthorizationProperties::class)
+@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
@@ -94,10 +95,11 @@ class CoSecSnapshotAutoConfiguration {
         fun cosecPolicySnapshotCache(
             factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
+            cosec: CoSecProperties,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
             return factory.createPolicySnapshotCache(
-                CoSecCacheSpecs.policySnapshot(snapshot.keyPrefix, snapshot.localMaxAge)
+                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge)
             )
         }
 
@@ -150,9 +152,9 @@ class CoSecSnapshotAutoConfiguration {
             factory: CoCacheFactory,
             stores: ObjectProvider<CandidateStore>,
             compiler: PlatformCompiler,
-            properties: RuntimeAuthorizationProperties,
+            cosec: CoSecProperties,
         ): CandidateSource {
-            val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, properties.snapshot.keyPrefix)
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
             return CachingCandidateSource(store, compiler::compile)
         }
 
@@ -177,9 +179,9 @@ class CoSecSnapshotAutoConfiguration {
         @ConditionalOnMissingBean
         fun cosecShadowReports(
             factory: CoCacheFactory,
-            properties: RuntimeAuthorizationProperties
+            cosec: CoSecProperties,
         ): CoCacheShadowReports =
-            CoCacheShadowReports.create(factory, properties.snapshot.keyPrefix)
+            CoCacheShadowReports.create(factory, cosec.keyPrefix)
 
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
@@ -274,7 +276,20 @@ class ShadowReporting(reporter: ShadowReporter) : AutoCloseable {
     }
 }
 
-internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOptions = SnapshotOptions(
+/**
+ * The source's options. A `revalidate-interval` out of bounds fails startup naming the property (`SNP-6`, RC1-50): the
+ * periodic pass is the only bound on a change whose invalidation was lost, so it cannot be turned off.
+ */
+internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOptions {
+    SnapshotOptions.revalidateIntervalProblem(revalidateInterval, lagWarn, failClosed.tenants, failClosed.maxLag)?.let {
+        throw IllegalStateException("$REVALIDATE_INTERVAL_PROPERTY ($revalidateInterval) $it.")
+    }
+    return options()
+}
+
+internal const val REVALIDATE_INTERVAL_PROPERTY = "cosec.authorization.snapshot.revalidate-interval"
+
+private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions = SnapshotOptions(
     revalidateInterval = revalidateInterval,
     lagWarn = lagWarn,
     lagEscalate = lagEscalate,

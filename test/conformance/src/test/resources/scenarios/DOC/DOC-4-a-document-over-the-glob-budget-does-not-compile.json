@@ -1,0 +1,230 @@
+{
+  "rules": [
+    "DOC-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Nine such DENYs hold 2,304 glob units, over the document's bound of 2,048: the document does not compile, whatever each pattern costs alone.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "globs",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            },
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab",
+                "http:path:/{v}a*a*a*a*ab"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "globs",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "globs"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "more than 2048"
+  }
+}

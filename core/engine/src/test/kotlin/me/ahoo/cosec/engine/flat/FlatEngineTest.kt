@@ -138,11 +138,10 @@ class FlatEngineTest {
         fixture.log.clear()
         CoSecFlatEngine.evaluate(flatRequest(), SnapshotView(platform, null, emptyTenant)).decision.assert()
             .isEqualTo(Decision.Permit(ref("r", 0, bound("g3"))))
+        // p, bound twice, is evaluated once per pass (ALG-9).
         fixture.log.calls.assert().containsExactly(
             "guard:c",
             "rule:p.0",
-            "rule:p.0",
-            "rule:p.1",
             "rule:p.1",
             "rule:q.0",
             "guard:other",

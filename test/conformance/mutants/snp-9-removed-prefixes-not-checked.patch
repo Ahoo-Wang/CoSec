@@ -1,0 +1,16 @@
+# Rule: SNP-9
+# Mutant: a removed key prefix is only an unknown property, so with cosec.unknown-properties=warn, or once renamed, revocations stay where nothing reads them
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.RemovedKeyPrefixesTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecPropertyCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecPropertyCheckAutoConfiguration.kt
+index 6c888ad8..206d4d99 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecPropertyCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecPropertyCheckAutoConfiguration.kt
+@@ -26,7 +26,6 @@ import org.springframework.core.env.ConfigurableEnvironment
+ class CoSecPropertyCheckAutoConfiguration {
+     @Bean
+     fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): InitializingBean = InitializingBean {
+-        RemovedKeyPrefixes.check(environment)
+         val mode = environment.getProperty(UnknownProperties.MODE_KEY, "fail")
+         UnknownProperties.load(javaClass.classLoader).check(environment, warn = mode.equals("warn", ignoreCase = true))
+     }

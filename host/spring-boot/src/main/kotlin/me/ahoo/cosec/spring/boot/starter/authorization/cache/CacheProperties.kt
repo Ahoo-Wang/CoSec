@@ -16,18 +16,16 @@ import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
-import org.springframework.boot.context.properties.bind.DefaultValue
 import org.springframework.boot.convert.DurationUnit
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 
 /**
  * `cosec.authorization.cache.*`: the token revocation caches. The policy snapshot has its own properties
- * (`cosec.authorization.snapshot.*`).
+ * (`cosec.authorization.snapshot.*`); every cache's keys live under `cosec.key-prefix`.
  */
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
 class CacheProperties(
-    @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC,
     @NestedConfigurationProperty
     var token: CacheConfiguration = CacheConfiguration(),
 ) {

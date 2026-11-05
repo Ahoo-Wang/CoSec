@@ -38,7 +38,7 @@ Indeterminate in an explanation.
 
 | Status | Problem `type` slug | Meaning |
 |---|---|---|
-| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), or a route-map capture that cannot be a resource id segment. The engine never saw it. |
+| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit rule, whatever its effect; PIP-12): typically `X-Forwarded-For` from two proxies that each append a line; have them send one line, or read `environment.ip`. The engine never saw it. |
 | 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
 | 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
 | 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
@@ -62,6 +62,21 @@ A 401 always means "authenticate (again)"; a 403 means the identity is known and
 Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Startup failures
+
+- **`cosec.authorization.snapshot.revalidate-interval (<value>) must be ...`**: the periodic revalidation is the only
+  bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, less than
+  `lag-warn`, and, with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
+  suggest turning revalidation off.
+- **`CoSec no longer reads cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
+  `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and startup fails whatever
+  `cosec.unknown-properties` says. The message lists the families that move from where to where. Have the token
+  revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
+  left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
+  `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
+- **A document does not compile on a path pattern** (`DOC-4`): over 2,048 characters, a glob segment of more than 16
+  parts (consecutive `*` count once), or more than 2,048 glob units in one document (each glob segment's parts and the
+  characters of its text, twice after a leading `**`). The control plane answers a
+  `COMPILE` finding; on the data plane the stored document is installed as failed and its requests are 503.
 
 - **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by `<key> -> <replacement>` lines:
   a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
@@ -185,7 +200,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   (`cosec.pipeline.api-key-header`).
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
-  delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4).
+  delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;
+  or a claim CoSec refuses: `tenantId` not a string, `roles` or `policies` not an array of strings, `attributes` not an
+  object).
 - `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the
   `MembershipProvider` does not know (answers `MembershipAnswer.Unknown`) or knows as deactivated (`active = false`),
   IDN-3: the decision
@@ -253,8 +270,9 @@ header: anonymous. Otherwise never anonymous:
 
 ### Change not visible / snapshot lag
 
-- Instances revalidate every `cosec.authorization.snapshot.revalidate-interval` (10s) and serve local copies up to
-  `local-max-age` (30s). Logs: `Snapshot document [<key>] revision <n> has not been confirmed for <lag>` (WARN, over
+- Instances revalidate every `cosec.authorization.snapshot.revalidate-interval` (10s; it cannot be turned off, SNP-6)
+  and serve local copies up to `local-max-age` (30s). Every instance and the control plane need the same Redis and
+  `cosec.key-prefix`. Logs: `Snapshot document [<key>] revision <n> has not been confirmed for <lag>` (WARN, over
   `lag-warn`, 60s) and `... is stale` (ERROR, over `lag-escalate`, 5m). `Reloading snapshot document [<key>] failed;
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a

@@ -53,6 +53,12 @@ class CompiledStatement internal constructor(
     internal val externals: Array<Attribute> =
         condition?.let { ConditionAttributes.of(it).filter(Attribute::external).distinct().toTypedArray() } ?: NO_ATTRIBUTES
 
+    /** The tokens and literal characters of its resources' glob segments, which the document's budget counts (`DOC-4`). */
+    internal val globUnits: Int = resources.sumOf { (it as? ResourcePattern.Http)?.path?.globUnits ?: 0 }
+
+    /** The request headers [condition] reads (`PIP-12`). */
+    internal val headers: Array<String> = condition?.let { HeadersRead.of(ConditionAttributes.of(it)) } ?: NO_HEADERS
+
     /** Whether [condition] reads a captured variable: only then does matching the resource keep the captures. */
     internal val captures: Boolean = condition != null && ConditionAttributes.of(condition).any {
         it.kind == Attribute.Kind.RESOURCE_VAR
@@ -126,6 +132,38 @@ enum class OnMissing {
 }
 
 internal val NO_ATTRIBUTES: Array<Attribute> = emptyArray()
+
+internal val NO_HEADERS: Array<String> = emptyArray()
+
+/**
+ * The request headers attributes read, in lower case: `http.header.<name>` reads `<name>`, `http.origin` and the
+ * attributes derived from it read `origin`, and `http.referer` and its derived ones `referer` (`PIP-12`). The names
+ * come from attributes that resolved, so a credential header (`CND-5`) is never one of them.
+ */
+internal object HeadersRead {
+    private const val ORIGIN = "origin"
+    private const val REFERER = "referer"
+
+    fun of(attributes: Iterable<Attribute>): Array<String> {
+        val names = attributes.mapNotNullTo(LinkedHashSet(), ::headerOf)
+        return if (names.isEmpty()) NO_HEADERS else names.toTypedArray()
+    }
+
+    /** The distinct names of [first] and [rest], in order; [NO_HEADERS] for none. */
+    fun merge(first: Array<String>, rest: Iterable<Array<String>>): Array<String> {
+        val names = LinkedHashSet<String>()
+        names.addAll(first)
+        rest.forEach { names.addAll(it) }
+        return if (names.isEmpty()) NO_HEADERS else names.toTypedArray()
+    }
+
+    fun headerOf(attribute: Attribute): String? = when (attribute.kind) {
+        Attribute.Kind.HTTP_HEADER -> attribute.name
+        Attribute.Kind.HTTP_ORIGIN, Attribute.Kind.HTTP_ORIGIN_HOST, Attribute.Kind.HTTP_ORIGIN_HOST_LABELS -> ORIGIN
+        Attribute.Kind.HTTP_REFERER, Attribute.Kind.HTTP_REFERER_HOST, Attribute.Kind.HTTP_REFERER_HOST_LABELS -> REFERER
+        else -> null
+    }
+}
 
 /**
  * How [CompiledPolicy] indexes its statements (RFC 0005 §6.2). The decision never depends on them (I2); only how many

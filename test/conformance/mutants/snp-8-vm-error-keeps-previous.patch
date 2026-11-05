@@ -1,0 +1,16 @@
+# Rule: SNP-8
+# Mutant: a VirtualMachineError while compiling ends the load as a transient failure, which keeps the previous revision
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.*
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 8ab96d44..5f3a4bb3 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -1045,7 +1045,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+                     load.confirmedAt,
+                     EntryOrigin.UNCOMPILABLE,
+                 )
+-                finish(load, failed, install = true)
+                 throw error
+             }
+             retryDelay = options.rejectedReloadRetry

@@ -118,7 +118,7 @@ class SnapshotInstallOrderPropertyTest {
         // One app and one tenant at most, so loading the other evicts it: eviction runs concurrently on the scheduler.
         // Retries after a failed recompile would run on the scheduler too; settling revalidates instead.
         val options = SnapshotOptions(
-            revalidateInterval = Duration.ZERO,
+            revalidateInterval = QUIET_PASS,
             maxApps = 1,
             maxTenants = 1,
             rejectedReloadRetry = Duration.ofHours(1),

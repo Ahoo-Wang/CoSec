@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "PIP-12"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Only an ALLOW reads X-Tier. Sent twice with different values, it is still answered 400, as for a DENY, so the answer does not tell which effect reads the header.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "tier",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "http.header.x-tier",
+                  "gold"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "tier",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "tier"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Tier": [
+        "gold",
+        "silver"
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

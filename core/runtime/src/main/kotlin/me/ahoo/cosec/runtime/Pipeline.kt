@@ -407,6 +407,11 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             return unavailable(requestId, traceId, Cause.SourceUnavailable(DocumentKind.PLATFORM, it))
         }
         record?.resolved(scope, view)
+        // RC1-38 (PIP-12): a header a document reads, sent with different values, has no value to decide on. Refused for
+        // every such header, whichever statement reads it, so the answer does not tell a DENY from an ALLOW.
+        if (HttpAttributes.ambiguousHeader(facts.headers, view) != null) {
+            return StatusMapping.invalidRequest(requestId, "header", traceId)
+        }
 
         val authz = AuthzRequest(
             subject = authzSubject,

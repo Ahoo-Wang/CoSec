@@ -129,7 +129,7 @@ class SnapshotRoundTwoTest {
     @Test
     fun storeReadTimeoutDuringRevalidationIsNotAConfirmation() {
         val clock = ManualClock()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, storeReadTimeout = Duration.ofMillis(50))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, storeReadTimeout = Duration.ofMillis(50))
         testSource(store, options = options, clock = clock).use { source ->
             source.load().join()
             clock.advance(Duration.ofHours(1))
@@ -143,7 +143,7 @@ class SnapshotRoundTwoTest {
 
     @Test
     fun reloadOfAnEvictedSlotReadsNothing() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 2, reloadConcurrency = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, reloadConcurrency = 1)
         testSource(store, options = options).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
@@ -205,7 +205,7 @@ class SnapshotRoundTwoTest {
         inMemory.put(SnapshotKey.Platform, document(1))
         val apps = 10_000
         repeat(apps) { inMemory.put(SnapshotKey.App("app-$it"), document(1, "a")) }
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = apps * 2)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = apps * 2)
         testSource(inMemory, options = options).use { source ->
             repeat(apps) { source.load("app-$it").join() }
 
@@ -222,7 +222,7 @@ class SnapshotRoundTwoTest {
             if (reject.get()) throw RejectedExecutionException("full")
             task.run()
         }
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, rejectedReloadRetry = Duration.ofMillis(20))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, rejectedReloadRetry = Duration.ofMillis(20))
         testSource(store, options = options, compileExecutor = compile).use { source ->
             source.load().join()
             reject.set(true)

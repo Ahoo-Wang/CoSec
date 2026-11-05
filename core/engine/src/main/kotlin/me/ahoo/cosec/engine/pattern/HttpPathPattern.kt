@@ -39,6 +39,11 @@ class HttpPathPattern private constructor(
     private val elements: Array<PathElement>,
     /** The names of the captured variables, in the order [Captures] holds their values. */
     val variableNames: List<String>,
+    /**
+     * The tokens and literal characters of its glob segments, twice after a leading rest, which tries them against two
+     * segments: what it costs a document's budget (`DOC-4`).
+     */
+    internal val globUnits: Int,
 ) {
     private val names: Array<String> = variableNames.toTypedArray()
 
@@ -63,11 +68,20 @@ class HttpPathPattern private constructor(
      */
     internal val prefix: Array<String?> = prefixOf(elements, leadingRest || !decodeAndParseSegments)
 
-    /** Whether [path] matches. Allocates nothing unless a segment has several `*` or captures. */
+    /** Whether [path] matches. Allocates nothing. */
     fun matches(path: HttpPath): Boolean = matchPath(path, null)
 
+    /** [matches], deciding glob segments in [scratch], the evaluation's ([SegmentGlob]). */
+    internal fun matches(path: HttpPath, scratch: EvaluationScratch): Boolean = matchPath(path, null, scratch)
+
     /** The captured variables if [path] matches, otherwise `null`. */
-    fun match(path: HttpPath): Captures? {
+    fun match(path: HttpPath): Captures? = match(path, null)
+
+    /**
+     * [match], deciding and capturing glob segments in [scratch], the evaluation's: then it allocates only the captured
+     * values. A fresh table is used without one.
+     */
+    internal fun match(path: HttpPath, scratch: EvaluationScratch?): Captures? {
         if (names.isEmpty()) {
             return if (matchPath(path, null)) Captures.NONE else null
         }
@@ -75,7 +89,8 @@ class HttpPathPattern private constructor(
             return null
         }
         val values = arrayOfNulls<String>(names.size)
-        if (!matchPath(path, values)) {
+        val matched = if (scratch == null) matchPath(path, values) else matchPath(path, values, scratch)
+        if (!matched) {
             return null
         }
         return Captures(names, values.requireNoNulls())
@@ -91,6 +106,12 @@ class HttpPathPattern private constructor(
         return true
     }
 
+    /*
+     * Two copies of the walk: one without a table, as it was before there was one, which every pattern without a glob
+     * segment takes, and one with the evaluation's table. One walk taking the table as well cost
+     * FlatAuthorizationBenchmark 7 to 12 % on CI's x86 runners, whose patterns have no glob segment at all.
+     */
+
     private fun matchPath(path: HttpPath, captures: Array<String?>?): Boolean {
         require(path.decodeAndParseSegments == decodeAndParseSegments) {
             "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
@@ -103,9 +124,11 @@ class HttpPathPattern private constructor(
             return matchFrom(0, 0, path, captures)
         }
         // Every element after a leading rest matches one path element, except a final `*`, which may match none:
-        // so the rest of the pattern can only start at one of the last two positions. Spring takes the first that fits.
+        // so the rest of the pattern can only start where it ends the path, or one later. Spring takes the first that
+        // fits. Trying no other start keeps a glob after the rest to two segments (RC1-8, `DOC-4`).
         val rest = elements.size - 1
-        for (start in maxOf(0, path.size - rest) until path.size) {
+        val first = path.size - rest
+        for (start in maxOf(0, first) until minOf(path.size, first + 2)) {
             if (matchFrom(1, start, path, captures)) {
                 (elements[0] as PathElement.Rest).capture(path, 0, start, captures)
                 return true
@@ -125,6 +148,55 @@ class HttpPathPattern private constructor(
                 is PathElement.Segment -> {
                     val segment = if (index < path.size) path.segment(index) else null
                     if (segment != null && element.matches(segment, captures)) index + 1 else NO_MATCH
+                }
+            }
+            if (index == NO_MATCH) {
+                return false
+            }
+        }
+        return index == path.size
+    }
+
+    /** [matchPath], glob segments matched in [scratch]. */
+    private fun matchPath(path: HttpPath, captures: Array<String?>?, scratch: EvaluationScratch): Boolean {
+        require(path.decodeAndParseSegments == decodeAndParseSegments) {
+            "Path [$path] was parsed with decodeAndParseSegments=${path.decodeAndParseSegments}, pattern [$pattern] " +
+                "needs $decodeAndParseSegments."
+        }
+        if (path.value.isEmpty() && !matchesEmptyPath) {
+            return false
+        }
+        if (!leadingRest) {
+            return matchFrom(0, 0, path, captures, scratch)
+        }
+        val rest = elements.size - 1
+        val first = path.size - rest
+        for (start in maxOf(0, first) until minOf(path.size, first + 2)) {
+            if (matchFrom(1, start, path, captures, scratch)) {
+                (elements[0] as PathElement.Rest).capture(path, 0, start, captures)
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun matchFrom(
+        first: Int,
+        start: Int,
+        path: HttpPath,
+        captures: Array<String?>?,
+        scratch: EvaluationScratch,
+    ): Boolean {
+        var index = start
+        val last = elements.size - 1
+        for (position in first..last) {
+            index = when (val element = elements[position]) {
+                is PathElement.Rest -> return element.matches(path, index, captures)
+                PathElement.Separator -> if (index < path.size && path.isSeparator(index)) index + 1 else NO_MATCH
+                PathElement.Wildcard -> wildcard(path, index, position == last)
+                is PathElement.Segment -> {
+                    val segment = if (index < path.size) path.segment(index) else null
+                    if (segment != null && element.matches(segment, captures, scratch)) index + 1 else NO_MATCH
                 }
             }
             if (index == NO_MATCH) {
@@ -188,8 +260,18 @@ class HttpPathPattern private constructor(
                 decodeAndParseSegments = decodeAndParseSegments,
                 elements = parsed.elements,
                 variableNames = parsed.variableNames,
+                globUnits = parsed.globUnits,
             )
         }
+
+        /** The longest pattern: no normalized path is longer (RC1-8, `DOC-4`). */
+        const val MAX_LENGTH: Int = 2048
+
+        /**
+         * The most tokens of a segment that mixes `*`, `?` or `{name}` with other text, counted after consecutive `*`
+         * collapse into one: each `*`, `?` and `{name}`, and each run of text between them (RC1-8, `DOC-4`).
+         */
+        const val MAX_SEGMENT_TOKENS: Int = 16
     }
 }
 
@@ -250,6 +332,10 @@ internal sealed class PathElement {
     /** An element that matches one segment by its value. */
     sealed class Segment : PathElement() {
         abstract fun matches(value: String, captures: Array<String?>?): Boolean
+
+        /** [matches] with the evaluation's table, which only a glob uses. */
+        open fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch): Boolean =
+            matches(value, captures)
     }
 
     /** Compared like `String.equalsIgnoreCase` when case-insensitive, as Spring compares literal segments. */
@@ -294,7 +380,10 @@ internal sealed class PathElement {
     }
 
     /** A segment with `*` or a capture among other text: see [SegmentGlob]. */
-    class Glob(private val glob: SegmentGlob) : Segment() {
-        override fun matches(value: String, captures: Array<String?>?): Boolean = glob.matches(value, captures)
+    class Glob(val glob: SegmentGlob) : Segment() {
+        override fun matches(value: String, captures: Array<String?>?): Boolean = glob.matches(value, captures, null)
+
+        override fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch): Boolean =
+            glob.matches(value, captures, scratch)
     }
 }

@@ -158,31 +158,49 @@ class RedisSnapshotDocumentStoreTest {
             SnapshotNode(backend, keyPrefix).use { listening ->
                 SnapshotNode(backend, keyPrefix).use { writing ->
                     val changed = CopyOnWriteArrayList<SnapshotKey>()
-                    val subscription = listening.store.subscribe(object : SnapshotChangeListener {
-                        override fun onChanged(keys: Collection<SnapshotKey>) {
-                            changed.addAll(keys)
-                        }
-
-                        override fun onReset() = Unit
-                    })
+                    val subscription = listening.store.subscribe(collector(changed))
                     writing.writer.publish(SnapshotKey.Platform).block()
                     writing.writer.publish(SnapshotKey.App("app")).block()
                     awaitTrue(what = "both invalidations") {
                         changed.containsAll(listOf(SnapshotKey.Platform, SnapshotKey.App("app")))
                     }
-                    // an instance hears of its own writes too
+                    // An instance hears of its own writes too: at once, from the writer's notifyChanged, and again when
+                    // the invalidation comes back from Redis. Wait for that echo as well: a dispatch takes its listeners
+                    // when the message arrives, so an echo still in flight would land after the close below.
                     listening.writer.publish(SnapshotKey.Platform).block()
-                    awaitTrue(what = "the instance's own write") { changed.count { it == SnapshotKey.Platform } >= 2 }
+                    awaitTrue(what = "the instance's own write and its echo") {
+                        changed.count { it == SnapshotKey.Platform } >= 3
+                    }
 
-                    subscription.close()
-                    changed.clear()
-                    writing.writer.publish(SnapshotKey.Platform).block()
-                    listening.writer.publish(SnapshotKey.Platform).block()
-                    Thread.sleep(200)
-                    changed.assert().isEmpty()
+                    // A positive barrier instead of a sleep: a second subscription, live before the close (it has heard a
+                    // marker), hears every message published after the close; once it has, they have all been dispatched.
+                    val barrier = CopyOnWriteArrayList<SnapshotKey>()
+                    listening.store.subscribe(collector(barrier)).use {
+                        writing.writer.publish(SnapshotKey.App("marker")).block()
+                        awaitTrue(what = "the barrier's subscription") { SnapshotKey.App("marker") in barrier }
+
+                        subscription.close()
+                        changed.clear()
+                        barrier.clear()
+                        writing.writer.publish(SnapshotKey.Platform).block()
+                        listening.writer.publish(SnapshotKey.Platform).block()
+                        // The writer's echo, and the listener's own write with its echo.
+                        awaitTrue(what = "every invalidation after the close") {
+                            barrier.count { it == SnapshotKey.Platform } >= 3
+                        }
+                        changed.assert().isEmpty()
+                    }
                 }
             }
         }
+    }
+
+    private fun collector(into: MutableList<SnapshotKey>) = object : SnapshotChangeListener {
+        override fun onChanged(keys: Collection<SnapshotKey>) {
+            into.addAll(keys)
+        }
+
+        override fun onReset() = Unit
     }
 
     /**

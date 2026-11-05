@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: consecutive stars each count as a token
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 6eb561e9..072c8c8a 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -123,7 +123,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+             when (val char = text[index]) {
+                 '*', '?' -> {
+                     flush()
+-                    val repeatsAStar = char == '*' && (tokens.lastOrNull() as? GlobToken.Run)?.variable == -1
++                    val repeatsAStar = false
+                     if (!repeatsAStar) {
+                         tokens.add(if (char == '*') GlobToken.Run(-1) else GlobToken.AnyChar)
+                     }

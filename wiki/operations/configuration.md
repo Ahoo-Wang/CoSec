@@ -71,6 +71,19 @@ These have no switch:
 - **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi` and Spring Boot Actuator are;
   expose it like any actuator endpoint.
 
+## Key prefix
+
+Every key a deployment writes to Redis lives under one prefix (`SNP-9`): snapshot documents, control-plane records,
+shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states
+([Redis keys](./storage.md#redis-keys)). Two deployments on one Redis that use different prefixes share nothing.
+It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
+`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, whatever `cosec.unknown-properties`
+says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. |
+
 ## Pipeline
 
 `cosec.pipeline.*`: how one request is read and bounded.
@@ -143,9 +156,8 @@ of your own replaces both.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.snapshot.key-prefix` | string | `cosec` | The Redis namespace of the snapshot documents, the control plane's records and the shadow keys, with a trailing `:` removed. Every service that reads the same platform, and the control plane, must use the same value. |
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read. `0` turns the periodic pass off; invalidation messages still reload changed documents. |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read: the longest a change whose invalidation message was lost goes unseen (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |
@@ -192,8 +204,7 @@ With JWT enabled, startup fails unless revocations can be recorded and read: `co
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.api-key.store` | `memory`, `redis` | `memory` | `memory`: the keys configured below. `redis`: keys shared by every instance; needs `cosec-cocache`, a `StringRedisTemplate` and a `ReactiveStringRedisTemplate`. |
-| `cosec.api-key.key-prefix` | string | `cosec:api-key` | Redis key prefix of the `redis` store, with a trailing `:` removed. Independent of every other prefix ([Redis keys](./storage.md#redis-keys)). |
+| `cosec.api-key.store` | `memory`, `redis` | `memory` | `memory`: the keys configured below. `redis`: keys shared by every instance, under `<cosec.key-prefix>:api-key`; needs `cosec-cocache`, a `StringRedisTemplate` and a `ReactiveStringRedisTemplate`. |
 | `cosec.api-key.keys[n].*` | list | empty | Keys of the `memory` store; ignored with `redis`. |
 
 The header is [`cosec.pipeline.api-key-header`](#pipeline). API keys need a `MembershipProvider` bean, or the
@@ -218,7 +229,6 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.cache.key-prefix` | string | `cosec` | Prefix of the revocation keys, with a trailing `:` removed. Independent of `cosec.authorization.snapshot.key-prefix`. |
 | `cosec.authorization.cache.token.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
 
 ### Local cache settings
@@ -325,7 +335,7 @@ Every CoCache duration needs a unit (`2s`, `10m`); a bare number fails startup.
 | `cocache.defaults.cache.*`, `cocache.defaults.store.*` | Fill only what a cache's declaration leaves unwritten. CoSec's caches declare what they depend on, so these change little: `MembershipCache` is a `cache`, every other CoSec cache a `store` ([Precedence](#precedence)). |
 | `cocache.overrides.cache.*`, `cocache.overrides.store.*` | Tighten staleness bounds (`local-max-age`, `absent-ttl`) and `read-failure` over every cache, except for the fields CoSec locks. |
 | `cocache.caches.[<CacheName>].*` | The policy of one cache, by the names above. Setting a field CoSec locks fails startup ([Precedence](#precedence)). |
-| `cocache.key-prefix` | None: CoSec locks its own prefixes (`cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix`). |
+| `cocache.key-prefix` | None: CoSec locks its own prefix, [`cosec.key-prefix`](#key-prefix). |
 | `cocache.redis.command-timeout` | How long one Redis command may take (`2s` by default). A snapshot read that times out is a failed read ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `cocache.redis.channel-mode` | `pubsub` or `sharded` invalidation. Every instance, and the control plane, must agree. |
 | `cocache.redis.assume-maxmemory-policy` | The policy CoCache's own eviction check assumes when `INFO memory` cannot be read. CoCache refuses to start with `allkeys-*`, or with an unreadable policy and this unset, because CoSec's documents and records are `Store`s; `cosec.authorization.snapshot.eviction-check=warn` does not change that ([Redis requirements](./storage.md#redis-requirements)). |

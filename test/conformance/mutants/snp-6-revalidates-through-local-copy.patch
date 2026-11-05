@@ -1,0 +1,18 @@
+# Rule: SNP-6
+# Mutant: a seen key is read through the local copy, so revalidation can confirm what the copy holds instead of the store
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 8ab96d44..7f56bebc 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -894,6 +894,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+                 load.fromLocalCopy = true
+                 return store.read(key)
+             }
++            if (known != null && !load.force && !load.recompiles) {
++                return store.read(key)
++            }
+             val digest = when {
+                 known == null || load.force || load.recompiles -> null
+                 known.origin == EntryOrigin.UNCOMPILABLE -> null

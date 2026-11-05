@@ -22,6 +22,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
+import tools.jackson.core.StreamReadFeature
 
 private val log = KotlinLogging.logger {}
 
@@ -69,6 +70,8 @@ class UnknownProperties(
     companion object {
         const val PREFIX = "cosec."
         const val MODE_KEY = "cosec.unknown-properties"
+        private const val PREFIX_MOVED =
+            "cosec.key-prefix, the prefix of every key; copy the token revocations and API keys first"
         private val INDEX = Regex("\\[[^]]*]")
 
         /** What 8.0 did with a 7.x key, by key or by prefix (ending in `.`). */
@@ -96,6 +99,9 @@ class UnknownProperties(
             "cosec.inject.enabled" to "removed: see the upgrade guide",
             "cosec.api-key.store-blocking" to "removed",
             "cosec.jwt.token-revocation.enabled" to "removed: revocation is always on",
+            RemovedKeyPrefixes.SNAPSHOT to PREFIX_MOVED,
+            RemovedKeyPrefixes.CACHE to PREFIX_MOVED,
+            RemovedKeyPrefixes.API_KEY to PREFIX_MOVED,
         )
 
         fun hint(name: String): String? =
@@ -108,7 +114,7 @@ class UnknownProperties(
             val resolver = PathMatchingResourcePatternResolver(classLoader)
             for (pattern in METADATA) {
                 resolver.getResources(pattern).forEach { resource ->
-                    val properties = resource.inputStream.use { CoSecJson.mapper.readTree(it) }.get("properties")
+                    val properties = resource.inputStream.use { metadata.readTree(it) }.get("properties")
                     properties?.values()?.forEach { property ->
                         val name = property.get("name")?.asString() ?: return@forEach
                         known += name
@@ -121,6 +127,12 @@ class UnknownProperties(
             }
             return UnknownProperties(known, containers)
         }
+
+        /**
+         * Reads Spring's metadata files, which any jar may carry, hand-written ones too: not a format CoSec defines, so
+         * a duplicate key in one is not CoSec's to refuse (DOC-5 covers CoSec's own formats, review L4 of #1200).
+         */
+        private val metadata = CoSecJson.mapper.reader().without(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
         private val METADATA = listOf(
             "classpath*:META-INF/spring-configuration-metadata.json",

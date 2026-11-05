@@ -14,17 +14,23 @@
 package me.ahoo.cosec.runtime.json
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.jsonMapper
 
 /**
  * The one JSON mapper of CoSec: Kotlin support and the modules on the classpath, among them [CoSecModule]. Every
- * stored format (snapshot documents, control records, shadow reports, memberships, API keys, audit records) is written
- * with it, so one configuration decides their bytes. It builds the mapper and nothing else (RFC 0011 D3, §5).
+ * stored format (snapshot documents, control records, shadow reports, memberships, API keys, revocations, audit
+ * records) is written and read with it, so one configuration decides their bytes. It builds the mapper and nothing else
+ * (RFC 0011 D3, §5).
+ *
+ * Every read refuses an object with a duplicate key (`DOC-5`, RC1-44): `{"roles":["viewer"],…,"roles":null}` would
+ * otherwise read as its last value, an API key without its cap, whichever value the writer meant.
  */
 @InternalCoSecApi
 object CoSecJson {
     val mapper: JsonMapper = jsonMapper {
         findAndAddModules()
+        enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     }
 }

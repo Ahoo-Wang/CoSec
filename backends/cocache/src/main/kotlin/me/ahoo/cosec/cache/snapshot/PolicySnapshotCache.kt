@@ -21,6 +21,7 @@ import me.ahoo.cocache.api.spi.Keyspace
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
+import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -88,13 +89,23 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
 }
 
 /**
- * Creates the store declared by [spec], which [CoSecCacheSpecs.policySnapshot] builds, with CoSec's locks
- * ([CoSecCacheSpecs.locks]): the application's `cocache.*` properties and customizers apply to it, except for its storage
- * layout, codec, lifetime, failed reads and local max age.
+ * Creates the store declared by [spec], which [CoSecCacheSpecs.policySnapshot] builds, with the pins of a store of record
+ * whoever built [spec] (`SNP-3`, RC1-45): the snapshot's own key encoding and codec, no key filter, no per-entry TTL, no
+ * expiry and a failed read that throws. Only the storage layout and the local copies' age are [spec]'s. CoSec's locks
+ * ([CoSecCacheSpecs.locks]) then keep them so: the application's `cocache.*` properties and customizers apply to it,
+ * except for its storage layout, codec, lifetime, failed reads and local max age.
  */
 fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
     require(spec.name == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) { "Not the snapshot store: ${spec.name}." }
-    val store = create(spec, CoSecCacheSpecs.locks(spec.name))
-    val policy = checkNotNull(runtime.policy(spec.name)) { "The snapshot store ${spec.name} was not created." }
-    return PolicySnapshotCache(store, spec.keyspace, policy.localMaxAge, runtime.backend.channel)
+    val pinned = spec.toBuilder()
+        .keyEncoder(SnapshotKeyEncoder)
+        .codec(SnapshotDocumentCodec)
+        .unknownRead(UnknownReadMode.THROW)
+        .policy { ttl = forever() }
+    pinned.keyFilter = null
+    pinned.ttlOf = null
+    val created = pinned.build()
+    val store = create(created, CoSecCacheSpecs.locks(created.name))
+    val policy = checkNotNull(runtime.policy(created.name)) { "The snapshot store ${created.name} was not created." }
+    return PolicySnapshotCache(store, created.keyspace, policy.localMaxAge, runtime.backend.channel)
 }

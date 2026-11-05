@@ -66,12 +66,13 @@
     {
       "id": "PIP-6",
       "source": "RFC 0006 §5.3.2, §6.1 (K2, Q2)",
-      "statement": "A credential that is invalid, expired or revoked is evaluated as anonymous: a permit proceeds, and a deny answers 401 with the token-* problem type that names why (token-invalid, token-expired, token-revoked), never unauthorized.",
+      "statement": "A credential that is invalid (a token whose `roles` or `policies` claim is not an array of strings, or whose `attributes` claim is not an object, included), expired or revoked is evaluated as anonymous: a permit proceeds, and a deny answers 401 with the token-* problem type that names why (token-invalid, token-expired, token-revoked), never unauthorized.",
       "level": "pipeline",
       "guards": [
         "runtime:TokenAuthenticatorTest#rejectedTokensNameWhy",
         "runtime:PipelineTest#rejectedCredentialsDenyWithTheirReason",
-        "runtime:PipelineTest#rejectedCredentialsAreEvaluatedAsAnonymous"
+        "runtime:PipelineTest#rejectedCredentialsAreEvaluatedAsAnonymous",
+        "jwt:JwtTokenVerifierTest#malformedRoleAndPolicyClaimsAreInvalid"
       ],
       "pending": null
     },
@@ -101,7 +102,7 @@
     {
       "id": "PIP-9",
       "source": "RFC 0005 §3.2; RFC 0006 §5.4",
-      "statement": "Conditions read the request's host attributes: `http.header.<name>`, `http.origin`, `http.referer` and their hosts (in lower case) from the request's headers, and `request.attributes.<name>` from what the adapter knows besides HTTP (the gateway's route id). A DENY on them applies, and an ALLOW gated on them permits; they are never read as absent when the request carries them. A header sent more than once with different values has no single value: a statement reading it errs (a DENY is indeterminate, an ALLOW does not match).",
+      "statement": "Conditions read the request's host attributes: `http.header.<name>`, `http.origin`, `http.referer` and their hosts (in lower case) from the request's headers, and `request.attributes.<name>` from what the adapter knows besides HTTP (the gateway's route id). A DENY on them applies, and an ALLOW gated on them permits; they are never read as absent when the request carries them. A header sent more than once with the same value is that value; one sent with different values has none (PIP-12).",
       "level": "pipeline",
       "guards": [
         "runtime:HostAttributesPipelineTest",
@@ -130,6 +131,17 @@
       "guards": [
         "architecture:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
         "architecture:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-12",
+      "source": "RFC 0006 §6.1; RC1-38",
+      "statement": "A request that sends a header with different values, when any statement, policy condition, boundary or rate limit key of the documents its view reads reads that header (`http.header.<name>`, or `Origin` and `Referer` through `http.origin` and `http.referer`), is answered 400 before evaluation, whatever the effect of the statement and whether it applies to the request; identical repeats are one value, and a header no document reads is not checked.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:HostAttributesPipelineTest#aHeaderWithDifferentValuesIsInvalid",
+        "engine:CompiledDocumentTest#a document knows the headers it reads"
       ],
       "pending": null
     }

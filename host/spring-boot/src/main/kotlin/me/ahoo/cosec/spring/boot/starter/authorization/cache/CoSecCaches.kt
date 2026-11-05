@@ -27,7 +27,7 @@ import me.ahoo.cosec.cache.CoSecCacheSpecs
  * Like the caches an application declares, a CoSec cache takes the `cocache.defaults.*`, `cocache.overrides.*` and
  * `cocache.caches.[name].*` properties and the application's `CacheSpecCustomizer`s, field by field. What CoSec's
  * correctness depends on is locked ([CoSecCacheSpecs.locks]): the storage layout stays CoSec's
- * (`cosec.authorization.cache.key-prefix`, not `cocache.key-prefix`), a policy or permission store never expires and
+ * (`cosec.key-prefix`, not `cocache.key-prefix`), a policy or permission store never expires and
  * never reads a failed Redis read as a miss, and the memberships always expire. A property that sets a locked field
  * fails startup; a customizer that changes one throws.
  *

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.HttpNames
@@ -24,8 +25,10 @@ import java.net.URISyntaxException
  * The host's attributes of one HTTP request (RFC 0005 §3.2, RFC 0006 §5.4): what the engine does not hold itself.
  *
  * - `http.header.<name>`: the header's value; names arrive lower case. A header sent more than once with different
- *   values has no single value: reading it throws [AmbiguousHeaderException], so a DENY on it is indeterminate and an
- *   ALLOW on it does not match, rather than the first (or last) value deciding. Identical repeats are one value.
+ *   values has no single value. The pipeline answers such a request 400 before evaluating it when any document of its
+ *   view reads the header ([ambiguousHeader], `PIP-12`), so a refusal does not reveal which statement reads it; read
+ *   anyway (by a host check), it throws [AmbiguousHeaderException]: a DENY on it is indeterminate and an ALLOW on it
+ *   does not match, rather than the first (or last) value deciding. Identical repeats are one value.
  * - `http.origin`, `http.referer`: the `Origin` and `Referer` headers, read the same way; `.host` is their URI's host
  *   in lower case (hosts are case-insensitive), absent when the value is not a URI or has no host. The `.labels`
  *   attributes are derived from these by the conditions.
@@ -73,13 +76,10 @@ class HttpAttributes(
 
     private fun header(name: String): String? {
         val values = headers.values(name)
-        val first = values.firstOrNull() ?: return null
-        for (i in 1 until values.size) {
-            if (values[i] != first) {
-                throw AmbiguousHeaderException(name)
-            }
+        if (isAmbiguous(values)) {
+            throw AmbiguousHeaderException(name)
         }
-        return first
+        return values.firstOrNull()
     }
 
     private fun hostOf(value: String): String? = try {
@@ -88,9 +88,39 @@ class HttpAttributes(
         null
     }
 
-    private companion object {
-        const val ORIGIN = "origin"
-        const val REFERER = "referer"
+    internal companion object {
+        private const val ORIGIN = "origin"
+        private const val REFERER = "referer"
+
+        /**
+         * The first header the documents of [view] read that [headers] holds with different values, or null (`PIP-12`,
+         * RC1-38). Checked for every header any statement, policy condition, boundary or rate limit key reads, whatever
+         * its effect and whether it applies to the request: answering only when a DENY read it would tell the client a
+         * DENY exists and name its header. No allocation for a view whose documents read no header.
+         */
+        fun ambiguousHeader(headers: Headers, view: SnapshotView): String? =
+            ambiguousIn(headers, view.platform.headersRead)
+                ?: view.app?.let { ambiguousIn(headers, it.headersRead) }
+                ?: view.tenant?.let { ambiguousIn(headers, it.headersRead) }
+
+        private fun ambiguousIn(headers: Headers, names: List<String>): String? {
+            for (i in names.indices) {
+                if (isAmbiguous(headers.values(names[i]))) {
+                    return names[i]
+                }
+            }
+            return null
+        }
+
+        /** Whether [values] holds more than one value; identical repeats are one. */
+        private fun isAmbiguous(values: List<String>): Boolean {
+            for (i in 1 until values.size) {
+                if (values[i] != values[0]) {
+                    return true
+                }
+            }
+            return false
+        }
     }
 }
 

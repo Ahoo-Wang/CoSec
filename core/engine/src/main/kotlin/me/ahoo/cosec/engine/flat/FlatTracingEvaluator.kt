@@ -16,6 +16,7 @@ package me.ahoo.cosec.engine.flat
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.StatementRef
 
 /**
  * A [FlatEvaluator] that records the trace.
@@ -41,6 +42,9 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
 
     /** At [TraceLevel.FULL], the ALLOW pass after a DENY-pass decision lists its statements without evaluating them. */
     private var listing = false
+
+    /** The records of a repeated target's first evaluation, by its bit ([repeatBit]): its later bindings repeat them. */
+    private val firstRecords = HashMap<Int, IntRange>()
 
     fun evaluateTraced(): FlatEvaluation {
         val denyDecision = denyPass()
@@ -98,6 +102,27 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
             } else {
                 record(policy, statement, via, skipped(statement), null, traceOnly())
             }
+        }
+        return false
+    }
+
+    /**
+     * A repeated target (`ALG-9`) is evaluated through its first binding, as untraced; its later bindings are listed
+     * with the first one's outcomes and errors, which evaluating them again would give.
+     */
+    override fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean {
+        val bit = repeatBit(via, slot)
+        if (firstThrough(bit)) {
+            val from = candidates.size
+            candidate(policy, via)
+            firstRecords[bit] = from until candidates.size
+            return false
+        }
+        val afterDecision = traceOnly()
+        for (index in firstRecords.getValue(bit)) {
+            val first = candidates[index]
+            val ref = StatementRef.Policy(first.ref.policy, first.ref.index, first.ref.name, via)
+            candidates += CandidateTrace(ref, first.effect, first.outcome, first.error, afterDecision)
         }
         return false
     }

@@ -181,7 +181,7 @@ class SnapshotSourceTest {
     fun leastRecentlyUsedAppIsEvicted() {
         store.put(APP_B, document(1, "b1"))
         store.put(APP_C, document(1, "c1"))
-        testSource(store, options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 2)).use { source ->
+        testSource(store, options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2)).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
             source.peek("app-a").assert().isNotNull()
@@ -226,7 +226,7 @@ class SnapshotSourceTest {
     @Test
     fun prewarmRetriesWithBackoffUntilItSucceeds() {
         val options = SnapshotOptions(
-            revalidateInterval = Duration.ZERO,
+            revalidateInterval = QUIET_PASS,
             prewarmInitialBackoff = Duration.ofMillis(10),
             prewarmMaxBackoff = Duration.ofMillis(20),
         )
@@ -245,7 +245,7 @@ class SnapshotSourceTest {
 
     @Test
     fun prewarmStopsWhenClosed() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, prewarmInitialBackoff = Duration.ofMillis(10))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, prewarmInitialBackoff = Duration.ofMillis(10))
         val source = testSource(store, options = options)
         store.failure = IllegalStateException("down")
         val prewarm = source.prewarm(listOf(SnapshotKey.Platform))
@@ -276,7 +276,7 @@ class SnapshotSourceTest {
 
     @Test
     fun periodicRevalidationRunsOnItsOwn() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL)
         appSource(store, FakeCompiler(), FakeCompiler(), options).use { source ->
             source.load().join()
             val afterLoad = store.conditionalReads.get()

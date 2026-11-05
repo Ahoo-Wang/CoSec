@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "ALG-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A DENY bound to Anyone three times is evaluated once in the pass, and the first binding in candidate order (by binding id within the policy) reports it, as when it is bound once.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "d",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:c",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d"
+        },
+        {
+          "id": "g:a",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d"
+        },
+        {
+          "id": "g:b",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "d",
+      "statement": 0,
+      "via": {
+        "binding": "g:a",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -53,7 +53,6 @@ import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.context.ApplicationContextInitializer
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Configuration
-import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -65,7 +64,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class Slice(
     redisUri: String = REDIS,
-    options: SnapshotOptions = SnapshotOptions(revalidateInterval = Duration.ofMillis(200)),
+    options: SnapshotOptions = SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL),
     val keyPrefix: String = "e2e:${UUID.randomUUID()}",
     /** The external attribute providers: the documents compile against their catalog, the pipeline fetches them. */
     attributes: AttributeProviders = AttributeProviders.NONE,
@@ -90,7 +89,7 @@ class Slice(
         )
         .properties(
             "spring.data.redis.url=$redisUri",
-            "cosec.authorization.snapshot.key-prefix=$keyPrefix",
+            "cosec.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=${options.revalidateInterval.toMillis()}ms",
             "cosec.authorization.snapshot.cold-load-timeout=${options.coldLoadTimeout.toMillis()}ms",
             "cosec.authorization.routes.location=",

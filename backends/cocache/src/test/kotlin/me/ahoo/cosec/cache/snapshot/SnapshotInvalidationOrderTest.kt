@@ -24,7 +24,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -93,7 +92,7 @@ class SnapshotInvalidationOrderTest {
             val source = DocumentSnapshots.source(
                 reader.store,
                 SnapshotCompiler { _, document -> document.revision },
-                SnapshotOptions(revalidateInterval = Duration.ofMillis(200)),
+                SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL),
             )
             source.use {
                 reader.store.subscribe(listener).use {
@@ -115,7 +114,7 @@ class SnapshotInvalidationOrderTest {
             DocumentSnapshots.source(
                 reader.store,
                 SnapshotCompiler { _, document -> document.revision },
-                SnapshotOptions(revalidateInterval = Duration.ofMillis(200)),
+                SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL),
             ).use { source ->
                 source.load().get().version.shared.assert().isEqualTo(1L)
                 writer.writer.publish(SnapshotKey.Platform).block()

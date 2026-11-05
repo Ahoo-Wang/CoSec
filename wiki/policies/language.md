@@ -223,6 +223,32 @@ A resource may be a pattern object with options, for `http:path:` patterns only:
 | `caseSensitive` | `true` | `false` compares literals ignoring ASCII case. |
 | `decodeAndParseSegments` | `true` | `true` matches each segment by its percent-decoded value without `;` parameters; `false` by its text as received, except that `%2F` reads as `/`. |
 
+### Path pattern bounds
+
+What matching a document's patterns costs one request is bounded (`DOC-4`), as conditions are ([Limits](#limits)).
+A pattern over a bound does not compile:
+
+| Bound | Limit |
+|---|---|
+| An `http:path:` pattern | at most 2,048 characters after `http:path:`, the longest path the pipeline accepts |
+| A typed resource pattern | at most 2,058 characters |
+| A segment that mixes `*`, `?` or `{name}` with other text, such as `report-*.pdf` | at most 16 parts: each `*`, `?` and `{name}`, and each run of text between them. Consecutive `*` count once: `a**b` is `a*b` |
+| All such segments of one document, across its policies, boundaries and rate limit rules | at most 2,048 glob units in all: each segment's parts and the characters of its text, so `report-*.pdf` is 3 parts and 11 characters, 14 units. A segment after a leading `**` or `{*name}` counts twice, and so does a rate limit rule whose `key` reads a captured variable |
+
+A literal segment, `*` or `{name}` as a whole segment, `**` and `{*name}` cost nothing: only a segment mixing them with
+text is matched by searching, and its text may be compared at every position of the request's segment, so a character
+costs as much as a part. A segment after a leading `**` is tried against two segments, and a rule keyed by a captured
+variable is matched and then captured: hence they count twice. The bounds are fixed in 8.0. On the data plane a stored
+document over them is installed as failed, so the requests that read it fail closed.
+
+Each policy is evaluated at most once per pass for each document that binds it, plus one evaluation for the
+attachments, however many of its bindings apply (`ALG-9`). So the budget bounds what matching one document's patterns
+costs a request: a document that spends all of it on patterns that are candidates for every path costs about 0.45 ms
+per request at worst, and about twice that when its policies are attached as well, for a path segment of 256
+characters, the longest the pipeline accepts (`GlobBoundBenchmark`, its worst inputs, on a CI runner). It allocates the
+values it captures: about 0.25 MB per request with ASCII values, and about 0.6 MB with values outside Latin-1. A shadow window evaluates its candidate document as well,
+within a budget of its own.
+
 ## Path variables
 
 `{name}` in a typed or HTTP pattern, and `{*name}` in an HTTP pattern, capture a variable. Only the statement whose
@@ -327,8 +353,10 @@ every document, on the data plane and in the control plane, with that header ref
 it for a condition.
 
 A header sent more than once reads as its value when every copy is the same. When the copies differ, the header has no
-single value, and a statement that reads it errs: a DENY on it makes the request Indeterminate (`503`) unless another
-DENY matches, and an ALLOW on it does not match. The first or last copy never decides.
+single value, and the first or last copy never decides: the pipeline answers the request `400` `invalid-request`
+before evaluating it, when any statement, policy condition, boundary or rate limit `key` of the documents the request
+is decided on reads that header (`PIP-12`). It does so whatever the statement's effect and whether it could apply to
+the request, so the answer tells a client neither that a DENY reads the header nor which.
 
 ### Matching roles
 

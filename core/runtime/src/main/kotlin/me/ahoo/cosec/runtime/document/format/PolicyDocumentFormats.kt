@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.BINDING
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.CATALOG
@@ -453,6 +454,7 @@ internal object PolicyDocumentFormats {
         ),
         "resourcePattern" to StringType(
             pattern = FormatPatterns.RESOURCE_PATTERN,
+            maxLength = ResourcePattern.MAX_LENGTH,
             examples = listOf("order/{orderId}", "order/**", "http:path:/orders/{id}", "http:path:/admin/**"),
             counterExamples = FormatPatterns.RESOURCE_PATTERN_COUNTER_EXAMPLES,
             description = "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type.",

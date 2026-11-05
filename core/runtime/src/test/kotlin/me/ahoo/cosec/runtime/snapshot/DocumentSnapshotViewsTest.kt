@@ -62,7 +62,7 @@ class DocumentSnapshotViewsTest {
     private fun source() = DocumentSnapshots.source(
         store,
         PolicyDocumentCompiler(),
-        SnapshotOptions(revalidateInterval = Duration.ZERO)
+        SnapshotOptions(revalidateInterval = QUIET_PASS)
     )
 
     private fun scope(tenant: String, roles: List<String> = emptyList(), app: String = "order"): Scope {
@@ -211,7 +211,7 @@ class DocumentSnapshotViewsTest {
         publish(SnapshotKey.Platform, "")
         publish(SnapshotKey.Tenant("acme"), readInFence)
         val compiler = PlatformCompiler()
-        DocumentSnapshots.source(store, compiler, SnapshotOptions(revalidateInterval = Duration.ZERO)).use { source ->
+        DocumentSnapshots.source(store, compiler, SnapshotOptions(revalidateInterval = QUIET_PASS)).use { source ->
             compiler.bind(source)
             val views = DocumentSnapshotViews(source, platformRequired = true)
             val key = ViewKey.of(scope("acme"), blocked = false)
@@ -247,7 +247,7 @@ class DocumentSnapshotViewsTest {
         )
         val clock = MovingClock(Instant.parse("2026-10-26T00:00:00Z"))
         val options = SnapshotOptions(
-            revalidateInterval = Duration.ZERO,
+            revalidateInterval = QUIET_PASS,
             failClosedTenants = setOf("acme"),
             failClosedMaxLag = Duration.ofMinutes(5),
         )

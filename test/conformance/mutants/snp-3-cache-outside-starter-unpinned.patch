@@ -1,0 +1,24 @@
+# Rule: SNP-3
+# Mutant: createPolicySnapshotCache creates the spec as given, so a store built outside the starter may filter keys, set per-entry lifetimes or use another codec
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.CacheTtlPolicyTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
+index 1d2a8b96..796c7e0a 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
+@@ -97,14 +97,7 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
+  */
+ fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
+     require(spec.name == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) { "Not the snapshot store: ${spec.name}." }
+-    val pinned = spec.toBuilder()
+-        .keyEncoder(SnapshotKeyEncoder)
+-        .codec(SnapshotDocumentCodec)
+-        .unknownRead(UnknownReadMode.THROW)
+-        .policy { ttl = forever() }
+-    pinned.keyFilter = null
+-    pinned.ttlOf = null
+-    val created = pinned.build()
++    val created = spec
+     val store = create(created, CoSecCacheSpecs.locks(created.name))
+     val policy = checkNotNull(runtime.policy(created.name)) { "The snapshot store ${created.name} was not created." }
+     return PolicySnapshotCache(store, created.keyspace, policy.localMaxAge, runtime.backend.channel)

@@ -1,0 +1,62 @@
+{
+  "rules": [
+    "PIP-12"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A rate limit rule applies only to requests whose X-Plan is free. Sent twice with different values, the request is answered 400 rather than counted, or not, on one of them (review L2 of #1200).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "free",
+          "action": "*",
+          "condition": {
+            "eq": [
+              "http.header.x-plan",
+              "free"
+            ]
+          },
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Plan": [
+        "free",
+        "pro"
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

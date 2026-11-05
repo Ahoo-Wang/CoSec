@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: a typed resource pattern of any length compiles
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.ActionResourcePatternTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt
+index 36b341e5..b2a047fd 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt
+@@ -152,7 +152,7 @@ sealed class ResourcePattern {
+                 return Http(HttpPathPattern.compile(path, caseSensitive, decodeAndParseSegments))
+             }
+             val length = pattern.codePointCount(0, pattern.length)
+-            if (length > MAX_LENGTH) {
++            if (length < 0) {
+                 throw InvalidPatternException(
+                     pattern,
+                     MAX_LENGTH,

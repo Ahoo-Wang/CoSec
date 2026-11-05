@@ -22,6 +22,7 @@ import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
@@ -31,7 +32,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
-import tools.jackson.databind.ObjectMapper
 
 /**
  * The revoked token and subject caches, whenever `cosec-cocache` is present: the
@@ -47,8 +47,12 @@ import tools.jackson.databind.ObjectMapper
 @ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(
     CacheProperties::class,
+    CoSecProperties::class,
 )
-class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
+class CoSecTokenRevocationCacheAutoConfiguration(
+    private val cacheProperties: CacheProperties,
+    private val cosecProperties: CoSecProperties,
+) {
 
     companion object {
         const val REVOKED_TOKEN_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
@@ -70,10 +74,9 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
      */
     @Bean(REVOKED_TOKEN_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean
-    fun revokedTokenCache(factory: CoCacheFactory, objectMapper: ObjectMapper): RevokedTokenCache {
+    fun revokedTokenCache(factory: CoCacheFactory): RevokedTokenCache {
         val spec = CoSecCacheSpecs.revokedToken(
-            CoSecCacheSpecs.jacksonCodec<Boolean>(objectMapper),
-            cacheProperties.keyPrefix
+            cosecProperties.keyPrefix
         )
         return factory.createCoSecCache(RevokedTokenCache::class.java, cacheProperties.token.applyTo(spec))
     }
@@ -83,10 +86,9 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
      */
     @Bean(REVOKED_SUBJECT_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean
-    fun revokedSubjectCache(factory: CoCacheFactory, objectMapper: ObjectMapper): RevokedSubjectCache {
+    fun revokedSubjectCache(factory: CoCacheFactory): RevokedSubjectCache {
         val spec = CoSecCacheSpecs.revokedSubject(
-            CoSecCacheSpecs.jacksonCodec<Long>(objectMapper),
-            cacheProperties.keyPrefix
+            cosecProperties.keyPrefix
         )
         return factory.createCoSecCache(RevokedSubjectCache::class.java, cacheProperties.token.applyTo(spec))
     }

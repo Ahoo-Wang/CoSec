@@ -1,0 +1,19 @@
+# Rule: PIP-12
+# Mutant: the precheck looks only at the tenant document, so a platform statement reading a repeated header is decided
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.HostAttributesPipelineTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
+index 6c8100bd..f1bba12e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpAttributes.kt
+@@ -99,9 +99,7 @@ class HttpAttributes(
+          * DENY exists and name its header. No allocation for a view whose documents read no header.
+          */
+         fun ambiguousHeader(headers: Headers, view: SnapshotView): String? =
+-            ambiguousIn(headers, view.platform.headersRead)
+-                ?: view.app?.let { ambiguousIn(headers, it.headersRead) }
+-                ?: view.tenant?.let { ambiguousIn(headers, it.headersRead) }
++            view.tenant?.let { ambiguousIn(headers, it.headersRead) }
+ 
+         private fun ambiguousIn(headers: Headers, names: List<String>): String? {
+             for (i in names.indices) {

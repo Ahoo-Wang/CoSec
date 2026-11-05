@@ -1,0 +1,17 @@
+# Rule: SNP-3
+# Mutant: CoSec's locks leave the key filter and the TTL function open, so a customizer's key filter can hide revocations
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.authorization.cache.StoreOfRecordOverrideTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
+index 002b1f8f..bdbe89a3 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
+@@ -222,7 +222,7 @@ object CoSecCacheSpecs {
+      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
+      */
+     fun locks(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
+-        lockLayout(*LayoutField.entries.toTypedArray())
++        lockLayout(*(LayoutField.entries - LayoutField.KEY_FILTER - LayoutField.TTL_OF).toTypedArray())
+         when (cacheName) {
+             in STORE_OF_RECORD_CACHE_NAMES -> {
+                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }

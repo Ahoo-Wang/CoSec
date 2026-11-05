@@ -121,14 +121,23 @@ class HostAttributesPipelineTest {
         evaluate(facts(mapOf("Origin" to listOf("not a uri")))).status.assert().isEqualTo(403)
     }
 
-    /** A header sent twice with different values has none: the DENY reading it errs, so the request is 503. */
+    /**
+     * A header sent twice with different values has none (`PIP-12`, RC1-38). Any document of the view reads it, so the
+     * request is refused 400 before evaluation, whether a DENY reads it (X-Debug) or only an ALLOW (Origin): a 503
+     * for the DENY alone would reveal it. Identical repeats are one value, and a header no document reads is not checked.
+     */
     @Test
-    fun aHeaderWithDifferentValuesIsIndeterminate() {
-        val ambiguous = evaluate(facts(mapOf("X-Debug" to listOf("0", "1")), mapOf(ROUTE_ID to "orders")))
-        ambiguous.status.assert().isEqualTo(503)
-        ambiguous.basis.assert().isInstanceOf(Basis.Unavailable::class.java)
+    fun aHeaderWithDifferentValuesIsInvalid() {
+        for (header in listOf("X-Debug", "Origin")) {
+            val ambiguous = evaluate(facts(mapOf(header to listOf("0", "1")), mapOf(ROUTE_ID to "orders")))
+            ambiguous.status.assert().isEqualTo(400)
+            ambiguous.basis.assert().isEqualTo(Basis.InvalidRequest("header"))
+        }
         evaluate(
             facts(mapOf("X-Debug" to listOf("0", "0")), mapOf(ROUTE_ID to "orders"))
+        ).status.assert().isEqualTo(200)
+        evaluate(
+            facts(mapOf("X-Unread" to listOf("0", "1")), mapOf(ROUTE_ID to "orders"))
         ).status.assert().isEqualTo(200)
     }
 

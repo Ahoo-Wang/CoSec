@@ -13,18 +13,24 @@
 
 package me.ahoo.cosec.engine.pattern
 
-/** Parses an [HttpPathPattern]: its segments, the same way Spring's `InternalPathPatternParser` classifies them. */
+/**
+ * Parses an [HttpPathPattern]: its segments, the same way Spring's `InternalPathPatternParser` classifies them.
+ *
+ * Its cost is bounded (RC1-8, `DOC-4`): a pattern is at most [HttpPathPattern.MAX_LENGTH] characters, consecutive `*`
+ * within a segment count once (`.*.*` matches what `.*` matches, and no capture changes), and a segment that mixes
+ * wildcards or captures with other text holds at most [HttpPathPattern.MAX_SEGMENT_TOKENS] tokens. A glob segment then
+ * takes at most tokens × length steps to match, and its capture recursion is that many frames deep.
+ */
 // Every rejection throws where it is found: `throw invalid(...)` rather than a `Nothing` helper, so coverage sees the line.
 @Suppress("ThrowsCount")
 internal class HttpPathPatternParser(private val pattern: String, private val caseSensitive: Boolean) {
-    class Parsed(val elements: Array<PathElement>, val variableNames: List<String>)
+    /** [globUnits]: what a document's budget counts for it (`DOC-4`, [HttpPathPattern]). */
+    class Parsed(val elements: Array<PathElement>, val variableNames: List<String>, val globUnits: Int)
 
     private val variableNames = ArrayList<String>()
 
     fun parse(): Parsed {
-        if (pattern.isEmpty()) {
-            throw invalid(0, "the pattern is empty")
-        }
+        checkLength()
         val elements = ArrayList<PathElement>()
         var restAt = -1
         var begin = 0
@@ -53,7 +59,20 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         if (restAt > 0 && restAt != elements.size - 1) {
             throw invalid(0, "** and {*name} must be at the start or the end of the pattern")
         }
-        return Parsed(elements.toTypedArray(), variableNames.toList())
+        val globUnits = elements.sumOf { (it as? PathElement.Glob)?.glob?.units ?: 0 } * if (restAt == 0) 2 else 1
+        return Parsed(elements.toTypedArray(), variableNames.toList(), globUnits)
+    }
+
+    private fun checkLength() {
+        if (pattern.isEmpty()) {
+            throw invalid(0, "the pattern is empty")
+        }
+        if (pattern.length > HttpPathPattern.MAX_LENGTH) {
+            throw invalid(
+                HttpPathPattern.MAX_LENGTH,
+                "the pattern is ${pattern.length} characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",
+            )
+        }
     }
 
     private fun segment(begin: Int, end: Int): PathElement {
@@ -71,6 +90,13 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
         if (tokens.any { it is GlobToken.Run }) {
             if (tokens.all { it is GlobToken.Run }) {
                 throw invalid(begin, "segment [$text] can match an empty value; add a literal character or ?")
+            }
+            if (tokens.size > HttpPathPattern.MAX_SEGMENT_TOKENS) {
+                throw invalid(
+                    begin,
+                    "segment [$text] has ${tokens.size} parts (*, ?, {name} and the text between them), more than " +
+                        "${HttpPathPattern.MAX_SEGMENT_TOKENS}",
+                )
             }
             return PathElement.Glob(SegmentGlob(tokens.toTypedArray()))
         }
@@ -101,7 +127,10 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
             when (val char = text[index]) {
                 '*', '?' -> {
                     flush()
-                    tokens.add(if (char == '*') GlobToken.Run(-1) else GlobToken.AnyChar)
+                    val repeatsAStar = char == '*' && (tokens.lastOrNull() as? GlobToken.Run)?.variable == -1
+                    if (!repeatsAStar) {
+                        tokens.add(if (char == '*') GlobToken.Run(-1) else GlobToken.AnyChar)
+                    }
                 }
 
                 '{' -> {
@@ -165,17 +194,37 @@ internal sealed class GlobToken {
         private val text: String = if (caseSensitive) text else asciiLowercase(text)
         val length: Int get() = text.length
 
+        /** Whether [char] can start it: the first test of [matchesAt], cheap enough to make before calling it. */
+        fun startsWith(char: Char): Boolean = char == text[0] || (!caseSensitive && asciiLowercase(char) == text[0])
+
         fun matchesAt(value: String, offset: Int): Boolean {
+            val text = text
             if (offset + text.length > value.length) {
                 return false
             }
+            if (!caseSensitive) {
+                for (index in text.indices) {
+                    val char = value[offset + index]
+                    if (char != text[index] && asciiLowercase(char) != text[index]) {
+                        return false
+                    }
+                }
+                return true
+            }
+            // The JDK compares longer regions a vector at a time; for a few characters its checks cost more.
+            if (text.length >= VECTOR_LENGTH) {
+                return value.regionMatches(offset, text, 0, text.length)
+            }
             for (index in text.indices) {
-                val char = value[offset + index]
-                if (char != text[index] && (caseSensitive || asciiLowercase(char) != text[index])) {
+                if (value[offset + index] != text[index]) {
                     return false
                 }
             }
             return true
+        }
+
+        private companion object {
+            const val VECTOR_LENGTH = 16
         }
     }
 
@@ -196,24 +245,31 @@ internal sealed class GlobToken {
  * A segment with `*` or captures among other text. Spring compiles it into a regular expression (`*` is `.*`, `?` is
  * `.`, `{name}` is `(.*)`, with `DOTALL`) and calls `matches`.
  *
- * Whether a segment matches is decided by [accepts], the two-pointer wildcard match: it backtracks only to the last
- * run, so it takes at most tokens × length steps and allocates nothing, whatever the request path holds (review F4 of
- * #1040: the backtracking below took 0.2–0.4 s on one 8 KB segment). Only a segment that matches is then captured by
- * backtracking the way the regular expression does, so every greedy run takes as much as the rest allows and captures
- * the same values; failed (token, position) pairs are remembered, so that takes at most tokens × length² steps.
+ * An evaluation matches it with [table], a dynamic programme (review M2 of #1200). Row `t` of its table says, for each
+ * position, whether tokens `t..` match the rest of the value; each row comes from the next, so a row of a run or `?`
+ * takes a few word operations, and a literal is compared only where the row after it holds. A segment whose values a
+ * condition reads is then captured by a walk forward that gives each run the largest end whose next row holds: as much
+ * as the rest allows, the greedy choice the regular expression's backtracking makes, so the values are the same. A
+ * literal compared at every position costs its length each time, so a segment costs at most its [units] times the
+ * value's length in steps. The table is the evaluation's ([EvaluationScratch]): matching allocates only the captured values.
+ *
+ * Without a scratch table, as through the public [HttpPathPattern.matches], [accepts] decides instead: the two-pointer
+ * wildcard match, which goes back only to the last run and allocates nothing (review F4 of #1040: backtracking took
+ * 0.2–0.4 s on one 8 KB segment), in the same bound with a larger constant.
  */
 internal class SegmentGlob(private val tokens: Array<GlobToken>) {
-    private val remembersFailures = tokens.count { it is GlobToken.Run } > 1
+    /** How many tokens it has: at most [HttpPathPattern.MAX_SEGMENT_TOKENS]. */
+    val size: Int get() = tokens.size
 
-    fun matches(value: String, captures: Array<String?>?): Boolean {
-        if (!accepts(value)) {
-            return false
+    /** What it costs a document's budget (`DOC-4`): its tokens and the characters of its literals. */
+    val units: Int = tokens.size + tokens.sumOf { (it as? GlobToken.Literal)?.length ?: 0 }
+
+    /** Whether [value] matches; when it does and [captures] is given, the runs' values in it. */
+    fun matches(value: String, captures: Array<String?>?, scratch: EvaluationScratch?): Boolean {
+        if (scratch == null && captures == null) {
+            return accepts(value)
         }
-        if (captures == null) {
-            return true
-        }
-        val failed = if (remembersFailures) BooleanArray(tokens.size * (value.length + 1)) else null
-        return step(0, 0, value, captures, failed)
+        return table(value, captures, scratch ?: EvaluationScratch())
     }
 
     /**
@@ -260,58 +316,134 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
         return true
     }
 
-    private fun step(
-        token: Int,
-        position: Int,
-        value: String,
-        captures: Array<String?>?,
-        failed: BooleanArray?,
-    ): Boolean {
-        if (token == tokens.size) {
-            return position == value.length
+    /**
+     * Whether [value] matches, capturing the runs' values into [captures] when it does and they are given.
+     *
+     * Positions are `0..length`, one bit each; a row is `width` words. A run ends only where a code point does: the
+     * regular expression steps back by code points, so the middle of a surrogate pair is no end, unless the run starts
+     * there (`boundaries` is the row of the other positions, built only when the value has a pair).
+     */
+    @Suppress("ReturnCount")
+    fun table(value: String, captures: Array<String?>?, scratch: EvaluationScratch): Boolean {
+        val width = (value.length + WORD_BITS) ushr WORD_SHIFT
+        val pairs = hasPairs(value)
+        val table = scratch.words(width * (tokens.size + if (pairs) 2 else 1))
+        val boundaries = if (pairs) boundaries(value, table, (tokens.size + 1) * width, width) else NO_ROW
+        val end = tokens.size * width
+        table.fill(0L, end, end + width)
+        table[end + (value.length ushr WORD_SHIFT)] = 1L shl value.length
+        for (token in tokens.indices.reversed()) {
+            val row = token * width
+            when (val current = tokens[token]) {
+                is GlobToken.Literal -> literalRow(current, value, table, row, width)
+                GlobToken.AnyChar -> anyCharRow(value, table, row, width, pairs)
+                is GlobToken.Run -> runRow(table, row, width, boundaries)
+            }
         }
-        val key = token * (value.length + 1) + position
-        if (failed != null && failed[key]) {
+        if ((table[0] and 1L) == 0L) {
             return false
         }
-        val matched = when (val current = tokens[token]) {
-            is GlobToken.Literal -> current.matchesAt(value, position) &&
-                step(token + 1, position + current.length, value, captures, failed)
-
-            GlobToken.AnyChar ->
-                position < value.length &&
-                    step(token + 1, nextCodePoint(value, position), value, captures, failed)
-
-            is GlobToken.Run -> run(current, token, position, value, captures, failed)
+        if (captures == null) {
+            return true
         }
-        if (!matched && failed != null) {
-            failed[key] = true
-        }
-        return matched
-    }
-
-    private fun run(
-        run: GlobToken.Run,
-        token: Int,
-        position: Int,
-        value: String,
-        captures: Array<String?>?,
-        failed: BooleanArray?,
-    ): Boolean {
-        var end = value.length
-        while (true) {
-            if (step(token + 1, end, value, captures, failed)) {
-                if (run.variable >= 0 && captures != null) {
-                    captures[run.variable] = value.substring(position, end)
+        var position = 0
+        for (token in tokens.indices) {
+            when (val current = tokens[token]) {
+                is GlobToken.Literal -> position += current.length
+                GlobToken.AnyChar -> position = nextCodePoint(value, position)
+                is GlobToken.Run -> {
+                    // The row after the run holds at `end`; it holds at `position` when no later end is possible.
+                    val end = maxOf(position, highest(table, (token + 1) * width, width, boundaries))
+                    if (current.variable >= 0) {
+                        captures[current.variable] = value.substring(position, end)
+                    }
+                    position = end
                 }
-                return true
             }
-            if (end == position) {
-                return false
+        }
+        return true
+    }
+
+    /** Row `p`: the literal matches at `p` and the next row holds where it ends. */
+    private fun literalRow(literal: GlobToken.Literal, value: String, table: LongArray, row: Int, width: Int) {
+        table.fill(0L, row, row + width)
+        val next = row + width
+        val single = literal.length == 1
+        for (word in 0 until width) {
+            var bits = table[next + word]
+            while (bits != 0L) {
+                val start = (word shl WORD_SHIFT) + bits.countTrailingZeroBits() - literal.length
+                bits = bits and (bits - 1)
+                val starts = start >= 0 && literal.startsWith(value[start])
+                if (starts && (single || literal.matchesAt(value, start))) {
+                    table[row + (start ushr WORD_SHIFT)] = table[row + (start ushr WORD_SHIFT)] or (1L shl start)
+                }
             }
-            end = previousCodePoint(value, end, position)
         }
     }
+
+    /** Row `p`: a code point starts at `p` and the next row holds after it. */
+    private fun anyCharRow(value: String, table: LongArray, row: Int, width: Int, pairs: Boolean) {
+        val next = row + width
+        for (word in 0 until width) {
+            val carry = if (word + 1 < width) table[next + word + 1] shl (WORD_BITS - 1) else 0L
+            table[row + word] = (table[next + word] ushr 1) or carry
+        }
+        if (!pairs) {
+            return
+        }
+        // A pair is one code point: from its first half, the next row is read two characters on.
+        for (start in 0 until value.length - 1) {
+            if (value[start].isHighSurrogate() && value[start + 1].isLowSurrogate()) {
+                val holds = (table[next + ((start + 2) ushr WORD_SHIFT)] and (1L shl (start + 2))) != 0L
+                val word = row + (start ushr WORD_SHIFT)
+                table[word] = if (holds) table[word] or (1L shl start) else table[word] and (1L shl start).inv()
+            }
+        }
+    }
+
+    /** Row `p`: the next row holds at `p` or at a boundary after it, so at every `p` up to its highest boundary. */
+    private fun runRow(table: LongArray, row: Int, width: Int, boundaries: Int) {
+        val next = row + width
+        val highest = highest(table, next, width, boundaries)
+        for (word in 0 until width) {
+            val below = when {
+                highest < 0 || word > (highest ushr WORD_SHIFT) -> 0L
+                word < (highest ushr WORD_SHIFT) -> -1L
+                else -> -1L ushr (WORD_BITS - 1 - (highest and (WORD_BITS - 1)))
+            }
+            table[row + word] = table[next + word] or below
+        }
+    }
+
+    /** The highest position where the row at [row] holds and a run may end, or -1. */
+    private fun highest(table: LongArray, row: Int, width: Int, boundaries: Int): Int {
+        for (word in width - 1 downTo 0) {
+            val bits = table[row + word] and if (boundaries == NO_ROW) -1L else table[boundaries + word]
+            if (bits != 0L) {
+                return (word shl WORD_SHIFT) + WORD_BITS - 1 - bits.countLeadingZeroBits()
+            }
+        }
+        return -1
+    }
+
+    /** Fills the row at [row] with every position but the middle of a pair, and returns [row]. */
+    private fun boundaries(value: String, table: LongArray, row: Int, width: Int): Int {
+        table.fill(-1L, row, row + width)
+        for (position in 1 until value.length) {
+            if (value[position - 1].isHighSurrogate() && value[position].isLowSurrogate()) {
+                table[row + (position ushr WORD_SHIFT)] = table[row + (position ushr WORD_SHIFT)] and
+                    (1L shl position).inv()
+            }
+        }
+        return row
+    }
+
+    /**
+     * Whether [value] holds a surrogate pair: then it counts fewer code points than characters. A Latin-1 string, as
+     * every ASCII path is, holds none, and the JDK answers that without reading it.
+     */
+    private fun hasPairs(value: String): Boolean = value.codePointCount(0, value.length) < value.length
 
     private fun nextCodePoint(value: String, position: Int): Int =
         if (value[position].isHighSurrogate() && position + 1 < value.length && value[position + 1].isLowSurrogate()) {
@@ -320,10 +452,9 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
             position + 1
         }
 
-    private fun previousCodePoint(value: String, end: Int, floor: Int): Int =
-        if (end - 2 >= floor && value[end - 1].isLowSurrogate() && value[end - 2].isHighSurrogate()) {
-            end - 2
-        } else {
-            end - 1
-        }
+    private companion object {
+        const val WORD_BITS = 64
+        const val WORD_SHIFT = 6
+        const val NO_ROW = -1
+    }
 }
