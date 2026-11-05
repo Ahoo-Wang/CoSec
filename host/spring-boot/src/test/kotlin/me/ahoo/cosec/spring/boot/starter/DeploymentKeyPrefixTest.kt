@@ -106,7 +106,7 @@ class DeploymentKeyPrefixTest {
             runtime.cacheNames.forEach { name ->
                 checkNotNull(
                     runtime.admin(name)
-                ).inspect("k").storageKey.assert().describedAs(name).startsWith("$prefix:")
+                ).keyspace.storagePrefix.assert().describedAs(name).startsWith("$prefix:")
             }
             context.getBean(ApiKeyStore::class.java).assert().isInstanceOf(RedisApiKeyStore::class.java)
             context.getBean(ApiKeyStore::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
