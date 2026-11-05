@@ -163,14 +163,17 @@ class RuntimeAuthorizationProperties {
     }
 
     class Snapshot {
-        /** The Redis namespace of the snapshot documents, shared by every service that reads the same platform. */
-        var keyPrefix: String = CoSec.COSEC
-
         /**
          * How long an instance serves its local copy of a document before it asks Redis again; the one value for the
          * snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.
          */
         var localMaxAge: Duration = Duration.ofSeconds(30)
+
+        /**
+         * How often every installed document is confirmed against Redis: the bound on a lost invalidation (`SNP-6`).
+         * At least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than
+         * `fail-closed.max-lag`; anything else fails startup.
+         */
         var revalidateInterval: Duration = Duration.ofSeconds(10)
         var lagWarn: Duration = Duration.ofSeconds(60)
         var lagEscalate: Duration = Duration.ofMinutes(5)

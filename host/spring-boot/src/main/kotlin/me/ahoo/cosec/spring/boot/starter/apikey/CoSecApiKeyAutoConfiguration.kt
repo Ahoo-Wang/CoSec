@@ -10,14 +10,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.apikey
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RedisApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
@@ -47,7 +52,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
-@EnableConfigurationProperties(ApiKeyProperties::class)
+@EnableConfigurationProperties(ApiKeyProperties::class, CoSecProperties::class)
 class CoSecApiKeyAutoConfiguration {
 
     /**
@@ -81,15 +86,15 @@ class CoSecApiKeyAutoConfiguration {
         @ConditionalOnMissingBean
         fun redisApiKeyStore(
             stringRedisTemplate: StringRedisTemplate,
-            apiKeyProperties: ApiKeyProperties
-        ): ApiKeyStore = RedisApiKeyStore(stringRedisTemplate, apiKeyProperties.keyPrefix)
+            cosec: CoSecProperties,
+        ): ApiKeyStore = RedisApiKeyStore(stringRedisTemplate, CoSecCacheSpecs.apiKeyPrefix(cosec.keyPrefix))
 
         /** Reads without blocking, since the pipeline may look a key up on an event loop. */
         @Bean
         @ConditionalOnMissingBean
         fun redisApiKeyReader(
             redisTemplate: ReactiveStringRedisTemplate,
-            apiKeyProperties: ApiKeyProperties
-        ): ApiKeyReader = RedisApiKeyReader(redisTemplate, apiKeyProperties.keyPrefix)
+            cosec: CoSecProperties,
+        ): ApiKeyReader = RedisApiKeyReader(redisTemplate, CoSecCacheSpecs.apiKeyPrefix(cosec.keyPrefix))
     }
 }

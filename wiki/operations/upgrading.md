@@ -165,6 +165,48 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   windows read it by the same rule (`CTL-3`). In code, `CompiledDocument.tenant` takes the set `boundApps`, and
   `CompiledDocument.needsApp` answers it; a `ShadowListener` built by hand needs the installed views (`views`) to
   compare a tenant candidate that makes a request read an app document, and reports `CANDIDATE_ERROR` without them.
+- **One key prefix** (RC1-46, `SNP-9`). [`cosec.key-prefix`](./configuration.md#key-prefix) replaces
+  `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix`.
+  An environment that still sets one of them fails startup whatever `cosec.unknown-properties` says, and the message
+  lists the families that move under the current `cosec.key-prefix`, from where to where. Every key lives under it: API keys under `<p>:api-key`, rate
+  limit counters under `<p>:rate-limiter` and the social login's OAuth states under `<p>:oauth:state`, which were fixed
+  ([Redis keys](./storage.md#redis-keys)). With the defaults every key stays where it was. A deployment that set one
+  of the three sets `cosec.key-prefix` to its snapshot prefix instead; **revocations and API keys kept under another
+  prefix are no longer read**, so a token revoked there would be accepted again: before switching, copy each such key
+  under the new prefix (`COPY`, or `RENAME`, which keeps its expiry). Memberships fill again on their own.
+  `cosec-migrate api-keys` no longer takes `--api-key-prefix`: it converts the keys under `<--key-prefix>:api-key`.
+- **`revalidate-interval` cannot turn the periodic pass off** (RC1-50, `SNP-6`). The pass is the only bound on a
+  change whose invalidation message was lost, so `cosec.authorization.snapshot.revalidate-interval` must be at least
+  `1s` (each pass reads every installed document from Redis), at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else
+  fails startup naming the property, and `SnapshotOptions` refuses the same. Replace a `0` with an interval within the
+  bounds; a longer one lowers what revalidation costs Redis ([Storage](./storage.md#what-revalidation-costs-redis)).
+- **Path patterns have cost bounds** (RC1-8, `DOC-4`). An `http:path:` pattern is at most 2,048 characters, a segment
+  that mixes `*`, `?` or `{name}` with other text holds at most 16 parts (consecutive `*` count once), a document's
+  such segments hold at most 2,048 glob units in all (their parts and the characters of their text, twice after a
+  leading `**` and for a rate limit rule keyed by a captured variable), and a typed pattern is at most 2,058 characters
+  ([Policy language](../policies/language.md#path-pattern-bounds)). The control plane answers a change over them with
+  a `COMPILE` finding (`422`) at the pattern or at `$`. A document published before with such a pattern no longer
+  compiles on an upgraded instance, and every request that reads it fails closed: rewrite it and publish before
+  upgrading the data plane.
+- **A policy is evaluated once per pass for each document that binds it** (`ALG-9`), however many of the document's
+  bindings apply, and a policy claimed twice among the attachments is attached once. The decision and the statement
+  and binding it reports do not change: the first binding in candidate order reports. A trace lists the later bindings
+  with the first one's outcomes, without evaluating them again.
+- **A repeated header that a document reads is `400`** (RC1-38, `PIP-12`). When a request sends a header with
+  different values, and any statement, policy condition, boundary or rate limit key of the documents its view reads
+  reads that header (`Origin` and `Referer` included), the pipeline answers `400` `invalid-request` before evaluating,
+  where a DENY on it made the request `503` and an ALLOW on it did not match. Identical repeats are one value
+  ([Web](../integration/web.md#responses-and-status-codes)).
+- **A malformed `roles`, `policies` or `attributes` claim is an invalid token** (`PIP-6`): `401` `token-invalid`, evaluated
+  as anonymous, where it was a `500`.
+- **Duplicate keys are refused everywhere** (RC1-44, `DOC-5`). Every stored format (API keys, memberships, shadow
+  reports, revocations) and every control-plane request body with a duplicate key fails to read: a stored value is
+  `503`, a request body `400`. `cosec-migrate` refuses 7.x exports and files with duplicate keys too.
+- **CoSec's caches keep their pins whoever builds them** (RC1-45, `SNP-3`). `createPolicySnapshotCache` applies the
+  store-of-record policy, the snapshot's codec and no key filter, per-entry TTL or loader to any spec, and a
+  `CacheSpecCustomizer` no longer changes a CoSec cache's codec, loaders, key filter or per-entry TTL.
+- **A compilation that overflows the stack fails the document closed** (RC1-43, `SNP-8`), as any compile error does,
+  instead of keeping the revision before it.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,
@@ -378,7 +420,7 @@ never overwrites 8.0 data.
 
 Writes are one per document. If one fails, the message names the documents already written; run again with
 `--resume`, which skips a document already published with the same content and refuses one with different content.
-`--key-prefix` is the 8.0 snapshot prefix, the same as `cosec.authorization.snapshot.key-prefix`.
+`--key-prefix` is the deployment's prefix, the same as [`cosec.key-prefix`](./configuration.md#key-prefix).
 
 After `publish`, change policies through the control plane only. Running `convert` and `publish` again does not update
 documents that exist.
@@ -485,7 +527,7 @@ templates inside `eq` conditions translate (D2).
 7.x rate limit rule files (`cosec.limiter.*`) are gone. `convert --rate-limit-rules` translates the rules into the
 platform document's rate limits. A rule applies to a request the policies permit, as in 7.x: the first exhausted rule
 answers `429`, and denied requests spend nothing. A rule with `strictFailure` whose limiter fails now answers `503`
-instead of `429` (R3). The Redis limiter uses the same keys (`cosec:rate-limiter:<rule>:<bucket>:<window>`) when a
+instead of `429` (R3). The Redis limiter uses the same keys (`cosec:rate-limiter:<rule>:<bucket>:<window>`, under `cosec.key-prefix`) when a
 `ReactiveStringRedisTemplate` bean exists; otherwise each instance counts alone. See
 [Rate limiting](../policies/rate-limiting.md).
 
@@ -618,8 +660,8 @@ principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0
   `attributes` and `toPrincipal()` are gone, `tenantId` is required and `roles: Set<String>?` is the cap, with no
   default.
 
-**Converting stored keys.** `cosec-migrate api-keys` reads every key under `--api-key-prefix` (default
-`cosec:api-key`) and writes `api-keys-report.json` to `--out`. Export what each principal holds now, as a JSON array
+**Converting stored keys.** `cosec-migrate api-keys` reads every key under `<--key-prefix>:api-key` (default
+`cosec:api-key`), where the deployment reads them, and writes `api-keys-report.json` to `--out`. Export what each principal holds now, as a JSON array
 of `{"tenant", "principal", "roles": ["role", "role@space", ...]}`, and pass it as `--memberships`:
 
 ```bash
@@ -924,7 +966,8 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.api-key.store-blocking` | Removed. |
 | `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
 
-`cosec.authorization.cache.key-prefix` and `cosec.authorization.cache.token.*` remain.
+`cosec.authorization.cache.token.*` remains. `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix` are
+replaced by [`cosec.key-prefix`](./configuration.md#key-prefix), the prefix of every key a deployment writes.
 
 New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level, mode),
 `cosec.gateway.identity.*`, `cosec.unknown-properties`, `cosec.authorization.scope.app-id`,

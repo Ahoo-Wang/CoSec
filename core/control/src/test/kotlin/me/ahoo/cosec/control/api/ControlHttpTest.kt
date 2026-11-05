@@ -250,6 +250,15 @@ class ControlHttpTest {
         }
     }
 
+    /** RC1-44 (`DOC-5`): a request body with a duplicate key is refused, never read as whichever value came last. */
+    @Test
+    fun `a body with a duplicate key is refused`() {
+        val proposal = """{"document":"tenant:acme","base":1,"note":"more",""" +
+            """"operations":[{"op":"putPolicy","policy":{"id":"more","statements":[{"effect":"allow","action":"order:read"}]}}]"""
+        call("POST", "/changes", "$proposal,\"note\":\"again\"}").first.assert().isEqualTo(400)
+        call("POST", "/changes", "$proposal}").first.assert().isEqualTo(201)
+    }
+
     @Test
     fun `malformed requests and unknown routes`() {
         call("POST", "/changes", "{not json").first.assert().isEqualTo(400)

@@ -84,7 +84,7 @@ flowchart LR
 
 | 限流器 | 何时使用 | 范围 |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | classpath 中有 `cosec-cocache`，且存在 `ReactiveStringRedisTemplate` bean | 整个集群，由 Lua 脚本原子地检查并计数，不阻塞调用线程。计数器位于 `cosec:rate-limiter:<rule>:<bucket>:<window>`，两个窗口后过期。 |
+| `ReactiveRedisRateLimiter` | classpath 中有 `cosec-cocache`，且存在 `ReactiveStringRedisTemplate` bean | 整个集群，由 Lua 脚本原子地检查并计数，不阻塞调用线程。计数器位于 `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>:<window>`，两个窗口后过期。 |
 | `LocalRateLimiter` | 其他情况 | 每个 JVM 独立：有 N 个实例时，实际限制是 N 倍。最多保留 100,000 个桶，空闲一小时的桶会被丢弃；被丢弃的桶从零重新计数。 |
 
 自定义的 `RateLimiter` bean 会替换两者（[扩展](../architecture/extending.md)）。每次调用受 `cosec.authorization.rate-limit.timeout`（默认 `500ms`，[配置](../operations/configuration.md)）约束；超时视为失败。

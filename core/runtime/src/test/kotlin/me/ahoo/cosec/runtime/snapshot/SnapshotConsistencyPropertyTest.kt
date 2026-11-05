@@ -47,7 +47,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -167,7 +166,7 @@ class SnapshotConsistencyPropertyTest {
         val violations = CopyOnWriteArrayList<String>()
         val seen = ConcurrentHashMap.newKeySet<Pair<Long, Long?>>()
         val evaluations = AtomicInteger()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS)
         DocumentSnapshots.source(store, compiler, options).use { source ->
             val readers = Executors.newFixedThreadPool(READERS)
             val done = CountDownLatch(READERS)

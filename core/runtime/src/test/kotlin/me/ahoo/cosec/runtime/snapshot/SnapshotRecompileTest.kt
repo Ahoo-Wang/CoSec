@@ -60,7 +60,7 @@ class SnapshotRecompileTest {
     private fun source(
         store: SnapshotDocumentStore,
         compiler: InputsCompiler,
-        options: SnapshotOptions = SnapshotOptions(revalidateInterval = Duration.ZERO),
+        options: SnapshotOptions = SnapshotOptions(revalidateInterval = QUIET_PASS),
     ) = SnapshotSource(
         store,
         SnapshotKey.Platform,
@@ -129,7 +129,7 @@ class SnapshotRecompileTest {
         store.publish(TENANT_A, 1)
         store.publish(TENANT_B, 1)
         val compiler = InputsCompiler()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, rejectedReloadRetry = Duration.ofMillis(10))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, rejectedReloadRetry = Duration.ofMillis(10))
         source(store, compiler, options).use { source ->
             source.loadAll(listOf(TENANT_A)).join()
             source.loadAll(listOf(TENANT_B)).join()
@@ -155,7 +155,7 @@ class SnapshotRecompileTest {
         val compiler = InputsCompiler()
         // No revalidation: only the retries can bring the document back.
         val options = SnapshotOptions(
-            revalidateInterval = Duration.ZERO,
+            revalidateInterval = QUIET_PASS,
             rejectedReloadRetry = Duration.ofMillis(1),
             prewarmInitialBackoff = Duration.ofMillis(1),
             prewarmMaxBackoff = Duration.ofMillis(5),
@@ -183,7 +183,7 @@ class SnapshotRecompileTest {
         store.publish(TENANT_B, 1)
         val compiler = InputsCompiler()
         // One reload at a time: tenant B waits behind tenant A's held read.
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, reloadConcurrency = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 1)
         source(store, compiler, options).use { source ->
             source.loadAll(listOf(TENANT_A, TENANT_B)).join()
             store.hold = true

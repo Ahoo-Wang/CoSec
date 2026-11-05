@@ -1,0 +1,16 @@
+# Rule: PIP-12
+# Mutant: the headers a rate limit rule's condition reads are not checked, so a repeated one is counted, or not, on one value
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index ca876a50..9b1f7b97 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -299,7 +299,6 @@ class CompiledDocument private constructor(
+             policies.values.forEach { names.addAll(it.headers) }
+             boundaries.values.forEach { names.addAll(it.headers) }
+             for (rule in rateLimits) {
+-                names.addAll(rule.statement.headers)
+                 rule.key?.let(HeadersRead::headerOf)?.let(names::add)
+             }
+             return if (names.isEmpty()) emptyList() else names.toList()

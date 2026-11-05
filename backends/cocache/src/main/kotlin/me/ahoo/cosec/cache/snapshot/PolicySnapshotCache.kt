@@ -21,6 +21,7 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
@@ -88,13 +89,31 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
     }
 }
 
-/** Creates the cache declared by [spec], which [me.ahoo.cosec.cache.CoSecCacheSpecs.policySnapshot] builds. */
+/**
+ * Creates the cache declared by [spec], which [me.ahoo.cosec.cache.CoSecCacheSpecs.policySnapshot] builds, with the
+ * pins of a store of record whoever built [spec] (`SNP-3`, RC1-45): [storeOfRecord] (no expiry, failed reads and deletes
+ * throw), the snapshot's own key encoding and codec, no key filter, no per-entry TTL and no loader. Only the storage
+ * layout and the local copies' ages are [spec]'s.
+ */
 fun CacheRuntime.createPolicySnapshotCache(spec: CacheSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
     require(spec.keyPrefix.isEmpty()) { "The snapshot cache keeps its keys under its namespace only." }
+    require(
+        spec.loader == null && spec.asyncLoader == null && spec.versionedLoader == null && spec.versionedAsyncLoader == null
+    ) {
+        "The ${spec.name} cache takes no loader: Redis is the store of record, and only the snapshot source reads it."
+    }
+    val pinned = spec.toBuilder()
+        .keyEncoder(SnapshotKeyEncoder)
+        .codec(SnapshotDocumentCodec)
+        .policy(spec.policy.storeOfRecord())
+    pinned.keyFilter = null
+    pinned.ttlOf = null
+    pinned.versioned = false
+    val created = pinned.build()
     return PolicySnapshotCache(
-        create(spec),
-        spec.namespace,
-        maxOf(spec.policy.localMaxAge, spec.policy.degradedLocalMaxAge),
+        create(created),
+        created.namespace,
+        maxOf(created.policy.localMaxAge, created.policy.degradedLocalMaxAge),
         backend.channel,
     )
 }

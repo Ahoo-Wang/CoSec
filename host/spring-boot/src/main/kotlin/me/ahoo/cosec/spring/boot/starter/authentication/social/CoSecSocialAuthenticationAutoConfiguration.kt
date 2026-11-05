@@ -20,6 +20,7 @@ import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosec.social.justauth.RedisAuthStateCache
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.zhyd.oauth.cache.AuthStateCache
@@ -47,14 +48,16 @@ import java.lang.reflect.Constructor
 @ConditionalOnClass(SocialUser::class)
 @EnableConfigurationProperties(
     SocialAuthenticationProperties::class,
+    CoSecProperties::class,
 )
 class CoSecSocialAuthenticationAutoConfiguration(
     private val socialAuthenticationProperties: SocialAuthenticationProperties
 ) {
     @Bean
     @ConditionalOnMissingBean
-    fun authStateCache(stringRedisTemplate: StringRedisTemplate): AuthStateCache {
-        return RedisAuthStateCache(stringRedisTemplate)
+    fun authStateCache(stringRedisTemplate: StringRedisTemplate, cosec: CoSecProperties): AuthStateCache {
+        // Under the deployment's prefix, as every key CoSec writes (SNP-9, RC1-46).
+        return RedisAuthStateCache(stringRedisTemplate, cosec.keysOf(OAUTH_STATE) + ":")
     }
 
     /**
@@ -92,3 +95,5 @@ class CoSecSocialAuthenticationAutoConfiguration(
         return SocialAuthentication(principalConverter)
     }
 }
+
+private const val OAUTH_STATE = "oauth:state"

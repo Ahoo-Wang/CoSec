@@ -115,6 +115,17 @@ class ActionResourcePatternTest {
         assertThrownBy<InvalidPatternException> { ResourcePattern.parse(pattern) }
     }
 
+    /** RC1-8 (`DOC-4`): a typed pattern is held to the length of `http:path:` and the longest path, in characters. */
+    @Test
+    fun `a typed pattern is at most 2058 characters`() {
+        val longest = "order/" + "a".repeat(ResourcePattern.MAX_LENGTH - "order/".length)
+        ResourcePattern.parse(longest).matches(target("order", longest.removePrefix("order/"))).assert().isTrue()
+        assertThrownBy<InvalidPatternException> { ResourcePattern.parse(longest + "a") }
+            .hasMessageContaining("more than ${ResourcePattern.MAX_LENGTH}")
+        // Counted in characters, not UTF-16 units: a segment of 2,052 astral characters is within the bound.
+        ResourcePattern.parse("order/" + "\uD83D\uDE00".repeat(ResourcePattern.MAX_LENGTH - "order/".length))
+    }
+
     @Test
     fun `typed resources take no path options`() {
         assertThrownBy<InvalidPatternException> { ResourcePattern.parse("order/1", caseSensitive = false) }

@@ -21,6 +21,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.time.Duration
+import kotlin.random.Random
 
 /** Examples of Spring's semantics; `HttpPathPatternParityTest` in `cosec-core` compares against Spring itself. */
 class HttpPathPatternTest {
@@ -261,5 +262,178 @@ class HttpPathPatternTest {
         // A segment that matches is still captured as the regular expression does.
         HttpPathPattern.compile("/{x}a{y}b").match(HttpPath.parse("/" + "a".repeat(1_000) + "b"))!!["x"].assert()
             .isEqualTo("a".repeat(999))
+    }
+
+    /** RC1-8 (`DOC-4`): no normalized path is longer than 2,048 characters, so no pattern needs to be. */
+    @Test
+    fun `a pattern is at most 2048 characters`() {
+        val longest = "/" + "a".repeat(HttpPathPattern.MAX_LENGTH - 1)
+        HttpPathPattern.compile(longest).matches(HttpPath.parse(longest)).assert().isTrue()
+        assertThrownBy<InvalidPatternException> { HttpPathPattern.compile(longest + "a") }
+            .hasMessageContaining("more than ${HttpPathPattern.MAX_LENGTH}")
+    }
+
+    /** RC1-8 (`DOC-4`): a glob segment holds at most 16 parts; it costs its parts and literal characters. */
+    @Test
+    fun `a glob segment holds at most 16 tokens`() {
+        val sixteen = HttpPathPattern.compile("/{v}a*a*a*a*a*a*a*b")
+        sixteen.globUnits.assert().isEqualTo(HttpPathPattern.MAX_SEGMENT_TOKENS + 8)
+        val value = "a".repeat(255) + "b"
+        sixteen.match(HttpPath.parse("/$value"))!!["v"].assert().isEqualTo("a".repeat(248))
+        assertThrownBy<InvalidPatternException> { HttpPathPattern.compile("/a*a*a*a*a*a*a*a*b") }
+            .hasMessageContaining("17 parts")
+        // Only glob segments cost: literals, ?, * and {name} as whole segments, ** and {*name} cost nothing.
+        HttpPathPattern.compile("/a/?b/*/{v}/x*y/**").globUnits.assert().isEqualTo(5)
+        HttpPathPattern.compile("/x*yz/{v}").globUnits.assert().isEqualTo(6)
+    }
+
+    /**
+     * Review M2 of #1200: after a leading `**` the rest of the pattern is tried where it ends the path or one later,
+     * never at every start, so a glob after it is matched against two segments at most, and costs twice.
+     */
+    @Test
+    fun `a glob after a leading rest costs twice and is tried at two starts`() {
+        HttpPathPattern.compile("/**/x*yz").globUnits.assert().isEqualTo(12)
+        HttpPathPattern.compile("{*rest}/x*yz/a").globUnits.assert().isEqualTo(12)
+        val tried = HttpPathPattern.compile("/**/{v}x*/a/b/c")
+        tried.match(HttpPath.parse("/x".repeat(40) + "/a/b/c"))!!["v"].assert().isEqualTo("")
+        tried.match(HttpPath.parse("/yx/a/b/c"))!!["v"].assert().isEqualTo("y")
+        tried.matches(HttpPath.parse("/yx/a/b")).assert().isFalse()
+        // A final `*` may match no segment: the rest then starts one later.
+        HttpPathPattern.compile("/**/a/*").matches(HttpPath.parse("/x/a/")).assert().isTrue()
+        match("/{*p}/a/*", "/x/y/a/b").assert().isEqualTo(mapOf("p" to "/x/y"))
+    }
+
+    /** RC1-8: `.*.*` matches what `.*` matches, so consecutive `*` within a segment are one token, as in Spring. */
+    @Test
+    fun `consecutive stars in a segment count once`() {
+        val stars = HttpPathPattern.compile("/a" + "*".repeat(2_000) + "b")
+        stars.globUnits.assert().isEqualTo(5)
+        val one = HttpPathPattern.compile("/a*b")
+        for (value in listOf("ab", "axb", "a/b", "abb", "ba", "a", "")) {
+            val path = HttpPath.parse("/$value")
+            stars.matches(path).assert().isEqualTo(one.matches(path))
+        }
+        // A capture next to a star keeps what it captured: only anonymous stars collapse.
+        HttpPathPattern.compile("/{v}***x").match(HttpPath.parse("/abcx"))!!["v"].assert()
+            .isEqualTo(HttpPathPattern.compile("/{v}*x").match(HttpPath.parse("/abcx"))!!["v"])
+        HttpPathPattern.compile("/x***{v}").match(HttpPath.parse("/xabc"))!!["v"].assert()
+            .isEqualTo(HttpPathPattern.compile("/x*{v}").match(HttpPath.parse("/xabc"))!!["v"])
+    }
+
+    /**
+     * Review M2 of #1200: capturing is a dynamic programme, and captures what the regular expression's backtracking
+     * does, which this reference transcribes: every greedy run takes as much as the rest allows, stepping back by code
+     * points (a surrogate pair is one, a lone half is one too). Random segments of literals, `?`, `*` and captures,
+     * against values of letters, pairs and lone halves.
+     */
+    @Test
+    fun `capturing agrees with backtracking`() {
+        val random = Random(8)
+        val pieces = listOf("a", "b", "ab", "\uD83D\uDE00", "\uD83D", "\uDE00")
+        val scratch = EvaluationScratch()
+        repeat(CASES) {
+            val tokens = ArrayList<Reference.Token>()
+            var variables = 0
+            repeat(1 + random.nextInt(6)) {
+                tokens += when (random.nextInt(4)) {
+                    0 -> Reference.Token.Literal(pieces[random.nextInt(3)])
+                    1 -> Reference.Token.AnyChar
+                    2 -> Reference.Token.Run(null)
+                    else -> Reference.Token.Run("v${variables++}")
+                }
+            }
+            if (tokens.none { it is Reference.Token.Run } || tokens.all { it is Reference.Token.Run }) {
+                return@repeat
+            }
+            val segment = Reference.render(tokens) ?: return@repeat
+            val value = buildString { repeat(1 + random.nextInt(12)) { append(pieces[random.nextInt(pieces.size)]) } }
+            val expected = HashMap<String, String>()
+            val matches = Reference.match(tokens, 0, 0, value, expected)
+            val pattern = HttpPathPattern.compile("/$segment")
+            val path = HttpPath.parse("/$value")
+            pattern.match(path)?.toMap().assert().describedAs("$segment against $value")
+                .isEqualTo(if (matches) expected else null)
+            // An evaluation's table, reused across values, decides as a fresh one and as the two-pointer match.
+            pattern.match(path, scratch)?.toMap().assert().describedAs("$segment against $value")
+                .isEqualTo(if (matches) expected else null)
+            pattern.matches(path, scratch).assert().describedAs("$segment against $value").isEqualTo(matches)
+            pattern.matches(path).assert().describedAs("$segment against $value").isEqualTo(matches)
+        }
+    }
+
+    /** The backtracking capture this module had before the dynamic programme, without its memo. */
+    private object Reference {
+        sealed class Token {
+            class Literal(val text: String) : Token()
+
+            object AnyChar : Token()
+
+            class Run(val variable: String?) : Token()
+        }
+
+        /** The segment's pattern text, or null when consecutive anonymous runs would collapse. */
+        fun render(tokens: List<Token>): String? {
+            val text = StringBuilder()
+            var previous: Token? = null
+            for (token in tokens) {
+                when (token) {
+                    is Token.Literal -> if (previous is Token.Literal) return null else text.append(token.text)
+                    Token.AnyChar -> text.append('?')
+                    is Token.Run -> {
+                        if (token.variable == null && previous is Token.Run && previous.variable == null) return null
+                        text.append(token.variable?.let { "{$it}" } ?: "*")
+                    }
+                }
+                previous = token
+            }
+            return text.toString()
+        }
+
+        fun match(tokens: List<Token>, token: Int, position: Int, value: String, captures: MutableMap<String, String>): Boolean {
+            if (token == tokens.size) {
+                return position == value.length
+            }
+            return when (val current = tokens[token]) {
+                is Token.Literal -> value.startsWith(current.text, position) &&
+                    match(tokens, token + 1, position + current.text.length, value, captures)
+
+                Token.AnyChar -> position < value.length && match(tokens, token + 1, next(value, position), value, captures)
+                is Token.Run -> run(tokens, token, current, position, value, captures)
+            }
+        }
+
+        private fun run(
+            tokens: List<Token>,
+            token: Int,
+            run: Token.Run,
+            position: Int,
+            value: String,
+            captures: MutableMap<String, String>,
+        ): Boolean {
+            var end = value.length
+            while (true) {
+                if (match(tokens, token + 1, end, value, captures)) {
+                    run.variable?.let { captures[it] = value.substring(position, end) }
+                    return true
+                }
+                if (end == position) {
+                    return false
+                }
+                val pair = end - 2 >= position && value[end - 1].isLowSurrogate() && value[end - 2].isHighSurrogate()
+                end -= if (pair) 2 else 1
+            }
+        }
+
+        private fun next(value: String, position: Int): Int =
+            if (value[position].isHighSurrogate() && position + 1 < value.length && value[position + 1].isLowSurrogate()) {
+                position + 2
+            } else {
+                position + 1
+            }
+    }
+
+    private companion object {
+        const val CASES = 50_000
     }
 }

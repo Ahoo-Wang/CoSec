@@ -1,0 +1,16 @@
+# Rule: PIP-12
+# Mutant: the headers a platform boundary reads are not checked, so a repeated one passes or fails the boundary on one value
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index ca876a50..fc825644 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -297,7 +297,6 @@ class CompiledDocument private constructor(
+             }
+             val names = LinkedHashSet<String>()
+             policies.values.forEach { names.addAll(it.headers) }
+-            boundaries.values.forEach { names.addAll(it.headers) }
+             for (rule in rateLimits) {
+                 names.addAll(rule.statement.headers)
+                 rule.key?.let(HeadersRead::headerOf)?.let(names::add)

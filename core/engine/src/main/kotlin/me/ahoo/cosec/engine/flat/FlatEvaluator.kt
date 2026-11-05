@@ -14,8 +14,10 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.pattern.Captures
+import me.ahoo.cosec.engine.pattern.EvaluationScratch
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.ResourceTarget
+import me.ahoo.cosec.engine.pattern.ScratchSource
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
@@ -29,6 +31,7 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
 
@@ -59,7 +62,8 @@ import me.ahoo.cosec.model.decision.StatementRef
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
     CandidateVisitor,
     ConditionInput,
-    IndexLookup {
+    IndexLookup,
+    ScratchSource {
     protected val authz: AuthzRequest = request.request
     private val host: ConditionInput = request.attributes
     protected val target: ResourceTarget = ResourceTarget(authz.resource)
@@ -100,6 +104,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var firstList: IntArray? = null
     private var lists: Array<IntArray?>? = null
     private var listCount = 0
+
+    /**
+     * The glob table and the marks of repeated targets ([BoundEntry.repeat]), made when the evaluation first needs
+     * either: an evaluation of documents with neither glob segments nor repeated targets makes none.
+     */
+    private var scratch: EvaluationScratch? = null
 
     private var pathState = PATH_UNPARSED
     private var subjectRoles: Set<String>? = null
@@ -167,7 +177,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private fun bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
         // The statement captures only for its own condition: a key reading a variable matches with captures here.
         captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
-            rule.statement.resources.firstNotNullOfOrNull { it.match(target) }
+            rule.statement.resources.firstNotNullOfOrNull { it.match(target, this) }
         } else {
             null
         }
@@ -290,6 +300,45 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     }
 
     /**
+     * `ALG-9`: a pass evaluates a policy once for all the bindings of one document that reach it. The later ones can
+     * change nothing: scope and expiry are checked per binding before this, a statement's result depends only on the
+     * request and the policy ([step]), and the first error and the first skipped ALLOW are kept already. So a document
+     * that binds one costly policy many times costs one evaluation, and a policy costs at most one per document.
+     */
+    override fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean =
+        firstThrough(repeatBit(via, slot)) && candidate(policy, via)
+
+    /** The bit of [slot] of [via]'s document in the current pass. */
+    protected fun repeatBit(via: BindingRef.Bound, slot: Int): Int {
+        val before = when (via.document) {
+            DocumentKind.PLATFORM -> 0
+            DocumentKind.APP -> view.platform.repeats
+            DocumentKind.TENANT -> view.platform.repeats + (view.app?.repeats ?: 0)
+        }
+        return 2 * (before + slot) + if (pass === Effect.DENY) 0 else 1
+    }
+
+    /** Whether [bit] was clear; sets it. */
+    protected fun firstThrough(bit: Int): Boolean {
+        val scratch = scratch()
+        val words = scratch.marks ?: LongArray(repeatWords()).also { scratch.marks = it }
+        val word = bit ushr WORD_SHIFT
+        val mask = 1L shl bit
+        if ((words[word] and mask) != 0L) {
+            return false
+        }
+        words[word] = words[word] or mask
+        return true
+    }
+
+    override fun scratch(): EvaluationScratch = scratch ?: EvaluationScratch().also { scratch = it }
+
+    private fun repeatWords(): Int {
+        val slots = view.platform.repeats + (view.app?.repeats ?: 0) + (view.tenant?.repeats ?: 0)
+        return (2 * slots + WORD_BITS - 1) ushr WORD_SHIFT
+    }
+
+    /**
      * Evaluates [statement] and acts on the result: [DECIDED] on a match, [NEXT_POLICY] when the policy condition does
      * not hold (none of the policy's statements can match), else [NEXT_STATEMENT].
      */
@@ -388,14 +437,17 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     @Suppress("TooGenericExceptionCaught")
     private fun resource(statement: CompiledStatement): Captures? {
         var failure: Exception? = null
+        // Only glob segments use the evaluation's table: a statement without one matches through the plain calls, as
+        // before the table, one call less deep on the hot path.
+        val globs = statement.globUnits > 0
         for (pattern in statement.resources) {
             try {
                 if (!statement.captures) {
-                    if (pattern.matches(target)) {
+                    if (if (globs) pattern.matches(target, this) else pattern.matches(target)) {
                         return Captures.NONE
                     }
                 } else {
-                    pattern.match(target)?.let { return it }
+                    (if (globs) pattern.match(target, this) else pattern.match(target))?.let { return it }
                 }
             } catch (error: Exception) {
                 failure = failure ?: error
@@ -715,6 +767,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         private const val GUARD_ERROR = 3
         private const val INITIAL_GUARDS = 4
         private const val INITIAL_LISTS = 8
+
+        private const val WORD_BITS = 64
+        private const val WORD_SHIFT = 6
 
         private const val PATH_UNPARSED = 0
         private const val PATH_PARSED = 1

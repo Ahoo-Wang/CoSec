@@ -64,6 +64,17 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 - **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi` 和 Spring Boot Actuator 就存在；像其他 actuator
   端点一样决定是否暴露它。
 
+## Key 前缀 {#key-prefix}
+
+一个部署写入 Redis 的每个 key 都在同一个前缀之下（`SNP-9`）：快照文档、控制面记录、影子报告、吊销、成员关系、API key、
+限流计数器和 OAuth 状态（[Redis key](./storage.md#redis-keys)）。同一个 Redis 上前缀不同的两个部署不共享任何 key。
+它取代了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`：
+设置其中任何一项的环境都会启动失败，无论 `cosec.unknown-properties` 如何设置（[故障排查](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)）。
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。 |
+
 ## 管道 {#pipeline}
 
 `cosec.pipeline.*`：如何读取并限定一个请求。
@@ -133,9 +144,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.snapshot.key-prefix` | string | `cosec` | 快照文档、控制面记录和影子 key 所在的 Redis 命名空间，去掉末尾的 `:`。读取同一个平台的所有服务以及控制面必须使用同一个值。 |
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | CoCache 中文档的本地副本可以为冷加载提供多久，之后重新询问 Redis。无论缓存定制器或 `cocache.*` 配置项设置了什么，都以它为准。 |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久用条件读向 Redis 确认一次每个已装入的文档。`0` 关闭周期确认；失效消息仍会重新加载变化的文档。 |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久用条件读向 Redis 确认一次每个已装入的文档：失效消息丢失时，变化最多这么久不被看到（`SNP-6`）。至少为 `1s`、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。每一轮在 Redis 上花费的 CPU 与文档大小成正比（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | 文档超过这个时长未被确认时，以 `WARN` 记录。不得超过 `lag-escalate`。 |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | 文档超过这个时长未被确认时，以 `ERROR` 记录为陈旧。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。其他租户继续基于已装入的文档决策。 |
@@ -182,8 +192,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.api-key.store` | `memory`、`redis` | `memory` | `memory`：下面配置的 key。`redis`：所有实例共享的 key；需要 `cosec-cocache`、一个 `StringRedisTemplate` 和一个 `ReactiveStringRedisTemplate`。 |
-| `cosec.api-key.key-prefix` | string | `cosec:api-key` | `redis` 存储的 Redis key 前缀，去掉末尾的 `:`。与其他前缀都无关（[Redis key](./storage.md#redis-keys)）。 |
+| `cosec.api-key.store` | `memory`、`redis` | `memory` | `memory`：下面配置的 key。`redis`：所有实例共享的 key，位于 `<cosec.key-prefix>:api-key` 下；需要 `cosec-cocache`、一个 `StringRedisTemplate` 和一个 `ReactiveStringRedisTemplate`。 |
 | `cosec.api-key.keys[n].*` | list | 空 | `memory` 存储的 key；使用 `redis` 时忽略。 |
 
 请求头由 [`cosec.pipeline.api-key-header`](#pipeline) 决定。API key 需要一个 `MembershipProvider` Bean，否则应用无法启动（`IDN-6`，[API key](../integration/authentication.md#api-keys)）。`cosec.api-key.keys` 的每一项如下，任何其他字段都会导致启动失败：
@@ -206,7 +215,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.cache.key-prefix` | string | `cosec` | 吊销 key 的前缀，去掉末尾的 `:`。与 `cosec.authorization.snapshot.key-prefix` 无关。 |
 | `cosec.authorization.cache.token.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
 
 ### 本地缓存设置 {#local-cache-settings}

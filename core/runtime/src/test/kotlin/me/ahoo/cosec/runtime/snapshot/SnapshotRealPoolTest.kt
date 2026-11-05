@@ -74,7 +74,7 @@ class SnapshotRealPoolTest {
 
     @Test
     fun evictionKeepsAtMostMaxApps() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 1)
         testSource(store, options = options, compileExecutor = null).use { source ->
             source.load("app-a").get(10, TimeUnit.SECONDS)
             source.load("app-b").get(10, TimeUnit.SECONDS)

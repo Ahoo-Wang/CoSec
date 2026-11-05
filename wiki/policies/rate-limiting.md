@@ -107,7 +107,7 @@ refused requests are not counted.
 
 | Limiter | Used when | Scope |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `cosec:rate-limiter:<rule>:<bucket>:<window>` and expire after two windows. |
+| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>:<window>` and expire after two windows. |
 | `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. Keeps at most 100,000 buckets and drops buckets idle for an hour; a dropped bucket starts again from zero. |
 
 Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has

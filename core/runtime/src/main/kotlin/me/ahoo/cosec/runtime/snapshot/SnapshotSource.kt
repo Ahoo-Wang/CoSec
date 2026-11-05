@@ -54,7 +54,8 @@ import java.util.function.LongSupplier
 /**
  * Holds the compiled policy snapshot (RFC 0003 §4.2–§4.5, RFC 0004 §7.4): one shared document, which every request needs
  * and which is never evicted, and the documents of each [SnapshotFamily], each family holding up to its own bound and
- * evicting least recently used. The 8.0 source ([DocumentSnapshots.source]) shares [SnapshotKey.Platform] and has the
+ * evicting least recently used. Entries for documents the store does not hold have a bound of their own and evict only
+ * each other, so ids a client chooses never push out a document that exists (`SNP-7`). The 8.0 source ([DocumentSnapshots.source]) shares [SnapshotKey.Platform] and has the
  * app and tenant families. Every guarantee below holds for every key of every family alike.
  *
  * - [peek] is the hot path: a synchronous in-memory lookup with no future and no I/O, safe on an event loop.
@@ -65,6 +66,8 @@ import java.util.function.LongSupplier
  *   under the same lock, so nothing can slip in between.
  * - Installed documents are revalidated every [SnapshotOptions.revalidateInterval] with a conditional read of the store
  *   of record, so a document's lag (time since the store last confirmed it) is bounded while the store is reachable.
+ *   The pass always runs: it is the only bound on a change whose invalidation was lost, or whose reload failed
+ *   (`SNP-6`, RC1-50).
  *
  * Only a key never seen by this source is cold-loaded with [SnapshotDocumentStore.read], which may answer from a local
  * copy. That install counts as confirmed [SnapshotDocumentStore.localCopyMaxAge] before the read, the oldest the copy can
@@ -74,7 +77,8 @@ import java.util.function.LongSupplier
  *
  * Failures keep 7.0's semantics (RFC 0003 §4.4): a read that fails while a document is installed keeps it (F6, bounded
  * by lag and [checkFresh]); a document that is present but cannot be decoded or compiled is installed as
- * [DocumentState.Failed] (F3, F5); a cold read that fails is answered as failed and not installed (F1).
+ * [DocumentState.Failed] (F3, F5), a compilation that ends in a [VirtualMachineError] included (`SNP-8`); a cold read
+ * that fails is answered as failed and not installed (F1).
  *
  * Revisions are metadata, not a guard. Redis replicates asynchronously, so a failover can promote a replica that never
  * received an acknowledged write, and the store then answers with an older revision than the one installed. The older
@@ -155,7 +159,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
     private val subscription: AutoCloseable = store.subscribe(ChangeListener())
-    private val periodic: ScheduledFuture<*>? = schedulePeriodic()
+    private val periodic: ScheduledFuture<*> = schedulePeriodic()
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
     val isPrewarmed: Boolean get() = prewarmed
@@ -334,7 +338,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             return
         }
         closed = true
-        periodic?.cancel(false)
+        periodic.cancel(false)
         subscription.close()
         if (ownsScheduler) {
             scheduler.shutdownNow()
@@ -424,10 +428,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     private fun closedError() = IllegalStateException("SnapshotSource is closed.")
 
-    private fun schedulePeriodic(): ScheduledFuture<*>? {
-        if (options.revalidateInterval.isZero) {
-            return null
-        }
+    private fun schedulePeriodic(): ScheduledFuture<*> {
         val millis = options.revalidateInterval.toMillis()
         return scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
     }
@@ -558,20 +559,42 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         return family.slots[family.spec.idOf(key)]?.removeIfIdle(onlyIfEmpty = false) ?: false
     }
 
-    /** Evicts the least recently used idle documents of [family] beyond its bound. */
+    /**
+     * Evicts the least recently used idle entries of [family] beyond its bounds: documents beyond
+     * [SnapshotFamily.maxEntries], and entries for documents the store does not hold beyond [SnapshotFamily.maxAbsent].
+     * Each kind evicts only its own, and a load in flight counts toward neither (`SNP-7`).
+     */
     private fun evictBeyond(family: Family) {
         val slots = family.slots
-        val bound = family.spec.maxEntries
-        if (slots.size <= bound) {
+        if (slots.size <= minOf(family.spec.maxEntries, family.spec.maxAbsent)) {
             return
         }
         synchronized(evictionLock) {
-            while (slots.size > bound) {
-                val victim = slots.values.filter { it.installed != null && it.isIdle() }.minByOrNull { it.lastAccess } ?: return
-                if (victim.removeIfIdle(onlyIfEmpty = false)) {
-                    lastLagReport.remove(victim.key)
-                    log.debug { "Evicted snapshot document [${victim.key}]." }
+            evictBeyond(slots, family.spec.maxEntries, absent = false)
+            evictBeyond(slots, family.spec.maxAbsent, absent = true)
+        }
+    }
+
+    private fun evictBeyond(slots: ConcurrentHashMap<String, Slot<A>>, bound: Int, absent: Boolean) {
+        while (true) {
+            var held = 0
+            var victim: Slot<A>? = null
+            for (slot in slots.values) {
+                val entry = slot.installed ?: continue
+                if ((entry.origin == EntryOrigin.ABSENT) != absent) {
+                    continue
                 }
+                held++
+                if ((victim == null || slot.lastAccess < victim.lastAccess) && slot.isIdle()) {
+                    victim = slot
+                }
+            }
+            if (held <= bound || victim == null) {
+                return
+            }
+            if (victim.removeIfIdle(onlyIfEmpty = false)) {
+                lastLagReport.remove(victim.key)
+                log.debug { "Evicted snapshot document [${victim.key}]." }
             }
         }
     }
@@ -993,12 +1016,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         /**
          * A reload that found the compile queue full tries again, with a delay that doubles while the queue stays full,
-         * up to the revalidation interval (or [SnapshotOptions.prewarmMaxBackoff] when periodic revalidation is off).
+         * up to the revalidation interval.
          */
         private fun retryLater() {
             val delay = retryDelay
-            val cap = options.revalidateInterval.takeUnless { it.isZero } ?: options.prewarmMaxBackoff
-            retryDelay = minOf(delay.multipliedBy(2), cap)
+            retryDelay = minOf(delay.multipliedBy(2), options.revalidateInterval)
             try {
                 scheduler.schedule({ reload(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
             } catch (rejected: RejectedExecutionException) {
@@ -1009,7 +1031,27 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private fun compileAndInstall(load: Load, read: SnapshotRead.Present) {
             val document = read.document
             val begin = System.nanoTime()
-            val state = compileState(document)
+            val state = try {
+                compileState(document)
+            } catch (error: VirtualMachineError) {
+                // RC1-43: a document that compiles on the control plane can overflow a smaller data-plane stack. Ending
+                // the load as a transient failure would keep the previous revision, and a new DENY would never apply.
+                val failure = SnapshotUnavailableException(
+                    key,
+                    "revision ${document.revision} cannot be compiled",
+                    error
+                )
+                val failed = SnapshotEntry(
+                    key,
+                    DocumentState.Failed(failure),
+                    document.revision,
+                    read.digest,
+                    load.confirmedAt,
+                    EntryOrigin.UNCOMPILABLE,
+                )
+                finish(load, failed, install = true)
+                throw error
+            }
             retryDelay = options.rejectedReloadRetry
             metrics.onCompile(key.kind, Duration.ofNanos(System.nanoTime() - begin), state is DocumentState.Present)
             val origin = if (state is DocumentState.Present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE

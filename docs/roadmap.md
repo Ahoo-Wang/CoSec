@@ -225,7 +225,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1194 | `fix(gateway)!`：RC 修复批次 C，网关与租户隔离的边缘（RC1-5、6、15–19、48、49）：身份转发按 scheme 选择加入，凭据（头、查询参数、`authorization` cookie）不下行，执法放行清掉客户端的 `CoSec-Identity`，路由 app 先于配置，网关上暴露的 Actuator 端点启动失败，租户把 app 的 `perm:` 策略绑给 `Anyone` 或主体时读取 app 文档，控制面与执法读同一组文档；规则 IDN-7、IDN-8、IDN-9、STA-2 与 SCP-2/4/7、TNT-4、PIP-10、CTL-3 的修订；JMH 分摊定位后吞吐回到 `main` 的 A/A 区间；四轮独立审查，所有发现在本 PR 内修完 | ✅ 2026-11-03 合入（`8bc0e6e1`） |
 | #1197、#1198 | 外部 IdP 放到 8.1 并单独写 RFC；网关也去掉 `authorization` cookie 的决定；RFC 0010 复查（C4 公共 data class 归类、C5 实例状态的格式级别） | ✅ 已合入 |
 | #1199 | #1194 之后的共享文档（RFC 0004、0006、0007、0008、0011，审查记录与路线图） | ✅ 已合入（`071f7b68`） |
-| #1200 | `fix(runtime)!`：RC 修复批次 D1，数据面（RC1-7、8、14、38、43–46、50，非数组 `roles`/`policies` 声明 401，失效通知测试的竞态，`SharedLock`，条件读取的测量）：无文档条目单独计数（SNP-7），路径模式按 glob 单位限额、动态规划匹配（DOC-4），一次评估中同一文档对同一策略的多条绑定只评一次（ALG-9），文档读到的请求头重复即 400（PIP-12），`revalidate-interval` 为 1 秒到 5 分钟（SNP-6），VM 错误装入失败修订（SNP-8），唯一的 `cosec.key-prefix` 且旧前缀配置启动失败（SNP-9），一个严格的 mapper（DOC-5）；两轮独立审查 | 进行中（2026-11-04）：第 2 轮只剩 M1（SNP-9 启动信息按它建议的前缀计算迁移的数据族）与文档更正 L1、L2，已交实现会话；修完由协调者核对 diff、CI 与 CodeQL 后合入 |
+| #1200 | `fix(runtime)!`：RC 修复批次 D1，数据面（RC1-7、8、14、38、43–46、50，非数组 `roles`/`policies` 声明 401，失效通知测试的竞态，`SharedLock`，条件读取的测量）：无文档条目单独计数（SNP-7），路径模式按 glob 单位限额、动态规划匹配（DOC-4），一次评估中同一文档对同一策略的多条绑定只评一次（ALG-9），文档读到的请求头重复即 400（PIP-12），`revalidate-interval` 为 1 秒到 5 分钟（SNP-6），VM 错误装入失败修订（SNP-8），唯一的 `cosec.key-prefix` 且旧前缀配置启动失败（SNP-9），一个严格的 mapper（DOC-5）；两轮独立审查 | ✅ 2026-11-04 合入。第 1 轮 M1–M3、L1–L8 与第 2 轮 M1（SNP-9 启动信息按它建议的前缀列出迁移的数据族）、L1、L2 都在本 PR 内修完，协调者核对第 2 轮修复；第 2 轮的 L3–L6 留给 D2 |
 
 **2026-11-04 状态（接手者从这里继续）**：
 
@@ -236,10 +236,10 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1188 CoCache 6.7.0 → 6.10.0 | ✅ 已合入（`d10bd61e`），协调者对照代码审查；共享文档随 #1188 之后的文档 PR | — |
 | B2 后续 PR | ✅ #1192 | — |
 | 批次 C（网关） | ✅ #1194，四轮独立复审，所有发现在 PR 内修完；共享文档 #1199 | — |
-| 批次 D（DoS、快照、泄露） | D1：草稿 #1200，两轮独立复审（第 1 轮 M1–M3 与 L1–L8 已修；第 2 轮无高级，M1 与 L1、L2 在修）。D2 未开始 | 1. 核对 #1200 第 2 轮修复的 diff，全绿后标 ready 并 squash 合入。2. D1 的共享文档：审查记录 Fix plan 的 D 行与各发现的状态、§9 的 D1 决定（已记在下方）、RFC 0003/0005/0006/0011 的实现说明，清单见 #1200 的 "For the coordinator"。3. 派 D2：RC1-39、40、41、47，控制面 API 按租户限流，控制面文档列表结构，另加 D1 第 2 轮复审的 L3–L6 与 simulate/explain 对重复请求头的一致性。两轮复审报告在协调者的 side-session-notes 目录（`rc-batch-d1-review-pr1200*.md`） |
+| 批次 D（DoS、快照、泄露） | D1 ✅ #1200，两轮独立复审，所有中级问题在 PR 内修完。D2 未开始 | 1. D1 的共享文档：审查记录 Fix plan 的 D 行与各发现的状态、§9 的 D1 决定（已记在下方）、RFC 0003/0005/0006/0011 的实现说明，清单见 #1200 的 "For the coordinator"。2. 派 D2：RC1-39、40、41、47，控制面 API 按租户限流，控制面文档列表结构，另加 D1 第 2 轮复审的 L3–L6 与 simulate/explain 对重复请求头的一致性。两轮复审报告在协调者的 side-session-notes 目录（`rc-batch-d1-review-pr1200*.md`） |
 | #866、#1163 | Renovate，与 main 冲突 | 等 Renovate rebase；#1163 是运行时依赖，须维护者确认 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：合入 D1（#1200）及其共享文档 → D2（控制面与运维）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200）的共享文档 → D2（控制面与运维）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 

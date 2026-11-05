@@ -208,7 +208,7 @@ cosec:
 
 每个 key 都需要 `id`、64 个字符的小写十六进制 `hash`、`principal-id`、`tenant-id`，以及 `roles` 与 `uncapped: true` 二者恰好其一，且 id 必须唯一；否则应用无法启动，因此不会有 key 因遗漏而没有上限。配置了 key 不再携带的 `policies` 或 `attributes` 的 key 同样无法启动：未知字段在绑定时失败，而不是被丢弃。在代码中，`ApiKey` 的 `roles` 也没有默认值：创建 key 的一方（包括 `RedisApiKeyStore.issue`）都要传入上限或 `null`。经网关使用的 key 请设置 `expires-at`：网关拒绝转发永不过期的凭证的身份（[转发身份](./web.md#forwarding-the-identity)）。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
 
-**Redis 存储**，由所有实例共享，可在运行时修改：设置 `cosec.api-key.store: redis`（需要 `cosec-cocache`；key 位于 `cosec.api-key.key-prefix` 之下，默认 `cosec:api-key`）。管道用非阻塞的 `RedisApiKeyReader` 读取它们。通过 `RedisApiKeyStore` Bean 管理 key：
+**Redis 存储**，由所有实例共享，可在运行时修改：设置 `cosec.api-key.store: redis`（需要 `cosec-cocache`；key 位于 `<cosec.key-prefix>:api-key` 之下，默认 `cosec:api-key`）。管道用非阻塞的 `RedisApiKeyReader` 读取它们。通过 `RedisApiKeyStore` Bean 管理 key：
 
 | 调用 | 效果 |
 |---|---|
@@ -245,6 +245,6 @@ cosec:
 - **信任网关转发的身份**（`cosec.pipeline.mode=gateway`）。网关校验凭证、检查吊销并做出决策，然后在 `CoSec-Identity` 中转发调用方是谁。服务不需要密钥、key、文档或 Redis，并且必须只能经由网关访问。配置方法、回应和安全上下文见[网关之后的服务](./web.md#services-behind-the-gateway)。
 - **再次决策**（默认的 `enforce`）。服务运行自己的管道：校验令牌的签名、有效期和吊销状态，并基于同样的文档做决策。
 
-要再次决策，请在网关上设置 `cosec.gateway.identity.forward-authorization=true`：默认情况下网关在转发前会移除 `Authorization` 请求头、API key 请求头、`authorization` 查询参数和 `authorization` cookie；即使打开，也只在本会接收身份的路由上转发它们：`lb://` 路由，或标为 `cosec-identity: true` 的路由（[转发身份](./web.md#forwarding-the-identity)）。让各服务与网关使用相同的 `cosec.jwt.secret`、相同的 Redis 和相同的 `cosec.authorization.snapshot.key-prefix`，这样它们读取的是同样的文档和同样的吊销记录。网关把 `CoSec-Request-Id` 设为它自己的请求 id（[网关](./web.md#gateway)），使每个服务的结果带有同一个 id。在每个服务上设置 `cosec.authorization.scope.app-id`，并把 `cosec.authorization.remote-ip.max-trusted-index` 设为它前面的代理数量（包括网关）（[信任边界](../guide/security-model.md#trust-boundaries)）。
+要再次决策，请在网关上设置 `cosec.gateway.identity.forward-authorization=true`：默认情况下网关在转发前会移除 `Authorization` 请求头、API key 请求头、`authorization` 查询参数和 `authorization` cookie；即使打开，也只在本会接收身份的路由上转发它们：`lb://` 路由，或标为 `cosec-identity: true` 的路由（[转发身份](./web.md#forwarding-the-identity)）。让各服务与网关使用相同的 `cosec.jwt.secret`、相同的 Redis 和相同的 `cosec.key-prefix`，这样它们读取的是同样的文档和同样的吊销记录。网关把 `CoSec-Request-Id` 设为它自己的请求 id（[网关](./web.md#gateway)），使每个服务的结果带有同一个 id。在每个服务上设置 `cosec.authorization.scope.app-id`，并把 `cosec.authorization.remote-ip.max-trusted-index` 设为它前面的代理数量（包括网关）（[信任边界](../guide/security-model.md#trust-boundaries)）。
 
 **下一步：** 在自己的代码中请求决策，见[代码中的权限检查](./checks.md)。

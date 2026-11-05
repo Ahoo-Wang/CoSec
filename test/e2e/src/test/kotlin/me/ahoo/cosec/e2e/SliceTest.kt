@@ -215,7 +215,10 @@ class SliceTest {
     fun `when Redis goes down, a document not yet loaded is unavailable, never permitted`() {
         RedisOutage().use { redis ->
             val options =
-                SnapshotOptions(revalidateInterval = Duration.ofMillis(200), coldLoadTimeout = Duration.ofMillis(500))
+                SnapshotOptions(
+                    revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL,
+                    coldLoadTimeout = Duration.ofMillis(500),
+                )
             Slice(redisUri = redis.uri, options = options).use { down ->
                 down.publish(SnapshotKey.Platform, platform)
                 down.publish(SnapshotKey.App("order"), app)
@@ -237,7 +240,7 @@ class SliceTest {
     }
 
     private companion object {
-        /** Notification or the 200 ms revalidation: well inside a second; generous for CI. */
+        /** Notification or the 1 s revalidation: a few seconds; generous for CI. */
         val STALENESS_BOUND: Duration = Duration.ofSeconds(10)
         const val POLL_MILLIS = 50L
     }

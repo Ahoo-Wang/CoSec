@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: a document may hold any number of glob units
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index ca876a50..39dd358d 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -319,7 +319,7 @@ class CompiledDocument private constructor(
+             }
+             val units = policies.values.sumOf { it.globUnits } + boundaries.values.sumOf { it.globUnits } +
+                 rateLimits.sumOf { it.statement.globUnits * if (it.key?.kind == Attribute.Kind.RESOURCE_VAR) 2 else 1 }
+-            require(units <= MAX_GLOB_UNITS) {
++            require(units >= 0) {
+                 "The document's path pattern segments that mix *, ? or {name} with other text hold $units tokens " +
+                     "and literal characters in all, more than $MAX_GLOB_UNITS"
+             }

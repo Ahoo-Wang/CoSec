@@ -125,7 +125,7 @@ class SnapshotColdLoadTest {
     @Test
     fun f7ColdLoadTimeoutFailsTheRequestWhileTheLoadGoesOn() {
         val metrics = RecordingMetrics()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, coldLoadTimeout = Duration.ofMillis(50))
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, coldLoadTimeout = Duration.ofMillis(50))
         testSource(store, options = options, metrics = metrics).use { source ->
             store.hold = true
 
@@ -146,7 +146,7 @@ class SnapshotColdLoadTest {
     @Test
     fun f8FullCompileQueueFailsColdLoadsAndLeavesInstalledDocuments() {
         val compiler = FakeCompiler()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, compileThreads = 1, compileQueueCapacity = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, compileThreads = 1, compileQueueCapacity = 1)
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
             source.load().get(10, TimeUnit.SECONDS)
             val gate = CountDownLatch(1)
@@ -173,7 +173,7 @@ class SnapshotColdLoadTest {
     @Test
     fun f8FullCompileQueueKeepsTheInstalledRevisionOnReload() {
         val compiler = FakeCompiler()
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, compileThreads = 1, compileQueueCapacity = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, compileThreads = 1, compileQueueCapacity = 1)
         testSource(store, compiler = compiler, options = options, compileExecutor = null).use { source ->
             source.load("app-a").get(10, TimeUnit.SECONDS)
             val gate = CountDownLatch(1)

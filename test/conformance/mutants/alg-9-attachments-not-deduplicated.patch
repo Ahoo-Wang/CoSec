@@ -1,0 +1,18 @@
+# Rule: ALG-9
+# Mutant: a policy claimed many times as an attachment is evaluated once per claim
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RepeatedBindingsTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+index 4cac011d..b0df2013 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+@@ -137,9 +137,6 @@ internal object CandidateOrder {
+         val claimed = if (attachments.size > PAIRWISE) HashSet<String>(attachments.size * 2) else null
+         for (i in attachments.indices) {
+             val id = attachments[i].value
+-            if (if (claimed == null) claimedBefore(attachments, i) else !claimed.add(id)) {
+-                continue
+-            }
+             val own = tenant?.policy(id)
+             val shared = platform.policy(id)
+             if (own != null && shared != null && !own.sameContent(shared)) {

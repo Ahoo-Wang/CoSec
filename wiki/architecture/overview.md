@@ -284,7 +284,11 @@ when several match. At a high level:
 
 The exact rules, including break-glass and the boundary, are in the
 [security model](../guide/security-model.md). A policy with many statements is indexed by action, resource and condition keys, so a candidate
-costs only the statements that could match. Untraced evaluation records nothing and allocates almost nothing; the traced
+costs only the statements that could match. A policy that several bindings of one document reach is evaluated once per
+pass (`ALG-9`): a binding whose policy id others of its document name too gets a slot when the document compiles, and
+the evaluator marks the slots a pass has evaluated in a bitset it allocates only when it reaches one, so a document
+without such bindings costs nothing for it. Path patterns are bounded per document (`DOC-4`,
+[path pattern bounds](../policies/language.md#path-pattern-bounds)). Untraced evaluation records nothing and allocates almost nothing; the traced
 evaluator, used for decision events at `cosec.pipeline.trace-level` and for `explain`, is a separate class so the hot
 path carries no trace code.
 
@@ -304,9 +308,11 @@ holds them:
   bounded pool (`compile-threads`); a full queue fails the load closed. Installs of one key happen in the order their
   loads started (`SNP-2`, `SnapshotInstallOrderPropertyTest`).
 - **Bounded memory.** The platform document is loaded at startup and never evicted. App and tenant documents are loaded on
-  demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed.
+  demand and evicted least recently used beyond `max-apps` and `max-tenants`; selected ones can be prewarmed. Ids the
+  store holds no document for are kept apart, at most 256 per family, and evict only each other (`SNP-7`).
 - **Revalidation.** Every installed document is revalidated every `revalidate-interval` (10 s by default) with a
-  conditional read of the store of record, which transfers no body when the digest is unchanged. Change notifications
+  conditional read of the store of record, which transfers no body when the digest is unchanged. It is the only bound on
+  a lost change notification, so it cannot be turned off and is at most 5 minutes (`SNP-6`). Change notifications
   from the store trigger a reload sooner. A cold key is read once (possibly from a local copy) and then confirmed by a
   conditional read at once.
 - **Fail closed.** A read that fails while a document is installed keeps the installed revision, and the lag is

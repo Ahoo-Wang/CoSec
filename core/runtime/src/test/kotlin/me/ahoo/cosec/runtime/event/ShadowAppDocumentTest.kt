@@ -29,6 +29,7 @@ import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.QUIET_PASS
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
@@ -39,7 +40,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.time.Duration
 import java.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
@@ -52,7 +52,7 @@ import kotlin.time.Duration.Companion.seconds
 class ShadowAppDocumentTest {
     private val store = InMemorySnapshotDocumentStore()
     private val compiler = PolicyDocumentCompiler()
-    private val source = DocumentSnapshots.source(store, compiler, SnapshotOptions(revalidateInterval = Duration.ZERO))
+    private val source = DocumentSnapshots.source(store, compiler, SnapshotOptions(revalidateInterval = QUIET_PASS))
     private val views = DocumentSnapshotViews(source)
     private val recorder = ShadowRecorder("instance-1")
     private val opened = ArrayList<DecisionListeners>()

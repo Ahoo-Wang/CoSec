@@ -1,0 +1,17 @@
+# Rule: SNP-6
+# Mutant: a reset of the change channel reloads nothing
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 8ab96d44..21364f57 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -1290,7 +1290,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+ 
+         override fun onReset() {
+             log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
+-            reloadAll(installedSlots()) { it.reload(force = false) }
++            Unit
+         }
+     }
+ 

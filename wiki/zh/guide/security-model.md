@@ -58,6 +58,8 @@ flowchart TD
 
 顺序不会改变决策的类型，只影响多条语句同时命中时报告的是哪一条：DENY 轮总是先遍历完所有候选，ALLOW 轮才开始。
 
+同一个文档中有多条绑定指向的策略，每一轮只通过按此顺序的第一条绑定求值一次；在附加策略中声明两次的策略只附加一次（`ALG-9`）：它的语句经由每条绑定得到的结果都相同，之后的绑定改变不了什么。由第一条绑定报告命中或记录错误。因此一个策略有多少条绑定都只花费一条的开销，每一轮中一个策略对每个绑定它的文档最多求值一次，另加附加策略的一次求值。
+
 ### 策略条件 {#policy-conditions}
 
 策略可以有自己的 `condition`。它在每个请求中最多求值一次，而且只在该策略的某条语句已经按动作和资源命中之后才求值。条件不成立时，策略中的所有语句都不命中，DENY 也一样。条件抛出异常时，经由它到达的 DENY 视为失败的 DENY（Indeterminate），ALLOW 视为未命中。必须始终生效的 DENY，应放在没有条件的策略里。
@@ -209,7 +211,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 **客户端 IP。** `max-trusted-index` 是应用前面的代理数量；默认值 `1` 假定有一个代理。CoSec 从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你的代理追加的那一条。在客户端可直接访问的宿主上，请设置为 `0`，否则客户端可以在该请求头里写入任意地址（[代理之后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 
-**请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：针对它的 DENY 为 Indeterminate（`503`），针对它的 ALLOW 不匹配（[属性](../policies/language.md#attributes)）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
+**请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：请求所依据的文档读取它时，请求在求值之前即为 `400`，无论语句的效果是什么，因此这个回答既不暴露 DENY，也不暴露它读取哪个请求头（[请求头](../policies/language.md#headers)、`PIP-12`）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
 
 任何属性引用都不能读取携带凭证的请求头：`authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 和 `cosec-identity`，条件和限流规则的 `key` 都是如此（[请求头](../policies/language.md#headers)）。读取它们的文档无法编译。否则策略可以通过决策逐字符泄露其他主体的凭证，或者信任客户端写入的身份。用 `cosec.pipeline.api-key-header` 改名后的 API key 头同样是携带凭证的请求头：starter 在数据面和控制面编译每个文档时都拒绝它，而且无论文档由谁编译，管道都不会为条件读取它。
 

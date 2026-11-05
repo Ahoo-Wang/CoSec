@@ -77,7 +77,7 @@ class PlatformCompilerInFlightTest {
                 }
             }
         }
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, compileThreads = 2)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, compileThreads = 2)
         DocumentSnapshots.source(store, gated, options).use { source ->
             compiler.bind(source)
             val views = DocumentSnapshotViews(source, platformRequired = true)

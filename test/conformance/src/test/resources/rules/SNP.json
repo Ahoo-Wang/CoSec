@@ -26,14 +26,16 @@
     },
     {
       "id": "SNP-3",
-      "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
-      "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
+      "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006); RC1-45",
+      "statement": "Snapshot caches have ttl = null and throw on failed reads, whoever creates them (a snapshot cache built outside the starter is pinned all the same), and no customizer replaces a CoSec cache's codec, loaders, key filter or per-entry lifetime; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
       "level": "startup",
       "guards": [
         "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
         "cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
         "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
-        "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn"
+        "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn",
+        "cocache:CacheTtlPolicyTest#aSnapshotCacheBuiltOutsideTheStarterIsPinned",
+        "spring-boot:StoreOfRecordOverrideTest#customizersCannotReplaceWhatDecidesACachesContent"
       ],
       "pending": null
     },
@@ -60,6 +62,60 @@
       "level": "pipeline",
       "guards": [
         "runtime:DocumentSnapshotViewsTest#a fail-closed tenant past its lag bound is unresolved, others decide"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-6",
+      "source": "RFC 0003 §4.4 F9, F10; RC1-50; review L1 of #1200",
+      "statement": "The periodic revalidation cannot be turned off or left unbounded: `cosec.authorization.snapshot.revalidate-interval` is at least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`, or startup fails naming it. Every interval each installed document is revalidated with a conditional read of the store, never a local copy, and a reset of the change channel reloads them all, so a change whose invalidation was lost, or whose reload failed, is installed within one interval.",
+      "level": "startup",
+      "guards": [
+        "spring-boot:CoSecPipelineAutoConfigurationTest#a revalidate-interval that turns off or unbinds the periodic pass fails startup",
+        "runtime:SnapshotRevalidationTest#theRevalidationIntervalCannotTurnThePassOffOrUnbindIt",
+        "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",
+        "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
+        "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-7",
+      "source": "RFC 0003 §4.2; RC1-7",
+      "statement": "An entry for a document the store does not hold never evicts one it holds: such entries have a bound of their own (`maxAbsent` per family) and evict only each other, so however many ids without a document a client names, every document a family holds within its bound stays installed.",
+      "level": "timing",
+      "properties": [
+        "runtime:SnapshotFailClosedPropertyTest#absentEntriesNeverEvictDocuments"
+      ],
+      "guards": [
+        "runtime:DocumentSnapshotSourceTest#a flood of ids without a document never evicts a document"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-8",
+      "source": "RFC 0003 §4.4 F5; RC1-43",
+      "statement": "A revision whose compilation fails, with an exception or a VirtualMachineError such as a StackOverflowError, is installed as failed: the source never keeps serving the revision before it in its place.",
+      "level": "timing",
+      "properties": [
+        "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision"
+      ],
+      "guards": [
+        "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
+        "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-9",
+      "source": "RFC 0003 §4.1; RC1-46; review M3 of #1200",
+      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup whatever `cosec.unknown-properties` says, naming the families that move and that revocations and API keys must be copied first, so no revocation is left where nothing reads it.",
+      "level": "startup",
+      "guards": [
+        "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
+        "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
+        "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
+        "spring-boot:RemovedKeyPrefixesTest#every removed prefix counts, by any of its names"
       ],
       "pending": null
     }

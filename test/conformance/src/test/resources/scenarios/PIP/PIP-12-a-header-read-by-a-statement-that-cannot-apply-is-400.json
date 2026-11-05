@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "PIP-12"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The DENY that reads X-Debug is for http:DELETE and could not apply to this GET. The repeated header is refused all the same: whether a statement applies to the request is not revealed either.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        },
+        {
+          "id": "no-debug",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:DELETE",
+              "condition": {
+                "eq": [
+                  "http.header.x-debug",
+                  "1"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "no-debug",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-debug"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Debug": [
+        "0",
+        "1"
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

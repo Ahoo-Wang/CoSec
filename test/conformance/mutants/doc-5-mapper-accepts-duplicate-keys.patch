@@ -1,0 +1,15 @@
+# Rule: DOC-5
+# Mutant: the one mapper reads an object with a duplicate key as its last value
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.StoredFormatTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/json/CoSecJson.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/json/CoSecJson.kt
+index f7c6841e..2e414dcd 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/json/CoSecJson.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/json/CoSecJson.kt
+@@ -31,6 +31,5 @@ import tools.jackson.module.kotlin.jsonMapper
+ object CoSecJson {
+     val mapper: JsonMapper = jsonMapper {
+         findAndAddModules()
+-        enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+     }
+ }

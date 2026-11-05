@@ -17,6 +17,9 @@ package me.ahoo.cosec.cache
 
 import io.mockk.mockk
 import me.ahoo.cocache.api.CacheLoader
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.InvalidateFailureMode
@@ -24,13 +27,14 @@ import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.control.ControlCacheSpecs
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
+import java.time.Instant
 
 /**
  * Policy and permission caches are the store of record in Redis (no loader), so they must never expire and a failed
@@ -60,8 +64,6 @@ class CacheTtlPolicyTest {
         // RFC 0007 §6.4: a staged candidate is the control plane's only copy while its change stages.
         CoSecCacheSpecs.CANDIDATE_CACHE_NAME to me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(policy = weakened).policy,
     )
-
-    private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJson.mapper)
 
     @Test
     fun storeOfRecordCachesNeverExpireAndFailClosed() {
@@ -157,16 +159,61 @@ class CacheTtlPolicyTest {
         assertThrows<IllegalArgumentException> { CoSecCacheSpecs.pinPolicySnapshot(loading, base) }
     }
 
+    /**
+     * RC1-45 (`SNP-3`): a snapshot cache built outside the starter, from a spec that expires, degrades, filters keys and
+     * sets per-entry lifetimes, is still a store of record: `createPolicySnapshotCache` pins it, whoever built the spec.
+     */
+    @Test
+    fun aSnapshotCacheBuiltOutsideTheStarterIsPinned() {
+        val runtime = CacheRuntime.builder().backend(InMemoryBackend()).build()
+        runtime.use {
+            val spec = CoSecCacheSpecs.policySnapshot("outside:").toBuilder()
+                .policy(weakened)
+                .keyFilter { true }
+                .ttlOf { _, _ -> Duration.ofMillis(1) }
+                .build()
+            val cache = runtime.createPolicySnapshotCache(spec)
+            val engine = checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
+            val created = engine.field<CacheSpec<*, *>>("spec")
+            created.policy.ttl.assert().isNull()
+            created.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+            created.policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.THROW)
+            created.keyFilter.assert().isNull()
+            created.ttlOf.assert().isNull()
+            created.namespace.assert().isEqualTo("outside:snapshot")
+            // The filter that called every key absent is gone: a written document reads back.
+            val body = """{"schema":2,"revision":1,"publishedAt":"2026-11-03T00:00:00Z","policies":[],"bindings":[]}"""
+            val document = SnapshotDocument(2, 1, Instant.parse("2026-11-03T00:00:00Z"), body.encodeToByteArray())
+            cache.put(SnapshotKey.Platform, document)
+            cache.get(SnapshotKey.Platform)!!.revision.assert().isEqualTo(1)
+        }
+        val loading = CoSecCacheSpecs.policySnapshot().toBuilder()
+            .loader(mockk<CacheLoader<SnapshotKey, SnapshotDocument>>())
+            .build()
+        assertThrows<IllegalArgumentException> {
+            CacheRuntime.builder().backend(InMemoryBackend()).build().use { it.createPolicySnapshotCache(loading) }
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> Any.field(name: String): T {
+        val field = generateSequence<Class<*>>(javaClass) { it.superclass }
+            .flatMap { it.declaredFields.asSequence() }
+            .first { it.name == name }
+        field.isAccessible = true
+        return field.get(this) as T
+    }
+
     @Test
     fun revokedTokenCacheBoundsMissingTtlAndKeepsDegradedReads() {
-        val policy = CoSecCacheSpecs.revokedToken(codec()).policy
+        val policy = CoSecCacheSpecs.revokedToken().policy
         policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
         policy.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
     }
 
     @Test
     fun revokedSubjectCacheIsConfiguredLikeRevokedTokens() {
-        val spec = CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper))
+        val spec = CoSecCacheSpecs.revokedSubject()
         spec.policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
         spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
         spec.policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
@@ -185,9 +232,9 @@ class CacheTtlPolicyTest {
     @Test
     fun revocationCachesKeepTheReadFailureTheirPolicyChose() {
         val strict = CachePolicy.builder().readFailure(ReadFailureMode.THROW).build()
-        CoSecCacheSpecs.revokedToken(codec(), policy = strict).policy.readFailure
+        CoSecCacheSpecs.revokedToken(policy = strict).policy.readFailure
             .assert().isEqualTo(ReadFailureMode.THROW)
-        CoSecCacheSpecs.revokedSubject(codec(), policy = strict).policy.readFailure
+        CoSecCacheSpecs.revokedSubject(policy = strict).policy.readFailure
             .assert().isEqualTo(ReadFailureMode.THROW)
     }
 

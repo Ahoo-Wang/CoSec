@@ -38,9 +38,12 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 - **CoSec 无法解码的值使读取失败，并留在 Redis 中。** 它永远不会被回收（删除），因为回收会删掉唯一的副本。用普通
   Redis 命令写入的值就属于这种值：只通过控制面或 `cosec-migrate` 写入文档（[发布文档](#publishing-documents)）。
 
+**CoCache 定制器还能改变什么。** CoSec 还会在它们之后恢复决定缓存内容的部分：命名空间、key 编码、编解码器、加载器、key 过滤器和按条目的生存期。无法读取的吊销使读取失败；成员关系总会过期，不带抖动，读取失败时失败即拒绝。缓存策略的其余部分仍由应用决定：每个缓存的 `localMaxAge`、`degradedLocalMaxAge`、本地缓存的大小和 `expireAfterAccess`、`refreshWindow`、`lease`、`load`，以及成员关系以外的 `ttlJitter`；两个吊销缓存还有 `absentTtl`、`readFailure` 和 `invalidateFailure`；成员关系还有 `ttl`（永不为空）、`absentTtl` 和 `invalidateFailure`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销缓存上更长的 `localMaxAge`、`degradedLocalMaxAge` 或 `absentTtl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authorization.cache.token.local-max-age`，30 秒）；更长的成员关系 `ttl` 会让已移除的角色多生效这么久。`cocache.*` 配置项同样能改变它们。
+
 ### Redis key {#redis-keys}
 
-`<s>` 是 [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot)（默认 `cosec`），去掉末尾的 `:`。
+`<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
+key 都在它之下（`SNP-9`）。
 `<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:`，所以一个 key
 只对应一个文档。
 
@@ -59,17 +62,16 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<s>:shadow:report:<window>:<instance>` | 仅数据面实例 `<instance>` | 该实例对一个影子窗口的累计报告；每次写入替换上一次的；最后一次写入 8 天后过期 |
 | `<s>:shadow:reporters:<window>` | 每个数据面实例 | 对 `<window>` 报告过的实例 id；过期时间同上 |
 | `<s>:shadow:status:instances` | 每个数据面实例 | 每个实例已装入的修订及其滞后；最后一次写入 2 分钟后过期，超过一分钟的条目被忽略 |
-| `<c>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
-| `<c>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
-| `<m>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
-| `<k>:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
-| `cosec:rate-limiter:<ruleId>:<bucket>:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期 |
+| `<s>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
+| `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
+| `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
+| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期 |
+| `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`；3 分钟后过期 |
 
-- `<c>` 是 [`cosec.authorization.cache.key-prefix`](./configuration.md#cache)，`<k>` 是
-  [`cosec.api-key.key-prefix`](./configuration.md#api-keys)（`cosec:api-key`），`<m>` 是应用给成员关系缓存的前缀
-  （默认 `cosec`），都去掉末尾的 `:`。它们 **不** 跟随 `<s>`。限流器的前缀 `cosec:rate-limiter` 是固定的。多个部署共用
-  一个 Redis 时，给每个部署各自的前缀以及各自的限流规则 id。
-- 除限流计数器和 API key 以外，每个 key 都是 CoCache 值。每个 CoCache 命名空间有自己的失效通道
+- 多个部署共用一个 Redis 时，给每个部署各自的 `cosec.key-prefix`：前缀不同，就不共享任何 key，一个部署签发的 API key
+  不会被另一个接受，限流计数器也互不相干。
+- 除限流计数器、API key 和 OAuth 状态以外，每个 key 都是 CoCache 值。每个 CoCache 命名空间有自己的失效通道
   `cocache:inv:<namespace>`（例如 `cocache:inv:cosec:snapshot`），所以前缀不同的部署在同一个 Redis 上互不干扰。
 
 ### Redis 要求 {#redis-requirements}
@@ -140,7 +142,10 @@ sequenceDiagram
 - **变更立即到达每个实例**，通过 CoCache 的失效消息（第 2 到 5 步）。实例绕过本地副本自己读取 Redis，编译新修订并
   装入。进行中的请求继续使用它开始时的修订：一次求值绝不会混用一个文档的不同修订。
 - **丢失的消息由重新确认兜底**（第 6、7 步）：每隔 [`revalidate-interval`](./configuration.md#snapshot)（10 秒），
-  每个已装入的文档用一次条件读确认，未变化时不传输任何内容。
+  每个已装入的文档用一次对 Redis 的条件读确认（从不使用本地副本），未变化时不传输任何内容。失效消息丢失时，它是变化唯一的界，
+  因此不能关闭，最长 5 分钟（`SNP-6`）。
+- **没有文档的 id** 与文档分开记住，每个文档族最多 256 个：声明随机应用 id 的客户端会让实例为每个 id 读一次 Redis，但
+  绝不会把已装入的文档挤出去（`SNP-7`）。
 - **滞后**是 Redis 上一次确认某个文档以来的时间。只要 Redis 有应答，它就低于重新确认间隔。超过 `lag-warn`（60 秒）
   时实例以 `WARN` 记录 `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过
   `lag-escalate`（5 分钟）时以 `ERROR` 记录 `... is stale: not confirmed for <lag>.`，每个文档每分钟最多一次。
@@ -154,6 +159,17 @@ sequenceDiagram
 - **修订只按 Redis 的说法变化。** Redis 故障切换后，由于复制是异步的，Redis 可能返回比已装入的更旧的修订。实例装入
   Redis 中的内容，因为其他实例读到的也一样，并以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`。请重新发布丢失的变更。
+
+### 重新确认在 Redis 上的开销 {#what-revalidation-costs-redis}
+
+条件读在 Redis 主线程上对整份已存储的文档做哈希来比较摘要，所以即使文档没有变化，Redis 花费的时间也与文档大小成正比：1 KiB
+约 12 µs，128 KiB 约 0.4 ms，1 MiB 约 2.9 ms，4 MiB 约 12 ms；节点做哈希时不执行其他任何命令
+（[测量](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)）。一个节点上的负载约为
+实例数 × 每个实例持有的全部文档的开销 ÷ `revalidate-interval`：100 个实例每 10 秒确认一份 1 MiB 的平台文档，约占它的 3%。
+
+- 调大 [`revalidate-interval`](./configuration.md#snapshot)，最长 5 分钟且小于 `lag-warn`（也一起调大）：开销按比例下降，
+  错过失效消息的实例也晚同样的时间才跟上。
+- 让平台文档保持小巧。每个实例都持有它；租户特有的策略属于租户文档，只有服务该租户的实例才持有。
 
 ## Redis 不可用时 {#when-redis-is-unavailable}
 
@@ -172,6 +188,15 @@ sequenceDiagram
 | 控制面 | 存储读取失败就是失败，绝不当作"不存在"：控制 API 返回 `503`，不发布任何内容。 |
 | 影子报告 | 实例记录写入失败，并在下一个周期重写；在此期间窗口保持打开。 |
 
+**重新连接之后。** 连接断开期间，Lettuce 缓冲交给它的命令，重新连接时在一把每次写命令都要获取的锁下把它们全部写出。
+这时发送命令的请求（包括在事件循环上的）要等到缓冲写完，而缓冲默认没有上限。要限制这段等待，用
+`LettuceClientConfigurationBuilderCustomizer` 给应用的 Lettuce 客户端设置 `requestQueueSize`，或在断开期间拒绝命令。
+CoSec 不改动这个客户端：它由应用共享。
+
+**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入 `max-apps`、`max-tenants`，也不计入没有文档的 id：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在 `cold-load-timeout` 之后回答 `503`。因此在这样的故障期间，一个以很高速率声明新应用 id 的客户端最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。
+
+**没有文档的应用共用 256 个位置。** 实例记住的没有文档的 id 每个族最多 256 个（`SNP-7`），由所有租户共用。声明大量随机 `CoSec-App-Id` 的客户端会挤出那些确实没有应用文档的真实应用，于是这些应用中的请求会再次读取 Redis（不需要编译），直到它们重新被记住。这仍然失败即拒绝，但对 `fail-closed.tenants` 中的租户，这种应用从本地副本加载的条目按 `local-max-age` 的年龄计：当 `fail-closed.max-lag` 小于 `local-max-age` 时，它的请求回答 `503`，直到 Redis 随即确认它。租户 id 来自凭证，因此租户族不能被这样淹没。
+
 吊销检查和没有 `strictFailure` 的限流规则是失败即拒绝的两个已记录的例外（[安全模型](../guide/security-model.md)）。
 `503` 在响应和审计中是什么样子，见[故障排查](./troubleshooting.md#unavailable)。
 
@@ -182,7 +207,7 @@ sequenceDiagram
 - **控制面**（`cosec-control` 加 `cosec-cocache`），在运行时通过变更请求写入；
 - **`cosec-migrate`**，用于部署的最初文档以及从 7.x 迁移。
 
-两者都写入实例读取的那个 Redis，并使用同一个 `cosec.authorization.snapshot.key-prefix`。一次发布先写修订记录，再以
+两者都写入实例读取的那个 Redis，并使用同一个 `cosec.key-prefix`。一次发布先写修订记录，再以
 基准修订的摘要做比较并设置来替换头部，所以读者看到的要么是旧头部、要么是新头部，绝不会是混合；两个发布者也绝不会互相
 覆盖：后一个会被告知基准已经变了。
 

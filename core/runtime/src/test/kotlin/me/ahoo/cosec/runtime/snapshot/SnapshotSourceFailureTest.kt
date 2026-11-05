@@ -154,6 +154,32 @@ class SnapshotSourceFailureTest {
         }
     }
 
+    /**
+     * RC1-43 (`SNP-8`): a revision that overflows the compile thread's stack, as a document that compiles on the
+     * control plane can on a data-plane thread with less stack, is installed as failed; the previous revision is not
+     * kept, or a DENY it adds would never apply. The error still reaches the compile thread.
+     */
+    @Test
+    fun f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne() {
+        val compiler = FakeCompiler()
+        testSource(store, compiler = compiler, compileExecutor = null).use { source ->
+            source.load("app-a").join()
+            compiler.failure = StackOverflowError("a deep document")
+            store.put(SnapshotKey.Platform, document(2))
+
+            await { source.peek("app-a")?.policies is DocumentState.Failed }
+            val snapshot = source.peek("app-a")!!
+            snapshot.version.shared.assert().isEqualTo(2)
+            generateSequence(snapshot.policies.failure()) { it.cause }
+                .any { it is StackOverflowError }.assert().isTrue()
+            snapshot.appCompiled.revision.assert().isEqualTo(1)
+
+            compiler.failure = null
+            source.revalidate().join()
+            await { (source.peek()?.policies as? DocumentState.Present)?.compiled?.revision == 2L }
+        }
+    }
+
     @Test
     fun f6ReloadReadFailureKeepsTheInstalledDocumentAndLagGrows() {
         val clock = ManualClock()
@@ -213,7 +239,7 @@ class SnapshotSourceFailureTest {
     @Test
     fun seenAppDocumentStillFailsClosedAfterEviction() {
         store.put(APP_B, document(1, "b1"))
-        testSource(store, options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)).use { source ->
+        testSource(store, options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 1)).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
             await { !source.holds(APP_A) }

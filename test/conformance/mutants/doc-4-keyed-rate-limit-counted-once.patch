@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: a rate limit rule keyed by a captured variable counts once, though it is matched and then captured
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index ca876a50..9839d8d3 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -318,7 +318,7 @@ class CompiledDocument private constructor(
+                 return
+             }
+             val units = policies.values.sumOf { it.globUnits } + boundaries.values.sumOf { it.globUnits } +
+-                rateLimits.sumOf { it.statement.globUnits * if (it.key?.kind == Attribute.Kind.RESOURCE_VAR) 2 else 1 }
++                rateLimits.sumOf { it.statement.globUnits }
+             require(units <= MAX_GLOB_UNITS) {
+                 "The document's path pattern segments that mix *, ? or {name} with other text hold $units tokens " +
+                     "and literal characters in all, more than $MAX_GLOB_UNITS"

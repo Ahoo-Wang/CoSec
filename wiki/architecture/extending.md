@@ -92,9 +92,15 @@ contract:
 
 - **Never block the calling thread.** The SPIs are `suspend` functions (the snapshot store returns
   `CompletableFuture`s). A suspending client is fine. An implementation over a blocking client (JDBC, a blocking HTTP
-  client) moves the call to its own bounded executor, for example with `withContext(myDispatcher)`. Do not use
+  client) moves the call to its own bounded executor with `runInterruptible(myDispatcher) { ... }`. Do not use
   `Dispatchers.IO` inside CoSec modules (`RuntimeBoundaryTest` forbids it there); in your own code, prefer a bounded
   executor sized for the dependency.
+- **Stop when cancelled.** Timeouts are cooperative: at an SPI's timeout, or at `cosec.pipeline.timeout`, the pipeline
+  cancels the call and waits for it to return before it answers `503`. `withContext(myDispatcher)` cannot stop a
+  blocking call, so a JDBC query that hangs for 30 seconds holds the request for 30 seconds, not for its 300 ms
+  timeout, and on WebMvc it holds a request thread too. `runInterruptible` interrupts the thread on cancellation;
+  give the client its own timeouts as well (a JDBC query timeout, an HTTP read timeout) for calls that ignore
+  interruption.
 - **Report failure by throwing.** Never answer "nothing" for a lookup that failed: an empty membership list, a missing
   attribute or "not revoked" can each turn a deny into a permit. The pipeline turns a thrown exception or a timeout into
   `Indeterminate`, which answers `503` unless a DENY matches.
