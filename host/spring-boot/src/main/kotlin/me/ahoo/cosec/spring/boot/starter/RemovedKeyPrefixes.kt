@@ -58,23 +58,7 @@ internal object RemovedKeyPrefixes {
         // The moves are those of the prefix this message asks for: unset, it must become the snapshot documents' one,
         // or the deployment loses them (review round 2 of #1200, M1).
         val now = explicit ?: snapshot
-        val moves = buildList {
-            if (snapshot != now) {
-                add("snapshot documents, control-plane records, candidates and shadow reports: $snapshot: -> $now:")
-            }
-            if (cache != now) {
-                add(
-                    "token revocations and memberships: $cache: -> $now: (the memberships of a membership cache the " +
-                        "application made itself are under its own prefix)",
-                )
-            }
-            if (apiKeys != "$now:$API_KEYS") {
-                add("API keys: $apiKeys -> $now:$API_KEYS")
-            }
-            if (now != CoSec.COSEC) {
-                add("rate limit counters and the social login's OAuth states: ${CoSec.COSEC}: -> $now:")
-            }
-        }
+        val moves = moves(snapshot, cache, apiKeys, now)
         val properties = set.joinToString(", ")
         val against = when {
             explicit != null -> "With the old values and $KEY_PREFIX ($now)"
@@ -92,5 +76,23 @@ internal object RemovedKeyPrefixes {
         }
         return "CoSec no longer reads $properties: every key a deployment writes lives under $KEY_PREFIX. " + where +
             "Then remove $properties; ${UnknownProperties.MODE_KEY} does not turn this check off. See $DOCUMENTATION"
+    }
+
+    private fun moves(snapshot: String, cache: String, apiKeys: String, now: String): List<String> = buildList {
+        if (snapshot != now) {
+            add("snapshot documents, control-plane records, candidates and shadow reports: $snapshot: -> $now:")
+        }
+        if (cache != now) {
+            add(
+                "token revocations and memberships: $cache: -> $now: (the memberships of a membership cache the " +
+                    "application made itself are under its own prefix)",
+            )
+        }
+        if (apiKeys != "$now:$API_KEYS") {
+            add("API keys: $apiKeys -> $now:$API_KEYS")
+        }
+        if (now != CoSec.COSEC) {
+            add("rate limit counters and the social login's OAuth states: ${CoSec.COSEC}: -> $now:")
+        }
     }
 }

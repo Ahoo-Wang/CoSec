@@ -65,7 +65,9 @@ class RemovedKeyPrefixesTest {
         message.assert().contains("Copy the token revocations and the API keys under the new prefix")
         // Another prefix than the snapshot documents' moves them too, and the message says where they are.
         val elsewhere = runner.failure("${RemovedKeyPrefixes.SNAPSHOT}=b", "cosec.key-prefix=c")!!
-        elsewhere.assert().contains("snapshot documents, control-plane records, candidates and shadow reports: b: -> c:")
+        elsewhere.assert().contains(
+            "snapshot documents, control-plane records, candidates and shadow reports: b: -> c:"
+        )
         elsewhere.assert().contains("Set cosec.key-prefix to the snapshot documents' prefix (b).")
     }
 
