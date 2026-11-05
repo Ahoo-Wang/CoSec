@@ -648,6 +648,27 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
 - 允许的请求：WebFlux 把校验后的 `SecurityContext` 写进 Reactor `Context` 和 exchange 属性（现在的 `writeSecurityContext`、`setSecurityContext`），WebMvc 写进
   `SecurityContextHolder` 并在 `finally` 中清除（现在的 [`AuthorizationFilter`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt) 已经这样做）。
 
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：网关的身份与凭据，以下几处补充本节：
+> - **身份转发按 scheme 选择加入（IDN-7，RC1-49）。**
+>   - 路由 URI 的 scheme 恰为 `lb`（`lb://`、`lb:ws://` 等）时，默认接收 `CoSec-Identity`。
+>   - 其他路由要元数据 `cosec-identity` 恰为 `true`（布尔或字符串），其他任何值都不接收。
+>   - 网关在每个路由请求上把 `cosec.identity.forward` 设为 `true` 或 `false`，管道只在 `true` 时转发。
+> - **凭据不下行（IDN-8，RC1-5）。**
+>   - `cosec.gateway.identity.forward-authorization`（默认 `false`）关闭时，网关从每个转发的请求去掉以下凭据：
+>     - `Authorization` 头；
+>     - API Key 头（按 `cosec.pipeline.api-key-header` 给它的名字）；
+>     - `authorization` 查询参数（不论编码与大小写）；
+>     - `authorization` cookie（名字不分大小写）。
+>   - 打开时，这些凭据只留给接收身份的路由。
+>   - cookie 的改写方式：
+>     - 去掉那一对和一个相邻的 `;`，其余的对逐字节保留；
+>     - 前导 `$Version` 头有两处修正；
+>     - 只剩分隔符的头不发；
+>     - 请求解析出的 cookie 与改写后的头一致。
+> - **执法放行清掉客户端的 `CoSec-Identity`（IDN-9，RC1-18）。** 每个执法模式的放行都在 `Outcome.forward` 里写明 `CoSec-Identity: null`，WebFlux 与 WebMvc 适配器把 `Outcome.forward` 应用到下传的请求，网关本来就如此。网关模式（`IdentityGate`）不清，网关后面的服务保留网关发的头。
+> - **路由 app。** 路由的 `cosec-app-id` 原样以 `HttpFacts.routeApp` 交给管道，适配器不判断，见 [RFC 0004](0004-unified-model.md) §4.6 的说明。
+> - **身份头不签名（RC1-19）。** `CoSec-Identity` 在 8.0 不签名，信任边界是网关与服务之间的网络（`security-model.md`）。加签名或受众是新成员，要升 `v`（[RFC 0010](0010-ga-extension-points.md) 10-29 的约束 2）。
+
 ### 7.4 取消、超时与 fail closed
 
 | 情形 | 发生什么 | 为什么仍然 fail closed |
