@@ -15,10 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.jwt
 
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
-import me.ahoo.cocache.spring.boot.CoCacheProperties
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -27,8 +24,7 @@ import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
-import org.springframework.beans.factory.ObjectProvider
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -48,7 +44,7 @@ import tools.jackson.databind.ObjectMapper
 @ConditionalOnCoSecEnabled
 @ConditionalOnJwtEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.RevokedTokenCache"])
-@ConditionalOnBean(CacheRuntime::class)
+@ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
@@ -74,18 +70,12 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
      */
     @Bean(REVOKED_TOKEN_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean
-    fun revokedTokenCache(
-        runtime: CacheRuntime,
-        objectMapper: ObjectMapper,
-        customizers: ObjectProvider<CacheSpecCustomizer>,
-        cocacheProperties: ObjectProvider<CoCacheProperties>,
-    ): RevokedTokenCache {
+    fun revokedTokenCache(factory: CoCacheFactory, objectMapper: ObjectMapper): RevokedTokenCache {
         val spec = CoSecCacheSpecs.revokedToken(
             CoSecCacheSpecs.jacksonCodec<Boolean>(objectMapper),
-            cacheProperties.keyPrefix,
-            cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
+            cacheProperties.keyPrefix
         )
-        return cosecCacheAssembler(runtime, customizers, cocacheProperties).create(RevokedTokenCache::class.java, spec)
+        return factory.createCoSecCache(RevokedTokenCache::class.java, cacheProperties.token.applyTo(spec))
     }
 
     /**
@@ -93,21 +83,11 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
      */
     @Bean(REVOKED_SUBJECT_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean
-    fun revokedSubjectCache(
-        runtime: CacheRuntime,
-        objectMapper: ObjectMapper,
-        customizers: ObjectProvider<CacheSpecCustomizer>,
-        cocacheProperties: ObjectProvider<CoCacheProperties>,
-    ): RevokedSubjectCache {
+    fun revokedSubjectCache(factory: CoCacheFactory, objectMapper: ObjectMapper): RevokedSubjectCache {
         val spec = CoSecCacheSpecs.revokedSubject(
             CoSecCacheSpecs.jacksonCodec<Long>(objectMapper),
-            cacheProperties.keyPrefix,
-            cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
+            cacheProperties.keyPrefix
         )
-        return cosecCacheAssembler(
-            runtime,
-            customizers,
-            cocacheProperties
-        ).create(RevokedSubjectCache::class.java, spec)
+        return factory.createCoSecCache(RevokedSubjectCache::class.java, cacheProperties.token.applyTo(spec))
     }
 }

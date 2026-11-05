@@ -16,18 +16,21 @@
 package me.ahoo.cosec.cache.control
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
-import me.ahoo.cocache.api.spi.Envelope
-import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cache.createLocked
 import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
+import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
@@ -52,7 +55,7 @@ import java.time.Instant
 /**
  * The [ControlStore] over CoCache and Redis (RFC 0007 §5.2). The heads are the snapshot documents the data plane
  * reads ([PolicySnapshotCache], one key per document); the records, indexes, back-references and leases are the
- * caches of [ControlCacheSpecs].
+ * `Store`s of [ControlCacheSpecs]. Digests are CoCache's, SHA-256 with its algorithm.
  *
  * Writes are `putIfMatch`, one Lua script each (CoCache 6.7), as 7.x's snapshot publisher
  * wrote: the head only over the digest it was read at, a record only where there is none. A write whose reply is lost
@@ -60,23 +63,22 @@ import java.time.Instant
  * replicas (RFC 0007 Q27): a write lost in a failover shows up as a broken chain or a revision regression.
  *
  * Every read is a conditional read without a digest, so it answers from Redis, not from a local copy, and a failed
- * read throws ([ControlCacheSpecs] pins `ReadFailureMode.THROW`). Nothing here blocks the caller: it awaits CoCache's
- * async view.
+ * read throws (a `Store`'s conditional read always does). Nothing here blocks the caller: it awaits CoCache's async view.
  */
 class CoCacheControlStore internal constructor(
-    private val heads: Cache<SnapshotKey, SnapshotDocument>,
-    private val records: Cache<RevisionRecordKey, SnapshotDocument>,
-    private val indexes: Cache<SnapshotKey, RevisionIndex>,
-    private val references: Cache<ReferenceKey, Set<SnapshotKey>>,
-    private val leases: Cache<String, String>,
-    private val changes: Cache<ChangeId, ChangeRequest>,
-    private val stages: Cache<SnapshotKey, StageSlot>,
+    private val heads: Store<SnapshotKey, SnapshotDocument>,
+    private val records: Store<RevisionRecordKey, SnapshotDocument>,
+    private val indexes: Store<SnapshotKey, RevisionIndex>,
+    private val references: Store<ReferenceKey, Set<SnapshotKey>>,
+    private val leases: Store<String, String>,
+    private val changes: Store<ChangeId, ChangeRequest>,
+    private val stages: Store<SnapshotKey, StageSlot>,
     /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
-    private val candidates: Cache<SnapshotKey, StoredCandidate>,
+    private val candidates: Store<SnapshotKey, StoredCandidate>,
     /** The document keys and the ids of changes that may be open ([documents], [openChanges]). */
-    private val lists: Cache<String, Map<String, Instant>>,
+    private val lists: Store<String, Map<String, Instant>>,
     /** The app documents there are ([apps], RC1-4). */
-    private val appLists: Cache<String, AppList>,
+    private val appLists: Store<String, AppList>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
     private val clock: Clock = Clock.systemUTC(),
@@ -120,7 +122,7 @@ class CoCacheControlStore internal constructor(
     }
 
     override suspend fun removeRecord(key: SnapshotKey, digest: SnapshotDigest) {
-        records.async().invalidate(RevisionRecordKey(key, digest)).await()
+        records.async().delete(RevisionRecordKey(key, digest)).await()
     }
 
     override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? =
@@ -216,7 +218,7 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
         if (candidate == null) {
-            candidates.async().invalidate(key).await()
+            candidates.async().delete(key).await()
         } else {
             candidates.async().put(key, candidate).await()
         }
@@ -233,7 +235,7 @@ class CoCacheControlStore internal constructor(
     /** Read, then removed if still [holder]'s: while it holds the lease no one else can take it, so nothing is lost. */
     override suspend fun releaseLease(name: String, holder: String) {
         if (read(leases, name)?.first == holder) {
-            leases.async().invalidate(name).await()
+            leases.async().delete(name).await()
         }
     }
 
@@ -265,7 +267,7 @@ class CoCacheControlStore internal constructor(
      * still [expected] means it did not, and the failure is the answer; anything else means another writer got there.
      */
     private suspend fun <K : Any, V : Any> put(
-        cache: Cache<K, V>,
+        cache: Store<K, V>,
         key: K,
         expected: SnapshotDigest?,
         value: V,
@@ -273,14 +275,14 @@ class CoCacheControlStore internal constructor(
     ): Put {
         val async = cache.async()
         val result = try {
-            async.putIfMatch(key, expected?.let { Digest(it.toByteArray()) }, value).await()
+            async.putIfMatch(key, expected?.let(::cocacheDigest), value).await()
         } catch (error: CacheWriteException) {
             val read = try {
-                async.getIfChanged(key, Digest(mine.toByteArray())).await()
+                async.getIfChanged(key, cocacheDigest(mine)).await()
             } catch (_: Exception) {
                 throw error
             }
-            val current = (read as? ConditionalGet.Present)?.let { SnapshotDigest(it.digest.sha1) }
+            val current = (read as? ConditionalGet.Present)?.let { snapshotDigest(it.digest) }
             return when {
                 read == ConditionalGet.Unchanged -> Put.Written
                 current == expected -> throw error
@@ -289,16 +291,15 @@ class CoCacheControlStore internal constructor(
         }
         return when (result) {
             is ConditionalPut.Written -> Put.Written
-            is ConditionalPut.Conflict -> Put.Conflict(result.current?.let { SnapshotDigest(it.sha1) })
-            else -> error("Unknown conditional write result $result")
+            is ConditionalPut.Conflict -> Put.Conflict(result.current?.let(::snapshotDigest))
         }
     }
 
-    private suspend fun <K : Any, V : Any> read(cache: Cache<K, V>, key: K): Pair<V, SnapshotDigest>? =
+    private suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K): Pair<V, SnapshotDigest>? =
         when (val read = cache.async().getIfChanged(key, null).await()) {
-            is ConditionalGet.Present -> read.value to SnapshotDigest(read.digest.sha1)
+            is ConditionalGet.Present -> read.value to snapshotDigest(read.digest)
             ConditionalGet.Unchanged -> error("An unconditional read of [$key] was answered as unchanged.")
-            else -> null
+            ConditionalGet.Absent -> null
         }
 
     companion object {
@@ -311,28 +312,31 @@ class CoCacheControlStore internal constructor(
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)
 
         /** The digest CoCache computes for [value] stored with [codec]. */
-        fun <V> digest(codec: Codec<V>, value: V): SnapshotDigest = SnapshotDigest(
-            Digest.of(Envelope.Scalar(codec.encode(value))).sha1
+        fun <V> digest(codec: Codec<V>, value: V): SnapshotDigest = snapshotDigest(
+            Digest.ofPayload(codec.encode(value))
         )
 
-        /** Creates the control caches under [keyPrefix] in [runtime], next to the snapshot heads [heads]. */
+        /**
+         * Creates the control caches under [keyPrefix] through [factory], with CoSec's locks ([CoSecCacheSpecs.locks]),
+         * next to the snapshot heads [heads].
+         */
         fun create(
-            runtime: CacheRuntime,
+            factory: CoCacheFactory,
             heads: PolicySnapshotCache,
             keyPrefix: String = CoSec.COSEC,
             onPublished: (SnapshotKey) -> Unit = {},
             missingGrace: Duration = DEFAULT_MISSING_GRACE,
         ): CoCacheControlStore = CoCacheControlStore(
             heads = heads,
-            records = runtime.create(ControlCacheSpecs.revisionRecord(keyPrefix)),
-            indexes = runtime.create(ControlCacheSpecs.revisionIndex(keyPrefix)),
-            references = runtime.create(ControlCacheSpecs.referenceIndex(keyPrefix)),
-            leases = runtime.create(ControlCacheSpecs.lease(keyPrefix)),
-            changes = runtime.create(ControlCacheSpecs.changeRequest(keyPrefix)),
-            stages = runtime.create(ControlCacheSpecs.stage(keyPrefix)),
-            candidates = runtime.create(ShadowCacheSpecs.candidate(keyPrefix)),
-            lists = runtime.create(ControlCacheSpecs.list(keyPrefix)),
-            appLists = runtime.create(ControlCacheSpecs.appList(keyPrefix)),
+            records = factory.createLocked(ControlCacheSpecs.revisionRecord(keyPrefix)),
+            indexes = factory.createLocked(ControlCacheSpecs.revisionIndex(keyPrefix)),
+            references = factory.createLocked(ControlCacheSpecs.referenceIndex(keyPrefix)),
+            leases = factory.createLocked(ControlCacheSpecs.lease(keyPrefix)),
+            changes = factory.createLocked(ControlCacheSpecs.changeRequest(keyPrefix)),
+            stages = factory.createLocked(ControlCacheSpecs.stage(keyPrefix)),
+            candidates = factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix)),
+            lists = factory.createLocked(ControlCacheSpecs.list(keyPrefix)),
+            appLists = factory.createLocked(ControlCacheSpecs.appList(keyPrefix)),
             onPublished = onPublished,
             missingGrace = missingGrace,
         )

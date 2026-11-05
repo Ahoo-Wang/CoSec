@@ -16,7 +16,7 @@
 package me.ahoo.cosec.spring.boot.starter.control
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.control.CoCacheControlStore
@@ -105,13 +105,13 @@ class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlStore(
-        runtime: CacheRuntime,
+        factory: CoCacheFactory,
         heads: PolicySnapshotCache,
         documents: RedisSnapshotDocumentStore,
         properties: RuntimeAuthorizationProperties,
         control: ControlProperties,
     ): ControlStore = CoCacheControlStore.create(
-        runtime,
+        factory,
         heads,
         properties.snapshot.keyPrefix,
         documents::notifyChanged,
@@ -260,7 +260,7 @@ class CoSecControlAutoConfiguration {
         authorizer: ControlAuthorizer,
         authority: ChangeAuthority,
         options: ChangeOptions,
-        runtime: CacheRuntime,
+        factory: CoCacheFactory,
         listeners: ChangeListeners,
         idGenerator: ObjectProvider<IdGenerator>,
         shadowReports: ObjectProvider<CoCacheShadowReports>,
@@ -280,7 +280,7 @@ class CoSecControlAutoConfiguration {
             credentialHeaders = credentialHeaders(environment),
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
-            reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
+            reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, properties.snapshot.keyPrefix),
             listeners = listeners,
         )
     }

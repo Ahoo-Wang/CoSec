@@ -16,12 +16,12 @@
 package me.ahoo.cosec.cache
 
 import io.lettuce.core.RedisURI
-import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.ReadableCache
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.core.CoCacheFactory
+import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
@@ -37,17 +37,20 @@ internal class CoSecTestCaches(
 ) : AutoCloseable {
     val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
 
+    /** Creates caches as the starter does, with CoSec's locks, but without the starter's configuration layers. */
+    val factory: CoCacheFactory = CoCacheFactory(runtime)
+
     val revokedTokenCache: RevokedTokenCache by lazy {
-        runtime.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix))
+        factory.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix))
     }
 
     val revokedSubjectCache: RevokedSubjectCache by lazy {
-        runtime.createCache(
+        factory.createCache(
             CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix)
         )
     }
 
-    val membershipCache: MembershipCache by lazy { runtime.createCache(CoSecCacheSpecs.membership(keyPrefix)) }
+    val membershipCache: MembershipCache by lazy { factory.createCache(CoSecCacheSpecs.membership(keyPrefix)) }
 
     /** Drops this instance's local copies only; the shared backend keeps the values. */
     fun clearLocal(cacheName: String) {
@@ -67,7 +70,7 @@ internal class CoSecTestCaches(
 }
 
 /**
- * Creates the cache declared by [spec] and exposes it as [C], one of CoSec's cache interfaces.
+ * Creates the cache declared by [spec] with CoSec's locks and exposes it as [C], one of CoSec's cache interfaces.
  */
-inline fun <reified C : Cache<K, V>, K : Any, V : Any> CacheRuntime.createCache(spec: CacheSpec<K, V>): C =
-    CacheProxies.create(C::class.java, create(spec))
+inline fun <reified C : ReadableCache<*, *>> CoCacheFactory.createCache(spec: Spec<*, *>): C =
+    create(C::class.java, spec, CoSecCacheSpecs.locks(spec.name))

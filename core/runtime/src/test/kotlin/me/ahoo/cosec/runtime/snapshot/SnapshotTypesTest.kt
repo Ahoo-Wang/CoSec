@@ -71,20 +71,34 @@ class SnapshotTypesTest {
         assertThrows<IllegalArgumentException> { SnapshotDocument(1, 0, Instant.EPOCH, ByteArray(0)) }
     }
 
+    private fun bytes(first: Int) = ByteArray(SnapshotDigest.SHA_256_BYTES) { (first + it).toByte() }
+
+    /** CoCache 8's digests: SHA-256, written with the algorithm. */
     @Test
     fun digest() {
-        val digest = SnapshotDigest(byteArrayOf(0x0a, 0x1b))
-        digest.toString().assert().isEqualTo("0a1b")
-        digest.assert().isEqualTo(SnapshotDigest(byteArrayOf(0x0a, 0x1b)))
-        digest.hashCode().assert().isEqualTo(SnapshotDigest(byteArrayOf(0x0a, 0x1b)).hashCode())
-        digest.assert().isNotEqualTo(SnapshotDigest(byteArrayOf(0x0a)))
-        digest.toByteArray().assert().containsExactly(0x0a, 0x1b)
+        val digest = SnapshotDigest(bytes(0x0a))
+        digest.algorithm.assert().isEqualTo(SnapshotDigest.SHA_256)
+        val text = "SHA-256:" + (0x0a until 0x0a + 32).joinToString("") { "%02x".format(it) }
+        digest.toString().assert().isEqualTo(text)
+        SnapshotDigest.isDigest(text).assert().isTrue()
+        SnapshotDigest.parse(text).assert().isEqualTo(digest)
+        digest.assert().isEqualTo(SnapshotDigest(SnapshotDigest.SHA_256, bytes(0x0a)))
+        digest.hashCode().assert().isEqualTo(SnapshotDigest(bytes(0x0a)).hashCode())
+        digest.assert().isNotEqualTo(SnapshotDigest(bytes(0x0b)))
+        digest.toByteArray().assert().isEqualTo(bytes(0x0a))
+        // A SHA-1 digest of CoCache 6, another algorithm, another length: none is a snapshot digest.
+        assertThrows<IllegalArgumentException> { SnapshotDigest(ByteArray(20)) }
+        assertThrows<IllegalArgumentException> { SnapshotDigest("SHA-1", ByteArray(32)) }
+        listOf(text.uppercase(), text.removePrefix("SHA-256:"), "SHA-1:" + "0".repeat(40), text + "0", "").forEach {
+            SnapshotDigest.isDigest(it).assert().describedAs(it).isFalse()
+            assertThrows<IllegalArgumentException> { SnapshotDigest.parse(it) }
+        }
     }
 
     @Test
     fun reads() {
-        val present = SnapshotRead.Present(document(2), SnapshotDigest(byteArrayOf(1)))
-        present.toString().assert().isEqualTo("Present(revision=2, digest=01)")
+        val present = SnapshotRead.Present(document(2), SnapshotDigest(ByteArray(32)))
+        present.toString().assert().isEqualTo("Present(revision=2, digest=SHA-256:${"0".repeat(64)})")
     }
 
     @Test

@@ -17,7 +17,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.spi.Digest
-import me.ahoo.cocache.api.spi.Envelope
 import me.ahoo.cocache.api.spi.InvalidationListener
 import me.ahoo.cocache.api.spi.NodeId
 import me.ahoo.cocache.core.ForeignFormatException
@@ -39,13 +38,15 @@ import java.util.concurrent.ForkJoinPool
  * The [SnapshotDocumentStore] over CoCache and Redis (RFC 0003 §4.1–§4.4).
  *
  * - [read] may answer from this instance's local (L2) copy, at most [localCopyMaxAge] old. It never answers
- *   [SnapshotRead.Absent] from a local copy: CoCache caches "no value" locally for a cache without a loader, and an
- *   absence remembered from before a publish would install "no policies" for documents that exist. A local miss of
- *   any kind is confirmed with a conditional read of Redis.
+ *   [SnapshotRead.Absent] from a local copy: CoCache keeps "no value" locally for a `Store`, and an absence remembered
+ *   from before a publish would install "no policies" for documents that exist. A local miss of any kind is confirmed
+ *   with a conditional read of Redis. A Redis read that has no answer (`Lookup.Unknown`) fails the read: it is never
+ *   absent.
  * - [readIfChanged] is CoCache's conditional read of Redis, which bypasses every local copy.
- * - [subscribe] listens to CoCache's invalidation channel of the cache's namespace (RFC 0003 Q6). The cache subscribed
- *   when it was created, so its engine has dropped its local copy before a listener here is told (RFC 0003 §4.4,
- *   guarded by a test); every invalidation is passed on, whichever instance wrote it.
+ * - [subscribe] listens to CoCache's invalidation channel of the store's keyspace (RFC 0003 Q6), which hands it encoded
+ *   keys. The store subscribed when it was created, so its engine has dropped its local copy before a listener here is
+ *   told (RFC 0003 §4.4, CoCache's channel contract, guarded by a test); every invalidation is passed on, whichever
+ *   instance wrote it.
  *
  * Nothing here blocks: Redis is read through CoCache's async API, and the digest of a local copy, which CoCache does
  * not keep, is computed on [digestExecutor] rather than the caller's thread. A stored value that cannot be decoded fails
@@ -66,19 +67,21 @@ class RedisSnapshotDocumentStore(
                 is Lookup.Present -> present(lookup.value)
                 // Possibly a local "no value" from before a publish: only Redis may answer absent.
                 is Lookup.Absent -> async.getIfChanged(key, null).thenApply { unconditional(key, it) }
+                // Redis failed: the read fails, it is never a document's absence (RFC 0003 §4.4 F1).
+                is Lookup.Unknown -> CompletableFuture.failedFuture(lookup.error)
             }
         }
     }
 
     override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead> = guard(key) {
-        async.getIfChanged(key, known?.let { Digest(it.toByteArray()) }).thenApply { toRead(it) }
+        async.getIfChanged(key, known?.let(::cocacheDigest)).thenApply { toRead(it) }
     }
 
     @Suppress("TooGenericExceptionCaught")
     override fun subscribe(listener: SnapshotChangeListener): AutoCloseable {
         listeners.add(listener)
         val subscription = try {
-            cache.channel.subscribe(cache.namespace, ChannelListener(listener))
+            cache.channel.subscribe(cache.keyspace, ChannelListener(listener))
         } catch (error: RuntimeException) {
             listeners.remove(listener)
             throw error
@@ -98,14 +101,14 @@ class RedisSnapshotDocumentStore(
         listeners.forEach { listener -> deliver("changed") { listener.onChanged(keys) } }
     }
 
-    /** A local copy carries no digest: SHA-1 of the stored bytes, as CoCache computes it, off the caller's thread. */
+    /** A local copy carries no digest: SHA-256 of the stored bytes, as CoCache computes it, off the caller's thread. */
     private fun present(document: SnapshotDocument): CompletableFuture<SnapshotRead> =
         CompletableFuture.supplyAsync({ SnapshotRead.Present(document, digestOf(document)) }, digestExecutor)
 
     private fun toRead(read: ConditionalGet<SnapshotDocument>): SnapshotRead = when (read) {
         ConditionalGet.Unchanged -> SnapshotRead.Unchanged
         ConditionalGet.Absent -> SnapshotRead.Absent
-        is ConditionalGet.Present -> SnapshotRead.Present(read.value, SnapshotDigest(read.digest.sha1))
+        is ConditionalGet.Present -> SnapshotRead.Present(read.value, snapshotDigest(read.digest))
     }
 
     /** A conditional read without a known digest, which CoCache never answers with "unchanged". */
@@ -140,6 +143,7 @@ class RedisSnapshotDocumentStore(
     }
 
     private inner class ChannelListener(private val listener: SnapshotChangeListener) : InvalidationListener {
+        /** [keys] are encoded keys; an empty frame is the channel probe of a store being created. */
         override fun onInvalidated(keys: List<String>, origin: NodeId) {
             val changed = keys.mapNotNull { cache.snapshotKeyOf(it) }
             if (changed.isNotEmpty()) {
@@ -156,8 +160,15 @@ class RedisSnapshotDocumentStore(
         private val log = KotlinLogging.logger {}
 
         /** The digest CoCache computes for the stored bytes of [document]: the codec writes the body unchanged. */
-        fun digestOf(document: SnapshotDocument): SnapshotDigest =
-            SnapshotDigest(Digest.of(Envelope.Scalar(document.bodyBytes())).sha1)
+        fun digestOf(
+            document: SnapshotDocument
+        ): SnapshotDigest = snapshotDigest(Digest.ofPayload(document.bodyBytes()))
+
+        /** CoCache's SHA-256 [digest], with its algorithm, as a [SnapshotDigest]. */
+        fun snapshotDigest(digest: Digest): SnapshotDigest = SnapshotDigest(digest.algorithm, digest.bytes)
+
+        /** [digest] as CoCache's, for a conditional read or write. */
+        fun cocacheDigest(digest: SnapshotDigest): Digest = Digest(digest.algorithm, digest.toByteArray())
 
         /**
          * [error] as the SPI expects it: unwrapped, and with a [SnapshotFormatException] in its cause chain when the

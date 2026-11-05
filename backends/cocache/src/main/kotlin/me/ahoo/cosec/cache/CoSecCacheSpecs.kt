@@ -16,13 +16,19 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.codec.jackson.JacksonCodec
 import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
-import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.core.policy.ForeignFormatMode
+import me.ahoo.cocache.core.LayoutField
+import me.ahoo.cocache.core.Locks
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.InvalidateFailureMode
+import me.ahoo.cocache.core.policy.PolicyField
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cocache.core.policy.Ttl
+import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
@@ -37,16 +43,21 @@ import java.time.Duration
 /**
  * CoSec's CoCache declarations.
  *
- * CoCache stores an entry under `{keyPrefix}{namespace}:{key}`; each cache sets an empty `keyPrefix` and a namespace
- * of [cacheNamespace] (`cosec:token:revoked`, `cosec:token:subject:revoked`, `cosec:snapshot` and so on). Each
- * namespace also names its own invalidation channel `cocache:inv:{namespace}`, so deployments with different key
- * prefixes stay apart.
+ * CoCache stores an entry under `{keyPrefix}{namespace}:{key}`, and a namespace may hold no `:`. Each CoSec cache has a
+ * storage path under CoSec's key prefix ([storagePath]: `cosec:token:revoked`, `cosec:snapshot`,
+ * `cosec:control:revision` and so on), split at its last `:` into CoCache's key prefix and namespace ([layout]):
+ * `cosec:token:` and `revoked`, `cosec:` and `snapshot`. The storage keys are the storage path, `:` and the encoded key,
+ * whatever the split; the invalidation channel of each cache is `{keyPrefix}inv:{namespace}`.
  *
- * Snapshot and control-plane caches have no loader: Redis is the store of record. [pinnedPolicy] must therefore be the
- * last change to every cache's policy, after any customizer or configuration property.
+ * Every CoSec cache is created through `CoCacheFactory` with [locks]: the application's `cocache.*` properties and
+ * customizers apply to it, except for what CoSec's correctness depends on, which they can neither change nor weaken.
+ * Policies, permissions and the control plane's records are [StoreSpec]s: Redis is their store of record.
  */
 @InternalCoSecApi
 object CoSecCacheSpecs {
+    /** Who locks CoSec's caches, as `CoCacheFactory`'s start log, endpoint and errors name it. */
+    const val LOCKED_BY = "cosec"
+
     const val REVOKED_TOKEN_CACHE_NAME = "RevokedTokenCache"
 
     /** The principals whose tokens were revoked all at once (RFC 0004 §4.5.3). */
@@ -123,7 +134,14 @@ object CoSecCacheSpecs {
         CANDIDATE_CACHE_NAME,
     )
 
-    private val NAMESPACES: Map<String, String> = mapOf(
+    /** The shadow window's observations: they expire, but a failed read still fails (RFC 0007 §6.4, §6.5). */
+    val SHADOW_CACHE_NAMES: Set<String> = setOf(
+        SHADOW_REPORT_CACHE_NAME,
+        SHADOW_REPORTER_CACHE_NAME,
+        INSTANCE_STATUS_CACHE_NAME,
+    )
+
+    private val PATHS: Map<String, String> = mapOf(
         REVOKED_TOKEN_CACHE_NAME to "token:revoked",
         // Not under token:revoked, whose keys are token ids.
         REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
@@ -143,197 +161,199 @@ object CoSecCacheSpecs {
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
     )
 
-    /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
-    fun cacheNamespace(keyPrefix: String, cacheName: String): String =
-        "${keyPrefix.trimEnd(':')}:${NAMESPACES.getValue(cacheName)}"
+    /** Where a cache keeps its entries: `{keyPrefix}{namespace}:{encodedKey}`, in CoCache's terms. */
+    data class Layout(val keyPrefix: String, val namespace: String) {
+        /** `{keyPrefix}{namespace}`, the part of every storage key before `:` and the encoded key. */
+        val storagePath: String get() = keyPrefix + namespace
+    }
+
+    /** The storage path of [cacheName] under CoSec's [keyPrefix]: `{keyPrefix}:snapshot` and so on. */
+    fun storagePath(keyPrefix: String, cacheName: String): String =
+        "${keyPrefix.trimEnd(':')}:${PATHS.getValue(cacheName)}"
 
     /**
-     * Policy and permission caches are the store of record, so:
-     *
-     * - entries never expire (`ttl = null`); with an expiry, policies would silently disappear;
-     * - content the cache cannot read, such as an unmigrated CoCache 5 value, fails the read
-     *   ([ForeignFormatMode.FAIL]) and stays in Redis, instead of being reclaimed: with no loader, a reclaim would
-     *   delete the only copy;
-     * - a failed Redis read throws ([ReadFailureMode.THROW]) instead of degrading to a miss, which would silently
-     *   drop a policy or permission. The security pipeline turns the error into a denied (500) response. (A
-     *   `SetCache` such as the global policy index has nothing to degrade to and always rethrows; with CoCache 5 a
-     *   degraded index read meant "no global policies", so explicit DENY rules were skipped.)
-     * - a failed delete throws ([InvalidateFailureMode.THROW]) instead of being retried later: a late retry would
-     *   delete what another writer wrote in between, such as a revision record written again or a lease taken again.
-     *   CoCache picks this mode itself for a cache without a loader; the pin keeps it whatever a policy says.
+     * [storagePath] split at its last `:`: CoCache's key prefix (`cosec:control:`) and namespace (`revision`), which may
+     * hold no `:`. The storage keys stay `{storagePath}:{encodedKey}`.
      */
-    fun CachePolicy.storeOfRecord(): CachePolicy = toBuilder()
-        .ttl(null)
-        .readFailure(ReadFailureMode.THROW)
-        .invalidateFailure(InvalidateFailureMode.THROW)
-        .foreignFormat(ForeignFormatMode.FAIL)
-        .build()
-
-    /**
-     * Revoked tokens are not the store of record (they expire with their tokens, and a failed read degrades on
-     * purpose, [revocation]), but a 6.x revocation must not be reclaimed either: deleting it would accept the token
-     * again. Content the cache cannot read therefore fails the read ([ForeignFormatMode.FAIL]), whatever `cocache.*`
-     * says.
-     */
-    fun CachePolicy.failOnForeignFormat(): CachePolicy = toBuilder()
-        .foreignFormat(ForeignFormatMode.FAIL)
-        .build()
-
-    /**
-     * The memberships cache is not the store of record, so its entries expire, but a failed read must never become
-     * "no memberships" (RFC 0006 §5.5.2): with no roles, a DENY on a role would not apply. So:
-     *
-     * - entries always expire: a `ttl` of null becomes [DEFAULT_MEMBERSHIP_TTL], since a membership change whose
-     *   invalidation is lost would otherwise never apply; without jitter, so the TTL is the bound it is documented as;
-     * - a failed Redis read throws ([ReadFailureMode.THROW]) and content the cache cannot read fails the read
-     *   ([ForeignFormatMode.FAIL]); the request fails closed with 503.
-     */
-    fun CachePolicy.expiringFailClosed(): CachePolicy = toBuilder()
-        .ttl(ttl ?: DEFAULT_MEMBERSHIP_TTL)
-        .ttlJitter(Duration.ZERO)
-        .readFailure(ReadFailureMode.THROW)
-        .foreignFormat(ForeignFormatMode.FAIL)
-        .build()
-
-    /**
-     * What CoSec fixes in the policy of [cacheName], applied after any customizer or property:
-     * [storeOfRecord] for policies and permissions, [failOnForeignFormat] for revoked tokens and subjects,
-     * [expiringFailClosed] for memberships.
-     */
-    fun pinnedPolicy(cacheName: String, policy: CachePolicy): CachePolicy = when (cacheName) {
-        in STORE_OF_RECORD_CACHE_NAMES -> policy.storeOfRecord()
-        REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> policy.failOnForeignFormat()
-        MEMBERSHIP_CACHE_NAME -> policy.expiringFailClosed()
-        else -> policy
+    fun layout(keyPrefix: String, cacheName: String): Layout {
+        val path = storagePath(keyPrefix, cacheName)
+        val split = path.lastIndexOf(':')
+        return Layout(path.substring(0, split + 1), path.substring(split + 1))
     }
 
     /**
-     * The snapshot documents (RFC 0003 §4.1): [storeOfRecord] like every policy cache, keys encoded explicitly
-     * ([SnapshotKeyEncoder]), values by [SnapshotDocumentCodec]. Create it with
+     * What CoSec fixes in each of its caches, whatever the `cocache.*` properties and customizers say (CoCache's
+     * `lock` and `constrain`, applied last). Every cache keeps CoSec's storage layout, codec and data source: its keys
+     * stay where every instance and the control plane look for them, and a cache without a source never gets one.
+     *
+     * Policies, permissions and the control plane's records are the store of record ([STORE_OF_RECORD_CACHE_NAMES]):
+     *
+     * - they are `Store`s: a failed delete throws instead of being retried later (a late retry would delete what another
+     *   writer wrote in between, such as a revision record written again or a lease taken again), and content the
+     *   cache cannot read fails the read and stays in Redis;
+     * - entries never expire (`ttl` locked and constrained to forever): with an expiry, policies would silently
+     *   disappear;
+     * - a failed Redis read is `Lookup.Unknown` and `get` throws (`unknown-read` locked to `throw`), instead of
+     *   degrading to a miss, which would silently drop a policy or permission. The security pipeline turns the error
+     *   into a denied (503) response.
+     *
+     * The memberships cache is not the store of record, so its entries expire, but a failed read must never become "no
+     * memberships" (RFC 0006 §5.5.2): with no roles, a DENY on a role would not apply. So its `ttl` is always finite
+     * ([DEFAULT_MEMBERSHIP_TTL] when the effective value is forever) and without jitter, so the TTL is the bound it is
+     * documented as, and a failed Redis read throws (`read-failure` and `unknown-read` locked to `throw`): the request
+     * fails closed with 503.
+     *
+     * The revocation tables read "not revoked" when Redis fails ([revokedToken]); an operator may still choose `throw`
+     * (`cocache.caches.[RevokedTokenCache].unknown-read`). The shadow caches fail a failed read.
+     *
+     * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
+     */
+    fun locks(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
+        lockLayout(*LayoutField.entries.toTypedArray())
+        when (cacheName) {
+            in STORE_OF_RECORD_CACHE_NAMES -> {
+                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
+                lock(PolicyField.TTL, PolicyField.UNKNOWN_READ)
+                constrain(PolicyField.TTL) { Ttl.Forever }
+                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                if (cacheName == POLICY_SNAPSHOT_CACHE_NAME) {
+                    // One local max age, cosec.authorization.snapshot.local-max-age (RFC 0008 §4.4).
+                    lock(PolicyField.LOCAL_MAX_AGE)
+                }
+            }
+
+            in SHADOW_CACHE_NAMES -> {
+                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
+                lock(PolicyField.UNKNOWN_READ)
+                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+            }
+
+            REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> verify {
+                require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." }
+            }
+
+            MEMBERSHIP_CACHE_NAME -> {
+                verify {
+                    require(it is CacheSpec<*, *> && it.externallySourced) {
+                        "CoSec's ${it.name} is an externally sourced Cache."
+                    }
+                }
+                lock(PolicyField.READ_FAILURE, PolicyField.UNKNOWN_READ)
+                constrain(PolicyField.TTL) { it.finiteOr(DEFAULT_MEMBERSHIP_TTL) }
+                constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
+                constrain(PolicyField.READ_FAILURE) { ReadFailureMode.THROW }
+                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+            }
+
+            else -> throw IllegalArgumentException("[$cacheName] is not one of CoSec's caches.")
+        }
+    }.build()
+
+    /**
+     * The snapshot documents (RFC 0003 §4.1): the store of record like every policy cache ([locks]), keys encoded
+     * explicitly ([SnapshotKeyEncoder]), values by [SnapshotDocumentCodec], one local max age. Create it with
      * [me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache], never through an interface proxy (RFC 0003 §10).
      *
      * Redis must not evict these keys: run it with `maxmemory-policy noeviction`. Under an `allkeys-*` policy a
      * document can vanish. An instance that had read it fails closed (RFC 0003 §4.4 F2a), but an instance that starts
      * afterwards reads it as absent (F2): without the policies document there are no global policies, so a global DENY
-     * no longer applies.
+     * no longer applies. CoCache refuses to start with an `allkeys-*` policy for that reason.
      */
     fun policySnapshot(
         keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
         localMaxAge: Duration = DEFAULT_SNAPSHOT_LOCAL_MAX_AGE,
-    ): CacheSpec<SnapshotKey, SnapshotDocument> =
-        CacheSpec.builder<SnapshotKey, SnapshotDocument>(POLICY_SNAPSHOT_CACHE_NAME)
-            .namespace(cacheNamespace(keyPrefix, POLICY_SNAPSHOT_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(SnapshotDocumentCodec)
-            .policy(policy.toBuilder().localMaxAge(localMaxAge).build().storeOfRecord())
+    ): StoreSpec<SnapshotKey, SnapshotDocument> =
+        storeOfRecord(POLICY_SNAPSHOT_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, SnapshotDocumentCodec)
+            .policy { this.localMaxAge = localMaxAge }
             .build()
 
     /**
-     * [customized], the [policySnapshot] spec after cache customizers and `cocache.*` properties, with what the snapshot
-     * cache keeps from [base] whatever they set (RFC 0008 §4.4): its storage layout, key encoder, codec, key filter and
-     * entry lifetime, one local max age (`cosec.authorization.snapshot.local-max-age`), and [storeOfRecord]. A loader
-     * is refused: Redis is the store of record, and only the snapshot source reads it.
+     * A store of record under CoSec's layout, with nothing but the type's defaults (`ttl` forever, a failed read
+     * `Unknown`); [locks] keeps it so.
      */
-    fun pinPolicySnapshot(
-        customized: CacheSpec<SnapshotKey, SnapshotDocument>,
-        base: CacheSpec<SnapshotKey, SnapshotDocument>,
-    ): CacheSpec<SnapshotKey, SnapshotDocument> {
-        require(customized.loader == null && customized.asyncLoader == null) {
-            "The ${base.name} cache takes no loader: Redis is the store of record, and only the snapshot source reads it."
-        }
-        val builder = customized.toBuilder()
-            .namespace(base.namespace)
-            .keyPrefix(base.keyPrefix)
-            .keyEncoder(base.keyEncoder)
-            .codec(base.codec)
-            .policy(
-                customized.policy.toBuilder()
-                    .localMaxAge(base.policy.localMaxAge)
-                    .degradedLocalMaxAge(base.policy.degradedLocalMaxAge)
-                    .build()
-                    .storeOfRecord(),
-            )
-        builder.keyFilter = base.keyFilter
-        builder.ttlOf = base.ttlOf
-        return builder.build()
+    fun <K : Any, V : Any> storeOfRecord(
+        cacheName: String,
+        keyPrefix: String,
+        keyEncoder: KeyEncoder<K>,
+        codec: Codec<V>,
+    ): StoreSpec.Builder<K, V> {
+        require(cacheName in STORE_OF_RECORD_CACHE_NAMES) { "[$cacheName] is not a store of record." }
+        val layout = layout(keyPrefix, cacheName)
+        return StoreSpec.builder<K, V>(cacheName)
+            .keyPrefix(layout.keyPrefix)
+            .namespace(layout.namespace)
+            .keyEncoder(keyEncoder)
+            .codec(codec)
     }
 
     /**
-     * What both revocation caches start from, before customizers and `cocache.*` properties:
+     * What both revocation tables declare, before `cocache.*` properties and customizers:
      *
-     * - "not revoked" is cached for [RevokedTokenCache.MISSING_TTL_SECONDS];
-     * - a failed Redis read degrades to "not revoked" ([ReadFailureMode.DEGRADE]), the documented exception to failing
-     *   closed: tokens are still signature-verified and expire on their own, and failing closed would reject every
-     *   authenticated request during a Redis outage. CoCache would throw for a cache without a loader such as these,
-     *   so the mode is set here; a mode [this] already chose is kept, and a customizer or property may still choose
-     *   `throw`, which fails the revocation check closed with 503. A degraded read caches nothing: every read during
-     *   the outage asks Redis again, and a revocation applies as soon as Redis answers;
-     * - unreadable content fails the read ([failOnForeignFormat]).
+     * - they are `Store`s, written with an explicit lifetime each ([CoCacheTokenStore]); content the table cannot read
+     *   fails the read, so a 6.x revocation is never reclaimed (deleting it would accept the token again);
+     * - "not revoked" is kept locally for [RevokedTokenCache.MISSING_TTL_SECONDS];
+     * - a failed Redis read reads as "not revoked" (`unknownRead = ABSENT`), the documented exception to failing closed:
+     *   tokens are still signature-verified and expire on their own, and failing closed would reject every
+     *   authenticated request during a Redis outage. Such a read caches nothing: every read during the outage asks
+     *   Redis again, and a revocation applies as soon as Redis answers. `cocache.caches.[name].unknown-read: throw`
+     *   fails the revocation check closed with 503 instead.
      */
-    private fun CachePolicy.revocation(): CachePolicy = toBuilder()
-        .absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
-        .readFailure(readFailure ?: ReadFailureMode.DEGRADE)
-        .build()
-        .failOnForeignFormat()
+    private fun <V : Any> revocation(cacheName: String, keyPrefix: String, codec: Codec<V>): StoreSpec<String, V> {
+        val layout = layout(keyPrefix, cacheName)
+        return StoreSpec.builder<String, V>(cacheName)
+            .keyPrefix(layout.keyPrefix)
+            .namespace(layout.namespace)
+            .keyEncoder(KeyEncoder.ofToString())
+            .codec(codec)
+            .unknownRead(UnknownReadMode.ABSENT)
+            .policy { absentTtl = Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS) }
+            .build()
+    }
 
-    /** Revocations are always written with an explicit lifetime, under the policy of [revocation]. */
-    fun revokedToken(
-        codec: Codec<Boolean>,
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, Boolean> = CacheSpec.builder<String, Boolean>(REVOKED_TOKEN_CACHE_NAME)
-        .storageLayout(keyPrefix)
-        .codec(codec)
-        .policy(policy.revocation())
-        .build()
+    /** The revoked token ids ([RevokedTokenCache]), under the rules of [revocation]. */
+    fun revokedToken(codec: Codec<Boolean>, keyPrefix: String = CoSec.COSEC): StoreSpec<String, Boolean> =
+        revocation(REVOKED_TOKEN_CACHE_NAME, keyPrefix, codec)
 
     /**
-     * The revoked subjects, under the same rules as [revokedToken]: explicit lifetimes, a degraded read (the
-     * documented exception to failing closed), and unreadable content fails the read. A key is a subject's
-     * [RevokedSubjectCache.key]; a value is the revocation's `issuedBefore`, in epoch milliseconds.
+     * The revoked subjects, under the same rules as [revokedToken]. A key is a subject's [RevokedSubjectCache.key]; a
+     * value is the revocation's `issuedBefore`, in epoch milliseconds.
      */
-    fun revokedSubject(
-        codec: Codec<Long>,
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, Long> = CacheSpec.builder<String, Long>(REVOKED_SUBJECT_CACHE_NAME)
-        .storageLayout(keyPrefix)
-        .codec(codec)
-        .policy(policy.revocation())
-        .build()
+    fun revokedSubject(codec: Codec<Long>, keyPrefix: String = CoSec.COSEC): StoreSpec<String, Long> =
+        revocation(REVOKED_SUBJECT_CACHE_NAME, keyPrefix, codec)
 
     /**
-     * The memberships of principals whose token asks the provider ([CoCacheMembershipProvider]): keyed by
-     * [MembershipCache.key], expiring after [ttl], and failing closed on read ([expiringFailClosed]).
+     * The memberships of principals whose token asks the provider ([CoCacheMembershipProvider]): an externally sourced
+     * `Cache`, which the provider reads with its own loader on each call, keyed by [MembershipCache.key], expiring
+     * after [ttl], and failing closed on read ([locks]).
      *
-     * A failed [CoCacheMembershipProvider.invalidate] is retried in the background ([InvalidateFailureMode.RETRY])
-     * unless [policy] chose a mode: every read passes the provider's loader, so a late delete only makes the next
-     * request load again. CoCache decides by the spec's loader, which this cache does not have, and would throw.
+     * A failed [CoCacheMembershipProvider.invalidate] is retried in the background ([InvalidateFailureMode.RETRY]):
+     * every read passes the provider's loader, so a late delete only makes the next request load again.
      */
     fun membership(
         keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-        ttl: Duration = DEFAULT_MEMBERSHIP_TTL,
-    ): CacheSpec<String, Memberships> = CacheSpec.builder<String, Memberships>(MEMBERSHIP_CACHE_NAME)
-        .storageLayout(keyPrefix)
-        .codec(MembershipsCodec)
-        .policy(
-            policy.toBuilder()
-                .ttl(ttl)
-                .invalidateFailure(policy.invalidateFailure ?: InvalidateFailureMode.RETRY)
-                .build()
-                .expiringFailClosed()
-        )
-        .build()
+        ttl: Duration = DEFAULT_MEMBERSHIP_TTL
+    ): CacheSpec<String, Memberships> {
+        val layout = layout(keyPrefix, MEMBERSHIP_CACHE_NAME)
+        return CacheSpec.builder<String, Memberships>(MEMBERSHIP_CACHE_NAME)
+            .keyPrefix(layout.keyPrefix)
+            .namespace(layout.namespace)
+            .keyEncoder(KeyEncoder.ofToString())
+            .codec(MembershipsCodec)
+            .externallySourced()
+            .policy {
+                this.ttl = ttl
+                ttlJitter = Duration.ZERO
+                readFailure = ReadFailureMode.THROW
+                invalidateFailure = InvalidateFailureMode.RETRY
+            }
+            .build()
+    }
 
     inline fun <reified V : Any> jacksonCodec(mapper: ObjectMapper): Codec<V> =
         JacksonCodec(mapper, object : TypeReference<V>() {}.type)
-
-    private fun <K : Any, V : Any> CacheSpec.Builder<K, V>.storageLayout(keyPrefix: String) = apply {
-        namespace(cacheNamespace(keyPrefix, name))
-        keyPrefix("")
-        keyEncoder(KeyEncoder.ofToString())
-    }
 }
+
+/** Creates [spec] through this factory with CoSec's locks ([CoSecCacheSpecs.locks]). */
+@InternalCoSecApi
+fun <K : Any, V : Any> CoCacheFactory.createLocked(spec: StoreSpec<K, V>): Store<K, V> =
+    create(spec, CoSecCacheSpecs.locks(spec.name))

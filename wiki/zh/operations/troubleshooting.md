@@ -313,6 +313,32 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档
 会被读成不存在，其中的 DENY 语句不再生效。
 
+CoCache 8 也检查它的 `Store`，而 `eviction-check=warn` 管不到这个检查：
+
+```text
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
+```
+
+第一条：允许 `INFO`，或者在你已自行设置 `noeviction` 之后设置 `cocache.redis.assume-maxmemory-policy: noeviction`。
+第二条：`allkeys-*` 策略，任何设置都不接受；设置 `noeviction`（[Redis 要求](./storage.md#redis-requirements)）。
+
+### 锁定的缓存设置导致启动失败 {#startup-fails-on-a-locked-cache-setting}
+
+```text
+Cache[PolicySnapshotCache] - ... locked by cosec ...
+```
+
+某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上锁定的字段，例如快照存储的
+`ttl`、`unknown-read` 或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
+能让该条目启动，但 CoSec 约束的字段保持原值（[优先级](./configuration.md#precedence)）。
+
+### 通道权限导致启动失败 {#startup-fails-on-a-channel-permission}
+
+拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出的 `IllegalStateException` 指出需要允许的模式，例如
+`[&cosec:control:inv:*]`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
+（[Redis 要求](./storage.md#redis-requirements)）。
+
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 
 ```text
@@ -366,7 +392,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | 消息 | 修复 |
 |---|---|
 | `Decision listener <name> is registered twice.` | 给每个 `DecisionListener` 一个独立的 `name`。 |
-| `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | 某个 `CacheSpecCustomizer` 给每个缓存都设置了 loader；把 `PolicySnapshotCache` 排除在外。 |
+| `CoSec's <CacheName> is the store of record: a Store.` | 有东西替换了某个 CoSec 缓存的定义；CoSec 自己创建这些缓存。 |
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
 | `Invalid change options.`、`Invalid shadow window options.` | 修正 [`cosec.control.*`](./configuration.md#control-plane)：`break-glass.max-duration` 超过 `24h`，或 `shadow.max-duration` 小于 `shadow.min-duration`。 |
 | `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |

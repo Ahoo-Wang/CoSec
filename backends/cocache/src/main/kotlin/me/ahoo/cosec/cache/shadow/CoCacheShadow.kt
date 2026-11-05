@@ -19,18 +19,17 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
-import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
-import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cocache.api.Store
+import me.ahoo.cocache.api.spi.Digest
+import me.ahoo.cocache.core.CoCacheFactory
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.cache.createLocked
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.CandidateStore
@@ -54,8 +53,8 @@ import java.time.Duration
  * | reporters | `<p>:shadow:reporters:<window>` | the instances that reported on one window, only ever added to; expires as the reports |
  * | statuses | `<p>:shadow:status:instances` | every instance's last status; expires [STATUS_TTL] after the last write |
  *
- * Reports and statuses are observations, so they expire; a failed read still throws, so that an outage is never read
- * as "no samples" or "no instance". Each instance writes only its own report key (round-2 review R1), so that one
+ * All four are `Store`s. Reports and statuses are observations, so they expire; a failed read still throws, so that an
+ * outage is never read as "no samples" or "no instance". Each instance writes only its own report key (round-2 review R1), so that one
  * instance can never replace another's numbers, and an ACL can confine each instance to its own keys.
  */
 internal object ShadowCacheSpecs {
@@ -67,44 +66,43 @@ internal object ShadowCacheSpecs {
 
     const val STATUS_KEY: String = "instances"
 
-    fun candidate(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<SnapshotKey, StoredCandidate> =
-        CacheSpec.builder<SnapshotKey, StoredCandidate>(CoSecCacheSpecs.CANDIDATE_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CANDIDATE_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(StoredCandidateCodec)
-            .policy(policy.storeOfRecord())
+    fun candidate(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, StoredCandidate> =
+        CoSecCacheSpecs.storeOfRecord(
+            CoSecCacheSpecs.CANDIDATE_CACHE_NAME,
+            keyPrefix,
+            SnapshotKeyEncoder,
+            StoredCandidateCodec
+        )
             .build()
 
-    fun reports(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, ShadowReport> =
-        CacheSpec.builder<String, ShadowReport>(CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(ShadowReportCodec)
-            .policy(policy.toBuilder().ttl(REPORT_TTL).readFailure(ReadFailureMode.THROW).build())
-            .build()
+    fun reports(keyPrefix: String = CoSec.COSEC): StoreSpec<String, ShadowReport> =
+        observation(CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME, keyPrefix, ShadowReportCodec, REPORT_TTL)
 
-    fun reporters(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Set<String>> =
-        CacheSpec.builder<String, Set<String>>(CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(ReportersCodec)
-            .policy(policy.toBuilder().ttl(REPORT_TTL).readFailure(ReadFailureMode.THROW).build())
-            .build()
+    fun reporters(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Set<String>> =
+        observation(CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME, keyPrefix, ReportersCodec, REPORT_TTL)
 
     /** The key of [instance]'s report of [window], under the reports' namespace. */
     fun reportKey(window: String, instance: String): String = "$window:$instance"
 
-    fun statuses(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Map<String, InstanceStatus>> =
-        CacheSpec.builder<String, Map<String, InstanceStatus>>(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME))
-            .keyPrefix("")
+    fun statuses(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Map<String, InstanceStatus>> =
+        observation(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, keyPrefix, InstanceStatusesCodec, STATUS_TTL)
+
+    /** A `Store` whose entries expire [ttl] after their last write; a failed read throws ([CoSecCacheSpecs.locks]). */
+    private fun <V : Any> observation(
+        cacheName: String,
+        keyPrefix: String,
+        codec: Codec<V>,
+        ttl: Duration
+    ): StoreSpec<String, V> {
+        val layout = CoSecCacheSpecs.layout(keyPrefix, cacheName)
+        return StoreSpec.builder<String, V>(cacheName)
+            .keyPrefix(layout.keyPrefix)
+            .namespace(layout.namespace)
             .keyEncoder { it }
-            .codec(InstanceStatusesCodec)
-            .policy(policy.toBuilder().ttl(STATUS_TTL).readFailure(ReadFailureMode.THROW).build())
+            .codec(codec)
+            .policy { this.ttl = ttl }
             .build()
+    }
 }
 
 internal object StoredCandidateCodec : Codec<StoredCandidate> {
@@ -139,19 +137,19 @@ internal object InstanceStatusesCodec : Codec<Map<String, InstanceStatus>> {
 }
 
 /** The data plane's [CandidateStore] on Redis: reads `<p>:candidate:<docKey>` from Redis, never a local copy. */
-class CoCacheCandidateStore(private val candidates: Cache<SnapshotKey, StoredCandidate>) : CandidateStore {
+class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCandidate>) : CandidateStore {
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? =
         when (val read = candidates.async().getIfChanged(key, null).await()) {
             is ConditionalGet.Present -> read.value
             ConditionalGet.Unchanged -> error(
                 "An unconditional read of the candidate of [$key] was answered as unchanged."
             )
-            else -> null
+            ConditionalGet.Absent -> null
         }
 
     companion object {
-        fun create(runtime: CacheRuntime, keyPrefix: String = CoSec.COSEC): CoCacheCandidateStore =
-            CoCacheCandidateStore(runtime.create(ShadowCacheSpecs.candidate(keyPrefix)))
+        fun create(factory: CoCacheFactory, keyPrefix: String = CoSec.COSEC): CoCacheCandidateStore =
+            CoCacheCandidateStore(factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix)))
     }
 }
 
@@ -170,9 +168,9 @@ class CoCacheCandidateStore(private val candidates: Cache<SnapshotKey, StoredCan
  * dropped as they are written and ignored as they are read.
  */
 class CoCacheShadowReports(
-    private val reports: Cache<String, ShadowReport>,
-    private val reporters: Cache<String, Set<String>>,
-    private val statuses: Cache<String, Map<String, InstanceStatus>>,
+    private val reports: Store<String, ShadowReport>,
+    private val reporters: Store<String, Set<String>>,
+    private val statuses: Store<String, Map<String, InstanceStatus>>,
     private val clock: Clock = Clock.systemUTC(),
 ) : ShadowReportSink, ShadowReportReader {
     override suspend fun write(report: ShadowReport) {
@@ -229,7 +227,7 @@ class CoCacheShadowReports(
         return read(statuses, ShadowCacheSpecs.STATUS_KEY)?.first?.values?.filter { !it.at.isBefore(since) }.orEmpty()
     }
 
-    private suspend fun <V : Any> update(cache: Cache<String, V>, key: String, next: (V) -> V, empty: V) {
+    private suspend fun <V : Any> update(cache: Store<String, V>, key: String, next: (V) -> V, empty: V) {
         repeat(MAX_ATTEMPTS) {
             val current = read(cache, key)
             val value = next(current?.first ?: empty)
@@ -241,27 +239,32 @@ class CoCacheShadowReports(
     }
 
     private suspend fun update(
-        cache: Cache<String, Map<String, InstanceStatus>>,
+        cache: Store<String, Map<String, InstanceStatus>>,
         key: String,
         next: (Map<String, InstanceStatus>) -> Map<String, InstanceStatus>
     ) =
         update(cache, key, next, emptyMap())
 
-    private suspend fun <V : Any> read(cache: Cache<String, V>, key: String): Pair<V, me.ahoo.cocache.api.spi.Digest>? =
+    private suspend fun <V : Any> read(cache: Store<String, V>, key: String): Pair<V, Digest>? =
         when (val read = cache.async().getIfChanged(key, null).await()) {
             is ConditionalGet.Present -> read.value to read.digest
             ConditionalGet.Unchanged -> error("An unconditional read of [$key] was answered as unchanged.")
-            else -> null
+            ConditionalGet.Absent -> null
         }
 
     companion object {
         private const val MAX_ATTEMPTS = 16
 
-        fun create(runtime: CacheRuntime, keyPrefix: String = CoSec.COSEC, clock: Clock = Clock.systemUTC()): CoCacheShadowReports =
+        /** Creates the report caches under [keyPrefix] through [factory], with CoSec's locks ([CoSecCacheSpecs.locks]). */
+        fun create(
+            factory: CoCacheFactory,
+            keyPrefix: String = CoSec.COSEC,
+            clock: Clock = Clock.systemUTC()
+        ): CoCacheShadowReports =
             CoCacheShadowReports(
-                runtime.create(ShadowCacheSpecs.reports(keyPrefix)),
-                runtime.create(ShadowCacheSpecs.reporters(keyPrefix)),
-                runtime.create(ShadowCacheSpecs.statuses(keyPrefix)),
+                factory.createLocked(ShadowCacheSpecs.reports(keyPrefix)),
+                factory.createLocked(ShadowCacheSpecs.reporters(keyPrefix)),
+                factory.createLocked(ShadowCacheSpecs.statuses(keyPrefix)),
                 clock
             )
     }

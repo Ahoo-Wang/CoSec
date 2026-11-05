@@ -107,6 +107,15 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.
+- **`Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...]`** or **`Authoritative
+  caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
+  its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
+  `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+- **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
+  field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
+  any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
+  fields keep their values anyway. **An `IllegalStateException` naming a channel pattern** such as
+  `[&cosec:control:inv:*]`: the Redis ACL denies the cache's invalidation channel; allow `&<prefix>:*`.
 - **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
   is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
   `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.

@@ -4,7 +4,7 @@ spring-boot = "4.1.2"
 # kotlinx-coroutines (core, reactor, slf4j, test, debug) and opentelemetry-extension-kotlin take their versions from the
 # BOMs above (kotlinx-coroutines-bom, opentelemetry-bom), so they stay aligned with Spring Boot (RFC 0006 Q7).
 spring-cloud = "2025.1.4"
-cocache = "6.10.0"
+cocache = "8.0.0-alpha.1"
 # cosec-cosid only: never in cosec-dependencies, so CoSec forces no CosId version on an application
 cosid = "5.0.0"
 opentelemetry = "2.32.0"

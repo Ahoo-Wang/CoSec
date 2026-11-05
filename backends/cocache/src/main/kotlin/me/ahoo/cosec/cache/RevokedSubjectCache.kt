@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.Store
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 
 /**
- * Revoked Subject Cache (RFC 0004 §4.5.3).
+ * Revoked Subject Cache (RFC 0004 §4.5.3), a CoCache `Store` like [RevokedTokenCache].
  *
  * Key is [key] of a principal; value is the revocation's `issuedBefore` in epoch milliseconds: the principal's tokens
  * issued before it are revoked. Entries are written with their own lifetime, which outlives the refresh tokens they
@@ -27,7 +27,7 @@ import me.ahoo.cosec.model.TenantId
  *
  * @see CoCacheTokenStore
  */
-interface RevokedSubjectCache : Cache<String, Long> {
+interface RevokedSubjectCache : Store<String, Long> {
     companion object {
         /**
          * `{length of tenant}:{tenant}:{principal}`. The length keeps the key unambiguous whatever characters the ids

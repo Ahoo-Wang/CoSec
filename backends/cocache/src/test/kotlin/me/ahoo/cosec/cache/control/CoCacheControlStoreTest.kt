@@ -18,19 +18,18 @@ package me.ahoo.cosec.cache.control
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cocache.api.AsyncCache
-import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.AsyncStore
 import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.ConditionalPut
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.snapshot.RawCodec
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisTarget
@@ -83,11 +82,11 @@ class CoCacheControlStoreTest {
 
     private fun store(
         node: SnapshotNode,
-        heads: Cache<SnapshotKey, SnapshotDocument> = node.cache,
-        lists: Cache<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
-        appLists: Cache<String, AppList> = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
+        heads: Store<SnapshotKey, SnapshotDocument> = node.cache,
+        lists: Store<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        appLists: Store<String, AppList> = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
         clock: Clock = Clock.systemUTC(),
-        changes: Cache<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+        changes: Store<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
     ) = CoCacheControlStore(
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
@@ -134,15 +133,12 @@ class CoCacheControlStoreTest {
             revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
             CacheRuntime.builder().backend(backend).build().use { raw ->
                 raw.create(
-                    CacheSpec.builder<ReferenceKey, ByteArray>("RawReferences")
-                        .namespace(
-                            CoSecCacheSpecs.cacheNamespace(node.keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
-                        )
-                        .keyPrefix("")
-                        .keyEncoder(ReferenceKeyEncoder)
-                        .codec(RawCodec)
-                        .policy(CachePolicy.DEFAULT.storeOfRecord())
-                        .build()
+                    rawStore(
+                        "RawReferences",
+                        node.keyPrefix,
+                        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+                        ReferenceKeyEncoder
+                    )
                 ).put(ReferenceKey(SnapshotKey.Platform, shared), """["app:a\u0001b"]""".encodeToByteArray())
             }
             val logged = ListAppender<ILoggingEvent>().apply { start() }
@@ -186,15 +182,12 @@ class CoCacheControlStoreTest {
                 .replace("\"key\":\"tenant:acme\"", "\"key\":\"app:a\\u0001b\"")
             CacheRuntime.builder().backend(backend).build().use { raw ->
                 raw.create(
-                    CacheSpec.builder<ChangeId, ByteArray>("RawChange")
-                        .namespace(
-                            CoSecCacheSpecs.cacheNamespace(node.keyPrefix, CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME)
-                        )
-                        .keyPrefix("")
-                        .keyEncoder { it.value }
-                        .codec(RawCodec)
-                        .policy(CachePolicy.DEFAULT.storeOfRecord())
-                        .build()
+                    rawStore(
+                        "RawChange",
+                        node.keyPrefix,
+                        CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
+                        KeyEncoder<ChangeId> { it.value }
+                    )
                 ).put(ChangeId("c1"), written.encodeToByteArray())
             }
             store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
@@ -282,9 +275,9 @@ class CoCacheControlStoreTest {
             SnapshotNode(backend, keyPrefix).use { reading ->
                 val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
                 val changes = writing.runtime.create(ControlCacheSpecs.changeRequest(writing.keyPrefix))
-                val failing = object : Cache<ChangeId, ChangeRequest> by changes {
-                    override fun async(): AsyncCache<ChangeId, ChangeRequest> =
-                        object : AsyncCache<ChangeId, ChangeRequest> by changes.async() {
+                val failing = object : Store<ChangeId, ChangeRequest> by changes {
+                    override fun async(): AsyncStore<ChangeId, ChangeRequest> =
+                        object : AsyncStore<ChangeId, ChangeRequest> by changes.async() {
                             override fun putIfMatch(
                                 key: ChangeId,
                                 expected: Digest?,
@@ -344,8 +337,8 @@ class CoCacheControlStoreTest {
     @Test
     fun `a head write whose reply was lost is read back`() = runBlocking<Unit> {
         SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-            val lostReply = object : Cache<SnapshotKey, SnapshotDocument> by node.cache {
-                override fun async(): AsyncCache<SnapshotKey, SnapshotDocument> = object : AsyncCache<SnapshotKey, SnapshotDocument> by node.cache.async() {
+            val lostReply = object : Store<SnapshotKey, SnapshotDocument> by node.cache {
+                override fun async(): AsyncStore<SnapshotKey, SnapshotDocument> = object : AsyncStore<SnapshotKey, SnapshotDocument> by node.cache.async() {
                     override fun putIfMatch(
                         key: SnapshotKey,
                         expected: Digest?,
@@ -438,7 +431,7 @@ class CoCacheControlStoreTest {
 
     @Test
     fun `the codecs read back what they write and reject anything else`() {
-        val digest = SnapshotDigest(ByteArray(20) { it.toByte() })
+        val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
         val index = RevisionIndex(
             listOf(RevisionEntry(3, digest, Instant.parse("2026-11-01T00:00:00Z"))),
             listOf(PendingRecord(digest, Instant.parse("2026-11-02T00:00:00Z"))),
@@ -454,7 +447,14 @@ class CoCacheControlStoreTest {
             """{"entries":[],"pending":[]}""",
             """{"entries":[],"pending":[],"floor":0}""",
             """{"entries":[{"revision":1,"digest":"zz","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
-            """{"entries":[],"pending":[{"digest":"${"0".repeat(40)}","since":"later"}],"floor":1}""",
+            """{"entries":[],"pending":[{"digest":"SHA-256:${"0".repeat(64)}","since":"later"}],"floor":1}""",
+            // A 7.x-era SHA-1 digest, without its algorithm.
+            """{"entries":[{"revision":1,"digest":"${"0".repeat(
+                40
+            )}","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
+            """{"entries":[{"revision":1,"digest":"${"0".repeat(
+                64
+            )}","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
             """{"entries":[],"pending":[],"floor":1,"x":1}""",
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
@@ -463,13 +463,24 @@ class CoCacheControlStoreTest {
             assertThrownBy<SnapshotFormatException> { SnapshotKeySetCodec.decode(text.encodeToByteArray()) }
         }
         RevisionRecordKeyEncoder.encode(RevisionRecordKey(SnapshotKey.Tenant("acme"), digest))
-            .assert().isEqualTo("tenant:acme:$digest")
+            .assert().isEqualTo("tenant:acme:SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         ReferenceKeyEncoder.encode(
             ReferenceKey(SnapshotKey.Platform, PolicyId("cosec:root"))
         ).assert().isEqualTo("platform:cosec:root")
     }
 
     private companion object {
+        /** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
+        fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
+            CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
+                StoreSpec.builder<K, ByteArray>(name)
+                    .keyPrefix(layout.keyPrefix)
+                    .namespace(layout.namespace)
+                    .keyEncoder(keyEncoder)
+                    .codec(RawCodec)
+                    .build()
+            }
+
         val BOOTSTRAP = Publication(
             "bootstrap",
             ProvenanceKind.BOOTSTRAP,

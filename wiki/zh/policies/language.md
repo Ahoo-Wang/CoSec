@@ -485,7 +485,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 | 字段 | 含义 |
 |---|---|
-| `parent` | 被本修订替换的头修订的 `{"revision", "digest"}`（`digest`：40 位小写十六进制）；第一个修订没有。 |
+| `parent` | 被本修订替换的头修订的 `{"revision", "digest"}`（`digest`：`SHA-256:` 加 64 位小写十六进制，即存储的摘要）；第一个修订没有。 |
 | `change` | 发布它的变更。 |
 | `kind` | `PUBLISH`、`ROLLBACK`、`BREAK_GLASS`、`EXPIRE`、`MIGRATE` 或 `BOOTSTRAP`。 |
 | `publishedBy` | `{"tenant", "principal"}`。 |

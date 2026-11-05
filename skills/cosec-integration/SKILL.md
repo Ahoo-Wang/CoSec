@@ -80,7 +80,12 @@ Startup fails, on purpose, when:
 - **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
   different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
-  `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning).
+  `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning) and
+  `cocache.redis.assume-maxmemory-policy=noeviction`: CoCache 8 checks its `Store`s too, and refuses `allkeys-*` and an
+  unreadable policy whatever CoSec's setting is.
+- **A `cocache.caches.[<CoSec cache>].*` entry or a `CacheSpecCustomizer` sets a field CoSec locks** (the snapshot
+  store's `ttl`, `unknown-read`, `local-max-age` or `key-prefix`, say): startup fails. Remove it, or exclude CoSec's
+  caches from the customizer.
 - **API keys with `store=redis` and no `ReactiveStringRedisTemplate`.**
 
 Every `cosec.*` property: https://cosec.ahoo.me/operations/configuration. In a CoSec checkout the source of truth is

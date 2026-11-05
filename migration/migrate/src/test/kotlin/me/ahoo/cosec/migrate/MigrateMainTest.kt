@@ -18,6 +18,7 @@ package me.ahoo.cosec.migrate
 import io.lettuce.core.RedisURI
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -194,8 +195,9 @@ class MigrateMainTest {
     private fun <T> controlStore(keyPrefix: String, block: suspend (CoCacheControlStore) -> T): T =
         RedisBackend.standalone(RedisURI.create(REDIS)).use { backend ->
             CacheRuntime.builder().backend(backend).build().use { runtime ->
-                val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                runBlocking { block(CoCacheControlStore.create(runtime, heads, keyPrefix)) }
+                val factory = CoCacheFactory(runtime)
+                val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                runBlocking { block(CoCacheControlStore.create(factory, heads, keyPrefix)) }
             }
         }
 

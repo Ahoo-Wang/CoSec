@@ -23,12 +23,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import me.ahoo.cocache.api.spi.CoherenceBackend
-import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.redis.RedisBackend
-import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
-import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.shadow.CoCacheCandidateStore
@@ -55,7 +52,6 @@ import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -86,24 +82,23 @@ class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cache.snapshot.PolicySnapshotCache"])
-    @ConditionalOnBean(CacheRuntime::class)
+    @ConditionalOnBean(CoCacheFactory::class)
     class Redis {
         /**
-         * The snapshot cache, customizable like every CoSec cache except for what [CoSecCacheSpecs.pinPolicySnapshot]
-         * keeps: one local max age, from `cosec.authorization.snapshot.local-max-age`.
+         * The snapshot store, created through CoCache's factory like every CoSec cache: the `cocache.*` properties and
+         * customizers apply to it, except for what [CoSecCacheSpecs.locks] keeps, such as its one local max age, from
+         * `cosec.authorization.snapshot.local-max-age`.
          */
         @Bean
         @ConditionalOnMissingBean
         fun cosecPolicySnapshotCache(
-            runtime: CacheRuntime,
-            customizers: ObjectProvider<CacheSpecCustomizer>,
-            cocacheProperties: ObjectProvider<CoCacheProperties>,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
-            val base = CoSecCacheSpecs.policySnapshot(snapshot.keyPrefix, CachePolicy.DEFAULT, snapshot.localMaxAge)
-            val assembled = cosecCacheAssembler(runtime, customizers, cocacheProperties).assemble(base)
-            return runtime.createPolicySnapshotCache(CoSecCacheSpecs.pinPolicySnapshot(assembled, base))
+            return factory.createPolicySnapshotCache(
+                CoSecCacheSpecs.policySnapshot(snapshot.keyPrefix, snapshot.localMaxAge)
+            )
         }
 
         @Bean
@@ -111,7 +106,11 @@ class CoSecSnapshotAutoConfiguration {
         fun cosecRedisSnapshotDocumentStore(cache: PolicySnapshotCache): RedisSnapshotDocumentStore =
             RedisSnapshotDocumentStore(cache)
 
-        /** `SNP-3`: Redis must not evict snapshot documents, or a global DENY can silently vanish. */
+        /**
+         * `SNP-3`: Redis must not evict snapshot documents, or a global DENY can silently vanish. CoCache's own check of
+         * its `Store`s runs as well (`cocache.redis.store-eviction-check`): it fails startup on `allkeys-*` or a policy it
+         * cannot read, whatever this check's mode, unless `cocache.redis.assume-maxmemory-policy` names one.
+         */
         @Bean
         fun cosecEvictionPolicyCheck(
             backend: CoherenceBackend,
@@ -129,7 +128,7 @@ class CoSecSnapshotAutoConfiguration {
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cache.shadow.CoCacheCandidateStore"])
-    @ConditionalOnBean(CacheRuntime::class)
+    @ConditionalOnBean(CoCacheFactory::class)
     @ConditionalOnProperty(
         prefix = RuntimeAuthorizationProperties.PREFIX + ".shadow",
         name = ["enabled"],
@@ -148,12 +147,12 @@ class CoSecSnapshotAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun cosecCandidateSource(
-            runtime: CacheRuntime,
+            factory: CoCacheFactory,
             stores: ObjectProvider<CandidateStore>,
             compiler: PlatformCompiler,
             properties: RuntimeAuthorizationProperties,
         ): CandidateSource {
-            val store = stores.ifUnique ?: CoCacheCandidateStore.create(runtime, properties.snapshot.keyPrefix)
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, properties.snapshot.keyPrefix)
             return CachingCandidateSource(store, compiler::compile)
         }
 
@@ -177,10 +176,10 @@ class CoSecSnapshotAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun cosecShadowReports(
-            runtime: CacheRuntime,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties
         ): CoCacheShadowReports =
-            CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix)
+            CoCacheShadowReports.create(factory, properties.snapshot.keyPrefix)
 
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean

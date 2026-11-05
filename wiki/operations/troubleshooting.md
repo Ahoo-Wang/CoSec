@@ -374,6 +374,34 @@ With `warn` the instance starts and logs the same text at `WARN`, starting with 
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really
 evicts, an app or tenant document loaded after it was evicted is read as absent, and its DENY statements stop applying.
 
+CoCache 8 checks its `Store`s too, and `eviction-check=warn` does not reach that check:
+
+```text
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
+```
+
+The first: allow `INFO`, or set `cocache.redis.assume-maxmemory-policy: noeviction` once you have set `noeviction`
+yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noeviction`
+([Redis requirements](./storage.md#redis-requirements)).
+
+### Startup fails on a locked cache setting
+
+```text
+Cache[PolicySnapshotCache] - ... locked by cosec ...
+```
+
+A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
+the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
+([Precedence](./configuration.md#precedence)).
+
+### Startup fails on a channel permission
+
+A Redis ACL that denies a cache's invalidation channel fails its creation with an `IllegalStateException` naming the
+pattern to allow, such as `[&cosec:control:inv:*]`. Allow the channels under CoSec's prefixes, and CoCache's probe in
+`pubsub` mode ([Redis requirements](./storage.md#redis-requirements)).
+
 ### Startup fails without a token store
 
 ```text
@@ -431,7 +459,7 @@ random one.
 | Message | Fix |
 |---|---|
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
-| `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | A `CacheSpecCustomizer` sets a loader on every cache; exclude `PolicySnapshotCache`. |
+| `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |

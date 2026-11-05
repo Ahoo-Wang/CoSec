@@ -13,10 +13,10 @@
 
 package me.ahoo.cosec.cache.snapshot
 
-import me.ahoo.cocache.api.AsyncCache
-import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.AsyncStore
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.Lookup
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
@@ -185,14 +185,20 @@ class RedisSnapshotDocumentStoreTest {
         }
     }
 
+    /**
+     * CoCache 8 hands invalidation listeners encoded keys, not storage keys: a listener that still stripped the storage
+     * prefix would drop every policy change without an error ([passesOnInvalidationsOfItsNamespaceFromEveryInstance]).
+     */
     @Test
-    fun mapsOnlyItsOwnStorageKeys() {
+    fun mapsEncodedKeysOnly() {
         SnapshotNode(InMemoryBackend(), "k").use { node ->
-            node.cache.snapshotKeyOf("k:snapshot:platform").assert().isEqualTo(SnapshotKey.Platform)
-            node.cache.snapshotKeyOf("k:snapshot:app:a").assert().isEqualTo(SnapshotKey.App("a"))
-            node.cache.snapshotKeyOf("k:snapshot:other").assert().isNull()
-            node.cache.snapshotKeyOf("k:policy:p").assert().isNull()
+            node.cache.snapshotKeyOf("platform").assert().isEqualTo(SnapshotKey.Platform)
+            node.cache.snapshotKeyOf("app:a").assert().isEqualTo(SnapshotKey.App("a"))
+            node.cache.snapshotKeyOf("other").assert().isNull()
+            node.cache.snapshotKeyOf("k:snapshot:platform").assert().isNull()
             node.cache.storageKey(SnapshotKey.App("a")).assert().isEqualTo("k:snapshot:app:a")
+            node.cache.keyspace.keyPrefix.assert().isEqualTo("k:")
+            node.cache.keyspace.namespace.assert().isEqualTo("snapshot")
         }
     }
 
@@ -233,10 +239,10 @@ class RedisSnapshotDocumentStoreTest {
                 }
             }).use {
                 val before = resets.get()
-                backend.reset(node.cache.namespace)
+                backend.reset(node.cache.keyspace)
                 resets.get().assert().isEqualTo(before + 1)
             }
-            backend.reset(node.cache.namespace)
+            backend.reset(node.cache.keyspace)
         }
     }
 
@@ -266,7 +272,7 @@ class RedisSnapshotDocumentStoreTest {
     @Test
     fun anUnconditionalReadAnsweredUnchangedFails() {
         SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-            val async = object : AsyncCache<SnapshotKey, SnapshotDocument> by node.cache.async() {
+            val async = object : AsyncStore<SnapshotKey, SnapshotDocument> by node.cache.async() {
                 override fun getIfChanged(
                     key: SnapshotKey,
                     known: Digest?
@@ -275,10 +281,10 @@ class RedisSnapshotDocumentStoreTest {
                 )
             }
             val cache = PolicySnapshotCache(
-                object : Cache<SnapshotKey, SnapshotDocument> by node.cache {
-                    override fun async(): AsyncCache<SnapshotKey, SnapshotDocument> = async
+                object : Store<SnapshotKey, SnapshotDocument> by node.cache {
+                    override fun async(): AsyncStore<SnapshotKey, SnapshotDocument> = async
                 },
-                node.cache.namespace,
+                node.cache.keyspace,
                 node.cache.localCopyMaxAge,
                 node.cache.channel,
             )

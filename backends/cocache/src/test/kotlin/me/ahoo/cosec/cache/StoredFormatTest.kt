@@ -62,7 +62,7 @@ import java.time.Instant
  */
 class StoredFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
-    private val digest = SnapshotDigest(ByteArray(20) { it.toByte() })
+    private val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
     private val document = SnapshotDocument(
         2,
         5,
@@ -74,7 +74,9 @@ class StoredFormatTest {
      * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline (except
      * `apiKey`, `apiKey-uncapped`, `apiKey-empty-cap` and `memberships-inactive`, the formats of RFC 0009 PR-3): each was
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
-     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780.
+     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780. `revisionIndex` is
+     * the exception: its digests became CoCache 8's SHA-256 with the algorithm (`SHA-256:<hex>`), which replaced the
+     * SHA-1 hex digests of CoCache 6.
      */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()

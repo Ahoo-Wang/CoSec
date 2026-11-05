@@ -291,7 +291,7 @@ class CoSecPipelineAutoConfigurationTest {
         EvictionPolicyCheck.read(mockk<CoherenceBackend>())
             .assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
         EvictionPolicyCheck.read(
-            InMemoryBackend { System.currentTimeMillis() }
+            InMemoryBackend()
         ).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
         EvictionPolicyCheck.read(
             mockk<RedisBackend> { every { maxmemoryPolicies() } returns mapOf("n" to "noeviction") }

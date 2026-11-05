@@ -68,7 +68,7 @@ class RevisionChainTest {
     /** One control-plane instance: its own runtime over the shared Redis. */
     private fun instance(): Pair<SnapshotNode, Revisions> {
         val node = SnapshotNode(backend, keyPrefix).also { nodes += it }
-        val store = CoCacheControlStore.create(node.runtime, node.cache, keyPrefix, node.store::notifyChanged)
+        val store = CoCacheControlStore.create(node.factory, node.cache, keyPrefix, node.store::notifyChanged)
         stores[node] = store
         return node to Revisions(store)
     }
@@ -224,7 +224,7 @@ class RevisionChainTest {
         val (_, second) = instance()
         first.publishOver("c", "p")
         val node = SnapshotNode(backend, keyPrefix).also { nodes += it }
-        val store = CoCacheControlStore.create(node.runtime, node.cache, keyPrefix)
+        val store = CoCacheControlStore.create(node.factory, node.cache, keyPrefix)
         store.acquireLease("reclaim:$key", "elsewhere", java.time.Duration.ofMinutes(5)).assert().isTrue()
         store.acquireLease("reclaim:$key", "elsewhere", java.time.Duration.ofMinutes(5)).assert().isTrue()
         store.acquireLease("reclaim:$key", "another", java.time.Duration.ofMinutes(5)).assert().isFalse()

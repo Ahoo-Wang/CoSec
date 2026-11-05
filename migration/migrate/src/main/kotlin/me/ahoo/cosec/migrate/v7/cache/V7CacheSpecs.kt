@@ -11,27 +11,19 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
-
 package me.ahoo.cosec.migrate.v7.cache
 
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.SetCacheSpec
-import me.ahoo.cocache.core.codec.StringCodec
-import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.core.proxy.CacheProxies
-import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
-
-/** The names and Redis layout of 7.0's policy and permission caches, which `CoSec7xReader` reads. */
+/**
+ * The names and Redis layout of 7.0's policy and permission caches, which `CoSec7xReader` reads: each entry is stored
+ * under `{namespace}:{key}`, as CoCache 6 wrote it with an empty key prefix.
+ */
 internal object V7CacheSpecs {
     const val POLICY_CACHE_NAME = "PolicyCache"
     const val GLOBAL_POLICY_INDEX_CACHE_NAME = "GlobalPolicyIndexCache"
     const val APP_PERMISSION_CACHE_NAME = "AppPermissionCache"
     const val ROLE_PERMISSION_CACHE_NAME = "RolePermissionCache"
 
-    /** Encoded key of the single global policy index entry, whatever key the caller passes. */
+    /** Encoded key of the single global policy index entry, a CoCache 6 set. */
     const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
 
     /** Policy ids under this prefix hold 7.x's policy history, not policies. */
@@ -44,22 +36,7 @@ internal object V7CacheSpecs {
         ROLE_PERMISSION_CACHE_NAME to "app:role:permission",
     )
 
-    /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
+    /** The CoCache 6 namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
     fun cacheNamespace(keyPrefix: String, cacheName: String): String =
         "${keyPrefix.trimEnd(':')}:${NAMESPACES.getValue(cacheName)}"
-
-    fun globalPolicyIndex(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = SetCacheSpec.DEFAULT_POLICY
-    ): SetCacheSpec<String, String> = SetCacheSpec.builder<String, String>(GLOBAL_POLICY_INDEX_CACHE_NAME)
-        .namespace(cacheNamespace(keyPrefix, GLOBAL_POLICY_INDEX_CACHE_NAME))
-        .keyPrefix("")
-        .keyEncoder { GLOBAL_POLICY_INDEX_ENCODED_KEY }
-        .elementCodec(StringCodec)
-        .policy(policy.storeOfRecord())
-        .build()
 }
-
-/** Creates the global policy index declared by [spec]. */
-internal fun CacheRuntime.createGlobalPolicyIndex(spec: SetCacheSpec<String, String>): GlobalPolicyIndexCache =
-    CacheProxies.create(GlobalPolicyIndexCache::class.java, create(spec))

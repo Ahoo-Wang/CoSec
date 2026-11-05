@@ -31,7 +31,8 @@
       "level": "startup",
       "guards": [
         "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
-        "cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
+        "cocache:CacheTtlPolicyTest#storeOfRecordCachesNeverExpireAndFailClosed",
+        "spring-boot:StoreOfRecordOverrideTest#breakingTheGlassStillLeavesAStoreOfRecord",
         "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
         "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn"
       ],

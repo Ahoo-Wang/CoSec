@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
@@ -37,9 +37,11 @@ class CacheProperties(
 }
 
 /**
- * Local (in-process) cache settings of the revocation caches. The defaults are on the fields, not on the property that
- * holds them: constructor binding builds this from its own defaults as soon as one key is set, so `maximum-size` alone
- * must not drop `local-max-age` to CoCache's 5 minutes. A null value keeps CoCache's default.
+ * Local (in-process) cache settings of the revocation caches, which they declare: `cocache.defaults.store.*` does not
+ * change them, `cocache.overrides.store.*` may tighten `local-max-age`, and `cocache.caches.[name].*` sets either. The
+ * defaults are on the fields, not on the property that holds them: constructor binding builds this from its own defaults
+ * as soon as one key is set, so `maximum-size` alone must not drop `local-max-age` to CoCache's default. A null value
+ * keeps CoCache's default.
  */
 data class CacheConfiguration(
     /** How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost. */
@@ -57,17 +59,13 @@ data class CacheConfiguration(
         const val DEFAULT_MAXIMUM_SIZE: Long = 100_000
     }
 
-    fun toCachePolicy(base: CachePolicy): CachePolicy {
-        val local = base.local
-        return base.toBuilder()
-            .local(
-                local.copy(
-                    maximumSize = maximumSize ?: local.maximumSize,
-                    initialCapacity = initialCapacity ?: local.initialCapacity,
-                    expireAfterAccess = expireAfterAccess ?: local.expireAfterAccess,
-                )
-            )
-            .localMaxAge(localMaxAge ?: base.localMaxAge)
-            .build()
-    }
+    /** [spec] declaring these settings. */
+    fun <K : Any, V : Any> applyTo(spec: StoreSpec<K, V>): StoreSpec<K, V> = spec.toBuilder().policy {
+        local = local.copy(
+            maximumSize = maximumSize ?: local.maximumSize,
+            initialCapacity = initialCapacity ?: local.initialCapacity,
+            expireAfterAccess = expireAfterAccess ?: local.expireAfterAccess,
+        )
+        this@CacheConfiguration.localMaxAge?.let { localMaxAge = it }
+    }.build()
 }

@@ -20,7 +20,9 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.ScanArgs
 import io.lettuce.core.ScanCursor
 import io.lettuce.core.api.sync.RedisCommands
+import io.lettuce.core.codec.ByteArrayCodec
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
@@ -238,8 +240,8 @@ object MigrateMain {
                 val markerKey = "${keyPrefix.trimEnd(':')}:meta:schema"
                 val marker = Source7x.Marker(markerKey, commands.get(markerKey))
                 val keys = CoSec7xReader.keys(keyPrefix) { pattern -> scan(commands, pattern) }
-                return RedisBackend.standalone(redisUri).use { backend ->
-                    CoSec7xReader(backend, keyPrefix).use { reader -> reader.source(keys, marker) }
+                return client.connect(ByteArrayCodec.INSTANCE).use { raw ->
+                    CoSec7xReader(raw.sync(), keyPrefix).source(keys, marker)
                 }
             }
         } finally {
@@ -443,8 +445,9 @@ object MigrateMain {
         }
         return backend.use { backend ->
             CacheRuntime.builder().backend(backend).build().use { runtime ->
-                val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                block(CoCacheControlStore.create(runtime, heads, keyPrefix))
+                val factory = CoCacheFactory(runtime)
+                val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                block(CoCacheControlStore.create(factory, heads, keyPrefix))
             }
         }
     }

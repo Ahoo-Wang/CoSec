@@ -21,6 +21,7 @@ import me.ahoo.cosec.runtime.document.format.DocumentFormats.BINDING
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.CATALOG
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.DEFINITIONS
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.SNAPSHOT_DOCUMENT
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**
  * The 8.0 formats (RFC 0004 §7.1, RFC 0005 §3.1, §5.1): bindings, catalogs, and the definitions of `schema: 2`
@@ -294,11 +295,19 @@ internal object PolicyDocumentFormats {
                                 "digest",
                                 StringType(
                                     pattern = DIGEST,
-                                    examples = listOf("9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"),
-                                    counterExamples = listOf("9F2C0B1E6A6D1F2C3B4A5D6E7F8091A2B3C4D5E6", "9f2c", "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6a", ""),
+                                    examples = listOf("SHA-256:$DIGEST_HEX"),
+                                    counterExamples = listOf(
+                                        "SHA-256:${DIGEST_HEX.uppercase()}",
+                                        // A 7.x-era SHA-1 digest, without the algorithm.
+                                        "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6",
+                                        DIGEST_HEX,
+                                        "SHA-1:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6",
+                                        "SHA-256:${DIGEST_HEX}a",
+                                        "",
+                                    ),
                                 ),
                                 required = true,
-                                description = "The store's digest of the parent: the address of its revision record.",
+                                description = "The store's SHA-256 digest of the parent, with its algorithm: the address of its revision record.",
                             ),
                         ),
                     ),
@@ -480,7 +489,8 @@ internal object PolicyDocumentFormats {
     )
 }
 
-private const val DIGEST = "^[0-9a-f]{40}$"
+private const val DIGEST = SnapshotDigest.PATTERN
+private const val DIGEST_HEX = "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"
 
 private fun dateTime(vararg examples: String) = StringType(
     pattern = FormatPatterns.DATE_TIME,

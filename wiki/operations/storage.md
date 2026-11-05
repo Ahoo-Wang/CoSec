@@ -33,9 +33,9 @@ tokens, shadow-window reports and rate-limit counters. Each instance keeps an in
 ### Redis is the store of record
 
 The documents and the control plane's records have no other copy: no database behind them, no loader that could fill
-a cache miss. What Redis holds is what every instance decides with. Three rules follow, and CoSec applies them after
-any CoCache customizer or `cocache.*` property, so no configuration can weaken them
-([Precedence](./configuration.md#precedence)):
+a cache miss. What Redis holds is what every instance decides with, so they are CoCache `Store`s. Three rules follow,
+and CoSec locks and constrains them over any CoCache customizer or `cocache.*` property, so no configuration can weaken
+them ([Precedence](./configuration.md#precedence)):
 
 - **Nothing expires.** Documents and control-plane records are written without a TTL. An expiry would silently delete
   a document, and a deleted DENY widens access.
@@ -54,7 +54,7 @@ contain `:`, so a key names one document only.
 | Key | Written by | Contents |
 |---|---|---|
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
-| `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest |
+| `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
 | `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
@@ -77,9 +77,12 @@ contain `:`, so a key names one document only.
   application gives the membership cache (`cosec` by default), each with a trailing `:` removed. They do **not**
   follow `<s>`. The rate limiter's prefix `cosec:rate-limiter` is fixed. When several deployments share one Redis, give
   each its own prefixes, and its own rate-limit rule ids.
-- Every key except the rate-limit counters and the API keys is a CoCache value. Each CoCache namespace has its own
-  invalidation channel, `cocache:inv:<namespace>` (for example `cocache:inv:cosec:snapshot`), so deployments with
-  different prefixes stay apart on one Redis.
+- Every key except the rate-limit counters and the API keys is a CoCache 8 value. CoCache splits each key path at its
+  last `:` before the entry: `<s>:control:revision` is the key prefix `<s>:control:` and the namespace `revision`.
+  Each one has its own invalidation channel, `{key prefix}inv:{namespace}`: `<s>:inv:snapshot`, `<s>:inv:candidate`,
+  `<s>:control:inv:revision`, `<s>:shadow:inv:report`, `<c>:token:inv:revoked`, `<c>:token:subject:inv:revoked`,
+  `<m>:inv:membership`. A channel sits under the same prefix as its keys, so deployments with different prefixes stay
+  apart on one Redis, and an ACL rule on `<s>:control:*` covers both the control plane's keys and its channels.
 
 ### Redis requirements
 
@@ -87,15 +90,23 @@ contain `:`, so a key names one document only.
   policy Redis can evict a document: an instance that had it installed fails closed, but an instance that loads it
   afterwards reads an evicted app or tenant document as absent, so its DENY statements silently stop applying. Use
   `noeviction` and size Redis for the data.
-- **The startup check.** With the Redis backend, each instance reads every node's `maxmemory-policy` at startup from
-  `INFO memory`, which managed Redis services usually allow where they block `CONFIG`. A node that is not
-  `noeviction`, an `INFO` that fails or is denied, or a CoCache backend the check cannot see into (a wrapper, a custom
-  backend) fails startup by default. A Redis that denies `INFO` while you have set `noeviction` yourself needs
-  [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot): the instance starts and logs a
-  `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
+- **The startup checks.** With the Redis backend, each instance reads every node's `maxmemory-policy` at startup from
+  `INFO memory`, which managed Redis services usually allow where they block `CONFIG`. Two checks read it:
+  - CoSec's own (`SNP-3`): a node that is not `noeviction`, an `INFO` that fails or is denied, or a CoCache backend the
+    check cannot see into (a wrapper, a custom backend) fails startup by default. A Redis that denies `INFO` while you
+    have set `noeviction` yourself needs
+    [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot): the instance starts and logs a
+    `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
+  - CoCache's, for its `Store`s, which CoSec's documents and records are: an `allkeys-*` policy always fails startup,
+    and so does an `INFO` it cannot read, whatever `eviction-check` says. With a Redis that denies `INFO`, also set
+    [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) to the policy you have set (`noeviction`).
 - **Redis client.** CoCache builds its own Lettuce client from `spring.data.redis.*`; the versions, topologies and
-  ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The startup check
-  needs `INFO` (`+info`), which CoCache's list includes.
+  ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The startup checks
+  need `INFO` (`+info`), which CoCache's list includes. Channels follow the key prefixes: allow `&<s>:*` (and `&<c>:*`,
+  `&<m>:*` when those prefixes differ), or each `&{key prefix}inv:*` above. With
+  `cocache.redis.channel-mode: pubsub`, also allow CoCache's probe, `~cocache:!probe:*` and `&cocache:!probe:*`, which
+  does not follow the prefix. Each cache publishes an empty frame to its channel when it is created, so a missing
+  channel permission fails startup, naming the pattern to allow.
 
 ### Who may write which keys
 

@@ -30,8 +30,8 @@ import java.util.Collections
 
 /**
  * Memberships Cache (RFC 0006 §5.5.2): the memberships a [MembershipLoader] answered, keyed by [key], read by
- * [CoCacheMembershipProvider]. Not the store of record: entries expire, but a failed read throws (see
- * [CoSecCacheSpecs.membership]).
+ * [CoCacheMembershipProvider] with the loader on each call (an externally sourced CoCache `Cache`). Not the store of
+ * record: entries expire, but a failed read throws (see [CoSecCacheSpecs.membership]).
  */
 interface MembershipCache : Cache<String, Memberships> {
     companion object {

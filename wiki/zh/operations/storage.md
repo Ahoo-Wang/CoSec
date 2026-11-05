@@ -30,8 +30,8 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 ### Redis 是权威存储 {#redis-is-the-store-of-record}
 
 文档和控制面的记录没有其他副本：背后没有数据库，也没有能在缓存未命中时补上数据的 loader。Redis 里有什么，每个实例就
-用什么做决策。由此有三条规则，CoSec 在任何 CoCache 定制器或 `cocache.*` 配置项之后应用它们，因此任何配置都无法削弱
-它们（[优先级](./configuration.md#precedence)）：
+用什么做决策，因此它们是 CoCache 的 `Store`。由此有三条规则，CoSec 在任何 CoCache 定制器或 `cocache.*` 配置项之上
+锁定并约束它们，因此任何配置都无法削弱它们（[优先级](./configuration.md#precedence)）：
 
 - **永不过期。** 文档和控制面记录写入时不带 TTL。过期会悄悄删除一个文档，而删掉的 DENY 会放宽访问。
 - **读取失败就是失败。** Redis 读取失败绝不会变成"没有文档"（[Redis 不可用时](#when-redis-is-unavailable)）。
@@ -47,7 +47,7 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | Key | 写入者 | 内容 |
 |---|---|---|
 | `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订 |
-| `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址 |
+| `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址（`SHA-256:` 加 64 位十六进制，与 CoCache 的计算相同） |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引 |
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目 |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它 |
@@ -69,8 +69,12 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
   [`cosec.api-key.key-prefix`](./configuration.md#api-keys)（`cosec:api-key`），`<m>` 是应用给成员关系缓存的前缀
   （默认 `cosec`），都去掉末尾的 `:`。它们 **不** 跟随 `<s>`。限流器的前缀 `cosec:rate-limiter` 是固定的。多个部署共用
   一个 Redis 时，给每个部署各自的前缀以及各自的限流规则 id。
-- 除限流计数器和 API key 以外，每个 key 都是 CoCache 值。每个 CoCache 命名空间有自己的失效通道
-  `cocache:inv:<namespace>`（例如 `cocache:inv:cosec:snapshot`），所以前缀不同的部署在同一个 Redis 上互不干扰。
+- 除限流计数器和 API key 以外，每个 key 都是 CoCache 8 的值。CoCache 在条目之前最后一个 `:` 处拆分每个 key 路径：
+  `<s>:control:revision` 是 key 前缀 `<s>:control:` 加命名空间 `revision`。每一个都有自己的失效通道
+  `{key 前缀}inv:{命名空间}`：`<s>:inv:snapshot`、`<s>:inv:candidate`、`<s>:control:inv:revision`、
+  `<s>:shadow:inv:report`、`<c>:token:inv:revoked`、`<c>:token:subject:inv:revoked`、`<m>:inv:membership`。通道与它的
+  key 在同一个前缀下，所以前缀不同的部署在同一个 Redis 上互不干扰，而针对 `<s>:control:*` 的一条 ACL 规则同时覆盖控制面
+  的 key 和通道。
 
 ### Redis 要求 {#redis-requirements}
 
@@ -78,12 +82,21 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
   可能驱逐一个文档：已经装入它的实例会失败即拒绝，但之后才加载它的实例会把被驱逐的应用文档或租户文档读成不存在，于是
   其中的 DENY 语句悄悄失效。使用 `noeviction`，并按数据量规划 Redis 的容量。
 - **启动检查。** 使用 Redis 后端时，每个实例在启动时从 `INFO memory` 读取每个节点的 `maxmemory-policy`；托管 Redis
-  通常禁用 `CONFIG`，但允许 `INFO`。某个节点不是 `noeviction`、`INFO` 失败或被拒绝、或者 CoCache 后端无法被检查看穿
-  （包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
-  [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
-  `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
+  通常禁用 `CONFIG`，但允许 `INFO`。有两个检查读取它：
+  - CoSec 自己的检查（`SNP-3`）：某个节点不是 `noeviction`、`INFO` 失败或被拒绝、或者 CoCache 后端无法被检查看穿
+    （包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
+    [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
+    `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
+  - CoCache 针对其 `Store` 的检查，CoSec 的文档和记录都是 `Store`：`allkeys-*` 策略总是使启动失败，读不到 `INFO`
+    同样如此，与 `eviction-check` 无关。Redis 拒绝 `INFO` 时，还要把
+    [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) 设为你设置的策略
+    （`noeviction`）。
 - **Redis 客户端。** CoCache 根据 `spring.data.redis.*` 构建自己的 Lettuce 客户端；它需要的版本、拓扑和 ACL 命令见
   [CoCache 文档](https://cocache.ahoo.me/operations/#acl)。启动检查需要 `INFO`（`+info`），CoCache 列出的命令已包含它。
+  通道跟随 key 前缀：允许 `&<s>:*`（`<c>`、`<m>` 与之不同时再加 `&<c>:*`、`&<m>:*`），或上面的每个
+  `&{key 前缀}inv:*`。使用 `cocache.redis.channel-mode: pubsub` 时，还要允许 CoCache 的探测
+  `~cocache:!probe:*` 和 `&cocache:!probe:*`，它不跟随前缀。每个缓存在创建时向自己的通道发布一个空帧，所以缺少通道权限
+  会使启动失败，并指出需要允许的模式。
 
 ### 谁可以写哪些 key {#who-may-write-which-keys}
 
