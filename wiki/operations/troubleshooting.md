@@ -427,7 +427,7 @@ The periodic revalidation is the only bound on a document change whose invalidat
 cannot be off or unbounded. The message says which bound the value breaks: at least 1 second (each pass reads every
 installed document from Redis), at most 5 minutes, less than `lag-warn`, and with `fail-closed.tenants` less than
 `fail-closed.max-lag`
-([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on large documents, raise it within those
+([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 
 ### Startup fails on a removed key prefix

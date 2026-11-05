@@ -207,17 +207,17 @@ sequenceDiagram
 
 ### What revalidation costs Redis
 
-A conditional read hashes the whole stored document on Redis's main thread to compare digests, so an unchanged document
-still costs Redis time in proportion to its size: about 12 µs at 1 KiB, 0.4 ms at 128 KiB, 2.9 ms at 1 MiB and 12 ms at
-4 MiB, and while a node hashes, it runs no other command
-([measurement](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)). The load on a node is
-about instances × the cost of every document each holds ÷ `revalidate-interval`: 100 instances revalidating a 1 MiB
-platform document every 10 seconds take about 3 % of it.
+A conditional read compares the digest CoCache 8 keeps in the stored value's header and transfers nothing when the
+document is unchanged, so its cost does not depend on the document's size: about 7 to 13 µs of Redis time per document,
+from 1 KiB to 4 MiB ([measurement](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)).
+The load on a node is about instances × documents each holds × that cost ÷ `revalidate-interval`: 100 instances
+revalidating 10 documents every 10 seconds take about 0.1 % of it.
 
-- Raise [`revalidate-interval`](./configuration.md#snapshot), at most 5 minutes and below `lag-warn` (raise that too):
-  the cost falls in proportion, and an instance that missed an invalidation message catches up as much later.
-- Keep the platform document small. Every instance holds it; tenant-specific policies belong in tenant documents, which
-  only the instances serving the tenant hold.
+- Raise [`revalidate-interval`](./configuration.md#snapshot), at most 5 minutes and below `lag-warn` (raise that too),
+  only when the number of documents makes even that cost matter: an instance that missed an invalidation message catches
+  up as much later.
+- Keep the platform document small anyway. Every instance holds it, and a changed document is read whole; tenant-specific
+  policies belong in tenant documents, which only the instances serving the tenant hold.
 
 ## When Redis is unavailable
 

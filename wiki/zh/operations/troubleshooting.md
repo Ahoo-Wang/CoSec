@@ -353,7 +353,7 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 ```
 
 失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：至少 1 秒（每一轮都从 Redis 读取每个已安装的文档）、不超过
-5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。要为大文档节省
+5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
 
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}

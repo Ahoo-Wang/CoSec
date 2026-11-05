@@ -175,14 +175,14 @@ sequenceDiagram
 
 ### 重新确认在 Redis 上的开销 {#what-revalidation-costs-redis}
 
-条件读在 Redis 主线程上对整份已存储的文档做哈希来比较摘要，所以即使文档没有变化，Redis 花费的时间也与文档大小成正比：1 KiB
-约 12 µs，128 KiB 约 0.4 ms，1 MiB 约 2.9 ms，4 MiB 约 12 ms；节点做哈希时不执行其他任何命令
-（[测量](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)）。一个节点上的负载约为
-实例数 × 每个实例持有的全部文档的开销 ÷ `revalidate-interval`：100 个实例每 10 秒确认一份 1 MiB 的平台文档，约占它的 3%。
+条件读只比较 CoCache 8 保存在值头部的摘要，文档没有变化时不传输任何内容，所以它的开销与文档大小无关：从 1 KiB 到 4 MiB，
+每份文档约 7 到 13 µs 的 Redis 时间（[测量](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)）。
+一个节点上的负载约为实例数 × 每个实例持有的文档数 × 该开销 ÷ `revalidate-interval`：100 个实例每 10 秒确认 10 份文档，
+约占它的 0.1%。
 
-- 调大 [`revalidate-interval`](./configuration.md#snapshot)，最长 5 分钟且小于 `lag-warn`（也一起调大）：开销按比例下降，
-  错过失效消息的实例也晚同样的时间才跟上。
-- 让平台文档保持小巧。每个实例都持有它；租户特有的策略属于租户文档，只有服务该租户的实例才持有。
+- 只有当文档数量多到连这一开销都要紧时，才调大 [`revalidate-interval`](./configuration.md#snapshot)，最长 5 分钟且小于
+  `lag-warn`（也一起调大）：错过失效消息的实例也晚同样的时间才跟上。
+- 仍然让平台文档保持小巧。每个实例都持有它，而变化了的文档要整份读取；租户特有的策略属于租户文档，只有服务该租户的实例才持有。
 
 ## Redis 不可用时 {#when-redis-is-unavailable}
 
