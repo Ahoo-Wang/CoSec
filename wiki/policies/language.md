@@ -241,11 +241,12 @@ costs as much as a part. A segment after a leading `**` is tried against two seg
 variable is matched and then captured: hence they count twice. The bounds are fixed in 8.0. On the data plane a stored
 document over them is installed as failed, so the requests that read it fail closed.
 
-Each policy is evaluated at most once per pass for each document that binds it, however many of its bindings apply
-(`ALG-9`). So the budget bounds what matching one document's patterns costs a request: a document that spends all of it
-on patterns that are candidates for every path costs about 0.45 ms per request at worst, for a path segment of 256
-characters, the longest the pipeline accepts, and allocates at most about 45 KB, the captured values
-(`GlobBoundBenchmark`, its worst inputs, on a CI runner). A shadow window evaluates its candidate document as well,
+Each policy is evaluated at most once per pass for each document that binds it, plus one evaluation for the
+attachments, however many of its bindings apply (`ALG-9`). So the budget bounds what matching one document's patterns
+costs a request: a document that spends all of it on patterns that are candidates for every path costs about 0.45 ms
+per request at worst, and about twice that when its policies are attached as well, for a path segment of 256
+characters, the longest the pipeline accepts (`GlobBoundBenchmark`, its worst inputs, on a CI runner). It allocates the
+values it captures: about 0.25 MB per request with ASCII values, and about 0.6 MB with values outside Latin-1. A shadow window evaluates its candidate document as well,
 within a budget of its own.
 
 ## Path variables

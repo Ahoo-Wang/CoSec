@@ -88,7 +88,7 @@ A policy that several bindings of one document reach is evaluated once per pass,
 order, and a policy claimed twice among the attachments is attached once (`ALG-9`): its statements give the same
 results through every binding, so the later ones could change nothing. The first one reports the match, or records the
 error. So many bindings of a policy cost no more than one, and a policy costs a pass at most one evaluation for each
-document that binds it.
+document that binds it, plus one evaluation for the attachments.
 
 ### Policy conditions
 

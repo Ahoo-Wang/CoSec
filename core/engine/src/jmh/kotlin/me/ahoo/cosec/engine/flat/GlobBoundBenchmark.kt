@@ -58,7 +58,10 @@ import org.openjdk.jmh.annotations.State
  *   sits at the start, which made the backtracking this replaced give up every end of every run: 232 ms per request.
  * - `bindings`: `captures`, its policy bound 64 times (review M1): each pass evaluates it once (`ALG-9`).
  *
- * The conditions read `resource.var.v` and are false, or, for `literal`, read the device id and are false.
+ * The conditions read `resource.var.v` and are false, or, for `literal`, read the device id and are false. These inputs
+ * are the worst in time; they allocate at most about 45 KB. In allocation the worst is the smallest capturing glob,
+ * `{v}a`, at three units: about 0.25 MB per request with ASCII values and about 0.6 MB with values outside Latin-1, the
+ * captured values (review round 2 of #1200), in at most about `literal`'s time.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class GlobBoundBenchmark {
