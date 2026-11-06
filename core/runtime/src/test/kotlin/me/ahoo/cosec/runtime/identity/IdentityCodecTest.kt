@@ -188,7 +188,11 @@ class IdentityCodecTest {
             BigDecimal("1E400"),
             AtomicInteger(7),
         ).forEach { value ->
-            assertThrows<IdentityOverflowException> { IdentityCodec.encode(identity.copy(claims = mapOf("n" to value))) }
+            assertThrows<IdentityOverflowException> {
+                IdentityCodec.encode(
+                    identity.copy(claims = mapOf("n" to value))
+                )
+            }
         }
     }
 }

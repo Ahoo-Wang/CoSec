@@ -196,24 +196,24 @@ object IdentityCodec {
      * refused rather than rounded: no other `Number` is converted, since its value could change on the way.
      */
     private fun number(claims: ObjectNode, name: String, value: Number) {
-        when (value) {
-            is Int, is Long, is Short, is Byte -> claims.put(name, value.toLong())
-            is BigInteger -> claims.put(name, if (value.bitLength() < Long.SIZE_BITS) value.toLong() else throw inexact(name, value))
-            is Double, is Float -> claims.put(name, value.toDouble().takeIf { it.isFinite() } ?: throw inexact(name, value))
-            is BigDecimal -> claims.put(name, exactDouble(value) ?: throw inexact(name, value))
+        when (val exact = exactly(value)) {
+            is Long -> claims.put(name, exact)
+            is Double -> claims.put(name, exact)
             else -> throw IdentityOverflowException(
-                "Claim [$name] is a ${value::class.simpleName}, not a number the identity header holds."
+                "Claim [$name] is ${value::class.simpleName} $value, which the identity header cannot hold exactly."
             )
         }
     }
 
-    /** [value] as a `Double`, when that is finite and its shortest decimal is [value]; null otherwise. */
-    private fun exactDouble(value: BigDecimal): Double? =
-        value.toDouble().takeIf { it.isFinite() && BigDecimal.valueOf(it).compareTo(value) == 0 }
-
-    private fun inexact(name: String, value: Number) = IdentityOverflowException(
-        "Claim [$name] is ${value::class.simpleName} $value, which the identity header cannot hold exactly."
-    )
+    /** [value] as the `Long` or the `Double` the header holds it as; null when it cannot hold it exactly. */
+    private fun exactly(value: Number): Number? = when (value) {
+        is Int, is Long, is Short, is Byte -> value.toLong()
+        is BigInteger -> if (value.bitLength() < Long.SIZE_BITS) value.toLong() else null
+        is Double, is Float -> value.toDouble().takeIf { it.isFinite() }
+        // Its shortest decimal, which is what the header writes, must be the same number.
+        is BigDecimal -> value.toDouble().takeIf { it.isFinite() && BigDecimal.valueOf(it).compareTo(value) == 0 }
+        else -> null
+    }
 
     private fun roles(node: JsonNode): Set<String> {
         if (!node.isArray) throw malformed("$.roles is not an array")

@@ -39,7 +39,11 @@ class BoundaryAttributePlanTest {
     private val compiler = PolicyCompiler(ConditionChecker(catalog = AttributeCatalog.of(listOf(inFence, country))))
 
     /** Anyone may do anything: no policy reads an external attribute, only the boundary does. */
-    private val allowAll = compiler.compile(PolicyId("all"), null, listOf(StatementSource("s", Effect.ALLOW, listOf("*"))))
+    private val allowAll = compiler.compile(
+        PolicyId("all"),
+        null,
+        listOf(StatementSource("s", Effect.ALLOW, listOf("*")))
+    )
     private val permit = Decision.Permit(StatementRef.Policy(PolicyId("all"), 0, "s", bound("g")))
 
     private fun boundary(
@@ -57,9 +61,19 @@ class BoundaryAttributePlanTest {
     private fun inFence(value: Boolean) = Condition.Eq(inFence.path, Literal.Bool(value))
 
     private fun platform(vararg boundaries: CompiledPolicy, default: String?) =
-        CompiledDocument.platform(listOf(allowAll), listOf(anyone("g", "all")), emptyList(), boundaries.toList(), default)
+        CompiledDocument.platform(
+            listOf(allowAll),
+            listOf(anyone("g", "all")),
+            emptyList(),
+            boundaries.toList(),
+            default
+        )
 
-    private fun view(platform: CompiledDocument, tenant: CompiledDocument = tenant()) = SnapshotView(platform, null, tenant)
+    private fun view(platform: CompiledDocument, tenant: CompiledDocument = tenant()) = SnapshotView(
+        platform,
+        null,
+        tenant
+    )
 
     private fun plan(view: SnapshotView, request: FlatRequest = flatRequest()): List<String> =
         CoSecFlatEngine.plan(request, view).attributes.map { it.path }
@@ -121,7 +135,9 @@ class BoundaryAttributePlanTest {
         val platformTenant = flatRequest(tenant = TenantId.PLATFORM.value)
         plan(view(platform, tenant(tenant = TenantId.PLATFORM.value)), platformTenant).assert().isEmpty()
         // A boundary statement for other actions is not the request's either.
-        plan(view(platform(boundary("orders", inFence(true), action = "order:*"), default = "orders"))).assert().isEmpty()
+        plan(
+            view(platform(boundary("orders", inFence(true), action = "order:*"), default = "orders"))
+        ).assert().isEmpty()
     }
 
     @Test

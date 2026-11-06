@@ -91,7 +91,8 @@ class ReactiveRedisRateLimiterTest {
     fun aRuleIdThatWouldEmptyTheHashTagIsRefused() {
         val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
         assertThrows<IllegalArgumentException> { limiter.keysOf("}rule", "global", 1) }
-        assertThrows<IllegalArgumentException> { runBlocking { limiter.tryAcquire("}rule", "global", RateLimitSpec(1.0)) } }
+        val refused = runBlocking { runCatching { limiter.tryAcquire("}rule", "global", RateLimitSpec(1.0)) } }
+        refused.exceptionOrNull().assert().isInstanceOf(IllegalArgumentException::class.java)
     }
 
     @Test

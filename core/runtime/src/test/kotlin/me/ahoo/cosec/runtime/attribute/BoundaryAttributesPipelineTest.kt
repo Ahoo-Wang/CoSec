@@ -60,7 +60,11 @@ class BoundaryAttributesPipelineTest {
     }
 
     /** Anyone may do anything; the default boundary [FENCE] holds tenants to the fence, `open` holds nothing back. */
-    private class Views(compiler: PolicyDocumentCompiler, fenceOnMissing: String?, tenantBoundary: String?) : SnapshotViews {
+    private class Views(
+        compiler: PolicyDocumentCompiler,
+        fenceOnMissing: String?,
+        tenantBoundary: String?
+    ) : SnapshotViews {
         private val platform = compiler.compile(
             SnapshotKey.Platform,
             document(

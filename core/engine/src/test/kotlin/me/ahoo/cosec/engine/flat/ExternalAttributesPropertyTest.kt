@@ -89,7 +89,8 @@ class ExternalAttributesPropertyTest {
     private fun boundary(random: Random, id: String): CompiledPolicy {
         val statements = List(random.nextInt(1, 3)) {
             val condition = if (random.nextInt(4) == 0) null else condition(random)
-            val onMissing = if (condition == null || !readsExternal(condition)) null else OnMissing.entries.random(random)
+            val external = condition != null && readsExternal(condition)
+            val onMissing = if (external) OnMissing.entries.random(random) else null
             val action = if (random.nextInt(5) == 0) "svc:verb" else "*"
             StatementSource("s$it", Effect.ALLOW, listOf(action), condition = condition, onMissing = onMissing)
         }

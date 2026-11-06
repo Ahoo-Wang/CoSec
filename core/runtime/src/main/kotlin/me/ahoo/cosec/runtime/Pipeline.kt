@@ -22,6 +22,7 @@ import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.engine.flat.AttributePlan
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
@@ -685,18 +686,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         if (plan.isEmpty) {
             return
         }
-        var groups: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? = null
-        for (attribute in plan.attributes) {
-            val path = attribute.path
-            if (fetched.asked(path)) {
-                continue
-            }
-            val registered = attributes.registered(path) ?: continue
-            val names = (groups ?: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>().also { groups = it })
-                .getOrPut(registered) { LinkedHashSet() }
-            names += path
-        }
-        val asked = groups ?: return
+        val asked = unasked(plan, fetched) ?: return
         val stageB = attributeRequest(request, request.scope)
         // Only a check gets here with a stage-A provider: a request's stage A asked for all of them already.
         val stageA = if (everyStage) attributeRequest(request, null) else stageB
@@ -714,6 +704,25 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             }.map { it.await() }
         }
         entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, answers[index]) }
+    }
+
+    /** The attributes of [plan] not asked for yet, by the provider that declares them; null when there are none. */
+    private fun unasked(
+        plan: AttributePlan,
+        fetched: FetchedAttributes,
+    ): LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? {
+        var groups: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? = null
+        for (attribute in plan.attributes) {
+            val path = attribute.path
+            if (fetched.asked(path)) {
+                continue
+            }
+            val registered = attributes.registered(path) ?: continue
+            val names = (groups ?: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>().also { groups = it })
+                .getOrPut(registered) { LinkedHashSet() }
+            names += path
+        }
+        return groups
     }
 
     private fun attributeRequest(request: FlatRequest, scope: Scope?) = AttributeRequest(
