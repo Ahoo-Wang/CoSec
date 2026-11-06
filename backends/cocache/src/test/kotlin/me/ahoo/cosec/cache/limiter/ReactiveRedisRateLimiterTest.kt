@@ -32,7 +32,8 @@ import kotlin.random.Random
 
 /**
  * RFC 0006 §8.4: the suspending Redis limiter counts atomically in Redis, against real Redis, in keys that keep a
- * bucket's two windows on one Redis Cluster slot (#1229); a failure is thrown. That it never blocks its caller is in `SnapshotStoreBlockHoundTest`.
+ * bucket's two windows on one Redis Cluster slot (`OBL-4`, #1229); a failure is thrown. That it never blocks its caller
+ * is in `SnapshotStoreBlockHoundTest`.
  */
 class ReactiveRedisRateLimiterTest {
     private val factory = connectionFactory("localhost", 6379)
@@ -74,14 +75,23 @@ class ReactiveRedisRateLimiterTest {
     @Test
     fun aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold() {
         val random = Random(1229)
-        val prefixes = listOf("cosec:rate-limiter", "{cosec}:rate-limiter", "a{b:rate-limiter", "a}b{c}:rl", "x{")
-        val rules = listOf("rule", "a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota")
-        repeat(2_000) {
+        val prefixes = listOf("cosec:rate-limiter", "{cosec}:rate-limiter", "a{b:rate-limiter", "a}b{c}:rl", "x{", "")
+        val rules = listOf("rule", "a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
+        fun text(length: Int) = (0 until length).map { BUCKET_CHARACTERS.random(random) }.joinToString("")
+        repeat(10_000) {
             val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefixes.random(random))
-            val bucket = (0 until random.nextInt(0, 8)).map { BUCKET_CHARACTERS.random(random) }.joinToString("")
-            val (current, previous) = limiter.keysOf(rules.random(random), bucket, random.nextLong(1, 1L shl 40))
-            SlotHash.getSlot(current).assert().isEqualTo(SlotHash.getSlot(previous))
+            // The engine's rule ids, or anything that does not begin with `}`.
+            val rule = if (random.nextBoolean()) rules.random(random) else text(random.nextInt(0, 6)).trimStart('}')
+            val (current, previous) = limiter.keysOf(rule, text(random.nextInt(0, 8)), random.nextLong(1, 1L shl 40))
+            SlotHash.getSlot(current).assert().describedAs("$current, $previous").isEqualTo(SlotHash.getSlot(previous))
         }
+    }
+
+    @Test
+    fun aRuleIdThatWouldEmptyTheHashTagIsRefused() {
+        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
+        assertThrows<IllegalArgumentException> { limiter.keysOf("}rule", "global", 1) }
+        assertThrows<IllegalArgumentException> { runBlocking { limiter.tryAcquire("}rule", "global", RateLimitSpec(1.0)) } }
     }
 
     @Test
@@ -98,7 +108,10 @@ class ReactiveRedisRateLimiterTest {
         }
     }
 
-    /** Opt-in, as the snapshot tests' cluster target: `COSEC_TEST_REDIS_CLUSTER_NODES=127.0.0.1:7000,...`. */
+    /**
+     * Opt-in, as the snapshot tests' cluster target: `COSEC_TEST_REDIS_CLUSTER_NODES=127.0.0.1:7101,...` names the nodes
+     * of a cluster with every slot assigned. Buckets of a platform, an app and a tenant rule, spread over its nodes.
+     */
     @Test
     fun countsOnARedisCluster() {
         val nodes = System.getenv("COSEC_TEST_REDIS_CLUSTER_NODES")
@@ -112,10 +125,12 @@ class ReactiveRedisRateLimiterTest {
             val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(cluster), prefix) { clock }
             val limit = RateLimitSpec(2.0)
             runBlocking {
-                (0 until 16).forEach { bucket ->
-                    limiter.tryAcquire("rule", "b$bucket", limit).remaining.assert().isEqualTo(1)
-                    limiter.tryAcquire("rule", "b$bucket", limit).remaining.assert().isZero()
-                    limiter.tryAcquire("rule", "b$bucket", limit).allowed.assert().isFalse()
+                for (rule in listOf("rule", "app:shop/quota", "tenant:acme/quota")) {
+                    (0 until 16).forEach { bucket ->
+                        limiter.tryAcquire(rule, "g:b$bucket", limit).remaining.assert().isEqualTo(1)
+                        limiter.tryAcquire(rule, "g:b$bucket", limit).remaining.assert().isZero()
+                        limiter.tryAcquire(rule, "g:b$bucket", limit).allowed.assert().isFalse()
+                    }
                 }
             }
         } finally {

@@ -64,9 +64,11 @@ class ReactiveRedisRateLimiter(
 
     /**
      * The keys of [bucket]'s current and previous window. They differ only after the hash tag, so they share a slot
-     * whatever the prefix, rule id and bucket hold: a `}` in the bucket ends the tag at the same place in both.
+     * whatever the prefix, rule id and bucket hold: a `}` in the rule id or the bucket ends the tag at the same place in
+     * both. Only a rule id that begins with `}` would empty the tag, and it is refused; the engine's never do (`OBL-4`).
      */
     internal fun keysOf(ruleId: String, bucket: String, windowIndex: Long): List<String> {
+        require(!ruleId.startsWith('}')) { "Rate limit rule id [$ruleId] would empty the counters' hash tag." }
         val base = "$keyPrefix:{$ruleId:$bucket}"
         return listOf("$base:$windowIndex", "$base:${windowIndex - 1}")
     }
