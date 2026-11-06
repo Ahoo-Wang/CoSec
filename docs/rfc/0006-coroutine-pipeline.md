@@ -533,6 +533,10 @@ class Pipeline internal constructor(/* 认证器、成员关系、快照、属�
   （与现在的 `SecurityDecision.responseHeaders` 相同）。
 - 503 **不带** `Retry-After`：CoSec 不知道依赖何时恢复（Q1）。需要的部署在网关层配置。
 
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：上表多了两种情形：
+> - **重复的请求头是 400（`PIP-12`，RC1-38）。** 一个请求把某个头发了多次且值不同，而视图读到的文档中有语句、策略条件、边界或限流规则的条件与 key 读这个头（`http.header.<name>`，或经 `http.origin`、`http.referer` 读 `Origin`、`Referer`）：管道在评估之前经 `StatusMapping` 答 400 `invalid-request`，不论语句的效果，也不论它是否适用于这个请求。每个 `CompiledDocument` 记下它读的头（`headersRead`，全部经 `ConditionChecker.attribute` 解析，所以从不含凭据头）。此前读这个头的 DENY 出错，决定为 Indeterminate 即 503，泄露了这条 DENY 的存在和它读的头。值相同的重复算一个值，没有文档读的头不检查。`PIP-9` 相应修订，它的 503 场景移到 `PIP-12`。`simulate` 与 `explain` 仍然评估这样的请求（答 Indeterminate），与执法一致的处理在 D2。
+> - **格式错误的令牌声明是 401（`PIP-6` 修订）。** `roles` 或 `policies` 为 null 或不是字符串数组、`attributes` 不是对象时，`Jwts.toPrincipal` 抛出 `TokenVerificationException`：按匿名评估，拒绝时答 401 `token-invalid`。此前是空指针，答 500（已是 fail closed）。
+
 ### 6.2 响应体
 
 > **2026-10-26 修订（Q27）**：本节重写。原文是"`AuthorizeResult` 这个类型在 PR-10 删除，响应体的形状保留（`{"authorized": false, "reason": "..."}`），`reason` 的取值换成
