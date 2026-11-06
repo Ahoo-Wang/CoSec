@@ -176,7 +176,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **A DENY's condition errored**, or the tenant's boundary statement errored. A DENY on `http.header.<name>` errors when
   the request sent that header more than once with different values (`Header [<name>] arrived with different
   values`); an ALLOW on it then does not match. One value repeated reads as that value.
-- **Rate limiter cannot count** and the matching rule has `strictFailure: true`.
+- **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
+  the log: see Rate limiting).
 - **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
   fails answers "not revoked" instead (the documented exception to fail closed).
@@ -276,6 +277,10 @@ header: anonymous. Otherwise never anonymous:
 - Denied requests never spend permits. A rule that never applies has a non-matching action (namespace), resource or
   condition. Rules count per document: an app's or tenant's rule has its own buckets.
 - A limiter failure skips the rule unless `strictFailure: true` (then 503, not 429).
+- On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
+  counters have no hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure` every permit is
+  503. Upgrade; counters are `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`. A `cosec.key-prefix` with
+  its own hash tag (`{cosec}`) puts every counter on one slot.
 
 ### Control-plane errors
 

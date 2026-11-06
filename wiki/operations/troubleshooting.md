@@ -156,6 +156,11 @@ to retry, and the audit `reasonCode` is `TOO_MANY_REQUESTS` ([Rate limiting](../
   per instance ([Rate limiting](./configuration.md#rate-limiting)).
 - **A rule never applies:** denied requests spend no permit, and a rule whose limiter fails is skipped
   (`Rate limiter unavailable: rule [<id>] is skipped.` at `WARN`) unless it is strict.
+- **No rule applies on a Redis Cluster**, and that `WARN` carries `CROSSSLOT Keys in request don't hash to the same
+  slot`: the instance runs a version whose counters have no hash tag (8.0.0-alpha.2 or earlier), so every call fails,
+  and a rule with `strictFailure` makes every permitted request `503` instead. Upgrade it
+  ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)). A `cosec.key-prefix` with a hash tag of its own, such as
+  `{cosec}`, puts every counter on one slot: it works, but one node counts for the whole deployment.
 
 ### `unavailable` {#unavailable}
 
@@ -172,8 +177,8 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). With `CoCacheMembershipProvider`, a `MembershipLoader` that does not answer within that time fails its load (`The membership loader did not answer within ...`), and the next request tries again. | Fix the provider or its store. |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | A statement needs an external attribute whose provider failed or timed out (`<provider> failed to fetch [...]` at `WARN`). | Fix the provider, or raise [`cosec.authorization.attributes.timeout`](./configuration.md#authorization). |
 | `INDETERMINATE: MatcherFailed` / `matcher` | A DENY statement's condition, or the condition of its policy, could not be evaluated. That includes a DENY on `http.header.<name>` when the request sent that header more than once with different values (`Header [<name>] arrived with different values; a condition on it cannot decide.`); the same header repeated with one value reads as that value. A failing ALLOW never makes a request `503`: an ALLOW on such a header does not match. | Fix the condition, or the client that sends the header twice. |
-| `INDETERMINATE: BoundaryUnavailable` / `boundary` | A statement of the tenant's boundary could not be evaluated for a permitted request. | Fix the boundary. |
-| `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). | Restore Redis, or drop `strictFailure`. |
+| `INDETERMINATE: BoundaryUnavailable` / `boundary` | A statement of the tenant's boundary could not be evaluated for a permitted request, for example because the provider of an external attribute it reads failed or timed out. | Fix the boundary or the provider. |
+| `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). With `CROSSSLOT` in that line, on every permitted request of a Redis Cluster, see [`too-many-requests`](#too-many-requests). | Restore Redis, or drop `strictFailure`. |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |

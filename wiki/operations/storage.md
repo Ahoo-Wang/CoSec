@@ -82,7 +82,7 @@ contain `:`, so a key names one document only.
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
-| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
+| `<s>:rate-limiter:{<ruleId>:<bucket>}:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows. `{...}` is a hash tag: a bucket's two windows share a Redis Cluster slot, so the script that reads both runs on a cluster |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
 
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
@@ -171,7 +171,10 @@ sequenceDiagram
 - **Lost messages are caught by revalidation** (steps 6 and 7): every
   [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) each installed document is confirmed with a
   conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. It is the only bound on a
-  change whose invalidation message was lost, so it cannot be turned off and is at most 5 minutes (`SNP-6`).
+  change whose invalidation message was lost, so it cannot be turned off and is at most 5 minutes (`SNP-6`). A pass
+  reads four documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the
+  interval, the next starts as soon as it ends, rather than add four more reads each interval. A pass held up only by
+  a compilation that does not end, having confirmed no document for 30 seconds, no longer holds back the next.
 - **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
   random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers it stays below the revalidate
