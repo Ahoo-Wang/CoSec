@@ -44,6 +44,9 @@ object GuardAllowlist {
             "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none",
             "cocache:StoredFormatTest#a duplicate key fails every stored format",
             "control:ControlHttpTest#a body with a duplicate key is refused",
+            "cocache:ReactiveRedisRateLimiterTest#aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold",
+            "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
+            "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",
         ),
         "startup" to setOf(
             "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
@@ -71,6 +74,8 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",
             "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
             "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy",
+            "runtime:SnapshotRevalidationTest#aPeriodicPassNeverOverlapsAnotherAndTheOneItOwesFollowsIt",
+            "runtime:SnapshotRevalidationTest#aPassHeldOnlyByACompilationDoesNotHoldBackTheNext",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
             "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
             "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
