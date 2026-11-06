@@ -27,6 +27,8 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectReader
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.time.Instant
 import java.util.Base64
 
@@ -180,14 +182,38 @@ object IdentityCodec {
                 claims.put(name, value)
             }
             is Boolean -> claims.put(name, value)
-            is Int -> claims.put(name, value)
-            is Long -> claims.put(name, value)
-            is Double -> claims.put(name, value)
+            is Number -> number(claims, name, value)
             else -> throw IdentityOverflowException(
                 "Claim [$name] is a ${value::class.simpleName}, not a string, number or boolean."
             )
         }
     }
+
+    /**
+     * A number claim as the header's JSON holds it, which a service reads back as a `Long` or a `Double` (#1228): the
+     * standard integer types, and a `BigInteger` within a `Long`, as an integer; a finite `Float` or `Double`, and a
+     * `BigDecimal` that a `Double` holds exactly (its shortest decimal is the same number), as a number. Anything else is
+     * refused rather than rounded: no other `Number` is converted, since its value could change on the way.
+     */
+    private fun number(claims: ObjectNode, name: String, value: Number) {
+        when (value) {
+            is Int, is Long, is Short, is Byte -> claims.put(name, value.toLong())
+            is BigInteger -> claims.put(name, if (value.bitLength() < Long.SIZE_BITS) value.toLong() else throw inexact(name, value))
+            is Double, is Float -> claims.put(name, value.toDouble().takeIf { it.isFinite() } ?: throw inexact(name, value))
+            is BigDecimal -> claims.put(name, exactDouble(value) ?: throw inexact(name, value))
+            else -> throw IdentityOverflowException(
+                "Claim [$name] is a ${value::class.simpleName}, not a number the identity header holds."
+            )
+        }
+    }
+
+    /** [value] as a `Double`, when that is finite and its shortest decimal is [value]; null otherwise. */
+    private fun exactDouble(value: BigDecimal): Double? =
+        value.toDouble().takeIf { it.isFinite() && BigDecimal.valueOf(it).compareTo(value) == 0 }
+
+    private fun inexact(name: String, value: Number) = IdentityOverflowException(
+        "Claim [$name] is ${value::class.simpleName} $value, which the identity header cannot hold exactly."
+    )
 
     private fun roles(node: JsonNode): Set<String> {
         if (!node.isArray) throw malformed("$.roles is not an array")

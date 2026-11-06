@@ -19,8 +19,11 @@ import me.ahoo.cosec.spi.identity.IdentityOverflowException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.time.Instant
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 
 /** The `CoSec-Identity` header, format v1: what a gateway writes is what a service reads, and nothing else is read. */
 class IdentityCodecTest {
@@ -143,6 +146,49 @@ class IdentityCodecTest {
             IdentityCodec.encode(
                 identity.copy(claims = mapOf("groups" to listOf("a")))
             )
+        }
+    }
+
+    /** #1228: a standard number type travels as the number it holds, when the header's numbers hold it exactly. */
+    @Test
+    fun `standard numbers are forwarded when the header holds them exactly`() {
+        val integers = mapOf(
+            "byte" to 7.toByte(),
+            "short" to (-7).toShort(),
+            "int" to 7,
+            "long" to Long.MIN_VALUE,
+            "big" to BigInteger.valueOf(Long.MAX_VALUE),
+        )
+        IdentityCodec.decode(IdentityCodec.encode(identity.copy(claims = integers))).claims.assert().isEqualTo(
+            mapOf("byte" to 7L, "short" to -7L, "int" to 7L, "long" to Long.MIN_VALUE, "big" to Long.MAX_VALUE)
+        )
+        val decimals = mapOf(
+            // A float widens to a double exactly: what travels is the float's own value.
+            "float" to 0.1f,
+            "double" to 1.25,
+            "decimal" to BigDecimal("19.990"),
+            "whole" to BigDecimal("7"),
+        )
+        IdentityCodec.decode(IdentityCodec.encode(identity.copy(claims = decimals))).claims.assert().isEqualTo(
+            mapOf("float" to 0.1f.toDouble(), "double" to 1.25, "decimal" to 19.99, "whole" to 7.0)
+        )
+    }
+
+    /** #1228: a number the header cannot hold exactly is refused at the gateway, never rounded or sent as text. */
+    @Test
+    fun `a number the header cannot hold exactly is not forwarded`() {
+        listOf(
+            BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE),
+            BigInteger.valueOf(Long.MIN_VALUE).subtract(BigInteger.ONE),
+            Double.NaN,
+            Double.POSITIVE_INFINITY,
+            Float.NEGATIVE_INFINITY,
+            Float.NaN,
+            BigDecimal("0.12345678901234567890"),
+            BigDecimal("1E400"),
+            AtomicInteger(7),
+        ).forEach { value ->
+            assertThrows<IdentityOverflowException> { IdentityCodec.encode(identity.copy(claims = mapOf("n" to value))) }
         }
     }
 }
