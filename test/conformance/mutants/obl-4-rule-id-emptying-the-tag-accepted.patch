@@ -1,0 +1,16 @@
+# Rule: OBL-4
+# Mutant: a rule id that begins with '}' is counted
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt
+index 22d42bae..e264f893 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt
+@@ -68,7 +68,6 @@ class ReactiveRedisRateLimiter(
+      * both. Only a rule id that begins with `}` would empty the tag, and it is refused; the engine's never do (`OBL-4`).
+      */
+     internal fun keysOf(ruleId: String, bucket: String, windowIndex: Long): List<String> {
+-        require(!ruleId.startsWith('}')) { "Rate limit rule id [$ruleId] would empty the counters' hash tag." }
+         val base = "$keyPrefix:{$ruleId:$bucket}"
+         return listOf("$base:$windowIndex", "$base:${windowIndex - 1}")
+     }

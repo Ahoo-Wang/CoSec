@@ -1,0 +1,17 @@
+# Rule: SNP-6
+# Mutant: a pass held only by a compilation that never ends holds back every later pass
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 593a7b06..c3bcca84 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -628,7 +628,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+             progressedAt = clock.instant()
+         }
+ 
+-        fun stalledAt(now: Instant): Boolean = Duration.between(progressedAt, now) > options.storeReadTimeout
++        fun stalledAt(now: Instant): Boolean = false
+ 
+         fun abandon(successor: Pass) {
+             abandoned = true

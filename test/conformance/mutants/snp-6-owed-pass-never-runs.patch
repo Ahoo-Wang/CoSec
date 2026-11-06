@@ -1,0 +1,17 @@
+# Rule: SNP-6
+# Mutant: the pass a tick owed is made but never run, so every later tick only owes one
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 593a7b06..e69011e7 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -610,7 +610,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+                 owed = null
+                 Pass(clock.instant(), waiting).also { current = it }
+             }
+-            run(next)
++            next.progressed()
+         }
+     }
+ 
