@@ -67,7 +67,8 @@ import java.util.function.LongSupplier
  * - Installed documents are revalidated every [SnapshotOptions.revalidateInterval] with a conditional read of the store
  *   of record, so a document's lag (time since the store last confirmed it) is bounded while the store is reachable.
  *   The pass always runs: it is the only bound on a change whose invalidation was lost, or whose reload failed
- *   (`SNP-6`, RC1-50).
+ *   (`SNP-6`, RC1-50). One pass runs at a time: an interval that ends while a pass is in flight starts the next as soon
+ *   as that one ends, so a slow store never sees more than [SnapshotOptions.reloadConcurrency] of its reads (#1215).
  *
  * Only a key never seen by this source is cold-loaded with [SnapshotDocumentStore.read], which may answer from a local
  * copy. That install counts as confirmed [SnapshotDocumentStore.localCopyMaxAge] before the read, the oldest the copy can
@@ -159,6 +160,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
     private val subscription: AutoCloseable = store.subscribe(ChangeListener())
+    private val passes = PeriodicPasses()
     private val periodic: ScheduledFuture<*> = schedulePeriodic()
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
@@ -386,10 +388,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = (!ownsScheduler || scheduler.isTerminated) && housekeeping.isTerminated &&
             (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
 
-    /** One periodic pass: report lag, then revalidate. */
+    /**
+     * One periodic tick: report lag, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future completes
+     * when a pass that started after this call has ended.
+     */
     internal fun tick(): CompletableFuture<Void> {
         reportLag()
-        return revalidate()
+        return passes.tick()
     }
 
     /** Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval]. */
@@ -488,9 +493,14 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /**
      * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. Each lane
-     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots.
+     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots. For a
+     * periodic [pass], each slot that finishes is progress, and once it is abandoned no lane takes another slot.
      */
-    private fun reloadAll(slots: List<Slot<*>>, reload: (Slot<*>) -> CompletableFuture<*>?): CompletableFuture<Void> {
+    private fun reloadAll(
+        slots: List<Slot<*>>,
+        pass: Pass? = null,
+        reload: (Slot<*>) -> CompletableFuture<*>?,
+    ): CompletableFuture<Void> {
         val done = CompletableFuture<Void>()
         if (slots.isEmpty()) {
             done.complete(null)
@@ -499,12 +509,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         val next = AtomicInteger()
         val remaining = AtomicInteger(slots.size)
         fun finishedOne() {
+            pass?.progressed()
             if (remaining.decrementAndGet() == 0) {
                 done.complete(null)
             }
         }
         fun lane() {
             while (true) {
+                if (pass?.abandoned == true) {
+                    return
+                }
                 val index = next.getAndIncrement()
                 if (index >= slots.size) {
                     return
@@ -523,6 +537,105 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
         repeat(minOf(options.reloadConcurrency, slots.size)) { lane() }
         return done
+    }
+
+    /**
+     * The periodic passes (#1215): one at a time. A tick that comes while a pass is in flight starts none, so a store
+     * slower than the interval does not get another [SnapshotOptions.reloadConcurrency] reads each interval; it owes a
+     * pass instead, which starts as soon as the one in flight ends, over every document installed by then. However many
+     * ticks come meanwhile, one pass is owed. Nothing here waits: the scheduler thread only starts passes.
+     *
+     * A pass that has finished no document for [SnapshotOptions.storeReadTimeout] has no read in flight (each ends by
+     * then), so what holds it is a compilation. It is abandoned: it takes no more documents, and the next tick starts a
+     * pass, so one compilation that never ends does not hold back the revalidation of every other document (`SNP-6`).
+     */
+    private inner class PeriodicPasses {
+        // Guarded by this.
+        private var current: Pass? = null
+        private var owed: CompletableFuture<Void>? = null
+
+        fun tick(): CompletableFuture<Void> {
+            val now = clock.instant()
+            val stalled: Pass?
+            val started: Pass
+            synchronized(this) {
+                val running = current
+                if (running != null && !running.stalledAt(now)) {
+                    return owed ?: CompletableFuture<Void>().also { owed = it }
+                }
+                stalled = running
+                // The pass that starts now is the one owed, if any: it starts after every tick that owed it.
+                started = Pass(now, owed ?: CompletableFuture())
+                owed = null
+                current = started
+            }
+            if (stalled != null) {
+                stalled.abandon(started)
+                log.warn {
+                    "A snapshot revalidation pass finished no document for ${options.storeReadTimeout}: a compilation " +
+                        "holds it. Starting the next pass without it."
+                }
+            }
+            run(started)
+            return started.done
+        }
+
+        @Suppress("TooGenericExceptionCaught")
+        private fun run(pass: Pass) {
+            val reloads = try {
+                reloadAll(installedSlots(), pass) { it.load() }
+            } catch (error: Throwable) {
+                // Never leave a pass in flight that nothing will end: every later tick would only owe one.
+                pass.done.completeExceptionally(error)
+                ended(pass)
+                throw error
+            }
+            reloads.whenComplete { _, error ->
+                if (error != null) pass.done.completeExceptionally(error) else pass.done.complete(null)
+                ended(pass)
+            }
+        }
+
+        /** [pass] ended: the owed pass starts now, if any. An abandoned pass ends with nothing to start. */
+        private fun ended(pass: Pass) {
+            val next = synchronized(this) {
+                if (current !== pass) {
+                    return
+                }
+                val waiting = owed
+                if (waiting == null) {
+                    current = null
+                    return
+                }
+                owed = null
+                Pass(clock.instant(), waiting).also { current = it }
+            }
+            run(next)
+        }
+    }
+
+    /** One periodic pass: [done] completes when it ends, or, once [abandon]ed, when the pass that replaced it does. */
+    private inner class Pass(startedAt: Instant, val done: CompletableFuture<Void>) {
+        /** When a document of this pass last finished: the start, until one does. */
+        @Volatile
+        private var progressedAt: Instant = startedAt
+
+        @Volatile
+        var abandoned: Boolean = false
+            private set
+
+        fun progressed() {
+            progressedAt = clock.instant()
+        }
+
+        fun stalledAt(now: Instant): Boolean = Duration.between(progressedAt, now) > options.storeReadTimeout
+
+        fun abandon(successor: Pass) {
+            abandoned = true
+            successor.done.whenComplete { _, error ->
+                if (error != null) done.completeExceptionally(error) else done.complete(null)
+            }
+        }
     }
 
     private fun attemptPrewarm(keys: List<SnapshotKey>, backoff: Duration, done: CompletableFuture<Void>) {
