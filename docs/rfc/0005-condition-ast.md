@@ -181,6 +181,13 @@ eval(c, req) : Boolean        // 不抛出：AST 求值中没有任何可能失�
 
 阈值是快照级的配置（`cosec.policy.limits.*`），控制面（第 6 阶段）在发布前检查；本阶段由 `SnapshotPublisher` 和转换工具检查。
 
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1，`DOC-4`，RC1-8）**：路径模式也有成本上界，与上表并列。它们是引擎的固定常量，不是 `limits` 里的配置：
+> - 一个 `http:path:` 模式至多 2,048 个字符，带类型的资源模式至多 2,058 个字符（schema 的 `resourcePattern` 有 `maxLength` 2,058）；
+> - 一个混合了 `*`、`?` 或 `{name}` 与其他文本的段（glob 段）至多 16 个部分，连续的 `*` 算一个；
+> - 一份文档中，策略、边界与限流规则的全部模式合计至多 2,048 个 glob 单位（glob 段的部分与字面量字符）。前导 `**` 或 `{*name}` 之后的段、以及按捕获变量计数的限流规则，算两次。
+>
+> 超限与其他编译错误一样，在控制面答 422。文档预算在 `CompiledDocument` 的构造中检查，所以快照编译器、simulate 与 testkit 都受它约束。常量按"一份文档的最坏情况在 CI 上每请求约 1 ms 以内"实测选定：最坏约 0.45 ms，策略还被附加时约 0.9–1.0 ms（`GlobBoundBenchmark`）。不设语句数上限（协调者决定）。匹配算法见 §5.2 的说明。
+
 ### 3.6 不能再表达的
 
 | 7.x 能写的 | 为什么去掉 | 替代 |
@@ -326,6 +333,8 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 §5.1 的资源类型写作 `http:path`，而 RFC 0004 的请求模型（`Resource`）中 HTTP 资源的类型是 `http`：PR-3 的 `http:path:` 模式匹配类型为 `http` 的资源，两者在 PR-4 接入时统一。
 
 路径在 Pipeline 中规范化一次（RFC 0001 §3.5；路径规范化本身属于第 5 阶段的 Pipeline 重组），本阶段沿用 7.x 的 `RequestPaths` 规范化结果作为 `resource.id`。
+
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：评估中的每个 glob 段改用动态规划匹配，捕获不再回溯（第 1 轮审查 M2）。表格是这次评估的 `EvaluationScratch`，跨语句与段复用；捕获再按表正向走一遍，每个 `*` 取最大的可行终点，与回溯（以及 Spring 的正则）的贪婪选择相同。正确性由两个测试固定：`HttpPathPatternParityTest`（runtime，对照 Spring），以及 `HttpPathPatternTest#capturing agrees with backtracking`（50,000 个随机段，对照旧的回溯实现）。前导 `**` 或 `{*name}` 之后的部分原来在路径的每个起点上尝试，现在只在两个放得下的起点上尝试，所以按 §3.5 说明中的预算算两次。捕获在最坏情况下每请求分配约 0.25 MB（ASCII 值），值在 Latin-1 之外时约 0.6 MB（第 2 轮审查 L1）。D2 补充：与 Spring 正则的对照测试、前导 `**` 收窄的计数守护、两种路径遍历的一致性测试，以及拒绝模式字面量中落单的代理项（第 2 轮审查 L3、L4）。
 
 ### 5.3 OpenAPI 生成的路由映射
 
