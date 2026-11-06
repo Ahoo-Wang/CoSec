@@ -20,7 +20,9 @@ import me.ahoo.cosec.model.decision.BindingRef
 /**
  * The external attributes one evaluation may read (RFC 0006 §5.4.2): those of the candidate statements, the
  * index's candidates intersected with the applicable bindings, that pass their action and index keys, and of their
- * policies' conditions. Evaluation reads no external attribute outside it (P14); one it would read anyway is missing.
+ * policies' conditions; of the rate limit rules; and of the boundary that holds the request's tenant, its statements'
+ * and its condition (RFC 0007 §7.6, #1208). Evaluation reads no external attribute outside it (P14, `ATR-8`); one it
+ * would read anyway is missing.
  */
 class AttributePlan internal constructor(val attributes: List<Attribute>) {
     val isEmpty: Boolean get() = attributes.isEmpty()
@@ -33,10 +35,10 @@ class AttributePlan internal constructor(val attributes: List<Attribute>) {
 }
 
 /**
- * Plans an evaluation: walks the same candidates as [FlatEvaluator], in both passes, and collects the external
- * attributes of every statement that passes what [FlatEvaluator.step] checks before calling host code. A superset of
- * what the evaluation reads: it reads a statement's condition only after those checks, and a policy condition only for
- * such a statement.
+ * Plans an evaluation: walks the same candidates as [FlatEvaluator], in both passes, then the rate limit rules and the
+ * boundary a permit is held to, and collects the external attributes of every statement that passes what
+ * [FlatEvaluator.step] checks before calling host code. A superset of what the evaluation reads: it reads a statement's
+ * condition only after those checks, a policy condition only for such a statement, and the boundary only on a permit.
  */
 internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvaluator(request, view) {
     private var found: LinkedHashSet<Attribute>? = null
@@ -54,15 +56,26 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
                 }
             }
         }
+        // A permit is held to the boundary of the request's tenant, which reads as an ALLOW does (RFC 0007 §7.6): the
+        // tenant's own, else the platform's default; another boundary is not this request's (#1208).
+        val boundary = view.boundaryOf(request.scope)?.let { view.platform.boundaryPolicy(it) }
+        if (boundary != null && boundary.readsExternal) {
+            collect(boundary, boundary.allows)
+        }
         return found?.let { AttributePlan(it.toList()) } ?: AttributePlan.EMPTY
     }
 
     override fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean {
-        if (!policy.readsExternal) {
-            return false
+        if (policy.readsExternal) {
+            collect(policy, policy.statements(pass))
         }
+        return false
+    }
+
+    /** The attributes of [statements] that pass their action and index keys, and of [policy]'s condition if one does. */
+    private fun collect(policy: CompiledPolicy, statements: Array<CompiledStatement>) {
         var reached = false
-        for (statement in policy.statements(pass)) {
+        for (statement in statements) {
             if (statement.matchesAction(authz.action) && statement.admits(this)) {
                 reached = true
                 add(statement.externals)
@@ -71,7 +84,6 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
         if (reached) {
             add(policy.externals)
         }
-        return false
     }
 
     private fun add(attributes: Array<Attribute>) {
