@@ -231,6 +231,27 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `BigInteger` within a `Long`, a `Float`, or a `BigDecimal` that a `Double` holds exactly, where the request was
   `500`. A number the header cannot hold exactly is still refused with `500`, and so are `NaN` and the infinities,
   which JSON has no number for.
+- **`simulate` and `explain` are decided and authorized on the tenant that decides the request** (RC1-40,
+  `CTL-23`). A request without a `principal` is decided on `(0)`'s document, as enforcement decides it: it needs
+  `cosec:simulate` or `cosec:explain` on `(0)`, where alpha.2 checked the tenant the request named, and one that names
+  another tenant is `400`. Simulate an anonymous request with `"tenant": "(0)"`, by a principal that may simulate there.
+- **`simulate` and `explain` refuse what enforcement refuses** (`CTL-3`, `PIP-12`): a request that sends a header its
+  documents read with different values is `400`, where it was decided (Indeterminate for a DENY on it), and a
+  `resource` longer than a request path may be (2,048 characters, 256 per segment) is `400`, for `analyze` too.
+- **The control API's `400` says less, and a stored value that does not decode is `500`** (RC1-39). A `400`'s `detail`
+  is one of the control plane's own checks, or names the field that does not parse; it no longer carries a parser's or
+  an exception's message (`No enum constant ...`, `For input string ...`, a JSON parser's), and a time that does not
+  parse (`expiresAt`, `time`) is `400` where it was `500`. A stored document or record that does not decode is `500`
+  without detail, where it was a `400` with the stored document's JSON path; the control host logs it with its key. A
+  client that matched on `detail` text should match on the status and `code`.
+- **A lone surrogate half in a path pattern does not compile** (review L4 of #1200): half of a pair, without the
+  other, in the text of an `http:path:` pattern is a `COMPILE` finding, where it compiled and could match the middle of
+  a pair, which Spring never matches. A document published before with one fails closed on an upgraded instance.
+- **CoSec's Redis templates read from the primary** (RC1-47): a `LettuceConnectionFactory` that reads from replicas,
+  by `spring.data.redis.lettuce.read-from` or a client customizer, fails startup
+  ([Redis requirements](./storage.md#redis-requirements)). And `cosecSnapshot` is `DOWN` while Redis may evict the
+  snapshot, read again at most once every `revalidate-interval`; with `eviction-check: warn` for a Redis that denies
+  `INFO`, that is for good, so keep it out of the readiness group there.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

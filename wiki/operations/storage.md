@@ -103,9 +103,25 @@ contain `:`, so a key names one document only.
   backend) fails startup by default. A Redis that denies `INFO` while you have set `noeviction` yourself needs
   [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot): the instance starts and logs a
   `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
+- **Checked again while it runs.** The `cosecSnapshot` health indicator reads every node's `maxmemory-policy` again,
+  at most once every `revalidate-interval`, so a later `CONFIG SET maxmemory-policy`, a failover to a node set up
+  otherwise or a restart is seen. While a node may evict, or the policy cannot be read, it reports `DOWN` with an
+  `eviction` detail that says why, and logs an `ERROR` when that starts, whatever `eviction-check` let startup do
+  ([Troubleshooting](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)). Requests are not refused for
+  it: an installed document stays, and one that is lost fails closed on every instance that has it.
+- **Reads from the primary.** Redis is the store of record, and a replica lags it: a read that alternates between the
+  two can take a revoked API key, or a document just published over, for the current one. CoCache's own client, which
+  reads the documents, the control-plane records and the revocations, connects to the node or the cluster's primaries
+  that `spring.data.redis.*` names and sets no `ReadFrom`. The Lettuce client behind the Redis templates CoSec uses
+  (API keys, the rate limiter, OAuth states) must read from the primary too: a `LettuceConnectionFactory` that reads
+  from replicas, by `spring.data.redis.lettuce.read-from` or a `LettuceClientConfigurationBuilderCustomizer` with a
+  `ReadFrom` other than the upstream, fails startup
+  ([Troubleshooting](./troubleshooting.md#startup-fails-because-redis-is-read-from-replicas)). CoSec cannot read the
+  client configuration of any other connection factory (Jedis, or one of your own): configure it to read from the
+  primary.
 - **Redis client.** CoCache builds its own Lettuce client from `spring.data.redis.*`; the versions, topologies and
   ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The startup check
-  needs `INFO` (`+info`), which CoCache's list includes.
+  and the health indicator need `INFO` (`+info`), which CoCache's list includes.
 
 ### Who may write which keys
 

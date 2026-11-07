@@ -210,7 +210,8 @@ contain `:`; no literal may contain `*`, `?`, `{`, `}`, whitespace or control ch
 | `**`, or `{*name}` | any number of segments, captured by `{*name}` as the rest of the path; only first or last, at most one per pattern. `/admin/**` also matches `/admin`. |
 
 These do not compile: `{name:regex}`, an empty pattern, a segment that can match an empty value other than `*` alone
-(such as `{a}{b}` or `*{a}`), and `{}` or `{*}`.
+(such as `{a}{b}` or `*{a}`), `{}` or `{*}`, and text that holds half of a surrogate pair without the other half (a
+character outside the Basic Multilingual Plane, such as an emoji, is written whole).
 
 A resource may be a pattern object with options, for `http:path:` patterns only:
 

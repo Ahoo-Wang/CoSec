@@ -144,6 +144,39 @@ A bucket that cannot be read for any reason other than a missing external attrib
 exceptions to [fail closed](../guide/security-model.md); set `strictFailure` on rules that protect against abuse, such
 as login attempts, and leave it off on rules that only smooth load.
 
+## The control API
+
+The [control API](./testing.md#the-control-plane) is served behind the pipeline, so a platform rule limits it like any
+other path, and keyed by `scope.tenant` it gives each tenant a bucket of its own. Cover the routes that compile,
+evaluate or check: `simulate`, `explain`, `analyze` and `changes`, under `cosec.control.http.base-path` and its `/v1`:
+
+```json
+{
+  "id": "control-per-tenant",
+  "action": "http:POST",
+  "resource": [
+    "http:path:/cosec/control/v1/simulate",
+    "http:path:/cosec/control/v1/explain",
+    "http:path:/cosec/control/v1/analyze",
+    "http:path:/cosec/control/v1/changes",
+    "http:path:/cosec/control/v1/changes/*"
+  ],
+  "key": "scope.tenant",
+  "permitsPerSecond": 0.5,
+  "windowSeconds": 60
+}
+```
+
+- The rule belongs in the platform document: a tenant's own rules count in their own buckets and never relax it.
+- The bucket is the caller's tenant: a tenant's administrators share one, and so do the platform's (`(platform)`).
+- An exhausted bucket answers `429` before the control API does any work.
+- Leave the break-glass routes (`/break-glass` and below) out of it: give them a rule of their own, or none, so that
+  a spent bucket never holds off an emergency revoke.
+- `documents/{key}:apply` and `:rollback` propose changes too, and can join the rule.
+
+No such rule is published for you, by `cosec-migrate bootstrap` or otherwise: the limits depend on the deployment's
+size.
+
 ## Publishing rules
 
 Rules are part of their documents, so they are checked and compiled with them: an invalid id, a duplicate id in one

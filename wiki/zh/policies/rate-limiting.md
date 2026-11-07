@@ -113,6 +113,38 @@ flowchart LR
 
 除外部属性不可用以外，因任何其他原因无法读取桶时，即使没有 `strictFailure` 也会拒绝请求。失败日志每十秒最多记录一次。跳过宽松规则是[失败即拒绝](../guide/security-model.md)的文档化例外之一；对防范滥用的规则（例如登录尝试）设置 `strictFailure`，只用于平滑负载的规则则不要设置。
 
+## 控制 API {#the-control-api}
+
+[控制 API](./testing.md#the-control-plane) 部署在管道之后，因此平台规则像限制其他路径一样限制它；以 `scope.tenant` 为
+`key` 时，每个租户各有一个桶。覆盖那些会编译、求值或检查的路由：`cosec.control.http.base-path` 及其 `/v1` 之下的
+`simulate`、`explain`、`analyze` 和 `changes`：
+
+```json
+{
+  "id": "control-per-tenant",
+  "action": "http:POST",
+  "resource": [
+    "http:path:/cosec/control/v1/simulate",
+    "http:path:/cosec/control/v1/explain",
+    "http:path:/cosec/control/v1/analyze",
+    "http:path:/cosec/control/v1/changes",
+    "http:path:/cosec/control/v1/changes/*"
+  ],
+  "key": "scope.tenant",
+  "permitsPerSecond": 0.5,
+  "windowSeconds": 60
+}
+```
+
+- 规则写在平台文档里：租户自己的规则在自己的桶里计数，从不放宽它。
+- 桶是调用者的租户：一个租户的管理员共用一个桶，平台的管理员也共用一个（`(platform)`）。
+- 桶耗尽时，在控制 API 做任何工作之前就答 `429`。
+- 不要把 break-glass 的路由（`/break-glass` 及其下）放进这条规则：给它们单独一条规则，或者不限，这样耗尽的桶永远不会挡住
+  紧急撤销。
+- `documents/{key}:apply` 和 `:rollback` 也会提出变更，可以加入这条规则。
+
+不会替你发布这样的规则，`cosec-migrate bootstrap` 也不会：限额取决于部署的规模。
+
 ## 发布规则 {#publishing-rules}
 
 规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1`、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。

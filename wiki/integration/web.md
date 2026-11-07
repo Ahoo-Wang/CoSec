@@ -533,7 +533,7 @@ What the API does is in [Testing policies](../policies/testing.md) and
   ([Quick start](../guide/quick-start.md#publish-the-platform-document)).
 - **Then the control plane's own check.** Every call is authorized again as the request's principal, in the app
   `cosec.control.app-id` (default `cosec-control`) and its default space, on documents confirmed current. An
-  anonymous request is `401`. Tenant isolation comes first and is not a policy: a tenant's principal acts only on
+  anonymous request is `401`, on both stacks before any of its body is read. Tenant isolation comes first and is not a policy: a tenant's principal acts only on
   its own tenant's document.
 - **Body size.** On WebMvc at most `cosec.control.http.max-body-size` (default `16MB`) is read; a larger body is
   `400` `invalid-request`, unread. On WebFlux the body is bounded by Spring's `spring.codec.max-in-memory-size`
@@ -546,6 +546,7 @@ The control API answers problems in the same format, with the types above plus i
 `conflict` (`409`), `gone` (`410`), `precondition-failed` (`412`), `unprocessable` (`422`) and
 `precondition-required` (`428`). A `400`, `409`, `410`, `412`, `422` or `428` explains the caller's own request in a
 `detail` member; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a
-document, a change or a DENY exists.
+document, a change or a DENY exists. A `400`'s `detail` is one of the control plane's own checks, or names the field
+that does not parse, never an exception's message; a stored document or record that does not decode is a `500`.
 
 **Next:** issue, refresh and revoke the tokens the adapter reads, in [Authentication](./authentication.md).

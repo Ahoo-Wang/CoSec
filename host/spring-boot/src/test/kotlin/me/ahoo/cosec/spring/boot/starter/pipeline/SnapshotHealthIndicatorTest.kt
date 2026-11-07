@@ -13,6 +13,10 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
@@ -22,6 +26,7 @@ import me.ahoo.cosec.runtime.snapshot.Snapshot
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.availability.AvailabilityChangeEvent
 import org.springframework.boot.availability.ReadinessState
@@ -58,6 +63,57 @@ class SnapshotHealthIndicatorTest {
         // Installed, but a prewarmed tenant is still missing.
         health(DocumentState.Present(Any()), false).status.assert().isEqualTo(Status.DOWN)
         health(DocumentState.Present(Any()), true).status.assert().isEqualTo(Status.UP)
+    }
+
+    /**
+     * RC1-47 (a): Redis's eviction policy is read again at most once every interval. While it may evict the snapshot, or
+     * cannot be read, the indicator is DOWN and says why; the change is logged at ERROR once, not on every call.
+     */
+    @Test
+    fun `health is down while Redis may evict the snapshot, read again at most once per interval`() {
+        var now = 0L
+        var reading: EvictionPolicyCheck.Reading = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "noeviction"))
+        var reads = 0
+        val monitor = EvictionPolicyMonitor({ reads++; reading }, Duration.ofSeconds(10)) { now }
+        val indicator = SnapshotHealthIndicator(source(DocumentState.Present(Any()), true), monitor)
+        val logger = LoggerFactory.getLogger(EvictionPolicyMonitor::class.java) as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            indicator.health().status.assert().isEqualTo(Status.UP)
+            reading = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "allkeys-lru"))
+            // Within the interval the last reading stands.
+            indicator.health().status.assert().isEqualTo(Status.UP)
+            reads.assert().isEqualTo(1)
+            now += Duration.ofSeconds(10).toNanos()
+            repeat(2) {
+                indicator.health().apply {
+                    status.assert().isEqualTo(Status.DOWN)
+                    details["eviction"].toString().assert().contains("allkeys-lru")
+                    details["platform"].assert().isEqualTo("installed")
+                }
+            }
+            reads.assert().isEqualTo(2)
+            now += Duration.ofSeconds(10).toNanos()
+            reading = EvictionPolicyCheck.Reading.Unreadable("INFO memory failed or is not allowed")
+            indicator.health().status.assert().isEqualTo(Status.DOWN)
+            now += Duration.ofSeconds(10).toNanos()
+            reading = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "noeviction"))
+            indicator.health().apply {
+                status.assert().isEqualTo(Status.UP)
+                details.containsKey("eviction").assert().isFalse()
+            }
+            logged.list.filter { it.level == Level.ERROR }.map { it.formattedMessage }.assert().hasSize(2)
+                .anyMatch { it.contains("allkeys-lru") }.anyMatch { it.contains("Cannot tell") }
+            logged.list.filter { it.level == Level.INFO }.assert().hasSize(1)
+        } finally {
+            logger.detachAppender(logged)
+        }
+        // CoCache's in-memory backend evicts nothing behind its back.
+        SnapshotHealthIndicator(
+            source(DocumentState.Present(Any()), true),
+            EvictionPolicyMonitor({ EvictionPolicyCheck.Reading.NotRedis }, Duration.ofSeconds(1)),
+        ).health().status.assert().isEqualTo(Status.UP)
     }
 
     @Test

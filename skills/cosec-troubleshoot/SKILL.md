@@ -122,6 +122,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.
+- **`CoSec's Redis template reads from replicas (ReadFrom...)`**: the Lettuce client behind CoSec's Redis templates
+  reads from replicas (`spring.data.redis.lettuce.read-from`, or a `LettuceClientConfigurationBuilderCustomizer` that
+  sets `ReadFrom`). Remove it or set `upstream`; give other data its own connection factory. Never suggest replica
+  reads for CoSec: Redis is its store of record, and a lagging replica can hand back a revoked API key.
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-because-redis-is-read-from-replicas
 - **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
   is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
   `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
@@ -153,7 +158,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request
   closed. Readiness refuses traffic until the platform document and every `prewarm-apps`/`prewarm-tenants` document is
   installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `failed`, `absent`, `loading`) and
-  `prewarmed`.
+  `prewarmed`. It is also `DOWN` with an `eviction` detail while Redis may evict the snapshot (it reads
+  `maxmemory-policy` again at most once per `revalidate-interval`, and logs `ERROR` from `EvictionPolicyMonitor` when
+  that starts): requests are still decided, but set `noeviction` again before an app or tenant document is evicted.
+  `Cannot tell whether Redis may evict` there, with `eviction-check=warn` for a Redis that denies `INFO`, stays `DOWN`:
+  keep `cosecSnapshot` out of the readiness group on such a Redis.
+  https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshot-is-down-with-an-eviction-detail
 - A document the request needs does not decode or compile: its new revision is installed as failed
   (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
   JSON paths), and every request that needs it fails closed; the previous revision is not kept. Compile the stored
@@ -291,8 +301,16 @@ change, or the change is in another state (409 `change-unreadable`: an earlier b
 cannot be an app id; remove its record); 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
 does not match; 422 the candidate does not compile, refers to a missing policy, or uses a reserved id prefix
 (`cosec:`, `g:`, `r:`); 428 a DENY with `onMissing: nomatch` needs a confirmation; 503 the decision or store could not
-be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebMvc a body over
-`cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
+be read; 500 a stored document or record does not decode (a newer version wrote it during a rolling upgrade: `a stored
+value does not decode` at `ERROR`, the exception naming the key), else a defect. A 400's `detail` is one of the control
+plane's own checks or names the field that does not parse, never an exception's message; a 400 without `detail` is
+logged at `INFO` (`Control API <method> <path> (request <requestId>) is 400: <reason>`). `simulate` and `explain` are
+authorized on the tenant that decides the request, `(0)` for one without a `principal` (an anonymous request that
+names another tenant is 400), and refuse with 400 a header their documents read sent with different values, as
+enforcement does, and a `resource` longer than a request path (2,048 characters, 256 per segment). A 429 on the
+control API is the pipeline's: a platform rate limit rule on its paths (per tenant with `key: "scope.tenant"`). A
+request without a permitted credential is 401 before any of its body is read. Large bodies on WebFlux need
+`spring.codec.max-in-memory-size`; on WebMvc a body over `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
 first one with `cosec-migrate publish`. A 401, 403, 404, 500 or 503 carries no `detail`: read why in the control
 host's log, `Control API <method> <path> by <tenant>/<principal> is <status> (request <requestId>): <reason>` at
 `INFO` from `me.ahoo.cosec.control.api`, matching the problem's `requestId`.

@@ -121,7 +121,10 @@ class SimulatorTest {
         fun decide(platform: Held, tenant: Held): Decision =
             simulator.decide(request, scope, HeldDocuments(platform, null, tenant)).evaluation.decision
 
-        decide(Held(platform, platformEntry), Held(tenant, tenantEntry)).assert().isInstanceOf(Decision.Permit::class.java)
+        decide(
+            Held(platform, platformEntry),
+            Held(tenant, tenantEntry)
+        ).assert().isInstanceOf(Decision.Permit::class.java)
         simulator.compilations.get().assert().isEqualTo(2L)
         repeat(3) { decide(Held(platform, platformEntry), Held(tenant, tenantEntry)) }
         simulator.compilations.get().assert().isEqualTo(2L)
@@ -178,7 +181,11 @@ class SimulatorTest {
         }
         error.status.assert().isEqualTo(400)
         error.message.assert().doesNotContain("x-debug")
-        simulator.evaluate(request.copy(headers = mapOf("x-debug" to listOf("1", "1"))), scope, Documents(platform, null, tenant))
+        simulator.evaluate(
+            request.copy(headers = mapOf("x-debug" to listOf("1", "1"))),
+            scope,
+            Documents(platform, null, tenant)
+        )
             .decision.assert().isInstanceOf(Decision.Permit::class.java)
     }
 

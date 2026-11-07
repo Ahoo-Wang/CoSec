@@ -161,7 +161,9 @@ class ControlHttp(private val plane: ControlPlane) {
             log.warn { "Control API ${request.method} ${request.path} (request $requestId): ${unnamed.message}" }
             return problem(Problem.CHANGE_UNREADABLE, requestId, CHANGE_UNREADABLE_DETAIL)
         }
-        log.error(e) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
+        log.error(
+            e
+        ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
         return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
 
@@ -245,7 +247,9 @@ class ControlHttp(private val plane: ControlPlane) {
                         )
                     )
                 )
-                rest.size == 2 && rest[0] == "revisions" -> document(plane.read(operator, key, revisionOf("revision", rest[1])))
+                rest.size == 2 && rest[0] == "revisions" -> document(
+                    plane.read(operator, key, revisionOf("revision", rest[1]))
+                )
                 rest.size == 3 && rest[0] == "revisions" && rest[2] == "propagation" -> {
                     val propagation = plane.propagation(operator, key, revisionOf("revision", rest[1]))
                     json(
@@ -276,7 +280,9 @@ class ControlHttp(private val plane: ControlPlane) {
                 val operations = it.array("operations").map { op ->
                     decoded("operations") { ChangeRequestCodec.operation(key, op) }
                 }
-                val confirmations = it.get("confirmations")?.let { c -> arrayOf("confirmations", c) }?.map(::confirmation).orEmpty()
+                val confirmations = it.get(
+                    "confirmations"
+                )?.let { c -> arrayOf("confirmations", c) }?.map(::confirmation).orEmpty()
                 // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
                 requireRequest(
                     !it.has("kind")
@@ -357,9 +363,9 @@ class ControlHttp(private val plane: ControlPlane) {
         val body = request.body?.takeIf { it.isNotEmpty() }?.let { bytes ->
             try {
                 reader.readTree(bytes)
-            } catch (_: JacksonException) {
+            } catch (e: JacksonException) {
                 // Not the parser's message: it is not one of the control plane's own (RC1-39).
-                throw InvalidControlRequestException("The request body is not JSON, or holds a key twice.")
+                throw InvalidControlRequestException("The request body is not JSON, or holds a key twice.", e)
             }
         } ?: factory.objectNode()
         requireRequest(body.isObject) { "The request body is a JSON object." }
@@ -528,8 +534,8 @@ class ControlHttp(private val plane: ControlPlane) {
     /** `platform`, `app:<id>` or `tenant:<id>`; the text is not echoed, as it may hold control characters. */
     private fun documentKey(text: String): SnapshotKey = try {
         ChangeRequestCodec.documentKeyOf(text)
-    } catch (_: SnapshotFormatException) {
-        throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>.")
+    } catch (e: SnapshotFormatException) {
+        throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>.", e)
     }
 
     private fun changeIdOf(text: String): ChangeId = field("change", "a change id") { ChangeId(text) }
@@ -550,7 +556,7 @@ class ControlHttp(private val plane: ControlPlane) {
     private inline fun <T> decoded(name: String, decode: () -> T): T = try {
         decode()
     } catch (e: SnapshotFormatException) {
-        throw InvalidControlRequestException("[$name]: ${e.message}")
+        throw InvalidControlRequestException("[$name]: ${e.message}", e)
     }
 
     /**
@@ -561,12 +567,12 @@ class ControlHttp(private val plane: ControlPlane) {
         parse()
     } catch (e: InvalidControlRequestException) {
         throw e
-    } catch (_: IllegalArgumentException) {
-        throw InvalidControlRequestException("[$name] is not $what.")
-    } catch (_: ArithmeticException) {
-        throw InvalidControlRequestException("[$name] is not $what.")
-    } catch (_: DateTimeException) {
-        throw InvalidControlRequestException("[$name] is not $what.")
+    } catch (e: IllegalArgumentException) {
+        throw InvalidControlRequestException("[$name] is not $what.", e)
+    } catch (e: ArithmeticException) {
+        throw InvalidControlRequestException("[$name] is not $what.", e)
+    } catch (e: DateTimeException) {
+        throw InvalidControlRequestException("[$name] is not $what.", e)
     }
 
     private fun simulation(simulation: Simulation): ObjectNode = factory.objectNode().apply {

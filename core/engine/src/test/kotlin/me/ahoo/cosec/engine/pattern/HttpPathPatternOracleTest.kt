@@ -63,9 +63,11 @@ class HttpPathPatternOracleTest {
                 // The engine refuses less than Spring only for RFC 0005 §5.2's differences; runtime's parity test checks them.
                 return@repeat
             }
-            val head = if (lead.isEmpty()) "" else List(random.nextInt(4)) { "/" + value(random, null) }.joinToString("")
-            val path = head + "/" + value(random, tokens.takeIf { random.nextInt(3) > 0 }) +
-                if (tail.isNotEmpty() && random.nextInt(5) > 0) tail else ""
+            val segments = if (lead.isEmpty()) 0 else random.nextInt(4)
+            val head = (0 until segments).joinToString("") { "/" + value(random, null) }
+            val filled = value(random, tokens.takeIf { random.nextInt(3) > 0 })
+            val end = tail.takeIf { random.nextInt(5) > 0 }.orEmpty()
+            val path = "$head/$filled$end"
             val expected = spring(text, path, caseSensitive)
             val parsed = HttpPath.parse(path)
             val captured = pattern.match(parsed, scratch)?.toMap()

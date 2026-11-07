@@ -283,7 +283,11 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`，客户端可直接访问的宿主设为 `0`。
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`，在面向多个应用的网关的每条路由上设置 `cosec-app-id`。
 - 在网关上，只给指向你自己服务、又不是 `lb://` 的路由标上 `cosec-identity: true`，并把 actuator 放在管理端口上。
-- 以 `maxmemory-policy noeviction` 运行 Redis（[存储](../operations/storage.md)）。
+- 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能撤销或恢复令牌。
+  通过 TLS 连接 Redis（`rediss://`，或 `spring.data.redis.ssl.enabled`），让中间网络上的任何人都无法读取或篡改实例读到的
+  内容；并给控制面和数据面实例使用[谁可以写哪些 key](../operations/storage.md#who-may-write-which-keys) 中的用户：实例只读文档。
+- 以 `maxmemory-policy noeviction` 运行 Redis，并从主节点读取（[Redis 要求](../operations/storage.md#redis-requirements)）。
+- 用一条平台限流规则按租户限制控制 API（[限流](../policies/rate-limiting.md#the-control-api)）。
 - 在任何人需要 break-glass 之前注册一个 REQUIRED 决策监听器。
 - 必须始终生效的 DENY 放在没有条件的策略里，并且永远不要基于客户端写入的请求头授权。
 - 用于防滥用的限流规则，如果 Redis 故障时也不能失效，请设置 `"strictFailure": true`。

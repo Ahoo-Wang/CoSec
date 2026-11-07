@@ -106,7 +106,12 @@ internal class DocumentCache(
      * The entry of [key] at [digest]: the one held, or [document] as a new one of [size] stored bytes. Another call
      * that put one first wins, so every caller compiles with the same entry.
      */
-    fun put(key: SnapshotKey, digest: SnapshotDigest, size: Int, document: PolicyDocument): Entry = synchronized(entries) {
+    fun put(
+        key: SnapshotKey,
+        digest: SnapshotDigest,
+        size: Int,
+        document: PolicyDocument
+    ): Entry = synchronized(entries) {
         entries[Key(key, digest)]?.let { return it }
         val entry = Entry(key, digest, document, size)
         entries[Key(key, digest)] = entry

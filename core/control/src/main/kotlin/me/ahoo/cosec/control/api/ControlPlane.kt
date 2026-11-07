@@ -190,7 +190,9 @@ class DefaultControlPlane(
 
     override suspend fun history(operator: Operator, key: SnapshotKey, before: Long?, limit: Int): List<RevisionSummary> {
         authority.require(operator, key, ControlActions.READ)
-        requireRequest(limit in 1..ControlPlane.MAX_LIMIT) { "The limit is 1 to ${ControlPlane.MAX_LIMIT}, not $limit." }
+        requireRequest(
+            limit in 1..ControlPlane.MAX_LIMIT
+        ) { "The limit is 1 to ${ControlPlane.MAX_LIMIT}, not $limit." }
         return revisions.history(
             key
         ).filter { before == null || it.revision < before }.sortedByDescending { it.revision }
@@ -336,7 +338,11 @@ class DefaultControlPlane(
      * naming another tenant is a 400, after the authorization, as enforcement would decide it on `(0)`. Its resource is
      * held to a request path's bounds (RC1-41, review L5 of #1200).
      */
-    private suspend fun decidingTenant(operator: Operator, request: SimulatedRequest, action: Action): SnapshotKey.Tenant {
+    private suspend fun decidingTenant(
+        operator: Operator,
+        request: SimulatedRequest,
+        action: Action
+    ): SnapshotKey.Tenant {
         val tenant = simulator.tenantOf(request)
         val key = SnapshotKey.Tenant(tenant.value)
         authority.require(operator, key, action)
@@ -453,7 +459,10 @@ class DefaultControlPlane(
     private suspend fun retained(key: SnapshotKey, revision: Long): PolicyDocument =
         revisions.revision(key, revision) ?: throw gone(key, revision)
 
-    private fun gone(key: SnapshotKey, revision: Long) = ChangeRejectedException(GONE, "[$key] keeps no revision $revision")
+    private fun gone(key: SnapshotKey, revision: Long) = ChangeRejectedException(
+        GONE,
+        "[$key] keeps no revision $revision"
+    )
 
     private fun resolved(request: SimulatedRequest) = (simulator.scope(request) as? ScopeResolution.Resolved)?.scope
 

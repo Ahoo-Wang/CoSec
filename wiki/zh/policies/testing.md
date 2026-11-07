@@ -20,7 +20,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | 开启影子窗口、发布 | `cosec:publish` |
 | 跳过影子窗口 | `cosec:skip-shadow` |
 | 审批、驳回 | `cosec:approve` |
-| `simulate`、`explain`、`analyze` | 针对所查询租户的文档分别需要 `cosec:simulate`、`cosec:explain`、`cosec:analyze` |
+| `simulate`、`explain`、`analyze` | 在决定该请求的租户文档上分别需要 `cosec:simulate`、`cosec:explain`（没有主体的请求是 `(0)` 的文档）；在所查询租户的文档上需要 `cosec:analyze` |
 
 `cosec:grant` 在每条绑定的作用域 `scope/<tenant>/<app>/<space>` 上检查：绑定任意 app 或任意空间时那一段为 `*`，默认空间为 `(default)`，所以限制在默认空间中授出的策略写 `scope/acme/order/(default)`。以 `(` 开头的空间 id 归 CoSec 所有，`(default)` 因而不会是你的空间。
 
@@ -39,7 +39,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
-错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。之前的构建为不能作为应用 id 的应用写入的变更记录不再可读：对可以读取平台文档的平台主体，查看或放弃它是 `409` `change-unreadable`，其详情说明由运维人员移除它的记录，且从不重复存储的 id；对其他任何人，则与不存在的变更相同。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
+错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息；存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有管道放行凭证的请求，在读取请求体之前就是 `401`。之前的构建为不能作为应用 id 的应用写入的变更记录不再可读：对可以读取平台文档的平台主体，查看或放弃它是 `409` `change-unreadable`，其详情说明由运维人员移除它的记录，且从不重复存储的 id；对其他任何人，则与不存在的变更相同。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
 
 ## 校验策略 {#validating-policies}
 
@@ -79,12 +79,12 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 | 字段 | 含义 |
 |---|---|
-| `tenant` | 必填。 |
-| `principal` | 主体 id；匿名请求时省略。 |
+| `tenant` | 必填：主体的租户，即请求在其中决策的租户。匿名请求为 `(0)`。 |
+| `principal` | 主体 id；匿名请求时省略，执法在租户 `(0)` 上决策它。 |
 | `roles`、`policies` | 成员关系，按令牌声明的写法：`role` 或 `role@space`，以及附加策略的 id。 |
 | `app`、`space` | 声明的作用域；空间按数据面的方式与角色核对。 |
 | `action` | 必填，`service:verb`（未映射的 HTTP 请求为 `http:GET`）。 |
-| `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。 |
+| `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。与请求路径一样，最多 2,048 个字符，每个 `/` 段最多 256 个。 |
 | `remoteIp`、`time` | 客户端地址，以及 ISO 时刻（默认：当前）。 |
 | `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`：此时附加的策略和主体绑定不授予任何东西，它们的 DENY 照样生效。只接受布尔值。 |
 
@@ -92,11 +92,22 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 模拟读取执行时读取的文档：平台文档、租户文档，以及在请求在其应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时的应用文档（[策略语言](./language.md)）。对租户文档的变更，由候选决定这一点：添加了这种绑定的变更会读取应用文档，移除了最后一个这种绑定的变更则不再读取。无法编译的租户文档按未解析处理，因此与数据面一样，它的绑定不会让请求读取应用文档；对请求没有读取的文档给出 `candidate` 时为 `400`。
 
+模拟在请求作用域实际解析到的租户上授权并决策，也就是决定它的那份文档的租户：主体的租户，匿名请求则与数据面一样是 `(0)`。
+匿名请求指定其他任何 `tenant` 都是 `400`，这在检查 `(0)` 上的 `cosec:simulate` 之后；因此 `acme` 的管理员无法用匿名请求
+读取 `(0)` 文档上的决策。
+
+以不同的值两次发送它所读文档（条件、边界或限流 key 中）读取的某个头的请求是 `400`，与执法在决策前拒绝它一样（`PIP-12`）；
+相同的重复算一个值。回答不点名是哪个头。超过请求路径上限的 `resource` 也是 `400`。
+
 模拟没有令牌属性，也不获取外部属性：读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理，因此在这里通常为 Indeterminate。
+
+控制面对每份存储的文档按其内容只解码、编译一次：在同样的头上重复 `simulate`、`explain` 或 `analyze` 不会再次编译，头
+移动之后，在下次读到时编译。`candidate` 每次调用编译一次。要限制一个调用者的调用开销，请按租户限制控制 API
+（[限流](./rate-limiting.md#the-control-api)）。
 
 ## 用 explain 调试决策 {#debugging-a-decision-with-explain}
 
-`explain` 接受同样的 `request`，以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app`。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
+`explain` 接受同样的 `request`（与 `simulate` 一样授权和检查），以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app`。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
 
 ## 变更 {#changes}
 

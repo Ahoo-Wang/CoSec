@@ -109,7 +109,7 @@ class PathNormalizerTest {
         PathNormalizer.withinBounds("/$segment").assert().isTrue()
         PathNormalizer.withinBounds("/${segment}a").assert().isFalse()
         // Path parameters count: a simulation matches the text it is given.
-        PathNormalizer.withinBounds("/a;${segment}").assert().isFalse()
+        PathNormalizer.withinBounds("/a;$segment").assert().isFalse()
         PathNormalizer.withinBounds("order/$segment").assert().isTrue()
         PathNormalizer.withinBounds("/a".repeat(PathNormalizer.MAX_PATH_LENGTH / 2)).assert().isTrue()
         PathNormalizer.withinBounds("/a".repeat(PathNormalizer.MAX_PATH_LENGTH / 2) + "/").assert().isFalse()

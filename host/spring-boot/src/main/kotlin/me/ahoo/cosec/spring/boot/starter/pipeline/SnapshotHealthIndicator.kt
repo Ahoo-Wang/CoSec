@@ -21,8 +21,16 @@ import org.springframework.boot.health.contributor.HealthIndicator
 /**
  * `cosecSnapshot`: UP once the platform document and the prewarmed apps and tenants are installed ([SnapshotReadiness]
  * gates readiness on the same), DOWN before, with what is missing. Add it to the readiness group for its details.
+ *
+ * On Redis it is DOWN too while Redis may evict the policy snapshot ([eviction], RC1-47): its eviction policy is read again
+ * at most once every `revalidate-interval`, so a later `CONFIG SET maxmemory-policy` or a failover to a node set up
+ * otherwise is seen, whatever `eviction-check` let startup do. Requests are not refused for it: a document already
+ * installed stays, and one that is lost fails closed on every instance that has seen it.
  */
-class SnapshotHealthIndicator(private val source: SnapshotSource<*, *>) : HealthIndicator {
+class SnapshotHealthIndicator(
+    private val source: SnapshotSource<*, *>,
+    private val eviction: EvictionPolicyMonitor? = null,
+) : HealthIndicator {
     override fun health(): Health {
         val platform = when (source.peek()?.policies) {
             is DocumentState.Present<*> -> "installed"
@@ -30,7 +38,10 @@ class SnapshotHealthIndicator(private val source: SnapshotSource<*, *>) : Health
             DocumentState.Absent -> "absent"
             null -> "loading"
         }
-        val builder = if (source.isPrewarmed && platform == "installed") Health.up() else Health.down()
-        return builder.withDetail("platform", platform).withDetail("prewarmed", source.isPrewarmed).build()
+        val evicting = eviction?.problem()
+        val builder = if (source.isPrewarmed && platform == "installed" && evicting == null) Health.up() else Health.down()
+        builder.withDetail("platform", platform).withDetail("prewarmed", source.isPrewarmed)
+        evicting?.let { builder.withDetail("eviction", it) }
+        return builder.build()
     }
 }

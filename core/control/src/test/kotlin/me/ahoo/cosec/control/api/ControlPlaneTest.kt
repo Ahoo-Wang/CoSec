@@ -55,9 +55,9 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -326,8 +326,12 @@ class ControlPlaneTest {
         val initech = SnapshotKey.Tenant("initech")
         bootstrap(
             initech,
-            listOf(allow("debug", action = "order:read", condition = Condition.Eq("http.header.x-debug", Literal.Str("1")))),
-            listOf(Binding(BindingId("debug"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("debug"))),
+            listOf(
+                allow("debug", action = "order:read", condition = Condition.Eq("http.header.x-debug", Literal.Str("1")))
+            ),
+            listOf(
+                Binding(BindingId("debug"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("debug"))
+            ),
         )
         val request = bob("read", TenantId("initech")).copy(roles = emptyList(), app = "", space = "")
         plane.simulate(plato, request.copy(headers = mapOf("X-Debug" to listOf("1")))).enforced.decision
@@ -351,7 +355,13 @@ class ControlPlaneTest {
             .assert().isEqualTo(400)
         refused { plane.explain(alice, bob("read").copy(resource = Resource("order", long, emptyMap()))) }
             .assert().isEqualTo(400)
-        val query = AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1/$long", emptyMap()))
+        val query = AccessQuery(
+            ACME,
+            "order",
+            "team-a",
+            Action("order", "read"),
+            Resource("order", "1/$long", emptyMap())
+        )
         refused { plane.analyze(alice, query) }.assert().isEqualTo(400)
         val bounded = "x".repeat(256)
         plane.simulate(alice, bob("read").copy(resource = Resource("order", bounded, emptyMap()))).enforced.decision
@@ -373,7 +383,10 @@ class ControlPlaneTest {
         repeat(3) { plane.simulate(alice, bob("read")) }
         plane.explain(alice, bob("read"))
         plane.explain(alice, bob("read"), SnapshotVersion(1, null, 1))
-        plane.analyze(alice, AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1", emptyMap())))
+        plane.analyze(
+            alice,
+            AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1", emptyMap()))
+        )
         simulator.compilations.get().assert().isEqualTo(compiled)
         val held = simulator.cache.size
 

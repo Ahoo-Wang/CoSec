@@ -383,7 +383,9 @@ class HttpPathPatternTest {
 
     /** Review L4 of #1200: a pattern literal holds whole characters; half a surrogate pair is no character at all. */
     @ParameterizedTest
-    @ValueSource(strings = ["/a\uD83D", "/\uDE00", "/a\uDE00b*", "/{v}\uD83D?", "/\uD83D\uD83D\uDE00", "/x/\uDE00\uDE00"])
+    @ValueSource(
+        strings = ["/a\uD83D", "/\uDE00", "/a\uDE00b*", "/{v}\uD83D?", "/\uD83D\uD83D\uDE00", "/x/\uDE00\uDE00"]
+    )
     fun `a lone surrogate half in a literal does not compile`(pattern: String) {
         assertThrownBy<InvalidPatternException> { HttpPathPattern.compile(pattern) }
             .hasMessageContaining("lone surrogate")

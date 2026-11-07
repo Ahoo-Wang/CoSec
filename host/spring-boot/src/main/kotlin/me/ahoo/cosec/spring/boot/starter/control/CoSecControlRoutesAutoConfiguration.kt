@@ -60,7 +60,8 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 /**
  * The control API as functional routes under `cosec.control.http.base-path` (RFC 0007 §10.2). The pipeline has
  * already authenticated and permitted the request; [ControlHttp] authorizes each control-plane action again as the
- * principal of that request, and answers 401 when no permitted request stands behind it.
+ * principal of that request, and answers 401 when no permitted request stands behind it, on either stack before any of
+ * the body is read (RC1-41).
  */
 @AutoConfiguration(after = [CoSecControlAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
@@ -78,14 +79,20 @@ class CoSecControlRoutesAutoConfiguration {
             val base = apiRootOf(properties)
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
                 val security = RequestSecurity.of(request.exchange().getSecurityContext())
-                request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY).flatMap { body ->
+                // Nothing is read for a request no permitted principal stands behind: ControlHttp answers it 401 (RC1-41).
+                val body = if (security == null) {
+                    Mono.just(EMPTY)
+                } else {
+                    request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY)
+                }
+                body.flatMap { bytes ->
                     mono(Dispatchers.Default) {
                         http.handle(
                             ControlHttpRequest(
                                 request.method().name(),
                                 relative(request.path(), base),
                                 request.queryParams().toSingleValueMap(),
-                                body
+                                bytes
                             ),
                             security,
                         )

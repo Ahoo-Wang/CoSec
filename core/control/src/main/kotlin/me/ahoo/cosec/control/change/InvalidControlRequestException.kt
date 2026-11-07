@@ -19,9 +19,13 @@ package me.ahoo.cosec.control.change
  * message says what the caller sent and never what is stored. Any other [IllegalArgumentException] is a `400` without
  * detail; a stored document or record that does not decode is a `500`.
  *
- * An [IllegalArgumentException], as these checks threw before it existed.
+ * An [IllegalArgumentException], as these checks threw before it existed. Its cause, a parse error of what the caller
+ * sent, is never shown.
  */
-class InvalidControlRequestException(message: String) : IllegalArgumentException(message)
+class InvalidControlRequestException(
+    message: String,
+    cause: Throwable? = null
+) : IllegalArgumentException(message, cause)
 
 /** [require], for a check of a caller's request: throws [InvalidControlRequestException] with [message]. */
 internal inline fun requireRequest(value: Boolean, message: () -> String) {

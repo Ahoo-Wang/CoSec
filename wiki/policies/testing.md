@@ -31,7 +31,7 @@ principals of the `(platform)` tenant.
 | Start a shadow window, publish | `cosec:publish` |
 | Skip a shadow window | `cosec:skip-shadow` |
 | Approve, reject | `cosec:approve` |
-| `simulate`, `explain`, `analyze` | `cosec:simulate`, `cosec:explain`, `cosec:analyze` on the tenant document asked about |
+| `simulate`, `explain`, `analyze` | `cosec:simulate`, `cosec:explain` on the tenant document that decides the request (`(0)`'s for one without a principal); `cosec:analyze` on the tenant document asked about |
 
 `cosec:grant` is checked on the scope of each binding, `scope/<tenant>/<app>/<space>`: `*` for a binding of any
 app or any space, and `(default)` for the default space, so a policy that limits grants in the default space names
@@ -56,7 +56,10 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
-exists. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
+exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
+not one of MERGE, REPLACE.`), never an exception's message; a stored document or record that does not decode, such as
+one a newer version wrote during a rolling upgrade, is a `500`. A request without a credential the pipeline permitted is
+a `401` before any of its body is read. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
 abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
 an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
 host logs why at `INFO`, with the problem's `requestId`
@@ -105,12 +108,12 @@ change's candidate too:
 
 | Field | Meaning |
 |---|---|
-| `tenant` | Required. |
-| `principal` | The principal id; leave it out for an anonymous request. |
+| `tenant` | Required: the principal's tenant, the one the request is decided in. For an anonymous request, `(0)`. |
+| `principal` | The principal id; leave it out for an anonymous request, which enforcement decides on tenant `(0)`. |
 | `roles`, `policies` | The memberships, as token claims write them: `role` or `role@space`, and attached policy ids. |
 | `app`, `space` | The declared scope; the space is checked against the roles as on the data plane. |
 | `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). |
-| `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. |
+| `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. At most 2,048 characters, 256 per `/` segment, as a request path is. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
 | `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
 
@@ -125,12 +128,26 @@ adds such a binding reads the app document, one that removes the last of them no
 does not compile reads as unresolved, so its bindings make the request read no app document, as on the data plane;
 a `candidate` of a document the request did not read is `400`.
 
+A simulation is authorized and decided on the tenant the request's scope resolves to, whose document decides it: the
+principal's, or `(0)` for an anonymous request, as on the data plane. An anonymous request that names any other
+`tenant` is `400`, after `cosec:simulate` on `(0)` is checked; so an administrator of `acme` cannot use an anonymous
+request to read decisions on `(0)`'s document.
+
+A request that sends a header the documents it reads read (in a condition, a boundary or a rate limit key) twice with
+different values is `400`, as enforcement refuses it before deciding (`PIP-12`); identical repeats are one value. The
+answer does not name the header. A `resource` longer than a request path may be is `400` too.
+
 A simulation has no token attributes and fetches no external attributes: a statement that reads `ext.*` finds it
 missing and follows its `onMissing`, so it is usually Indeterminate here.
 
+The control plane decodes and compiles each stored document once for its content: a repeated `simulate`, `explain` or
+`analyze` on the same heads compiles nothing again, and a head that moves is compiled when it is next read. A
+`candidate` is compiled once per call. To bound what one caller's calls cost, limit the control API per tenant
+([Rate limiting](./rate-limiting.md#the-control-api)).
+
 ## Debugging a decision with explain
 
-`explain` takes the same `request` and, optionally, `at`: the document revisions a decision used, as its audit event
+`explain` takes the same `request`, authorized and checked as `simulate`'s, and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
 kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
 document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
