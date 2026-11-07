@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
@@ -46,8 +47,9 @@ import java.util.Base64
  *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
  * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
- * the wrong type, a duplicate, an empty id or a header over the size limit is refused, never read as anonymous. The
- * `cosec-identity` format descriptor (`schema/cosec-identity.schema.json`) describes the JSON.
+ * the wrong type, a duplicate, an empty id, a string with an unpaired UTF-16 surrogate (RC1-52) or a header over the
+ * size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
+ * (`schema/cosec-identity.schema.json`) describes the JSON.
  */
 object IdentityCodec {
     /** The header the gateway sets on a permitted request, and strips from every request it receives. */
@@ -249,8 +251,13 @@ object IdentityCodec {
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: throw malformed("[$name] is missing")
 
-    private fun JsonNode.text(path: String): String =
-        if (isString) asString() else throw malformed("$path is not a string")
+    /** A string field: like every id the identity names, it holds no unpaired UTF-16 surrogate (RC1-52, `IDN-10`). */
+    private fun JsonNode.text(path: String): String {
+        if (!isString) throw malformed("$path is not a string")
+        val text = asString()
+        if (!Identifiers.isWellFormed(text)) throw malformed("$path holds an unpaired surrogate")
+        return text
+    }
 
     private fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
 

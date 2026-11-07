@@ -41,6 +41,12 @@ policies decide what anonymous callers may do: a public path still works. If the
 is `401` with the problem type `token-expired`, `token-revoked` or `token-invalid` instead of `unauthorized`
 ([Responses and status codes](./web.md#responses-and-status-codes)).
 
+**Ids are text.** A token whose `sub`, `tenantId`, `jti`, `roles` or `policies` hold an unpaired UTF-16 surrogate,
+which JSON writes as an escape (`"beta\uD800"`), is `token-invalid`, before any revocation is read (`IDN-10`): a Redis
+key would hold `?` in its place, so the token would read the memberships, revocations and documents of `beta?`.
+`JwtTokenConverter` refuses to sign a principal whose id, tenant, roles, policies or attributes hold one, since the JWT
+library would write `?` and issue a token of another principal. Surrogate pairs, such as an emoji, are ordinary text.
+
 **Delegation tokens are refused.** A token with an `act` claim (an [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)
 delegation token: `sub` is the party acted for, `act` the one acting) is rejected as `token-invalid`, even when its
 signature and expiry are valid (`IDN-4`). A deny is audited with the reason code `DELEGATION_UNSUPPORTED`; on a permit,

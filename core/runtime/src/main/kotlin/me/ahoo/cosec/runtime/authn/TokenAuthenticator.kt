@@ -22,6 +22,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
 import me.ahoo.cosec.runtime.token.SimpleAccessToken
+import me.ahoo.cosec.runtime.token.TokenClaims
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
@@ -51,7 +52,9 @@ import java.time.Instant
  *   ([DelegationUnsupportedException], `IDN-4`): `DELEGATION_UNSUPPORTED`; any other [TokenVerificationException]:
  *   `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with the matching `token-*` problem
  *   (RFC 0006 K2); a delegation token answers `token-invalid`. So does a token whose `attributes` claim names one of
- *   [RESERVED_ATTRIBUTES], which CoSec sets for another kind of credential (RC1-25).
+ *   [RESERVED_ATTRIBUTES], which CoSec sets for another kind of credential (RC1-25), and one whose subject, tenant,
+ *   `jti`, `roles` or `policies` hold an unpaired UTF-16 surrogate, which would name another id's Redis keys (RC1-52,
+ *   `IDN-10`): refused before [revocations] is asked about it.
  * - The memberships come from the token as [MembershipSource.of] reads them.
  * - Break-glass (RFC 0009 §4.2, `BRK-8`): only when [verifier] is CoSec's own ([CoSecTokenVerifier]), whose credential
  *   is then [Identity.Method.JWT]. Any other verifier's credential is named [method], and never gets break-glass.
@@ -98,6 +101,10 @@ class TokenAuthenticator(
             return INVALID
         }
         if (principal.attributes.keys.any { it in RESERVED_ATTRIBUTES }) {
+            return INVALID
+        }
+        // Before any store is asked about it: an id with an unpaired surrogate would read another's key (RC1-52).
+        if (!TokenClaims.areWellFormed(principal)) {
             return INVALID
         }
         if (revocations.isRevoked(principal.tokenId)) {

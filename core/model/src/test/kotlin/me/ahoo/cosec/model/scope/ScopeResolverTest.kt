@@ -146,7 +146,9 @@ class ScopeResolverTest {
     fun `a declared app that cannot be an app id is rejected with or without a host app`() {
         // RC1-15: a control character, which would forge a plain-text log line, as a tenant id's would.
         val controls = listOf("a\nforged", "a\rb", "\u0000", "a\u007Fb", "a\u0085b", "\t")
-        val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1)) + controls
+        // RC1-52: an unpaired surrogate, which a Redis key writes as '?', so `shop\uD800` would read `shop?`'s documents.
+        val unpaired = listOf("shop\uD800", "\uDC00shop", "\uD800", "a\uDC00\uD800b")
+        val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1)) + controls + unpaired
         for (host in listOf(noHost, HostScope(AppId("order")))) {
             for (app in invalid) {
                 rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), host))
@@ -156,6 +158,9 @@ class ScopeResolverTest {
         val longest = "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH)
         resolved(ScopeResolver.resolve(user, DeclaredScope(longest, ""), noHost)).app.assert()
             .isEqualTo(AppId(longest))
+        // A surrogate pair is one character: an app id may hold it.
+        resolved(ScopeResolver.resolve(user, DeclaredScope("shop\uD83D\uDE00", ""), noHost)).app.assert()
+            .isEqualTo(AppId("shop\uD83D\uDE00"))
     }
 
     @Test

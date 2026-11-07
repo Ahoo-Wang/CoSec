@@ -14,11 +14,12 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Cache
+import me.ahoo.cosec.model.Identifiers
 
 /**
  * Revoked Token Cache .
  *
- * Key is the token id (jti); value is `true` when the token has been revoked.
+ * Key is the token id (jti, [key]); value is `true` when the token has been revoked.
  * Entries are written with their own lifetime, the remaining lifetime of the revoked token's bound refresh token.
  *
  * The local tier is configured via `cosec.authorization.cache.token.*`
@@ -32,5 +33,19 @@ interface RevokedTokenCache : Cache<String, Boolean> {
     companion object {
         /** Bounds how long a "not revoked" lookup is cached locally if an invalidation message is lost. */
         const val MISSING_TTL_SECONDS = 30L
+
+        /**
+         * The key of the token [tokenId]: the id itself, which may not hold an unpaired UTF-16 surrogate, since the Redis
+         * key would write it as `?` (RC1-52, `IDN-10`): revoking `jti\uD800` would revoke `jti?`.
+         *
+         * @throws IllegalArgumentException when [tokenId] holds one
+         */
+        fun key(tokenId: String): String {
+            require(Identifiers.isWellFormed(tokenId)) {
+                "Token [${Identifiers.printable(tokenId)}] names no key: an unpaired UTF-16 surrogate would share it with " +
+                    "another token."
+            }
+            return tokenId
+        }
     }
 }

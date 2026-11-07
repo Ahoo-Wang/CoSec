@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "IDN-10"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A valid token of alice in tenant beta\\uD800 (an unpaired surrogate, which a Redis key writes as ?) is invalid: the request, evaluated as anonymous, is denied 401 token-invalid, never decided in tenant beta?, whose document lets alice read.",
+  "documents": {
+    "tenants": {
+      "beta?": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "beta?"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "beta\ud800",
+      "id": "alice"
+    }
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}

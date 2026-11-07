@@ -104,6 +104,11 @@ contract:
 - **Report failure by throwing.** Never answer "nothing" for a lookup that failed: an empty membership list, a missing
   attribute or "not revoked" can each turn a deny into a permit. The pipeline turns a thrown exception or a timeout into
   `Indeterminate`, which answers `503` unless a DENY matches.
+- **Answer ids that are text.** An id an SPI gives (a principal, a tenant, a credential id, a role, a space, a policy
+  id) must not hold an unpaired UTF-16 surrogate: a Redis key would hold `?` in its place and share another id's key
+  (`IDN-10`). `AuthenticatedPrincipal` and `ApiKey` refuse one when made, so an authenticator or an API key store
+  that gives one throws, and a `MembershipProvider` answer with one fails: each is a `503`. `Identifiers.isWellFormed`
+  (`cosec-model`) is the test.
 - **Do not catch cancellation.** A client that goes away cancels the request's coroutine. Rethrow
   `CancellationException`, and do not use `runCatching` around a suspending call.
 - **Keep it cheap.** Each call has a timeout (see [Configuration](../operations/configuration.md)); the whole request

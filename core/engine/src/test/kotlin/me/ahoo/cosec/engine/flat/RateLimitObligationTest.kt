@@ -89,6 +89,31 @@ class RateLimitObligationTest {
             .assert().isEqualTo(Obligation.RateLimit("by-tier", "g:", limit, false))
     }
 
+    /**
+     * RC1-52 (`IDN-10`): a limiter writes its counters' keys as UTF-8, which holds `?` for an unpaired surrogate. A value
+     * with one gets an escaped bucket of its own, well formed; every other value keeps the bucket 7.x names.
+     */
+    @Test
+    fun `a key value with an unpaired surrogate counts in a well formed bucket of its own`() {
+        val platform = permitting(rule("by-order", key = "resource.var.id", resource = "http:path:/orders/{id}"))
+        val view = SnapshotView(platform, null, tenant())
+        fun bucket(id: String) = (
+            obligations(
+                view,
+                flatRequest(path = "/orders/$id")
+            ).single() as Obligation.RateLimit
+            ).bucket!!
+        val values = listOf("x\uD800", "x?", "x\\uD800", "x\\\\uD800", "x\uDC00", "x\uD83D\uDE00", "\\")
+        val buckets = values.map(::bucket)
+        buckets.toSet().assert().describedAs("one bucket per value").hasSize(values.size)
+        buckets.forEach { it.encodeToByteArray().decodeToString().assert().describedAs("well formed").isEqualTo(it) }
+        bucket("x?").assert().isEqualTo("g:x?")
+        bucket("x\uD83D\uDE00").assert().isEqualTo("g:x\uD83D\uDE00")
+        bucket("x\uD800").assert().isEqualTo("e:x\\uD800")
+        bucket("x\\uD800").assert().isEqualTo("g:x\\uD800")
+        CompiledRateLimit.keyedBucket("\\\uDC00").assert().isEqualTo("e:\\\\\\uDC00")
+    }
+
     /** P15: a deny spends nothing, so it carries no obligation. */
     @Test
     fun `a deny carries no obligation`() {

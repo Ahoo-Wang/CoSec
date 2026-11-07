@@ -87,6 +87,15 @@ public final class me/ahoo/cosec/model/Environment {
 	public final fun getRequestId ()Ljava/lang/String;
 }
 
+public final class me/ahoo/cosec/model/Identifiers {
+	public static final field INSTANCE Lme/ahoo/cosec/model/Identifiers;
+	public final fun areWellFormed (Ljava/lang/Iterable;)Z
+	public final fun isUnpairedSurrogateAt (Ljava/lang/CharSequence;I)Z
+	public final fun isWellFormed (Ljava/lang/CharSequence;)Z
+	public final fun isWellFormed (Lme/ahoo/cosec/model/Memberships;)Z
+	public final fun printable (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public abstract interface class me/ahoo/cosec/model/Match {
 	public static final field Companion Lme/ahoo/cosec/model/Match$Companion;
 	public static final field WILDCARD Ljava/lang/String;

@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.id.IdGenerator
@@ -106,6 +107,13 @@ class JwtTokenConverter(
             accessTokenBuilder
                 .withClaim(TENANT_ID_KEY, tenantCapable.tenant.tenantId)
         }
+        // RC1-52 (`IDN-10`): java-jwt writes an unpaired surrogate as `?`, so the token would be another principal's,
+        // another tenant's, or carry another value; and a token with one would be refused when it is presented. Fail
+        // where it is issued instead.
+        require(wellFormed(principal)) {
+            "Principal [${Identifiers.printable(principal.id)}] holds an unpaired UTF-16 surrogate in its id, tenant, " +
+                "roles, policies or attributes: a token cannot carry it."
+        }
         val accessToken = accessTokenBuilder.sign(algorithm)
         val refreshTokenId = idGenerator.generate()
         val refreshTokenExp = Date(System.currentTimeMillis() + refreshTokenValidity.toMillis())
@@ -139,6 +147,22 @@ class JwtTokenConverter(
         if (principal.roles.isNotEmpty()) {
             accessTokenBuilder.withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
         }
+    }
+
+    /** Whether every string the token would carry of [principal] holds no unpaired surrogate. */
+    private fun wellFormed(principal: CoSecPrincipal): Boolean =
+        Identifiers.isWellFormed(principal.id) &&
+            Identifiers.isWellFormed(MembershipClaims.tenantOf(principal).value) &&
+            Identifiers.areWellFormed(principal.roles) &&
+            Identifiers.areWellFormed(principal.policies) &&
+            wellFormedClaim(principal.attributes)
+
+    private fun wellFormedClaim(value: Any?): Boolean = when (value) {
+        is String -> Identifiers.isWellFormed(value)
+        is Map<*, *> -> value.all { (name, item) -> wellFormedClaim(name) && wellFormedClaim(item) }
+        is Iterable<*> -> value.all(::wellFormedClaim)
+        is Array<*> -> value.all(::wellFormedClaim)
+        else -> true
     }
 
     private fun exceedsMembershipClaimLimit(principal: CoSecPrincipal): Boolean {

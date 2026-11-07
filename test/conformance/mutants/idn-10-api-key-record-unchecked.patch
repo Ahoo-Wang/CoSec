@@ -1,0 +1,17 @@
+# Rule: IDN-10
+# Mutant: an API key record may name a principal, tenant or role with an unpaired surrogate
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
+index 0d494268..b7ccc382 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
+@@ -48,7 +48,7 @@ class ApiKey(
+         // which the pipeline answers 503, never as another principal's or tenant's key.
+         val wellFormed = Identifiers.isWellFormed(id) && Identifiers.isWellFormed(principalId) &&
+             Identifiers.isWellFormed(tenantId) && (roles == null || Identifiers.areWellFormed(roles))
+-        require(wellFormed) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
++        require(wellFormed || true) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
+         require(principalId.isNotEmpty()) { "API key [$id] has a principal." }
+         require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }
+     }

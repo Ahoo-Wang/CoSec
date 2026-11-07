@@ -16,6 +16,7 @@ package me.ahoo.cosec.spi.authn
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -119,6 +120,29 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {
             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+        }
+        // RC1-52 (`IDN-10`): an id with an unpaired surrogate would share a Redis key with another id. An authenticator
+        // that gives one throws here, which the pipeline answers 503, as it answers any authenticator that throws.
+        require(wellFormed()) {
+            "Principal [${Identifiers.printable(id.value)}] of tenant [${Identifiers.printable(tenant.value)}] holds an " +
+                "id with an unpaired UTF-16 surrogate: its id, tenant, credential id or memberships."
+        }
+    }
+
+    /** Whether every id the principal holds follows the text rule of ids ([Identifiers]). */
+    private fun wellFormed(): Boolean {
+        if (!Identifiers.isWellFormed(id.value) || !Identifiers.isWellFormed(tenant.value)) {
+            return false
+        }
+        if (credential != null && !Identifiers.isWellFormed(credential.id)) {
+            return false
+        }
+        return when (membershipSource) {
+            is MembershipSource.Claims -> Identifiers.isWellFormed(membershipSource.memberships)
+            is MembershipSource.Provider -> membershipSource.cap.orEmpty().all { (space, roles) ->
+                Identifiers.isWellFormed(space.value) && roles.all { Identifiers.isWellFormed(it.value) }
+            }
+            is MembershipSource.Unusable -> true
         }
     }
 

@@ -29,6 +29,7 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
@@ -341,8 +342,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         val route = "The cosec-app-id of route [$routeId]"
         error(
             if (app is String) {
-                "$route cannot be an app id: blank, *, with ':' or a control character, or longer than " +
-                    "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+                "$route cannot be an app id: blank, *, with ':', a control character or an unpaired surrogate, or " +
+                    "longer than ${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             } else {
                 "$route is a ${app.javaClass.name}, not a string: an app id is a string. Quote it in the route's " +
                     "metadata (cosec-app-id: \"<app id>\"), as a single value."
@@ -350,9 +351,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         )
     }
 
-    /** [value] for a log line: control characters escaped, so no configured value can forge one. */
-    private fun printable(value: String?): String =
-        value?.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }?.joinToString("").orEmpty()
+    /** [value] for a log line: control characters and unpaired surrogates escaped, so no configured value can forge one. */
+    private fun printable(value: String?): String = Identifiers.printable(value.orEmpty())
 
     /**
      * The rest of [decide], for the request as [authn] authenticated it. A credential whose principal the membership

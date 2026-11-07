@@ -74,6 +74,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 - **永远不阻塞调用线程。** 这些 SPI 都是 `suspend` 函数（快照存储返回 `CompletableFuture`）。使用挂起式客户端没有问题。基于阻塞客户端（JDBC、阻塞式 HTTP 客户端）的实现，要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界执行器上。CoSec 模块内不得使用 `Dispatchers.IO`（`RuntimeBoundaryTest` 禁止）；在你自己的代码里，也优先使用按依赖规模设定的有界执行器。
 - **被取消时停下。** 超时是协作式的：到了 SPI 的超时或 `cosec.pipeline.timeout`，Pipeline 取消调用，并等它返回之后才应答 `503`。`withContext(myDispatcher)` 停不下阻塞调用，所以挂住 30 秒的 JDBC 查询会让请求等 30 秒，而不是它的 300 ms 超时；在 WebMvc 上还会占住一个请求线程。`runInterruptible` 在取消时中断线程；对不响应中断的调用，再给客户端设置它自己的超时（JDBC 查询超时、HTTP 读取超时）。
 - **用抛出异常报告失败。** 查找失败时，永远不要返回“什么都没有”：空的成员关系、缺失的属性或“未吊销”，都可能把拒绝变成放行。Pipeline 把抛出的异常或超时变成 `Indeterminate`，除非有 DENY 匹配，否则应答 `503`。
+- **给出的 id 是文本。** SPI 给出的 id（主体、租户、凭证 id、角色、空间、策略 id）不能带落单的 UTF-16 代理项：Redis key 会在它的位置写 `?`，与另一个 id 共用一个 key（`IDN-10`）。`AuthenticatedPrincipal` 与 `ApiKey` 在构造时拒绝它，所以给出这种 id 的认证器或 API key 存储会抛出异常，带这种 id 的 `MembershipProvider` 答复也会失败：都是 `503`。判断用 `Identifiers.isWellFormed`（`cosec-model`）。
 - **不要捕获取消。** 客户端离开会取消请求的协程。重新抛出 `CancellationException`，也不要用 `runCatching` 包裹挂起调用。
 - **保持廉价。** 每次调用都有超时（见[配置](../operations/configuration.md)）；整个请求受 `cosec.pipeline.timeout` 约束。不挂起的本地应答不切换线程，也不设定时器。
 

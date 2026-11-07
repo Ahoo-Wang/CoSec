@@ -100,6 +100,7 @@ public abstract interface class me/ahoo/cosec/cache/RevokedTokenCache : me/ahoo/
 
 public final class me/ahoo/cosec/cache/RevokedTokenCache$Companion {
 	public static final field MISSING_TTL_SECONDS J
+	public final fun key (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/cache/RevokedTokenCache$DefaultImpls {

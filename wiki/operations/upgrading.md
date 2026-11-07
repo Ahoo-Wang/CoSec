@@ -144,6 +144,19 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   parameter once.
 - **App ids refuse control characters** (RC1-15, `SCP-7`), as tenant ids do: a declared app with one is
   `403` `scope-rejected` (`401` for an anonymous caller), and a host app with one fails startup.
+- **Ids refuse unpaired UTF-16 surrogates** (RC1-52, `IDN-10`). A JSON token or body can write one as an escape
+  (`"beta\uD800"`), and a Redis key holds `?` in its place, so tenant `beta\uD800` read the documents of tenant
+  `beta?`, and a principal's memberships and revocations, and a rate limit bucket, were shared the same way. Now a
+  token that claims one in its `sub`, `tenantId`, `jti`, `roles` or `policies` is `401` `token-invalid`, and CoSec's
+  own issuer refuses to sign one (login fails); a `CoSec-Identity` that names one is `400`; a control request that
+  holds one anywhere in its path, query or body is `400`; an authenticator, an API key record or a membership
+  provider that gives one fails the request with `503`; an app or tenant id with one is refused as one with a control
+  character is. A rate limit `key` value with one counts in a bucket of its own (`e:` and the value, escaped). Ids
+  with surrogate pairs, such as an emoji, are unchanged. Log lines and messages write such a surrogate as `\uXXXX`,
+  never `?`. In code, `Identifiers` (`cosec-model`) holds the rule; `ApiKey` and `AuthenticatedPrincipal` refuse such
+  ids when made, and `RevokedTokenCache.key`, `RevokedSubjectCache.key` and `MembershipCache.key` throw for them.
+  Nothing to migrate; where a token issuer or a script could have sent such ids, what is stored under the id with
+  `?` may have been written for the other.
 - **The control plane takes only app ids** (`SCP-7`). An app id is not blank, not `*`, has no `:` and no control
   character, and has at most 128 characters; earlier builds took any app without `:`. A binding in any other app is
   now a `V2` finding (`400`) at `$.bindings[i].app`, and since the whole candidate is checked, a document that still

@@ -101,6 +101,31 @@ class MembershipResolverTest {
         ).resolve(marked()).assert().isNull()
     }
 
+    /**
+     * RC1-52, `IDN-10`: a provider that answers a space, role or policy id with an unpaired surrogate gave no usable
+     * answer: the resolution fails (503), as for any answer the resolver cannot use, never resolving to fewer roles.
+     */
+    @Test
+    fun anAnswerWithAnIdHoldingAnUnpairedSurrogateFails() = runTest {
+        val answers = listOf(
+            Memberships(
+                Memberships.Source.PROVIDER,
+                mapOf(SpaceId("team\uD800") to setOf(RoleId("editor"))),
+                emptyList()
+            ),
+            Memberships(
+                Memberships.Source.PROVIDER,
+                mapOf(SpaceId.DEFAULT to setOf(RoleId("editor\uDC00"))),
+                emptyList()
+            ),
+            Memberships(Memberships.Source.PROVIDER, emptyMap(), listOf(PolicyId("p\uD800"))),
+        )
+        for (answer in answers) {
+            MembershipResolver(MembershipProvider { _, _ -> MembershipAnswer.Known(answer) }).failure()
+                .message.assert().contains("unpaired UTF-16 surrogate")
+        }
+    }
+
     @Test
     fun providerIsAskedForTheTokenTenant() = runTest {
         MembershipResolver(provider).resolve(marked(), TenantId("other")).assert().isNull()
