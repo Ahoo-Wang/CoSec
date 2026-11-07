@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index fc56c2d8..662bec51 100644
+index 0f98c085..d66f884f 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -346,7 +346,7 @@ class DefaultControlPlane(
+@@ -350,7 +350,7 @@ class DefaultControlPlane(
          val tenant = simulator.tenantOf(request)
          val key = SnapshotKey.Tenant(tenant.value)
          authority.require(operator, key, action)

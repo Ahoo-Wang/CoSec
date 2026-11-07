@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: a simulated http path is held to the length bounds only, not normalized as a request path is
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index 0f98c085..b071c477 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -369,7 +369,7 @@ class DefaultControlPlane(
+      */
+     private fun enforceable(resource: Resource): Resource {
+         val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+-            PathNormalizer.normalize(resource.id)
++            resource.id.takeIf { PathNormalizer.withinBounds(it) }
+         } else {
+             resource.id.takeIf { PathNormalizer.withinBounds(it) }
+         }

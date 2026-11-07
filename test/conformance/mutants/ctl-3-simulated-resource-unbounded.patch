@@ -1,17 +1,20 @@
 # Rule: CTL-3
-# Mutant: a simulated, explained or analyzed resource is not held to a request path's bounds
+# Mutant: a simulated, explained or analyzed resource is decided as given: neither normalized nor bounded
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 7b57edac..77d07675 100644
+index 0f98c085..b31ca5df 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -353,7 +353,7 @@ class DefaultControlPlane(
- 
-     /** RC1-41, review L5 of #1200: what no request path can be is not decided either; its globs would cost more. */
-     private fun requireBounded(resource: Resource) {
--        if (!PathNormalizer.withinBounds(resource.id)) {
-+        if (resource.id.isEmpty() && !PathNormalizer.withinBounds(resource.id)) {
-             throw ChangeRejectedException(
-                 BAD_REQUEST,
-                 "The resource is longer than a request's path may be: ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
+@@ -369,9 +369,9 @@ class DefaultControlPlane(
+      */
+     private fun enforceable(resource: Resource): Resource {
+         val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+-            PathNormalizer.normalize(resource.id)
++            PathNormalizer.normalize(resource.id) ?: resource.id
+         } else {
+-            resource.id.takeIf { PathNormalizer.withinBounds(it) }
++            resource.id
+         }
+         id ?: throw ChangeRejectedException(
+             BAD_REQUEST,
