@@ -627,7 +627,9 @@ for a check, `412` for an `ifMatch` that does not hold).
 ## A log line names an id with `\u` escapes {#a-log-line-names-an-id-with-u-escapes}
 
 CoSec writes a control character or an unpaired UTF-16 surrogate of an id as its `\uXXXX` escape in log lines and
-error messages: `Tenant id [beta\uD800] ...`, never `beta?`. The escape is the id as it arrived; `beta?` is another id.
+error messages: `Tenant id [beta\uD800] ...`, never `beta?`, which is another id. A `\uXXXX` in a line is either such an
+escape or the id's own characters (a backslash, `u` and four hex digits, which an id may hold): the line that refuses an
+id says why, so read the reason rather than the id.
 A control character would forge a line (RC1-15); a surrogate would be written as `?`, naming another, healthy tenant
 or principal (RC1-52). Such an id is refused where it enters (`IDN-10`: [`token-invalid`](#token-invalid),
 [`unavailable`](#unavailable), [Control-plane errors](#control-plane-errors)), so it appears only in the line that

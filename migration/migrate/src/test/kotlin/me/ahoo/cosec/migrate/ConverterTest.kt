@@ -21,6 +21,7 @@ import me.ahoo.cosec.migrate.Fixtures7x.source
 import me.ahoo.cosec.migrate.Fixtures7x.statement
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
@@ -226,6 +227,40 @@ class ConverterTest {
         val report = convert(source(apps = apps), Partition.BY_OWNER).report
         report.rejections.filter { it.kind == RejectionKind.INVALID_ID }.map { it.location }
             .assert().containsExactlyElementsOf(ids.map { "app:$it" })
+    }
+
+    /**
+     * RC1-52 (`IDN-10`): 7.x JSON can write an unpaired surrogate as an escape (`"\uD800"`), and a Redis key would write
+     * it as `?`, so an id holding one would name another id's keys. Every such id of the converted documents is rejected
+     * where it is, and nothing is published, as the control plane refuses a request that holds one.
+     */
+    @Test
+    fun `an id with an unpaired surrogate is rejected, and nothing is converted`() {
+        fun rejected(app: Source7x.App): List<Rejection> {
+            val conversion = convert(source(apps = listOf(app)), Partition.BY_OWNER)
+            conversion.report.accepted.assert().isFalse()
+            conversion.documents.assert().isEmpty()
+            return conversion.report.rejections.filter { it.kind == RejectionKind.INVALID_ID }
+                .onEach { Identifiers.isWellFormed(it.message).assert().describedAs(it.message).isTrue() }
+        }
+        val permissionIds =
+            rejected(app("shop", appPermission("shop", permission("read\\uD800")), "clerk" to """["read\uD800"]"""))
+        permissionIds.map { it.location }.assert()
+            .contains("app:shop#$.catalog.groups[0].permissions[0].id", "app:shop#$.bindings[0].policy")
+        permissionIds.first().message.assert().contains("read\\uD800")
+        rejected(
+            app("shop", appPermission("shop", permission("read")), "clerk\uDC00" to """["read"]""")
+        ).map { it.location }
+            .assert().contains("app:shop#$.bindings[0].subject.role")
+        rejected(
+            app("shop\uD800", appPermission("shop\uD800", permission("read")), "clerk" to """["read"]""")
+        ).map { it.location }
+            .assert().containsExactly("app:shop\uD800")
+
+        // A surrogate pair is a character like any other.
+        val paired =
+            app("shop", appPermission("shop", permission("read\\uD83D\\uDE00")), "clerk" to """["read\uD83D\uDE00"]""")
+        convert(source(apps = listOf(paired)), Partition.BY_OWNER).report.accepted.assert().isTrue()
     }
 
     @Test

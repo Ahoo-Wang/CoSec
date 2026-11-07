@@ -104,7 +104,7 @@
     {
       "id": "IDN-10",
       "source": "RC1-52 (RFC 0004 §4.1)",
-      "statement": "An id with an unpaired UTF-16 surrogate is refused where it enters CoSec, so two different ids never share a stored key: a Redis key is UTF-8, which writes the surrogate as `?`, and tenant `beta\\uD800` would read the documents, memberships and revocations of tenant `beta?`. A token that claims one in its subject, tenant, jti, roles or policies is invalid (401 token-invalid) before any revocation is read, and CoSec's token issuer refuses to sign one; a forwarded identity naming one is malformed (400); a control request holding one in its path, query or body is 400; an authenticator, an API key record or a membership provider that gives one has failed (503). A surrogate pair is a character like any other. A rate limit key value with one counts in an escaped bucket of its own, never in another value's.",
+      "statement": "An id with an unpaired UTF-16 surrogate is refused where it enters CoSec, so two different ids never share a stored key: a Redis key is UTF-8, which writes the surrogate as `?`, and tenant `beta\\uD800` would read the documents, memberships and revocations of tenant `beta?`. A token that claims one in its subject, tenant, jti, roles or policies is invalid (401 token-invalid) before any revocation is read, and CoSec's token issuer refuses to sign one; a forwarded identity naming one is malformed (400); a control request holding one in its path, query or body is 400; an authenticator, an API key record or a membership provider that gives one has failed (503); cosec-migrate rejects a converted document that holds one (INVALID_ID), and publishes nothing. A surrogate pair is a character like any other. A rate limit key value with one counts in an escaped bucket of its own, never in another value's.",
       "level": "pipeline",
       "pending": null,
       "guards": [
@@ -121,7 +121,13 @@
         "jwt:JwtTokenVerifierTest#aTokenClaimingAnIdWithAnUnpairedSurrogateIsInvalid",
         "jwt:JwtTokenConverterTest#anIdWithAnUnpairedSurrogateIsNotIssued",
         "control:ControlHttpTest#a request holding an unpaired surrogate is a 400, wherever it holds it",
-        "engine:RateLimitObligationTest#a key value with an unpaired surrogate counts in a well formed bucket of its own"
+        "engine:RateLimitObligationTest#a key value with an unpaired surrogate counts in a well formed bucket of its own",
+        "runtime:ApiKeyAuthenticatorTest#aKeyRecordWithAnIdHoldingAnUnpairedSurrogateCannotBeMade",
+        "runtime:RevocableTokenVerifierTest#verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate",
+        "cocache:UnpairedSurrogateKeyTest#anAppIdWithAnUnpairedSurrogateNeverReadsAnotherAppsDocument",
+        "cocache:UnpairedSurrogateKeyTest#aPrincipalWithAnUnpairedSurrogateIsNeitherRevokedNorReadAsAnotherPrincipal",
+        "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
+        "migrate:ConverterTest#an id with an unpaired surrogate is rejected, and nothing is converted"
       ]
     }
   ]

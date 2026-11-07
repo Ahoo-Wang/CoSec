@@ -4,37 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "A valid token of principal alice\\uDC00 in acme, whose memberships and revocations a Redis key would read as alice?'s, is invalid: 401 token-invalid, never alice?, whom acme lets read.",
-  "documents": {
-    "tenants": {
-      "acme": {
-        "policies": [
-          {
-            "id": "alice-reads",
-            "statements": [
-              {
-                "effect": "allow",
-                "action": "http:GET",
-                "resource": "http:path:/orders/**"
-              }
-            ]
-          }
-        ],
-        "bindings": [
-          {
-            "id": "alice-reads",
-            "subject": {
-              "principal": "alice?",
-              "tenant": "acme"
-            },
-            "app": "*",
-            "space": "*",
-            "policy": "alice-reads"
-          }
-        ]
-      }
-    }
-  },
+  "description": "A valid token of principal alice\\uDC00 in acme is 401 token-invalid, evaluated as anonymous, where it would otherwise be authenticated (and denied 403). This harness stores documents in memory, by Java string, so it cannot alias keys: that principal alice\\uDC00 and principal alice? would share a Redis key is guarded by cocache:UnpairedSurrogateKeyTest.",
   "http": {
     "method": "GET",
     "path": "/orders/1",

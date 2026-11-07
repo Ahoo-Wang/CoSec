@@ -485,7 +485,8 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 ## 日志行中的 id 带 `\u` 转义 {#a-log-line-names-an-id-with-u-escapes}
 
 CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16 代理项写成 `\uXXXX` 转义：`Tenant id [beta\uD800] ...`，从不写成
-`beta?`。转义就是 id 到达时的样子；`beta?` 是另一个 id。控制字符会伪造日志行（RC1-15）；代理项会被写成 `?`，点名另一个健康的租户或主体（RC1-52）。
+`beta?`，那是另一个 id。日志行里的 `\uXXXX` 可能是这种转义，也可能是 id 本身的字符（反斜杠、`u` 和四位十六进制数字，id 可以含有这些字符）：
+拒绝 id 的那一行会写明原因，请读原因，而不是 id。控制字符会伪造日志行（RC1-15）；代理项会被写成 `?`，点名另一个健康的租户或主体（RC1-52）。
 这样的 id 在进入处就被拒绝（`IDN-10`：[`token-invalid`](#token-invalid)、[`unavailable`](#unavailable)、
 [控制面错误](#control-plane-errors)），所以它只出现在拒绝它的那一行里。找出发送它的一方：令牌签发方、用户存储、成员关系提供方，或调用控制 API 的脚本。
 

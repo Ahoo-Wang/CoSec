@@ -439,7 +439,7 @@ then convert again into a new directory.
 | `UNDEFINED_PERMISSION` | A role grant names a permission its app does not define (rule C6). | Define the permission, or remove it from the grant. |
 | `UNDECODABLE` | Not valid 7.x JSON, not decodable by 7.x's own model, or it needs a class missing from the classpath (an `ognl` condition, a custom matcher). | Fix the stored JSON. A custom matcher has no 8.0 form; see `CUSTOM_ACTION` and `CUSTOM_CONDITION`. |
 | `RESERVED_POLICY_ID` | A policy id starts with `perm:`, `g:`, `r:` or `cosec:`, which generated ids use. | Rename the policy and every attachment that names it. |
-| `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id. | Rename it. In 8.0 `*` means any app or space. |
+| `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id, or an unpaired UTF-16 surrogate in any id of a converted document (a JSON escape such as `"\uD800"`, `IDN-10`), located by the document and its JSON path. | Rename it. In 8.0 `*` means any app or space. |
 | `DUPLICATE_ID` | The same policy twice in an export, or the same permission twice in one app. | Keep one. |
 | `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
 | `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...). |

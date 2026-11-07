@@ -47,8 +47,8 @@ import java.util.Base64
  *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
  * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
- * the wrong type, a duplicate, an empty id, a string with an unpaired UTF-16 surrogate (RC1-52) or a header over the
- * size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
+ * the wrong type, a duplicate, an empty id, an id (or any member other than a claim) with an unpaired UTF-16 surrogate
+ * (RC1-52) or a header over the size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
  * (`schema/cosec-identity.schema.json`) describes the JSON.
  */
 object IdentityCodec {
