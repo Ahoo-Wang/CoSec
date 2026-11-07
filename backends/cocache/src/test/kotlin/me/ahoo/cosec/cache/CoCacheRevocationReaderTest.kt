@@ -134,6 +134,22 @@ class CoCacheRevocationReaderTest {
     }
 
     /**
+     * Only reads fail (CoCache 8.0.0-rc.1's `HookedBackend.failReads`): the reader degrades to "not revoked", the
+     * documented exception, while a revocation made meanwhile still lands, and applies as soon as reads succeed again.
+     */
+    @Test
+    fun aRevocationMadeWhileReadsFailAppliesOnceTheyRecover() = runBlocking<Unit> {
+        val revoked = tokenId()
+        backend.failReads = true
+        CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1))
+        reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
+        reader.isRevoked(revoked).assert().isFalse()
+        backend.failReads = false
+        reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
+        reader.isRevoked(revoked).assert().isTrue()
+    }
+
+    /**
      * A key Redis cannot hold losslessly (an unpaired surrogate, which UTF-8 turns into `?`) is refused on reads and
      * writes, by the revocation tables' keys (`IDN-10`) and by CoCache 8 itself. It is not the degraded read: the
      * reader throws and never says "not revoked" for it, though the tables read a failed Redis read as absent.

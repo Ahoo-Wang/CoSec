@@ -22,6 +22,7 @@ import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
+import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
@@ -136,15 +137,15 @@ internal object InstanceStatusesCodec : Codec<Map<String, InstanceStatus>> {
     override fun decode(bytes: ByteArray): Map<String, InstanceStatus> = ShadowCodec.decodeStatuses(bytes)
 }
 
-/** The data plane's [CandidateStore] on Redis: reads `<p>:candidate:<docKey>` from Redis, never a local copy. */
+/**
+ * The data plane's [CandidateStore] on Redis: reads `<p>:candidate:<docKey>` from Redis, never a local copy
+ * (`lookupRemote`, CoCache 8.0.0-rc.1), and throws when Redis fails.
+ */
 class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCandidate>) : CandidateStore {
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? =
-        when (val read = candidates.async().getIfChanged(key, null).await()) {
-            is ConditionalGet.Present -> read.value
-            ConditionalGet.Unchanged -> error(
-                "An unconditional read of the candidate of [$key] was answered as unchanged."
-            )
-            ConditionalGet.Absent -> null
+        when (val read = candidates.suspending().lookupRemote(key)) {
+            is Lookup.Present -> read.value
+            is Lookup.Absent -> null
         }
 
     companion object {

@@ -265,6 +265,8 @@ class CoCacheControlStore internal constructor(
     /**
      * `putIfMatch`. A write that failed with an unknown outcome is resolved by reading back: [mine] means it landed;
      * still [expected] means it did not, and the failure is the answer; anything else means another writer got there.
+     * A write CoCache knows was not executed (`outcomeUnknown` false, such as a command rejected before it was sent) is
+     * not read back: the failure is the answer, even when another writer stored the same bytes in between.
      */
     private suspend fun <K : Any, V : Any> put(
         cache: Store<K, V>,
@@ -277,15 +279,11 @@ class CoCacheControlStore internal constructor(
         val result = try {
             async.putIfMatch(key, expected?.let(::cocacheDigest), value).await()
         } catch (error: CacheWriteException) {
-            val read = try {
-                async.getIfChanged(key, cocacheDigest(mine)).await()
-            } catch (_: Exception) {
-                throw error
-            }
+            val read = if (error.outcomeUnknown) readBack(cache, key, mine) else null
             val current = (read as? ConditionalGet.Present)?.let { snapshotDigest(it.digest) }
             return when {
                 read == ConditionalGet.Unchanged -> Put.Written
-                current == expected -> throw error
+                read == null || current == expected -> throw error
                 else -> Put.Conflict(current)
             }
         }
@@ -294,6 +292,19 @@ class CoCacheControlStore internal constructor(
             is ConditionalPut.Conflict -> Put.Conflict(result.current?.let(::snapshotDigest))
         }
     }
+
+    /** What [key] holds now, compared with [mine]; null when Redis cannot say, so the write's own failure stands. */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught")
+    private suspend fun <K : Any, V : Any> readBack(
+        cache: Store<K, V>,
+        key: K,
+        mine: SnapshotDigest
+    ): ConditionalGet<V>? =
+        try {
+            cache.async().getIfChanged(key, cocacheDigest(mine)).await()
+        } catch (_: Exception) {
+            null
+        }
 
     private suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K): Pair<V, SnapshotDigest>? =
         when (val read = cache.async().getIfChanged(key, null).await()) {

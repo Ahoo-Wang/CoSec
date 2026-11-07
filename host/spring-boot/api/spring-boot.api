@@ -2,6 +2,11 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration {
 	public fun <init> ()V
 }
 
+public class me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration$CacheNames {
+	public fun <init> ()V
+	public fun cosecCacheNameContributor ()Lme/ahoo/cocache/spring/boot/CacheNameContributor;
+}
+
 public class me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration$Companion;
 	public fun <init> ()V

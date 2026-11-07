@@ -33,6 +33,7 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
@@ -50,7 +51,7 @@ import java.util.concurrent.ExecutionException
  * Neither an application's [CacheSpecCustomizer] nor a `cocache.*` property can weaken the policy snapshot store, which
  * is the store of record: it never expires, and a failed Redis read throws. CoSec creates it through CoCache's factory
  * with locks ([CoSecCacheSpecs.locks]): a property that sets a locked field fails startup, a customizer that changes one
- * throws, the global layers skip it, and even `unlock` (breaking the glass) leaves the constrained fields as they must be.
+ * throws, the global layers skip it, and `unlock` (breaking the glass) cannot reach the fields CoSec pins.
  * The revocation tables read "not revoked" when Redis fails, but an operator may make them fail closed.
  */
 @OptIn(InternalCoSecApi::class)
@@ -72,8 +73,6 @@ class StoreOfRecordOverrideTest {
     private val contextRunner = ApplicationContextRunner()
         .withPropertyValues(
             "cocache.backend=memory",
-            // A hooked in-memory backend: the SNP-3 check cannot read it, and need not.
-            "cosec.authorization.snapshot.eviction-check=warn",
             "cosec.jwt.enabled=true",
             "cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             "cosec.authorization.routes.location=",
@@ -96,31 +95,43 @@ class StoreOfRecordOverrideTest {
         }
     }
 
+    private fun ApplicationContextRunner.refusedFor(why: String, vararg properties: String) =
+        withPropertyValues(*properties).run { context ->
+            assertThat(context).describedAs(properties.joinToString()).hasFailed()
+            generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                .any { snapshot in it && "$why by ${CoSecCacheSpecs.LOCKED_BY}" in it }
+                .assert().describedAs(properties.joinToString()).isTrue()
+        }
+
     /**
      * Fails for the lock, not for some other reason: since CoCache 8.0.0-alpha.4 an unknown or inapplicable key under
-     * `cocache.caches.[name]` fails startup too, which would pass a bare `hasFailed()`.
+     * `cocache.caches.[name]` fails startup too, which would pass a bare `hasFailed()`. A store of record's `ttl` and
+     * `unknown-read` are pinned (CoCache 8.0.0-rc.1), its layout and local max age locked.
      */
     @Test
     fun aPerCachePropertyCannotSetALockedField() {
-        listOf("ttl=60s", "unknown-read=absent", "key-prefix=elsewhere:", "local-max-age=1h").forEach { setting ->
-            contextRunner.withPropertyValues("cocache.caches.[$snapshot].$setting").run { context ->
-                assertThat(context).describedAs(setting).hasFailed()
-                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
-                    .any { snapshot in it && "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }
-                    .assert().describedAs(setting).isTrue()
-            }
+        listOf("ttl=60s", "unknown-read=absent").forEach {
+            contextRunner.refusedFor("pinned", "cocache.caches.[$snapshot].$it")
+        }
+        listOf("key-prefix=elsewhere:", "local-max-age=1h").forEach {
+            contextRunner.refusedFor("locked", "cocache.caches.[$snapshot].$it")
         }
     }
 
-    /** `unlock` is CoCache's break glass: CoSec's constraints still run after it. */
+    /**
+     * `unlock` is CoCache's break glass, but none reaches a pinned field: an entry that unlocks a store of record's `ttl`
+     * or `unknown-read` fails startup, so the store stays one that never expires and throws on a failed read.
+     */
     @Test
     fun breakingTheGlassStillLeavesAStoreOfRecord() {
-        contextRunner
-            .withPropertyValues(
-                "cocache.caches.[$snapshot].ttl=60s",
-                "cocache.caches.[$snapshot].unknown-read=absent",
-                "cocache.caches.[$snapshot].unlock=ttl,unknown-read",
+        listOf("ttl" to "60s", "unknown-read" to "absent").forEach { (field, value) ->
+            contextRunner.refusedFor(
+                "pinned",
+                "cocache.caches.[$snapshot].$field=$value",
+                "cocache.caches.[$snapshot].unlock=$field",
             )
+        }
+        contextRunner
             .run { context ->
                 assertThat(context).hasNotFailed()
                 val runtime = context.getBean(CacheRuntime::class.java)
@@ -143,6 +154,26 @@ class StoreOfRecordOverrideTest {
                     backend.failAll = false
                 }
             }
+    }
+
+    /**
+     * CoSec publishes the name of every cache it may create (CoCache 8.0.0-rc.1's `CacheNameContributor`): an entry for
+     * a control-plane cache, from a configuration every service shares, starts an instance that runs no control plane.
+     * Only CoSec's names are relaxed: a misspelled one still fails startup as an undeclared cache.
+     */
+    @Test
+    fun anEntryForACacheThisInstanceDoesNotCreateStarts() {
+        val changes = CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME
+        val runner = contextRunner.withUserConfiguration(CoSecAutoConfiguration::class.java)
+        runner.withPropertyValues("cocache.caches.[$changes].local-max-age=10s").run { context ->
+            assertThat(context).hasNotFailed()
+            context.getBean(CacheRuntime::class.java).cacheNames.assert().doesNotContain(changes)
+        }
+        runner.withPropertyValues("cocache.caches.[ChangeRequestCach].local-max-age=10s").run { context ->
+            assertThat(context).hasFailed()
+            generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                .any { "undeclared caches [ChangeRequestCach]" in it }.assert().isTrue()
+        }
     }
 
     /** The global layers skip what CoSec locks: one local max age, `cosec.authorization.snapshot.local-max-age`. */

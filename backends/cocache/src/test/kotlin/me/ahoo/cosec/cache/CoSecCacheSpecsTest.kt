@@ -40,10 +40,13 @@ class CoSecCacheSpecsTest {
      */
     @Test
     fun noStoragePrefixNestsAnother() {
-        val names = CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES + CoSecCacheSpecs.SHADOW_CACHE_NAMES + setOf(
-            CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
-            CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
-            CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME,
+        val names = CoSecCacheSpecs.CACHE_NAMES
+        names.assert().isEqualTo(
+            CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES + CoSecCacheSpecs.SHADOW_CACHE_NAMES + setOf(
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
+                CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME,
+            )
         )
         names.size.assert().isEqualTo(16)
         listOf("cosec", "a:b").forEach { keyPrefix ->

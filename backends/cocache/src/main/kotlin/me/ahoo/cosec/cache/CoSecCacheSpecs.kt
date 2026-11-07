@@ -162,6 +162,13 @@ object CoSecCacheSpecs {
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
     )
 
+    /**
+     * Every cache CoSec may create, by name. An instance creates those of the features it runs: the control plane's
+     * caches only where the control plane runs, [MEMBERSHIP_CACHE_NAME] only with a membership loader, the revocation
+     * tables only with JWT.
+     */
+    val CACHE_NAMES: Set<String> = PATHS.keys
+
     /** Where a cache keeps its entries: `{keyPrefix}{namespace}:{encodedKey}`, in CoCache's terms. */
     data class Layout(val keyPrefix: String, val namespace: String) {
         /** `{keyPrefix}{namespace}`, the part of every storage key before `:` and the encoded key. */
@@ -196,7 +203,7 @@ object CoSecCacheSpecs {
 
     /**
      * What CoSec fixes in each of its caches, whatever the `cocache.*` properties and customizers say (CoCache's
-     * `lock` and `constrain`, applied last). Every cache keeps CoSec's storage layout, codec and data source: its keys
+     * `pin`, `lock` and `constrain`, applied last). Every cache keeps CoSec's storage layout, codec and data source: its keys
      * stay where every instance and the control plane look for them, and a cache without a source never gets one.
      *
      * Policies, permissions and the control plane's records are the store of record ([STORE_OF_RECORD_CACHE_NAMES]):
@@ -204,31 +211,30 @@ object CoSecCacheSpecs {
      * - they are `Store`s: a failed delete throws instead of being retried later (a late retry would delete what another
      *   writer wrote in between, such as a revision record written again or a lease taken again), and content the
      *   cache cannot read fails the read and stays in Redis;
-     * - entries never expire (`ttl` locked and constrained to forever): with an expiry, policies would silently
-     *   disappear;
-     * - a failed Redis read is `Lookup.Unknown` and `get` throws (`unknown-read` locked to `throw`), instead of
+     * - entries never expire (`ttl` pinned to forever): with an expiry, policies would silently disappear;
+     * - a failed Redis read is `Lookup.Unknown` and `get` throws (`unknown-read` pinned to `throw`), instead of
      *   degrading to a miss, which would silently drop a policy or permission. The security pipeline turns the error
      *   into a denied (503) response.
      *
      * The memberships cache is not the store of record, so its entries expire, but a failed read must never become "no
      * memberships" (RFC 0006 §5.5.2): with no roles, a DENY on a role would not apply. So its `ttl` is always finite
      * ([DEFAULT_MEMBERSHIP_TTL] when the effective value is forever) and without jitter, so the TTL is the bound it is
-     * documented as, and a failed Redis read throws (`read-failure` and `unknown-read` locked to `throw`): the request
+     * documented as, and a failed Redis read throws (`read-failure` and `unknown-read` pinned to `throw`): the request
      * fails closed with 503.
      *
      * The revocation tables read "not revoked" when Redis fails ([revokedToken]); an operator may still choose `throw`
      * (`cocache.caches.[RevokedTokenCache].unknown-read`). The shadow caches fail a failed read.
      *
-     * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
+     * A pinned field has no break glass: a `cocache.caches.[name]` entry that sets it, or lists it in `unlock`, fails
+     * startup. The membership `ttl` and `ttl-jitter` are constrained, not pinned: an entry may set them, within bounds.
      */
     fun locks(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
         lockLayout(*LayoutField.entries.toTypedArray())
         when (cacheName) {
             in STORE_OF_RECORD_CACHE_NAMES -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
-                lock(PolicyField.TTL, PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.TTL) { Ttl.Forever }
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                pin(PolicyField.TTL, Ttl.Forever)
+                pin(PolicyField.UNKNOWN_READ, UnknownReadMode.THROW)
                 if (cacheName == POLICY_SNAPSHOT_CACHE_NAME) {
                     // One local max age, cosec.authorization.snapshot.local-max-age (RFC 0008 §4.4).
                     lock(PolicyField.LOCAL_MAX_AGE)
@@ -237,8 +243,7 @@ object CoSecCacheSpecs {
 
             in SHADOW_CACHE_NAMES -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
-                lock(PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                pin(PolicyField.UNKNOWN_READ, UnknownReadMode.THROW)
             }
 
             REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> verify {
@@ -251,11 +256,10 @@ object CoSecCacheSpecs {
                         "CoSec's ${it.name} is an externally sourced Cache."
                     }
                 }
-                lock(PolicyField.READ_FAILURE, PolicyField.UNKNOWN_READ)
+                pin(PolicyField.READ_FAILURE, ReadFailureMode.THROW)
+                pin(PolicyField.UNKNOWN_READ, UnknownReadMode.THROW)
                 constrain(PolicyField.TTL) { it.finiteOr(DEFAULT_MEMBERSHIP_TTL) }
                 constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
-                constrain(PolicyField.READ_FAILURE) { ReadFailureMode.THROW }
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
             }
 
             else -> throw IllegalArgumentException("[$cacheName] is not one of CoSec's caches.")

@@ -374,6 +374,47 @@ class CoCacheControlStoreTest {
         }
     }
 
+    /**
+     * A write CoCache reports as not executed is not read back: the same bytes another writer stored in between are not
+     * this write landing.
+     */
+    @Test
+    fun `a head write that was not executed throws, though the same bytes are there`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val rejected = object : Store<SnapshotKey, SnapshotDocument> by node.cache {
+                override fun async(): AsyncStore<SnapshotKey, SnapshotDocument> = object : AsyncStore<SnapshotKey, SnapshotDocument> by node.cache.async() {
+                    override fun putIfMatch(
+                        key: SnapshotKey,
+                        expected: Digest?,
+                        value: SnapshotDocument
+                    ): CompletableFuture<ConditionalPut> = CompletableFuture.failedFuture(
+                        CacheWriteException(
+                            name,
+                            "putIfMatch",
+                            IllegalStateException("rejected"),
+                            outcomeUnknown = false
+                        )
+                    )
+                }
+            }
+            val store = CoCacheControlStore(
+                rejected,
+                node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
+                node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
+                { },
+            )
+            node.cache.put(key, document(1))
+            assertThrownBy<CacheWriteException> { runBlocking { store.putHead(key, null, document(1)) } }
+        }
+    }
+
     @Test
     fun `a failed write throws, and nothing is written`() = runBlocking<Unit> {
         val hooked = HookedBackend(InMemoryBackend())

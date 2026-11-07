@@ -378,7 +378,13 @@ private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions =
 /**
  * `SNP-3` (RFC 0003 §4.1): every Redis node's `maxmemory-policy` is `noeviction`. A policy that could not be read is
  * treated like an evicting one: a Redis whose `INFO memory` is denied or failed, or a backend this check cannot see
- * into (a wrapper, a custom backend), is not known to keep the snapshot, so it fails startup unless told to warn.
+ * into (a custom backend that unwraps to neither CoCache backend), is not known to keep the snapshot, so it fails
+ * startup unless told to warn. A wrapper such as `HookedBackend` is read through `CoherenceBackend.unwrap` (CoCache
+ * 8.0.0-rc.1).
+ *
+ * Stricter than CoCache's own check (`StoreEvictionRisk`), which accepts `volatile-*` while every `Store`'s policy has
+ * no `ttl`: the revocation tables and the control plane's leases are `Store`s whose entries carry a lifetime of their
+ * own, which `volatile-*` may evict before it ends, and an evicted revocation accepts its token again.
  */
 internal object EvictionPolicyCheck {
     private val log = KotlinLogging.logger {}
@@ -395,13 +401,18 @@ internal object EvictionPolicyCheck {
         data class Unreadable(val reason: String) : Reading
     }
 
-    fun read(backend: CoherenceBackend): Reading = when (backend) {
-        is InMemoryBackend -> Reading.NotRedis
-        is RedisBackend -> backend.maxmemoryPolicies()?.let { policies ->
-            // A cluster connection that knows no upstream node reads nothing (review L3 of #1240).
-            if (policies.isEmpty()) Reading.Unreadable(NO_NODE) else Reading.Policies(policies)
-        } ?: Reading.Unreadable("INFO memory failed or is not allowed")
-        else -> Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
+    fun read(backend: CoherenceBackend): Reading {
+        val redis = backend as? RedisBackend ?: backend.unwrap(RedisBackend::class.java)
+        if (redis != null) {
+            return redis.maxmemoryPolicies()?.let { policies ->
+                // A cluster connection that knows no upstream node reads nothing (review L3 of #1240).
+                if (policies.isEmpty()) Reading.Unreadable(NO_NODE) else Reading.Policies(policies)
+            } ?: Reading.Unreadable("INFO memory failed or is not allowed")
+        }
+        if (backend is InMemoryBackend || backend.unwrap(InMemoryBackend::class.java) != null) {
+            return Reading.NotRedis
+        }
+        return Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
     }
 
     private const val NO_NODE = "no Redis node answered INFO memory"

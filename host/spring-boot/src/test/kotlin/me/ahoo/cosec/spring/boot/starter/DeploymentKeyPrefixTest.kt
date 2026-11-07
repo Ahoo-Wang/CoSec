@@ -83,7 +83,6 @@ class DeploymentKeyPrefixTest {
         .withPropertyValues(
             "cosec.key-prefix=$prefix",
             "cocache.backend=memory",
-            "cosec.authorization.snapshot.eviction-check=warn",
             "cosec.api-key.enabled=true",
             "cosec.api-key.store=redis",
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",

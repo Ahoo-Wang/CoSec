@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
+import io.lettuce.core.RedisURI
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
@@ -28,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.redis.RedisBackend
+import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
@@ -333,9 +335,21 @@ class CoSecPipelineAutoConfigurationTest {
         assertThrows<IllegalStateException> {
             EvictionPolicyCheck.check(nodeless, RuntimeAuthorizationProperties.EvictionCheck.FAIL)
         }.message.assert().contains("Cannot tell")
-        // A wrapped or custom backend is not known to keep the snapshot either.
-        EvictionPolicyCheck.read(mockk<CoherenceBackend>())
-            .assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
+        // A custom backend that unwraps to neither of CoCache's is not known to keep the snapshot either.
+        val custom = mockk<CoherenceBackend> {
+            every { unwrap(RedisBackend::class.java) } returns null
+            every { unwrap(InMemoryBackend::class.java) } returns null
+        }
+        EvictionPolicyCheck.read(custom).assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
+        // A wrapper is read through CoherenceBackend.unwrap (CoCache 8.0.0-rc.1): what it wraps decides.
+        EvictionPolicyCheck.read(
+            HookedBackend(InMemoryBackend())
+        ).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
+        RedisBackend.standalone(RedisURI.create("redis://localhost:6379")).use { redis ->
+            val reading = EvictionPolicyCheck.read(HookedBackend(redis))
+            reading.assert().isInstanceOf(EvictionPolicyCheck.Reading.Policies::class.java)
+            (reading as EvictionPolicyCheck.Reading.Policies).policies.assert().isEqualTo(redis.maxmemoryPolicies())
+        }
         EvictionPolicyCheck.read(
             InMemoryBackend()
         ).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
