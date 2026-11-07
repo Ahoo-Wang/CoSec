@@ -69,21 +69,29 @@ internal class DocumentCache(
          * form adds its weight, and one it drops takes it away.
          */
         fun compiled(platform: SnapshotDigest?, compile: () -> CompiledDocument): Result<CompiledDocument> {
-            var added = 0
-            val compilation = synchronized(compiled) {
-                compiled[platform] ?: lazy(LazyThreadSafetyMode.SYNCHRONIZED) { compiling(compile) }.also {
-                    compiled[platform] = it
-                    added++
-                    if (compiled.size > VARIANTS) {
-                        compiled.remove(compiled.keys.first())
-                        added--
-                    }
-                }
-            }
-            if (added != 0) {
-                weigh(this, added.toLong() * size * COMPILED_FACTOR)
+            val (compilation, added) = synchronized(compiled) { formFor(platform, compile) }
+            if (added) {
+                weigh(this, size.toLong() * COMPILED_FACTOR)
             }
             return compilation.value
+        }
+
+        /**
+         * The form for [platform], and whether it is a new one that adds its weight: one more than [VARIANTS] makes the
+         * oldest leave, whose weight goes as the new one's comes, so nothing is added then. Called under the forms' lock.
+         */
+        private fun formFor(
+            platform: SnapshotDigest?,
+            compile: () -> CompiledDocument,
+        ): Pair<Lazy<Result<CompiledDocument>>, Boolean> {
+            compiled[platform]?.let { return it to false }
+            val created = lazy(LazyThreadSafetyMode.SYNCHRONIZED) { compiling(compile) }
+            compiled[platform] = created
+            if (compiled.size <= VARIANTS) {
+                return created to true
+            }
+            compiled.remove(compiled.keys.first())
+            return created to false
         }
 
         @Suppress("TooGenericExceptionCaught")
