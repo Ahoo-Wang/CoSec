@@ -114,7 +114,9 @@ class ReplicaReadsTest {
             .withBean("stringRedisTemplate", StringRedisTemplate::class.java, { template(ReadFrom.REPLICA_PREFERRED) })
             .withBean("otherTemplate", StringRedisTemplate::class.java, { template(null) })
             .run { context ->
-                val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                val message = generateSequence(
+                    context.startupFailure
+                ) { it.cause }.mapNotNull { it.message }.joinToString()
                 message.assert().contains("[stringRedisTemplate] (ReadFromReplicaPreferred)")
                     .doesNotContain("[otherTemplate]")
             }
