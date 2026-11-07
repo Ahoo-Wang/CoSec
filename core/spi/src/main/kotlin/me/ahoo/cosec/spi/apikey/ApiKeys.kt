@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spi.apikey
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.model.Identifiers
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -43,6 +44,11 @@ class ApiKey(
 ) {
     init {
         require(id.isNotEmpty()) { "An API key has an id." }
+        // Every id it holds follows the text rule of ids (RC1-52, `IDN-10`): a key read back with one fails its lookup,
+        // which the pipeline answers 503, never as another principal's or tenant's key.
+        val wellFormed = Identifiers.isWellFormed(id) && Identifiers.isWellFormed(principalId) &&
+            Identifiers.isWellFormed(tenantId) && (roles == null || Identifiers.areWellFormed(roles))
+        require(wellFormed) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
         require(principalId.isNotEmpty()) { "API key [$id] has a principal." }
         require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }
     }

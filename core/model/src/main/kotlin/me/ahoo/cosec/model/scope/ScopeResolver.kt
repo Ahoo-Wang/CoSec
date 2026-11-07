@@ -14,6 +14,7 @@
 package me.ahoo.cosec.model.scope
 
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.SpaceId
@@ -39,7 +40,9 @@ class DeclaredScope(val app: String, val space: String)
  */
 class HostScope(val app: AppId?) {
     init {
-        require(app == null || ScopeResolver.isValidAppId(app.value)) { "Host app id [${app?.value}] is not valid." }
+        require(app == null || ScopeResolver.isValidAppId(app.value)) {
+            "Host app id [${Identifiers.printable(app?.value.orEmpty())}] is not valid."
+        }
     }
 }
 
@@ -85,9 +88,10 @@ object ScopeResolver {
 
     /**
      * Whether [app] can name an app: not blank, not [Match.WILDCARD], no `:` (it separates document key parts, as in
-     * `SnapshotKey.App`), no control character (an app id reaches plain-text log lines, which it must not forge, RC1-15)
-     * and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id. One pass over the characters: every request
-     * checks its app here, and the keys of its tenant's documents through the same rule.
+     * `SnapshotKey.App`), no control character (an app id reaches plain-text log lines, which it must not forge, RC1-15),
+     * no unpaired UTF-16 surrogate (a Redis key holds `?` in its place, so the id would name another id's documents,
+     * RC1-52, [Identifiers]) and at most [MAX_APP_ID_LENGTH] characters: the rule of a tenant id. One pass over the
+     * characters: every request checks its app here, and the keys of its tenant's documents through the same rule.
      */
     fun isValidAppId(app: String): Boolean {
         if (app.isEmpty() || app.length > MAX_APP_ID_LENGTH || app == Match.WILDCARD) {
@@ -96,7 +100,7 @@ object ScopeResolver {
         var blank = true
         for (index in app.indices) {
             val c = app[index]
-            if (c == ':' || c.isISOControl()) {
+            if (c == ':' || c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)) {
                 return false
             }
             blank = blank && c.isWhitespace()

@@ -1,0 +1,16 @@
+# Rule: IDN-10
+# Mutant: a membership provider's answer may hold a space, role or policy id with an unpaired surrogate
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.UnpairedSurrogatePipelineTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+index 1cb7f568..06ec5452 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+@@ -111,7 +111,6 @@ class MembershipResolver(
+         val unusable = when {
+             memberships.source != Memberships.Source.PROVIDER -> "memberships from [${memberships.source}]"
+             // RC1-52 (`IDN-10`): a space, role or policy id with an unpaired surrogate is no id.
+-            !Identifiers.isWellFormed(memberships) -> "an id with an unpaired UTF-16 surrogate"
+             else -> return memberships.takeIf { it.active }
+         }
+         throw MembershipUnavailableException(

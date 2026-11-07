@@ -35,6 +35,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -174,7 +175,14 @@ internal object RevisionRecordKeyEncoder : KeyEncoder<RevisionRecordKey> {
 
 /** `<docKey>:<policyId>`: the document key ends before the first `:` after its kind, so policy ids may contain `:`. */
 internal object ReferenceKeyEncoder : KeyEncoder<ReferenceKey> {
-    override fun encode(key: ReferenceKey): String = "${SnapshotKeyEncoder.encode(key.target)}:${key.policy.value}"
+    /** A policy id with an unpaired surrogate names no key: the Redis key would write it as `?` (RC1-52, `IDN-10`). */
+    override fun encode(key: ReferenceKey): String {
+        require(Identifiers.isWellFormed(key.policy.value)) {
+            "Policy [${Identifiers.printable(key.policy.value)}] names no reference key: an unpaired UTF-16 surrogate " +
+                "would share it with another policy."
+        }
+        return "${SnapshotKeyEncoder.encode(key.target)}:${key.policy.value}"
+    }
 }
 
 private val factory = JsonNodeFactory.instance

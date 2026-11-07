@@ -31,7 +31,8 @@ import java.time.Duration
  *
  * Both [verify] and the renewal path ([refresh]) consult the [TokenStore] after the delegate succeeds, so a logged-out token
  * can neither authenticate nor be refreshed back to life. The same holds for the
- * tokens of a principal revoked with [TokenRevoker.revokeSubject].
+ * tokens of a principal revoked with [TokenRevoker.revokeSubject]. A token whose subject, tenant, `jti`, `roles` or
+ * `policies` hold an unpaired UTF-16 surrogate is invalid, before the store is asked (RC1-52, `IDN-10`).
  *
  * @param delegate the actual verification implementation
  * @param tokenStore the revocation store
@@ -52,7 +53,7 @@ class RevocableTokenVerifier(
      * @param T the expected principal type
      * @param accessToken the access token to verify
      * @return the verified token principal
-     * @throws TokenVerificationException if the delegate rejects the token
+     * @throws TokenVerificationException if the delegate rejects the token, or it claims an id with an unpaired surrogate
      * @throws TokenRevokedException if the token has been revoked
      */
     override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
@@ -67,7 +68,7 @@ class RevocableTokenVerifier(
      * @param token the composite token containing the refresh token
      * @return the token principal carried by the old access token
      * @throws TokenVerificationException if the delegate rejects the refresh token
-     * or its binding to the access token
+     * or its binding to the access token, or the token claims an id with an unpaired surrogate
      * @throws TokenRevokedException if the old access token's id has been revoked
      */
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
@@ -78,6 +79,10 @@ class RevocableTokenVerifier(
     }
 
     private fun checkNotRevoked(tokenPrincipal: TokenPrincipal) {
+        // Before the store is asked: an id with an unpaired surrogate would read another's key (RC1-52, `IDN-10`).
+        if (!TokenClaims.areWellFormed(tokenPrincipal)) {
+            throw TokenVerificationException("The token claims an id with an unpaired UTF-16 surrogate.")
+        }
         if (tokenStore.isRevoked(tokenPrincipal.tokenId)) {
             throw TokenRevokedException("Token [${tokenPrincipal.tokenId}] has been revoked.")
         }

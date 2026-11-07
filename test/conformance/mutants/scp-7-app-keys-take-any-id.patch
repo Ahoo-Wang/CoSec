@@ -3,12 +3,12 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoderTest :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt
-index 700aadc5..4a491609 100644
+index a6bf6eaa..31ba4394 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt
-@@ -82,7 +82,7 @@ sealed interface SnapshotKey {
-              * R1-6 of #1194's review), so the control plane takes no app key the data plane could never read, and no
-              * id reaches a Redis key or a log line it does not own.
+@@ -84,7 +84,7 @@ sealed interface SnapshotKey {
+              * surrogate; RC1-15, RC1-52, R1-6 of #1194's review), so the control plane takes no app key the data plane
+              * could never read, and no id reaches a Redis key or a log line it does not own.
               */
 -            fun isValidAppId(appId: String): Boolean = ScopeResolver.isValidAppId(appId)
 +            fun isValidAppId(appId: String): Boolean = appId.isNotEmpty() && !appId.contains(APP_ID_SEPARATOR)

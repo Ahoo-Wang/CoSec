@@ -57,7 +57,9 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
-not one of MERGE, REPLACE.`), never an exception's message; a stored document or record that does not decode, such as
+not one of MERGE, REPLACE.`), never an exception's message. A request whose path, query or body holds a string with an
+unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`), anywhere, is a `400` before its route reads it (`IDN-10`):
+a Redis key would write it as `?`, naming another id. A stored document or record that does not decode, such as
 one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
 of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
 trailing `/` or an empty segment is a `404`. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
@@ -75,7 +77,7 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:` or a control character, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
 | `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to (a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |

@@ -129,6 +129,7 @@ public final class me/ahoo/cosec/engine/flat/CompiledPolicy {
 
 public final class me/ahoo/cosec/engine/flat/CompiledRateLimit {
 	public static final field Companion Lme/ahoo/cosec/engine/flat/CompiledRateLimit$Companion;
+	public static final field ESCAPED_BUCKET_PREFIX Ljava/lang/String;
 	public static final field KEYED_BUCKET_PREFIX Ljava/lang/String;
 	public static final field SHARED_BUCKET Ljava/lang/String;
 	public final fun getId ()Ljava/lang/String;
@@ -139,6 +140,7 @@ public final class me/ahoo/cosec/engine/flat/CompiledRateLimit {
 
 public final class me/ahoo/cosec/engine/flat/CompiledRateLimit$Companion {
 	public final fun counterId (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun keyedBucket (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/engine/flat/CompiledStatement {

@@ -16,6 +16,7 @@ package me.ahoo.cosec.control.change
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
@@ -32,8 +33,12 @@ import java.time.Instant
 @JvmInline
 value class ChangeId(val value: String) {
     init {
-        require(value.isNotEmpty() && value.none { it == ':' || it.isWhitespace() || it.isISOControl() }) {
-            "A change id is not empty and has no ':', whitespace or control characters: [$value]."
+        require(
+            value.isNotEmpty() && value.none { it == ':' || it.isWhitespace() || it.isISOControl() } &&
+                Identifiers.isWellFormed(value)
+        ) {
+            "A change id is not empty and has no ':', whitespace, control characters or unpaired surrogates: " +
+                "[${Identifiers.printable(value)}]."
         }
     }
 }

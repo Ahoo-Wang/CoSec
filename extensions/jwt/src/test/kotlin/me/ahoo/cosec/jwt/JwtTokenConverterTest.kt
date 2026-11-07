@@ -14,6 +14,7 @@ package me.ahoo.cosec.jwt
 
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.test.asserts.assert
@@ -72,6 +73,31 @@ internal class JwtTokenConverterTest {
     fun aReservedAttributeIsNotIssued() {
         val principal = SimplePrincipal("id", attributes = mapOf("apiKeyId" to "k1"))
         assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(principal) }
+    }
+
+    /**
+     * RC1-52, `IDN-10`: java-jwt writes an unpaired surrogate as `?`, so a token issued for `alice\uD800` would be a token
+     * of `alice?`. It is refused where it is issued, whichever string of the principal holds one.
+     */
+    @Test
+    fun anIdWithAnUnpairedSurrogateIsNotIssued() {
+        val principals = listOf(
+            SimplePrincipal("alice\uD800"),
+            SimpleTenantPrincipal(SimplePrincipal("alice"), SimpleTenant("beta\uDC00")),
+            SimplePrincipal("alice", roles = setOf("admin\uD800")),
+            SimplePrincipal("alice", policies = setOf("p\uD800")),
+            SimplePrincipal("alice", attributes = mapOf("org" to "x\uD800")),
+            SimplePrincipal("alice", attributes = mapOf("org\uD800" to "x")),
+            SimplePrincipal("alice", attributes = mapOf("orgs" to listOf("x", mapOf("y" to "\uDC00")))),
+            SimplePrincipal("alice", attributes = mapOf("orgs" to arrayOf("x", "\uD800"))),
+        )
+        for (principal in principals) {
+            val error = runCatching { jwtTokenConverter.toToken(principal) }.exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
+            error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
+        }
+        val paired = jwtTokenConverter.toToken(SimplePrincipal("alice\uD83D\uDE00", attributes = mapOf("level" to 3)))
+        jwtTokenVerifier.verify<TokenPrincipal>(paired).id.assert().isEqualTo("alice\uD83D\uDE00")
     }
 
     @Test

@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 class JwtTokenVerifierTest {
@@ -180,6 +181,42 @@ class JwtTokenVerifierTest {
         principal.breakGlass.assert().isTrue()
         principal.credential!!.method.assert().isEqualTo(Identity.Method.JWT)
         authenticate(object : TokenVerifier by jwtTokenVerifier {}).breakGlass.assert().isFalse()
+    }
+
+    /**
+     * RC1-52, `IDN-10`: a token signed elsewhere can write an unpaired surrogate as a JSON escape (`"\uD800"`), which
+     * java-jwt's own signing never does (it writes `?`). CoSec's verifier reads it as written, and its authenticator
+     * refuses it: `token-invalid`, never the principal or tenant with `?` in its place.
+     */
+    @Test
+    fun aTokenClaimingAnIdWithAnUnpairedSurrogateIsInvalid() {
+        fun crafted(payload: String): String {
+            val encoder = Base64.getUrlEncoder().withoutPadding()
+            val header = encoder.encode("""{"alg":"HS256","typ":"JWT"}""".encodeToByteArray())
+            val body = encoder.encode(payload.encodeToByteArray())
+            val signature = encoder.encodeToString(JwtFixture.ALGORITHM.sign(header, body))
+            return "${String(header)}.${String(body)}.$signature"
+        }
+        val exp = Instant.now().plusSeconds(600).epochSecond
+        val claims = listOf(
+            """"sub":"alice\uD800","jti":"t1"""",
+            """"sub":"alice","jti":"t1","tenantId":"beta\uD800"""",
+            """"sub":"alice","jti":"t1\uDC00"""",
+            """"sub":"alice","jti":"t1","roles":["admin\uD800"]""",
+            """"sub":"alice","jti":"t1","policies":["p\uDC00"]""",
+        )
+        for (claim in claims) {
+            val token = crafted("{$claim,\"exp\":$exp}")
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token)).assert().isNotNull()
+            val result = runBlocking { TokenAuthenticator(jwtTokenVerifier).authenticate(Credentials(token, null)) }
+            (result as AuthnResult.Rejected).reason.assert().describedAs(
+                claim
+            ).isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
+        }
+        val tenant = jwtTokenVerifier.verify<TokenTenantPrincipal>(
+            SimpleAccessToken(crafted("""{"sub":"alice","jti":"t1","tenantId":"beta\uD800","exp":$exp}"""))
+        ).tenant.tenantId
+        tenant.assert().isEqualTo("beta\uD800")
     }
 
     /** `may_act` only says who may act for the subject; the token is still the subject's own. */

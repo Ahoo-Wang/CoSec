@@ -1,0 +1,16 @@
+# Rule: IDN-10
+# Mutant: an authenticator may give a principal whose id, tenant, credential or memberships hold an unpaired surrogate
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.UnpairedSurrogatePipelineTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+index 7f4a3c7b..9c56c8db 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+@@ -131,6 +131,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
+ 
+     /** Whether every id the principal holds follows the text rule of ids ([Identifiers]). */
+     private fun wellFormed(): Boolean {
++        if (id.value.isNotEmpty()) return true
+         if (!Identifiers.isWellFormed(id.value) || !Identifiers.isWellFormed(tenant.value)) {
+             return false
+         }

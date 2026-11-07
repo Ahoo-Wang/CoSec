@@ -1,0 +1,17 @@
+# Rule: IDN-10
+# Mutant: cosec-migrate converts and publishes a document whose ids hold an unpaired surrogate
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.ConverterTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentIds.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentIds.kt
+index 5027047f..b717891d 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentIds.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentIds.kt
+@@ -29,7 +29,7 @@ internal object DocumentIds {
+     fun unpaired(document: PolicyDocument): List<Pair<String, String>> {
+         val found = ArrayList<Pair<String, String>>(0)
+         fun check(id: String, path: String) {
+-            if (!Identifiers.isWellFormed(id)) found += path to id
++            if (id.isEmpty() && !Identifiers.isWellFormed(id)) found += path to id
+         }
+         document.policies.forEachIndexed { i, policy -> check(policy.id.value, "$.policies[$i].id") }
+         document.bindings.forEachIndexed { i, binding ->

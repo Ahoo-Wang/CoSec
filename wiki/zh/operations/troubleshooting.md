@@ -71,6 +71,10 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
 - **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），`roles` 或 `policies` 声明不是字符串数组，`attributes`
   声明不是对象，或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key 设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
+- **带落单代理项的 id：** 令牌的 `sub`、`tenantId`、`jti`、`roles` 或 `policies` 中有落单的 UTF-16 代理项，JSON 把它写成
+  `"beta\uD800"` 这样的转义（`IDN-10`）。Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的文档、成员关系与吊销，所以在读取其中任何一项之前就被拒绝。
+  CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报 `Principal [alice\uD800] holds an unpaired UTF-16 surrogate ...`。
+  修正签发方或它读取的用户存储：id 是 Unicode 文本。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -147,6 +151,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码或编译，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `INDETERMINATE: MissingPolicies`、`AmbiguousPolicy` / `missing_policies` | 绑定或附加策略指向文档中未定义的策略，或者租户和平台都定义了同一个策略 id。 | 通过控制面修正文档。 |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | `MembershipProvider` 失败，或耗时超过 [`cosec.authorization.membership.timeout`](./configuration.md#authorization)。使用 `CoCacheMembershipProvider` 时，在该时间内没有应答的 `MembershipLoader` 会让这次加载失败（`The membership loader did not answer within ...`），下一个请求会再试。 | 修复提供者或它的存储。 |
+| `INDETERMINATE: MembershipUnavailable` / `membership`，只有部分主体 | `MembershipProvider` 答出的空间、角色或策略 id 中有落单的 UTF-16 代理项（`The membership provider answered an id with an unpaired UTF-16 surrogate for principal [<id>].`，`IDN-10`）：这样的 id 会与另一个 id 共用一个 Redis key，所以不使用这个答复。 | 修正提供方的存储：id 是 Unicode 文本。 |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | 某条语句需要的外部属性的提供者失败或超时（以 `WARN` 记录 `<provider> failed to fetch [...]`）。 | 修复提供者，或者调大 [`cosec.authorization.attributes.timeout`](./configuration.md#authorization)。 |
 | `INDETERMINATE: MatcherFailed` / `matcher` | 某条 DENY 语句的条件，或它所在策略的条件，无法求值。包括请求以不同的值多次发送某个请求头时，基于 `http.header.<name>` 的 DENY（`Header [<name>] arrived with different values; a condition on it cannot decide.`）；同一个值重复发送时按该值读取。失败的 ALLOW 永远不会让请求变成 `503`：基于这种请求头的 ALLOW 不匹配。 | 修正条件，或修正重复发送该请求头的客户端。 |
 | `INDETERMINATE: BoundaryUnavailable` / `boundary` | 对一个被放行的请求，租户边界中的某条语句无法求值，例如它读取的外部属性的提供者失败或超时。 | 修正边界或提供者。 |
@@ -154,6 +159,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | `REQUIRED` 决策监听器在一次放行上失败或超时（`REQUIRED decision listener [<name>] failed on request [<id>].`），或者放行来自 break-glass 绑定而没有 `REQUIRED` 监听器（`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`）。 | 修复监听器的存储，或在使用 break-glass 之前注册 `REQUIRED` 监听器（[决策监听器](./observability.md#decision-listeners)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过 [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline)：例如 Redis API key 存储无法访问。 | 恢复存储。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，某个认证器的每个请求 | 你自己的 `Authenticator` 把凭证的方式命名为 `jwt`，而它保留给 CoSec 的令牌（`The authentication method [jwt] is CoSec's own token's ...`）。 | 按你的凭证命名方式，例如 `Identity.Method("ldap")`（[扩展](../architecture/extending.md#authenticators)）。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。 | 修正认证器或 key 的记录：id 是 Unicode 文本。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以 8.0 之前的格式存储，读取时被拒绝（`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`）。 | 转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
@@ -206,7 +212,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、大于 [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、大于 [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
 
@@ -452,7 +458,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 |---|---|---|
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
 | `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃撤销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
-| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。 | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
+| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
 | `409` `change-unreadable` | 该变更的记录由之前的构建为一个不能作为应用 id 的应用写入（空白、`*`、含控制字符或超过 128 个字符）；控制面所在的主机在每一轮维护中记录 `Change [<id>] is skipped: it is of [<key>], which no document key can name`。它既无法查看也无法放弃。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-2)。 |
@@ -475,6 +481,16 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `[platform] is at revision <n>, not <m>`**：撤销提议时另一次写入恰好改变了平台文档，那可能是另一个撤销同一绑定的调用。请确认该绑定是否还在：重试（返回 `404` 即已删除），或读取 `GET /documents/platform`。
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
+
+## 日志行中的 id 带 `\u` 转义 {#a-log-line-names-an-id-with-u-escapes}
+
+CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16 代理项写成 `\uXXXX` 转义：`Tenant id [beta\uD800] ...`，从不写成
+`beta?`，那是另一个 id。日志行里的 `\uXXXX` 可能是这种转义，也可能是 id 本身的字符（反斜杠、`u` 和四位十六进制数字，id 可以含有这些字符）：
+拒绝 id 的那一行会写明原因，请读原因，而不是 id。控制字符会伪造日志行（RC1-15）；代理项会被写成 `?`，点名另一个健康的租户或主体（RC1-52）。
+这样的 id 在进入处就被拒绝（`IDN-10`：[`token-invalid`](#token-invalid)、[`unavailable`](#unavailable)、
+[控制面错误](#control-plane-errors)），所以它只出现在拒绝它的那一行里。找出发送它的一方：令牌签发方、用户存储、成员关系提供方，或调用控制 API 的脚本。
+
+限流 `key` 的值带落单代理项时，计入它自己的桶，以转义形式写出（`e:<value>`，`\` 加倍）：从不计入把它换成 `?` 的那个值的桶。
 
 ## Spring MVC 上经过 CoSec 后表单 POST 请求体为空 {#form-post-body-is-empty-after-cosec-on-spring-mvc}
 

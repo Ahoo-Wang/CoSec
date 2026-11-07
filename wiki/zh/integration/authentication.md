@@ -28,6 +28,8 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 **被拒绝的令牌不是错误。** 过期、签名错误或已吊销的令牌会让调用方成为匿名主体，由策略决定匿名调用方能做什么：公开路径照常可用。如果请求被拒绝，响应为 `401`，problem 类型为 `token-expired`、`token-revoked` 或 `token-invalid`，而不是 `unauthorized`（[响应与状态码](./web.md#responses-and-status-codes)）。
 
+**id 是文本。** `sub`、`tenantId`、`jti`、`roles` 或 `policies` 中带落单 UTF-16 代理项（JSON 把它写成 `"beta\uD800"` 这样的转义）的令牌为 `token-invalid`，在读取任何吊销之前就被拒绝（`IDN-10`）：Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的成员关系、吊销与文档。`JwtTokenConverter` 拒绝为 id、租户、角色、策略或属性中带这种代理项的主体签发令牌，因为 JWT 库会写成 `?`，签出另一个主体的令牌。代理对（例如 emoji）是普通文本。
+
 **委托令牌会被拒绝。** 带 `act` 声明的令牌（[RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) 委托令牌：`sub` 是被代理方，`act` 是执行方）即使签名和有效期都有效，也按 `token-invalid` 拒绝（`IDN-4`）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时（例如匿名调用方可以访问的路径），审计记录 `ALLOW`，原因只出现在决策事件的 `subject.rejected` 中。如果按 `sub` 读取，这种令牌会让执行方获得主体能做的一切，而 8.0 不评估委托。CoSec 自己从不签发这种令牌。`may_act` 声明只说明谁可以代理主体，因此被忽略。
 
 ## 认证器 {#authenticators}

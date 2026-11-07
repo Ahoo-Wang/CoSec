@@ -16,6 +16,7 @@ package me.ahoo.cosec.spi.authn
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -122,6 +123,37 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         }
     }
 
+    /**
+     * RC1-52 (`IDN-10`): an id with an unpaired surrogate would share a Redis key with another id. Another authenticator
+     * that gives one throws here, from the public constructors, which the pipeline answers 503, as it answers any
+     * authenticator that throws. CoSec's own authenticators check the ids where they read them (a token's claims, an
+     * [me.ahoo.cosec.spi.apikey.ApiKey], a forwarded identity), so the constructor they use does not scan them twice
+     * on every request.
+     */
+    private fun requireWellFormed() {
+        require(wellFormed()) {
+            "Principal [${Identifiers.printable(id.value)}] of tenant [${Identifiers.printable(tenant.value)}] holds an " +
+                "id with an unpaired UTF-16 surrogate: its id, tenant, credential id or memberships."
+        }
+    }
+
+    /** Whether every id the principal holds follows the text rule of ids ([Identifiers]). */
+    private fun wellFormed(): Boolean {
+        if (!Identifiers.isWellFormed(id.value) || !Identifiers.isWellFormed(tenant.value)) {
+            return false
+        }
+        if (credential != null && !Identifiers.isWellFormed(credential.id)) {
+            return false
+        }
+        return when (membershipSource) {
+            is MembershipSource.Claims -> Identifiers.isWellFormed(membershipSource.memberships)
+            is MembershipSource.Provider -> membershipSource.cap.orEmpty().all { (space, roles) ->
+                Identifiers.isWellFormed(space.value) && roles.all { Identifiers.isWellFormed(it.value) }
+            }
+            is MembershipSource.Unusable -> true
+        }
+    }
+
     /** A principal another authenticator proved: never break-glass. */
     @OptIn(InternalCoSecApi::class)
     constructor(
@@ -139,7 +171,9 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         breakGlass = false,
         issuedAt = null,
         apiKeyCredential = false
-    )
+    ) {
+        requireWellFormed()
+    }
 
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
@@ -161,7 +195,9 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         breakGlass = false,
         issuedAt = null,
         apiKeyCredential = false,
-    )
+    ) {
+        requireWellFormed()
+    }
 
     /**
      * Whether an API key proved the principal, a workload's credential: so CoSec's API key authenticator says, by

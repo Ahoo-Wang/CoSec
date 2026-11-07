@@ -27,6 +27,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
@@ -159,7 +160,14 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         convertPolicies()
         source.apps.forEach(::convertApp)
         convertRateLimits()
-        val documents = if (rejections.isEmpty()) documents() else emptyMap()
+        val built = if (rejections.isEmpty()) documents() else emptyMap()
+        // RC1-52 (`IDN-10`): as the control plane refuses a request that holds one, nothing is published.
+        built.forEach { (key, document) ->
+            DocumentIds.unpaired(document).forEach { (path, id) ->
+                reject(RejectionKind.INVALID_ID, "$key#$path", DocumentIds.unpairedMessage(id))
+            }
+        }
+        val documents = if (rejections.isEmpty()) built else emptyMap()
         count("documents", documents.size)
         count("rejections", rejections.distinct().size)
         count("warnings", warnings.size)
@@ -346,7 +354,8 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             reject(
                 RejectionKind.OWNER_TENANT,
                 location,
-                "policy [$id] has tenantId [$tenantId], which names no tenant document (--partition by-owner)",
+                "policy [${Identifiers.printable(id)}] has tenantId [${Identifiers.printable(tenantId)}], which names no " +
+                    "tenant document (--partition by-owner)",
             )
             return null
         }
@@ -426,8 +435,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             reject(
                 RejectionKind.INVALID_ID,
                 app.location,
-                "app id [$appId] is `*`, blank, longer than ${ScopeResolver.MAX_APP_ID_LENGTH} characters, or contains " +
-                    "`:` or a control character: 8.0 reads `*` as any app, and names no app document by the others",
+                "app id [${Identifiers.printable(appId)}] is `*`, blank, longer than ${ScopeResolver.MAX_APP_ID_LENGTH} " +
+                    "characters, or contains `:`, a control character or an unpaired surrogate: 8.0 reads `*` as any " +
+                    "app, and names no app document by the others",
             )
             return null
         }

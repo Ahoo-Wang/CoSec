@@ -1,0 +1,17 @@
+# Rule: IDN-10
+# Mutant: a rate limit key value with an unpaired surrogate counts in the bucket of the value with ? in its place
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RateLimitObligationTest :cocache:test --tests me.ahoo.cosec.cache.UnpairedSurrogateKeyTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
+index abb60a5f..21e8dfa3 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
+@@ -74,7 +74,7 @@ class CompiledRateLimit internal constructor(
+          * `\uXXXX` escape: well formed, its own, and every other value keeps the bucket it had.
+          */
+         fun keyedBucket(value: String): String {
+-            if (Identifiers.isWellFormed(value)) {
++            if (value.isNotEmpty() || value.isEmpty()) {
+                 return KEYED_BUCKET_PREFIX + value
+             }
+             val bucket = StringBuilder(ESCAPED_BUCKET_PREFIX.length + value.length + ESCAPE_LENGTH)

@@ -32,6 +32,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
@@ -82,7 +83,8 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * 412, 422 or 428 explains the caller's own request (RC1-39): a 400's detail is the message of one of the control
  * plane's own checks of the request, or names the field that does not parse, never an exception's message or a class
  * name. A stored document or record that does not decode is a 500, logged; anything else refused as an illegal
- * argument is a 400 without detail.
+ * argument is a 400 without detail. A request whose path, query or body holds a string with an unpaired UTF-16
+ * surrogate is a 400 before any route reads it (RC1-52, `IDN-10`): every id it names is one of those strings.
  *
  * | Method and path | Call |
  * |---|---|
@@ -168,6 +170,11 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+        // RC1-52 (`IDN-10`): no id the request names may hold an unpaired surrogate, which a Redis key writes as `?`.
+        requireRequest(
+            Identifiers.isWellFormed(request.path) &&
+                request.query.all { (name, value) -> Identifiers.isWellFormed(name) && Identifiers.isWellFormed(value) }
+        ) { UNPAIRED_SURROGATE }
         val segments = segmentsOf(request.path) ?: return notFound()
         // A leaf route is its one segment: `/simulate/x` is no route, so a rule on `/simulate` covers what is served
         // (R2-M1 of #1240's review).
@@ -391,7 +398,19 @@ class ControlHttp(private val plane: ControlPlane) {
             }
         } ?: factory.objectNode()
         requireRequest(body.isObject) { "The request body is a JSON object." }
+        requireRequest(wellFormed(body)) { UNPAIRED_SURROGATE }
         return block(body)
+    }
+
+    /**
+     * Whether every field name and string in [node] holds no unpaired surrogate (RC1-52): every id the body names is
+     * one of them, a document's included, and a JSON escape (`"\uD800"`) can write one.
+     */
+    private fun wellFormed(node: JsonNode): Boolean = when {
+        node.isString -> Identifiers.isWellFormed(node.asString())
+        node.isObject -> node.properties().all { (name, value) -> Identifiers.isWellFormed(name) && wellFormed(value) }
+        node.isArray -> node.values().all(::wellFormed)
+        else -> true
     }
 
     private inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
@@ -763,6 +782,9 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     companion object {
+        private const val UNPAIRED_SURROGATE = "The request holds a string with an unpaired UTF-16 surrogate, which " +
+            "no id may hold (IDN-10)."
+
         private const val CHANGE_UNREADABLE_DETAIL = "This change can no longer be read: it is of an app that cannot be " +
             "an app id under the current rule (SCP-7), so it can be neither shown nor abandoned. An operator removes its " +
             "record from the control store."

@@ -29,6 +29,10 @@ before writing code.
   `Dispatchers.IO` inside the pipeline.
 - **Report failure by throwing**, never by returning a default. CoSec turns a failure into the safe outcome (503 or the
   statement's `onMissing`); a made-up "not blocked" or "no roles" answer can let a request through.
+- **Give ids that are text.** A principal, tenant, credential, role, space or policy id with an unpaired UTF-16
+  surrogate would share a Redis key with another id (written `?`), so `AuthenticatedPrincipal` and `ApiKey` refuse one
+  when made and a `MembershipProvider` answer holding one fails: each is a 503 (IDN-10). Check with
+  `Identifiers.isWellFormed` (`me.ahoo.cosec.model`) where your source can hold one.
 - **Do not change the decision.** Extensions supply facts or observe outcomes; only documents decide.
 - Do not change the SPI interfaces; ask first if one seems insufficient.
 
