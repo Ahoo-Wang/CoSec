@@ -191,6 +191,19 @@ class StoredFormatTest {
         assertThrows<JacksonException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
     }
 
+    /**
+     * The revocation tables are the only CoSec caches whose values CoCache's `JacksonCodec` writes, with [CoSecJson]'s
+     * mapper, for the declared `Boolean` and `Long`: CoCache 8.0.0-alpha.6 encodes by the declared type (#873), which
+     * for these final types writes what it always did.
+     */
+    @Test
+    fun `revocations`() {
+        val token = CoSecCacheSpecs.revokedToken().codec
+        pinned("revokedToken", true, token::encode, token::decode, "true")
+        val subject = CoSecCacheSpecs.revokedSubject().codec
+        pinned("revokedSubject", 1_761_955_200_000L, subject::encode, subject::decode, "1761955200000")
+    }
+
     @Test
     fun `snapshot documents`() {
         pinned(

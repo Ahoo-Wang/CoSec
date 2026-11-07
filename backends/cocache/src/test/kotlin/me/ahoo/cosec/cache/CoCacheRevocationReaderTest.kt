@@ -24,6 +24,7 @@ import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 import kotlin.coroutines.Continuation
@@ -130,6 +131,27 @@ class CoCacheRevocationReaderTest {
         backend.failAll = false
         reader.isRevoked(revoked).assert().isTrue()
         reader.subjectRevokedBefore(tenant, alice).assert().isEqualTo(issuedBefore)
+    }
+
+    /**
+     * A key Redis cannot hold losslessly (an unpaired surrogate, which UTF-8 turns into `?`) is refused by CoCache 8
+     * (alpha.5) on reads and writes. It is not the degraded read: the reader throws, which the pipeline answers 503,
+     * and never says "not revoked" for it. Before, `x\uD800` and `x\uDBFF` shared one Redis key, `x?`, with each other
+     * and with a literal `x?`.
+     */
+    @Test
+    fun aKeyRedisCannotHoldIsAnErrorNotARevocationMiss() = runBlocking<Unit> {
+        val unpaired = "${tokenId()}\uD800"
+        refused { reader.isRevoked(unpaired) }
+        refused { reader.subjectRevokedBefore(tenant, PrincipalId("alice\uDBFF")) }
+        refused { reader.subjectRevokedBefore(TenantId("acme\uDC00"), alice) }
+        // The write is refused the same way, so no token is revoked under an id that is not its own.
+        refused { store.revoke(unpaired, Duration.ofMinutes(1)) }
+        reader.isRevoked(unpaired.dropLast(1) + "?").assert().isFalse()
+    }
+
+    private fun refused(call: suspend () -> Any?) {
+        assertThrows<IllegalArgumentException> { runBlocking { call() } }
     }
 
     private companion object {

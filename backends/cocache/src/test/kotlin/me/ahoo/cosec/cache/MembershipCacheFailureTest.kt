@@ -125,6 +125,19 @@ class MembershipCacheFailureTest {
         failure.message.assert().contains("failed")
     }
 
+    /**
+     * A principal or tenant id Redis cannot key losslessly (an unpaired surrogate) is refused by CoCache 8 (alpha.5)
+     * before anything is read or loaded: an error, never "unknown" or "no memberships", and the loader is not asked.
+     */
+    @Test
+    fun aKeyRedisCannotHoldIsAnErrorNeverNoMemberships() {
+        val unpairedPrincipal = PrincipalId("alice\uD800")
+        val unpairedTenant = TenantId("acme\uDFFF")
+        assertThrows<IllegalArgumentException> { runBlocking { providerA.memberships(tenant, unpairedPrincipal) } }
+        assertThrows<IllegalArgumentException> { runBlocking { providerA.memberships(unpairedTenant, alice) } }
+        loads.get().assert().isEqualTo(0)
+    }
+
     @Test
     fun aFailedReadOfCachedMembershipsAlsoThrows() = runBlocking<Unit> {
         providerA.memberships(tenant, alice)

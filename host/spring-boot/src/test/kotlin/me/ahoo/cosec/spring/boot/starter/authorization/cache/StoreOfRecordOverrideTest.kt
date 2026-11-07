@@ -96,11 +96,18 @@ class StoreOfRecordOverrideTest {
         }
     }
 
+    /**
+     * Fails for the lock, not for some other reason: since CoCache 8.0.0-alpha.4 an unknown or inapplicable key under
+     * `cocache.caches.[name]` fails startup too, which would pass a bare `hasFailed()`.
+     */
     @Test
     fun aPerCachePropertyCannotSetALockedField() {
         listOf("ttl=60s", "unknown-read=absent", "key-prefix=elsewhere:", "local-max-age=1h").forEach { setting ->
             contextRunner.withPropertyValues("cocache.caches.[$snapshot].$setting").run { context ->
                 assertThat(context).describedAs(setting).hasFailed()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { snapshot in it && "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }
+                    .assert().describedAs(setting).isTrue()
             }
         }
     }
