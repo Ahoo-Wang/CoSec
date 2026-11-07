@@ -85,8 +85,8 @@ key 都在它之下（`SNP-9`）。
   其中的 DENY 语句悄悄失效。使用 `noeviction`，并按数据量规划 Redis 的容量。
 - **启动检查。** 使用 Redis 后端时，每个实例在启动时从 `INFO memory` 读取每个节点的 `maxmemory-policy`；托管 Redis
   通常禁用 `CONFIG`，但允许 `INFO`。有两个检查读取它：
-  - CoSec 自己的检查（`SNP-3`）：某个节点不是 `noeviction`、`INFO` 失败或被拒绝、或者 CoCache 后端无法被检查看穿
-    （包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
+  - CoSec 自己的检查（`SNP-3`），检查创建快照存储的 CoCache 运行时背后的 Redis：某个节点不是 `noeviction`、`INFO`
+    失败或被拒绝、或者 CoCache 后端无法被检查看穿（包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
     [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
     `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
   - CoCache 针对其 `Store` 的检查，CoSec 的文档和记录都是 `Store`：`allkeys-*` 策略总是使启动失败，读不到 `INFO`

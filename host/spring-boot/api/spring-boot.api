@@ -893,8 +893,8 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Redis {
 	public fun <init> ()V
-	public fun cosecEvictionPolicyCheck (Lme/ahoo/cocache/api/spi/CoherenceBackend;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
-	public fun cosecEvictionPolicyMonitor (Lme/ahoo/cocache/api/spi/CoherenceBackend;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;
+	public fun cosecEvictionPolicyCheck (Lme/ahoo/cocache/core/CoCacheFactory;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
+	public fun cosecEvictionPolicyMonitor (Lme/ahoo/cocache/core/CoCacheFactory;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;
 	public fun cosecPolicySnapshotCache (Lme/ahoo/cocache/core/CoCacheFactory;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;
 	public fun cosecRedisSnapshotDocumentStore (Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;)Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore;
 }

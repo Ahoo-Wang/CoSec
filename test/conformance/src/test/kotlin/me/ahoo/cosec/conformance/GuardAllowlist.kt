@@ -73,6 +73,7 @@ object GuardAllowlist {
             "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#health alone starts",
             "cocache:CacheTtlPolicyTest#aSnapshotCacheBuiltOutsideTheStarterIsPinned",
             "spring-boot:StoreOfRecordOverrideTest#customizersCannotReplaceWhatDecidesACachesContent",
+            "spring-boot:SnapshotEvictionHealthIndicatorTest#the checks read the snapshot runtime's backend, not another backend bean",
             "spring-boot:CoSecPipelineAutoConfigurationTest#a revalidate-interval that turns off or unbinds the periodic pass fails startup",
             "runtime:SnapshotRevalidationTest#theRevalidationIntervalCannotTurnThePassOffOrUnbindIt",
             "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",

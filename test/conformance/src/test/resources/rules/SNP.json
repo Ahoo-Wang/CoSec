@@ -36,7 +36,8 @@
         "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
         "spring-boot:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn",
         "cocache:CacheTtlPolicyTest#aSnapshotCacheBuiltOutsideTheStarterIsPinned",
-        "spring-boot:StoreOfRecordOverrideTest#customizersCannotReplaceWhatDecidesACachesContent"
+        "spring-boot:StoreOfRecordOverrideTest#customizersCannotReplaceWhatDecidesACachesContent",
+        "spring-boot:SnapshotEvictionHealthIndicatorTest#the checks read the snapshot runtime's backend, not another backend bean"
       ],
       "pending": null
     },

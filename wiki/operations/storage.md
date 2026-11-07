@@ -102,9 +102,9 @@ contain `:`, so a key names one document only.
   `noeviction` and size Redis for the data.
 - **The startup checks.** With the Redis backend, each instance reads every node's `maxmemory-policy` at startup from
   `INFO memory`, which managed Redis services usually allow where they block `CONFIG`. Two checks read it:
-  - CoSec's own (`SNP-3`): a node that is not `noeviction`, an `INFO` that fails or is denied, or a CoCache backend the
-    check cannot see into (a wrapper, a custom backend) fails startup by default. A Redis that denies `INFO` while you
-    have set `noeviction` yourself needs
+  - CoSec's own (`SNP-3`), of the Redis behind the CoCache runtime the snapshot store is created on: a node that is
+    not `noeviction`, an `INFO` that fails or is denied, or a CoCache backend the check cannot see into (a wrapper, a
+    custom backend) fails startup by default. A Redis that denies `INFO` while you have set `noeviction` yourself needs
     [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot): the instance starts and logs a
     `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
   - CoCache's, for its `Store`s, which CoSec's documents and records are: an `allkeys-*` policy always fails startup,

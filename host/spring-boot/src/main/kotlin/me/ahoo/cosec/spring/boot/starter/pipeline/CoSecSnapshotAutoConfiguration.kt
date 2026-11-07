@@ -119,13 +119,20 @@ class CoSecSnapshotAutoConfiguration {
          * `SNP-3`: Redis must not evict snapshot documents, or a global DENY can silently vanish. CoCache's own check of
          * its `Store`s runs as well (`cocache.redis.store-eviction-check`): it fails startup on `allkeys-*` or a policy it
          * cannot read, whatever this check's mode, unless `cocache.redis.assume-maxmemory-policy` names one.
+         *
+         * Both read the backend of the runtime the snapshot store is created on ([CoCacheFactory.runtime]), as CoCache's
+         * does since 8.0.0-alpha.6 (#874): an application's own `CacheRuntime` need not expose its backend as a bean,
+         * and a `CoherenceBackend` bean beside it may not be the Redis that holds the snapshot.
          */
         @Bean
         fun cosecEvictionPolicyCheck(
-            backend: CoherenceBackend,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
         ): SmartInitializingSingleton = SmartInitializingSingleton {
-            EvictionPolicyCheck.check(EvictionPolicyCheck.read(backend), properties.snapshot.evictionCheck)
+            EvictionPolicyCheck.check(
+                EvictionPolicyCheck.read(factory.runtime.backend),
+                properties.snapshot.evictionCheck
+            )
         }
 
         /**
@@ -136,10 +143,10 @@ class CoSecSnapshotAutoConfiguration {
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         fun cosecEvictionPolicyMonitor(
-            backend: CoherenceBackend,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
         ): EvictionPolicyMonitor = EvictionPolicyMonitor(
-            { EvictionPolicyCheck.read(backend) },
+            { EvictionPolicyCheck.read(factory.runtime.backend) },
             properties.snapshot.revalidateInterval,
             properties.snapshot.evictionCheck,
         ).start()
