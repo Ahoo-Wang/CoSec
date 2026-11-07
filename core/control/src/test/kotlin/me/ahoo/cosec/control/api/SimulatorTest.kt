@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
@@ -26,8 +27,11 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 /** `simulate` and `explain` decide on the view enforcement would read (S5, `CTL-3`). */
 class SimulatorTest {
@@ -101,7 +105,89 @@ class SimulatorTest {
         decide(request.copy(principalBindings = false), alice).assert().isInstanceOf(Decision.Deny::class.java)
     }
 
+    /**
+     * RC1-41: a stored document, which its cache entry names by key and digest, is compiled once for its content and
+     * the platform document it compiles with; a repeated call compiles nothing. A candidate is compiled every call, and
+     * so is what compiles with a candidate platform.
+     */
+    @Test
+    fun `a repeated call does not recompile`() {
+        val simulator = Simulator()
+        val platform = document(DocumentKind.PLATFORM, "", "")
+        val tenant = document(DocumentKind.TENANT, "acme", ALLOW_ALL)
+        val platformEntry = simulator.cache.put(SnapshotKey.Platform, digest(1), 1, platform)
+        val tenantEntry = simulator.cache.put(SnapshotKey.Tenant("acme"), digest(2), 1, tenant)
+        val scope = (simulator.scope(request) as ScopeResolution.Resolved).scope
+        fun decide(platform: Held, tenant: Held): Decision =
+            simulator.decide(request, scope, HeldDocuments(platform, null, tenant)).evaluation.decision
+
+        decide(Held(platform, platformEntry), Held(tenant, tenantEntry)).assert().isInstanceOf(Decision.Permit::class.java)
+        simulator.compilations.get().assert().isEqualTo(2L)
+        repeat(3) { decide(Held(platform, platformEntry), Held(tenant, tenantEntry)) }
+        simulator.compilations.get().assert().isEqualTo(2L)
+        // Another platform document: the tenant's compiled form is the one with it, compiled once.
+        val other = simulator.cache.put(SnapshotKey.Platform, digest(3), 1, platform)
+        repeat(2) { decide(Held(platform, other), Held(tenant, tenantEntry)) }
+        simulator.compilations.get().assert().isEqualTo(4L)
+        // A candidate tenant document, every call.
+        repeat(2) { decide(Held(platform, platformEntry), Held(tenant, null)) }
+        simulator.compilations.get().assert().isEqualTo(6L)
+        // A candidate platform: nothing compiled with it is kept.
+        repeat(2) { decide(Held(platform, null), Held(tenant, tenantEntry)) }
+        simulator.compilations.get().assert().isEqualTo(10L)
+        // The public evaluate takes no stored content.
+        simulator.evaluate(request, scope, Documents(platform, null, tenant)).decision.assert()
+            .isInstanceOf(Decision.Permit::class.java)
+        simulator.compilations.get().assert().isEqualTo(12L)
+    }
+
+    /** RC1-41: a document that does not compile is kept as failed, since it fails again; it is not compiled again. */
+    @Test
+    fun `a document that does not compile is not compiled again`() {
+        val simulator = Simulator()
+        val platform = document(DocumentKind.PLATFORM, "", "")
+        val tenant = document(DocumentKind.TENANT, "acme", IN_FENCE)
+        val platformEntry = simulator.cache.put(SnapshotKey.Platform, digest(1), 1, platform)
+        val tenantEntry = simulator.cache.put(SnapshotKey.Tenant("acme"), digest(2), 1, tenant)
+        val scope = (simulator.scope(request) as ScopeResolution.Resolved).scope
+        repeat(2) {
+            val decision = simulator.decide(
+                request,
+                scope,
+                HeldDocuments(Held(platform, platformEntry), null, Held(tenant, tenantEntry))
+            ).evaluation.decision
+            ((decision as Decision.Indeterminate).cause as Cause.SourceUnavailable).document
+                .assert().isEqualTo(DocumentKind.TENANT)
+        }
+        simulator.compilations.get().assert().isEqualTo(2L)
+    }
+
+    /** `PIP-12`: a header the view reads, sent with different values, is refused before evaluation, as enforcement does. */
+    @Test
+    fun `a repeated header a document reads is refused`() {
+        val simulator = Simulator()
+        val platform = document(DocumentKind.PLATFORM, "", "")
+        val tenant = document(DocumentKind.TENANT, "acme", DEBUG)
+        val scope = (simulator.scope(request) as ScopeResolution.Resolved).scope
+        val error = assertThrows<ChangeRejectedException> {
+            simulator.evaluate(
+                request.copy(headers = mapOf("x-debug" to listOf("1", "2"))),
+                scope,
+                Documents(platform, null, tenant)
+            )
+        }
+        error.status.assert().isEqualTo(400)
+        error.message.assert().doesNotContain("x-debug")
+        simulator.evaluate(request.copy(headers = mapOf("x-debug" to listOf("1", "1"))), scope, Documents(platform, null, tenant))
+            .decision.assert().isInstanceOf(Decision.Permit::class.java)
+    }
+
+    private fun digest(seed: Int) = SnapshotDigest(ByteArray(20) { seed.toByte() })
+
     private companion object {
+        const val DEBUG = ""","policies":[{"id":"debug","statements":[{"effect":"allow","action":"*",""" +
+            """"condition":{"eq":["http.header.x-debug","1"]}}]}],""" +
+            """"bindings":[{"id":"debug","subject":"*","app":"*","space":"*","policy":"debug"}]"""
         const val ALLOW_ALL = ""","policies":[{"id":"all","statements":[{"effect":"allow","action":"*"}]}],""" +
             """"bindings":[{"id":"all","subject":"*","app":"*","space":"*","policy":"all"}]"""
         const val ROOT = ""","bindings":[{"id":"root","subject":{"principal":"cosec","tenant":"(platform)"},""" +

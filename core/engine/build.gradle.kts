@@ -17,4 +17,7 @@ dependencies {
     api(project(":model"))
     // HttpPathPatternBenchmark compares with Spring's PathPattern; the jmh source set is not checked for purity.
     jmh("org.springframework:spring-web")
+    // HttpPathPatternOracleTest checks the evaluation's walk against Spring's PathPattern (review L3 of #1200); tests
+    // are not checked for purity either.
+    testImplementation("org.springframework:spring-web")
 }

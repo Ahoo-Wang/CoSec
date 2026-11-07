@@ -1,0 +1,157 @@
+{
+  "rules": [
+    "CTL-23"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-40: a request without a principal is decided on tenant (0)'s document, so simulate and explain authorize it there. alice, acme's administrator, may simulate nothing in (0): 403, though the request names acme. plato may; the request naming acme is a 400, never a decision on (0) under acme's name.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      },
+      "(0)": {
+        "policies": [
+          {
+            "id": "public",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "public",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "public"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "(0)",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 403",
+      "refused 400",
+      "refused 403",
+      "refused 400",
+      "refused 403"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

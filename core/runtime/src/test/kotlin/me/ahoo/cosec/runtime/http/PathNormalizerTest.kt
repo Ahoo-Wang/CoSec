@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -98,6 +99,21 @@ class PathNormalizerTest {
         path.length.assert().isLessThanOrEqualTo(PathNormalizer.MAX_PATH_LENGTH)
         PathNormalizer.normalize(path).assert().isEqualTo(path)
         PathNormalizer.normalize(path + "aa").assert().isNull()
+    }
+
+    /** Review L5 of #1200: what the control plane decides without a request is held to the same bounds, as written. */
+    @OptIn(InternalCoSecApi::class)
+    @Test
+    fun boundsApplyAsWritten() {
+        val segment = "a".repeat(PathNormalizer.MAX_SEGMENT_LENGTH)
+        PathNormalizer.withinBounds("/$segment").assert().isTrue()
+        PathNormalizer.withinBounds("/${segment}a").assert().isFalse()
+        // Path parameters count: a simulation matches the text it is given.
+        PathNormalizer.withinBounds("/a;${segment}").assert().isFalse()
+        PathNormalizer.withinBounds("order/$segment").assert().isTrue()
+        PathNormalizer.withinBounds("/a".repeat(PathNormalizer.MAX_PATH_LENGTH / 2)).assert().isTrue()
+        PathNormalizer.withinBounds("/a".repeat(PathNormalizer.MAX_PATH_LENGTH / 2) + "/").assert().isFalse()
+        PathNormalizer.withinBounds("").assert().isTrue()
     }
 
     @Test

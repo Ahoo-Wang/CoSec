@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.control.api
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
@@ -33,6 +37,7 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 
@@ -338,6 +343,78 @@ class ControlHttpTest {
             problem.get("detail").asString().assert().isEqualTo("binding [$ordinary] is not a break-glass binding")
         }
         fixture.ids.get().assert().isEqualTo(before)
+    }
+
+    /**
+     * RC1-39: a 400's detail is a message of the control plane's own checks, or names the field that does not parse:
+     * never an exception's message or a class name. A time that does not parse is the caller's 400, not a 500.
+     */
+    @Test
+    fun `a field that does not parse is a 400 that names it, never an exception's message`() {
+        fun refused(response: Pair<Int, JsonNode>, field: String) {
+            response.first.assert().describedAs(field).isEqualTo(400)
+            response.second.get("detail").asString().assert().describedAs(field).contains(field)
+                .doesNotContain("me.ahoo").doesNotContain("Exception").doesNotContain("No enum constant")
+                .doesNotContain("For input string").doesNotContain("could not be parsed")
+        }
+        val desired = """{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z"}"""
+        val apply = call("POST", "/documents/tenant:acme:apply", """{"document":$desired,"mode":"BOGUS"}""")
+        refused(apply, "[mode]")
+        apply.second.get("detail").asString().assert().contains("MERGE").doesNotContain("ApplyMode")
+        refused(
+            call(
+                "POST",
+                "/break-glass",
+                """{"principal":"plato","expiresAt":"tomorrow","reason":"incident"}""",
+                security = plato
+            ),
+            "[expiresAt]"
+        )
+        val request = """{"tenant":"acme","principal":"bob","action":"order:read","resource":"order/1","time":"now"}"""
+        refused(call("POST", "/simulate", """{"request":$request}"""), "[time]")
+        refused(call("GET", "/documents/tenant:acme/revisions", query = mapOf("limit" to "many")), "[limit]")
+        refused(call("GET", "/documents/tenant:acme/revisions", query = mapOf("before" to "x")), "[before]")
+        refused(call("GET", "/documents/tenant:acme/revisions/first"), "[revision]")
+        refused(call("GET", "/documents/tenant:acme/diff", query = mapOf("from" to "1", "to" to "x")), "[to]")
+        val statement = """{"policy":"p","statement":${Long.MAX_VALUE},"digest":"d"}"""
+        val proposal = """{"document":"tenant:acme","base":1,"operations":[],"confirmations":[$statement]}"""
+        refused(call("POST", "/changes", proposal), "[confirmations]")
+        // The parser's own message is not the control plane's either.
+        val (malformed, problem) = call("POST", "/changes", "{not json")
+        malformed.assert().isEqualTo(400)
+        problem.get("detail").asString().assert().doesNotContain("Unexpected character").doesNotContain("code 110")
+        // What the control plane's own checks say, it still says.
+        call("POST", "/changes/c1:reject", """{"reason":" "}""").second.get("detail").asString()
+            .assert().isEqualTo("A rejection needs a reason.")
+    }
+
+    /**
+     * RC1-39: a stored document that does not decode, perhaps one a newer version wrote during a rolling upgrade, is no
+     * fault of the caller's: a 500 without detail, and the error is logged with its key. Before, it was a 400 that showed
+     * the stored document's JSON path, also of an app document simulate read for a caller who may not read it.
+     */
+    @Test
+    fun `a stored document that does not decode is a 500 without detail, logged with its key`() {
+        runBlocking { fixture.bootstrap(SnapshotKey.App("order"), emptyList(), emptyList()) }
+        fixture.undecodable += SnapshotKey.App("order")
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            val read = call("GET", "/documents/app:order", security = plato)
+            val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order",""" +
+                """"space":"team-a","action":"order:read","resource":"order/1"}"""
+            val simulated = call("POST", "/simulate", """{"request":$request}""")
+            for ((status, problem) in listOf(read, simulated)) {
+                status.assert().isEqualTo(500)
+                problem.get("code").asString().assert().isEqualTo("INTERNAL_ERROR")
+                problem.has("detail").assert().isFalse()
+            }
+            logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
+                .assert().hasSize(2).allMatch { it.contains("[app:order]") && it.contains("does not decode") }
+        } finally {
+            logger.detachAppender(logged)
+        }
     }
 
     @Test

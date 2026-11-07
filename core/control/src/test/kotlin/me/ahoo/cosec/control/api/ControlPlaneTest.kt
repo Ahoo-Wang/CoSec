@@ -35,6 +35,7 @@ import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
@@ -55,7 +56,11 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -71,12 +76,25 @@ class ControlPlaneTest {
 
     /** Changes whose stored record no longer reads, as one of an app an earlier build named (R3-4 of #1194's review). */
     val unreadable = HashSet<ChangeId>()
+
+    /** Documents whose stored head does not decode, as one a newer version wrote during a rolling upgrade (RC1-39). */
+    val undecodable = HashSet<SnapshotKey>()
     private val store: ControlStore = object : ControlStore by memory {
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
             // Wrapped, as a store's cache may wrap what its codec threw.
             throw IllegalStateException("decoding", UnnamedDocumentException("app:a\\u0001b"))
         } else {
             memory.change(id)
+        }
+
+        override suspend fun head(key: SnapshotKey): StoredDocument? = memory.head(key)?.let { stored ->
+            if (key !in undecodable) return@let stored
+            val document = stored.document
+            val body = """{"schema":2,"revision":${document.revision},"publishedAt":"2026-10-27T00:00:00Z","next":1}"""
+            StoredDocument(
+                SnapshotDocument(document.schema, document.revision, document.publishedAt, body.encodeToByteArray()),
+                SnapshotDigest(ByteArray(20) { 7 }),
+            )
         }
     }
     private val revisions = Revisions(store, clock)
@@ -93,7 +111,8 @@ class ControlPlaneTest {
         clock,
         options
     )
-    val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options))
+    val simulator = Simulator()
+    val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options), simulator)
 
     val plato = engine.operator(TenantId.PLATFORM, "plato")
     val alice = engine.operator(ACME, "alice", roles = listOf("admin", "ops@team-a"))
@@ -277,6 +296,103 @@ class ControlPlaneTest {
         }
         // A space inside, or a letter outside ASCII, is an app id.
         plane.analyze(plato, query.copy(app = "order app")).allows.assert().isEmpty()
+    }
+
+    /**
+     * RC1-40, `CTL-23`: a simulated or explained request is authorized on the tenant whose document decides it. Without
+     * a principal that is tenant `(0)`, as enforcement decides it, so a request that names another one is refused, after
+     * the authorization on `(0)`.
+     */
+    @Test
+    fun `a request without a principal is authorized and decided on tenant (0) only`() = runBlocking<Unit> {
+        val anonymous = bob("read").copy(principal = null, roles = emptyList(), app = "", space = "")
+        // Authorized on (0), whose document would decide it: alice, acme's administrator, simulates nothing there.
+        refused { plane.simulate(alice, anonymous) }.assert().isEqualTo(403)
+        refused { plane.explain(alice, anonymous) }.assert().isEqualTo(403)
+        // plato may simulate on (0), but not under acme's name: that is no request enforcement would decide on acme.
+        refused { plane.simulate(plato, anonymous) }.assert().isEqualTo(400)
+        refused { plane.explain(plato, anonymous) }.assert().isEqualTo(400)
+        val zero = anonymous.copy(tenant = TenantId.DEFAULT)
+        plane.simulate(plato, zero).enforced.decision.assert().isEqualTo("Deny")
+        plane.explain(plato, zero).decision.decision.assert().isEqualTo("Deny")
+        refused { plane.simulate(alice, zero) }.assert().isEqualTo(403)
+        // With a principal, the request's own tenant decides, as before.
+        plane.simulate(alice, bob("read")).enforced.decision.assert().isEqualTo("Permit")
+    }
+
+    /** `PIP-12`, `CTL-3`: a request whose header a document of its view reads, sent with different values, is a 400. */
+    @Test
+    fun `a header the view reads sent with different values is refused as enforcement refuses it`() = runBlocking<Unit> {
+        val initech = SnapshotKey.Tenant("initech")
+        bootstrap(
+            initech,
+            listOf(allow("debug", action = "order:read", condition = Condition.Eq("http.header.x-debug", Literal.Str("1")))),
+            listOf(Binding(BindingId("debug"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("debug"))),
+        )
+        val request = bob("read", TenantId("initech")).copy(roles = emptyList(), app = "", space = "")
+        plane.simulate(plato, request.copy(headers = mapOf("X-Debug" to listOf("1")))).enforced.decision
+            .assert().isEqualTo("Permit")
+        // Identical repeats are one value.
+        plane.simulate(plato, request.copy(headers = mapOf("X-Debug" to listOf("1", "1")))).enforced.decision
+            .assert().isEqualTo("Permit")
+        val twice = request.copy(headers = mapOf("X-Debug" to listOf("1", "0")))
+        refused { plane.simulate(plato, twice) }.assert().isEqualTo(400)
+        refused { plane.explain(plato, twice) }.assert().isEqualTo(400)
+        // A header no document reads is not checked.
+        plane.simulate(plato, request.copy(headers = mapOf("X-Debug" to listOf("1"), "X-Other" to listOf("a", "b"))))
+            .enforced.decision.assert().isEqualTo("Permit")
+    }
+
+    /** RC1-41, review L5 of #1200: a resource no request path could be is not decided, nor analyzed. */
+    @Test
+    fun `a resource is held to a request path's bounds`() = runBlocking<Unit> {
+        val long = "x".repeat(257)
+        refused { plane.simulate(alice, bob("read").copy(resource = Resource("http", "/$long", emptyMap()))) }
+            .assert().isEqualTo(400)
+        refused { plane.explain(alice, bob("read").copy(resource = Resource("order", long, emptyMap()))) }
+            .assert().isEqualTo(400)
+        val query = AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1/$long", emptyMap()))
+        refused { plane.analyze(alice, query) }.assert().isEqualTo(400)
+        val bounded = "x".repeat(256)
+        plane.simulate(alice, bob("read").copy(resource = Resource("order", bounded, emptyMap()))).enforced.decision
+            .assert().isEqualTo("Permit")
+        plane.analyze(alice, query.copy(resource = Resource("order", bounded, emptyMap()))).allows
+            .assert().hasSize(1)
+    }
+
+    /**
+     * RC1-41: `simulate`, `explain` and `analyze` decode and compile a stored document once for its content, in one
+     * cache; a candidate, which is no stored content, is compiled once per call, and a head that moves is compiled again.
+     */
+    @Test
+    fun `stored documents are compiled once for their content`() = runBlocking<Unit> {
+        plane.simulate(alice, bob("read"))
+        val compiled = simulator.compilations.get()
+        // The platform's and acme's documents; the order app has none.
+        compiled.assert().isEqualTo(2L)
+        repeat(3) { plane.simulate(alice, bob("read")) }
+        plane.explain(alice, bob("read"))
+        plane.explain(alice, bob("read"), SnapshotVersion(1, null, 1))
+        plane.analyze(alice, AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1", emptyMap())))
+        simulator.compilations.get().assert().isEqualTo(compiled)
+        val held = simulator.cache.size
+
+        val change = plane.propose(alice, TENANT, 1, listOf(Operation.RemoveBinding(BindingId("ops"))), "revoke")
+        plane.simulate(alice, bob("read"), change.id).candidate!!.decision.assert().isEqualTo("Deny")
+        // The candidate alone, once.
+        simulator.compilations.get().assert().isEqualTo(compiled + 1)
+        plane.simulate(alice, bob("read"), change.id)
+        simulator.compilations.get().assert().isEqualTo(compiled + 2)
+        simulator.cache.size.assert().isEqualTo(held)
+
+        plane.startShadow(alice, change.id)
+        changes.shadowed(change.id)
+        plane.publish(alice, change.id)
+        // acme's new head is new content; the platform's is not.
+        plane.simulate(alice, bob("read")).enforced.decision.assert().isEqualTo("Deny")
+        simulator.compilations.get().assert().isEqualTo(compiled + 3)
+        plane.simulate(alice, bob("read"))
+        simulator.compilations.get().assert().isEqualTo(compiled + 3)
     }
 
     companion object {

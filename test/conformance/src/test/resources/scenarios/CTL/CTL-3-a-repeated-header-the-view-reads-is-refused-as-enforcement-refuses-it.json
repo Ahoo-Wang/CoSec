@@ -1,0 +1,137 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "PIP-12 parity (D2): acme's ALLOW reads x-debug. A simulated or explained request that sends it twice with different values is refused 400 before evaluation, as enforcement refuses it, never decided Indeterminate; the refusal names no header.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "debug",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**",
+                "condition": {
+                  "eq": [
+                    "http.header.x-debug",
+                    "1"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "debug",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "debug"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "order:read",
+          "resource": "order/1",
+          "headers": {
+            "x-debug": [
+              "1",
+              "0"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "order:read",
+          "resource": "order/1",
+          "headers": {
+            "x-debug": [
+              "0",
+              "1"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "order:read",
+          "resource": "order/1",
+          "headers": {
+            "x-debug": [
+              "1",
+              "2"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 400",
+      "refused 400",
+      "refused 400"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

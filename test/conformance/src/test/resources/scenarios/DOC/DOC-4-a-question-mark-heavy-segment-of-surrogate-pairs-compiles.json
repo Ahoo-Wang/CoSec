@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "DOC-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Review L6 of #1200: a segment of sixteen tokens, {v} then ?* seven times and a final ?, the bound, with no literal: the DENY compiles and matches a 256-character segment of 128 surrogate pairs, each ? taking one pair.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "globs",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/{v}?*?*?*?*?*?*?*?"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "globs",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "globs"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "globs",
+      "statement": 0,
+      "via": {
+        "binding": "globs",
+        "document": "platform"
+      }
+    }
+  }
+}

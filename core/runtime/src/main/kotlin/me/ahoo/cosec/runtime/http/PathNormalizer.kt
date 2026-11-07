@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.io.ByteArrayOutputStream
 
 /**
@@ -53,6 +54,15 @@ object PathNormalizer {
         val path = withoutPathParameters(rawPath)
         return if (hasLongSegment(path) || isTraversal(path)) null else path
     }
+
+    /**
+     * Whether [text] is within the bounds a request's path is held to, [MAX_PATH_LENGTH] in all and [MAX_SEGMENT_LENGTH]
+     * per segment, counted as written, path parameters included: for what the control plane decides without a request
+     * (review L5 of #1200, RC1-41), a simulated, explained or analyzed resource, whose glob segments would otherwise
+     * cost the evaluation more than any request can.
+     */
+    @InternalCoSecApi
+    fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text)
 
     private fun hasLongSegment(path: String): Boolean {
         if (path.length <= MAX_SEGMENT_LENGTH) {

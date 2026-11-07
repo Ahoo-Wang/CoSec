@@ -57,7 +57,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
         reason: String,
         policy: PolicyId = BuiltinPolicies.ROOT,
     ): ChangeRequest {
-        require(reason.isNotBlank()) { "Break-glass needs a reason." }
+        requireRequest(reason.isNotBlank()) { "Break-glass needs a reason." }
         val binding = BindingId("break-glass-${principal.value}-${expiresAt.toEpochMilli()}")
         if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
             throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
@@ -102,7 +102,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
      * library caller reads that head to know, and the HTTP API answers 409 until then.
      */
     suspend fun revoke(operator: Operator, binding: BindingId, reason: String): ChangeRequest {
-        require(reason.isNotBlank()) { "Revoking break-glass needs a reason." }
+        requireRequest(reason.isNotBlank()) { "Revoking break-glass needs a reason." }
         val operations = listOf(Operation.RemoveBinding(binding))
         changes.authority.authorize(operator, SnapshotKey.Platform, operations, ProvenanceKind.BREAK_GLASS)
         var attempt = stalled(operator, binding, reason)?.let(::Attempt) ?: run {

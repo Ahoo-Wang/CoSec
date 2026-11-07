@@ -57,6 +57,9 @@ import org.openjdk.jmh.annotations.State
  * - `captures`: `*{a}*{c}*{d}*{e}*{f}*{g}*{h}x{v}` against `xa…a`, which matches and is captured. Its only literal
  *   sits at the start, which made the backtracking this replaced give up every end of every run: 232 ms per request.
  * - `bindings`: `captures`, its policy bound 64 times (review M1): each pass evaluates it once (`ALG-9`).
+ * - `pairs`: `{v}?*?*?*?*?*?*?*?`, sixteen tokens and no literal, against 128 surrogate pairs (review L6 of #1200), which
+ *   matches and is captured. A value with a pair takes the row of code point boundaries, and every `?` row a second
+ *   pass that reads two characters at each pair.
  *
  * The conditions read `resource.var.v` and are false, or, for `literal`, read the device id and are false. These inputs
  * are the worst in time; they allocate at most about 45 KB. In allocation the worst is the smallest capturing glob,
@@ -65,7 +68,7 @@ import org.openjdk.jmh.annotations.State
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class GlobBoundBenchmark {
-    @Param("literal", "capture-literal", "alternating", "captures", "bindings")
+    @Param("literal", "capture-literal", "alternating", "captures", "bindings", "pairs")
     lateinit var scenario: String
 
     private lateinit var request: FlatRequest
@@ -81,6 +84,7 @@ open class GlobBoundBenchmark {
             "capture-literal" -> "/{v}ab*" to "/$a"
             "alternating" -> "/{v}a*a*a*a*a*a*a*b" to "/" + a.drop(1) + "b"
             "captures", "bindings" -> "/*{a}*{c}*{d}*{e}*{f}*{g}*{h}x{v}" to "/x" + a.drop(1)
+            "pairs" -> "/{v}" + "?*".repeat(PAIR_RUNS) + "?" to "/" + PAIR.repeat(SEGMENT_LENGTH / PAIR.length)
             else -> error("Unknown scenario $scenario")
         }
         val units = HttpPathPattern.compile(pattern).globUnits
@@ -138,5 +142,9 @@ open class GlobBoundBenchmark {
     private companion object {
         const val SEGMENT_LENGTH = 256
         const val BINDINGS = 64
+        const val PAIR = "\uD83D\uDE00"
+
+        /** `?*` seven times between `{v}` and a final `?`: sixteen tokens, the bound. */
+        const val PAIR_RUNS = 7
     }
 }

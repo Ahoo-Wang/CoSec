@@ -49,6 +49,9 @@ class HttpPathPatternParityTest {
 
         /** `{*name}` and `{name}` with the same name, which Spring allows; one of the values is lost. */
         DUPLICATE_REST_VARIABLE("/{a}/{*a}"),
+
+        /** Half a surrogate pair in a literal (review L4 of #1200): no character, and no decoded path holds one. */
+        LONE_SURROGATE("/a\uD83D*"),
     }
 
     private sealed interface Outcome {
@@ -127,6 +130,9 @@ class HttpPathPatternParityTest {
         if (pattern.isEmpty()) {
             return IntendedDifference.EMPTY_PATTERN
         }
+        if (pattern.indices.any { index -> isLoneSurrogate(pattern, index) }) {
+            return IntendedDifference.LONE_SURROGATE
+        }
         val segments = pattern.split('/')
         if (segments.any { CAPTURE_WITH_COLON.containsMatchIn(it) }) {
             return IntendedDifference.REGEX_CAPTURE
@@ -147,6 +153,12 @@ class HttpPathPatternParityTest {
             onlyRuns && captures + stars >= 2 && segment != "**"
         }
         return if (emptyMatching) IntendedDifference.EMPTY_MATCHING_SEGMENT else null
+    }
+
+    private fun isLoneSurrogate(text: String, index: Int): Boolean = when {
+        text[index].isHighSurrogate() -> index + 1 >= text.length || !text[index + 1].isLowSurrogate()
+        text[index].isLowSurrogate() -> index == 0 || !text[index - 1].isHighSurrogate()
+        else -> false
     }
 
     private fun check(pattern: String, path: String, options: Options): String? {

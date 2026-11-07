@@ -24,8 +24,8 @@
     },
     {
       "id": "CTL-3",
-      "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998)",
-      "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow. simulate, explain and a shadow window's comparison decide on the documents enforcement reads, by its one rule (ViewDocuments): the platform's, the tenant's, and the app's when the scope has roles in that app or the tenant document decided with (the head, the candidate, or the revision explained) binds one of that app's permission policies to Anyone or a principal; never more. What explain reports as the revisions decided on, and the documents simulate takes a candidate of, are those the view read: a tenant document that does not compile makes a roleless request read no app document.",
+      "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998); D2 (PIP-12 parity, review L5 of #1200)",
+      "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow. simulate, explain and a shadow window's comparison decide on the documents enforcement reads, by its one rule (ViewDocuments): the platform's, the tenant's, and the app's when the scope has roles in that app or the tenant document decided with (the head, the candidate, or the revision explained) binds one of that app's permission policies to Anyone or a principal; never more. What explain reports as the revisions decided on, and the documents simulate takes a candidate of, are those the view read: a tenant document that does not compile makes a roleless request read no app document. A simulated or explained request that sends a header the documents of its view read with different values is refused 400, as enforcement refuses it before evaluation (PIP-12), and one whose resource is longer than a request path may be (2,048 characters, 256 per segment, PathNormalizer's bounds; RC1-41) is refused 400 too; analyze holds its resource to the same bounds.",
       "level": "control",
       "pending": null,
       "guards": [
@@ -39,7 +39,10 @@
         "runtime:ShadowAppDocumentTest#a tenant candidate that grants an app permission reads the app document and widens",
         "runtime:ShadowAppDocumentTest#a tenant candidate that revokes it reads no app document and narrows",
         "runtime:ShadowAppDocumentTest#withoutViewsSuchACandidateIsAnError",
-        "spring-boot:PipelineStarterRedisTest#a tenant candidate that makes a roleless request read an app document widens its window"
+        "spring-boot:PipelineStarterRedisTest#a tenant candidate that makes a roleless request read an app document widens its window",
+        "control:ControlPlaneTest#a header the view reads sent with different values is refused as enforcement refuses it",
+        "control:SimulatorTest#a repeated header a document reads is refused",
+        "control:ControlPlaneTest#a resource is held to a request path's bounds"
       ]
     },
     {
@@ -251,6 +254,16 @@
         "control:RetriedPublishTest#a publish and its retry record it once",
         "control:PreemptionRaceTest#a head write that meets the preempting change's head records the failure"
       ]
+    },
+    {
+      "id": "CTL-23",
+      "source": "RFC 0007 §10.3; RC1-40 (D2)",
+      "statement": "simulate and explain are authorized (cosec:simulate, cosec:explain) on the tenant the simulated request's scope resolves to, whose document decides it, never on a tenant the request only names. A request without a principal is decided on tenant (0), as enforcement decides it, so one that names any other tenant is refused 400, after the authorization on (0).",
+      "level": "control",
+      "guards": [
+        "control:ControlPlaneTest#a request without a principal is authorized and decided on tenant (0) only"
+      ],
+      "pending": null
     }
   ]
 }

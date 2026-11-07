@@ -25,7 +25,9 @@ import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.Action
@@ -40,11 +42,13 @@ import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.time.DateTimeException
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -75,7 +79,10 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * `unavailable`, `internal-error`), plus the control API's own statuses (404, 409, 410, 412, 422, 428). A problem
  * says what the caller can act on: a 401, 403, 404, 500 or 503 carries no detail, so a refusal never tells whether a
  * document, a change or a DENY exists, and why a refused step was refused is logged at INFO instead; a 400, 409, 410,
- * 412, 422 or 428 explains the caller's own request.
+ * 412, 422 or 428 explains the caller's own request (RC1-39): a 400's detail is the message of one of the control
+ * plane's own checks of the request, or names the field that does not parse, never an exception's message or a class
+ * name. A stored document or record that does not decode is a 500, logged; anything else refused as an illegal
+ * argument is a 400 without detail.
  *
  * | Method and path | Call |
  * |---|---|
@@ -118,12 +125,19 @@ class ControlHttp(private val plane: ControlPlane) {
                 }
             }
             problem(problem, requestId, e.message)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: InvalidControlRequestException) {
             problem(Problem.INVALID_REQUEST, requestId, e.message)
         } catch (e: SnapshotFormatException) {
-            problem(Problem.INVALID_REQUEST, requestId, e.message)
+            stored(request, requestId, e)
         } catch (e: JacksonException) {
-            problem(Problem.INVALID_REQUEST, requestId, e.originalMessage)
+            stored(request, requestId, e)
+        } catch (e: IllegalArgumentException) {
+            // Refused for a reason none of the control plane's own checks gives (RC1-39): not shown, logged.
+            log.info {
+                "Control API ${request.method} ${request.path} (request $requestId) is 400: " +
+                    SnapshotKeyText.printable(e.message.orEmpty())
+            }
+            problem(Problem.INVALID_REQUEST, requestId, null)
         } catch (e: Exception) {
             val unnamed = UnnamedDocumentException.of(e)
             if (unnamed != null) {
@@ -135,6 +149,20 @@ class ControlHttp(private val plane: ControlPlane) {
             log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
             problem(Problem.INTERNAL_ERROR, requestId, null)
         }
+    }
+
+    /**
+     * What the control plane read and could not decode (RC1-39): a stored document or record, perhaps one a newer
+     * version wrote during a rolling upgrade. The caller can do nothing about it: a 500 without detail, the error logged
+     * with what it names (a document's key).
+     */
+    private fun stored(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
+        UnnamedDocumentException.of(e)?.let { unnamed ->
+            log.warn { "Control API ${request.method} ${request.path} (request $requestId): ${unnamed.message}" }
+            return problem(Problem.CHANGE_UNREADABLE, requestId, CHANGE_UNREADABLE_DETAIL)
+        }
+        log.error(e) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
+        return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
 
     private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
@@ -151,7 +179,7 @@ class ControlHttp(private val plane: ControlPlane) {
                         plane.simulate(
                             operator,
                             simulated(it.need("request")),
-                            it.get("candidate")?.let { c -> ChangeId(c.text()) }
+                            it.optText("candidate")?.let { c -> field("candidate", "a change id") { ChangeId(c) } }
                         )
                     )
                 )
@@ -170,19 +198,21 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private suspend fun documents(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
         val (keyText, verb) = segments.firstOrNull()?.let(::verbOf) ?: return notFound()
-        val key = ChangeRequestCodec.documentKeyOf(keyText)
+        val key = documentKey(keyText)
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
             "apply" -> post(request) {
                 val (kind, owner) = Revisions.ownerOf(key)
-                val desired = PolicyDocumentCodec.decode(kind, owner, it.need("document"))
-                val mode = ApplyMode.valueOf(it.need("mode").text())
-                changeResponse(plane.apply(operator, key, desired, mode, it.get("note")?.text().orEmpty()), CREATED)
+                val desired = decoded("document") { PolicyDocumentCodec.decode(kind, owner, it.need("document")) }
+                val mode = it.text("mode").let { mode ->
+                    field("mode", "one of ${ApplyMode.entries.joinToString()}") { ApplyMode.valueOf(mode) }
+                }
+                changeResponse(plane.apply(operator, key, desired, mode, it.optText("note").orEmpty()), CREATED)
             }
 
             "rollback" -> post(request) {
                 changeResponse(
-                    plane.rollback(operator, key, it.need("revision").long(), it.get("note")?.text().orEmpty()),
+                    plane.rollback(operator, key, it.long("revision"), it.optText("note").orEmpty()),
                     CREATED
                 )
             }
@@ -202,21 +232,22 @@ class ControlHttp(private val plane: ControlPlane) {
             when {
                 rest.isEmpty() -> document(plane.read(operator, key))
                 rest == listOf("diff") -> json(
-                    diff(plane.diff(operator, key, request.long("from"), request.long("to")))
+                    diff(plane.diff(operator, key, request.revision("from"), request.revision("to")))
                 )
                 rest == listOf("revisions") -> json(
                     history(
                         plane.history(
                             operator,
                             key,
-                            request.query["before"]?.toLong(),
-                            request.query["limit"]?.toInt() ?: ControlPlane.DEFAULT_LIMIT
+                            request.query["before"]?.let { revisionOf("before", it) },
+                            request.query["limit"]?.let { limit -> field("limit", "a number") { limit.toInt() } }
+                                ?: ControlPlane.DEFAULT_LIMIT
                         )
                     )
                 )
-                rest.size == 2 && rest[0] == "revisions" -> document(plane.read(operator, key, rest[1].toLong()))
+                rest.size == 2 && rest[0] == "revisions" -> document(plane.read(operator, key, revisionOf("revision", rest[1])))
                 rest.size == 3 && rest[0] == "revisions" && rest[2] == "propagation" -> {
-                    val propagation = plane.propagation(operator, key, rest[1].toLong())
+                    val propagation = plane.propagation(operator, key, revisionOf("revision", rest[1]))
                     json(
                         factory.objectNode().put(
                             "revision",
@@ -241,20 +272,22 @@ class ControlHttp(private val plane: ControlPlane) {
     private suspend fun changes(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
         if (segments.isEmpty()) {
             return post(request) {
-                val key = ChangeRequestCodec.documentKeyOf(it.need("document").text())
-                val operations = it.need("operations").values().map { op -> ChangeRequestCodec.operation(key, op) }
-                val confirmations = it.get("confirmations")?.values()?.map(::confirmation).orEmpty()
+                val key = documentKey(it.text("document"))
+                val operations = it.array("operations").map { op ->
+                    decoded("operations") { ChangeRequestCodec.operation(key, op) }
+                }
+                val confirmations = it.get("confirmations")?.let { c -> arrayOf("confirmations", c) }?.map(::confirmation).orEmpty()
                 // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
-                require(
+                requireRequest(
                     !it.has("kind")
                 ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
                 changeResponse(
                     plane.propose(
                         operator,
                         key,
-                        it.need("base").long(),
+                        it.long("base"),
                         operations,
-                        it.get("note")?.text().orEmpty(),
+                        it.optText("note").orEmpty(),
                         confirmations,
                     ),
                     CREATED
@@ -263,7 +296,7 @@ class ControlHttp(private val plane: ControlPlane) {
         }
         if (segments.size != 1) return notFound()
         val (idText, verb) = verbOf(segments[0])
-        val id = ChangeId(idText)
+        val id = changeIdOf(idText)
         if (verb == null) {
             return get(request) { changeResponse(plane.get(operator, id), OK) }
         }
@@ -271,9 +304,9 @@ class ControlHttp(private val plane: ControlPlane) {
             val change = when (verb) {
                 "rebase" -> plane.rebase(operator, id)
                 "shadow" -> plane.startShadow(operator, id)
-                "skip-shadow" -> plane.skipShadow(operator, id, it.need("reason").text())
-                "approve" -> plane.approve(operator, id, it.need("candidate").text())
-                "reject" -> plane.reject(operator, id, it.need("reason").text())
+                "skip-shadow" -> plane.skipShadow(operator, id, it.text("reason"))
+                "approve" -> plane.approve(operator, id, it.text("candidate"))
+                "reject" -> plane.reject(operator, id, it.text("reason"))
                 "abandon" -> plane.abandon(operator, id)
                 "publish" -> plane.publish(operator, id, it.get("ack")?.let(::ack))
                 else -> return@post notFound()
@@ -286,17 +319,18 @@ class ControlHttp(private val plane: ControlPlane) {
         segments.isEmpty() -> post(request) {
             val change = plane.breakGlass.request(
                 operator,
-                PrincipalId(it.need("principal").text()),
-                Instant.parse(it.need("expiresAt").text()),
-                it.need("reason").text(),
-                it.get("policy")?.let { p -> PolicyId(p.text()) } ?: me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
+                it.text("principal").let { p -> field("principal", "a principal id") { PrincipalId(p) } },
+                instantOf("expiresAt", it.text("expiresAt")),
+                it.text("reason"),
+                it.optText("policy")?.let { p -> field("policy", "a policy id") { PolicyId(p) } }
+                    ?: me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
             )
             changeResponse(change, CREATED)
         }
 
         segments.size == 1 && request.method == DELETE -> {
-            val reason = request.query["reason"] ?: throw IllegalArgumentException("Revoking break-glass needs a reason.")
-            val binding = BindingId(segments[0])
+            val reason = request.query["reason"] ?: throw InvalidControlRequestException("Revoking break-glass needs a reason.")
+            val binding = field("binding", "a binding id") { BindingId(segments[0]) }
             val change = plane.breakGlass.revoke(operator, binding, reason)
             // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
             if (plane.breakGlass.grants(binding)) {
@@ -310,7 +344,7 @@ class ControlHttp(private val plane: ControlPlane) {
 
         segments.size == 1 && verbOf(segments[0]).second == "approve" -> post(request) {
             changeResponse(
-                plane.approve(operator, ChangeId(verbOf(segments[0]).first), it.need("candidate").text()),
+                plane.approve(operator, changeIdOf(verbOf(segments[0]).first), it.text("candidate")),
                 OK
             )
         }
@@ -320,8 +354,15 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private inline fun post(request: ControlHttpRequest, block: (JsonNode) -> ControlHttpResponse): ControlHttpResponse {
         if (request.method != POST) return methodNotAllowed()
-        val body = request.body?.takeIf { it.isNotEmpty() }?.let { reader.readTree(it) } ?: factory.objectNode()
-        require(body.isObject) { "The request body is a JSON object." }
+        val body = request.body?.takeIf { it.isNotEmpty() }?.let { bytes ->
+            try {
+                reader.readTree(bytes)
+            } catch (_: JacksonException) {
+                // Not the parser's message: it is not one of the control plane's own (RC1-39).
+                throw InvalidControlRequestException("The request body is not JSON, or holds a key twice.")
+            }
+        } ?: factory.objectNode()
+        requireRequest(body.isObject) { "The request body is a JSON object." }
         return block(body)
     }
 
@@ -364,7 +405,7 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private fun notFound(): ControlHttpResponse = throw ChangeRejectedException(NOT_FOUND, "no such route")
 
-    private fun methodNotAllowed(): ControlHttpResponse = throw IllegalArgumentException(
+    private fun methodNotAllowed(): ControlHttpResponse = throw InvalidControlRequestException(
         "This route does not take that method."
     )
 
@@ -380,6 +421,7 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private fun simulated(node: JsonNode): SimulatedRequest {
         node.only(
+            "request",
             "tenant",
             "principal",
             "roles",
@@ -395,34 +437,42 @@ class ControlHttp(private val plane: ControlPlane) {
             "principalBindings",
             "breakGlass",
         )
-        val action = node.need("action").text().split(':', limit = 2).takeIf { it.size == 2 }
-            ?: throw IllegalArgumentException("An action is service:verb.")
         return SimulatedRequest(
-            tenant = TenantId(node.need("tenant").text()),
-            principal = node.get("principal")?.text(),
-            roles = node.get("roles")?.values()?.map { it.text() }.orEmpty(),
-            policies = node.get("policies")?.values()?.map { it.text() }.orEmpty(),
-            app = node.get("app")?.text().orEmpty(),
-            space = node.get("space")?.text().orEmpty(),
-            action = Action(action[0], action[1]),
-            resource = resource(node.need("resource").text()),
-            remoteIp = node.get("remoteIp")?.text().orEmpty(),
-            time = node.get("time")?.let { Instant.parse(it.text()).toEpochMilli() } ?: System.currentTimeMillis(),
-            headers = node.get("headers")?.properties()?.associate { (name, value) ->
-                name to if (value.isArray) value.values().map { it.text() } else listOf(value.text())
+            tenant = node.text("tenant").let { field("tenant", "a tenant id") { TenantId(it) } },
+            principal = node.optText("principal"),
+            roles = node.strings("roles"),
+            policies = node.strings("policies"),
+            app = node.optText("app").orEmpty(),
+            space = node.optText("space").orEmpty(),
+            action = action(node),
+            resource = resource(node.text("resource")),
+            remoteIp = node.optText("remoteIp").orEmpty(),
+            time = node.optText("time")?.let { instantOf("time", it).toEpochMilli() } ?: System.currentTimeMillis(),
+            headers = node.get("headers")?.let { headers ->
+                objectOf("headers", headers).properties().associate { (name, value) ->
+                    name to if (value.isArray) value.values().map { it.stringIn("headers") } else listOf(value.stringIn("headers"))
+                }
             }.orEmpty(),
-            requestAttributes = node.get("requestAttributes")?.properties()?.associate { (name, value) ->
-                name to value.text()
+            requestAttributes = node.get("requestAttributes")?.let { attributes ->
+                objectOf("requestAttributes", attributes).properties().associate { (name, value) ->
+                    name to value.stringIn("requestAttributes")
+                }
             }.orEmpty(),
-            principalBindings = node.get("principalBindings")?.bool() ?: true,
-            breakGlass = node.get("breakGlass")?.bool() ?: true,
+            principalBindings = node.optBool("principalBindings") ?: true,
+            breakGlass = node.optBool("breakGlass") ?: true,
         )
     }
 
-    private fun resource(text: String): Resource {
-        if (text.startsWith('/')) return Resource("http", text, emptyMap())
+    private fun action(node: JsonNode): Action {
+        val action = node.text("action").split(':', limit = 2).takeIf { it.size == 2 }
+            ?: throw InvalidControlRequestException("An action is service:verb.")
+        return field("action", "service:verb") { Action(action[0], action[1]) }
+    }
+
+    private fun resource(text: String): Resource = field("resource", "a resource") {
+        if (text.startsWith('/')) return@field Resource("http", text, emptyMap())
         val slash = text.indexOf('/')
-        return if (slash < 0) {
+        if (slash < 0) {
             Resource(
                 text,
                 "",
@@ -434,39 +484,89 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private fun query(node: JsonNode): AccessQuery {
-        node.only("tenant", "app", "space", "action", "resource")
-        val action = node.need("action").text().split(':', limit = 2).takeIf { it.size == 2 }
-            ?: throw IllegalArgumentException("An action is service:verb.")
+        node.only("query", "tenant", "app", "space", "action", "resource")
         return AccessQuery(
-            TenantId(node.need("tenant").text()),
-            node.get("app")?.text(),
-            node.get("space")?.text(),
-            Action(action[0], action[1]),
-            resource(node.need("resource").text())
+            node.text("tenant").let { field("tenant", "a tenant id") { TenantId(it) } },
+            node.optText("app"),
+            node.optText("space"),
+            action(node),
+            resource(node.text("resource"))
         )
     }
 
     private fun version(node: JsonNode): SnapshotVersion {
-        node.only("platform", "app", "tenant")
-        return SnapshotVersion(node.need("platform").long(), node.get("app")?.long(), node.get("tenant")?.long())
+        node.only("at", "platform", "app", "tenant")
+        return SnapshotVersion(node.long("platform"), node.optLong("app"), node.optLong("tenant"))
     }
 
     private fun confirmation(node: JsonNode): Confirmation {
-        node.only("policy", "statement", "digest", "kind")
-        return Confirmation(
-            PolicyId(node.need("policy").text()),
-            node.need("statement").long().toInt(),
-            node.need("digest").text(),
-            node.get("kind")?.text() ?: Confirmation.DENY_NOMATCH
-        )
+        node.only("confirmations", "policy", "statement", "digest", "kind")
+        val policy = node.text("policy")
+        val statement = node.long("statement")
+        return field("confirmations", "a confirmation") {
+            Confirmation(
+                PolicyId(policy),
+                Math.toIntExact(statement),
+                node.text("digest"),
+                node.optText("kind") ?: Confirmation.DENY_NOMATCH
+            )
+        }
     }
 
     private fun ack(node: JsonNode): ShadowAck {
-        node.only("window", "counts")
-        return ShadowAck(
-            node.need("window").text(),
-            node.need("counts").properties().associate { (outcome, count) -> outcome to count.long() }
-        )
+        node.only("ack", "window", "counts")
+        return field("ack", "a shadow window's acknowledgement") {
+            ShadowAck(
+                node.text("window"),
+                objectOf("counts", node.need("counts")).properties().associate { (outcome, count) ->
+                    outcome to count.longIn("counts")
+                }
+            )
+        }
+    }
+
+    /** `platform`, `app:<id>` or `tenant:<id>`; the text is not echoed, as it may hold control characters. */
+    private fun documentKey(text: String): SnapshotKey = try {
+        ChangeRequestCodec.documentKeyOf(text)
+    } catch (_: SnapshotFormatException) {
+        throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>.")
+    }
+
+    private fun changeIdOf(text: String): ChangeId = field("change", "a change id") { ChangeId(text) }
+
+    private fun ControlHttpRequest.revision(name: String): Long =
+        query[name]?.let { revisionOf(name, it) } ?: throw InvalidControlRequestException("[$name] is a revision number.")
+
+    private fun revisionOf(name: String, text: String): Long =
+        text.toLongOrNull() ?: throw InvalidControlRequestException("[$name] is a revision number.")
+
+    private fun instantOf(name: String, text: String): Instant =
+        field(name, "an ISO-8601 instant such as 2026-01-01T00:00:00Z") { Instant.parse(text) }
+
+    /**
+     * [decode] of the client's own [name]: the codec's format errors describe what the caller sent, by its JSON path, so
+     * they are the request's validation and say so (RC1-39).
+     */
+    private inline fun <T> decoded(name: String, decode: () -> T): T = try {
+        decode()
+    } catch (e: SnapshotFormatException) {
+        throw InvalidControlRequestException("[$name]: ${e.message}")
+    }
+
+    /**
+     * [parse] of the client's field [name]. What it throws is not shown, being no message of the control plane's own:
+     * only that [name] is not [what] (RC1-39), unless it is one of those checks.
+     */
+    private inline fun <T> field(name: String, what: String, parse: () -> T): T = try {
+        parse()
+    } catch (e: InvalidControlRequestException) {
+        throw e
+    } catch (_: IllegalArgumentException) {
+        throw InvalidControlRequestException("[$name] is not $what.")
+    } catch (_: ArithmeticException) {
+        throw InvalidControlRequestException("[$name] is not $what.")
+    } catch (_: DateTimeException) {
+        throw InvalidControlRequestException("[$name] is not $what.")
     }
 
     private fun simulation(simulation: Simulation): ObjectNode = factory.objectNode().apply {
@@ -579,31 +679,56 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private fun JsonNode.need(name: String): JsonNode = get(name)?.takeUnless {
         it.isNull
-    } ?: throw IllegalArgumentException("[$name] is missing.")
+    } ?: throw InvalidControlRequestException("[$name] is missing.")
 
-    private fun JsonNode.text(): String {
-        require(isString) { "$this is not a string." }
+    /** The string field [name], required. */
+    private fun JsonNode.text(name: String): String = need(name).stringIn(name)
+
+    /** The string field [name], or null when it is absent. */
+    private fun JsonNode.optText(name: String): String? = get(name)?.stringIn(name)
+
+    private fun JsonNode.long(name: String): Long = need(name).longIn(name)
+
+    private fun JsonNode.optLong(name: String): Long? = get(name)?.longIn(name)
+
+    private fun JsonNode.optBool(name: String): Boolean? = get(name)?.let {
+        requireRequest(it.isBoolean) { "[$name] is not a boolean." }
+        it.asBoolean()
+    }
+
+    private fun JsonNode.strings(name: String): List<String> =
+        get(name)?.let { arrayOf(name, it) }?.map { it.stringIn(name) }.orEmpty()
+
+    private fun JsonNode.array(name: String): List<JsonNode> = arrayOf(name, need(name))
+
+    private fun arrayOf(name: String, node: JsonNode): List<JsonNode> {
+        requireRequest(node.isArray) { "[$name] is not an array." }
+        return node.values().toList()
+    }
+
+    private fun objectOf(name: String, node: JsonNode): JsonNode {
+        requireRequest(node.isObject) { "[$name] is not an object." }
+        return node
+    }
+
+    /** This value, of the field [name], as a string. */
+    private fun JsonNode.stringIn(name: String): String {
+        requireRequest(isString) { "[$name] is not a string." }
         return asString()
     }
 
-    private fun JsonNode.bool(): Boolean {
-        require(isBoolean) { "$this is not a boolean." }
-        return asBoolean()
-    }
-
-    private fun JsonNode.long(): Long {
-        require(isIntegralNumber) { "$this is not an integer." }
+    /** This value, of the field [name], as an integer. */
+    private fun JsonNode.longIn(name: String): Long {
+        requireRequest(isIntegralNumber && canConvertToLong()) { "[$name] is not an integer." }
         return asLong()
     }
 
-    private fun JsonNode.only(vararg names: String) {
-        require(isObject) { "$this is not an object." }
+    /** This object, the field [name], has only [names]. */
+    private fun JsonNode.only(name: String, vararg names: String) {
+        requireRequest(isObject) { "[$name] is not an object." }
         val unknown = properties().map { it.key }.toSet() - names.toSet()
-        require(unknown.isEmpty()) { "Unknown fields $unknown." }
+        requireRequest(unknown.isEmpty()) { "Unknown fields $unknown in [$name]." }
     }
-
-    private fun ControlHttpRequest.long(name: String): Long =
-        query[name]?.toLongOrNull() ?: throw IllegalArgumentException("[$name] is a revision number.")
 
     companion object {
         private const val CHANGE_UNREADABLE_DETAIL = "This change can no longer be read: it is of an app that cannot be " +
