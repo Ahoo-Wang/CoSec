@@ -447,7 +447,7 @@ class ChangesB1Test {
                 target: SnapshotKey,
                 policy: PolicyId,
                 expected: SnapshotDigest?,
-                referrers: Set<SnapshotKey>
+                referrers: Map<SnapshotKey, Long>
             ): Boolean {
                 check(!written) { "Redis is down" }
                 return harness.memory.putReferrers(target, policy, expected, referrers)

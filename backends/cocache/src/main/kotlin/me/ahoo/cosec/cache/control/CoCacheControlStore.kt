@@ -67,7 +67,7 @@ class CoCacheControlStore internal constructor(
     private val heads: Cache<SnapshotKey, SnapshotDocument>,
     private val records: Cache<RevisionRecordKey, SnapshotDocument>,
     private val indexes: Cache<SnapshotKey, RevisionIndex>,
-    private val references: Cache<ReferenceKey, Set<SnapshotKey>>,
+    private val references: Cache<ReferenceKey, Map<SnapshotKey, Long>>,
     private val leases: Cache<String, String>,
     private val changes: Cache<ChangeId, ChangeRequest>,
     private val stages: Cache<SnapshotKey, StageSlot>,
@@ -144,21 +144,21 @@ class CoCacheControlStore internal constructor(
     override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean =
         put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
 
-    /** An emptied set is written as empty, never deleted: a delete cannot be conditional, and could drop a new referrer. */
+    /** Emptied referrers are written as empty, never deleted: a delete cannot be conditional, and could drop a new one. */
     override suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean = put(
         references,
         ReferenceKey(target, policy),
         expected,
         referrers,
-        digest(SnapshotKeySetCodec, referrers)
+        digest(ReferrersCodec, referrers)
     ) is Put.Written
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =

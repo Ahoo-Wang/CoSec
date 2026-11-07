@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.control.ChangeRequestCacheCodec
 import me.ahoo.cosec.cache.control.ListedCodec
 import me.ahoo.cosec.cache.control.RevisionIndexCodec
-import me.ahoo.cosec.cache.control.SnapshotKeySetCodec
+import me.ahoo.cosec.cache.control.ReferrersCodec
 import me.ahoo.cosec.cache.control.StageSlotCodec
 import me.ahoo.cosec.cache.shadow.ReportersCodec
 import me.ahoo.cosec.cache.shadow.ShadowReportCodec
@@ -239,13 +239,17 @@ class StoredFormatTest {
             StageSlotCodec::decode,
             fixture("stageSlot")
         )
-        val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
+        // #1207: each referrer with the revision of it that last indexed the reference.
         pinned(
-            "keys",
-            keys,
-            SnapshotKeySetCodec::encode,
-            SnapshotKeySetCodec::decode,
-            fixture("keys")
+            "referrers",
+            mapOf(SnapshotKey.Tenant("b") to 7L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 2L),
+            ReferrersCodec::encode,
+            ReferrersCodec::decode,
+            fixture("referrers")
+        )
+        // The set earlier builds wrote still reads, each member at revision 0.
+        ReferrersCodec.decode(fixture("keys").encodeToByteArray()).assert().isEqualTo(
+            mapOf(SnapshotKey.App("order") to 0L, SnapshotKey.Platform to 0L, SnapshotKey.Tenant("b") to 0L)
         )
         pinned(
             "listed",

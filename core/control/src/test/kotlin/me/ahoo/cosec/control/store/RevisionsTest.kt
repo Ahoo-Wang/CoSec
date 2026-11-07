@@ -318,7 +318,7 @@ class RevisionsTest {
                 SnapshotKey.Platform,
                 shared,
                 memory.referrers(SnapshotKey.Platform, shared)!!.digest,
-                emptySet()
+                emptyMap()
             )
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
             revisions.repairReferences(ACME).assert().isEqualTo(1)

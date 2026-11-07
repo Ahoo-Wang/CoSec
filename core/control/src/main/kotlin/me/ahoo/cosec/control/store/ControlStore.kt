@@ -72,15 +72,19 @@ interface ControlStore : CandidateStore {
     /** Replaces the revision index of [key] if it is still at [expected]; `false` when it changed in between. */
     suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean
 
-    /** The documents that refer to [policy] of [target] (RFC 0007 §5.8), with the digest a [putReferrers] must name. */
-    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>?
+    /**
+     * The documents that refer to [policy] of [target] (RFC 0007 §5.8), each with the revision of it that last indexed
+     * the reference, and the digest a [putReferrers] must name. A revision removes only what it or an earlier one
+     * indexed, so the late removal of one revision never takes back what a later one indexed again (#1207).
+     */
+    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>?
 
     /** Replaces the referrers of [policy] of [target] if they are still at [expected]; `false` when they changed. */
     suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean
 
     /** The change request [id], with the digest a [putChange] must name, or `null` when there is none. */

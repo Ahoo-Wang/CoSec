@@ -159,7 +159,7 @@ class CoCacheControlStoreTest {
             } finally {
                 root.detachAppender(logged)
             }
-            store.referrers(SnapshotKey.Platform, shared)!!.value.assert().containsExactly(SnapshotKey.Tenant("acme"))
+            store.referrers(SnapshotKey.Platform, shared)!!.value.keys.assert().containsExactly(SnapshotKey.Tenant("acme"))
             val warning = logged.list.map { it.formattedMessage }.single { "back-reference set names" in it }
             warning.assert().contains("app:a\\u0001b").doesNotContain("\u0001")
         }
@@ -408,10 +408,14 @@ class CoCacheControlStoreTest {
             store.putIndex(key, stored.digest, index).assert().isFalse()
 
             val shared = PolicyId("cosec:shared")
-            store.putReferrers(SnapshotKey.Platform, shared, null, setOf(key)).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, shared, null, mapOf(key to 3L)).assert().isTrue()
             val referrers = store.referrers(SnapshotKey.Platform, shared)!!
-            referrers.value.assert().containsExactly(key)
-            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptySet()).assert().isTrue()
+            referrers.value.assert().isEqualTo(mapOf(key to 3L))
+            // Another revision is another value: a removal read before it no longer matches.
+            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, mapOf(key to 4L)).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptyMap()).assert().isFalse()
+            val raised = store.referrers(SnapshotKey.Platform, shared)!!
+            store.putReferrers(SnapshotKey.Platform, shared, raised.digest, emptyMap()).assert().isTrue()
             store.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEmpty()
 
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()
@@ -445,9 +449,12 @@ class CoCacheControlStoreTest {
             floor = 2,
         )
         RevisionIndexCodec.decode(RevisionIndexCodec.encode(index)).assert().isEqualTo(index)
-        val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
-        SnapshotKeySetCodec.decode(SnapshotKeySetCodec.encode(keys)).assert().isEqualTo(keys)
-        SnapshotKeySetCodec.encode(keys).decodeToString().assert().isEqualTo("""["app:order","platform","tenant:b"]""")
+        val referrers = mapOf(SnapshotKey.Tenant("b") to 1L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 12L)
+        ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
+        ReferrersCodec.encode(referrers).decodeToString().assert()
+            .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
+        // The array of keys earlier builds wrote: every member at revision 0.
+        ReferrersCodec.decode("""["tenant:b"]""".encodeToByteArray()).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
         listOf(
             "",
             "[]",
@@ -459,8 +466,18 @@ class CoCacheControlStoreTest {
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
         }
-        listOf("{}", """["policies"]""", """["tenant:a:b"]""", "[1]").forEach { text ->
-            assertThrownBy<SnapshotFormatException> { SnapshotKeySetCodec.decode(text.encodeToByteArray()) }
+        listOf(
+            "1",
+            "\"tenant:b\"",
+            """["policies"]""",
+            """["tenant:a:b"]""",
+            "[1]",
+            """{"policies":1}""",
+            """{"tenant:b":-1}""",
+            """{"tenant:b":"1"}""",
+            """{"tenant:b":1.5}""",
+        ).forEach { text ->
+            assertThrownBy<SnapshotFormatException> { ReferrersCodec.decode(text.encodeToByteArray()) }
         }
         RevisionRecordKeyEncoder.encode(RevisionRecordKey(SnapshotKey.Tenant("acme"), digest))
             .assert().isEqualTo("tenant:acme:$digest")

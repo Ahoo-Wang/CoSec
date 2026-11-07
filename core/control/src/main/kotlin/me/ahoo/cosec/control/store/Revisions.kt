@@ -106,13 +106,14 @@ class RetentionPolicy(
  * [publish] writes in the order that never loses content and never lets the data plane see anything but the old or
  * the new head:
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
- * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
- *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
+ * 2. the back-references the candidate adds are added, each with the candidate's revision (the index stays a superset
+ *    of the true references), and an app document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
  * 3. the caller's precondition is read, and the head is replaced with `putIfMatch(expected = base digest)`: one key,
  *    one atomic step (P7). A conflict leaves the head as someone else wrote it and is reported, never retried on the
  *    new content (RFC 0007 §5.5);
- * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
- *    marks the app list complete when it names every app document the store lists.
+ * 4. the index gains the revision, and back-references only the base had are removed, unless a later revision has
+ *    indexed them again since (#1207); the platform's first revision marks the app list complete when it names every
+ *    app document the store lists.
  *
  * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged.
  *
@@ -171,7 +172,7 @@ class Revisions(
         val before = base?.let { references(it.document) }.orEmpty()
         val after = references(document)
         for ((target, policy) in after - before) {
-            check(updateReferrers(target, policy) { it + key }) {
+            check(updateReferrers(target, policy) { indexed(it, key, revision) }) {
                 "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
             }
         }
@@ -352,9 +353,28 @@ class Revisions(
             )
         } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
         for ((target, policy) in dropped) {
-            updateReferrers(target, policy) { it - key } ||
+            updateReferrers(target, policy) { dropped(it, key, entry.revision) } ||
                 warn("[$key] no longer refers to [$policy] of [$target], which stays indexed")
         }
+    }
+
+    /**
+     * [referrers] with [key] at [revision]: a reference [publish] indexes before its head write. One already indexed
+     * by [revision] or a later revision (a publish that lost its race) stays as it is.
+     */
+    private fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+        val current = referrers[key]
+        return if (current != null && current >= revision) referrers else referrers + (key to revision)
+    }
+
+    /**
+     * [referrers] without [key], if [revision], which no longer refers, or an earlier revision indexed it. The removal
+     * runs after the head write, so a later revision may have indexed the reference again meanwhile (#1207): it stays,
+     * and so does one of a revision whose publish lost its race, a superset that blocks a deletion at most.
+     */
+    private fun dropped(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+        val current = referrers[key] ?: return referrers
+        return if (current <= revision) referrers - key else referrers
     }
 
     /**
@@ -510,7 +530,7 @@ class Revisions(
 
     /** The documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-        store.referrers(target, policy)?.value.orEmpty()
+        store.referrers(target, policy)?.value?.keys.orEmpty()
 
     /**
      * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
@@ -521,11 +541,11 @@ class Revisions(
         val head = head(key) ?: return 0
         var added = 0
         for ((target, policy) in references(head.document)) {
-            if (store.referrers(target, policy)?.value?.contains(key) == true) {
+            if (store.referrers(target, policy)?.value?.containsKey(key) == true) {
                 continue
             }
             check(
-                updateReferrers(target, policy) { it + key }
+                updateReferrers(target, policy) { indexed(it, key, head.revision) }
             ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
             added++
         }
@@ -627,11 +647,15 @@ class Revisions(
         return false
     }
 
-    private suspend fun updateReferrers(target: SnapshotKey, policy: PolicyId, change: (Set<SnapshotKey>) -> Set<SnapshotKey>): Boolean {
+    private suspend fun updateReferrers(
+        target: SnapshotKey,
+        policy: PolicyId,
+        change: (Map<SnapshotKey, Long>) -> Map<SnapshotKey, Long>,
+    ): Boolean {
         repeat(maxAttempts) {
             val current = store.referrers(target, policy)
             val next = change(current?.value.orEmpty())
-            if (current != null && next == current.value) {
+            if (next == (current?.value ?: emptyMap<SnapshotKey, Long>())) {
                 return true
             }
             if (store.putReferrers(target, policy, current?.digest, next)) {

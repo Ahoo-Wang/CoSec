@@ -37,7 +37,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val heads = HashMap<SnapshotKey, SnapshotDocument>()
     private val records = HashMap<Pair<SnapshotKey, SnapshotDigest>, SnapshotDocument>()
     private val indexes = HashMap<SnapshotKey, RevisionIndex>()
-    private val references = HashMap<Pair<SnapshotKey, PolicyId>, Set<SnapshotKey>>()
+    private val references = HashMap<Pair<SnapshotKey, PolicyId>, Map<SnapshotKey, Long>>()
     private val leases = HashMap<String, Pair<String, Instant>>()
     private val changes = HashMap<ChangeId, Pair<ChangeRequest, Long>>()
     private val stages = HashMap<SnapshotKey, Pair<StageSlot, Long>>()
@@ -108,16 +108,16 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         changes.filterValues { (change, _) -> !change.state.terminal }.keys.toSet()
     }
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
-        synchronized(lock) { references[target to policy]?.let { Versioned(it, setDigest(it)) } }
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
+        synchronized(lock) { references[target to policy]?.let { Versioned(it, referrersDigest(it)) } }
 
     override suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean = synchronized(lock) {
-        val current = references[target to policy]?.let(::setDigest)
+        val current = references[target to policy]?.let(::referrersDigest)
         if (current != expected) {
             return false
         }
@@ -192,8 +192,8 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         return digest("$entries|${apps.complete}".encodeToByteArray())
     }
 
-    private fun setDigest(set: Set<SnapshotKey>): SnapshotDigest =
-        digest(set.map { it.toString() }.sorted().joinToString("\n").encodeToByteArray())
+    private fun referrersDigest(referrers: Map<SnapshotKey, Long>): SnapshotDigest =
+        digest(referrers.map { (key, revision) -> "$key=$revision" }.sorted().joinToString("\n").encodeToByteArray())
 
     private fun digest(bytes: ByteArray): SnapshotDigest =
         SnapshotDigest(MessageDigest.getInstance("SHA-256").digest(bytes).copyOf(DIGEST_BYTES))

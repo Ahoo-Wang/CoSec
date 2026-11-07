@@ -102,12 +102,12 @@ internal object ControlCacheSpecs {
     fun referenceIndex(
         keyPrefix: String = CoSec.COSEC,
         policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<ReferenceKey, Set<SnapshotKey>> =
-        CacheSpec.builder<ReferenceKey, Set<SnapshotKey>>(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
+    ): CacheSpec<ReferenceKey, Map<SnapshotKey, Long>> =
+        CacheSpec.builder<ReferenceKey, Map<SnapshotKey, Long>>(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
             .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME))
             .keyPrefix("")
             .keyEncoder(ReferenceKeyEncoder)
-            .codec(SnapshotKeySetCodec)
+            .codec(ReferrersCodec)
             .policy(policy.storeOfRecord())
             .build()
 
@@ -303,35 +303,58 @@ internal object StageSlotCodec : Codec<StageSlot> {
     override fun decode(bytes: ByteArray): StageSlot = ChangeRequestCodec.decodeSlot(bytes)
 }
 
-/** A set of document keys as a sorted JSON array of their encodings, so equal sets have equal bytes and digests. */
-internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
+/**
+ * The referrers of one policy as a JSON object of their encodings, sorted, each with the revision of it that last
+ * indexed the reference (#1207): `{"tenant:acme": 3}`. Equal referrers have equal bytes and digests.
+ */
+internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
     private const val WHAT = "back-reference set"
 
-    override fun encode(value: Set<SnapshotKey>): ByteArray {
-        val array = factory.arrayNode()
-        value.map(SnapshotKeyEncoder::encode).sorted().forEach(array::add)
-        return CoSecJson.mapper.writeValueAsBytes(array)
+    override fun encode(value: Map<SnapshotKey, Long>): ByteArray {
+        val node = factory.objectNode()
+        value.entries.map { (key, revision) -> SnapshotKeyEncoder.encode(key) to revision }.sortedBy { it.first }
+            .forEach { (key, revision) -> node.put(key, revision) }
+        return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
     /**
+     * The JSON array earlier builds wrote, of keys without revisions, reads as each indexed at revision 0: before any
+     * revision this build publishes, so a later drop by the referrer removes it and a later reference raises it.
+     *
      * A member that is an app key earlier builds wrote and the app id rule now refuses is skipped, with a WARN (R3-1 of
      * #1194's review): such a document can no longer be read or published, and so can never drop its own reference,
      * while one such member would make every write and check of the set fail. Dropping it is safe: an extra referrer
-     * only ever blocks a deletion. Anything else that is not a document key is still malformed.
+     * only ever blocks a deletion. Anything else that is not a document key, or a revision that is not a non-negative
+     * integer, is still malformed.
      */
-    override fun decode(bytes: ByteArray): Set<SnapshotKey> =
-        read(bytes, WHAT).items(WHAT).mapNotNullTo(LinkedHashSet()) { item ->
-            val text = item.text(WHAT)
-            SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
+    override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
+        val root = read(bytes, WHAT)
+        val members: List<Pair<String, Long>> = if (root.isArray) {
+            root.items(WHAT).map { it.text(WHAT) to LEGACY_REVISION }
+        } else {
+            if (!root.isObject) malformed(WHAT, "$root is neither an object nor an array")
+            root.properties().map { (key, revision) ->
+                val value = revision.long(WHAT)
+                if (value < 0) malformed(WHAT, "revision $value of [$key] is negative")
+                key to value
+            }
+        }
+        return members.mapNotNull { (text, revision) ->
+            val key = SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
                 log.warn {
                     "A back-reference set names [${SnapshotKeyText.printable(text)}], which no document key can name " +
                         "(SCP-7): that member is skipped."
                 }
-                null
+                return@mapNotNull null
             } else {
                 malformed(WHAT, "[$text] is not a document key")
             }
-        }
+            key to revision
+        }.toMap(LinkedHashMap())
+    }
+
+    /** The revision a member of the earlier format, without one, is read as. */
+    const val LEGACY_REVISION: Long = 0
 
     private val log = KotlinLogging.logger {}
 }
