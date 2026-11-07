@@ -3,7 +3,7 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
-index 1d2a8b96..796c7e0a 100644
+index 32f2935..f37945b 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
 @@ -97,14 +97,7 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
@@ -20,5 +20,5 @@ index 1d2a8b96..796c7e0a 100644
 -    val created = pinned.build()
 +    val created = spec
      val store = create(created, CoSecCacheSpecs.locks(created.name))
-     val policy = checkNotNull(runtime.policy(created.name)) { "The snapshot store ${created.name} was not created." }
-     return PolicySnapshotCache(store, created.keyspace, policy.localMaxAge, runtime.backend.channel)
+     val admin = checkNotNull(runtime.admin(created.name)) { "The snapshot store ${created.name} was not created." }
+     val localMaxAge = checkNotNull(runtime.policy(created.name)).localMaxAge
