@@ -895,14 +895,20 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Health {
 	public fun <init> ()V
-	public fun cosecSnapshotHealthIndicator (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)Lme/ahoo/cosec/spring/boot/starter/pipeline/SnapshotHealthIndicator;
+	public fun cosecSnapshotHealthIndicator (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/spring/boot/starter/pipeline/SnapshotHealthIndicator;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Redis {
 	public fun <init> ()V
 	public fun cosecEvictionPolicyCheck (Lme/ahoo/cocache/api/spi/CoherenceBackend;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
+	public fun cosecEvictionPolicyMonitor (Lme/ahoo/cocache/api/spi/CoherenceBackend;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;
 	public fun cosecPolicySnapshotCache (Lme/ahoo/cocache/core/CacheRuntime;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;
 	public fun cosecRedisSnapshotDocumentStore (Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;)Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore;
+}
+
+public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$RedisReads {
+	public fun <init> ()V
+	public fun cosecReplicaReadCheck (Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Shadow {
@@ -920,6 +926,10 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoC
 }
 
 public abstract interface annotation class me/ahoo/cosec/spring/boot/starter/pipeline/ConditionalOnEnforceMode : java/lang/annotation/Annotation {
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor {
+	public final fun problem ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayIdentityProperties {
@@ -1135,6 +1145,8 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting : 
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/SnapshotHealthIndicator : org/springframework/boot/health/contributor/HealthIndicator {
 	public fun <init> (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)V
+	public fun <init> (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun health ()Lorg/springframework/boot/health/contributor/Health;
 }
 

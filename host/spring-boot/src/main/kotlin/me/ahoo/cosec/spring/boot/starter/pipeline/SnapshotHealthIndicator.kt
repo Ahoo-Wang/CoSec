@@ -27,7 +27,7 @@ import org.springframework.boot.health.contributor.HealthIndicator
  * otherwise is seen, whatever `eviction-check` let startup do. Requests are not refused for it: a document already
  * installed stays, and one that is lost fails closed on every instance that has seen it.
  */
-class SnapshotHealthIndicator(
+class SnapshotHealthIndicator @JvmOverloads constructor(
     private val source: SnapshotSource<*, *>,
     private val eviction: EvictionPolicyMonitor? = null,
 ) : HealthIndicator {

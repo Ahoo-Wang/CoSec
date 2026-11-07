@@ -47,11 +47,15 @@ class ControlRoutesTest {
     fun `on WebFlux a request without a permitted principal is a 401, its body never read`() {
         val read = AtomicBoolean()
         val routes = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties)
+        val body = Mono.fromCallable {
+            read.set(true)
+            BODY
+        }
         val request = MockServerRequest.builder()
             .method(HttpMethod.POST)
             .uri(URI.create(PATH))
             .exchange(MockServerWebExchange.from(MockServerHttpRequest.post(PATH)))
-            .body(Mono.fromCallable { read.set(true); BODY })
+            .body(body)
         val handler = routes.route(request).block()!!
         val response = handler.handle(request).block()!!
         response.statusCode().value().assert().isEqualTo(401)

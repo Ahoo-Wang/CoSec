@@ -74,7 +74,11 @@ class SnapshotHealthIndicatorTest {
         var now = 0L
         var reading: EvictionPolicyCheck.Reading = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "noeviction"))
         var reads = 0
-        val monitor = EvictionPolicyMonitor({ reads++; reading }, Duration.ofSeconds(10)) { now }
+        val read = {
+            reads++
+            reading
+        }
+        val monitor = EvictionPolicyMonitor(read, Duration.ofSeconds(10)) { now }
         val indicator = SnapshotHealthIndicator(source(DocumentState.Present(Any()), true), monitor)
         val logger = LoggerFactory.getLogger(EvictionPolicyMonitor::class.java) as Logger
         val logged = ListAppender<ILoggingEvent>().also { it.start() }
