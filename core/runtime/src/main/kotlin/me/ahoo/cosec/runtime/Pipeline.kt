@@ -22,6 +22,7 @@ import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.engine.flat.AttributePlan
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
@@ -58,6 +59,7 @@ import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
 import me.ahoo.cosec.runtime.route.RouteResolution
+import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
@@ -261,7 +263,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         }
         val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
-        val decision = evaluate(request, view, fetchedAttributes(), null)
+        // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
+        // fetched now, from stage A as from stage B (#1209).
+        val decision = evaluate(request, view, fetchedAttributes(), null, planEveryStage = true)
         // A check writes no audit, and every use of break-glass is written to a REQUIRED one (§9.4.3): a check that
         // only break-glass permits is refused (review A1).
         if (decision is Decision.Permit && view.platform.isBreakGlass(decision.by.via)) {
@@ -559,14 +563,18 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return null
     }
 
-    /** Stage B, when there are providers, then the engine. */
+    /**
+     * Stage B, when there are providers, then the engine. With [planEveryStage], a check's: the plan is fetched from
+     * every provider, since stage A has fetched nothing for it.
+     */
     private suspend fun evaluate(
         request: FlatRequest,
         view: SnapshotView,
         fetched: FetchedAttributes?,
         record: RequestRecord?,
+        planEveryStage: Boolean = false,
     ): Decision {
-        fetched?.let { fetchStageB(request, view, it) }
+        fetched?.let { fetchPlanned(request, view, it, planEveryStage) }
         val evaluated = if (fetched == null || fetched.isEmpty) {
             // Nothing fetched reads as ExternalValues.NONE: every external attribute is missing.
             request
@@ -657,10 +665,16 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     /**
      * The planned attributes stage A did not fetch, each provider in parallel with its own timeout: a provider that
      * fails or times out makes only its own attributes unavailable (§5.4.2). A planned attribute no provider declares
-     * stays unavailable.
+     * stays unavailable. Stage B, or with [everyStage] a check, which asks a stage-A provider as stage A does: without
+     * the scope (#1209).
      */
-    private suspend fun fetchStageB(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes) {
-        if (!attributes.hasStageB) {
+    private suspend fun fetchPlanned(
+        request: FlatRequest,
+        view: SnapshotView,
+        fetched: FetchedAttributes,
+        everyStage: Boolean,
+    ) {
+        if (!everyStage && !attributes.hasStageB) {
             // Only stage-A providers, the blacklist say, and stage A asked them for everything: no plan to make.
             return
         }
@@ -672,6 +686,31 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         if (plan.isEmpty) {
             return
         }
+        val asked = unasked(plan, fetched) ?: return
+        val stageB = attributeRequest(request, request.scope)
+        // Only a check gets here with a stage-A provider: a request's stage A asked for all of them already.
+        val stageA = if (everyStage) attributeRequest(request, null) else stageB
+        fun requestOf(registered: AttributeProviders.Registered) =
+            if (registered.stage == AttributeDeclaration.Stage.A) stageA else stageB
+        if (asked.size == 1) {
+            val (registered, names) = asked.entries.first()
+            fetchFrom(registered, names, requestOf(registered), fetched)
+            return
+        }
+        val entries = asked.entries.toList()
+        val answers = coroutineScope {
+            entries.map { (registered, names) ->
+                async(start = CoroutineStart.UNDISPATCHED) { provide(registered, names, requestOf(registered)) }
+            }.map { it.await() }
+        }
+        entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, answers[index]) }
+    }
+
+    /** The attributes of [plan] not asked for yet, by the provider that declares them; null when there are none. */
+    private fun unasked(
+        plan: AttributePlan,
+        fetched: FetchedAttributes,
+    ): LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? {
         var groups: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? = null
         for (attribute in plan.attributes) {
             val path = attribute.path
@@ -683,29 +722,18 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                 .getOrPut(registered) { LinkedHashSet() }
             names += path
         }
-        val asked = groups ?: return
-        val attributeRequest = AttributeRequest(
-            request.request.subject,
-            request.scope,
-            request.request.action,
-            request.request.resource,
-            request.request.environment.remoteIp,
-            request.request.environment.requestId,
-            request.request.environment.deviceId,
-        )
-        if (asked.size == 1) {
-            val (registered, names) = asked.entries.first()
-            fetchFrom(registered, names, attributeRequest, fetched)
-            return
-        }
-        val entries = asked.entries.toList()
-        val answers = coroutineScope {
-            entries.map { (registered, names) ->
-                async(start = CoroutineStart.UNDISPATCHED) { provide(registered, names, attributeRequest) }
-            }.map { it.await() }
-        }
-        entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, answers[index]) }
+        return groups
     }
+
+    private fun attributeRequest(request: FlatRequest, scope: Scope?) = AttributeRequest(
+        request.request.subject,
+        scope,
+        request.request.action,
+        request.request.resource,
+        request.request.environment.remoteIp,
+        request.request.environment.requestId,
+        request.request.environment.deviceId,
+    )
 
     private suspend fun fetchFrom(
         registered: AttributeProviders.Registered,

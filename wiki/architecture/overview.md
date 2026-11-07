@@ -215,8 +215,11 @@ sequenceDiagram
 - **Snapshot view.** The snapshot source answers the view (platform, app and tenant documents) from memory, or loads
   what is missing (step 7). A blocked request loads only the platform document.
 - **Stage B.** When a provider declares stage-B attributes, the engine's `plan` names the external attributes this
-  request could read, and only those are fetched, each provider in parallel with its own timeout (steps 8 and 9). A
-  provider that fails makes only its own attributes unavailable.
+  request could read, and only those are fetched, each provider in parallel with its own timeout (steps 8 and 9). The
+  plan holds those of the candidate statements and their policies' conditions, of the rate limit rules, and of the
+  boundary that holds the request's tenant (`ATR-8`). A provider that fails makes only its own attributes unavailable.
+  A check (`AuthorizationChecker`) plans its own action and resource and fetches every planned attribute, from stage-A
+  and stage-B providers alike.
 - **Decide.** The engine answers `Permit` (with obligations), `Deny` or `Indeterminate` (step 10).
 - **Obligations.** A permit's rate limit obligations run in order (step 11). The first exhausted rule is a `429`; a rule
   that cannot be counted is a `503` when it is strict and is skipped otherwise.

@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.HostAttributesPipelineTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 0c032821..06b1e32c 100644
+index c78e9cb4..41358f99 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -203,7 +203,7 @@ class Pipeline(components: PipelineComponents) {
+@@ -262,7 +262,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
              )
          }
          val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
 -        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
 +        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
-         val decision = evaluate(request, view, fetchedAttributes(), null)
-         // A check writes no audit, and every use of break-glass is written to a REQUIRED one (§9.4.3): a check that
-         // only break-glass permits is refused (review A1).
+         // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
+         // fetched now, from stage A as from stage B (#1209).
+         val decision = evaluate(request, view, fetchedAttributes(), null, planEveryStage = true)

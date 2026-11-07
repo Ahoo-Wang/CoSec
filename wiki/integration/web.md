@@ -452,14 +452,14 @@ does not compile.
 | `auth` | `{method, jti, exp, capped}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, and the credential's expiry; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
-| `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, numbers and booleans. |
+| `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, booleans and numbers. A `Byte`, `Short`, `Int`, `Long`, or `BigInteger` within a `Long` travels as an integer; a finite `Float` or `Double`, or a `BigDecimal` a `Double` holds exactly, as a number. |
 
 It never carries the token, the API key, cookies or other request headers, policies, the matched statement,
 external attribute values or the client IP.
 
 **It fails closed.** The request is `500` `internal-error`, logged, and nothing is truncated, when the identity is
-larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not a string, number or boolean or is
-longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
+larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not a string, boolean or such a number (a
+number the header cannot hold exactly, `NaN` or an infinity included) or is longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
 without `expires-at`): a service could not bound such an identity.
 
 **Credentials.** The gateway forwards none of the client's credentials, no header, query parameter or cookie: from

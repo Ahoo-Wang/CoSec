@@ -67,15 +67,19 @@
     },
     {
       "id": "SNP-6",
-      "source": "RFC 0003 §4.4 F9, F10; RC1-50; review L1 of #1200",
-      "statement": "The periodic revalidation cannot be turned off or left unbounded: `cosec.authorization.snapshot.revalidate-interval` is at least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`, or startup fails naming it. Every interval each installed document is revalidated with a conditional read of the store, never a local copy, and a reset of the change channel reloads them all, so a change whose invalidation was lost, or whose reload failed, is installed within one interval.",
+      "source": "RFC 0003 §4.4 F9, F10; RC1-50; review L1 of #1200; #1215",
+      "statement": "The periodic revalidation cannot be turned off or left unbounded: `cosec.authorization.snapshot.revalidate-interval` is at least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`, or startup fails naming it. Installed documents are revalidated by periodic passes, each a conditional read of the store per document, never a local copy, and a reset of the change channel reloads them all. A pass starts every interval or, when the previous one is still in flight, as soon as it ends; a change whose invalidation was lost, or whose reload failed, is installed by the first pass that reaches its document after the change is readable. A pass that has finished no document for `storeReadTimeout` and has no read in flight is abandoned at the next tick; a pass with a read in flight never is.",
       "level": "startup",
       "guards": [
         "spring-boot:CoSecPipelineAutoConfigurationTest#a revalidate-interval that turns off or unbinds the periodic pass fails startup",
         "runtime:SnapshotRevalidationTest#theRevalidationIntervalCannotTurnThePassOffOrUnbindIt",
         "runtime:SnapshotRevalidationTest#f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation",
         "runtime:SnapshotRevalidationTest#f10ResetReloadsEveryInstalledDocument",
-        "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy"
+        "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy",
+        "runtime:SnapshotRevalidationTest#aPeriodicPassNeverOverlapsAnotherAndTheOneItOwesFollowsIt",
+        "runtime:SnapshotRevalidationTest#aPassHeldOnlyByACompilationDoesNotHoldBackTheNext",
+        "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
+        "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned"
       ],
       "pending": null
     },

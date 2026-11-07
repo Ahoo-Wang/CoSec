@@ -82,7 +82,7 @@ says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-pref
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. |
+| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix whose first `{` is immediately followed by `}` (an empty hash tag) fails startup, and one with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
 
 ## Pipeline
 
@@ -157,7 +157,7 @@ of your own replaces both.
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read: the longest a change whose invalidation message was lost goes unseen (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often a pass starts that confirms every installed document against Redis with a conditional read; while a pass is still in flight, the next starts as soon as it ends, never overlapped. A change whose invalidation message was lost is installed by the first pass that reaches its document after the change is readable (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |

@@ -98,6 +98,7 @@ decision:
 |---|---|---|
 | Action and resource | from the route map | the ones you pass |
 | Snapshot documents | read for the request | read again for the check |
+| External attributes | stage A for every request, stage B as the plan names | fetched again for the check's action and resource: each one it can read, from the provider that declares it (a stage-A provider without the scope, as stage A asks) |
 | Decision listeners (audit, metrics, traces) | yes | none |
 | Rate limits | spends permits, can answer `429` | never spends, never limited |
 | A Permit only break-glass gives | proceeds, after a REQUIRED audit | `false`: a check writes no audit |

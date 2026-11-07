@@ -264,7 +264,9 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
   its `onMissing` setting ([Policy language](../policies/language.md)).
 - **Stages.** A stage-B attribute (the default) is fetched only when the engine's plan says this request could read it,
   after the scope is resolved. A stage-A attribute is fetched on every request, before the scope, together with the
-  memberships. Use stage A only for attributes that decide what is loaded, as the blacklist does.
+  memberships. Use stage A only for attributes that decide what is loaded, as the blacklist does. An
+  `AuthorizationChecker` check asks for what its own action and resource can read, in both stages: a stage-A provider
+  is asked again then, still without the scope.
 - **What a provider sees.** `AttributeRequest` holds the subject, the resolved scope (null in stage A), the action,
   the resource, the client address, the request id and the device id, never another attribute's value.
 

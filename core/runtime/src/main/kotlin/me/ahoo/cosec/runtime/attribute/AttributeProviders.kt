@@ -32,9 +32,10 @@ private val log = KotlinLogging.logger {}
  * attributes ([BlacklistAttributeProvider.ATTRIBUTES]) only in stage A.
  */
 class AttributeProviders(providers: List<AttributeProvider>) {
-    /** One provider and what it declares in one stage. */
+    /** One provider and what it declares in one [stage]. */
     internal class Registered(
         val provider: AttributeProvider,
+        val stage: AttributeDeclaration.Stage,
         val attributes: Map<String, Attribute>,
     ) {
         val names: Set<String> = attributes.keys
@@ -62,7 +63,7 @@ class AttributeProviders(providers: List<AttributeProvider>) {
         for (provider in providers) {
             val declared = provider.attributes.groupBy({ it.stage }) { Attribute.external(it.path, it.type) }
             for ((stage, attributes) in declared) {
-                val registered = Registered(provider, attributes.associateBy { it.path })
+                val registered = Registered(provider, stage, attributes.associateBy { it.path })
                 for (path in registered.names) {
                     require(byPath.put(path, registered) == null) { "External attribute $path is declared twice." }
                     // The pipeline reads them before it loads the view: in stage B they would come too late.

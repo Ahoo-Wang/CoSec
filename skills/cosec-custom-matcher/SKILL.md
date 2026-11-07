@@ -85,6 +85,9 @@ fun riskAttributeProvider(risk: RiskClient): AttributeProvider = RiskAttributePr
   request id, device id. It never carries another attribute's value.
 - `AttributeDeclaration(..., stage = Stage.A)` fetches on every request before the scope is resolved; keep it for
   what decides what to load (the blacklist). The default, stage B, fetches only what the request's statements read.
+  An `AuthorizationChecker` check asks again, in both stages, for the attributes its own action and resource can
+  read: a stage-A provider may then be called again for each check, with the check's action and resource and still
+  without the scope. Do not assume one call per request.
 - Documents compile only against paths some registered provider declares, or the platform document declares in
   `attributes` (declare them there so every instance and the control plane compile the same documents). A path declared twice, by two
   providers, fails startup. A document reading a path this instance cannot fetch makes those requests unavailable.

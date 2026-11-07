@@ -207,6 +207,30 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `CacheSpecCustomizer` no longer changes a CoSec cache's codec, loaders, key filter or per-entry TTL.
 - **A compilation that overflows the stack fails the document closed** (RC1-43, `SNP-8`), as any compile error does,
   instead of keeping the revision before it.
+- **Rate limits count on a Redis Cluster** (#1229, `OBL-4`). The Redis limiter's counters move to
+  `<p>:rate-limiter:{<rule>:<bucket>}:<window>`: the hash tag keeps the two windows of a bucket, which its script reads
+  together, on one slot. On a cluster every call failed with `CROSSSLOT`, so a rule without `strictFailure` was skipped
+  and limited nothing, and one with it made every permitted request `503`. On a single Redis only the keys change.
+  **During a rolling upgrade, instances of each version count in their own keys**: while instances of both versions
+  serve, and for up to two windows after the last old one stops, a rule lets through up to twice its limit. The old
+  keys expire after two windows. A `cosec.key-prefix` whose first `{` is immediately followed by `}` (an empty hash
+  tag) now fails startup.
+- **A boundary's external attributes are fetched** (#1208, `ATR-8`). The attribute plan holds the attributes of the
+  boundary that holds the request, its statements' and its policy condition's, so a stage-B provider is asked for
+  them. A request such a boundary allows was `503` (`BoundaryUnavailable`) and now proceeds; providers may be asked for
+  more attributes per request.
+- **A check fetches the attributes it needs** (#1209, `ATR-8`). `AuthorizationChecker` asks the providers for every
+  attribute its action and resource read, a stage-A provider included (without the scope, as stage A asks), where a
+  stage-A attribute was unavailable (`AttributeUnavailable`) unless some stage-B provider was registered. A stage-A
+  provider is now called by each check that needs one of its attributes.
+- **One revalidation pass at a time** (#1215, `SNP-6`). A periodic pass that outlasts `revalidate-interval` is no
+  longer joined by another: the next starts as soon as it ends, so a slow Redis sees at most four revalidation reads
+  from an instance at once. A change whose invalidation was lost is installed by the first pass that reaches its
+  document, which can then take longer than one interval ([Storage](./storage.md#how-instances-read-documents)).
+- **Identity claims of every standard number type** (#1228). A gateway forwards a claim that is a `Byte`, a `Short`, a
+  `BigInteger` within a `Long`, a `Float`, or a `BigDecimal` that a `Double` holds exactly, where the request was
+  `500`. A number the header cannot hold exactly is still refused with `500`, and so are `NaN` and the infinities,
+  which JSON has no number for.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,
@@ -527,8 +551,10 @@ templates inside `eq` conditions translate (D2).
 7.x rate limit rule files (`cosec.limiter.*`) are gone. `convert --rate-limit-rules` translates the rules into the
 platform document's rate limits. A rule applies to a request the policies permit, as in 7.x: the first exhausted rule
 answers `429`, and denied requests spend nothing. A rule with `strictFailure` whose limiter fails now answers `503`
-instead of `429` (R3). The Redis limiter uses the same keys (`cosec:rate-limiter:<rule>:<bucket>:<window>`, under `cosec.key-prefix`) when a
-`ReactiveStringRedisTemplate` bean exists; otherwise each instance counts alone. See
+instead of `429` (R3). The Redis limiter counts when a `ReactiveStringRedisTemplate` bean exists, otherwise each
+instance counts alone. Its keys are new, `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`, so that a
+bucket's two windows share a Redis Cluster slot. Each version counts apart: while 7.x and 8.0 instances both serve,
+and for up to two windows after the last 7.x one stops, a rule lets through up to twice its limit. See
 [Rate limiting](../policies/rate-limiting.md).
 
 ### Responses and status codes

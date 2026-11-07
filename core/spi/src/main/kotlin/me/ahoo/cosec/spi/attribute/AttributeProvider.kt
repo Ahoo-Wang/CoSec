@@ -51,7 +51,9 @@ class AttributeDeclaration(val path: String, val type: AttributeType, val stage:
     /**
      * When the pipeline fetches it: [A] on every request, together with the memberships and before the scope, for
      * attributes that decide what the evaluation loads (the blacklist); [B] after the scope, only when the
-     * [me.ahoo.cosec.engine.flat.AttributePlan] of the request names it.
+     * [me.ahoo.cosec.engine.flat.AttributePlan] of the request names it. An `AuthorizationChecker` check asks a provider
+     * of either stage again for the attributes its own action and resource can read; a stage-A provider is asked then
+     * still without the scope.
      */
     enum class Stage { A, B }
 

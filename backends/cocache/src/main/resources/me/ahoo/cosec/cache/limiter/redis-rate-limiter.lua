@@ -10,8 +10,8 @@
 -- exceeded; estimate is the weighted count before this request, in thousandths (Redis truncates Lua numbers).
 -- The check and the count happen atomically, so the limit is enforced cluster-wide.
 --
--- Note: the two keys are not wrapped in a Redis Cluster hashtag; CoSec has no
--- cluster support elsewhere, and tagging would pin all counters to one slot.
+-- The two keys share a Redis Cluster hash tag, `{<rule>:<bucket>}`, so a script may read both on a cluster;
+-- different buckets still hash to different slots.
 
 local current = tonumber(redis.call('GET', KEYS[1]) or '0')
 local previous = tonumber(redis.call('GET', KEYS[2]) or '0')

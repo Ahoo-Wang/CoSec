@@ -16,6 +16,7 @@ package me.ahoo.cosec.engine.flat
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
@@ -33,7 +34,8 @@ import kotlin.random.Random
  * - P9′ (`ATR-1`): making any of them unavailable never turns a decision that is not a Permit into a Permit. A DENY
  *   with `onMissing: nomatch` lapses by design (RFC 0006 Q13, platform document only), so the generator writes `nomatch`
  *   on ALLOW statements only;
- * - P14: the plan holds every external attribute the evaluation reads.
+ * - P14 (`ATR-8`): the plan holds every external attribute the evaluation reads, the boundary's included (#1208): the
+ *   platform may name a default boundary and the tenant its own, each reading the attributes too.
  */
 class ExternalAttributesPropertyTest {
     private val seed = System.getProperty("cosec.external.seed")?.toLong() ?: SEED
@@ -83,6 +85,18 @@ class ExternalAttributesPropertyTest {
         return compiler.compile(PolicyId(id), guard, statements)
     }
 
+    /** An ALLOW-only boundary policy, with an optional policy condition: what a boundary may hold. */
+    private fun boundary(random: Random, id: String): CompiledPolicy {
+        val statements = List(random.nextInt(1, 3)) {
+            val condition = if (random.nextInt(4) == 0) null else condition(random)
+            val external = condition != null && readsExternal(condition)
+            val onMissing = if (external) OnMissing.entries.random(random) else null
+            val action = if (random.nextInt(5) == 0) "svc:verb" else "*"
+            StatementSource("s$it", Effect.ALLOW, listOf(action), condition = condition, onMissing = onMissing)
+        }
+        return compiler.compile(PolicyId(id), if (random.nextInt(3) == 0) condition(random) else null, statements)
+    }
+
     private fun values(random: Random): Map<String, Any> = buildMap {
         if (random.nextInt(4) != 0) put("ext.t.a", random.nextBoolean())
         if (random.nextInt(4) != 0) put("ext.t.b", if (random.nextBoolean()) "x" else "y")
@@ -100,13 +114,19 @@ class ExternalAttributesPropertyTest {
         val random = Random(seed)
         repeat(ITERATIONS) { iteration ->
             val policies = List(random.nextInt(1, 5)) { policy(random, "p$it") }
+            val boundaries = if (random.nextBoolean()) List(2) { boundary(random, "boundary$it") } else emptyList()
+            val default = boundaries.firstOrNull()?.policyId?.value?.takeIf { random.nextInt(4) != 0 }
+            val own = boundaries.lastOrNull()?.policyId?.value?.takeIf { random.nextInt(3) == 0 }
             val view = SnapshotView(
-                platform(
-                    *policies.toTypedArray(),
-                    bindings = policies.map { anyone("b${it.policyId.value}", it.policyId.value) }
+                CompiledDocument.platform(
+                    policies,
+                    policies.map { anyone("b${it.policyId.value}", it.policyId.value) },
+                    emptyList(),
+                    boundaries,
+                    default,
                 ),
                 null,
-                tenant(),
+                CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), emptyList(), own),
             )
             val values = values(random)
             val all = attributes.mapTo(HashSet()) { it.path }

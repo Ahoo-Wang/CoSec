@@ -61,9 +61,13 @@ class CompiledDocument private constructor(
     /** For a tenant document, [needsApp]'s apps; empty for the other kinds. */
     private val boundApps: Set<String> = emptySet(),
 ) {
-    /** Whether one of its policies or rate limit rules reads an external attribute (RFC 0006 §5.4.2). */
+    /**
+     * Whether one of its policies, boundaries or rate limit rules reads an external attribute (RFC 0006 §5.4.2): only
+     * then is there anything to plan. A tenant's boundary is a policy of the platform, so the platform's says (#1208).
+     */
     internal val readsExternal: Boolean =
-        policies.values.any { it.readsExternal } || rateLimits.any { it.externals.isNotEmpty() }
+        policies.values.any { it.readsExternal } || boundaries.values.any { it.readsExternal } ||
+            rateLimits.any { it.externals.isNotEmpty() }
 
     /**
      * The request headers any of its policies, boundaries or rate limit rules (their conditions and keys) reads, in lower
