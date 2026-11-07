@@ -206,6 +206,7 @@ class Scope internal constructor(
 - **`*` 是保留值（第一轮审查，2026-10-26）**：文档用 `*` 表示 `Match.Any`（§7.1），所以 `AppId`、`SpaceId` 和 `Match.Exactly` 都不接受 `*`
   （`Match.WILDCARD`），否则一条授予给字面空间 `*` 的数据解码回来就成了"所有空间"。`ScopeResolver` 把声明为 `*` 的应用按 `APP_MISMATCH`、
   空间按 `SPACE_NOT_MEMBER` 拒绝。
+- **id 不含落单的 UTF-16 代理项（2026-11-07，#1254，RC1-52，`IDN-10`）**：每种 id 的文本规则都由 `me.ahoo.cosec.model.Identifiers` 判定：落单的高位或低位代理项不是字符，含它的 id 在进入 CoSec 处被拒绝。原因是 Redis 的 key 按 UTF-8 写，落单的代理项被写成 `?`，于是 `beta\uD800` 与 `beta?` 共用一个 key。成对的代理项照常。`ScopeResolver.isValidAppId` 在同一个循环里检查它与控制字符（RC1-15），所以 app、租户 id 与 `SnapshotKey` 都遵守它。
 
 ### 4.2 `Binding`
 

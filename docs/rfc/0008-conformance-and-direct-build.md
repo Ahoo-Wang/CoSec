@@ -229,6 +229,8 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 > - 修订 `CTL-3`：被模拟的 `http` 资源与执法经同一个路径规范化，重复的请求头答 400（`PIP-12` 的一致性）；新增场景。`DOC-4` 新增一个场景与前导 `**` 收窄的计数守护。
 > - 新增的变异体（`ctl-23-*`、`ctl-24-*`、`ctl-3-*`、`doc-4-*`）全部被杀死，其中 `ctl-3-simulated-raw-path-decided` 来自审查者存活的探针。
 
+> **实现说明（2026-11-07，#1254，RC1-52）**：登记表新增 `IDN-10`（`pipeline` 级）：含落单 UTF-16 代理项的 id 在进入处被拒绝，两个不同的 id 从不共用一个存储的 key。两个正例、一个反例场景（成对的代理项照常），12 个变异体全部被杀死；`idn-3-inactive-principal-accepted`、`scp-7-control-characters-accepted`、`scp-7-app-keys-take-any-id` 随代码重新生成。#1254 的审查确认：`main` 上自 #1240 起有 6 个变异体不再能应用，由 E2a 重新生成。
+
 ### 3.3 场景语料
 
 每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：

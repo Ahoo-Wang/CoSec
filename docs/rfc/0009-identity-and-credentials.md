@@ -190,6 +190,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 | IDN-4 | pipeline | 带 `act` 的 token 判为无效 |
 | IDN-5 | engine | `principal.type`、`auth.method` 只来自注册表与认证器；token 声明、key 与宿主属性不能写入 |
 | IDN-6 | startup | 启用 API Key 而没有 `MembershipProvider` 时启动失败 |
+| IDN-10 | pipeline | 含落单 UTF-16 代理项的 id 在进入处被拒绝：令牌声明为 401，签发方拒绝签发，转发的身份为 400，控制请求为 400，认证器、API Key 记录与成员关系提供者给出它时为 503（RC1-52，#1254，2026-11-07 补充） |
 
 每条规则配正反场景，IDN-1 至 IDN-5 各配一个变异体。
 
