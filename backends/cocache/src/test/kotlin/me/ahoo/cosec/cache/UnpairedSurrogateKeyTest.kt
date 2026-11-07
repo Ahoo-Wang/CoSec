@@ -17,11 +17,14 @@ package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.control.ReferenceKey
+import me.ahoo.cosec.cache.control.ReferenceKeyEncoder
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.engine.flat.CompiledRateLimit
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -141,6 +144,15 @@ class UnpairedSurrogateKeyTest {
                 .assert().isInstanceOf(IllegalArgumentException::class.java)
             store.subjectRevokedBefore(TenantId("beta?"), PrincipalId("bob")).assert().isNull()
         }
+    }
+
+    /** The control store's back-references name a policy by id: one with an unpaired surrogate names no key either. */
+    @Test
+    fun aPolicyIdWithAnUnpairedSurrogateNamesNoReferenceKey() {
+        val tenant = SnapshotKey.Tenant("acme")
+        ReferenceKeyEncoder.encode(ReferenceKey(tenant, PolicyId("p?"))).assert().isEqualTo("tenant:acme:p?")
+        refused { ReferenceKeyEncoder.encode(ReferenceKey(tenant, PolicyId("p\uD800"))) }
+            .assert().isInstanceOf(IllegalArgumentException::class.java)
     }
 
     /**

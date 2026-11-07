@@ -304,11 +304,22 @@ class ControlHttpTest {
         }
         refused(call("GET", "/documents/tenant:beta\uD800"), "path")
         refused(call("GET", "/changes/c1\uDC00"), "change id")
+        refused(call("GET", "/changes/c1", query = mapOf("x\uD800" to "y")), "query name")
         refused(
             call("DELETE", "/break-glass/glass", security = plato, query = mapOf("reason" to "done\uD800")),
             "query"
         )
-        // The bytes of a surrogate half in UTF-8 form are no JSON string either.
+        fixture.ids.get().assert().describedAs("no change was made").isEqualTo(made)
+
+        val paired = call("POST", "/simulate", """{"request":${request.replace("\"bob\"", "\"bob\\uD83D\\uDE00\"")}}""")
+        paired.first.assert().isEqualTo(200)
+    }
+
+    /** RC1-52: the bytes of a surrogate half in UTF-8 form are no JSON string, and a change id cannot hold one either. */
+    @Test
+    fun `a surrogate half in UTF-8 form, and a change id with one, are refused`() {
+        val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order","space":"team-a",""" +
+            """"action":"order:read","resource":"order/1","time":"2026-11-01T00:00:00Z"}"""
         val raw = """{"request":${request.replace("\"acme\"", "\"acme\u0000\"")}}""".encodeToByteArray()
         val index = raw.indexOf(0)
         val cesu = raw.copyOfRange(0, index) + byteArrayOf(0xED.toByte(), 0xA0.toByte(), 0x80.toByte()) +
@@ -319,10 +330,9 @@ class ControlHttpTest {
                 alice
             )
         }.status.assert().isEqualTo(400)
-        fixture.ids.get().assert().describedAs("no change was made").isEqualTo(made)
-
-        val paired = call("POST", "/simulate", """{"request":${request.replace("\"bob\"", "\"bob\\uD83D\\uDE00\"")}}""")
-        paired.first.assert().isEqualTo(200)
+        val changeId = runCatching { ChangeId("c1\uD800") }.exceptionOrNull()
+        changeId.assert().isInstanceOf(IllegalArgumentException::class.java)
+        changeId!!.message!!.assert().contains("[c1\\uD800]")
     }
 
     /** RC1-44 (`DOC-5`): a request body with a duplicate key is refused, never read as whichever value came last. */

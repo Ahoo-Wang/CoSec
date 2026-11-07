@@ -111,6 +111,7 @@
         "cocache:UnpairedSurrogateKeyTest#aTenantIdWithAnUnpairedSurrogateNeverReadsAnotherTenantsDocument",
         "cocache:UnpairedSurrogateKeyTest#aPrincipalIdWithAnUnpairedSurrogateNeverReadsAnotherPrincipalsMemberships",
         "cocache:UnpairedSurrogateKeyTest#aTokenIdWithAnUnpairedSurrogateIsNeitherRevokedNorReadAsAnotherToken",
+        "cocache:UnpairedSurrogateKeyTest#aPolicyIdWithAnUnpairedSurrogateNamesNoReferenceKey",
         "cocache:UnpairedSurrogateKeyTest#aBucketValueWithAnUnpairedSurrogateSharesNoBucket",
         "model:IdentifiersTest#well formed is what survives UTF-8",
         "runtime:TokenAuthenticatorTest#aTokenClaimingAnIdWithAnUnpairedSurrogateIsInvalid",

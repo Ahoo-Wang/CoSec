@@ -38,6 +38,8 @@ import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -112,7 +114,26 @@ class UnpairedSurrogatePipelineTest {
                 )
                 AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
             },
+            {
+                val credential = Identity.Credential(Identity.Method("custom"), "key\uD800", null)
+                AuthenticatedPrincipal(
+                    PrincipalId("alice"),
+                    TenantId("acme"),
+                    MembershipSource.Provider.UNCAPPED,
+                    credential = credential
+                )
+            },
+            {
+                AuthenticatedPrincipal(
+                    PrincipalId("alice"),
+                    TenantId("acme"),
+                    MembershipSource.Provider.capped(listOf("r@s\uDC00"))
+                )
+            },
         )
+        // Memberships that cannot be used hold no id: the principal is made, and its request fails on them later.
+        AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), MembershipSource.Unusable("marker")).id
+            .assert().isEqualTo(PrincipalId("alice"))
         for (principal in principals) {
             val engine = StubEngine(IMPLICIT_DENY)
             val outcome = pipeline(Authenticator { AuthnResult.Authenticated(principal(), "custom") }, engine)

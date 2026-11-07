@@ -89,13 +89,14 @@ internal class JwtTokenConverterTest {
             SimplePrincipal("alice", attributes = mapOf("org" to "x\uD800")),
             SimplePrincipal("alice", attributes = mapOf("org\uD800" to "x")),
             SimplePrincipal("alice", attributes = mapOf("orgs" to listOf("x", mapOf("y" to "\uDC00")))),
+            SimplePrincipal("alice", attributes = mapOf("orgs" to arrayOf("x", "\uD800"))),
         )
         for (principal in principals) {
             val error = runCatching { jwtTokenConverter.toToken(principal) }.exceptionOrNull()
             error.assert().isInstanceOf(IllegalArgumentException::class.java)
             error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
         }
-        val paired = jwtTokenConverter.toToken(SimplePrincipal("alice\uD83D\uDE00"))
+        val paired = jwtTokenConverter.toToken(SimplePrincipal("alice\uD83D\uDE00", attributes = mapOf("level" to 3)))
         jwtTokenVerifier.verify<TokenPrincipal>(paired).id.assert().isEqualTo("alice\uD83D\uDE00")
     }
 
