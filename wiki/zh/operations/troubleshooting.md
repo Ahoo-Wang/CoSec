@@ -372,6 +372,14 @@ cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forev
 这是 CoCache 自己的检查：该条目设置了 CoCache 没有定义的键，或者不适用于该缓存的键。改正这个键；`cocache.caches-validation: warn`
 改为记录告警。设置了锁定字段的条目无论该项如何都会启动失败。
 
+```text
+cocache.caches configures undeclared caches [ChangeRequestCache]; declared caches: [...]
+```
+
+该条目指向本实例不创建的缓存：没有运行控制面的实例上的控制面缓存、没有 `MembershipLoader` 时的 `MembershipCache`，或者关闭
+JWT 时的吊销表。所有服务共用一份配置时会遇到它。把这类条目放进创建该缓存的服务的配置，或者在其他服务上设置
+`cocache.caches-validation: warn`。
+
 ### 缓存 key 重叠导致启动失败 {#startup-fails-on-overlapping-cache-keys}
 
 ```text

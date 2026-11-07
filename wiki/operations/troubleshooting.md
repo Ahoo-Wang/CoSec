@@ -448,6 +448,15 @@ cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forev
 CoCache's own check: the entry sets a key CoCache does not define, or one that does not apply to that cache. Fix the
 key; `cocache.caches-validation: warn` logs it instead. An entry that sets a locked field fails whatever that says.
 
+```text
+cocache.caches configures undeclared caches [ChangeRequestCache]; declared caches: [...]
+```
+
+The entry names a cache this instance does not create: a control-plane cache on an instance without the control plane,
+`MembershipCache` without a `MembershipLoader`, or a revocation table with JWT off. A configuration shared by every
+service hits this. Keep such entries in the configuration of the services that create the cache, or set
+`cocache.caches-validation: warn` on the others.
+
 ### Startup fails on overlapping cache keys
 
 ```text

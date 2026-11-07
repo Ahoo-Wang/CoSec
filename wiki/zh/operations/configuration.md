@@ -319,7 +319,7 @@ Redis 中。
 | `cocache.backend` | `redis`（默认）或 `memory`。使用 `memory` 时实例之间不共享任何内容，驱逐检查总是通过，每个实例启动时都没有文档：仅用于本地开发和测试。 |
 | `cocache.defaults.cache.*`、`cocache.defaults.store.*` | 只填补缓存的声明没有写出的字段。CoSec 的缓存声明了它们依赖的字段，所以这些配置影响不大：`MembershipCache` 属于 `cache`，其余 CoSec 缓存都属于 `store`（[优先级](#precedence)）。 |
 | `cocache.overrides.cache.*`、`cocache.overrides.store.*` | 收紧所有缓存的陈旧界限（`local-max-age`、`absent-ttl`）与 `read-failure`，CoSec 锁定的字段除外。 |
-| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误）同样启动失败，除非 `cocache.caches-validation: warn`（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。 |
+| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误），以及为本实例不创建的缓存写的条目，同样启动失败，除非 `cocache.caches-validation: warn`：控制面的缓存只在运行控制面的实例上存在，`MembershipCache` 只在有 `MembershipLoader` 时存在，吊销表只在启用 JWT 时存在（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。 |
 | `cocache.key-prefix` | 无：CoSec 锁定自己的前缀 [`cosec.key-prefix`](#key-prefix)。 |
 | `cocache.redis.command-timeout` | 一条 Redis 命令最多用多久（默认 `2s`）。超时的快照读取算作读取失败（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `cocache.redis.channel-mode` | `pubsub` 或 `sharded` 失效。所有实例以及控制面必须一致。 |

@@ -130,7 +130,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
   fields keep their values anyway. **`cocache.caches sets unknown keys [...]`**: CoCache's own check of a misspelled
-  or inapplicable per-cache key; fix the key (`cocache.caches-validation: warn` only logs it). **`Cache[<name>] - its
+  or inapplicable per-cache key; fix the key (`cocache.caches-validation: warn` only logs it). **`cocache.caches
+  configures undeclared caches [...]`**: an entry for a CoSec cache this instance does not create (a control-plane
+  cache without the control plane, `MembershipCache` without a `MembershipLoader`, a revocation table with JWT off),
+  usually from a configuration shared by every service; move it or set `caches-validation: warn` there. **`Cache[<name>] - its
   storage keys (...) overlap those of Cache[<other>]`**: an application cache and a CoSec cache would share Redis
   keys; give the application's cache another prefix or namespace (`cosec.key-prefix` moves every instance's data).
   **An `IllegalStateException` naming a channel pattern** such as
