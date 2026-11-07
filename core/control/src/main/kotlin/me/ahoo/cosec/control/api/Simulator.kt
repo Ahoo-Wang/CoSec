@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -51,6 +52,7 @@ import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
 import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.util.concurrent.atomic.AtomicLong
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
@@ -89,10 +91,24 @@ data class SnapshotVersion(val platform: Long, val app: Long?, val tenant: Long?
 class Documents(val platform: PolicyDocument?, val app: PolicyDocument?, val tenant: PolicyDocument?)
 
 /**
+ * A document to decide on and, for a stored one (a head, or a retained revision), its [entry] in the [DocumentCache]:
+ * then it is compiled once for its content (RC1-41). A candidate has none, and is compiled once per call.
+ */
+internal class Held(val document: PolicyDocument, val entry: DocumentCache.Entry?) {
+    companion object {
+        fun of(document: PolicyDocument?): Held? = document?.let { Held(it, null) }
+    }
+}
+
+/** The documents a decision reads, as [Held]. */
+internal class HeldDocuments(val platform: Held?, val app: Held?, val tenant: Held?)
+
+/**
  * The control plane's decisions (RFC 0007 §10.3, Q22, CTL-3): the enforcing flow's parts, not a second evaluator. The
  * scope is resolved by [ScopeResolver], the documents are compiled by the data plane's [PolicyDocumentCompiler] with
  * the platform's limits and attributes and the host's [attributes], into the view enforcement would read, and [engine]
- * is the data plane's `Engine.evaluate`, at full trace.
+ * is the data plane's `Engine.evaluate`, at full trace. A stored document is compiled once for its content, in a cache
+ * `simulate`, `explain` and `analyze` share (RC1-41).
  */
 class Simulator(
     private val engine: FlatEngine = CoSecFlatEngine,
@@ -101,22 +117,44 @@ class Simulator(
     /** The headers the host reads credentials from besides the fixed ones, as enforcement compiles with them. */
     private val credentialHeaders: Set<String> = emptySet(),
 ) {
+    /** The documents decoded and compiled for this simulator's compilers. */
+    internal val cache = DocumentCache()
+
+    /** Every compilation this simulator made, cached or not; for tests. */
+    internal val compilations = AtomicLong()
+
     /** The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a host request. */
-    fun scope(request: SimulatedRequest): ScopeResolution {
-        val memberships = MembershipClaims.parse(request.roles, request.policies)
-        val subject = ScopeSubject(request.tenant, request.principal != null, memberships)
-        return ScopeResolver.resolve(subject, DeclaredScope(request.app, request.space), HostScope(null))
-    }
+    fun scope(request: SimulatedRequest): ScopeResolution =
+        ScopeResolver.resolve(subject(request), DeclaredScope(request.app, request.space), HostScope(null))
+
+    /**
+     * The tenant [request] is decided in, as [ScopeResolver] decides it, whatever its scope (RC1-40): the principal's,
+     * or [TenantId.DEFAULT] for a request without one. An empty declared scope always resolves, so this is the resolver's
+     * own answer, not a copy of its rule.
+     */
+    internal fun tenantOf(request: SimulatedRequest): TenantId =
+        (ScopeResolver.resolve(subject(request), DeclaredScope("", ""), HostScope(null)) as ScopeResolution.Resolved)
+            .scope.tenant
+
+    private fun subject(request: SimulatedRequest): ScopeSubject =
+        ScopeSubject(request.tenant, request.principal != null, MembershipClaims.parse(request.roles, request.policies))
 
     fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation =
-        decide(request, scope, documents).evaluation
+        decide(
+            request,
+            scope,
+            HeldDocuments(Held.of(documents.platform), Held.of(documents.app), Held.of(documents.tenant)),
+        ).evaluation
 
     /**
      * [evaluate], with what its view read (R2-5 of #1194's review): [keys] says which documents to fetch from the raw
      * tenant document, but when that document does not compile the view, as enforcement's, reads no app document for a
      * roleless request. What a caller reports or checks against is what the view read.
+     *
+     * A request that sends a header the view's documents read with different values is refused 400, as enforcement
+     * refuses it before evaluating (`PIP-12`): the answer names no header, so it does not tell which document reads it.
      */
-    internal fun decide(request: SimulatedRequest, scope: Scope, documents: Documents): Decided {
+    internal fun decide(request: SimulatedRequest, scope: Scope, documents: HeldDocuments): Decided {
         val memberships = MembershipClaims.parse(request.roles, request.policies)
         val subject = Subject(
             id = request.principal ?: ANONYMOUS,
@@ -138,14 +176,12 @@ class Simulator(
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),
         )
         val view = view(scope, documents)
+        val http = HttpAttributes(Headers.of(request.headers), request.requestAttributes)
+        if (http.ambiguousHeader(view) != null) {
+            throw ChangeRejectedException(BAD_REQUEST, AMBIGUOUS_HEADER)
+        }
         val evaluation = engine.evaluate(
-            FlatRequest(
-                authz,
-                scope,
-                memberships,
-                request.time,
-                HttpAttributes(Headers.of(request.headers), request.requestAttributes),
-            ),
+            FlatRequest(authz, scope, memberships, request.time, http),
             view,
             TraceLevel.FULL
         )
@@ -184,9 +220,10 @@ class Simulator(
      * unresolved, not empty; a document that does not compile is unresolved, so the decision is indeterminate unless a
      * DENY matches, as on the data plane, rather than an error of the whole call.
      */
-    private fun view(scope: Scope, documents: Documents): SnapshotView {
+    private fun view(scope: Scope, documents: HeldDocuments): SnapshotView {
         val unresolved = ArrayList<Cause>(0)
-        val compiler = compiler(documents.platform)
+        val platformDocument = documents.platform?.document
+        val compiler = Compilation(compiler(platformDocument), documents.platform)
         val platform = documents.platform?.let { compiled(compiler, it, unresolved) } ?: run {
             if (documents.platform == null) {
                 unresolved += Cause.SourceUnavailable(DocumentKind.PLATFORM, MissingPlatformException())
@@ -213,45 +250,66 @@ class Simulator(
             tenant,
             unresolved,
             version = ViewVersion(
-                documents.platform?.revision ?: 0,
+                platformDocument?.revision ?: 0,
                 app?.let {
-                    documents.app?.revision ?: 0
+                    documents.app?.document?.revision ?: 0
                 },
-                documents.tenant?.revision ?: 0
+                documents.tenant?.document?.revision ?: 0
             ),
         )
     }
 
     /**
-     * The compiler of [platform] as the data plane's `PlatformCompiler` makes it: its limits, and the attributes it
-     * declares ahead of the host's providers ([attributes]).
+     * The compiler of the platform document [platform] (null: none) as the data plane's `PlatformCompiler` makes it:
+     * its limits, and the attributes it declares ahead of the host's providers ([attributes]). What it compiles is
+     * cached by [platform]'s digest when it is a stored document; with a candidate platform, nothing is.
      */
+    private class Compilation(val compiler: PolicyDocumentCompiler, platform: Held?) {
+        val cached: Boolean = platform == null || platform.entry != null
+        val platformDigest = platform?.entry?.digest
+    }
+
     private fun compiler(platform: PolicyDocument?): PolicyDocumentCompiler =
         PolicyDocumentCompiler.forPlatform(platform, attributes, credentialHeaders = credentialHeaders)
 
     /** [document] compiled, [empty] when none is published, or null (unresolved) when it does not compile. */
     private fun documentOf(
-        document: PolicyDocument?,
-        compiler: PolicyDocumentCompiler,
+        document: Held?,
+        compilation: Compilation,
         unresolved: MutableList<Cause>,
         empty: () -> CompiledDocument,
-    ): CompiledDocument? = if (document == null) empty() else compiled(compiler, document, unresolved)
+    ): CompiledDocument? = if (document == null) empty() else compiled(compilation, document, unresolved)
+
+    private fun compiled(compilation: Compilation, document: Held, unresolved: MutableList<Cause>): CompiledDocument? {
+        val compile = {
+            compilations.incrementAndGet()
+            compilation.compiler.compile(document.document)
+        }
+        val entry = document.entry
+        val result = if (entry != null && compilation.cached) {
+            entry.compiled(compilation.platformDigest, compile)
+        } else {
+            compiling(compile)
+        }
+        return result.getOrElse {
+            unresolved += Cause.SourceUnavailable(document.document.kind, it as Exception)
+            null
+        }
+    }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun compiled(
-        compiler: PolicyDocumentCompiler,
-        document: PolicyDocument,
-        unresolved: MutableList<Cause>,
-    ): CompiledDocument? = try {
-        compiler.compile(document)
+    private fun compiling(compile: () -> CompiledDocument): Result<CompiledDocument> = try {
+        Result.success(compile())
     } catch (e: Exception) {
-        unresolved += Cause.SourceUnavailable(document.kind, e)
-        null
+        Result.failure(e)
     }
 
     companion object {
         private const val ANONYMOUS = "(0)"
         private const val REQUEST_ID = "simulated"
+        private const val BAD_REQUEST = 400
+        private const val AMBIGUOUS_HEADER = "A header the documents of this request's view read arrived with different " +
+            "values: enforcement refuses such a request (PIP-12)."
     }
 }
 

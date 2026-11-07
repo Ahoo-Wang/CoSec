@@ -1,0 +1,21 @@
+# Rule: ATR-8
+# Mutant: the attribute plan leaves out the boundary that holds the request, as before #1208
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :runtime:test --tests me.ahoo.cosec.runtime.attribute.* :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
+index 76d7df29..393118c3 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
+@@ -56,12 +56,6 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
+                 }
+             }
+         }
+-        // A permit is held to the boundary of the request's tenant, which reads as an ALLOW does (RFC 0007 §7.6): the
+-        // tenant's own, else the platform's default; another boundary is not this request's (#1208).
+-        val boundary = view.boundaryOf(request.scope)?.let { view.platform.boundaryPolicy(it) }
+-        if (boundary != null && boundary.readsExternal) {
+-            collect(boundary, boundary.allows)
+-        }
+         return found?.let { AttributePlan(it.toList()) } ?: AttributePlan.EMPTY
+     }
+ 

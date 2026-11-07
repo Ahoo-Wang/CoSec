@@ -1,0 +1,17 @@
+# Rule: ATR-8
+# Mutant: a platform whose only external read is a boundary plans nothing
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :runtime:test --tests me.ahoo.cosec.runtime.attribute.* :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index 6108bfac..036f03dd 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -66,7 +66,7 @@ class CompiledDocument private constructor(
+      * then is there anything to plan. A tenant's boundary is a policy of the platform, so the platform's says (#1208).
+      */
+     internal val readsExternal: Boolean =
+-        policies.values.any { it.readsExternal } || boundaries.values.any { it.readsExternal } ||
++        policies.values.any { it.readsExternal } ||
+             rateLimits.any { it.externals.isNotEmpty() }
+ 
+     /**

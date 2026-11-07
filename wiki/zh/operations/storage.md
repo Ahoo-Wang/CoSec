@@ -66,7 +66,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
-| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期 |
+| `<s>:rate-limiter:{<ruleId>:<bucket>}:<window>` | Redis 限流器 | 一条规则一个桶一个窗口的计数器；两个窗口后过期。`{...}` 是 hash tag：一个桶的两个窗口在 Redis Cluster 的同一个 slot 上，读取两者的脚本因此能在集群上运行 |
 | `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`；3 分钟后过期 |
 
 - 多个部署共用一个 Redis 时，给每个部署各自的 `cosec.key-prefix`：前缀不同，就不共享任何 key，一个部署签发的 API key
@@ -93,9 +93,24 @@ key 都在它之下（`SNP-9`）。
     同样如此，与 `eviction-check` 无关。Redis 拒绝 `INFO` 时，还要把
     [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) 设为你设置的策略
     （`noeviction`）。
+- **运行期间再次检查。** CoSec 的检查每个 `revalidate-interval` 在自己的线程上再次读取每个节点的
+  `maxmemory-policy`，因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现；CoCache 的检查
+  只在启动时运行。只要某个节点可能驱逐，
+  `cosecSnapshotEviction` 健康指示器就是 `DOWN`，并在 `eviction` 详情里说明原因，实例在开始时记录一条 `ERROR`；两种
+  `eviction-check` 都是如此（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。读不到策略时，`fail` 下也是
+  `DOWN`；`warn` 在启动时已经接受了这一点，所以是 `UP`，详情为 `eviction: unknown`。请求不会因此被拒绝：已装入的文档保持
+  不变，丢失的文档在每个持有它的实例上都失败即拒绝。不要把这个指示器放进就绪组：它是告警。
+- **从主节点读。** Redis 是权威存储，副本落后于它：在两者之间交替读取，可能把一个已撤销的 API key、或一份刚被覆盖发布的
+  文档当成当前的。CoCache 自己的客户端读取文档、控制面记录和撤销记录，它连接 `spring.data.redis.*` 指定的节点或集群的
+  各个主节点，不设置 `ReadFrom`。CoSec 注入的 Redis 模板（唯一的或 `@Primary` 的 `StringRedisTemplate` 与
+  `ReactiveStringRedisTemplate`：API key、限流器、OAuth 状态）背后的 Lettuce 客户端也必须从主节点读：某个
+  `LettuceConnectionFactory` 从副本读（`spring.data.redis.lettuce.read-from`，或设置了非 upstream
+  `ReadFrom` 的 `LettuceClientConfigurationBuilderCustomizer`）时，启动失败
+  （[故障排查](./troubleshooting.md#startup-fails-because-redis-is-read-from-replicas)）。其他连接工厂（Jedis，或你
+  自己的）的客户端配置 CoSec 读不到：请把它配置为从主节点读。
 - **Redis 客户端。** CoCache 根据 `spring.data.redis.*` 构建自己的 Lettuce 客户端；它需要的版本、拓扑和 ACL 命令见
-  [CoCache 文档](https://cocache.ahoo.me/operations/#acl)。启动检查需要 `INFO`（`+info`），CoCache 列出的命令已包含它。
-  通道跟随 key 前缀：允许 `&<s>:*`，或上面的每个
+  [CoCache 文档](https://cocache.ahoo.me/operations/#acl)。启动检查和健康指示器需要 `INFO`（`+info`），CoCache 列出的
+  命令已包含它。通道跟随 key 前缀：允许 `&<s>:*`，或上面的每个
   `&{key 前缀}inv:*`。使用 `cocache.redis.channel-mode: pubsub` 时，还要允许 CoCache 的探测
   `~cocache:!probe:*` 和 `&cocache:!probe:*`，它不跟随前缀。每个缓存在创建时向自己的通道发布一个空帧，所以缺少通道权限
   会使启动失败，并指出需要允许的模式。
@@ -154,12 +169,16 @@ sequenceDiagram
 
 - **变更立即到达每个实例**，通过 CoCache 的失效消息（第 2 到 5 步）。实例绕过本地副本自己读取 Redis，编译新修订并
   装入。进行中的请求继续使用它开始时的修订：一次求值绝不会混用一个文档的不同修订。
-- **丢失的消息由重新确认兜底**（第 6、7 步）：每隔 [`revalidate-interval`](./configuration.md#snapshot)（10 秒），
-  每个已装入的文档用一次对 Redis 的条件读确认（从不使用本地副本），未变化时不传输任何内容。失效消息丢失时，它是变化唯一的界，
-  因此不能关闭，最长 5 分钟（`SNP-6`）。
+- **丢失的消息由重新确认兜底**（第 6、7 步）：每隔 [`revalidate-interval`](./configuration.md#snapshot)（10 秒）
+  开始一轮，用一次对 Redis 的条件读确认每个已装入的文档（从不使用本地副本），未变化时不传输任何内容。失效消息丢失时，
+  这些轮次是变化唯一的界：变化可读之后第一个到达该文档的一轮把它装上。因此它不能关闭，间隔最长 5 分钟（`SNP-6`）。
+  一轮确认每次读四个文档，同一时间只有一轮：Redis 慢到一轮超过间隔时，下一轮在它结束后立即开始，而不是每个间隔再多
+  四个读。一轮 30 秒没有确认任何文档、也没有在途的读时，拖住它的只有编译：下一个 tick 放弃它并开始新的一轮。仍在
+  确认文档的慢轮次，或有读在途的轮次，从不被放弃。
 - **没有文档的 id** 与文档分开记住，每个文档族最多 256 个：声明随机应用 id 的客户端会让实例为每个 id 读一次 Redis，但
   绝不会把已装入的文档挤出去（`SNP-7`）。
-- **滞后**是 Redis 上一次确认某个文档以来的时间。只要 Redis 有应答，它就低于重新确认间隔。超过 `lag-warn`（60 秒）
+- **滞后**是 Redis 上一次确认某个文档以来的时间。只要 Redis 有应答，每一轮都会确认每个文档，所以滞后低于重新确认间隔
+  加上一轮的耗时；一轮超过间隔之后，低于两轮的耗时。超过 `lag-warn`（60 秒）
   时实例以 `WARN` 记录 `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过
   `lag-escalate`（5 分钟）时以 `ERROR` 记录 `... is stale: not confirmed for <lag>.`，每个文档每分钟最多一次。
 - **按滞后失败即拒绝的租户。** 对 [`fail-closed.tenants`](./configuration.md#snapshot) 中列出的租户，当请求读取的

@@ -210,7 +210,8 @@ contain `:`; no literal may contain `*`, `?`, `{`, `}`, whitespace or control ch
 | `**`, or `{*name}` | any number of segments, captured by `{*name}` as the rest of the path; only first or last, at most one per pattern. `/admin/**` also matches `/admin`. |
 
 These do not compile: `{name:regex}`, an empty pattern, a segment that can match an empty value other than `*` alone
-(such as `{a}{b}` or `*{a}`), and `{}` or `{*}`.
+(such as `{a}{b}` or `*{a}`), `{}` or `{*}`, and text that holds half of a surrogate pair without the other half (a
+character outside the Basic Multilingual Plane, such as an emoji, is written whole).
 
 A resource may be a pattern object with options, for `http:path:` patterns only:
 
@@ -243,9 +244,10 @@ document over them is installed as failed, so the requests that read it fail clo
 
 Each policy is evaluated at most once per pass for each document that binds it, plus one evaluation for the
 attachments, however many of its bindings apply (`ALG-9`). So the budget bounds what matching one document's patterns
-costs a request: a document that spends all of it on patterns that are candidates for every path costs about 0.45 ms
+costs a request: a document that spends all of it on patterns that are candidates for every path costs about 0.5 ms
 per request at worst, and about twice that when its policies are attached as well, for a path segment of 256
-characters, the longest the pipeline accepts (`GlobBoundBenchmark`, its worst inputs, on a CI runner). It allocates the
+characters, the longest the pipeline accepts (`GlobBoundBenchmark`, its worst inputs, on a CI runner). The worst is a
+segment of surrogate pairs, such as emoji, against `?` and `*`; with ASCII it is about 0.33 ms. It allocates the
 values it captures: about 0.25 MB per request with ASCII values, and about 0.6 MB with values outside Latin-1. A shadow window evaluates its candidate document as well,
 within a budget of its own.
 

@@ -160,6 +160,34 @@ class IdentityForwardingTest {
         outcome.proceed.assert().isFalse()
     }
 
+    /** #1228: a custom authenticator's numbers of any standard type are forwarded; one the header cannot hold is a 500. */
+    @Test
+    fun `a claim of any standard number type is forwarded`() {
+        fun claimed(amount: Any) = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PipelineFixtures.PRINCIPAL,
+                PipelineFixtures.TENANT,
+                MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
+                mapOf("amount" to amount),
+                credential,
+                breakGlass = true,
+                issuedAt = null,
+                apiKeyCredential = false,
+            ),
+            "custom",
+        )
+        val issuer = IdentityIssuer(setOf("amount"), clock = Clock.fixed(now, ZoneOffset.UTC))
+        for ((amount, forwarded) in listOf(1.25f to 1.25, java.math.BigDecimal("1.25") to 1.25, 7.toShort() to 7L)) {
+            val outcome = evaluate(claimed(amount), issuer = issuer)
+            outcome.status.assert().isEqualTo(200)
+            IdentityCodec.decode(outcome.forward.getValue(IdentityCodec.HEADER)!!).claims
+                .assert().isEqualTo(mapOf("amount" to forwarded))
+        }
+        val inexact = evaluate(claimed(java.math.BigDecimal("0.12345678901234567890")), issuer = issuer)
+        inexact.status.assert().isEqualTo(500)
+        inexact.proceed.assert().isFalse()
+    }
+
     /** Review of #1124: a service could not bound an identity whose credential never expires, so none is sent. */
     @Test
     fun `a credential that never expires fails the request closed`() {

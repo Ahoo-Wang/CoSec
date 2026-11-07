@@ -1,0 +1,17 @@
+# Rule: SNP-6
+# Mutant: a pass with a read in flight is replaced once it looks stalled, and its reads add to the next pass's
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 3d80418c..dfa40d0f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -669,7 +669,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+          * flight; only one with no read can be, so [startRead] never succeeds after this does.
+          */
+         fun abandonIfStalled(now: Long): Boolean =
+-            now - progressedAt > options.storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
++            now - progressedAt > options.storeReadTimeout.toNanos() && (reads.compareAndSet(0, ABANDONED) || reads.get() > 0)
+ 
+         /** This abandoned pass ends when [successor] does. */
+         fun follow(successor: Pass) {

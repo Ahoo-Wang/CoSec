@@ -1,0 +1,139 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "PIP-12 parity (D2): a header sent twice with the same value is that value, and a header no document reads is not checked, so these requests are decided as enforcement decides them.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "debug",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**",
+                "condition": {
+                  "eq": [
+                    "http.header.x-debug",
+                    "1"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "debug",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "debug"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "order:read",
+          "resource": "order/1",
+          "headers": {
+            "x-debug": [
+              "1",
+              "1"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "order:read",
+          "resource": "order/1",
+          "headers": {
+            "x-debug": [
+              "1"
+            ],
+            "x-other": [
+              "a",
+              "b"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "order:read",
+          "resource": "order/1",
+          "headers": {
+            "x-debug": [
+              "0"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by debug",
+      "Permit by debug",
+      "Deny at 1/-/1"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

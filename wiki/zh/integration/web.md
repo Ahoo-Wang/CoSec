@@ -327,11 +327,11 @@ spring:
 | `auth` | `{method, jti, exp, capped}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id，以及凭证的过期时间；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
-| `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明；API key 只提供 `apiKeyId`）：字符串、数字和布尔值。 |
+| `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明；API key 只提供 `apiKeyId`）：字符串、布尔值和数字。`Byte`、`Short`、`Int`、`Long`，以及 `Long` 范围内的 `BigInteger` 作为整数传递；有限的 `Float` 或 `Double`，以及 `Double` 能精确表示的 `BigDecimal` 作为数字传递。 |
 
 它绝不携带令牌、API key、cookie 或其他请求头、策略、匹配的语句、外部属性值或客户端 IP。
 
-**失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、数字或布尔值，或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
+**失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、布尔值或上述数字（头不能精确表示的数字、`NaN` 和无穷大都算），或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
 **凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。开头的 `$Version` 键值对用 `,` 藏了令牌的头整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
 
@@ -375,10 +375,10 @@ cosec:
 启用 `cosec-control`（以及 `cosec-cocache`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
 
 - **先经过管道。** 控制请求对宿主来说是普通请求：你的文档必须放行它（例如对已认证调用方放行 `http:path:/cosec/control/v1/**` 上的 `http:POST`），否则它会像其他请求一样被拒绝。在平台文档发布之前，每个请求（包括控制路由）都是 `503`，因此第一份平台文档要通过 `cosec-migrate publish` 发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。
-- **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
+- **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`，两种栈上都在读取请求体之前。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
 - **请求体大小。** 在 WebMvc 上最多读取 `cosec.control.http.max-body-size`（默认 `16MB`）；更大的请求体返回 `400` `invalid-request`，且不会被读取。在 WebFlux 上，请求体受 Spring 的 `spring.codec.max-in-memory-size`（默认 256 KB）限制：在接收大文档的控制面宿主上请调大它。
 - **网关宿主。** 网关的全局过滤器只作用于网关路由，因此 starter 额外添加一个只作用于基础路径的 `PipelineWebFilter`。控制路由像在 WebFlux 宿主上一样被授权；网关的路由仍由网关过滤器处理。
 
-控制 API 以相同格式回应 problem，类型除上文所列外还有它自己的：`not-found`（`404`）、`conflict`（`409`）、`gone`（`410`）、`precondition-failed`（`412`）、`unprocessable`（`422`）和 `precondition-required`（`428`）。`400`、`409`、`410`、`412`、`422` 和 `428` 会在 `detail` 成员中解释调用方自己的请求；`401`、`403`、`404`、`500` 和 `503` 不带任何细节，因此拒绝永远不会透露某个文档、变更或 DENY 是否存在。
+控制 API 以相同格式回应 problem，类型除上文所列外还有它自己的：`not-found`（`404`）、`conflict`（`409`）、`gone`（`410`）、`precondition-failed`（`412`）、`unprocessable`（`422`）和 `precondition-required`（`428`）。`400`、`409`、`410`、`412`、`422` 和 `428` 会在 `detail` 成员中解释调用方自己的请求；`401`、`403`、`404`、`500` 和 `503` 不带任何细节，因此拒绝永远不会透露某个文档、变更或 DENY 是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段，从不带异常消息；存储的文档或记录解码失败是 `500`。
 
 **下一步：** 签发、刷新和吊销适配器读取的令牌，见[认证](./authentication.md)。

@@ -81,7 +81,7 @@ contain `:`, so a key names one document only.
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
-| `<s>:rate-limiter:<ruleId>:<bucket>:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows |
+| `<s>:rate-limiter:{<ruleId>:<bucket>}:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows. `{...}` is a hash tag: a bucket's two windows share a Redis Cluster slot, so the script that reads both runs on a cluster |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
 
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
@@ -109,11 +109,31 @@ contain `:`, so a key names one document only.
     `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
   - CoCache's, for its `Store`s, which CoSec's documents and records are: an `allkeys-*` policy always fails startup,
     and so does an `INFO` it cannot read, whatever `eviction-check` says. With a Redis that denies `INFO`, also set
-    [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) to the policy you have set (`noeviction`).
+    [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) to the policy
+    you have set (`noeviction`).
+- **Checked again while it runs.** CoSec's check reads every node's `maxmemory-policy` again every
+  `revalidate-interval`, on a thread of its own, so a later `CONFIG SET maxmemory-policy`, a failover to a node set up
+  otherwise or a restart is seen; CoCache's runs only at startup. While a node may evict, the `cosecSnapshotEviction` health indicator is `DOWN` with an
+  `eviction` detail that says why, and the instance logs an `ERROR` when that starts, with either `eviction-check`
+  ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). A policy that cannot be read is `DOWN` too
+  under `fail`; under `warn`, which accepted that at startup, it is `UP` with `eviction: unknown`. Requests are not
+  refused for it: an installed document stays, and one that is lost fails closed on every instance that has it. Keep
+  the indicator out of the readiness group: it is an alert.
+- **Reads from the primary.** Redis is the store of record, and a replica lags it: a read that alternates between the
+  two can take a revoked API key, or a document just published over, for the current one. CoCache's own client, which
+  reads the documents, the control-plane records and the revocations, connects to the node or the cluster's primaries
+  that `spring.data.redis.*` names and sets no `ReadFrom`. The Lettuce client behind the Redis templates CoSec injects (the
+  only or the `@Primary` `StringRedisTemplate` and `ReactiveStringRedisTemplate`: API keys, the rate limiter, OAuth
+  states) must read from the primary too: a `LettuceConnectionFactory` that reads
+  from replicas, by `spring.data.redis.lettuce.read-from` or a `LettuceClientConfigurationBuilderCustomizer` with a
+  `ReadFrom` other than the upstream, fails startup
+  ([Troubleshooting](./troubleshooting.md#startup-fails-because-redis-is-read-from-replicas)). CoSec cannot read the
+  client configuration of any other connection factory (Jedis, or one of your own): configure it to read from the
+  primary.
 - **Redis client.** CoCache builds its own Lettuce client from `spring.data.redis.*`; the versions, topologies and
   ACL commands it needs are in [CoCache's documentation](https://cocache.ahoo.me/operations/#acl). The startup checks
-  need `INFO` (`+info`), which CoCache's list includes. Channels follow the key prefixes: allow `&<s>:*`, or each
-  `&{key prefix}inv:*` above. With
+  and the health indicator need `INFO` (`+info`), which CoCache's list includes. Channels follow the key prefixes: allow
+  `&<s>:*`, or each `&{key prefix}inv:*` above. With
   `cocache.redis.channel-mode: pubsub`, also allow CoCache's probe, `~cocache:!probe:*` and `&cocache:!probe:*`, which
   does not follow the prefix. Each cache publishes an empty frame to its channel when it is created, so a missing
   channel permission fails startup, naming the pattern to allow.
@@ -179,14 +199,20 @@ sequenceDiagram
 - **A change reaches every instance at once** through CoCache's invalidation message (steps 2 to 5). The instance
   reads Redis itself, bypassing its local copy, compiles the new revision and installs it. A request in flight keeps
   the revision it started with: one evaluation never mixes revisions of a document.
-- **Lost messages are caught by revalidation** (steps 6 and 7): every
-  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) each installed document is confirmed with a
-  conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. It is the only bound on a
-  change whose invalidation message was lost, so it cannot be turned off and is at most 5 minutes (`SNP-6`).
+- **Lost messages are caught by revalidation** (steps 6 and 7): a pass starts every
+  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) and confirms each installed document with a
+  conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. The passes are the only
+  bound on a change whose invalidation message was lost: the first pass to reach the document after the change
+  installs it. So they cannot be turned off, and the interval is at most 5 minutes (`SNP-6`). A pass reads four
+  documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the interval, the next
+  starts as soon as it ends, rather than add four more reads each interval. A pass that has confirmed no document for
+  30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
+  pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned.
 - **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
   random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
-- **Lag** is the time since Redis last confirmed a document. While Redis answers it stays below the revalidate
-  interval. Past `lag-warn` (60 seconds) the instance logs
+- **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
+  document, so lag stays below the revalidate interval plus the length of a pass, or below the length of two passes
+  once a pass outlasts the interval. Past `lag-warn` (60 seconds) the instance logs
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past `lag-escalate`
   (5 minutes) `... is stale: not confirmed for <lag>.` at `ERROR`, at most once a minute per document.
 - **Tenants that fail closed on lag.** For the tenants listed in

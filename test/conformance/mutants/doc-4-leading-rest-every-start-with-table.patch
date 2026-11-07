@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: the evaluation's walk tries the rest of a pattern after a leading rest at every start
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
+index 4bd7f08c..76b2b478 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
+@@ -171,7 +171,7 @@ class HttpPathPattern private constructor(
+         }
+         val rest = elements.size - 1
+         val first = path.size - rest
+-        for (start in maxOf(0, first) until minOf(path.size, first + 2)) {
++        for (start in 0 until path.size) {
+             if (matchFrom(1, start, path, captures, scratch)) {
+                 (elements[0] as PathElement.Rest).capture(path, 0, start, captures)
+                 return true

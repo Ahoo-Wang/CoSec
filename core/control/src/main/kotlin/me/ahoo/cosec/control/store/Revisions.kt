@@ -28,6 +28,7 @@ import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.ShadowWindow
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
@@ -640,10 +641,31 @@ class Revisions(
         return false
     }
 
-    private fun decode(key: SnapshotKey, document: SnapshotDocument): PolicyDocument {
+    /**
+     * [document], a stored one of [key], decoded. One that does not decode (a newer version's, during a rolling
+     * upgrade) names its key, so that the control API logs which one: its answer is a 500 without detail (RC1-39).
+     */
+    internal fun decode(key: SnapshotKey, document: SnapshotDocument): PolicyDocument {
         val (kind, owner) = ownerOf(key)
-        return PolicyDocumentCodec.decode(kind, owner, document.bodyBytes())
+        return try {
+            PolicyDocumentCodec.decode(kind, owner, document.bodyBytes())
+        } catch (e: SnapshotFormatException) {
+            throw SnapshotFormatException(
+                "The stored document [$key] revision ${document.revision} does not decode: ${e.message}",
+                e
+            )
+        }
     }
+
+    /** The head of [key] as stored, not decoded: its digest names its content (RC1-41). */
+    internal suspend fun stored(key: SnapshotKey): StoredDocument? = store.head(requireDocumentKey(key))
+
+    /** The digest [key] had at [revision], if its record is retained: what [revision] reads, before reading it. */
+    internal suspend fun retainedDigest(key: SnapshotKey, revision: Long): SnapshotDigest? =
+        history(key).firstOrNull { it.revision == revision }?.digest
+
+    /** The record of [key] with [digest], if retained. */
+    internal suspend fun record(key: SnapshotKey, digest: SnapshotDigest): SnapshotDocument? = store.record(key, digest)
 
     private fun warn(message: String): Boolean {
         log.warn { message }

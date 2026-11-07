@@ -334,6 +334,8 @@ fun Engine.plan(request: AuthzRequest, view: SnapshotView): AttributePlan
   并返回 `Indeterminate`"不同——那样一个只被 ALLOW 引用的属性超时，就会让一条本来命中的 DENY 无法生效（DENY 命中优先于不可用，RFC 0004 Q6）。
   所以取消粒度是提供者，而结果由引擎按 `onMissing` 逐条语句决定。
 
+> **实现说明（2026-11-07，#1231，审计 issue #1208、#1209，`ATR-8`）**：P14 的"计划必须完整"登记为规则 `ATR-8`（`pipeline` 级）。计划还包括持有这次请求所在租户的边界（租户自己的或平台默认的）：它的语句条件与策略条件读的外部属性。此前计划漏掉它们，边界读外部属性的平台让合法请求得到 `BoundaryUnavailable`（503）。`CompiledDocument.readsExternal` 也计入边界，所以只有边界读外部属性的平台同样会规划；不持有请求的边界不规划。P14 与 P9′ 的性质测试现在随机生成默认边界与租户边界。`AuthorizationChecker` 的检查见 §7.6 的说明。
+
 #### 5.4.3 `onMissing`
 
 语句可以写 `"onMissing": "indeterminate" | "nomatch"`（RFC 0005 §3.4 已定义语法），只作用于外部属性。一个外部属性"取不到"指：提供者失败、超时，
@@ -533,6 +535,10 @@ class Pipeline internal constructor(/* 认证器、成员关系、快照、属�
   （与现在的 `SecurityDecision.responseHeaders` 相同）。
 - 503 **不带** `Retry-After`：CoSec 不知道依赖何时恢复（Q1）。需要的部署在网关层配置。
 
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：上表多了两种情形：
+> - **重复的请求头是 400（`PIP-12`，RC1-38）。** 一个请求把某个头发了多次且值不同，而视图读到的文档中有语句、策略条件、边界或限流规则的条件与 key 读这个头（`http.header.<name>`，或经 `http.origin`、`http.referer` 读 `Origin`、`Referer`）：管道在评估之前经 `StatusMapping` 答 400 `invalid-request`，不论语句的效果，也不论它是否适用于这个请求。每个 `CompiledDocument` 记下它读的头（`headersRead`，全部经 `ConditionChecker.attribute` 解析，所以从不含凭据头）。此前读这个头的 DENY 出错，决定为 Indeterminate 即 503，泄露了这条 DENY 的存在和它读的头。值相同的重复算一个值，没有文档读的头不检查。`PIP-9` 相应修订，它的 503 场景移到 `PIP-12`。`simulate` 与 `explain` 仍然评估这样的请求（答 Indeterminate），与执法一致的处理在 D2。
+> - **格式错误的令牌声明是 401（`PIP-6` 修订）。** `roles` 或 `policies` 为 null 或不是字符串数组、`attributes` 不是对象时，`Jwts.toPrincipal` 抛出 `TokenVerificationException`：按匿名评估，拒绝时答 401 `token-invalid`。此前是空指针，答 500（已是 fail closed）。
+
 ### 6.2 响应体
 
 > **2026-10-26 修订（Q27）**：本节重写。原文是"`AuthorizeResult` 这个类型在 PR-10 删除，响应体的形状保留（`{"authorized": false, "reason": "..."}`），`reason` 的取值换成
@@ -709,6 +715,8 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
 - `AuthorizationChecker`：`suspend fun check(security, action, resource): Boolean`；`cosec-webflux` 提供 `Mono<Boolean>` 扩展，`cosec-webmvc` 提供阻塞扩展。
   它走同一个 `Pipeline` 的 `decide` 后半段（快照视图 → 计划 → 引擎 → **不**执行义务、不投递 REQUIRED），与现在"检查不扣限流"一致。
 
+> **实现说明（2026-11-07，#1231，审计 issue #1209，`ATR-8`）**：`AuthorizationChecker` 的检查为它自己的动作与资源规划外部属性，并向阶段 A 与阶段 B 的提供者都要计划中的属性，不论是否注册了阶段 B 的提供者；阶段 A 的提供者仍不带作用域（与请求路径的阶段 A 相同）。此前检查只在有阶段 B 提供者时才重新取属性，只由阶段 A 提供的属性在检查里读作取不到（`AttributeUnavailable`）。阶段 A 的提供者因此每次检查也会被问到，`AttributeDeclaration.Stage` 的 KDoc 与 `extending.md` 写明了这一点。
+
 ### 7.7 阻塞的 SPI 实现
 
 SPI 的契约（KDoc 与 `extending.md`）：**不得阻塞调用线程**。CoSec 自己从不按"是否阻塞"切换线程（K15，Q10）：
@@ -795,6 +803,8 @@ fun interface RateLimiter {
   所以本阶段不改变任何计数，滚动升级时新旧实例共享同一组桶。`RedisRateLimitingOffEventLoopTest` 改为断言"在 Netty 线程上调用、BlockHound 无报告、恢复在 `Default` 上"。
 
 ---
+
+> **实现说明（2026-11-07，#1231，审计 issue #1229，`OBL-4`）**：Redis 限流器的计数 key 改为 `<prefix>:rate-limiter:{<rule>:<bucket>}:<window>`。脚本原子地读写一个桶的当前与前一个窗口，两个 key 带同一个 hash tag，所以在 Redis Cluster 上落在同一个 slot；此前两者跨槽（CROSSSLOT），Cluster 上没有 `strictFailure` 的规则全被跳过，有 `strictFailure` 的规则让每个放行请求 503。不同的桶仍分散到各个 slot，除非 key 前缀自带 hash tag。使 tag 为空的两种输入被拒绝：第一个 `{` 紧跟 `}` 的前缀（构造限流器时，即启动失败），以 `}` 开头的规则 id（计数时，按限流器失败处理；引擎从不产生这样的 id）。上文"滚动升级时新旧实例共享同一组桶"不再成立：从 alpha.2 或 7.x 滚动升级时，新旧版本的实例同时服务期间，以及最后一个旧实例停止后的至多两个窗口内，一条规则至多放行两倍的上限（`upgrading.md`）。
 
 ## 9. 观察：`DecisionEvent` 与监听器
 

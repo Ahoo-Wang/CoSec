@@ -38,7 +38,9 @@ import java.time.Instant
  */
 data class Confirmation(val policy: PolicyId, val statement: Int, val digest: String, val kind: String = DENY_NOMATCH) {
     init {
-        require(statement >= 0 && kind == DENY_NOMATCH) { "A confirmation is deny-nomatch, of a statement index." }
+        requireRequest(
+            statement >= 0 && kind == DENY_NOMATCH
+        ) { "A confirmation is deny-nomatch, of a statement index." }
     }
 
     companion object {

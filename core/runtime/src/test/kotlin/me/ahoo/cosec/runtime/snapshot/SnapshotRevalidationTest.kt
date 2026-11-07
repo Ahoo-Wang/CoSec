@@ -23,10 +23,13 @@ import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Lost and early notifications (F9), resets (F10), revision regressions (F11), per-tenant fail-closed (F15), and the
- * bounds of the periodic pass that recovers from a lost notification (`SNP-6`, RC1-50).
+ * bounds of the periodic pass that recovers from a lost notification (`SNP-6`, RC1-50): one pass at a time (#1215).
  */
 class SnapshotRevalidationTest {
     private val store = ControllableStore().apply {
@@ -266,6 +269,192 @@ class SnapshotRevalidationTest {
                 failClosedTenants = setOf("strict"),
                 failClosedMaxLag = failClosed
             )
+        }
+    }
+
+    /** The platform document and [count] app documents, installed. */
+    private fun installed(source: SnapshotSource<Compiled, Compiled>, count: Int): List<SnapshotKey.App> {
+        val apps = (1..count).map { SnapshotKey.App("app-$it") }
+        apps.forEach { store.put(it, document(1, it.appId)) }
+        apps.forEach { source.load(it.appId).join() }
+        return apps
+    }
+
+    /**
+     * #1215: a tick while a pass is in flight opens no lanes of its own, however many intervals the pass takes, so a
+     * slow store never sees more than `reloadConcurrency` revalidation reads; the pass it owes starts as soon as that
+     * one ends, and revalidates every document again.
+     */
+    @Test
+    fun aPeriodicPassNeverOverlapsAnotherAndTheOneItOwesFollowsIt() {
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
+        testSource(store, options = options).use { source ->
+            val apps = installed(source, 6)
+            store.hold = true
+            store.readLog.clear()
+            val first = source.tick()
+            store.pending.size.assert().isEqualTo(2)
+            // Move the pass on: one started now would read documents this one is not reading.
+            repeat(2) { store.pending.removeAt(0).release() }
+            store.pending.size.assert().isEqualTo(2)
+
+            val owed = source.tick()
+            source.tick().assert().isSameAs(owed)
+            store.pending.size.assert().isEqualTo(2)
+            var peak = 0
+            while (!first.isDone) {
+                store.pending.removeAt(0).release()
+                peak = maxOf(peak, store.pending.size)
+            }
+            // The owed pass started when the first ended, with nobody ticking.
+            owed.isDone.assert().isFalse()
+            store.pending.size.assert().isEqualTo(2)
+            while (!owed.isDone) {
+                store.pending.removeAt(0).release()
+                peak = maxOf(peak, store.pending.size)
+            }
+            peak.assert().isLessThanOrEqualTo(2)
+            store.pending.assert().isEmpty()
+            // Every installed document twice: once by the first pass, once by the pass it owed, and no more.
+            val documents = listOf<SnapshotKey>(SnapshotKey.Platform) + apps
+            store.readLog.groupingBy { it }.eachCount().assert().isEqualTo(documents.associateWith { 2 })
+            // Idle again: the next tick starts a pass of its own.
+            store.hold = false
+            source.tick().join()
+            store.readLog.size.assert().isEqualTo(3 * documents.size)
+        }
+    }
+
+    /**
+     * #1215, `SNP-6`: a pass that has finished no document for `storeReadTimeout` and has no read in flight is held only
+     * by a compilation. The next tick starts a new pass, so a compilation that never ends does not hold back the
+     * revalidation of the documents that pass reaches.
+     */
+    @Test
+    fun aPassHeldOnlyByACompilationDoesNotHoldBackTheNext() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
+        testSource(store, options = options, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            val apps = installed(source, 3)
+            store.dropNotifications = true
+            store.put(apps[0], document(2, "changed"))
+            stuck.set(true)
+            store.readLog.clear()
+            val first = source.tick()
+            first.isDone.assert().isFalse()
+            parked.assert().hasSize(1)
+            val others = listOf<SnapshotKey>(SnapshotKey.Platform, apps[1], apps[2])
+            others.forEach { key -> store.readLog.count { it == key }.assert().isEqualTo(1) }
+
+            // Slow, not stalled: the tick owes a pass and reads nothing.
+            elapsed.advance(options.storeReadTimeout)
+            val owed = source.tick()
+            others.forEach { key -> store.readLog.count { it == key }.assert().isEqualTo(1) }
+
+            elapsed.advance(Duration.ofSeconds(1))
+            source.tick().assert().isSameAs(owed)
+            others.forEach { key -> store.readLog.count { it == key }.assert().isEqualTo(2) }
+
+            // Once the compilation ends, both passes end, and so does what was owed.
+            stuck.set(false)
+            parked.forEach { it.run() }
+            first.isDone.assert().isTrue()
+            owed.isDone.assert().isTrue()
+            source.peek(apps[0].appId)!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /**
+     * #1215, `SNP-6`: stalled means no document finished for `storeReadTimeout`, counted from the last one, not from the
+     * start. A pass whose compilations are slow but still finishing is not abandoned (it would start again from the
+     * first document every `storeReadTimeout`, and the documents after it would never be reached), and a step of the
+     * wall clock is not time passing.
+     */
+    @Test
+    fun aPassThatKeepsFinishingDocumentsIsNotAbandoned() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val clock = ManualClock()
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
+        testSource(store, options = options, clock = clock, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            val apps = installed(source, 3)
+            store.dropNotifications = true
+            store.put(SnapshotKey.Platform, document(2))
+            apps.forEach { store.put(it, document(2, "${it.appId}-2")) }
+            stuck.set(true)
+            store.readLog.clear()
+            val first = source.tick()
+            // Both lanes wait for a compilation, with no read in flight.
+            parked.assert().hasSize(2)
+            store.readLog.assert().hasSize(2)
+
+            // 20 s in, one compilation ends: the pass finished a document, and reads the next.
+            elapsed.advance(Duration.ofSeconds(20))
+            parked.removeAt(0).run()
+            store.readLog.assert().hasSize(3)
+            parked.assert().hasSize(2)
+
+            // 31 s in, 11 s after its last document, and the wall clock steps an hour: slow, not stalled.
+            elapsed.advance(Duration.ofSeconds(11))
+            clock.advance(Duration.ofHours(1))
+            val owed = source.tick()
+            store.readLog.assert().hasSize(3)
+
+            // Past `storeReadTimeout` after its last document: stalled, and the next pass starts.
+            elapsed.advance(Duration.ofSeconds(20))
+            source.tick().assert().isSameAs(owed)
+            store.readLog.size.assert().isGreaterThan(3)
+
+            stuck.set(false)
+            while (parked.isNotEmpty()) {
+                parked.removeAt(0).run()
+            }
+            first.isDone.assert().isTrue()
+            owed.isDone.assert().isTrue()
+        }
+    }
+
+    /**
+     * #1215, `SNP-6`: a pass with a read in flight is never abandoned, whatever either clock says: not when the wall
+     * clock steps forward, nor when a late tick comes after `storeReadTimeout` but before the timeouts of those reads
+     * have fired. So the reads of an abandoned pass and of the pass after it never add up past `reloadConcurrency`.
+     */
+    @Test
+    fun aPassWithAReadInFlightIsNeverAbandoned() {
+        val clock = ManualClock()
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
+        testSource(store, options = options, clock = clock).use { source ->
+            source.nanoTime = elapsed
+            installed(source, 4)
+            store.hold = true
+            store.readLog.clear()
+            val first = source.tick()
+            repeat(2) { store.pending.removeAt(0).release() }
+            store.pending.assert().hasSize(2)
+
+            clock.advance(options.storeReadTimeout.multipliedBy(2))
+            val owed = source.tick()
+            store.pending.assert().hasSize(2)
+
+            elapsed.advance(options.storeReadTimeout.plusSeconds(1))
+            source.tick().assert().isSameAs(owed)
+            store.pending.assert().hasSize(2)
+
+            var peak = 0
+            while (!owed.isDone) {
+                store.pending.removeAt(0).release()
+                peak = maxOf(peak, store.pending.size)
+            }
+            first.isDone.assert().isTrue()
+            peak.assert().isLessThanOrEqualTo(2)
         }
     }
 }

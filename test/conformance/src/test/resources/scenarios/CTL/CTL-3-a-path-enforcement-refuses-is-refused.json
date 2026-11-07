@@ -1,0 +1,125 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RC1-41 (coordinator 2026-11-07): a simulated or explained http resource goes through the path normalization a request's path does. acme allows GET /admin/{id} to anyone; a path with a dot segment, after decoding or before a path parameter, or a malformed escape, is one enforcement answers 400, so simulate and explain answer it 400, never decide it as written.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/{id}"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "admin",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//public/../admin/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//public/%2e%2e/admin/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//admin/..;x/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//admin/%zz"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 400",
+      "refused 400",
+      "refused 400",
+      "refused 400"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

@@ -1,0 +1,24 @@
+# Rule: OBL-4
+# Mutant: a key prefix with an empty hash tag is accepted
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt
+index 22d42bae..20936d57 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter.kt
+@@ -39,15 +39,6 @@ class ReactiveRedisRateLimiter(
+ ) : RateLimiter {
+     private val keyPrefix: String = keyPrefix.trimEnd(':')
+ 
+-    init {
+-        // Redis hashes a key whose first `{` is followed by `}` whole: the two windows would land on different slots.
+-        val brace = this.keyPrefix.indexOf('{')
+-        require(brace < 0 || this.keyPrefix.getOrNull(brace + 1) != '}') {
+-            "The rate limiter's key prefix [${this.keyPrefix}] holds an empty hash tag '{}'; Redis Cluster would put " +
+-                "a bucket's two windows on different slots."
+-        }
+-    }
+-
+     override suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult {
+         val rateLimit = RateLimiter.window(limit)
+         val nowMillis = clock()

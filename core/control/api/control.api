@@ -800,6 +800,11 @@ public final class me/ahoo/cosec/control/change/Finding {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class me/ahoo/cosec/control/change/InvalidControlRequestException : java/lang/IllegalArgumentException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
 public abstract interface class me/ahoo/cosec/control/change/Operation {
 }
 

@@ -1,0 +1,20 @@
+# Rule: CTL-3
+# Mutant: a simulated, explained or analyzed resource is decided as given: neither normalized nor bounded
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index 0f98c085..b31ca5df 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -369,9 +369,9 @@ class DefaultControlPlane(
+      */
+     private fun enforceable(resource: Resource): Resource {
+         val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+-            PathNormalizer.normalize(resource.id)
++            PathNormalizer.normalize(resource.id) ?: resource.id
+         } else {
+-            resource.id.takeIf { PathNormalizer.withinBounds(it) }
++            resource.id
+         }
+         id ?: throw ChangeRejectedException(
+             BAD_REQUEST,

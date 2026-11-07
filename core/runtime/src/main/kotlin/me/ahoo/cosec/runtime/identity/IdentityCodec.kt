@@ -27,6 +27,8 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectReader
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.time.Instant
 import java.util.Base64
 
@@ -180,13 +182,37 @@ object IdentityCodec {
                 claims.put(name, value)
             }
             is Boolean -> claims.put(name, value)
-            is Int -> claims.put(name, value)
-            is Long -> claims.put(name, value)
-            is Double -> claims.put(name, value)
+            is Number -> number(claims, name, value)
             else -> throw IdentityOverflowException(
                 "Claim [$name] is a ${value::class.simpleName}, not a string, number or boolean."
             )
         }
+    }
+
+    /**
+     * A number claim as the header's JSON holds it, which a service reads back as a `Long` or a `Double` (#1228): the
+     * standard integer types, and a `BigInteger` within a `Long`, as an integer; a finite `Float` or `Double`, and a
+     * `BigDecimal` that a `Double` holds exactly (its shortest decimal is the same number), as a number. Anything else is
+     * refused rather than rounded: no other `Number` is converted, since its value could change on the way.
+     */
+    private fun number(claims: ObjectNode, name: String, value: Number) {
+        when (val exact = exactly(value)) {
+            is Long -> claims.put(name, exact)
+            is Double -> claims.put(name, exact)
+            else -> throw IdentityOverflowException(
+                "Claim [$name] is ${value::class.simpleName} $value, which the identity header cannot hold exactly."
+            )
+        }
+    }
+
+    /** [value] as the `Long` or the `Double` the header holds it as; null when it cannot hold it exactly. */
+    private fun exactly(value: Number): Number? = when (value) {
+        is Int, is Long, is Short, is Byte -> value.toLong()
+        is BigInteger -> if (value.bitLength() < Long.SIZE_BITS) value.toLong() else null
+        is Double, is Float -> value.toDouble().takeIf { it.isFinite() }
+        // Its shortest decimal, which is what the header writes, must be the same number.
+        is BigDecimal -> value.toDouble().takeIf { it.isFinite() && BigDecimal.valueOf(it).compareTo(value) == 0 }
+        else -> null
     }
 
     private fun roles(node: JsonNode): Set<String> {

@@ -64,10 +64,14 @@ import java.util.function.LongSupplier
  * - Installs of one key happen in the order their loads started: at most one load per key is in flight, each load
  *   finishes exactly once, and a change notification that arrives during a load starts another as that one finishes,
  *   under the same lock, so nothing can slip in between.
- * - Installed documents are revalidated every [SnapshotOptions.revalidateInterval] with a conditional read of the store
- *   of record, so a document's lag (time since the store last confirmed it) is bounded while the store is reachable.
- *   The pass always runs: it is the only bound on a change whose invalidation was lost, or whose reload failed
- *   (`SNP-6`, RC1-50).
+ * - Installed documents are revalidated by periodic passes, each a conditional read of the store of record per
+ *   document, so a document's lag (time since the store last confirmed it) is bounded while the store is reachable.
+ *   The passes always run: they are the only bound on a change whose invalidation was lost, or whose reload failed,
+ *   which the first pass to reach its document after the change is readable installs (`SNP-6`, RC1-50). One pass runs
+ *   at a time (#1215): a pass starts every [SnapshotOptions.revalidateInterval] or, when the previous one is still in
+ *   flight, as soon as it ends, so a slow store never sees more than [SnapshotOptions.reloadConcurrency] of their
+ *   reads. A pass that has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in flight is
+ *   held only by compilations: the next tick abandons it.
  *
  * Only a key never seen by this source is cold-loaded with [SnapshotDocumentStore.read], which may answer from a local
  * copy. That install counts as confirmed [SnapshotDocumentStore.localCopyMaxAge] before the read, the oldest the copy can
@@ -117,6 +121,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /** How long [close] waits for this source's threads; shorter only in tests of the timeout. */
     internal var closeTimeout: Duration = CLOSE_TIMEOUT
 
+    /**
+     * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,
+     * so a step of the wall clock does not look like time passing. Replaced only in tests.
+     */
+    @Volatile
+    internal var nanoTime: LongSupplier = LongSupplier(System::nanoTime)
+
     /** Set on the threads this source starts: [close] does not wait for the thread it runs on. */
     private val onOwnThread = ThreadLocal<Boolean>()
     private val ownsCompileExecutor = compileExecutor == null
@@ -159,6 +170,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
     private val subscription: AutoCloseable = store.subscribe(ChangeListener())
+    private val passes = PeriodicPasses()
     private val periodic: ScheduledFuture<*> = schedulePeriodic()
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
@@ -386,10 +398,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = (!ownsScheduler || scheduler.isTerminated) && housekeeping.isTerminated &&
             (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
 
-    /** One periodic pass: report lag, then revalidate. */
+    /**
+     * One periodic tick: report lag, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future completes
+     * when a pass that started after this call has ended.
+     */
     internal fun tick(): CompletableFuture<Void> {
         reportLag()
-        return revalidate()
+        return passes.tick()
     }
 
     /** Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval]. */
@@ -488,9 +503,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /**
      * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. Each lane
-     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots.
+     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots. For a
+     * periodic [pass], each slot that finishes is progress, and once it is abandoned no lane takes another slot. A lane
+     * holds a read of the pass while it takes a slot, so the pass cannot be abandoned between that check and the read
+     * the slot starts ([Pass.abandonIfStalled]).
      */
-    private fun reloadAll(slots: List<Slot<*>>, reload: (Slot<*>) -> CompletableFuture<*>?): CompletableFuture<Void> {
+    private fun reloadAll(
+        slots: List<Slot<*>>,
+        pass: Pass? = null,
+        reload: (Slot<*>) -> CompletableFuture<*>?,
+    ): CompletableFuture<Void> {
         val done = CompletableFuture<Void>()
         if (slots.isEmpty()) {
             done.complete(null)
@@ -499,17 +521,24 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         val next = AtomicInteger()
         val remaining = AtomicInteger(slots.size)
         fun finishedOne() {
+            pass?.progressed()
             if (remaining.decrementAndGet() == 0) {
                 done.complete(null)
             }
         }
         fun lane() {
             while (true) {
+                val holding = pass?.let { it.startRead() ?: return }
                 val index = next.getAndIncrement()
                 if (index >= slots.size) {
+                    holding?.end()
                     return
                 }
-                val reloading = reload(slots[index])
+                val reloading = try {
+                    reload(slots[index])
+                } finally {
+                    holding?.end()
+                }
                 if (reloading == null || reloading.isDone) {
                     finishedOne()
                     continue
@@ -523,6 +552,142 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
         repeat(minOf(options.reloadConcurrency, slots.size)) { lane() }
         return done
+    }
+
+    /**
+     * The periodic passes (#1215): one at a time. A tick that comes while a pass is in flight starts none, so a store
+     * slower than the interval does not get another [SnapshotOptions.reloadConcurrency] reads each interval; it owes a
+     * pass instead, which starts as soon as the one in flight ends, over every document installed by then. However many
+     * ticks come meanwhile, one pass is owed. Nothing here waits: the scheduler thread only starts passes.
+     *
+     * A pass that has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in flight is held only
+     * by compilations. It is abandoned: it takes no more documents, and the tick starts a pass, so a compilation that
+     * never ends does not hold back the revalidation of the documents that pass reaches (`SNP-6`). A pass whose reads are
+     * slow but still finishing is never abandoned, and neither is one with a read in flight, so the reads of an abandoned
+     * pass and of the one that replaced it never add up.
+     */
+    private inner class PeriodicPasses {
+        // Guarded by this.
+        private var current: Pass? = null
+        private var owed: CompletableFuture<Void>? = null
+
+        fun tick(): CompletableFuture<Void> {
+            val now = nanoTime.asLong
+            val stalled: Pass?
+            val started: Pass
+            synchronized(this) {
+                val running = current
+                // Abandoning is atomic with the pass's lanes taking a slot: once it returns true, no lane of it reads.
+                if (running != null && !running.abandonIfStalled(now)) {
+                    return owed ?: CompletableFuture<Void>().also { owed = it }
+                }
+                stalled = running
+                // The pass that starts now is the one owed, if any: it starts after every tick that owed it.
+                started = Pass(owed ?: CompletableFuture())
+                owed = null
+                current = started
+                stalled?.follow(started)
+            }
+            if (stalled != null) {
+                log.warn {
+                    "A snapshot revalidation pass finished no document for ${options.storeReadTimeout} and has no read " +
+                        "in flight: compilations hold it. Starting the next pass without it."
+                }
+            }
+            run(started)
+            return started.done
+        }
+
+        @Suppress("TooGenericExceptionCaught")
+        private fun run(pass: Pass) {
+            val reloads = try {
+                reloadAll(installedSlots(), pass) { it.load(pass = pass) }
+            } catch (error: Throwable) {
+                // Never leave a pass in flight that nothing will end: every later tick would only owe one.
+                pass.done.completeExceptionally(error)
+                ended(pass)
+                throw error
+            }
+            reloads.whenComplete { _, error ->
+                if (error != null) pass.done.completeExceptionally(error) else pass.done.complete(null)
+                ended(pass)
+            }
+        }
+
+        /** [pass] ended: the owed pass starts now, if any. An abandoned pass ends with nothing to start. */
+        private fun ended(pass: Pass) {
+            val next = synchronized(this) {
+                if (current !== pass) {
+                    return
+                }
+                val waiting = owed
+                if (waiting == null) {
+                    current = null
+                    return
+                }
+                owed = null
+                Pass(waiting).also { current = it }
+            }
+            run(next)
+        }
+    }
+
+    /** One periodic pass: [done] completes when it ends, or, once abandoned, when the pass that replaced it does. */
+    private inner class Pass(val done: CompletableFuture<Void>) {
+        /** When a document of this pass last finished, in [nanoTime]: the start, until one does. */
+        @Volatile
+        private var progressedAt: Long = nanoTime.asLong
+
+        /** The reads this pass has in flight, with the lanes about to start one; [ABANDONED] once it is abandoned. */
+        private val reads = AtomicInteger()
+
+        val abandoned: Boolean get() = reads.get() == ABANDONED
+
+        fun progressed() {
+            progressedAt = nanoTime.asLong
+        }
+
+        /** A read of this pass starting, or null once the pass is abandoned. */
+        fun startRead(): PassRead? {
+            while (true) {
+                val count = reads.get()
+                if (count == ABANDONED) {
+                    return null
+                }
+                if (reads.compareAndSet(count, count + 1)) {
+                    return PassRead(this)
+                }
+            }
+        }
+
+        fun readEnded() {
+            reads.decrementAndGet()
+        }
+
+        /**
+         * Abandons this pass if it has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in
+         * flight; only one with no read can be, so [startRead] never succeeds after this does.
+         */
+        fun abandonIfStalled(now: Long): Boolean =
+            now - progressedAt > options.storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
+
+        /** This abandoned pass ends when [successor] does. */
+        fun follow(successor: Pass) {
+            successor.done.whenComplete { _, error ->
+                if (error != null) done.completeExceptionally(error) else done.complete(null)
+            }
+        }
+    }
+
+    /** One read of a [Pass], or a lane about to start one: ends once. */
+    private inner class PassRead(private val pass: Pass) {
+        private val open = AtomicBoolean(true)
+
+        fun end() {
+            if (open.compareAndSet(true, false)) {
+                pass.readEnded()
+            }
+        }
     }
 
     private fun attemptPrewarm(keys: List<SnapshotKey>, backoff: Duration, done: CompletableFuture<Void>) {
@@ -661,6 +826,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val epoch: Long,
             /** Whether [known] was compiled in an earlier epoch: this load reads in full and must not keep it. */
             val recompiles: Boolean,
+            /** The read of the periodic pass that started this load, ended once the read has answered or timed out. */
+            val passRead: PassRead?,
         ) {
             val startedAt: Instant = clock.instant()
 
@@ -688,14 +855,18 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
 
         /** A load starting now; under this slot's lock. */
-        private fun newLoad(force: Boolean, result: CompletableFuture<SnapshotEntry<T>>): Load {
+        private fun newLoad(
+            force: Boolean,
+            result: CompletableFuture<SnapshotEntry<T>>,
+            passRead: PassRead? = null,
+        ): Load {
             val epoch = compileEpoch.get()
             val known = installed
             // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
             val compiled = known != null &&
                 (known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE)
             val recompiles = key != sharedKey && compiled && installedEpoch < epoch
-            return Load(known, force, result, epoch, recompiles)
+            return Load(known, force, result, epoch, recompiles, passRead)
         }
 
         /**
@@ -823,9 +994,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         /**
          * Starts a load unless one is in flight, in which case it returns that one. Null when this slot was removed;
-         * after [close], an already failed entry.
+         * after [close], an already failed entry. A load that [pass] starts counts as a read of it until the read ends.
          */
-        fun load(force: Boolean = false): CompletableFuture<SnapshotEntry<T>>? {
+        fun load(force: Boolean = false, pass: Pass? = null): CompletableFuture<SnapshotEntry<T>>? {
             val load: Load
             synchronized(this) {
                 if (removed) {
@@ -835,7 +1006,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
                 }
                 inFlight?.let { return it.result }
-                load = newLoad(force, CompletableFuture())
+                load = newLoad(force, CompletableFuture(), pass?.startRead())
                 inFlight = load
                 dirty = false
             }
@@ -882,6 +1053,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             guarded(load) {
                 val reading = readFor(load)
                 withTimeout(reading).whenComplete { read, error ->
+                    load.passRead?.end()
                     guarded(load) { onRead(load, read, error) }
                 }
             }
@@ -1129,6 +1301,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
                 return
             }
+            // Whatever ended the load (a read that failed to start included), its read is over.
+            load.passRead?.end()
             val stale = install && key != sharedKey && load.epoch < compileEpoch.get() &&
                 (entry.origin == EntryOrigin.DOCUMENT || entry.origin == EntryOrigin.UNCOMPILABLE)
             val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
@@ -1303,6 +1477,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         /** Queued housekeeping beyond this runs in place rather than piling up without bound. */
         const val HOUSEKEEPING_QUEUE = 4096
+
+        /** A [Pass]'s count of reads once it is abandoned: no read can start any more. */
+        private const val ABANDONED = -1
 
         fun unwrap(error: Throwable?): Throwable {
             var current = error ?: return IllegalStateException("The load completed without a result.")

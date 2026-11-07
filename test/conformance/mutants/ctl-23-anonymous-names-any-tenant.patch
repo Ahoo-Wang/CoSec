@@ -1,0 +1,17 @@
+# Rule: CTL-23
+# Mutant: a request without a principal may name any tenant, and is decided on (0) under its name
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index 0f98c085..d66f884f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -350,7 +350,7 @@ class DefaultControlPlane(
+         val tenant = simulator.tenantOf(request)
+         val key = SnapshotKey.Tenant(tenant.value)
+         authority.require(operator, key, action)
+-        if (tenant != request.tenant) {
++        if (false) {
+             throw ChangeRejectedException(
+                 BAD_REQUEST,
+                 "A request without a principal is decided on tenant ${tenant.value}, as enforcement decides it: " +

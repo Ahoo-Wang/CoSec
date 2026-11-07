@@ -25,9 +25,10 @@ const val DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX = "cosec:rate-limiter"
 /**
  * The cluster-wide [RateLimiter] of the coroutine pipeline (RFC 0006 §8.4): a sliding-window counter kept in Redis, checked
  * and counted atomically by a Lua script (`redis-rate-limiter.lua`). Counters live under
- * `<keyPrefix>:<ruleId>:<bucket>:<windowIndex>`, the keys earlier releases count in, so instances of both share buckets
- * during a rolling upgrade. Run through the reactive template and awaited: the caller's thread never waits for Redis,
- * and Reactor stays inside this class (RFC 0006 K9).
+ * `<keyPrefix>:{<ruleId>:<bucket>}:<windowIndex>` ([keysOf]). The script reads a bucket's current and previous window
+ * together, so both keys carry the same hash tag and Redis Cluster keeps them on one slot, while different buckets
+ * still spread over the cluster (#1229). Run through the reactive template and awaited: the caller's thread never waits
+ * for Redis, and Reactor stays inside this class (RFC 0006 K9).
  *
  * A Redis failure is thrown; the rule's `strictFailure` decides what it means.
  */
@@ -38,19 +39,38 @@ class ReactiveRedisRateLimiter(
 ) : RateLimiter {
     private val keyPrefix: String = keyPrefix.trimEnd(':')
 
+    init {
+        // Redis hashes a key whose first `{` is followed by `}` whole: the two windows would land on different slots.
+        val brace = this.keyPrefix.indexOf('{')
+        require(brace < 0 || this.keyPrefix.getOrNull(brace + 1) != '}') {
+            "The rate limiter's key prefix [${this.keyPrefix}] holds an empty hash tag '{}'; Redis Cluster would put " +
+                "a bucket's two windows on different slots."
+        }
+    }
+
     override suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult {
         val rateLimit = RateLimiter.window(limit)
         val nowMillis = clock()
         val windowIndex = nowMillis / rateLimit.windowMillis
-        val baseKey = "$keyPrefix:$ruleId:$bucket"
         val reply = template.execute(
             SCRIPT,
-            listOf("$baseKey:$windowIndex", "$baseKey:${windowIndex - 1}"),
+            keysOf(ruleId, bucket, windowIndex),
             listOf(rateLimit.limitPerWindow.toString(), rateLimit.windowMillis.toString(), nowMillis.toString()),
         ).next().toFuture().await() ?: error("Redis rate limiter script returned no reply.")
         val allowed = reply[0] == 1L
         val estimate = reply[1] / ESTIMATE_SCALE
         return rateLimit.resultOf(allowed, estimate, nowMillis)
+    }
+
+    /**
+     * The keys of [bucket]'s current and previous window. They differ only after the hash tag, so they share a slot
+     * whatever the prefix, rule id and bucket hold: a `}` in the rule id or the bucket ends the tag at the same place in
+     * both. Only a rule id that begins with `}` would empty the tag, and it is refused; the engine's never do (`OBL-4`).
+     */
+    internal fun keysOf(ruleId: String, bucket: String, windowIndex: Long): List<String> {
+        require(!ruleId.startsWith('}')) { "Rate limit rule id [$ruleId] would empty the counters' hash tag." }
+        val base = "$keyPrefix:{$ruleId:$bucket}"
+        return listOf("$base:$windowIndex", "$base:${windowIndex - 1}")
     }
 
     companion object {

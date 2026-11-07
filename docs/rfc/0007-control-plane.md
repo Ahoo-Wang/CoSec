@@ -828,6 +828,8 @@ withinBoundary(p, req, view):
 
 > **实现说明（2026-10-27，#1075）**：边界语句缺少外部属性且写了 `onMissing nomatch` 时按普通的未命中处理，其他失败为 `Indeterminate(BoundaryUnavailable)`；没有任何边界数据（租户没有边界、也没有默认边界）时引擎整段跳过检查（`SnapshotView.bounded`）；租户的 `boundary` 若指向的不是平台的边界策略，是 `$.boundary` 处的 REFERENCES 错误，并进入反向引用索引。公开的 `cosec-api` `AuditReasonCode` 新增 `BOUNDARY`，审计的原因里带边界 id，指标的 `source` 与 `cause` 标签为 `boundary`；响应不变（边界拒绝是 `forbidden`/`unauthorized`，不可用是 `unavailable`）。Q24 的结果见 Q24 的实现说明。
 
+> **实现说明（2026-11-07，#1231，审计 issue #1208）**：边界的语句条件与策略条件读的外部属性进入属性计划，由提供者照常取得，按取到的值判断边界（`ATR-8`，见 [RFC 0006](0006-coroutine-pipeline.md) §5.4.2 的说明）。此前它们不在计划里，读外部属性的边界让合法请求得到 `BoundaryUnavailable`。
+
 > **实现说明（2026-10-27，#1095）**：所有 break-glass 规则按内容判定，而不是按变更的 kind：`BreakGlassRules.touches` 为真，即变更放入 break-glass 绑定、或在其上放入另一个绑定。`cosec:breakglass`、REQUIRED 变更监听器与 `BREAK_GLASS_REQUESTED` 事件、V5（含新规则：把 break-glass 绑定改成普通绑定也是 break-glass 变更）、期限上限、保留名检查都由它触发，没有 kind 可以豁免。移除 break-glass 绑定仍只缩小范围，只需 `cosec:write`。
 
 ---

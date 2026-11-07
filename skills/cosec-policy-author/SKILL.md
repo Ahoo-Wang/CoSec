@@ -81,7 +81,8 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   `http:POST`, ..., and `http:*`.
 - Resource: a typed pattern `type/segment/...` where a segment is a literal, `*` (one non-empty segment), `{name}`
   (one segment, captured) or a final `**`; or `http:path:<pattern>` (Spring-like: literals, `?`, `*`, `{name}`,
-  `**` and `{*name}` at the start or end; no `{name:regex}`). An object form adds `caseSensitive` and
+  `**` and `{*name}` at the start or end; no `{name:regex}`, and no half of a surrogate pair without the other: write
+  an emoji whole). An object form adds `caseSensitive` and
   `decodeAndParseSegments` (both default `true`) to an `http:path:` pattern.
 - Pattern bounds (DOC-4; over one, the document does not compile): an `http:path:` pattern is at most 2,048
   characters; a segment that mixes `*`, `?` or `{name}` with text (`report-*.pdf`) has at most 16 parts, consecutive
@@ -296,7 +297,9 @@ Check the final document for:
    `POST /cosec/control/v1/simulate` with
    `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42"}, "candidate": "<changeId>"}`
    compares a staged change with the enforced documents; `POST /explain` shows the deciding statement. External
-   attributes are not fetched in a simulation, so a statement reading one is Indeterminate there.
+   attributes are not fetched in a simulation, so a statement reading one is Indeterminate there. A request without a
+   `principal` is decided on tenant `(0)`: give it `"tenant": "(0)"` (another tenant is 400), as an operator who may
+   simulate there.
 5. **Publish** through the control plane: `POST /documents/{key}:apply` (`mode` `MERGE` or `REPLACE`) or
    `POST /changes`, optionally a shadow window before publishing. A compile error is 422, a stale base revision 409,
    a `nomatch` DENY without confirmation 428. See https://cosec.ahoo.me/policies/testing. The first documents (and

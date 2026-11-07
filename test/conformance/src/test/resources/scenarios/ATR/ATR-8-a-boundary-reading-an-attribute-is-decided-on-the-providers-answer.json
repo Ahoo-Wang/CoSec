@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "ATR-8"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Anyone may do anything, held to the default boundary, which allows only inside the geo fence: the boundary's attribute is planned, the stage-B geo provider is asked and answers true, so the request proceeds (#1208).",
+  "documents": {
+    "platform": {
+      "boundaries": {
+        "default": "fence"
+      },
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "fence",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "acme",
+    "id": "alice"
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "values": {
+        "ext.geo.inFence": true
+      }
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.control.api
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
@@ -33,6 +37,7 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 
@@ -259,6 +264,45 @@ class ControlHttpTest {
         call("POST", "/changes", "$proposal}").first.assert().isEqualTo(201)
     }
 
+    /**
+     * Review M1 of #1240: only a route's exact path is served, so a rule that names the exact paths, as the documented
+     * per-tenant rate limit does, covers every request that reaches one: a trailing `/` or an empty segment is a 404.
+     */
+    @Test
+    fun `a path with a trailing slash or an empty segment is served by no route`() {
+        val simulate = """{"request":{"tenant":"acme","principal":"bob","action":"order:read","resource":"order/1"}}"""
+        call("POST", "/simulate", simulate).first.assert().isEqualTo(200)
+        call("GET", "/documents/tenant:acme").first.assert().isEqualTo(200)
+        val paths = listOf(
+            "POST" to "/simulate/",
+            "POST" to "//simulate",
+            "POST" to "/simulate//",
+            "POST" to "simulate",
+            "POST" to "/explain/",
+            "POST" to "/changes/",
+            "GET" to "/documents//tenant:acme",
+            "GET" to "/documents/tenant:acme/",
+            "GET" to "/",
+            // R2-M1 of #1240's review: a leaf route followed by any segment is no route either.
+            "POST" to "/simulate/x",
+            "POST" to "/simulate/x/y",
+            "POST" to "/explain/x",
+            "POST" to "/analyze/x",
+            "POST" to "/documents/tenant:acme:apply/x",
+            "POST" to "/documents/tenant:acme:rollback/x",
+            "GET" to "/documents/tenant:acme/diff/x",
+            "GET" to "/documents/tenant:acme/revisions/1/propagation/x",
+            "POST" to "/changes/c1:publish/x",
+            "POST" to "/break-glass/c1:approve/x",
+            "DELETE" to "/break-glass/glass/x",
+        )
+        for ((method, path) in paths) {
+            val (status, problem) = call(method, path, simulate.takeIf { method == "POST" })
+            status.assert().describedAs("$method $path").isEqualTo(404)
+            problem.has("detail").assert().isFalse()
+        }
+    }
+
     @Test
     fun `malformed requests and unknown routes`() {
         call("POST", "/changes", "{not json").first.assert().isEqualTo(400)
@@ -338,6 +382,240 @@ class ControlHttpTest {
             problem.get("detail").asString().assert().isEqualTo("binding [$ordinary] is not a break-glass binding")
         }
         fixture.ids.get().assert().isEqualTo(before)
+    }
+
+    /**
+     * RC1-39: a 400's detail is a message of the control plane's own checks, or names the field that does not parse:
+     * never an exception's message or a class name. A time that does not parse is the caller's 400, not a 500.
+     */
+    @Test
+    fun `a field that does not parse is a 400 that names it, never an exception's message`() {
+        fun refused(response: Pair<Int, JsonNode>, field: String) {
+            response.first.assert().describedAs(field).isEqualTo(400)
+            response.second.get("detail").asString().assert().describedAs(field).contains(field)
+                .doesNotContain("me.ahoo").doesNotContain("Exception").doesNotContain("No enum constant")
+                .doesNotContain("For input string").doesNotContain("could not be parsed")
+        }
+        val desired = """{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z"}"""
+        val apply = call("POST", "/documents/tenant:acme:apply", """{"document":$desired,"mode":"BOGUS"}""")
+        refused(apply, "[mode]")
+        apply.second.get("detail").asString().assert().contains("MERGE").doesNotContain("ApplyMode")
+        refused(
+            call(
+                "POST",
+                "/break-glass",
+                """{"principal":"plato","expiresAt":"tomorrow","reason":"incident"}""",
+                security = plato
+            ),
+            "[expiresAt]"
+        )
+        val request = """{"tenant":"acme","principal":"bob","action":"order:read","resource":"order/1","time":"now"}"""
+        refused(call("POST", "/simulate", """{"request":$request}"""), "[time]")
+        refused(call("GET", "/documents/tenant:acme/revisions", query = mapOf("limit" to "many")), "[limit]")
+        refused(call("GET", "/documents/tenant:acme/revisions", query = mapOf("before" to "x")), "[before]")
+        refused(call("GET", "/documents/tenant:acme/revisions/first"), "[revision]")
+        refused(call("GET", "/documents/tenant:acme/diff", query = mapOf("from" to "1", "to" to "x")), "[to]")
+        val statement = """{"policy":"p","statement":${Long.MAX_VALUE},"digest":"d"}"""
+        val proposal = """{"document":"tenant:acme","base":1,"operations":[],"confirmations":[$statement]}"""
+        refused(call("POST", "/changes", proposal), "[confirmations]")
+        // The parser's own message is not the control plane's either.
+        val (malformed, problem) = call("POST", "/changes", "{not json")
+        malformed.assert().isEqualTo(400)
+        problem.get("detail").asString().assert().doesNotContain("Unexpected character").doesNotContain("code 110")
+        // What the control plane's own checks say, it still says.
+        call("POST", "/changes/c1:reject", """{"reason":" "}""").second.get("detail").asString()
+            .assert().isEqualTo("A rejection needs a reason.")
+    }
+
+    /** Requests whose fields do not parse, each with what its 400's detail holds. */
+    private val malformed: List<Case> = run {
+        val request = """"tenant":"acme","principal":"bob","action":"order:read","resource":"order/1""""
+        val proposal = """"document":"tenant:acme","base":1"""
+        // Method, path, body, and what the detail holds.
+        listOf(
+            Case("POST", "/changes", """{$proposal,"operations":{}}""", "[operations] is not an array"),
+            Case(
+                "POST",
+                "/changes",
+                """{$proposal,"operations":[],"confirmations":{}}""",
+                "[confirmations] is not an array",
+            ),
+            Case(
+                "POST",
+                "/changes",
+                """{"document":"tenant:acme","base":"1","operations":[]}""",
+                "[base] is not an integer",
+            ),
+            Case("POST", "/changes", """{"document":"nowhere","base":1,"operations":[]}""", "names no document"),
+            Case("POST", "/changes", """{$proposal,"operations":[{"op":"explode"}]}""", "[operations]: "),
+            Case(
+                "POST",
+                "/documents/tenant:acme:apply",
+                """{"document":{"schema":1},"mode":"MERGE"}""",
+                "[document]: ",
+            ),
+            Case("POST", "/documents/tenant:acme:rollback", """{"revision":"one"}""", "[revision] is not an integer"),
+            Case("POST", "/changes/a b:publish", null, "[change] is not a change id"),
+            Case(
+                "POST",
+                "/changes/c1:publish",
+                """{"ack":{"window":"w","counts":{"NARROWED":"x"}}}""",
+                "[counts] is not an integer",
+            ),
+            Case("POST", "/changes/c1:publish", """{"ack":{"window":"w","counts":[]}}""", "[counts] is not an object"),
+            Case(
+                "POST",
+                "/changes/c1:publish",
+                """{"ack":{"window":"w","counts":{},"x":1}}""",
+                "Unknown fields [x] in [ack]",
+            ),
+            Case("POST", "/break-glass/c1:approve", "{}", "[candidate] is missing", plato),
+            Case(
+                "POST",
+                "/break-glass",
+                """{"principal":"plato","expiresAt":"2026-11-01T01:00:00Z","reason":" "}""",
+                "Break-glass needs a reason.",
+                plato,
+            ),
+            Case(
+                "DELETE",
+                "/break-glass/glass",
+                null,
+                "Revoking break-glass needs a reason.",
+                plato,
+                mapOf("reason" to " "),
+            ),
+            Case("POST", "/simulate", """{"request":{$request,"roles":"admin"}}""", "[roles] is not an array"),
+            Case("POST", "/simulate", """{"request":{$request,"roles":[1]}}""", "[roles] is not a string"),
+            Case("POST", "/simulate", """{"request":{$request,"headers":[]}}""", "[headers] is not an object"),
+            Case("POST", "/simulate", """{"request":{$request,"headers":{"x-a":[1]}}}""", "[headers] is not a string"),
+            Case(
+                "POST",
+                "/simulate",
+                """{"request":{$request,"requestAttributes":{"a":1}}}""",
+                "[requestAttributes] is not a string",
+            ),
+            Case("POST", "/simulate", """{"request":{$request,"time":1}}""", "[time] is not a string"),
+            Case("POST", "/simulate", """{"request":{$request,"time":"$FAR"}}""", "[time] is not an ISO-8601 instant"),
+            Case("POST", "/explain", """{"request":{$request,"time":"$FAR"}}""", "[time] is not an ISO-8601 instant"),
+            Case(
+                "POST",
+                "/break-glass",
+                """{"principal":"plato","expiresAt":"$FAR","reason":"incident"}""",
+                "[expiresAt] is not an ISO-8601 instant",
+                plato,
+            ),
+            Case("POST", "/simulate", """{"request":{$request},"candidate":"a b"}""", "[candidate] is not a change id"),
+            Case("POST", "/simulate", """{"request":[]}""", "[request] is not an object"),
+            Case(
+                "POST",
+                "/explain",
+                """{"request":{$request},"at":{"platform":"1"}}""",
+                "[platform] is not an integer",
+            ),
+            Case(
+                "POST",
+                "/explain",
+                """{"request":{$request},"at":{"platform":1,"x":1}}""",
+                "Unknown fields [x] in [at]",
+            ),
+            Case("POST", "/analyze", """{"query":{"tenant":"acme","resource":"order/1"}}""", "[action] is missing"),
+        )
+    }
+
+    /**
+     * RC1-39, `CTL-24`: every field of every route is read by the control plane's own checks, so what does not parse is
+     * a 400 that names it, and what is the control plane's own check says so in its own words.
+     */
+    @Test
+    fun `every malformed field is named in the control plane's own words`() {
+        for (case in malformed) {
+            val (status, problem) = call(case.method, case.path, case.body, case.security ?: alice, case.query)
+            status.assert().describedAs("${case.method} ${case.path} ${case.body}").isEqualTo(400)
+            problem.get("detail").asString().assert().describedAs("${case.method} ${case.path}").contains(case.detail)
+        }
+    }
+
+    private companion object {
+        /** An instant `Instant.parse` reads and epoch milliseconds cannot hold. */
+        const val FAR = "+300000000-01-01T00:00:00Z"
+    }
+
+    /** A request and what its 400's detail holds; by alice unless [security] says otherwise. */
+    private class Case(
+        val method: String,
+        val path: String,
+        val body: String?,
+        val detail: String,
+        val security: RequestSecurity? = null,
+        val query: Map<String, String> = emptyMap(),
+    )
+
+    /**
+     * RC1-39: a stored document that does not decode, perhaps one a newer version wrote during a rolling upgrade, is no
+     * fault of the caller's: a 500 without detail, and the error is logged with its key. Before, it was a 400 that showed
+     * the stored document's JSON path, also of an app document simulate read for a caller who may not read it.
+     */
+    @Test
+    fun `a stored document that does not decode is a 500 without detail, logged with its key`() {
+        runBlocking { fixture.bootstrap(SnapshotKey.App("order"), emptyList(), emptyList()) }
+        fixture.undecodable += SnapshotKey.App("order")
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            val read = call("GET", "/documents/app:order", security = plato)
+            val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order",""" +
+                """"space":"team-a","action":"order:read","resource":"order/1"}"""
+            val simulated = call("POST", "/simulate", """{"request":$request}""")
+            for ((status, problem) in listOf(read, simulated)) {
+                status.assert().isEqualTo(500)
+                problem.get("code").asString().assert().isEqualTo("INTERNAL_ERROR")
+                problem.has("detail").assert().isFalse()
+            }
+            logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
+                .assert().hasSize(2).allMatch { it.contains("[app:order]") && it.contains("does not decode") }
+        } finally {
+            logger.detachAppender(logged)
+        }
+    }
+
+    /**
+     * Review L8 of #1240, `CTL-24`: a stored pattern this version cannot parse (a lone surrogate half, which a document
+     * published before L4 of #1200 may hold) is a stored value `analyze` cannot read: a 500 logged with its key, never
+     * the caller's 400.
+     */
+    @Test
+    fun `a stored pattern this version cannot parse is a 500, logged with its key`() {
+        runBlocking {
+            fixture.bootstrap(
+                SnapshotKey.Tenant("initech"),
+                listOf(
+                    me.ahoo.cosec.control.change.allow("broken", action = "order:read", resource = "http:path:/a\uD83D")
+                ),
+                listOf(
+                    Binding(
+                        BindingId("broken"),
+                        SubjectRef.Anyone,
+                        BindingScope(Match.Any, Match.Any),
+                        PolicyId("broken")
+                    )
+                ),
+            )
+        }
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            val query = """{"query":{"tenant":"initech","action":"order:read","resource":"/a"}}"""
+            val (status, problem) = call("POST", "/analyze", query, security = plato)
+            status.assert().isEqualTo(500)
+            problem.has("detail").assert().isFalse()
+            logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
+                .assert().hasSize(1).allMatch { it.contains("[tenant:initech]") && it.contains("cannot parse") }
+        } finally {
+            logger.detachAppender(logged)
+        }
     }
 
     @Test

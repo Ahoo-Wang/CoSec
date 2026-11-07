@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 1060f1d9..03ec81ca 100644
+index 3d80418c..e1a484bf 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -692,7 +692,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+@@ -865,7 +865,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
              // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
              val compiled = known != null &&
                  (known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE)
 -            val recompiles = key != sharedKey && compiled && installedEpoch < epoch
 +            val recompiles = false
-             return Load(known, force, result, epoch, recompiles)
+             return Load(known, force, result, epoch, recompiles, passRead)
          }
  

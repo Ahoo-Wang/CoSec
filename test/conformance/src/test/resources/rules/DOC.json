@@ -34,6 +34,7 @@
         "engine:HttpPathPatternTest#a glob segment holds at most 16 tokens",
         "engine:HttpPathPatternTest#consecutive stars in a segment count once",
         "engine:HttpPathPatternTest#a glob after a leading rest costs twice and is tried at two starts",
+        "engine:HttpPathPatternTest#a glob after a leading rest is decided at most twice",
         "engine:HttpPathPatternTest#capturing agrees with backtracking",
         "engine:CompiledDocumentTest#a document holds at most its glob budget",
         "engine:ActionResourcePatternTest#a typed pattern is at most 2058 characters"

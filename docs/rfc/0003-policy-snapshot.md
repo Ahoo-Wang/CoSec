@@ -347,6 +347,11 @@ CacheSpec.builder<SnapshotKey, SnapshotDocument>("PolicySnapshotCache")
   都再用条件读（`getIfChanged(key, null)`）向 L1 确认。L2 命中的值不带摘要：按 CoCache 的算法（编码后字节的 SHA-1）在调用方线程之外计算，
   编码器原样写出正文，所以与 Redis 算出的摘要相同（测试固定）。
 
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：
+> - **一个前缀（`SNP-9`，RC1-46）。** `cosec.key-prefix`（默认 `cosec`）取代 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 与 `cosec.api-key.key-prefix`。一个部署写进 Redis 的每个 key 都在它下面：快照文档、控制面记录、候选、影子报告、吊销、成员关系、API Key（`<p>:api-key`）、限流计数（`<p>:rate-limiter`，原为固定值）与社交登录的 OAuth state（`<p>:oauth:state`，原为固定值）。默认配置下 key 的字节不变。
+> - **旧前缀让启动失败。** 环境里还设着三个旧前缀之一时，不论 `cosec.unknown-properties` 怎么设，启动都失败。错误信息列出要搬的数据族，并说明吊销与 API Key 要先复制，否则按旧前缀吊销的 token 会重新被接受。`cosec.key-prefix` 未设时，按快照文档的前缀计算要搬的数据族（第 2 轮审查 M1）。
+> - **不经 starter 的缓存也被固定（`SNP-3` 修订，RC1-45）。** `createPolicySnapshotCache` 对任何 spec 施加 `storeOfRecord()`、快照的编解码器与 key 编码器，并去掉 key 过滤器、按条目的 TTL、版本化写入与加载器；`CoSecCacheAssembler.assemble` 在 customizer 之后恢复每个 spec 的编解码器、加载器、key 过滤器与 TTL 函数。
+
 ### 4.2 两层接口
 
 ```kotlin
@@ -473,6 +478,16 @@ sequenceDiagram
 
 F5 与 F6 的区别是有意的：F6 是"不知道有没有新版本"，旧快照仍是一份已发布的一致状态（RFC 0001 §7.1 的理由），由落后时长约束；F5 是"知道有新版本，
 但它无法使用"，按 7.0 失败即拒绝。F6 相对 7.0 的差异见 §7 X1。
+
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：
+> - **周期性重新校验不能关掉（`SNP-6`，RC1-50）。** `cosec.authorization.snapshot.revalidate-interval` 至少 1 秒、至多 5 分钟，小于 `lag-warn`；有 fail closed 的租户时还小于 `fail-closed.max-lag`。`SnapshotOptions` 的构造检查它，starter 先检查并在启动失败时点名属性。周期性一轮总被调度，重试间隔的上限就是这个间隔。失效通知丢失（CoCache 的通道至多一次）或重新加载失败之后，变更由它可读之后第一个到达其文档的一轮装上（#1231 起的陈述，见下一条）。下限 1 秒来自第 1 轮审查 L1：每一轮都对每份已安装文档做一次条件读，更短的间隔只让 Redis 空转。
+> - **一次一轮（2026-11-07，#1231，审计 issue #1215，`SNP-6` 修订）。** 周期性重新校验的轮次原来互相叠加：调度只启动一轮就返回，上一轮未完成时下一轮照样开出 `reloadConcurrency` 条 lane，后端变慢时读并发按轮次放大。现在同一时间只有一轮：每个间隔开始一轮，上一轮还在进行时，在它结束后立即开始（多少个 tick 都只欠一轮），调度线程不等待。所以一轮比间隔长时，"一个间隔内装上"不再成立；规则改为"由变更可读之后第一个到达其文档的一轮装上"。存储仍在应答时，落后时长低于间隔加一轮，一轮比间隔长时低于两轮。
+>   - **停住的一轮。** 一轮在 `storeReadTimeout`（30 秒）内没有完成任何文档、且没有读在途时，只可能是编译拖住了它：下一个 tick 放弃它并开新的一轮，所以一个永不结束的编译不会拖住其他文档的重新校验。停滞按单调时间计（墙钟跳变不算时间流逝）；每一轮计在途的读，放弃是从 0 到"已放弃"的原子交换，所以被放弃的一轮与取代它的一轮的读不会叠加，有读在途的一轮从不被放弃，仍在完成文档的一轮也不会（独立审查 L2、L3）。
+>   - **已知限制（独立审查 L4，后续项）。** 一轮的 lane 会等待槽位上进行中的加载；卡在永不结束的编译上的槽位不少于 `reloadConcurrency` 时，排在后面的文档仍轮不到。与 #1231 之前相同，是病态场景，留作后续。
+> - **条件读的成本。** CoCache 6 的条件读在 Lua 里对整份存储值算摘要，Redis 线程时间与文档大小成正比。按文档大小的测量见 [`docs/perf/conditional-read/`](../perf/conditional-read/README.md)，公式与缓解办法（在 `SNP-6` 的范围内调大间隔）写在 `storage.md`。不另存修订号：修订号与文档分开写，写失败会让实例跳过重新校验，陈旧无界。
+> - **不存在的文档单独计数（`SNP-7`，RC1-7）。** 读到 `Absent` 的条目在每个族里另有上限（`SnapshotOptions.maxAbsent`，默认 256），只互相淘汰。客户端随意给出的 app id 再多，也淘汰不掉存在的文档。在途的加载不计入任何一个上限，由存储读取超时约束。
+> - **F5 包括 `VirtualMachineError`（`SNP-8`，RC1-43）。** 编译以 `StackOverflowError` 一类错误结束时，`compileAndInstall` 先把这次修订装为失败（`UNCOMPILABLE`，下一轮重新编译），再重新抛出；此前保留的是上一个修订。
+> - **失效通知测试的竞态与 `SharedLock`。** 两者在 #1200 中查清，不是失效通知丢失，也不是 CoSec 阻塞了事件循环，见 [RC 审查记录](../security/8.0-rc-review.md) 的 Observations for batch D。
 
 ### 4.5 陈旧时间有上界
 
