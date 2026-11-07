@@ -58,8 +58,9 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   `(0)` 的文档上决策：它需要 `(0)` 上的 `cosec:simulate` 或 `cosec:explain`，而 alpha.2 检查的是请求指定的租户；指定其他
   租户的请求是 `400`。要模拟匿名请求，请写 `"tenant": "(0)"`，由能在那里模拟的主体来做。
 - **`simulate` 与 `explain` 拒绝执法所拒绝的**（`CTL-3`、`PIP-12`）：以不同的值发送其文档所读取的头的请求是 `400`，而之前
-  会被决策（DENY 读它时为 Indeterminate）；超过请求路径上限（2,048 个字符，每段 256 个）的 `resource` 是 `400`，`analyze`
-  也一样。
+  会被决策（DENY 读它时为 Indeterminate）；`http` 资源与请求路径经同一个规范化：执法拒绝的路径（点号段、格式错误的转义、
+  超过 2,048 个字符或每段 256 个）是 `400`，路径参数在决策前去掉，而之前按原样决策；超过这些长度的类型化 id 是 `400`。
+  `analyze` 的资源也一样。
 - **控制 API 的 `400` 说得更少，存储的值解码失败是 `500`**（RC1-39）。`400` 的 `detail` 是控制面自己的某项检查，或者点名
   解析不了的字段；它不再带解析器或异常的消息（`No enum constant ...`、`For input string ...`、JSON 解析器的消息），解析
   不了的时间（`expiresAt`、`time`）是 `400`，而之前是 `500`。存储的文档或记录解码失败是不带详情的 `500`，而之前是带有存储
@@ -68,8 +69,8 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   而之前它能编译，并能匹配一个代理对的中间，Spring 永远不会这样匹配。之前发布的含有它的文档，在升级后的实例上失败即拒绝。
 - **CoSec 的 Redis 模板从主节点读**（RC1-47）：通过 `spring.data.redis.lettuce.read-from` 或客户端定制器从副本读的
   `LettuceConnectionFactory` 会让启动失败（[Redis 要求](./storage.md#redis-requirements)）。另外，Redis 可能驱逐快照时
-  `cosecSnapshot` 为 `DOWN`，每个 `revalidate-interval` 至多重读一次；对拒绝 `INFO` 的 Redis 设置了 `eviction-check: warn`
-  时它会一直如此，那里请不要把它放进 readiness 组。
+  `cosecSnapshot` 为 `DOWN`，每个 `revalidate-interval` 至多重读一次。读不到策略时，`eviction-check: fail` 下为 `DOWN`，
+  `warn` 下为 `UP`，详情 `eviction: unknown`。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}

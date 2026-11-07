@@ -151,7 +151,8 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 - **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
   `DOWN`，细节为 `platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。就绪状态遵循同样的条件
   （[就绪](./deployment.md#readiness)）。在 Redis 上，Redis 可能驱逐快照时它也是 `DOWN`，并带 `eviction` 细节：它每个
-  `revalidate-interval` 至多一次地再次读取每个节点的 `maxmemory-policy`，就绪状态不读（[Redis 要求](./storage.md#redis-requirements)）。
+  `revalidate-interval` 至多一次地再次读取每个节点的 `maxmemory-policy`，就绪状态不读。读不到策略时，`eviction-check: fail`
+  下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`（[Redis 要求](./storage.md#redis-requirements)）。
 - **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、

@@ -1,0 +1,113 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-41 (coordinator 2026-11-07): a path enforcement accepts is decided as normalized: /admin;v=2/1 as /admin/1, its path parameter removed, as a request to it would be.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "admin",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/admin/{id}"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "admin",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "admin"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//admin/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//admin;v=2/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//admin;v=2/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by admin",
+      "Permit by admin",
+      "Permit by admin at 1/-/1"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

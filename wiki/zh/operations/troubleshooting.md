@@ -236,9 +236,9 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 上面这一行：有人执行了 `CONFIG SET maxmemory-policy`、Redis 切换到了另一种配置的节点，或某个节点以另一份配置重启。请求照常
 决策；Redis 驱逐的应用文档或租户文档，会被下一个加载它的实例读成不存在。在每个节点上重新设置 `noeviction`；指示器在下一次
 读取时变回 `UP`，并以 `INFO` 记录 `Redis no longer evicts CoSec's policy snapshot.`。详情是 `Cannot tell whether Redis may
-evict ...` 表示读不到策略（`INFO` 被拒绝或失败）：对拒绝 `INFO` 的 Redis 设置了
-[`eviction-check=warn`](./configuration.md#snapshot) 时，指示器一直是 `DOWN`，那里请不要把它放进 readiness 组，或者
-允许 `INFO`（[Redis 要求](./storage.md#redis-requirements)）。
+evict ...` 表示在 `eviction-check=fail` 下读不到策略（`INFO` 被拒绝或失败）：允许 `INFO`（`+info`），或者在你自己已经设置了
+`noeviction` 时设置 [`eviction-check=warn`](./configuration.md#snapshot)；在 `warn` 下，读不到的策略为 `UP`，详情为
+`eviction: unknown`，并以 `WARN` 记录一次（[Redis 要求](./storage.md#redis-requirements)）。
 
 ## 条件无法编译 {#a-condition-does-not-compile}
 
@@ -446,7 +446,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 |---|---|---|
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
 | `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃撤销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
-| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；`resource` 超过请求路径上限（2,048 个字符，每段 256 个）的请求，`analyze` 也拒绝这种资源。 | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
+| `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。 | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。 | |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
 | `409` `change-unreadable` | 该变更的记录由之前的构建为一个不能作为应用 id 的应用写入（空白、`*`、含控制字符或超过 128 个字符）；控制面所在的主机在每一轮维护中记录 `Change [<id>] is skipped: it is of [<key>], which no document key can name`。它既无法查看也无法放弃。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-2)。 |

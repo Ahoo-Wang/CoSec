@@ -44,6 +44,8 @@ object GuardAllowlist {
             "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none",
             "cocache:StoredFormatTest#a duplicate key fails every stored format",
             "control:ControlHttpTest#a body with a duplicate key is refused",
+            "control:ControlHttpTest#a field that does not parse is a 400 that names it, never an exception's message",
+            "control:ControlHttpTest#a stored document that does not decode is a 500 without detail, logged with its key",
             "cocache:ReactiveRedisRateLimiterTest#aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold",
             "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
             "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",

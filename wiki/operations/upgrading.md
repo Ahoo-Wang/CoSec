@@ -237,7 +237,10 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   another tenant is `400`. Simulate an anonymous request with `"tenant": "(0)"`, by a principal that may simulate there.
 - **`simulate` and `explain` refuse what enforcement refuses** (`CTL-3`, `PIP-12`): a request that sends a header its
   documents read with different values is `400`, where it was decided (Indeterminate for a DENY on it), and a
-  `resource` longer than a request path may be (2,048 characters, 256 per segment) is `400`, for `analyze` too.
+  `http` resource goes through the path normalization a request's path does: a path enforcement refuses (a dot segment,
+  a malformed escape, over 2,048 characters or 256 per segment) is `400`, and path parameters are removed before
+  deciding, where the path was decided as written; a typed id over those lengths is `400`. `analyze` takes its resource
+  the same way.
 - **The control API's `400` says less, and a stored value that does not decode is `500`** (RC1-39). A `400`'s `detail`
   is one of the control plane's own checks, or names the field that does not parse; it no longer carries a parser's or
   an exception's message (`No enum constant ...`, `For input string ...`, a JSON parser's), and a time that does not
@@ -250,8 +253,8 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
 - **CoSec's Redis templates read from the primary** (RC1-47): a `LettuceConnectionFactory` that reads from replicas,
   by `spring.data.redis.lettuce.read-from` or a client customizer, fails startup
   ([Redis requirements](./storage.md#redis-requirements)). And `cosecSnapshot` is `DOWN` while Redis may evict the
-  snapshot, read again at most once every `revalidate-interval`; with `eviction-check: warn` for a Redis that denies
-  `INFO`, that is for good, so keep it out of the readiness group there.
+  snapshot, read again at most once every `revalidate-interval`. A policy it cannot read is `DOWN` under
+  `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

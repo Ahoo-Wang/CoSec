@@ -81,8 +81,8 @@ Startup fails, on purpose, when:
   different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
   `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning). The `cosecSnapshot` health
-  indicator reads the policy again while the service runs and is `DOWN` while Redis may evict, so with `warn` keep it
-  out of the readiness group.
+  indicator reads the policy again while the service runs and is `DOWN` while Redis may evict; with `warn`, a policy it
+  cannot read is `UP` with `eviction: unknown`.
 - **Redis read from replicas.** CoSec's Redis templates must read the primary: `spring.data.redis.lettuce.read-from`
   (or a client customizer's `ReadFrom`) other than `upstream` fails startup.
 - **API keys with `store=redis` and no `ReactiveStringRedisTemplate`.**

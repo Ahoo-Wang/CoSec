@@ -161,8 +161,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `prewarmed`. It is also `DOWN` with an `eviction` detail while Redis may evict the snapshot (it reads
   `maxmemory-policy` again at most once per `revalidate-interval`, and logs `ERROR` from `EvictionPolicyMonitor` when
   that starts): requests are still decided, but set `noeviction` again before an app or tenant document is evicted.
-  `Cannot tell whether Redis may evict` there, with `eviction-check=warn` for a Redis that denies `INFO`, stays `DOWN`:
-  keep `cosecSnapshot` out of the readiness group on such a Redis.
+  `Cannot tell whether Redis may evict` there is `eviction-check=fail` on a Redis that denies `INFO`: allow `+info`, or
+  set `warn` when the operator has set `noeviction`, under which it is `UP` with `eviction: unknown`.
   https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshot-is-down-with-an-eviction-detail
 - A document the request needs does not decode or compile: its new revision is installed as failed
   (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
@@ -307,7 +307,8 @@ plane's own checks or names the field that does not parse, never an exception's 
 logged at `INFO` (`Control API <method> <path> (request <requestId>) is 400: <reason>`). `simulate` and `explain` are
 authorized on the tenant that decides the request, `(0)` for one without a `principal` (an anonymous request that
 names another tenant is 400), and refuse with 400 a header their documents read sent with different values, as
-enforcement does, and a `resource` longer than a request path (2,048 characters, 256 per segment). A 429 on the
+enforcement does, and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or
+256 per segment; path parameters are removed as there) or a typed id over those lengths. A 429 on the
 control API is the pipeline's: a platform rate limit rule on its paths (per tenant with `key: "scope.tenant"`). A
 request without a permitted credential is 401 before any of its body is read. Large bodies on WebFlux need
 `spring.codec.max-in-memory-size`; on WebMvc a body over `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the

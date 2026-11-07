@@ -371,6 +371,58 @@ class ControlPlaneTest {
     }
 
     /**
+     * RC1-41, coordinator 2026-11-07 (`CTL-3`): an `http` resource goes through the path normalization enforcement
+     * applies. A path enforcement answers 400 for is refused; one it normalizes is decided normalized, its path
+     * parameters removed, as a request to it would be.
+     */
+    @Test
+    fun `an http resource is normalized as enforcement normalizes a path`() = runBlocking<Unit> {
+        val initech = SnapshotKey.Tenant("initech")
+        bootstrap(
+            initech,
+            listOf(allow("admin", action = "http:GET", resource = "http:path:/admin/{id}")),
+            listOf(
+                Binding(BindingId("admin"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("admin"))
+            ),
+        )
+        val request = bob("read", TenantId("initech"))
+            .copy(roles = emptyList(), app = "", space = "", action = Action("http", "GET"))
+        fun at(path: String) = request.copy(resource = Resource("http", path, emptyMap()))
+        val refusedPaths = listOf(
+            "/public/../admin/1",
+            "/public/%2e%2e/admin/1",
+            "/admin/..;x/1",
+            "/admin\\..\\1",
+            "/admin/%zz"
+        )
+        for (path in refusedPaths) {
+            refused { plane.simulate(plato, at(path)) }.assert().describedAs(path).isEqualTo(400)
+            refused { plane.explain(plato, at(path)) }.assert().describedAs(path).isEqualTo(400)
+            val query = AccessQuery(
+                TenantId("initech"),
+                null,
+                null,
+                Action("http", "GET"),
+                Resource("http", path, emptyMap())
+            )
+            refused { plane.analyze(plato, query) }.assert().describedAs(path).isEqualTo(400)
+        }
+        plane.simulate(plato, at("/admin/1")).enforced.decision.assert().isEqualTo("Permit")
+        // As a request to /admin;v=2/1 is decided on /admin/1.
+        plane.simulate(plato, at("/admin;v=2/1")).enforced.decision.assert().isEqualTo("Permit")
+        plane.analyze(
+            plato,
+            AccessQuery(
+                TenantId("initech"),
+                null,
+                null,
+                Action("http", "GET"),
+                Resource("http", "/admin;v=2/1", emptyMap())
+            ),
+        ).allows.map { it.binding }.assert().containsExactly("admin")
+    }
+
+    /**
      * RC1-41: `simulate`, `explain` and `analyze` decode and compile a stored document once for its content, in one
      * cache; a candidate, which is no stored content, is compiled once per call, and a head that moves is compiled again.
      */

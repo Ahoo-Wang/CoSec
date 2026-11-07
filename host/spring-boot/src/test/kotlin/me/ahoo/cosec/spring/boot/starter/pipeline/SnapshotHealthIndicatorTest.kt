@@ -120,6 +120,58 @@ class SnapshotHealthIndicatorTest {
         ).health().status.assert().isEqualTo(Status.UP)
     }
 
+    /**
+     * RC1-47 (a), coordinator 2026-11-07: under `eviction-check: warn` the operator accepted at startup a policy that
+     * cannot be read (a Redis that denies `INFO`), so it is UP with `eviction: unknown`, logged once at WARN; a policy
+     * that may evict is DOWN and logged at ERROR in this mode too.
+     */
+    @Test
+    fun `under warn a policy that cannot be read is up and unknown, one that may evict is down`() {
+        var now = 0L
+        val unreadable = EvictionPolicyCheck.Reading.Unreadable("INFO memory failed or is not allowed")
+        var reading: EvictionPolicyCheck.Reading = unreadable
+        val monitor = EvictionPolicyMonitor(
+            { reading },
+            Duration.ofSeconds(1),
+            RuntimeAuthorizationProperties.EvictionCheck.WARN,
+        ) { now }
+        val indicator = SnapshotHealthIndicator(source(DocumentState.Present(Any()), true), monitor)
+        val logger = LoggerFactory.getLogger(EvictionPolicyMonitor::class.java) as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            repeat(2) {
+                indicator.health().apply {
+                    status.assert().isEqualTo(Status.UP)
+                    details["eviction"].assert().isEqualTo("unknown")
+                }
+                now += Duration.ofSeconds(1).toNanos()
+            }
+            reading = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "volatile-lru"))
+            indicator.health().apply {
+                status.assert().isEqualTo(Status.DOWN)
+                details["eviction"].toString().assert().contains("volatile-lru")
+            }
+            logged.list.filter { it.level == Level.WARN }.assert().hasSize(1)
+            logged.list.filter { it.level == Level.ERROR }.map { it.formattedMessage }.assert().hasSize(1)
+                .allMatch { it.contains("volatile-lru") }
+        } finally {
+            logger.detachAppender(logged)
+        }
+        // Under fail, the same unreadable policy is DOWN.
+        SnapshotHealthIndicator(
+            source(DocumentState.Present(Any()), true),
+            EvictionPolicyMonitor(
+                { unreadable },
+                Duration.ofSeconds(1),
+                RuntimeAuthorizationProperties.EvictionCheck.FAIL
+            ),
+        ).health().apply {
+            status.assert().isEqualTo(Status.DOWN)
+            details["eviction"].toString().assert().contains("Cannot tell")
+        }
+    }
+
     @Test
     fun `a ready snapshot accepts at once, and refusals or its own events are ignored`() {
         val publisher = mockk<ApplicationEventPublisher>(relaxed = true)

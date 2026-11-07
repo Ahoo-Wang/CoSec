@@ -33,6 +33,7 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding
@@ -266,13 +267,15 @@ class DefaultControlPlane(
     override suspend fun get(operator: Operator, change: ChangeId): ChangeRequest = changes.visible(operator, change)
 
     override suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId?): Simulation {
-        val tenant = decidingTenant(operator, request, ControlActions.SIMULATE)
-        val scope = resolved(request) ?: return rejected(request)
+        val decidable = decidable(operator, request, ControlActions.SIMULATE)
+        val tenant = decidable.tenant
+        val simulated = decidable.request
+        val scope = resolved(simulated) ?: return rejected(simulated)
         // The tenant's document first: with the scope, it decides whether the app's is read, as enforcement decides.
         val tenantHead = held(tenant)
         val keys = simulator.keys(scope, tenantHead?.document)
         val heads = keys.associateWith { if (it == tenant) tenantHead else held(it) }
-        val enforced = simulator.decide(request, scope, documents(heads))
+        val enforced = simulator.decide(simulated, scope, documents(heads))
         val proposed = candidate?.let { id ->
             val change = get(operator, id)
             authority.require(operator, change.key, ControlActions.SIMULATE)
@@ -288,7 +291,7 @@ class DefaultControlPlane(
             val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
             // The candidate is no stored content: compiled once, here; the heads come from the cache.
             val proposedHeads = fetched.associateWith { heads[it] ?: held(it) } + (change.key to Held(document, null))
-            simulator.decide(request, scope, documents(proposedHeads))
+            simulator.decide(simulated, scope, documents(proposedHeads))
         }
         val redaction = redaction(operator, (enforced.read + proposed?.read.orEmpty()).distinct())
         return Simulation(
@@ -301,10 +304,12 @@ class DefaultControlPlane(
     }
 
     override suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion?): Explanation {
-        val tenant = decidingTenant(operator, request, ControlActions.EXPLAIN)
-        val scope = resolved(request)
+        val decidable = decidable(operator, request, ControlActions.EXPLAIN)
+        val tenant = decidable.tenant
+        val explained = decidable.request
+        val scope = resolved(explained)
         if (scope == null) {
-            val rejected = rejected(request)
+            val rejected = rejected(explained)
             return Explanation(at ?: SnapshotVersion(0, null, 0), rejected.enforced, null)
         }
         // The tenant's document at the revision decided on first: it decides, by enforcement's rule, whether the app's
@@ -323,7 +328,7 @@ class DefaultControlPlane(
         val keys = simulator.keys(scope, tenantDocument?.document)
         val documents = keys.associateWith { if (it == tenant) tenantDocument else documentAt(it) }
         // The revisions the view read (R2-5): an app's only when it took the app's document.
-        val decided = simulator.decide(request, scope, documents(documents))
+        val decided = simulator.decide(explained, scope, documents(documents))
         val redaction = redaction(operator, decided.read)
         return Explanation(
             decided.version,
@@ -332,17 +337,16 @@ class DefaultControlPlane(
         )
     }
 
+    /** A simulated or explained request as enforcement would decide it, and the tenant whose document decides it. */
+    private class Decidable(val tenant: SnapshotKey.Tenant, val request: SimulatedRequest)
+
     /**
-     * The tenant whose document decides [request], once [operator] may [action] on it (RC1-40): the one the scope
-     * resolves to, never one the request only names. A request without a principal is decided on tenant `(0)`, so
-     * naming another tenant is a 400, after the authorization, as enforcement would decide it on `(0)`. Its resource is
-     * held to a request path's bounds (RC1-41, review L5 of #1200).
+     * [request] as enforcement would decide it, once [operator] may [action] on the tenant whose document decides it
+     * (RC1-40): the one the scope resolves to, never one the request only names. A request without a principal is
+     * decided on tenant `(0)`, so naming another tenant is a 400, after the authorization, as enforcement would decide
+     * it on `(0)`. Its resource is the one enforcement would decide on ([enforceable], RC1-41).
      */
-    private suspend fun decidingTenant(
-        operator: Operator,
-        request: SimulatedRequest,
-        action: Action
-    ): SnapshotKey.Tenant {
+    private suspend fun decidable(operator: Operator, request: SimulatedRequest, action: Action): Decidable {
         val tenant = simulator.tenantOf(request)
         val key = SnapshotKey.Tenant(tenant.value)
         authority.require(operator, key, action)
@@ -353,19 +357,29 @@ class DefaultControlPlane(
                     "it names no other tenant."
             )
         }
-        requireBounded(request.resource)
-        return key
+        return Decidable(key, request.copy(resource = enforceable(request.resource)))
     }
 
-    /** RC1-41, review L5 of #1200: what no request path can be is not decided either; its globs would cost more. */
-    private fun requireBounded(resource: Resource) {
-        if (!PathNormalizer.withinBounds(resource.id)) {
-            throw ChangeRejectedException(
-                BAD_REQUEST,
-                "The resource is longer than a request's path may be: ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
-                    "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
-            )
+    /**
+     * [resource] as enforcement would decide it (RC1-41, review L5 of #1200): an `http` path goes through the
+     * normalization every request's path does ([PathNormalizer.normalize]), which a path enforcement answers 400 for (a
+     * dot segment after decoding, a malformed escape, over the length bounds) fails here too, and its path parameters
+     * are removed as there. A typed id, which no request carries as written, is held to the same length bounds: what no
+     * request path can be is not decided either, as its globs would cost more than any request's.
+     */
+    private fun enforceable(resource: Resource): Resource {
+        val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+            PathNormalizer.normalize(resource.id)
+        } else {
+            resource.id.takeIf { PathNormalizer.withinBounds(it) }
         }
+        id ?: throw ChangeRejectedException(
+            BAD_REQUEST,
+            "The resource is not one enforcement decides: an http path is refused for a dot segment, a malformed " +
+                "escape or its length, as a request's is, and any resource is at most " +
+                "${PathNormalizer.MAX_PATH_LENGTH} characters, ${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
+        )
+        return if (id == resource.id) resource else Resource(resource.type, id, resource.attributes)
     }
 
     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
@@ -391,7 +405,7 @@ class DefaultControlPlane(
     override suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport {
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
-        requireBounded(query.resource)
+        val resource = enforceable(query.resource)
         val app = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
             // The data plane never reads such an app (SCP-7): refused, and not echoed, since it may hold control characters.
             if (!SnapshotKey.App.isValidAppId(app)) {
@@ -402,7 +416,7 @@ class DefaultControlPlane(
         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { entry(it) }
-        val found = AccessFindings(query, ResourceTarget(query.resource))
+        val found = AccessFindings(query, ResourceTarget(resource))
         for (key in readable) {
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
             val entry = (if (key == SnapshotKey.Platform) platform else entry(key)) ?: continue

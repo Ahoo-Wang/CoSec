@@ -138,6 +138,7 @@ class CoSecSnapshotAutoConfiguration {
         ): EvictionPolicyMonitor = EvictionPolicyMonitor(
             { EvictionPolicyCheck.read(backend) },
             properties.snapshot.revalidateInterval,
+            properties.snapshot.evictionCheck,
         )
     }
 
@@ -425,22 +426,32 @@ internal object ReplicaReads {
 
 /**
  * The eviction policy of the Redis behind the policy snapshot, [read] again at most once every [interval] (RC1-47, `SNP-3`):
- * what [SnapshotHealthIndicator] reports. A reading that may evict is logged at ERROR when it becomes so, not on every
- * call; one that no longer may, at INFO. Only the health indicator asks, so no request waits on Redis for it.
+ * what [SnapshotHealthIndicator] reports. A policy that may evict is [Status.down] whatever [mode] is, and logged at ERROR
+ * when it becomes so, not on every call. One that cannot be read is down under [mode] `fail`; under `warn` the operator
+ * accepted that at startup, so it is up, as `unknown`. Only the health indicator asks, so no request waits on Redis for it.
  */
 class EvictionPolicyMonitor internal constructor(
     private val read: () -> EvictionPolicyCheck.Reading,
     private val interval: Duration,
+    private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
+    /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
+    class Status internal constructor(val down: Boolean, val detail: String?) {
+        companion object {
+            val OK: Status = Status(false, null)
+            val UNKNOWN: Status = Status(false, "unknown")
+        }
+    }
+
     private val log = KotlinLogging.logger {}
     private var reading: EvictionPolicyCheck.Reading? = null
     private var readAt = 0L
-    private var reported: String? = null
+    private var reported: Status = Status.OK
 
-    /** Why Redis may evict the policy snapshot now, or null when it may not. */
+    /** What is known now of Redis's eviction of the snapshot. */
     @Synchronized
-    fun problem(): String? {
+    fun status(): Status {
         val now = nanoTime()
         val last = reading
         val current = if (last == null || now - readAt >= interval.toNanos()) {
@@ -452,18 +463,32 @@ class EvictionPolicyMonitor internal constructor(
             last
         }
         val problem = EvictionPolicyCheck.problem(current)
-        if (problem != reported) {
-            if (problem != null) {
-                log.error {
-                    "$problem: an instance that loads an app or tenant document Redis evicted reads it as absent, and " +
-                        "its DENY statements silently stop applying. Set maxmemory-policy to ${EvictionPolicyCheck.NOEVICTION}."
-                }
-            } else if (reported != null) {
-                log.info { "Redis no longer evicts CoSec's policy snapshot." }
-            }
-            reported = problem
+        val status = when {
+            problem == null -> Status.OK
+            current is EvictionPolicyCheck.Reading.Unreadable &&
+                mode == RuntimeAuthorizationProperties.EvictionCheck.WARN -> Status.UNKNOWN
+            else -> Status(true, problem)
         }
-        return problem
+        if (status.detail != reported.detail) {
+            report(status)
+        }
+        reported = status
+        return status
+    }
+
+    private fun report(status: Status) {
+        when {
+            status.down -> log.error {
+                "${status.detail}: an instance that loads an app or tenant document Redis evicted reads it as absent, " +
+                    "and its DENY statements silently stop applying. Set maxmemory-policy to " +
+                    "${EvictionPolicyCheck.NOEVICTION}."
+            }
+            status === Status.UNKNOWN -> log.warn {
+                "Cannot tell whether Redis may evict CoSec's policy snapshot; reported as unknown, as " +
+                    "${RuntimeAuthorizationProperties.PREFIX}.snapshot.eviction-check=warn accepts."
+            }
+            else -> log.info { "Redis no longer evicts CoSec's policy snapshot." }
+        }
     }
 }
 

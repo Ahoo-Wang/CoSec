@@ -929,7 +929,18 @@ public abstract interface annotation class me/ahoo/cosec/spring/boot/starter/pip
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor {
-	public final fun problem ()Ljava/lang/String;
+	public final fun status ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status {
+	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status$Companion;
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getDown ()Z
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status$Companion {
+	public final fun getOK ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
+	public final fun getUNKNOWN ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/GatewayIdentityProperties {

@@ -105,10 +105,11 @@ contain `:`, so a key names one document only.
   `WARN` that begins with `!!!` ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-eviction-check)).
 - **Checked again while it runs.** The `cosecSnapshot` health indicator reads every node's `maxmemory-policy` again,
   at most once every `revalidate-interval`, so a later `CONFIG SET maxmemory-policy`, a failover to a node set up
-  otherwise or a restart is seen. While a node may evict, or the policy cannot be read, it reports `DOWN` with an
-  `eviction` detail that says why, and logs an `ERROR` when that starts, whatever `eviction-check` let startup do
-  ([Troubleshooting](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)). Requests are not refused for
-  it: an installed document stays, and one that is lost fails closed on every instance that has it.
+  otherwise or a restart is seen. While a node may evict, it reports `DOWN` with an `eviction` detail that says why,
+  and logs an `ERROR` when that starts, with either `eviction-check`
+  ([Troubleshooting](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)). A policy that cannot be read
+  is `DOWN` too under `fail`; under `warn`, which accepted that at startup, it is `UP` with `eviction: unknown`. Requests
+  are not refused for it: an installed document stays, and one that is lost fails closed on every instance that has it.
 - **Reads from the primary.** Redis is the store of record, and a replica lags it: a read that alternates between the
   two can take a revoked API key, or a document just published over, for the current one. CoCache's own client, which
   reads the documents, the control-plane records and the revocations, connects to the node or the cluster's primaries

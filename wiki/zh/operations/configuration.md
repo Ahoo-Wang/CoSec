@@ -156,7 +156,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。 |
-| `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。无论哪种，`cosecSnapshot` 健康指示器都会每个 `revalidate-interval` 至多一次地再次读取该策略，Redis 可能驱逐时为 `DOWN`（[故障排查](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)）。 |
+| `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。无论哪种，`cosecSnapshot` 健康指示器都会每个 `revalidate-interval` 至多一次地再次读取该策略，Redis 可能驱逐时为 `DOWN`；读不到策略时，`fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`（[故障排查](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)）。 |
 
 ## 影子窗口 {#shadow-windows}
 

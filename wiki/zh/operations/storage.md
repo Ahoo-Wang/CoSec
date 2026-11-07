@@ -86,9 +86,10 @@ key 都在它之下（`SNP-9`）。
   `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
 - **运行期间再次检查。** `cosecSnapshot` 健康指示器会再次读取每个节点的 `maxmemory-policy`，每个
   `revalidate-interval` 至多一次，因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现。
-  只要某个节点可能驱逐、或者读不到策略，它就报告 `DOWN`，并在 `eviction` 详情里说明原因，开始时记录一条 `ERROR`；
-  不论 `eviction-check` 当初让启动怎样处理（[故障排查](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)）。
-  请求不会因此被拒绝：已装入的文档保持不变，丢失的文档在每个持有它的实例上都失败即拒绝。
+  只要某个节点可能驱逐，它就报告 `DOWN`，并在 `eviction` 详情里说明原因，开始时记录一条 `ERROR`；两种 `eviction-check`
+  都是如此（[故障排查](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)）。读不到策略时，`fail` 下也是
+  `DOWN`；`warn` 在启动时已经接受了这一点，所以是 `UP`，详情为 `eviction: unknown`。请求不会因此被拒绝：已装入的文档保持
+  不变，丢失的文档在每个持有它的实例上都失败即拒绝。
 - **从主节点读。** Redis 是权威存储，副本落后于它：在两者之间交替读取，可能把一个已撤销的 API key、或一份刚被覆盖发布的
   文档当成当前的。CoCache 自己的客户端读取文档、控制面记录和撤销记录，它连接 `spring.data.redis.*` 指定的节点或集群的
   各个主节点，不设置 `ReadFrom`。CoSec 使用的 Redis 模板（API key、限流器、OAuth 状态）背后的 Lettuce 客户端也必须从

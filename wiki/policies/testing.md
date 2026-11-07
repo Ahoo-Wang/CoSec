@@ -113,7 +113,7 @@ change's candidate too:
 | `roles`, `policies` | The memberships, as token claims write them: `role` or `role@space`, and attached policy ids. |
 | `app`, `space` | The declared scope; the space is checked against the roles as on the data plane. |
 | `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). |
-| `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. At most 2,048 characters, 256 per `/` segment, as a request path is. |
+| `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. An `http` path is normalized as a request's path is: one enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per `/` segment) is `400`, and path parameters (`;v=2`) are removed. A typed id is held to the same lengths. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
 | `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
 
@@ -135,7 +135,8 @@ request to read decisions on `(0)`'s document.
 
 A request that sends a header the documents it reads read (in a condition, a boundary or a rate limit key) twice with
 different values is `400`, as enforcement refuses it before deciding (`PIP-12`); identical repeats are one value. The
-answer does not name the header. A `resource` longer than a request path may be is `400` too.
+answer does not name the header. A `resource` enforcement would refuse is `400` too, and `analyze` takes its resource the
+same way.
 
 A simulation has no token attributes and fetches no external attributes: a statement that reads `ext.*` finds it
 missing and follows its `onMissing`, so it is usually Indeterminate here.

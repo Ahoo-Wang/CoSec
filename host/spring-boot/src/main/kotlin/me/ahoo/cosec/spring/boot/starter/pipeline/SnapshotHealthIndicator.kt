@@ -24,8 +24,9 @@ import org.springframework.boot.health.contributor.HealthIndicator
  *
  * On Redis it is DOWN too while Redis may evict the policy snapshot ([eviction], RC1-47): its eviction policy is read again
  * at most once every `revalidate-interval`, so a later `CONFIG SET maxmemory-policy` or a failover to a node set up
- * otherwise is seen, whatever `eviction-check` let startup do. Requests are not refused for it: a document already
- * installed stays, and one that is lost fails closed on every instance that has seen it.
+ * otherwise is seen, with either `eviction-check`. A policy that cannot be read is DOWN under `fail`, and UP with the
+ * detail `eviction: unknown` under `warn`, which accepted it at startup. Requests are not refused for it: a document
+ * already installed stays, and one that is lost fails closed on every instance that has seen it.
  */
 class SnapshotHealthIndicator @JvmOverloads constructor(
     private val source: SnapshotSource<*, *>,
@@ -38,10 +39,11 @@ class SnapshotHealthIndicator @JvmOverloads constructor(
             DocumentState.Absent -> "absent"
             null -> "loading"
         }
-        val evicting = eviction?.problem()
-        val builder = if (source.isPrewarmed && platform == "installed" && evicting == null) Health.up() else Health.down()
+        val evicting = eviction?.status()
+        val up = source.isPrewarmed && platform == "installed" && evicting?.down != true
+        val builder = if (up) Health.up() else Health.down()
         builder.withDetail("platform", platform).withDetail("prewarmed", source.isPrewarmed)
-        evicting?.let { builder.withDetail("eviction", it) }
+        evicting?.detail?.let { builder.withDetail("eviction", it) }
         return builder.build()
     }
 }
