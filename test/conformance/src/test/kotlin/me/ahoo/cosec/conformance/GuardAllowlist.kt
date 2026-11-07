@@ -47,6 +47,7 @@ object GuardAllowlist {
             "cocache:ReactiveRedisRateLimiterTest#aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold",
             "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
             "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",
+            "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster",
         ),
         "startup" to setOf(
             "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
@@ -76,6 +77,8 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#revalidationAsksTheStoreNeverALocalCopy",
             "runtime:SnapshotRevalidationTest#aPeriodicPassNeverOverlapsAnotherAndTheOneItOwesFollowsIt",
             "runtime:SnapshotRevalidationTest#aPassHeldOnlyByACompilationDoesNotHoldBackTheNext",
+            "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
+            "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
             "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
             "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",

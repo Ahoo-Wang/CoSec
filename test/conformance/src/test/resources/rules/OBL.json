@@ -36,12 +36,13 @@
     {
       "id": "OBL-4",
       "source": "RFC 0006 §8.4; #1229",
-      "statement": "The Redis rate limiter keeps a bucket's two windows on one Redis Cluster slot, so its script, which reads and counts both atomically, runs on a cluster as on one node: the keys are `<prefix>:{<rule>:<bucket>}:<window>`, differing only after the hash tag, and a key prefix whose hash tag is empty, or a rule id that begins with `}`, is refused. Different buckets still hash to different slots.",
+      "statement": "The Redis rate limiter keeps a bucket's two windows on one Redis Cluster slot, so its script, which reads and counts both atomically, runs on a cluster as on one node: the keys are `<prefix>:{<rule>:<bucket>}:<window>`, differing only after the hash tag. Either way of emptying that tag is refused: a key prefix whose first `{` is immediately followed by `}` when the limiter is built, and a rule id that begins with `}` when it counts, as a failure of the limiter. Different buckets spread over the slots, unless the key prefix carries a hash tag of its own.",
       "level": "build",
       "guards": [
         "cocache:ReactiveRedisRateLimiterTest#aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold",
         "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
-        "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused"
+        "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",
+        "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster"
       ],
       "pending": null
     }
