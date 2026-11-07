@@ -119,7 +119,9 @@ class ReplicaReadsTest {
                 it.isPrimary = true
             })
             .run { context ->
-                val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                val message = generateSequence(
+                    context.startupFailure
+                ) { it.cause }.mapNotNull { it.message }.joinToString()
                 message.assert().contains("[replicaTemplate] reads from replicas")
             }
     }

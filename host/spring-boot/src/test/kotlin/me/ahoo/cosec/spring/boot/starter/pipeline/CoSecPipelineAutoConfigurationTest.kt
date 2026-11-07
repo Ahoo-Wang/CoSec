@@ -326,7 +326,9 @@ class CoSecPipelineAutoConfigurationTest {
         }
         EvictionPolicyCheck.check(unreadable, RuntimeAuthorizationProperties.EvictionCheck.WARN)
         // Review L3 of #1240: a cluster connection that knows no upstream node reads no policy either.
-        val nodeless = EvictionPolicyCheck.read(mockk<RedisBackend> { every { maxmemoryPolicies() } returns emptyMap() })
+        val nodeless = EvictionPolicyCheck.read(
+            mockk<RedisBackend> { every { maxmemoryPolicies() } returns emptyMap() }
+        )
         nodeless.assert().isEqualTo(EvictionPolicyCheck.Reading.Unreadable("no Redis node answered INFO memory"))
         assertThrows<IllegalStateException> {
             EvictionPolicyCheck.check(nodeless, RuntimeAuthorizationProperties.EvictionCheck.FAIL)

@@ -16,9 +16,9 @@
 package me.ahoo.cosec.spring.boot.starter.control
 
 import io.mockk.mockk
-import kotlinx.coroutines.runBlocking
 import jakarta.servlet.ReadListener
 import jakarta.servlet.ServletInputStream
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
@@ -127,7 +127,9 @@ class ControlRoutesTest {
         }
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.post(PATH))
         exchange.setSecurityContext(anonymous.securityContext)
-        val flux = MockServerRequest.builder().method(HttpMethod.POST).uri(URI.create(PATH)).exchange(exchange).body(body)
+        val flux = MockServerRequest.builder().method(
+            HttpMethod.POST
+        ).uri(URI.create(PATH)).exchange(exchange).body(body)
         val webFlux = CoSecControlRoutesAutoConfiguration.WebFlux().cosecControlRoutes(http, properties)
         webFlux.route(flux).block()!!.handle(flux).block()!!.statusCode().value().assert().isEqualTo(401)
         read.get().assert().isFalse()
@@ -135,7 +137,9 @@ class ControlRoutesTest {
         val servlet = object : MockHttpServletRequest("POST", PATH) {
             override fun getInputStream(): ServletInputStream = throw AssertionError("the body was read")
 
-            override fun getParameterMap(): MutableMap<String, Array<String>> = throw AssertionError("a form body was read")
+            override fun getParameterMap(): MutableMap<String, Array<String>> = throw AssertionError(
+                "a form body was read"
+            )
         }
         servlet.contentType = "application/x-www-form-urlencoded"
         servlet.queryString = "reason=a%20b"
@@ -163,7 +167,9 @@ class ControlRoutesTest {
 
             override fun peek(key: ViewKey): SnapshotView = view(key)
 
-            override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(view(key))
+            override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(
+                view(key)
+            )
         }
         val permitting = object : FlatEngine {
             override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =

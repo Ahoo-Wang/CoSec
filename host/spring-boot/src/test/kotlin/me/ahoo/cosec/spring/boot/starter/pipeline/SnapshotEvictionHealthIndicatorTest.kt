@@ -84,14 +84,23 @@ class SnapshotEvictionHealthIndicatorTest {
             )
             .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
             .withBean(MembershipLoader::class.java, {
-                MembershipLoader { _, _ -> MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())) }
+                MembershipLoader { _, _ ->
+                    MembershipAnswer.Known(
+                        Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
+                    )
+                }
             })
             .run { context ->
                 context.startupFailure.assert().isNull()
                 val indicators = context.getBeansOfType(HealthIndicator::class.java)
-                indicators.keys.assert().contains("cosecSnapshotHealthIndicator", "cosecSnapshotEvictionHealthIndicator")
+                indicators.keys.assert().contains(
+                    "cosecSnapshotHealthIndicator",
+                    "cosecSnapshotEvictionHealthIndicator"
+                )
                 // CoCache's in-memory backend evicts nothing behind its back.
-                indicators.getValue("cosecSnapshotEvictionHealthIndicator").health()!!.status.assert().isEqualTo(Status.UP)
+                indicators.getValue(
+                    "cosecSnapshotEvictionHealthIndicator"
+                ).health()!!.status.assert().isEqualTo(Status.UP)
             }
     }
 
@@ -125,7 +134,8 @@ class SnapshotEvictionHealthIndicatorTest {
     @Test
     fun `under fail a policy that may evict or cannot be read is down, logged when it starts`() {
         var reading: EvictionPolicyCheck.Reading = keeping
-        val monitor = EvictionPolicyMonitor({ reading }, Duration.ofHours(1), RuntimeAuthorizationProperties.EvictionCheck.FAIL)
+        val monitor =
+            EvictionPolicyMonitor({ reading }, Duration.ofHours(1), RuntimeAuthorizationProperties.EvictionCheck.FAIL)
         val indicator = SnapshotEvictionHealthIndicator(monitor)
         logged { appender ->
             monitor.refresh()
@@ -157,7 +167,8 @@ class SnapshotEvictionHealthIndicatorTest {
     @Test
     fun `under warn a policy that cannot be read is up and unknown, one that may evict is down`() {
         var reading: EvictionPolicyCheck.Reading = unreadable
-        val monitor = EvictionPolicyMonitor({ reading }, Duration.ofHours(1), RuntimeAuthorizationProperties.EvictionCheck.WARN)
+        val monitor =
+            EvictionPolicyMonitor({ reading }, Duration.ofHours(1), RuntimeAuthorizationProperties.EvictionCheck.WARN)
         val indicator = SnapshotEvictionHealthIndicator(monitor)
         logged { appender ->
             repeat(2) {
