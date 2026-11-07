@@ -168,17 +168,20 @@ sequenceDiagram
 - **A change reaches every instance at once** through CoCache's invalidation message (steps 2 to 5). The instance
   reads Redis itself, bypassing its local copy, compiles the new revision and installs it. A request in flight keeps
   the revision it started with: one evaluation never mixes revisions of a document.
-- **Lost messages are caught by revalidation** (steps 6 and 7): every
-  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) each installed document is confirmed with a
-  conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. It is the only bound on a
-  change whose invalidation message was lost, so it cannot be turned off and is at most 5 minutes (`SNP-6`). A pass
-  reads four documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the
-  interval, the next starts as soon as it ends, rather than add four more reads each interval. A pass held up only by
-  a compilation that does not end, having confirmed no document for 30 seconds, no longer holds back the next.
+- **Lost messages are caught by revalidation** (steps 6 and 7): a pass starts every
+  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) and confirms each installed document with a
+  conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. The passes are the only
+  bound on a change whose invalidation message was lost: the first pass to reach the document after the change
+  installs it. So they cannot be turned off, and the interval is at most 5 minutes (`SNP-6`). A pass reads four
+  documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the interval, the next
+  starts as soon as it ends, rather than add four more reads each interval. A pass that has confirmed no document for
+  30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
+  pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned.
 - **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
   random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
-- **Lag** is the time since Redis last confirmed a document. While Redis answers it stays below the revalidate
-  interval. Past `lag-warn` (60 seconds) the instance logs
+- **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
+  document, so lag stays below the revalidate interval plus the length of a pass, or below the length of two passes
+  once a pass outlasts the interval. Past `lag-warn` (60 seconds) the instance logs
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past `lag-escalate`
   (5 minutes) `... is stale: not confirmed for <lag>.` at `ERROR`, at most once a minute per document.
 - **Tenants that fail closed on lag.** For the tenants listed in

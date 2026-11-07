@@ -49,10 +49,10 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **处处拒绝重复的 key**（RC1-44、`DOC-5`）。任何含重复 key 的存储格式（API key、成员关系、影子报告、吊销）和控制面请求体都无法读取：存储的值为 `503`，请求体为 `400`。`cosec-migrate` 也拒绝含重复 key 的 7.x 导出和文件。
 - **CoSec 的缓存无论由谁构建都保留其固定项**（RC1-45、`SNP-3`）。`createPolicySnapshotCache` 对任何 spec 都应用权威存储的策略、快照的编解码器，并去掉 key 过滤器、按条目的 TTL 和加载器；`CacheSpecCustomizer` 不再能改变 CoSec 缓存的编解码器、加载器、key 过滤器或按条目的 TTL。
 - **编译时栈溢出的文档失败关闭**（RC1-43、`SNP-8`），与其他编译错误一样，而不再保留之前的修订。
-- **限流在 Redis Cluster 上计数**（#1229、`OBL-4`）。Redis 限流器的计数器移到 `<p>:rate-limiter:{<rule>:<bucket>}:<window>`：hash tag 让一个桶的两个窗口（脚本一起读取它们）在同一个 slot 上。在集群上每次调用都以 `CROSSSLOT` 失败，于是没有 `strictFailure` 的规则被跳过、什么也不限制，有 `strictFailure` 的规则让每个放行的请求返回 `503`。在单个 Redis 上只有 key 变化。**滚动升级期间，两个版本的实例各自在自己的 key 里计数**：每条规则至多两个窗口的时间里，一条规则至多放行两倍的上限。旧 key 在两个窗口后过期。第一个 `{` 后紧跟 `}`（空 hash tag）的 `cosec.key-prefix` 现在会启动失败。
+- **限流在 Redis Cluster 上计数**（#1229、`OBL-4`）。Redis 限流器的计数器移到 `<p>:rate-limiter:{<rule>:<bucket>}:<window>`：hash tag 让一个桶的两个窗口（脚本一起读取它们）在同一个 slot 上。在集群上每次调用都以 `CROSSSLOT` 失败，于是没有 `strictFailure` 的规则被跳过、什么也不限制，有 `strictFailure` 的规则让每个放行的请求返回 `503`。在单个 Redis 上只有 key 变化。**滚动升级期间，两个版本的实例各自在自己的 key 里计数**：新旧版本的实例同时服务期间，以及最后一个旧实例停止后的至多两个窗口内，一条规则至多放行两倍的上限。旧 key 在两个窗口后过期。第一个 `{` 后紧跟 `}`（空 hash tag）的 `cosec.key-prefix` 现在会启动失败。
 - **边界的外部属性会被获取**（#1208、`ATR-8`）。属性计划包含约束这次请求的边界的属性，即它的语句的与它的策略条件的，于是阶段 B 的提供者会被询问这些属性。这样的边界允许的请求过去返回 `503`（`BoundaryUnavailable`），现在放行；每个请求询问提供者的属性可能变多。
 - **检查获取它需要的属性**（#1209、`ATR-8`）。`AuthorizationChecker` 向提供者询问它的动作与资源读取的每个属性，包括阶段 A 的提供者（与阶段 A 一样不带作用域）；过去除非注册了某个阶段 B 的提供者，阶段 A 的属性都取不到（`AttributeUnavailable`）。现在每次需要阶段 A 提供者某个属性的检查都会调用它。
-- **同一时间只有一轮重新确认**（#1215、`SNP-6`）。超过 `revalidate-interval` 的周期确认不再有另一轮叠加上来：下一轮在它结束后立即开始，所以慢的 Redis 同一时间至多收到一个实例的四个重新确认读（[存储](./storage.md#how-instances-read-documents)）。
+- **同一时间只有一轮重新确认**（#1215、`SNP-6`）。超过 `revalidate-interval` 的周期确认不再有另一轮叠加上来：下一轮在它结束后立即开始，所以慢的 Redis 同一时间至多收到一个实例的四个重新确认读。失效消息丢失的变化由第一个到达该文档的一轮装上，这时可能超过一个间隔（[存储](./storage.md#how-instances-read-documents)）。
 - **各种标准数字类型的身份声明**（#1228）。网关转发 `Byte`、`Short`、`Long` 范围内的 `BigInteger`、`Float`，以及 `Double` 能精确表示的 `BigDecimal` 类型的声明，过去这样的请求返回 `500`。头不能精确表示的数字仍以 `500` 拒绝，`NaN` 和无穷大也一样，JSON 没有表示它们的数字。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
 
@@ -279,7 +279,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 放行的请求：第一条耗尽的规则返回 `429`，被拒绝的请求不消耗许可。带 `strictFailure` 的规则在限流器失败时，现在返回 `503` 而不是 `429`（R3）。
 存在 `ReactiveStringRedisTemplate` bean 时由 Redis 限流器计数，否则每个实例各自计数。它的 key 是新的，
 `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`，让一个桶的两个窗口在 Redis Cluster 的同一个 slot 上：7.x 与 8.0
-的实例同时服务期间，两个版本各自计数，每条规则至多两个窗口的时间里，一条规则至多放行两倍的上限。见[限流](../policies/rate-limiting.md)。
+的实例同时服务期间，以及最后一个 7.x 实例停止后的至多两个窗口内，两个版本各自计数，一条规则至多放行两倍的上限。见[限流](../policies/rate-limiting.md)。
 
 ### 响应与状态码 {#responses-and-status-codes}
 
