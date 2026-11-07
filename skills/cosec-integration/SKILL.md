@@ -80,11 +80,12 @@ Startup fails, on purpose, when:
 - **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
   different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
-  `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning). The `cosecSnapshot` health
-  indicator reads the policy again while the service runs and is `DOWN` while Redis may evict; with `warn`, a policy it
-  cannot read is `UP` with `eviction: unknown`.
-- **Redis read from replicas.** CoSec's Redis templates must read the primary: `spring.data.redis.lettuce.read-from`
-  (or a client customizer's `ReadFrom`) other than `upstream` fails startup.
+  `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning). The policy is read again
+  while the service runs: the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict (with `warn`, a
+  policy it cannot read is `UP`, `eviction: unknown`). It is an alert: keep it out of the readiness group.
+- **Redis read from replicas.** The Redis templates CoSec injects (the only or the `@Primary`
+  `StringRedisTemplate` / `ReactiveStringRedisTemplate`) must read the primary: `spring.data.redis.lettuce.read-from`
+  (or a client customizer's `ReadFrom`) other than `upstream` on their factory fails startup.
 - **API keys with `store=redis` and no `ReactiveStringRedisTemplate`.**
 
 Every `cosec.*` property: https://cosec.ahoo.me/operations/configuration. In a CoSec checkout the source of truth is

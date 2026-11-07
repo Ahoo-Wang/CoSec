@@ -22,45 +22,66 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * The stored documents `simulate`, `explain` and `analyze` read, each decoded and compiled once for its content (RC1-41;
- * RFC 0007 §10.3 caches compiled versions): by its key and the digest of what is stored, so a head that moves, or a
- * retained revision, is another entry. An app or tenant document compiles with the platform document's limits and
- * attributes, so its compiled form is kept by the digest of the platform document it compiled with. Bounded by
- * [maxEntries] and by [maxBytes] of stored content, the least recently used leaving first. A candidate, which no digest
- * names, is never kept: [Simulator] compiles it once per call.
+ * RFC 0007 §10.3 caches compiled versions): by its key and the digest of what is stored, so a head that moves is another
+ * entry. An app or tenant document compiles with the platform document's limits and attributes, so its compiled form is
+ * kept by the digest of the platform document it compiled with.
+ *
+ * Bounded by [maxEntries] and by [maxHeap], an estimate of the heap it holds, the least recently used leaving first
+ * (review M2 of #1240): a document weighs its stored size times [DECODED_FACTOR] once decoded, and times
+ * [COMPILED_FACTOR] more for each compiled form it keeps, the factors measured on documents of many policies, many
+ * bindings and many conditions (`DocumentCacheTest`). What `analyze` parses of it is not weighed. A candidate, which no
+ * digest names, is never kept, nor is a retained revision `explain` decides at: [Simulator] compiles those per call.
  */
 internal class DocumentCache(
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
-    private val maxBytes: Long = DEFAULT_MAX_BYTES,
+    private val maxHeap: Long = DEFAULT_MAX_HEAP,
 ) {
     init {
-        require(maxEntries > 0 && maxBytes > 0) { "The cache holds at least one document." }
+        require(maxEntries > 0 && maxHeap > 0) { "The cache holds at least one document." }
     }
 
     private data class Key(val key: SnapshotKey, val digest: SnapshotDigest)
 
     private val entries = LinkedHashMap<Key, Entry>(INITIAL_CAPACITY, LOAD_FACTOR, true)
-    private var bytes = 0L
+    private var heap = 0L
 
-    /** A stored document: [key] at [digest], decoded. */
-    class Entry(val key: SnapshotKey, val digest: SnapshotDigest, val document: PolicyDocument, val size: Int) {
+    /** A stored document: [key] at [digest], decoded, of [size] stored bytes. */
+    inner class Entry internal constructor(
+        val key: SnapshotKey,
+        val digest: SnapshotDigest,
+        val document: PolicyDocument,
+        val size: Int,
+    ) {
         /** Its compiled forms by the platform document's digest they compiled with, at most [VARIANTS]. */
         private val compiled = LinkedHashMap<SnapshotDigest?, Lazy<Result<CompiledDocument>>>()
 
+        /** What it is counted for in [heap], while it is held: guarded by the cache's lock. */
+        internal var weight: Long = size.toLong() * DECODED_FACTOR
+
         /**
          * Its compiled form with the platform document of digest [platform] (null: none), by [compile] the first time.
-         * Concurrent first calls compile once; a compilation that fails is kept as failed, since it fails again.
+         * Concurrent first calls compile once; a compilation that fails is kept as failed, since it fails again. A new
+         * form adds its weight, and one it drops takes it away.
          */
         fun compiled(platform: SnapshotDigest?, compile: () -> CompiledDocument): Result<CompiledDocument> {
+            var added = 0
             val compilation = synchronized(compiled) {
-                compiled.getOrPut(platform) {
-                    lazy(LazyThreadSafetyMode.SYNCHRONIZED) { compiling(compile) }
-                }.also {
-                    if (compiled.size > VARIANTS) compiled.remove(compiled.keys.first())
+                compiled[platform] ?: lazy(LazyThreadSafetyMode.SYNCHRONIZED) { compiling(compile) }.also {
+                    compiled[platform] = it
+                    added++
+                    if (compiled.size > VARIANTS) {
+                        compiled.remove(compiled.keys.first())
+                        added--
+                    }
                 }
+            }
+            if (added != 0) {
+                weigh(this, added.toLong() * size * COMPILED_FACTOR)
             }
             return compilation.value
         }
@@ -75,15 +96,30 @@ internal class DocumentCache(
         /** Its policies by id as `analyze` matches them, the first of an id: each one's patterns parsed once (RC1-41). */
         val analyzed: Map<String, AnalyzedPolicy> by lazy(LazyThreadSafetyMode.PUBLICATION) {
             val policies = LinkedHashMap<String, AnalyzedPolicy>()
-            document.policies.forEach { policies.putIfAbsent(it.id.value, AnalyzedPolicy(it)) }
+            document.policies.forEach { policies.putIfAbsent(it.id.value, AnalyzedPolicy(it, this)) }
             policies
         }
     }
 
-    /** A policy, its statements' action and resource patterns parsed when `analyze` first reaches it. */
-    class AnalyzedPolicy(val definition: PolicyDefinition) {
+    /**
+     * A policy, its statements' action and resource patterns parsed when `analyze` first reaches it. A pattern this
+     * version cannot parse is a stored value it cannot read (review L8 of #1240): a [SnapshotFormatException] naming the
+     * document, which the control API answers 500 and logs, never the caller's 400.
+     */
+    class AnalyzedPolicy internal constructor(
+        val definition: PolicyDefinition,
+        private val entry: DocumentCache.Entry
+    ) {
         val statements: List<AnalyzedStatement> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-            definition.statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }
+            try {
+                definition.statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }
+            } catch (e: IllegalArgumentException) {
+                throw SnapshotFormatException(
+                    "The stored document [${entry.key}] revision ${entry.document.revision} has a pattern in policy " +
+                        "[${definition.id.value}] this version cannot parse: ${e.message}",
+                    e
+                )
+            }
         }
     }
 
@@ -115,16 +151,25 @@ internal class DocumentCache(
         entries[Key(key, digest)]?.let { return it }
         val entry = Entry(key, digest, document, size)
         entries[Key(key, digest)] = entry
-        bytes += size
+        heap += entry.weight
         evict()
         entry
     }
 
+    /** [entry]'s weight changes by [delta]: counted only while it is held, and what it pushes over the bound leaves. */
+    private fun weigh(entry: Entry, delta: Long) = synchronized(entries) {
+        entry.weight += delta
+        if (entries[Key(entry.key, entry.digest)] === entry) {
+            heap += delta
+            evict()
+        }
+    }
+
     private fun evict() {
         val iterator = entries.values.iterator()
-        // The newest entry stays even when it alone is over the size: a call holds it until it returns.
-        while ((entries.size > maxEntries || bytes > maxBytes) && entries.size > 1) {
-            bytes -= iterator.next().size
+        // The newest entry stays even when it alone is over the bound: a call holds it until it returns.
+        while ((entries.size > maxEntries || heap > maxHeap) && entries.size > 1) {
+            heap -= iterator.next().weight
             iterator.remove()
         }
     }
@@ -132,12 +177,21 @@ internal class DocumentCache(
     /** How many documents it holds; for tests. */
     val size: Int get() = synchronized(entries) { entries.size }
 
+    /** The heap it is estimated to hold; for tests. */
+    val estimatedHeap: Long get() = synchronized(entries) { heap }
+
     companion object {
         /** Documents held at most: a platform, app and tenant document for each of the tenants simulated most recently. */
         const val DEFAULT_MAX_ENTRIES: Int = 64
 
-        /** Stored bytes held at most: eight documents at the 8 MB cap (RFC 0003 Q14). */
-        const val DEFAULT_MAX_BYTES: Long = 64L * 1024 * 1024
+        /** The estimated heap held at most: a document of 1 MB stored, decoded and compiled once, weighs 12 MB of it. */
+        const val DEFAULT_MAX_HEAP: Long = 64L * 1024 * 1024
+
+        /** A decoded document's heap per stored byte, at most about 3.8 as measured. */
+        const val DECODED_FACTOR: Int = 4
+
+        /** A compiled form's heap per stored byte of its document, at most about 7.5 as measured. */
+        const val COMPILED_FACTOR: Int = 8
 
         /** Compiled forms kept per document: the current platform's, and the previous one's while a change propagates. */
         private const val VARIANTS = 2

@@ -39,7 +39,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
-错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息；存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有管道放行凭证的请求，在读取请求体之前就是 `401`。之前的构建为不能作为应用 id 的应用写入的变更记录不再可读：对可以读取平台文档的平台主体，查看或放弃它是 `409` `change-unreadable`，其详情说明由运维人员移除它的记录，且从不重复存储的 id；对其他任何人，则与不存在的变更相同。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
+错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息；存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 或含空段的路径是 `404`。之前的构建为不能作为应用 id 的应用写入的变更记录不再可读：对可以读取平台文档的平台主体，查看或放弃它是 `409` `change-unreadable`，其详情说明由运维人员移除它的记录，且从不重复存储的 id；对其他任何人，则与不存在的变更相同。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
 
 ## 校验策略 {#validating-policies}
 
@@ -102,7 +102,8 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 模拟没有令牌属性，也不获取外部属性：读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理，因此在这里通常为 Indeterminate。
 
 控制面对每份存储的文档按其内容只解码、编译一次：在同样的头上重复 `simulate`、`explain` 或 `analyze` 不会再次编译，头
-移动之后，在下次读到时编译。`candidate` 每次调用编译一次。要限制一个调用者的调用开销，请按租户限制控制 API
+移动之后，在下次读到时编译。`candidate` 每次调用编译一次，explain 在保留修订上的文档也是。保留的内容按估计的堆限定在 64 MB：一份文档解码后计其存储大小的
+4 倍，每个编译形态（按编译时的平台文档，至多两个）再计 8 倍，所以存储为 1 MB 的租户文档计 12 MB。要限制一个调用者的调用开销，请按租户限制控制 API
 （[限流](./rate-limiting.md#the-control-api)）。
 
 ## 用 explain 调试决策 {#debugging-a-decision-with-explain}

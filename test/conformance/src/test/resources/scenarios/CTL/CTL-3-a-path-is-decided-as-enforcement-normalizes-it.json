@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "RC1-41 (coordinator 2026-11-07): a path enforcement accepts is decided as normalized: /admin;v=2/1 as /admin/1, its path parameter removed, as a request to it would be.",
+  "description": "RC1-41 (coordinator 2026-11-07): a path enforcement accepts is decided as normalized: /admin;v=2/1 as /admin/1, its path parameter removed, as a request to it would be. A pattern matched as written (decodeAndParseSegments false) tells the two apart (review L7 of #1240): /raw;v=2/1 is decided as /raw/1, which /raw/{id} matches, where the path as given would not.",
   "documents": {
     "platform": {
       "bindings": [
@@ -32,6 +32,19 @@
                 "resource": "http:path:/admin/{id}"
               }
             ]
+          },
+          {
+            "id": "raw",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": {
+                  "pattern": "http:path:/raw/{id}",
+                  "decodeAndParseSegments": false
+                }
+              }
+            ]
           }
         ],
         "bindings": [
@@ -50,6 +63,13 @@
             "app": "*",
             "space": "*",
             "policy": "admin"
+          },
+          {
+            "id": "raw",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "raw"
           }
         ]
       }
@@ -99,13 +119,25 @@
           "resource": "http//admin;v=2/1"
         }
       }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "action": "http:GET",
+          "resource": "http//raw;v=2/1"
+        }
+      }
     }
   ],
   "expect": {
     "steps": [
       "Permit by admin",
       "Permit by admin",
-      "Permit by admin at 1/-/1"
+      "Permit by admin at 1/-/1",
+      "Permit by raw"
     ],
     "errors": {},
     "heads": {}

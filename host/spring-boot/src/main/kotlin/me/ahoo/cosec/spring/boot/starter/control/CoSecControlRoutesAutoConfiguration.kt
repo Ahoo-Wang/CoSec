@@ -48,6 +48,7 @@ import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import java.io.InputStream
+import java.net.URLDecoder
 import org.springframework.web.reactive.function.server.RequestPredicates as ReactivePredicates
 import org.springframework.web.reactive.function.server.RouterFunction as ReactiveRouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions as ReactiveRouterFunctions
@@ -79,8 +80,9 @@ class CoSecControlRoutesAutoConfiguration {
             val base = apiRootOf(properties)
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
                 val security = RequestSecurity.of(request.exchange().getSecurityContext())
-                // Nothing is read for a request no permitted principal stands behind: ControlHttp answers it 401 (RC1-41).
-                val body = if (security == null) {
+                // Nothing is read for a request no permitted principal stands behind, an anonymous permit included:
+                // ControlHttp answers it 401 (RC1-41, review L1 of #1240).
+                val body = if (security?.principal == null) {
                     Mono.just(EMPTY)
                 } else {
                     request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY)
@@ -120,15 +122,17 @@ class CoSecControlRoutesAutoConfiguration {
             return ServletRouterFunctions.route(ServletPredicates.path("$base/**")) { request ->
                 val servlet = request.servletRequest()
                 val security = RequestSecurity.of(servlet.getSecurityContext())
-                // Nothing is read for a request no permitted principal stands behind (ControlHttp answers 401), and
-                // never more than max-body-size: the body is read before ControlHttp authorizes the action.
-                val body = if (security == null) {
+                // Nothing is read for a request no permitted principal stands behind, an anonymous permit included
+                // (ControlHttp answers 401), and never more than max-body-size: the body is read before ControlHttp
+                // authorizes the action. The query comes from the query string alone: the request's parameters would
+                // read a form body (review L1 of #1240).
+                val body = if (security?.principal == null) {
                     EMPTY
                 } else {
                     readBody(servlet.inputStream, maxBodySize)
                         ?: return@route tooLarge(maxBodySize)
                 }
-                val query = request.params().toSingleValueMap()
+                val query = queryOf(servlet.queryString)
                 // A servlet thread is the caller's own: waiting on it blocks no event loop.
                 val response: ControlHttpResponse = runBlocking(Dispatchers.Default) {
                     http.handle(
@@ -195,6 +199,28 @@ class CoSecControlRoutesAutoConfiguration {
             )
 
         fun basePathOf(properties: ControlProperties): String = "/" + properties.http.basePath.trim('/')
+
+        /** The parameters of [queryString], decoded as a servlet decodes them, the first value of each name. */
+        fun queryOf(queryString: String?): Map<String, String> {
+            if (queryString.isNullOrEmpty()) {
+                return emptyMap()
+            }
+            val query = LinkedHashMap<String, String>()
+            for (pair in queryString.split('&')) {
+                if (pair.isEmpty()) continue
+                val separator = pair.indexOf('=')
+                val name = if (separator < 0) pair else pair.substring(0, separator)
+                val value = if (separator < 0) "" else pair.substring(separator + 1)
+                // A pair that does not decode is left out, as a servlet container leaves it out of the parameters.
+                val decoded = try {
+                    URLDecoder.decode(name, Charsets.UTF_8) to URLDecoder.decode(value, Charsets.UTF_8)
+                } catch (_: IllegalArgumentException) {
+                    continue
+                }
+                query.putIfAbsent(decoded.first, decoded.second)
+            }
+            return query
+        }
 
         /**
          * Where this version of the API is served: `{base-path}/v1`. The version is fixed here, not part of

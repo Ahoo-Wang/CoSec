@@ -895,7 +895,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Health {
 	public fun <init> ()V
-	public fun cosecSnapshotHealthIndicator (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/spring/boot/starter/pipeline/SnapshotHealthIndicator;
+	public fun cosecSnapshotHealthIndicator (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)Lme/ahoo/cosec/spring/boot/starter/pipeline/SnapshotHealthIndicator;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Redis {
@@ -906,9 +906,14 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 	public fun cosecRedisSnapshotDocumentStore (Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;)Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore;
 }
 
+public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Redis$EvictionHealth {
+	public fun <init> ()V
+	public fun cosecSnapshotEvictionHealthIndicator (Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;)Lme/ahoo/cosec/spring/boot/starter/pipeline/SnapshotEvictionHealthIndicator;
+}
+
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$RedisReads {
 	public fun <init> ()V
-	public fun cosecReplicaReadCheck (Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
+	public fun cosecReplicaReadCheck (Lorg/springframework/beans/factory/ListableBeanFactory;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;)Lorg/springframework/beans/factory/SmartInitializingSingleton;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration$Shadow {
@@ -928,7 +933,10 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoC
 public abstract interface annotation class me/ahoo/cosec/spring/boot/starter/pipeline/ConditionalOnEnforceMode : java/lang/annotation/Annotation {
 }
 
-public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor {
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor : java/lang/AutoCloseable {
+	public fun close ()V
+	public final fun refresh ()V
+	public final fun start ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;
 	public final fun status ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
 }
 
@@ -940,6 +948,7 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMoni
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status$Companion {
 	public final fun getOK ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
+	public final fun getPENDING ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
 	public final fun getUNKNOWN ()Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor$Status;
 }
 
@@ -1154,10 +1163,13 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting : 
 	public fun close ()V
 }
 
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/SnapshotEvictionHealthIndicator : org/springframework/boot/health/contributor/HealthIndicator {
+	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;)V
+	public fun health ()Lorg/springframework/boot/health/contributor/Health;
+}
+
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/SnapshotHealthIndicator : org/springframework/boot/health/contributor/HealthIndicator {
 	public fun <init> (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)V
-	public fun <init> (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/EvictionPolicyMonitor;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun health ()Lorg/springframework/boot/health/contributor/Health;
 }
 

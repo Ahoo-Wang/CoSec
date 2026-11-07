@@ -225,20 +225,25 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 `cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。把它加入 readiness 组即可在
 探针中看到：`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`。
 
-### `cosecSnapshot` 为 DOWN，并带 `eviction` 详情 {#cosecsnapshot-is-down-with-an-eviction-detail}
+### `cosecSnapshotEviction` 为 DOWN {#cosecsnapshoteviction-is-down}
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction: an instance that loads an app or tenant document Redis evicted reads it as absent, and its DENY statements silently stop applying. Set maxmemory-policy to noeviction.
 ```
 
-健康指示器会再次读取每个 Redis 节点的 `maxmemory-policy`，每个 [`revalidate-interval`](./configuration.md#snapshot)
-至多一次；某个节点开始允许驱逐时，`me.ahoo.cosec.spring.boot.starter.pipeline.EvictionPolicyMonitor` 以 `ERROR` 记录
-上面这一行：有人执行了 `CONFIG SET maxmemory-policy`、Redis 切换到了另一种配置的节点，或某个节点以另一份配置重启。请求照常
-决策；Redis 驱逐的应用文档或租户文档，会被下一个加载它的实例读成不存在。在每个节点上重新设置 `noeviction`；指示器在下一次
-读取时变回 `UP`，并以 `INFO` 记录 `Redis no longer evicts CoSec's policy snapshot.`。详情是 `Cannot tell whether Redis may
-evict ...` 表示在 `eviction-check=fail` 下读不到策略（`INFO` 被拒绝或失败）：允许 `INFO`（`+info`），或者在你自己已经设置了
-`noeviction` 时设置 [`eviction-check=warn`](./configuration.md#snapshot)；在 `warn` 下，读不到的策略为 `UP`，详情为
-`eviction: unknown`，并以 `WARN` 记录一次（[Redis 要求](./storage.md#redis-requirements)）。
+每个实例每个 [`revalidate-interval`](./configuration.md#snapshot) 在自己的线程上读取每个 Redis 节点的
+`maxmemory-policy`；某个节点开始允许驱逐时，`me.ahoo.cosec.spring.boot.starter.pipeline.EvictionPolicyMonitor` 以 `ERROR`
+记录上面这一行：有人执行了 `CONFIG SET maxmemory-policy`、Redis 切换到了另一种配置的节点，或某个节点以另一份配置重启。
+`cosecSnapshotEviction` 健康指示器随之为 `DOWN`，`eviction` 详情里是同样的文本。请求照常决策；Redis 驱逐的应用文档或租户
+文档，会被下一个加载它的实例读成不存在。在每个节点上重新设置 `noeviction`；下一次读取之后指示器变回 `UP`，实例以 `INFO`
+记录 `Redis no longer evicts CoSec's policy snapshot.`。
+
+详情是 `Cannot tell whether Redis may evict ...` 表示在 `eviction-check=fail` 下读不到策略（`INFO` 被拒绝、失败或超时，或没有
+节点可问）：允许 `INFO`（`+info`），或者在你自己已经设置了 `noeviction` 时设置
+[`eviction-check=warn`](./configuration.md#snapshot)；在 `warn` 下，读不到的策略为 `UP`，详情为 `eviction: unknown`，并以
+`WARN` 记录一次（[Redis 要求](./storage.md#redis-requirements)）。
+
+这个指示器是告警：不要把它放进就绪组，就绪组只由 `cosecSnapshot` 承担。放进去的话，Redis 的一次改动会让所有实例同时退出轮转。
 
 ## 条件无法编译 {#a-condition-does-not-compile}
 
@@ -332,7 +337,7 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 
 第一条：某个 Redis 节点不是 `noeviction`。在每个节点上设置 `maxmemory-policy noeviction`。第二条：实例读不到该策略，
 通常是因为 Redis 用户无权执行 `INFO`，或托管 Redis 拒绝了它；它也会指出检查无法读取的 CoCache 后端（包装过的或
-自定义的后端）。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置
+自定义的后端），以及不知道该问哪个节点的集群连接（`no Redis node answered INFO memory`）。允许 `INFO`（`+info`），或者在你已自行设置 `noeviction` 时，设置
 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)（[Redis 要求](./storage.md#redis-requirements)）。
 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`
@@ -342,12 +347,13 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 ### 从 Redis 副本读取导致启动失败 {#startup-fails-because-redis-is-read-from-replicas}
 
 ```text
-CoSec's Redis template reads from replicas (ReadFromReplicaPreferred): a replica lags the primary, and CoSec reads Redis as its store of record. Read from the upstream: remove spring.data.redis.lettuce.read-from, or the client customizer that sets ReadFrom.
+CoSec's Redis template [stringRedisTemplate] reads from replicas (ReadFromReplicaPreferred): a replica lags the primary, and CoSec reads Redis as its store of record. ...
 ```
 
-CoSec 的 Redis 模板背后的 Lettuce 客户端从副本读。去掉 `spring.data.redis.lettuce.read-from`、把它设为 `upstream`，
-或者去掉你的 `LettuceClientConfigurationBuilderCustomizer` 设置的 `ReadFrom`。若要从副本读其他数据，请为那些数据另配
-一个连接工厂；CoSec 的模板必须从主节点读（[Redis 要求](./storage.md#redis-requirements)）。
+CoSec 注入的那个 Redis 模板（消息里点名的那个）背后的 Lettuce 客户端从副本读。CoSec 注入唯一的 `StringRedisTemplate` 与
+`ReactiveStringRedisTemplate`，或各自 `@Primary` 的那个。去掉 `spring.data.redis.lettuce.read-from`、把它设为
+`upstream`，或者去掉你的 `LettuceClientConfigurationBuilderCustomizer` 在该模板的连接工厂上设置的 `ReadFrom`。若要从副本读
+其他数据，请为它另配一个模板与连接工厂，且不是 CoSec 注入的那个（不加 `@Primary`）（[Redis 要求](./storage.md#redis-requirements)）。
 
 ### 重新确认间隔导致启动失败 {#startup-fails-on-the-revalidation-interval}
 
@@ -447,7 +453,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
 | `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃撤销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。 | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
-| `404` | 没有这个路由、文档或变更，或者操作者看不到它。 | |
+| `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
 | `409` `change-unreadable` | 该变更的记录由之前的构建为一个不能作为应用 id 的应用写入（空白、`*`、含控制字符或超过 128 个字符）；控制面所在的主机在每一轮维护中记录 `Change [<id>] is skipped: it is of [<key>], which no document key can name`。它既无法查看也无法放弃。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-2)。 |
 | `410` | 请求的修订没有保留。 | |

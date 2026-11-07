@@ -370,6 +370,21 @@ class ControlPlaneTest {
             .assert().hasSize(1)
     }
 
+    /** `raw`, matched as written: only a normalized path, without its parameter, matches it (review L7 of #1240). */
+    private fun rawPolicy() = PolicyDefinition(
+        PolicyId("raw"),
+        false,
+        null,
+        listOf(
+            StatementSource(
+                "",
+                Effect.ALLOW,
+                listOf("http:GET"),
+                listOf(ResourceSource("http:path:/raw/{id}", decodeAndParseSegments = false)),
+            ),
+        ),
+    )
+
     /**
      * RC1-41, coordinator 2026-11-07 (`CTL-3`): an `http` resource goes through the path normalization enforcement
      * applies. A path enforcement answers 400 for is refused; one it normalizes is decided normalized, its path
@@ -380,10 +395,13 @@ class ControlPlaneTest {
         val initech = SnapshotKey.Tenant("initech")
         bootstrap(
             initech,
-            listOf(allow("admin", action = "http:GET", resource = "http:path:/admin/{id}")),
             listOf(
-                Binding(BindingId("admin"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId("admin"))
+                allow("admin", action = "http:GET", resource = "http:path:/admin/{id}"),
+                rawPolicy(),
             ),
+            listOf("admin", "raw").map {
+                Binding(BindingId(it), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId(it))
+            },
         )
         val request = bob("read", TenantId("initech"))
             .copy(roles = emptyList(), app = "", space = "", action = Action("http", "GET"))
@@ -410,6 +428,9 @@ class ControlPlaneTest {
         plane.simulate(plato, at("/admin/1")).enforced.decision.assert().isEqualTo("Permit")
         // As a request to /admin;v=2/1 is decided on /admin/1.
         plane.simulate(plato, at("/admin;v=2/1")).enforced.decision.assert().isEqualTo("Permit")
+        // Review L7 of #1240: decided on the normalized path, not the one given, which a pattern matched as written tells.
+        plane.simulate(plato, at("/raw;v=2/1")).enforced.by!!.policy.assert().isEqualTo("raw")
+        plane.explain(plato, at("/raw;v=2/1")).decision.decision.assert().isEqualTo("Permit")
         plane.analyze(
             plato,
             AccessQuery(

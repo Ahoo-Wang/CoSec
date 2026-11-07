@@ -21,17 +21,8 @@ import org.springframework.boot.health.contributor.HealthIndicator
 /**
  * `cosecSnapshot`: UP once the platform document and the prewarmed apps and tenants are installed ([SnapshotReadiness]
  * gates readiness on the same), DOWN before, with what is missing. Add it to the readiness group for its details.
- *
- * On Redis it is DOWN too while Redis may evict the policy snapshot ([eviction], RC1-47): its eviction policy is read again
- * at most once every `revalidate-interval`, so a later `CONFIG SET maxmemory-policy` or a failover to a node set up
- * otherwise is seen, with either `eviction-check`. A policy that cannot be read is DOWN under `fail`, and UP with the
- * detail `eviction: unknown` under `warn`, which accepted it at startup. Requests are not refused for it: a document
- * already installed stays, and one that is lost fails closed on every instance that has seen it.
  */
-class SnapshotHealthIndicator @JvmOverloads constructor(
-    private val source: SnapshotSource<*, *>,
-    private val eviction: EvictionPolicyMonitor? = null,
-) : HealthIndicator {
+class SnapshotHealthIndicator(private val source: SnapshotSource<*, *>) : HealthIndicator {
     override fun health(): Health {
         val platform = when (source.peek()?.policies) {
             is DocumentState.Present<*> -> "installed"
@@ -39,11 +30,7 @@ class SnapshotHealthIndicator @JvmOverloads constructor(
             DocumentState.Absent -> "absent"
             null -> "loading"
         }
-        val evicting = eviction?.status()
-        val up = source.isPrewarmed && platform == "installed" && evicting?.down != true
-        val builder = if (up) Health.up() else Health.down()
-        builder.withDetail("platform", platform).withDetail("prewarmed", source.isPrewarmed)
-        evicting?.detail?.let { builder.withDetail("eviction", it) }
-        return builder.build()
+        val builder = if (source.isPrewarmed && platform == "installed") Health.up() else Health.down()
+        return builder.withDetail("platform", platform).withDetail("prewarmed", source.isPrewarmed).build()
     }
 }

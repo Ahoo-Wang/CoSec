@@ -168,7 +168,7 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
-        val segments = request.path.trim('/').split('/').filter { it.isNotEmpty() }
+        val segments = segmentsOf(request.path) ?: return notFound()
         return when (segments.firstOrNull()) {
             "documents" -> documents(operator, request, segments.drop(1))
             "changes" -> changes(operator, request, segments.drop(1))
@@ -196,6 +196,19 @@ class ControlHttp(private val plane: ControlPlane) {
             "analyze" -> post(request) { json(report(plane.analyze(operator, query(it.need("query"))))) }
             else -> notFound()
         }
+    }
+
+    /**
+     * The segments of [path], or null when it is not written the one way the routes are (review M1 of #1240): a path
+     * that ends in `/` or holds an empty segment (`//`) is served by no route, so a rule that names the routes' exact
+     * paths, such as a rate limit rule on `.../simulate`, covers every request that reaches one.
+     */
+    private fun segmentsOf(path: String): List<String>? {
+        if (!path.startsWith('/')) {
+            return null
+        }
+        val segments = path.substring(1).split('/')
+        return segments.takeIf { it.none(String::isEmpty) }
     }
 
     private suspend fun documents(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
@@ -546,8 +559,12 @@ class ControlHttp(private val plane: ControlPlane) {
     private fun revisionOf(name: String, text: String): Long =
         text.toLongOrNull() ?: throw InvalidControlRequestException("[$name] is a revision number.")
 
+    /** An instant in epoch milliseconds' range: one beyond it parses, and would fail later (review L2 of #1240). */
     private fun instantOf(name: String, text: String): Instant =
-        field(name, "an ISO-8601 instant such as 2026-01-01T00:00:00Z") { Instant.parse(text) }
+        field(
+            name,
+            "an ISO-8601 instant such as 2026-01-01T00:00:00Z"
+        ) { Instant.parse(text).also { it.toEpochMilli() } }
 
     /**
      * [decode] of the client's own [name]: the codec's format errors describe what the caller sent, by its JSON path, so

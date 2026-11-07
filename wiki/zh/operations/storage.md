@@ -84,16 +84,17 @@ key 都在它之下（`SNP-9`）。
   （包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
   [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
   `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
-- **运行期间再次检查。** `cosecSnapshot` 健康指示器会再次读取每个节点的 `maxmemory-policy`，每个
-  `revalidate-interval` 至多一次，因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现。
-  只要某个节点可能驱逐，它就报告 `DOWN`，并在 `eviction` 详情里说明原因，开始时记录一条 `ERROR`；两种 `eviction-check`
-  都是如此（[故障排查](./troubleshooting.md#cosecsnapshot-is-down-with-an-eviction-detail)）。读不到策略时，`fail` 下也是
+- **运行期间再次检查。** 每个实例每个 `revalidate-interval` 在自己的线程上再次读取每个节点的 `maxmemory-policy`，
+  因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现。只要某个节点可能驱逐，
+  `cosecSnapshotEviction` 健康指示器就是 `DOWN`，并在 `eviction` 详情里说明原因，实例在开始时记录一条 `ERROR`；两种
+  `eviction-check` 都是如此（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。读不到策略时，`fail` 下也是
   `DOWN`；`warn` 在启动时已经接受了这一点，所以是 `UP`，详情为 `eviction: unknown`。请求不会因此被拒绝：已装入的文档保持
-  不变，丢失的文档在每个持有它的实例上都失败即拒绝。
+  不变，丢失的文档在每个持有它的实例上都失败即拒绝。不要把这个指示器放进就绪组：它是告警。
 - **从主节点读。** Redis 是权威存储，副本落后于它：在两者之间交替读取，可能把一个已撤销的 API key、或一份刚被覆盖发布的
   文档当成当前的。CoCache 自己的客户端读取文档、控制面记录和撤销记录，它连接 `spring.data.redis.*` 指定的节点或集群的
-  各个主节点，不设置 `ReadFrom`。CoSec 使用的 Redis 模板（API key、限流器、OAuth 状态）背后的 Lettuce 客户端也必须从
-  主节点读：某个 `LettuceConnectionFactory` 从副本读（`spring.data.redis.lettuce.read-from`，或设置了非 upstream
+  各个主节点，不设置 `ReadFrom`。CoSec 注入的 Redis 模板（唯一的或 `@Primary` 的 `StringRedisTemplate` 与
+  `ReactiveStringRedisTemplate`：API key、限流器、OAuth 状态）背后的 Lettuce 客户端也必须从主节点读：某个
+  `LettuceConnectionFactory` 从副本读（`spring.data.redis.lettuce.read-from`，或设置了非 upstream
   `ReadFrom` 的 `LettuceClientConfigurationBuilderCustomizer`）时，启动失败
   （[故障排查](./troubleshooting.md#startup-fails-because-redis-is-read-from-replicas)）。其他连接工厂（Jedis，或你
   自己的）的客户端配置 CoSec 读不到：请把它配置为从主节点读。

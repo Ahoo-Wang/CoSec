@@ -391,14 +391,16 @@ class DefaultControlPlane(
             ?: simulator.cache.put(key, stored.digest, stored.document.bodySize, revisions.decode(key, stored.document))
     }
 
-    /** [key] at [revision] from the cache, as [retained] reads it: 410 when it is no longer kept. */
+    /**
+     * [key] at [revision], as [retained] reads it: 410 when it is no longer kept. Taken from the cache when it holds that
+     * content (the head's, say), never put in it (review M2 of #1240): each retained revision would be an entry of its
+     * own, and explaining at revisions is rare, so it is decoded and compiled for the call.
+     */
     private suspend fun retainedHeld(key: SnapshotKey, revision: Long): Held {
         val digest = revisions.retainedDigest(key, revision) ?: throw gone(key, revision)
-        val entry = simulator.cache.get(key, digest) ?: run {
-            val record = revisions.record(key, digest) ?: throw gone(key, revision)
-            simulator.cache.put(key, digest, record.bodySize, revisions.decode(key, record))
-        }
-        return Held(entry.document, entry)
+        simulator.cache.get(key, digest)?.let { return Held(it.document, it) }
+        val record = revisions.record(key, digest) ?: throw gone(key, revision)
+        return Held(revisions.decode(key, record), null)
     }
 
     @ExperimentalCoSecApi

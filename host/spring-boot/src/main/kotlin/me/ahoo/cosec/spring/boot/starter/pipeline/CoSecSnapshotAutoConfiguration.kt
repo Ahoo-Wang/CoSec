@@ -58,6 +58,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -75,6 +76,9 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
@@ -126,11 +130,11 @@ class CoSecSnapshotAutoConfiguration {
         }
 
         /**
-         * RC1-47 (a): the eviction policy as it is now, for `cosecSnapshot`: a `CONFIG SET`, a failover to a node set up
-         * otherwise or a restart after startup's check is seen within one `revalidate-interval`. The request path does
-         * not read it.
+         * RC1-47 (a): the eviction policy as it is now, read every `revalidate-interval` on a thread of its own, so a
+         * `CONFIG SET`, a failover to a node set up otherwise or a restart after startup's check is seen. Neither the
+         * request path nor a health probe reads Redis for it (review M3 of #1240).
          */
-        @Bean
+        @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         fun cosecEvictionPolicyMonitor(
             backend: CoherenceBackend,
@@ -139,26 +143,45 @@ class CoSecSnapshotAutoConfiguration {
             { EvictionPolicyCheck.read(backend) },
             properties.snapshot.revalidateInterval,
             properties.snapshot.evictionCheck,
-        )
+        ).start()
+
+        /**
+         * `cosecSnapshotEviction` in the health endpoint (review M3 of #1240): DOWN while Redis may evict the policy
+         * snapshot. An alert, not a readiness signal: leave it out of the readiness group, as one Redis change would
+         * take every instance out of rotation while requests are still decided.
+         */
+        @Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(name = ["org.springframework.boot.health.contributor.HealthIndicator"])
+        class EvictionHealth {
+            @Bean
+            @ConditionalOnMissingBean(name = ["cosecSnapshotEvictionHealthIndicator"])
+            fun cosecSnapshotEvictionHealthIndicator(monitor: EvictionPolicyMonitor): SnapshotEvictionHealthIndicator =
+                SnapshotEvictionHealthIndicator(monitor)
+        }
     }
 
     /**
      * RC1-47 (b): Redis is the store of record, so CoSec reads it from the primary. A replica lags, and a read that
      * alternates between them could take a revoked API key, or a document just published over, for current. A Lettuce
-     * client behind CoSec's Redis templates that reads from replicas ([ReplicaReads]) fails startup. CoCache's own
-     * client, which reads the snapshot and control documents, sets no `ReadFrom`: it reads the primary.
+     * client behind the Redis templates CoSec injects that reads from replicas ([ReplicaReads]) fails startup. Those are
+     * the templates a single-bean injection point resolves to, the only one or the primary one (review L4 of #1240):
+     * another template of the application's may read from replicas. CoCache's own client, which reads the snapshot and
+     * control documents, sets no `ReadFrom`: it reads the primary.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = [ReplicaReads.LETTUCE_CONNECTION_FACTORY])
     class RedisReads {
         @Bean
         fun cosecReplicaReadCheck(
+            beans: ListableBeanFactory,
             templates: ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate>,
             reactiveTemplates: ObjectProvider<org.springframework.data.redis.core.ReactiveStringRedisTemplate>,
         ): SmartInitializingSingleton = SmartInitializingSingleton {
             ReplicaReads.check(
-                templates.orderedStream().toList().mapNotNull { it.connectionFactory } +
-                    reactiveTemplates.orderedStream().toList().map { it.connectionFactory }
+                listOfNotNull(
+                    templates.ifUnique?.let { ReplicaReads.nameOf(beans, it) to it.connectionFactory },
+                    reactiveTemplates.ifUnique?.let { ReplicaReads.nameOf(beans, it) to it.connectionFactory },
+                )
             )
         }
     }
@@ -293,8 +316,7 @@ class CoSecSnapshotAutoConfiguration {
         @ConditionalOnMissingBean(name = ["cosecSnapshotHealthIndicator"])
         fun cosecSnapshotHealthIndicator(
             source: SnapshotSource<CompiledDocument, CompiledDocument>,
-            eviction: ObjectProvider<EvictionPolicyMonitor>,
-        ): SnapshotHealthIndicator = SnapshotHealthIndicator(source, eviction.ifAvailable)
+        ): SnapshotHealthIndicator = SnapshotHealthIndicator(source)
     }
 
     @Bean
@@ -365,22 +387,27 @@ internal object EvictionPolicyCheck {
 
     fun read(backend: CoherenceBackend): Reading = when (backend) {
         is InMemoryBackend -> Reading.NotRedis
-        is RedisBackend -> backend.maxmemoryPolicies()?.let { Reading.Policies(it) }
-            ?: Reading.Unreadable("INFO memory failed or is not allowed")
+        is RedisBackend -> backend.maxmemoryPolicies()?.let { policies ->
+            // A cluster connection that knows no upstream node reads nothing (review L3 of #1240).
+            if (policies.isEmpty()) Reading.Unreadable(NO_NODE) else Reading.Policies(policies)
+        } ?: Reading.Unreadable("INFO memory failed or is not allowed")
         else -> Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
     }
+
+    private const val NO_NODE = "no Redis node answered INFO memory"
+
+    /** Whether [reading] says nothing of the policy: a failed or denied `INFO`, or no node to ask (review L3 of #1240). */
+    fun unreadable(reading: Reading): Boolean =
+        reading is Reading.Unreadable || (reading is Reading.Policies && reading.policies.isEmpty())
 
     /** Why [reading] may let Redis evict the policy snapshot, or null when it cannot. */
     fun problem(reading: Reading): String? = when (reading) {
         Reading.NotRedis -> null
         is Reading.Unreadable -> "Cannot tell whether Redis may evict CoSec's policy snapshot (${reading.reason})"
-        is Reading.Policies -> {
-            val evicting = if (reading.policies.isEmpty()) {
-                mapOf("redis" to "unknown")
-            } else {
-                reading.policies.filterValues { it != NOEVICTION }
-            }
-            evicting.takeIf { it.isNotEmpty() }?.let {
+        is Reading.Policies -> if (reading.policies.isEmpty()) {
+            "Cannot tell whether Redis may evict CoSec's policy snapshot ($NO_NODE)"
+        } else {
+            reading.policies.filterValues { it != NOEVICTION }.takeIf { it.isNotEmpty() }?.let {
                 "Redis may evict CoSec's policy snapshot: maxmemory-policy is $it, not $NOEVICTION"
             }
         }
@@ -411,69 +438,86 @@ internal object EvictionPolicyCheck {
 internal object ReplicaReads {
     const val LETTUCE_CONNECTION_FACTORY = "org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory"
 
-    fun check(factories: List<Any>) {
-        for (factory in factories.distinct()) {
+    /** The name of the bean [instance] is in [beans], for the message. */
+    fun nameOf(beans: ListableBeanFactory, instance: Any): String =
+        beans.getBeanNamesForType(instance.javaClass).firstOrNull { beans.getBean(it) === instance } ?: "?"
+
+    /** Each of [templates], by bean name, with its connection factory. */
+    fun check(templates: List<Pair<String, Any?>>) {
+        for ((name, factory) in templates) {
             val readFrom = (factory as? LettuceConnectionFactory)?.clientConfiguration?.readFrom?.orElse(null) ?: continue
             // ReadFrom.UPSTREAM and ReadFrom.MASTER are two instances of one class.
             check(readFrom.javaClass == ReadFrom.UPSTREAM.javaClass) {
-                "CoSec's Redis template reads from replicas (${readFrom.javaClass.simpleName}): a replica lags the " +
-                    "primary, and CoSec reads Redis as its store of record. Read from the upstream: remove " +
-                    "spring.data.redis.lettuce.read-from, or the client customizer that sets ReadFrom."
+                "CoSec's Redis template [$name] reads from replicas (${readFrom.javaClass.simpleName}): a replica " +
+                    "lags the primary, and CoSec reads Redis as its store of record. Read from the upstream: remove " +
+                    "spring.data.redis.lettuce.read-from, or the client customizer that sets ReadFrom on the factory " +
+                    "of [$name]; a template of your own may read from replicas when it is not the one CoSec injects " +
+                    "(the only one, or the @Primary one)."
             }
         }
     }
 }
 
 /**
- * The eviction policy of the Redis behind the policy snapshot, [read] again at most once every [interval] (RC1-47, `SNP-3`):
- * what [SnapshotHealthIndicator] reports. A policy that may evict is [Status.down] whatever [mode] is, and logged at ERROR
- * when it becomes so, not on every call. One that cannot be read is down under [mode] `fail`; under `warn` the operator
- * accepted that at startup, so it is up, as `unknown`. Only the health indicator asks, so no request waits on Redis for it.
+ * The eviction policy of the Redis behind the policy snapshot (RC1-47, `SNP-3`), [read] every [interval] once [start]ed,
+ * on a thread of its own: what [SnapshotEvictionHealthIndicator] reports, from [status], which never reads Redis (review
+ * M3 of #1240). A policy that may evict is [Status.down] whatever [mode] is, and logged at ERROR when it becomes so, not
+ * on every read. One that cannot be read is down under [mode] `fail`; under `warn` the operator accepted that at startup,
+ * so it is up, as `unknown`, logged once at WARN.
  */
 class EvictionPolicyMonitor internal constructor(
     private val read: () -> EvictionPolicyCheck.Reading,
     private val interval: Duration,
     private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
-    private val nanoTime: () -> Long = System::nanoTime,
-) {
+) : AutoCloseable {
     /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
     class Status internal constructor(val down: Boolean, val detail: String?) {
         companion object {
             val OK: Status = Status(false, null)
             val UNKNOWN: Status = Status(false, "unknown")
+
+            /** Before the first reading: startup's check has passed, or was told to warn. */
+            val PENDING: Status = Status(false, "pending")
         }
     }
 
     private val log = KotlinLogging.logger {}
-    private var reading: EvictionPolicyCheck.Reading? = null
-    private var readAt = 0L
-    private var reported: Status = Status.OK
 
-    /** What is known now of Redis's eviction of the snapshot. */
+    @Volatile
+    private var current: Status = Status.PENDING
+    private var executor: ScheduledExecutorService? = null
+
+    /** What is known now of Redis's eviction of the snapshot, from the last reading. */
+    fun status(): Status = current
+
+    /** Reads every [interval] from now until [close]. */
+    fun start(): EvictionPolicyMonitor = apply {
+        executor = Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "cosec-eviction-policy").apply { isDaemon = true }
+        }.also { it.scheduleWithFixedDelay(::refresh, 0, interval.toMillis(), TimeUnit.MILLISECONDS) }
+    }
+
+    /** Reads the policy now. A read that throws is a policy that cannot be read, and the next one is still made. */
     @Synchronized
-    fun status(): Status {
-        val now = nanoTime()
-        val last = reading
-        val current = if (last == null || now - readAt >= interval.toNanos()) {
-            read().also {
-                reading = it
-                readAt = now
-            }
-        } else {
-            last
+    @Suppress("TooGenericExceptionCaught")
+    fun refresh() {
+        val reading = try {
+            read()
+        } catch (e: Exception) {
+            EvictionPolicyCheck.Reading.Unreadable(e.message ?: e.javaClass.simpleName)
         }
-        val problem = EvictionPolicyCheck.problem(current)
+        val problem = EvictionPolicyCheck.problem(reading)
         val status = when {
             problem == null -> Status.OK
-            current is EvictionPolicyCheck.Reading.Unreadable &&
-                mode == RuntimeAuthorizationProperties.EvictionCheck.WARN -> Status.UNKNOWN
+            EvictionPolicyCheck.unreadable(reading) && mode == RuntimeAuthorizationProperties.EvictionCheck.WARN ->
+                Status.UNKNOWN
             else -> Status(true, problem)
         }
-        if (status.detail != reported.detail) {
+        val previous = current
+        if (status.detail != previous.detail && !(status === Status.OK && previous === Status.PENDING)) {
             report(status)
         }
-        reported = status
-        return status
+        current = status
     }
 
     private fun report(status: Status) {
@@ -489,6 +533,10 @@ class EvictionPolicyMonitor internal constructor(
             }
             else -> log.info { "Redis no longer evicts CoSec's policy snapshot." }
         }
+    }
+
+    override fun close() {
+        executor?.shutdownNow()
     }
 }
 

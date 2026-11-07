@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.control
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
@@ -27,6 +30,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -50,14 +54,17 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.server.WebFilter
+import java.io.File
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * D2, the control API's per-tenant limits, with no mechanism of their own: the control routes are served behind the
- * data-plane pipeline, so a platform rate limit rule on every path under `{base-path}/v1`, keyed by `scope.tenant`, gives
- * each tenant one bucket. An exhausted bucket answers 429 before the request reaches the control routes, and another
- * tenant's bucket is untouched. A tenant cannot change the rule (`OBL-2`).
+ * data-plane pipeline, so the platform rate limit rule `rate-limiting.md` documents, keyed by `scope.tenant`, gives each
+ * tenant one bucket. The test publishes that rule as the page writes it. An exhausted bucket answers 429 before the
+ * request reaches the control routes, another tenant's bucket is untouched, and a path the rule's exact patterns do not
+ * name, such as one with a trailing `/`, is served by no route (review M1 of #1240). A tenant cannot change the rule
+ * (`OBL-2`).
  */
 class ControlRateLimitStarterTest {
     /** The control API requests that passed the pipeline: what `ControlHttp` could do any work for. */
@@ -120,9 +127,9 @@ class ControlRateLimitStarterTest {
             .toToken(SimpleTenantPrincipal(SimplePrincipal(id, roles = setOf("admin")), SimpleTenant(tenant)))
             .accessToken
 
-    private fun WebTestClient.simulate(token: String, tenant: String): Pair<Int, String> {
+    private fun WebTestClient.simulate(token: String, tenant: String, suffix: String = ""): Pair<Int, String> {
         val body = """{"request":{"tenant":"$tenant","principal":"bob","action":"order:read","resource":"order/1"}}"""
-        val result = post().uri("$CONTROL/simulate")
+        val result = post().uri("$CONTROL/simulate$suffix")
             .header(HttpHeaders.AUTHORIZATION, token)
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(body)
@@ -153,33 +160,54 @@ class ControlRateLimitStarterTest {
             }
             val alice = token(context, "acme", "alice")
             val mallory = token(context, "globex", "mallory")
-            repeat(PERMITS) { client.simulate(alice, "acme").first.assert().isEqualTo(200) }
-            reached.get().assert().isEqualTo(PERMITS)
+            val permits = permitsOf(RULE)
+            // The limiter's estimate weighs the previous window: spend the bucket well inside one.
+            while (System.currentTimeMillis() % WINDOW_MILLIS > WINDOW_MILLIS - MARGIN_MILLIS) Thread.sleep(100)
+            repeat(permits) { client.simulate(alice, "acme").first.assert().isEqualTo(200) }
+            reached.get().assert().isEqualTo(permits)
             val (status, problem) = client.simulate(alice, "acme")
             status.assert().isEqualTo(429)
             problem.assert().contains("too-many-requests")
             // The pipeline answered it: the control routes never saw the request.
-            reached.get().assert().isEqualTo(PERMITS)
+            reached.get().assert().isEqualTo(permits)
+            // A path the rule's patterns do not name is not served either: never another simulation.
+            client.simulate(alice, "acme", "/").first.assert().isIn(404, 429)
             // globex's bucket is its own.
             client.simulate(mallory, "globex").first.assert().isEqualTo(200)
-            reached.get().assert().isEqualTo(PERMITS + 1)
         }
     }
 
     private companion object {
         const val CONTROL = "/cosec/control/v1"
+        const val WINDOW_MILLIS = 60_000L
+        const val MARGIN_MILLIS = 5_000L
 
-        /** `permitsPerSecond × windowSeconds`: three requests a minute per tenant. */
-        const val PERMITS = 3
+        /** The rule `rate-limiting.md` (§ The control API) documents, as the page writes it. */
+        val RULE: String = run {
+            val page = generateSequence(File("").absoluteFile) { it.parentFile }
+                .map { File(it, "wiki/policies/rate-limiting.md") }
+                .first { it.isFile }
+                .readText()
+            val section = page.substring(page.indexOf("## The control API"))
+            val start = section.indexOf("```json") + "```json".length
+            section.substring(start, section.indexOf("```", start)).trim()
+        }
+
+        /** `permitsPerSecond × windowSeconds`, at least one: what the rule lets through per window. */
+        fun permitsOf(rule: String): Int {
+            val node = CoSecJson.mapper.readTree(rule)
+            val window = node.get("windowSeconds").asLong()
+            check(window * 1000 == WINDOW_MILLIS) { "The documented rule's window changed: $window s" }
+            return maxOf(1, (node.get("permitsPerSecond").asDouble() * window).toInt())
+        }
 
         /** Any authenticated principal is let in; plato administers; the control API is limited per tenant. */
-        const val PLATFORM = ""","policies":[{"id":"members","statements":[{"effect":"allow","action":"http:*",""" +
+        val PLATFORM = ""","policies":[{"id":"members","statements":[{"effect":"allow","action":"http:*",""" +
             """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
             """"bindings":[{"id":"members","subject":"*","app":"*","space":"*","policy":"members"},""" +
             """{"id":"plato","subject":{"principal":"plato","tenant":"(platform)"},"app":"cosec-control","space":"",""" +
             """"policy":"cosec:platform-admin"}],""" +
-            """"rateLimits":[{"id":"control-per-tenant","action":"http:*","resource":"http:path:$CONTROL/**",""" +
-            """"key":"scope.tenant","permitsPerSecond":0.05,"windowSeconds":60}]"""
+            """"rateLimits":[$RULE]"""
 
         /** The tenant's administrators, by role. */
         const val ADMINS = ""","bindings":[{"id":"admins","subject":{"role":"admin"},"app":"cosec-control",""" +

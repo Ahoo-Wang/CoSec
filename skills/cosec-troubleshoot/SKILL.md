@@ -122,10 +122,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.
-- **`CoSec's Redis template reads from replicas (ReadFrom...)`**: the Lettuce client behind CoSec's Redis templates
+- **`CoSec's Redis template [<bean>] reads from replicas (ReadFrom...)`**: the Lettuce client behind the template CoSec
+  injects (the only `StringRedisTemplate` / `ReactiveStringRedisTemplate`, or the `@Primary` one), named in the message,
   reads from replicas (`spring.data.redis.lettuce.read-from`, or a `LettuceClientConfigurationBuilderCustomizer` that
-  sets `ReadFrom`). Remove it or set `upstream`; give other data its own connection factory. Never suggest replica
-  reads for CoSec: Redis is its store of record, and a lagging replica can hand back a revoked API key.
+  sets `ReadFrom`). Remove it or set `upstream` on that factory. Other data may read from replicas through a template
+  and connection factory of its own that is not the one CoSec injects (not `@Primary`). Never suggest replica reads
+  for CoSec: Redis is its store of record, and a lagging replica can hand back a revoked API key.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-because-redis-is-read-from-replicas
 - **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
   is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
@@ -158,12 +160,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request
   closed. Readiness refuses traffic until the platform document and every `prewarm-apps`/`prewarm-tenants` document is
   installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `failed`, `absent`, `loading`) and
-  `prewarmed`. It is also `DOWN` with an `eviction` detail while Redis may evict the snapshot (it reads
-  `maxmemory-policy` again at most once per `revalidate-interval`, and logs `ERROR` from `EvictionPolicyMonitor` when
-  that starts): requests are still decided, but set `noeviction` again before an app or tenant document is evicted.
-  `Cannot tell whether Redis may evict` there is `eviction-check=fail` on a Redis that denies `INFO`: allow `+info`, or
-  set `warn` when the operator has set `noeviction`, under which it is `UP` with `eviction: unknown`.
-  https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshot-is-down-with-an-eviction-detail
+  `prewarmed`, and only it belongs in the readiness group. Beside it, `cosecSnapshotEviction` is `DOWN` with an
+  `eviction` detail while Redis may evict the snapshot (each instance reads `maxmemory-policy` every
+  `revalidate-interval` on its own thread, and logs `ERROR` from `EvictionPolicyMonitor` when that starts): an alert,
+  never a readiness signal; requests are still decided, but set `noeviction` again before an app or tenant document is
+  evicted. `Cannot tell whether Redis may evict` there is `eviction-check=fail` on a Redis that denies or times out
+  `INFO`: allow `+info`, or set `warn` when the operator has set `noeviction`, under which it is `UP` with
+  `eviction: unknown`. https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshoteviction-is-down
 - A document the request needs does not decode or compile: its new revision is installed as failed
   (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
   JSON paths), and every request that needs it fails closed; the previous revision is not kept. Compile the stored

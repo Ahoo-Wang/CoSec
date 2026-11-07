@@ -32,6 +32,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
+import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
  * RC1-47 (b): Redis is CoSec's store of record, so the Lettuce client behind its Redis templates reads the primary. One
@@ -53,12 +54,19 @@ class ReplicaReadsTest {
             ReadFrom.LOWEST_LATENCY,
             ReadFrom.UPSTREAM_PREFERRED
         )) {
-            assertThrows<IllegalStateException> { ReplicaReads.check(listOf(factory(null), factory(replicas))) }
-                .message.assert().contains("reads from replicas").contains("spring.data.redis.lettuce.read-from")
+            assertThrows<IllegalStateException> {
+                ReplicaReads.check(listOf("upstream" to factory(null), "replica" to factory(replicas)))
+            }.message.assert().contains("[replica] reads from replicas").contains("spring.data.redis.lettuce.read-from")
         }
         // The upstream, by either name, or no ReadFrom at all; a factory this check cannot see into is storage.md's.
         ReplicaReads.check(
-            listOf(factory(null), factory(ReadFrom.UPSTREAM), factory(ReadFrom.MASTER), mockk<RedisConnectionFactory>())
+            listOf(
+                "none" to factory(null),
+                "upstream" to factory(ReadFrom.UPSTREAM),
+                "master" to factory(ReadFrom.MASTER),
+                "other" to mockk<RedisConnectionFactory>(),
+                "absent" to null,
+            )
         )
     }
 
@@ -92,5 +100,27 @@ class ReplicaReadsTest {
             context.startupFailure.assert().isNull()
         }
         runner.run { context -> context.startupFailure.assert().isNull() }
+    }
+
+    /**
+     * Review L4 of #1240: only the template CoSec injects, the only one or the @Primary one, is checked; an application's
+     * other template may read from replicas. The message names the bean.
+     */
+    @Test
+    fun `only the template CoSec injects is checked, by its name`() {
+        fun template(readFrom: ReadFrom?) = StringRedisTemplate(factory(readFrom))
+        runner
+            .withBean("cosecTemplate", StringRedisTemplate::class.java, { template(null) }, { it.isPrimary = true })
+            .withBean("replicaTemplate", StringRedisTemplate::class.java, { template(ReadFrom.REPLICA_PREFERRED) })
+            .run { context -> context.startupFailure.assert().isNull() }
+        runner
+            .withBean("upstreamTemplate", StringRedisTemplate::class.java, { template(null) })
+            .withBean("replicaTemplate", StringRedisTemplate::class.java, { template(ReadFrom.REPLICA_PREFERRED) }, {
+                it.isPrimary = true
+            })
+            .run { context ->
+                val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                message.assert().contains("[replicaTemplate] reads from replicas")
+            }
     }
 }

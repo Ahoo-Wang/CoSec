@@ -58,8 +58,9 @@ Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `4
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
 not one of MERGE, REPLACE.`), never an exception's message; a stored document or record that does not decode, such as
-one a newer version wrote during a rolling upgrade, is a `500`. A request without a credential the pipeline permitted is
-a `401` before any of its body is read. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
+one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
+of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
+trailing `/` or an empty segment is a `404`. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
 abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
 an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
 host logs why at `INFO`, with the problem's `requestId`
@@ -143,7 +144,9 @@ missing and follows its `onMissing`, so it is usually Indeterminate here.
 
 The control plane decodes and compiles each stored document once for its content: a repeated `simulate`, `explain` or
 `analyze` on the same heads compiles nothing again, and a head that moves is compiled when it is next read. A
-`candidate` is compiled once per call. To bound what one caller's calls cost, limit the control API per tenant
+`candidate` is compiled once per call, and so is a retained revision `explain` decides at. What is kept is bounded by
+an estimate of its heap, 64 MB: a document weighs its stored size times 4 decoded, and times 8 more for each compiled
+form (one per platform document it compiled with, at most two), so a tenant document of 1 MB stored weighs 12 MB. To bound what one caller's calls cost, limit the control API per tenant
 ([Rate limiting](./rate-limiting.md#the-control-api)).
 
 ## Debugging a decision with explain

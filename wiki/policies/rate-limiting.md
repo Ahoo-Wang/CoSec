@@ -168,10 +168,17 @@ evaluate or check: `simulate`, `explain`, `analyze` and `changes`, under `cosec.
 ```
 
 - The rule belongs in the platform document: a tenant's own rules count in their own buckets and never relax it.
-- The bucket is the caller's tenant: a tenant's administrators share one, and so do the platform's (`(platform)`).
-- An exhausted bucket answers `429` before the control API does any work.
+- The bucket is the caller's tenant, counted after the pipeline permits the request and before the control plane
+  authorizes it: every principal of the tenant that the pipeline lets onto these paths spends it, administrator or not,
+  and every `(platform)` principal spends the platform's. Permit the control paths in the pipeline only to principals
+  bound to a control role, so that no other principal can hold off a tenant's administrators.
+- An exhausted bucket answers `429` before the control API does any work. The control API serves only these exact
+  paths: one with a trailing `/` or an empty segment (`//`) is a `404`, so the patterns cover every request it serves.
 - Leave the break-glass routes (`/break-glass` and below) out of it: give them a rule of their own, or none, so that
-  a spent bucket never holds off an emergency revoke.
+  a spent bucket never holds off an emergency revoke. `changes/*` still covers three steps of break-glass: the
+  `:publish` that makes an approved break-glass grant take effect, the `:publish` that recovers a stalled revoke, and
+  `:abandon` of a break-glass change. Give the platform's bucket room for them, or keep the platform's principals out
+  of the rule with `"condition": {"not": {"eq": ["scope.tenant", "(platform)"]}}`.
 - `documents/{key}:apply` and `:rollback` propose changes too, and can join the rule.
 
 No such rule is published for you, by `cosec-migrate bootstrap` or otherwise: the limits depend on the deployment's

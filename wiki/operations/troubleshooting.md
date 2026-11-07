@@ -276,23 +276,28 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
 `prewarmed`. Add it to the readiness group to see it in the probe:
 `management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`.
 
-### `cosecSnapshot` is DOWN with an `eviction` detail {#cosecsnapshot-is-down-with-an-eviction-detail}
+### `cosecSnapshotEviction` is DOWN {#cosecsnapshoteviction-is-down}
 
 ```text
 Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction: an instance that loads an app or tenant document Redis evicted reads it as absent, and its DENY statements silently stop applying. Set maxmemory-policy to noeviction.
 ```
 
-The health indicator reads every Redis node's `maxmemory-policy` again, at most once every
-[`revalidate-interval`](./configuration.md#snapshot), and logs this at `ERROR` from
+Each instance reads every Redis node's `maxmemory-policy` every [`revalidate-interval`](./configuration.md#snapshot),
+on a thread of its own, and logs this at `ERROR` from
 `me.ahoo.cosec.spring.boot.starter.pipeline.EvictionPolicyMonitor` when a node starts to allow eviction: someone ran
 `CONFIG SET maxmemory-policy`, Redis failed over to a node set up otherwise, or a node restarted with another
-configuration. Requests are still decided; an app or tenant document Redis evicts is read as absent by the next
-instance that loads it. Set `noeviction` on every node again; the indicator is `UP` at its next reading, and logs
-`Redis no longer evicts CoSec's policy snapshot.` at `INFO`. `Cannot tell whether Redis may evict ...` in the detail
-means the policy could not be read (`INFO` denied or failing) under `eviction-check=fail`: allow `INFO` (`+info`), or,
-when you have set `noeviction` yourself, set [`eviction-check=warn`](./configuration.md#snapshot), under which an
-unreadable policy is `UP` with `eviction: unknown` and logged once at `WARN`
-([Redis requirements](./storage.md#redis-requirements)).
+configuration. The `cosecSnapshotEviction` health indicator is then `DOWN`, with the same text in its `eviction`
+detail. Requests are still decided; an app or tenant document Redis evicts is read as absent by the next instance that
+loads it. Set `noeviction` on every node again; the indicator is `UP` after the next reading, and the instance logs
+`Redis no longer evicts CoSec's policy snapshot.` at `INFO`.
+
+`Cannot tell whether Redis may evict ...` in the detail means the policy could not be read (`INFO` denied, failing or
+timing out, or no node to ask) under `eviction-check=fail`: allow `INFO` (`+info`), or, when you have set
+`noeviction` yourself, set [`eviction-check=warn`](./configuration.md#snapshot), under which an unreadable policy is
+`UP` with `eviction: unknown` and logged once at `WARN` ([Redis requirements](./storage.md#redis-requirements)).
+
+The indicator is an alert: keep it out of the readiness group, which `cosecSnapshot` alone serves. In it, one change to
+Redis would take every instance out of rotation at once.
 
 ## A condition does not compile
 
@@ -404,7 +409,8 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 
 The first: a Redis node is not `noeviction`. Set `maxmemory-policy noeviction` on every node. The second: the instance
 could not read the policy, usually because the Redis user may not run `INFO`, or a managed Redis denies it; it
-also names a CoCache backend the check cannot read (a wrapper or a custom backend). Allow `INFO` (`+info`), or, when
+also names a CoCache backend the check cannot read (a wrapper or a custom backend), and a cluster connection that
+knows no node to ask (`no Redis node answered INFO memory`). Allow `INFO` (`+info`), or, when
 you have set `noeviction` yourself, set
 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot) ([Redis requirements](./storage.md#redis-requirements)).
 
@@ -415,12 +421,14 @@ evicts, an app or tenant document loaded after it was evicted is read as absent,
 ### Startup fails because Redis is read from replicas {#startup-fails-because-redis-is-read-from-replicas}
 
 ```text
-CoSec's Redis template reads from replicas (ReadFromReplicaPreferred): a replica lags the primary, and CoSec reads Redis as its store of record. Read from the upstream: remove spring.data.redis.lettuce.read-from, or the client customizer that sets ReadFrom.
+CoSec's Redis template [stringRedisTemplate] reads from replicas (ReadFromReplicaPreferred): a replica lags the primary, and CoSec reads Redis as its store of record. ...
 ```
 
-The Lettuce client behind CoSec's Redis templates reads from replicas. Remove `spring.data.redis.lettuce.read-from`,
-set it to `upstream`, or remove the `ReadFrom` your `LettuceClientConfigurationBuilderCustomizer` sets. To read other
-data from replicas, give that data a connection factory of its own; CoSec's templates must read the primary
+The Lettuce client behind the Redis template CoSec injects, the one the message names, reads from replicas. CoSec
+injects the only `StringRedisTemplate` and `ReactiveStringRedisTemplate`, or the `@Primary` one of each. Remove
+`spring.data.redis.lettuce.read-from`, set it to `upstream`, or remove the `ReadFrom` your
+`LettuceClientConfigurationBuilderCustomizer` sets on that template's factory. To read other data from replicas, give
+it a template and connection factory of its own that is not the one CoSec injects (not `@Primary`)
 ([Redis requirements](./storage.md#redis-requirements)).
 
 ### Startup fails on the revalidation interval
@@ -536,7 +544,7 @@ principal sets a tenant's boundary`.
 | `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. Nothing of its body is read. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
 | `403` | The operator may not take this action on this document (for `simulate` and `explain`, on the tenant the request is decided in: `(0)` for one without a `principal`), or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
-| `404` | No such route, document or change, or one the operator may not see. | |
+| `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
 | `409` `change-unreadable` | The change's record was written by an earlier build for an app that cannot be an app id (blank, `*`, a control character, over 128 characters); the control host logs `Change [<id>] is skipped: it is of [<key>], which no document key can name` on every maintenance pass. It can be neither shown nor abandoned. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading.md#from-8-0-0-alpha-2) says. |
 | `410` | The revision asked for is not kept. | |

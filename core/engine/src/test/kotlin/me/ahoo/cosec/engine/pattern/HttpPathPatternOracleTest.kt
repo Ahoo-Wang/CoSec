@@ -111,9 +111,12 @@ class HttpPathPatternOracleTest {
         return tokens
     }
 
-    /** The segment's text, or null for one the engine refuses or collapses: only runs, or two literals in a row. */
+    /**
+     * The segment's text, or null for one the engine refuses or collapses: only runs, two literals in a row, or a
+     * literal alone. A segment of `?` and literals without a run (`a??b`) is kept: it is matched by a walk of its own.
+     */
     private fun render(tokens: List<Token>): String? {
-        if (tokens.none { it is Token.Run } || tokens.all { it is Token.Run }) {
+        if (tokens.all { it is Token.Run } || tokens.all { it is Token.Literal }) {
             return null
         }
         val text = StringBuilder()

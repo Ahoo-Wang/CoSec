@@ -68,9 +68,10 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **路径模式中落单的代理项不再编译**（#1200 审查的 L4）：`http:path:` 模式文本中只有一半的代理对是一个 `COMPILE` 发现，
   而之前它能编译，并能匹配一个代理对的中间，Spring 永远不会这样匹配。之前发布的含有它的文档，在升级后的实例上失败即拒绝。
 - **CoSec 的 Redis 模板从主节点读**（RC1-47）：通过 `spring.data.redis.lettuce.read-from` 或客户端定制器从副本读的
-  `LettuceConnectionFactory` 会让启动失败（[Redis 要求](./storage.md#redis-requirements)）。另外，Redis 可能驱逐快照时
-  `cosecSnapshot` 为 `DOWN`，每个 `revalidate-interval` 至多重读一次。读不到策略时，`eviction-check: fail` 下为 `DOWN`，
-  `warn` 下为 `UP`，详情 `eviction: unknown`。
+  `LettuceConnectionFactory` 会让启动失败（[Redis 要求](./storage.md#redis-requirements)）。另外，新的健康指示器
+  `cosecSnapshotEviction` 在 Redis 可能驱逐快照时为 `DOWN`，每个 `revalidate-interval` 读一次；读不到策略时，
+  `eviction-check: fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`。它是告警：`cosecSnapshot` 不变，
+  只有它属于就绪组。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}

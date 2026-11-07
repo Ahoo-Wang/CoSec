@@ -252,9 +252,10 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   a pair, which Spring never matches. A document published before with one fails closed on an upgraded instance.
 - **CoSec's Redis templates read from the primary** (RC1-47): a `LettuceConnectionFactory` that reads from replicas,
   by `spring.data.redis.lettuce.read-from` or a client customizer, fails startup
-  ([Redis requirements](./storage.md#redis-requirements)). And `cosecSnapshot` is `DOWN` while Redis may evict the
-  snapshot, read again at most once every `revalidate-interval`. A policy it cannot read is `DOWN` under
-  `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`.
+  ([Redis requirements](./storage.md#redis-requirements)). And a new health indicator, `cosecSnapshotEviction`, is
+  `DOWN` while Redis may evict the snapshot, read every `revalidate-interval`; a policy it cannot read is `DOWN` under
+  `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`. It is an alert: `cosecSnapshot` does not
+  change, and only it belongs in the readiness group.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

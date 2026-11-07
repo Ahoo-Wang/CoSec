@@ -163,10 +163,13 @@ CoSec registers no meters for the documents an instance holds. To see whether in
 - **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
   every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `failed`, `absent`
   or `loading`) and `prewarmed`. Readiness follows the same condition
-  ([Readiness](./deployment.md#readiness)). On Redis it is also `DOWN` while Redis may evict the snapshot, with an
-  `eviction` detail: it reads every node's `maxmemory-policy` again at most once every `revalidate-interval`, which
-  readiness does not. A policy it cannot read is `DOWN` under `eviction-check: fail`, and `UP` with `eviction: unknown`
-  under `warn` ([Redis requirements](./storage.md#redis-requirements)).
+  ([Readiness](./deployment.md#readiness)).
+- **Eviction.** On Redis, the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict the snapshot,
+  with an `eviction` detail that says why. It reports what the instance read last: every node's `maxmemory-policy`,
+  read every `revalidate-interval` on a thread of its own, never by a probe. A policy it cannot read is `DOWN` under
+  `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`. It is an alert, not a readiness signal: keep
+  it out of the readiness group, where one change to Redis would take every instance out of rotation while requests
+  are still decided ([Redis requirements](./storage.md#redis-requirements)).
 - **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
   than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,

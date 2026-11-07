@@ -138,7 +138,9 @@ management:
 ```
 
 `cosecSnapshot` is also part of `/actuator/health`, which therefore reports `DOWN` until the platform document is
-published.
+published. On Redis, `cosecSnapshotEviction` beside it is `DOWN` while Redis may evict the snapshot: an alert for your
+monitoring, which does not belong in the readiness group, since a change to Redis's policy would then take every
+instance out of rotation at once ([Observability](./observability.md)).
 
 ## Shutdown
 

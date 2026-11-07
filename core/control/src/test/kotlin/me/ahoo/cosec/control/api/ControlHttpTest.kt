@@ -264,6 +264,33 @@ class ControlHttpTest {
         call("POST", "/changes", "$proposal}").first.assert().isEqualTo(201)
     }
 
+    /**
+     * Review M1 of #1240: only a route's exact path is served, so a rule that names the exact paths, as the documented
+     * per-tenant rate limit does, covers every request that reaches one: a trailing `/` or an empty segment is a 404.
+     */
+    @Test
+    fun `a path with a trailing slash or an empty segment is served by no route`() {
+        val simulate = """{"request":{"tenant":"acme","principal":"bob","action":"order:read","resource":"order/1"}}"""
+        call("POST", "/simulate", simulate).first.assert().isEqualTo(200)
+        call("GET", "/documents/tenant:acme").first.assert().isEqualTo(200)
+        val paths = listOf(
+            "POST" to "/simulate/",
+            "POST" to "//simulate",
+            "POST" to "/simulate//",
+            "POST" to "simulate",
+            "POST" to "/explain/",
+            "POST" to "/changes/",
+            "GET" to "/documents//tenant:acme",
+            "GET" to "/documents/tenant:acme/",
+            "GET" to "/",
+        )
+        for ((method, path) in paths) {
+            val (status, problem) = call(method, path, simulate.takeIf { method == "POST" })
+            status.assert().describedAs("$method $path").isEqualTo(404)
+            problem.has("detail").assert().isFalse()
+        }
+    }
+
     @Test
     fun `malformed requests and unknown routes`() {
         call("POST", "/changes", "{not json").first.assert().isEqualTo(400)
@@ -457,6 +484,15 @@ class ControlHttpTest {
                 "[requestAttributes] is not a string",
             ),
             Case("POST", "/simulate", """{"request":{$request,"time":1}}""", "[time] is not a string"),
+            Case("POST", "/simulate", """{"request":{$request,"time":"$FAR"}}""", "[time] is not an ISO-8601 instant"),
+            Case("POST", "/explain", """{"request":{$request,"time":"$FAR"}}""", "[time] is not an ISO-8601 instant"),
+            Case(
+                "POST",
+                "/break-glass",
+                """{"principal":"plato","expiresAt":"$FAR","reason":"incident"}""",
+                "[expiresAt] is not an ISO-8601 instant",
+                plato,
+            ),
             Case("POST", "/simulate", """{"request":{$request},"candidate":"a b"}""", "[candidate] is not a change id"),
             Case("POST", "/simulate", """{"request":[]}""", "[request] is not an object"),
             Case(
@@ -486,6 +522,11 @@ class ControlHttpTest {
             status.assert().describedAs("${case.method} ${case.path} ${case.body}").isEqualTo(400)
             problem.get("detail").asString().assert().describedAs("${case.method} ${case.path}").contains(case.detail)
         }
+    }
+
+    private companion object {
+        /** An instant `Instant.parse` reads and epoch milliseconds cannot hold. */
+        const val FAR = "+300000000-01-01T00:00:00Z"
     }
 
     /** A request and what its 400's detail holds; by alice unless [security] says otherwise. */
@@ -522,6 +563,44 @@ class ControlHttpTest {
             }
             logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
                 .assert().hasSize(2).allMatch { it.contains("[app:order]") && it.contains("does not decode") }
+        } finally {
+            logger.detachAppender(logged)
+        }
+    }
+
+    /**
+     * Review L8 of #1240, `CTL-24`: a stored pattern this version cannot parse (a lone surrogate half, which a document
+     * published before L4 of #1200 may hold) is a stored value `analyze` cannot read: a 500 logged with its key, never
+     * the caller's 400.
+     */
+    @Test
+    fun `a stored pattern this version cannot parse is a 500, logged with its key`() {
+        runBlocking {
+            fixture.bootstrap(
+                SnapshotKey.Tenant("initech"),
+                listOf(
+                    me.ahoo.cosec.control.change.allow("broken", action = "order:read", resource = "http:path:/a\uD83D")
+                ),
+                listOf(
+                    Binding(
+                        BindingId("broken"),
+                        SubjectRef.Anyone,
+                        BindingScope(Match.Any, Match.Any),
+                        PolicyId("broken")
+                    )
+                ),
+            )
+        }
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control") as Logger
+        val logged = ListAppender<ILoggingEvent>().also { it.start() }
+        logger.addAppender(logged)
+        try {
+            val query = """{"query":{"tenant":"initech","action":"order:read","resource":"/a"}}"""
+            val (status, problem) = call("POST", "/analyze", query, security = plato)
+            status.assert().isEqualTo(500)
+            problem.has("detail").assert().isFalse()
+            logged.list.filter { it.level == Level.ERROR }.map { it.throwableProxy?.message.orEmpty() }
+                .assert().hasSize(1).allMatch { it.contains("[tenant:initech]") && it.contains("cannot parse") }
         } finally {
             logger.detachAppender(logged)
         }
