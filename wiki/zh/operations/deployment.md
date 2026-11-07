@@ -123,7 +123,9 @@ management:
 
 `cosecSnapshot` 也是 `/actuator/health` 的一部分，因此在平台文档发布之前它报告 `DOWN`。在 Redis 上，它旁边的
 `cosecSnapshotEviction` 在 Redis 可能驱逐快照时为 `DOWN`：这是给监控用的告警，不属于就绪组，否则 Redis 策略的一次改动会让
-所有实例同时退出轮转（[可观测性](./observability.md)）。
+所有实例同时退出轮转（[可观测性](./observability.md)）。它也会让聚合的 `/actuator/health` 变为 `DOWN`，因此负载均衡器或平台的
+健康检查应探测就绪组，或者一个排除了它的组（`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`），而不是
+`/actuator/health`。
 
 ## 关闭 {#shutdown}
 

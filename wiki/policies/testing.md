@@ -146,7 +146,10 @@ The control plane decodes and compiles each stored document once for its content
 `analyze` on the same heads compiles nothing again, and a head that moves is compiled when it is next read. A
 `candidate` is compiled once per call, and so is a retained revision `explain` decides at. What is kept is bounded by
 an estimate of its heap, 64 MB: a document weighs its stored size times 4 decoded, and times 8 more for each compiled
-form (one per platform document it compiled with, at most two), so a tenant document of 1 MB stored weighs 12 MB. To bound what one caller's calls cost, limit the control API per tenant
+form (one per platform document it compiled with, at most two), so a tenant document of 1 MB stored weighs 12 MB. A
+document that would weigh more than half of that, over about 2.7 MB stored, is never kept: it is decoded and compiled
+on each call that reads it, as a candidate is, so it never pushes the other documents out. Limit the control API per
+tenant to bound what such a document costs. To bound what one caller's calls cost, limit the control API per tenant
 ([Rate limiting](./rate-limiting.md#the-control-api)).
 
 ## Debugging a decision with explain

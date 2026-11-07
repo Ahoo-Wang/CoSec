@@ -68,27 +68,53 @@ class DocumentCacheTest {
 
     /**
      * Review M2 of #1240: a document weighs its stored size times the decoded factor, and times the compiled factor more
-     * for each compiled form; what goes over the bound leaves, the least recently used first, but the newest stays.
+     * for each compiled form; what goes over the bound leaves, the least recently used first.
      */
     @Test
-    fun `the estimated heap is bounded, but the newest document stays`() {
+    fun `the estimated heap is bounded`() {
         val decoded = 100L * DocumentCache.DECODED_FACTOR
         val compiledForm = 100L * DocumentCache.COMPILED_FACTOR
-        val cache = DocumentCache(maxEntries = 10, maxHeap = 2 * decoded + compiledForm / 2)
+        val cache = DocumentCache(maxEntries = 10, maxHeap = 2 * (decoded + compiledForm))
         val first = cache.put(key(1), digest(1), 100, document)
-        cache.put(key(2), digest(2), 100, document)
-        cache.size.assert().isEqualTo(2)
-        cache.estimatedHeap.assert().isEqualTo(2 * decoded)
-        // Compiling the first makes it the most recently used and pushes the second out.
+        val second = cache.put(key(2), digest(2), 100, document)
+        cache.put(key(3), digest(3), 100, document)
+        cache.estimatedHeap.assert().isEqualTo(3 * decoded)
+        // Compiling makes an entry the most recently used, and what it adds pushes the least recently used out.
         first.compiled(digest(7)) { CompiledDocument.tenant(TenantId("t1"), emptyList(), emptyList()) }
-        cache.get(key(2), digest(2)).assert().isNull()
+        cache.size.assert().isEqualTo(3)
+        second.compiled(digest(7)) { CompiledDocument.tenant(TenantId("t2"), emptyList(), emptyList()) }
+        cache.get(key(3), digest(3)).assert().isNull()
         cache.get(key(1), digest(1)).assert().isSameAs(first)
-        cache.estimatedHeap.assert().isEqualTo(decoded + compiledForm)
-        // Alone over the bound, the newest document stays.
-        cache.put(key(3), digest(3), 10_000, document)
-        cache.size.assert().isEqualTo(1)
-        cache.get(key(3), digest(3)).assert().isNotNull()
-        cache.estimatedHeap.assert().isEqualTo(10_000L * DocumentCache.DECODED_FACTOR)
+        cache.estimatedHeap.assert().isEqualTo(2 * (decoded + compiledForm))
+    }
+
+    /**
+     * R2-L2 of #1240's review: a document that, decoded and compiled once, would weigh more than half the bound is not
+     * admitted: it pushes no other entry out, and what it compiles goes with the call.
+     */
+    @Test
+    fun `a document too heavy to admit pushes nothing out`() {
+        val cache = DocumentCache(maxEntries = 10, maxHeap = 24_000)
+        val small = cache.put(key(1), digest(1), 100, document)
+        small.compiled(digest(7)) { CompiledDocument.tenant(TenantId("t1"), emptyList(), emptyList()) }
+        val held = cache.estimatedHeap
+        cache.admits(1_000).assert().isTrue()
+        cache.admits(1_001).assert().isFalse()
+        val heavy = cache.put(key(2), digest(2), 1_001, document)
+        var compilations = 0
+        repeat(2) {
+            heavy.compiled(digest(7)) {
+                compilations++
+                CompiledDocument.tenant(TenantId("t2"), emptyList(), emptyList())
+            }
+        }
+        // Compiled once for the entry the call holds; nothing of it in the cache.
+        compilations.assert().isEqualTo(1)
+        cache.get(key(2), digest(2)).assert().isNull()
+        cache.get(key(1), digest(1)).assert().isSameAs(small)
+        cache.estimatedHeap.assert().isEqualTo(held)
+        // The next call puts it again: another entry, compiled again.
+        cache.put(key(2), digest(2), 1_001, document).assert().isNotSameAs(heavy)
     }
 
     /**

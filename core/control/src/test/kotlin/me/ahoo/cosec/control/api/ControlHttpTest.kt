@@ -283,6 +283,18 @@ class ControlHttpTest {
             "GET" to "/documents//tenant:acme",
             "GET" to "/documents/tenant:acme/",
             "GET" to "/",
+            // R2-M1 of #1240's review: a leaf route followed by any segment is no route either.
+            "POST" to "/simulate/x",
+            "POST" to "/simulate/x/y",
+            "POST" to "/explain/x",
+            "POST" to "/analyze/x",
+            "POST" to "/documents/tenant:acme:apply/x",
+            "POST" to "/documents/tenant:acme:rollback/x",
+            "GET" to "/documents/tenant:acme/diff/x",
+            "GET" to "/documents/tenant:acme/revisions/1/propagation/x",
+            "POST" to "/changes/c1:publish/x",
+            "POST" to "/break-glass/c1:approve/x",
+            "DELETE" to "/break-glass/glass/x",
         )
         for ((method, path) in paths) {
             val (status, problem) = call(method, path, simulate.takeIf { method == "POST" })

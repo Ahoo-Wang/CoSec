@@ -155,7 +155,8 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
   细节。它报告实例最近一次读到的结果：每个 `revalidate-interval` 在自己的线程上读取的每个节点的 `maxmemory-policy`，
   探针从不读取。读不到策略时，`eviction-check: fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`。它是告警，
   不是就绪信号：不要把它放进就绪组，否则 Redis 的一次改动会让所有实例同时退出轮转，而请求仍在照常决策
-  （[Redis 要求](./storage.md#redis-requirements)）。
+  （[Redis 要求](./storage.md#redis-requirements)）。与每个指示器一样，它也会让聚合的 `/actuator/health` 变为 `DOWN`：让负载均衡器
+  和平台的健康检查探测就绪组，或者把它排除在它们探测的组之外（`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`）。
 - **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、

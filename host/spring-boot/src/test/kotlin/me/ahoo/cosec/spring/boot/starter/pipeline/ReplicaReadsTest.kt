@@ -56,7 +56,8 @@ class ReplicaReadsTest {
         )) {
             assertThrows<IllegalStateException> {
                 ReplicaReads.check(listOf("upstream" to factory(null), "replica" to factory(replicas)))
-            }.message.assert().contains("[replica] reads from replicas").contains("spring.data.redis.lettuce.read-from")
+            }.message.assert().contains("[replica] (").contains("reads from replicas")
+                .contains("spring.data.redis.lettuce.read-from")
         }
         // The upstream, by either name, or no ReadFrom at all; a factory this check cannot see into is storage.md's.
         ReplicaReads.check(
@@ -103,6 +104,27 @@ class ReplicaReadsTest {
     }
 
     /**
+     * R2-L1 of #1240's review: with two templates and no primary, an injection point resolves by parameter name, which the
+     * check does not follow, so every one is checked: the ones that read from replicas fail startup, named.
+     */
+    @Test
+    fun `without a unique or primary template every one is checked`() {
+        fun template(readFrom: ReadFrom?) = StringRedisTemplate(factory(readFrom))
+        runner
+            .withBean("stringRedisTemplate", StringRedisTemplate::class.java, { template(ReadFrom.REPLICA_PREFERRED) })
+            .withBean("otherTemplate", StringRedisTemplate::class.java, { template(null) })
+            .run { context ->
+                val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                message.assert().contains("[stringRedisTemplate] (ReadFromReplicaPreferred)")
+                    .doesNotContain("[otherTemplate]")
+            }
+        runner
+            .withBean("stringRedisTemplate", StringRedisTemplate::class.java, { template(null) })
+            .withBean("otherTemplate", StringRedisTemplate::class.java, { template(ReadFrom.UPSTREAM) })
+            .run { context -> context.startupFailure.assert().isNull() }
+    }
+
+    /**
      * Review L4 of #1240: only the template CoSec injects, the only one or the @Primary one, is checked; an application's
      * other template may read from replicas. The message names the bean.
      */
@@ -122,7 +144,7 @@ class ReplicaReadsTest {
                 val message = generateSequence(
                     context.startupFailure
                 ) { it.cause }.mapNotNull { it.message }.joinToString()
-                message.assert().contains("[replicaTemplate] reads from replicas")
+                message.assert().contains("[replicaTemplate] (ReadFromReplicaPreferred) reads from replicas")
             }
     }
 }

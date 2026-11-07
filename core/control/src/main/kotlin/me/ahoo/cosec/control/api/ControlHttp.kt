@@ -169,6 +169,11 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
         val segments = segmentsOf(request.path) ?: return notFound()
+        // A leaf route is its one segment: `/simulate/x` is no route, so a rule on `/simulate` covers what is served
+        // (R2-M1 of #1240's review).
+        if (segments.first() in LEAVES && segments.size != 1) {
+            return notFound()
+        }
         return when (segments.firstOrNull()) {
             "documents" -> documents(operator, request, segments.drop(1))
             "changes" -> changes(operator, request, segments.drop(1))
@@ -213,6 +218,10 @@ class ControlHttp(private val plane: ControlPlane) {
 
     private suspend fun documents(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
         val (keyText, verb) = segments.firstOrNull()?.let(::verbOf) ?: return notFound()
+        // `:apply` and `:rollback` end the path (R2-M1 of #1240's review); the reads match their own exact shapes.
+        if (verb != null && segments.size != 1) {
+            return notFound()
+        }
         val key = documentKey(keyText)
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
@@ -768,6 +777,9 @@ class ControlHttp(private val plane: ControlPlane) {
         private const val NOT_FOUND = 404
         private const val CONFLICT = 409
         private const val ANONYMOUS_REQUEST = "-"
+
+        /** The routes of one segment, whose verb is the whole path. */
+        private val LEAVES = setOf("simulate", "explain", "analyze")
         private val factory = JsonNodeFactory.instance
     }
 }

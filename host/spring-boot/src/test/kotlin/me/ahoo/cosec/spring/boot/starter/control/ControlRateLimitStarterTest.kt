@@ -172,6 +172,7 @@ class ControlRateLimitStarterTest {
             reached.get().assert().isEqualTo(permits)
             // A path the rule's patterns do not name is not served either: never another simulation.
             client.simulate(alice, "acme", "/").first.assert().isIn(404, 429)
+            client.simulate(alice, "acme", "/x").first.assert().isIn(404, 429)
             // globex's bucket is its own.
             client.simulate(mallory, "globex").first.assert().isEqualTo(200)
         }

@@ -163,7 +163,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `prewarmed`, and only it belongs in the readiness group. Beside it, `cosecSnapshotEviction` is `DOWN` with an
   `eviction` detail while Redis may evict the snapshot (each instance reads `maxmemory-policy` every
   `revalidate-interval` on its own thread, and logs `ERROR` from `EvictionPolicyMonitor` when that starts): an alert,
-  never a readiness signal; requests are still decided, but set `noeviction` again before an app or tenant document is
+  never a readiness signal (it also turns the aggregate `/actuator/health` DOWN, so load balancers poll the readiness
+  group); requests are still decided, but set `noeviction` again before an app or tenant document is
   evicted. `Cannot tell whether Redis may evict` there is `eviction-check=fail` on a Redis that denies or times out
   `INFO`: allow `+info`, or set `warn` when the operator has set `noeviction`, under which it is `UP` with
   `eviction: unknown`. https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshoteviction-is-down

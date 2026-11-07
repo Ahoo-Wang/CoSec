@@ -35,7 +35,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * (review M2 of #1240): a document weighs its stored size times [DECODED_FACTOR] once decoded, and times
  * [COMPILED_FACTOR] more for each compiled form it keeps, the factors measured on documents of many policies, many
  * bindings and many conditions (`DocumentCacheTest`). What `analyze` parses of it is not weighed. A candidate, which no
- * digest names, is never kept, nor is a retained revision `explain` decides at: [Simulator] compiles those per call.
+ * digest names, is never kept, nor is a retained revision `explain` decides at: [Simulator] compiles those per call. Nor
+ * is a document that, decoded and compiled once, would weigh more than half the bound (R2-L2 of #1240's review): it
+ * would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per call too.
  */
 internal class DocumentCache(
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
@@ -148,7 +150,8 @@ internal class DocumentCache(
 
     /**
      * The entry of [key] at [digest]: the one held, or [document] as a new one of [size] stored bytes. Another call
-     * that put one first wins, so every caller compiles with the same entry.
+     * that put one first wins, so every caller compiles with the same entry. A document too heavy to admit
+     * ([admits]) is an entry of its own, held by no one but the call: what it compiles goes with it.
      */
     fun put(
         key: SnapshotKey,
@@ -158,11 +161,17 @@ internal class DocumentCache(
     ): Entry = synchronized(entries) {
         entries[Key(key, digest)]?.let { return it }
         val entry = Entry(key, digest, document, size)
+        if (!admits(size)) {
+            return entry
+        }
         entries[Key(key, digest)] = entry
         heap += entry.weight
         evict()
         entry
     }
+
+    /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */
+    fun admits(size: Int): Boolean = size.toLong() * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2
 
     /** [entry]'s weight changes by [delta]: counted only while it is held, and what it pushes over the bound leaves. */
     private fun weigh(entry: Entry, delta: Long) = synchronized(entries) {

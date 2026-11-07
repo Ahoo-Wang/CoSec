@@ -163,10 +163,11 @@ class CoSecSnapshotAutoConfiguration {
     /**
      * RC1-47 (b): Redis is the store of record, so CoSec reads it from the primary. A replica lags, and a read that
      * alternates between them could take a revoked API key, or a document just published over, for current. A Lettuce
-     * client behind the Redis templates CoSec injects that reads from replicas ([ReplicaReads]) fails startup. Those are
-     * the templates a single-bean injection point resolves to, the only one or the primary one (review L4 of #1240):
-     * another template of the application's may read from replicas. CoCache's own client, which reads the snapshot and
-     * control documents, sets no `ReadFrom`: it reads the primary.
+     * client behind the Redis templates CoSec injects that reads from replicas ([ReplicaReads]) fails startup. When a
+     * type has one template, or a primary one, that is the one CoSec injects, and another template of the application's
+     * may read from replicas (review L4 of #1240). Without either, Spring resolves an injection point by its parameter
+     * name, which this check does not follow: every template of the type is checked, failing closed (R2-L1). CoCache's
+     * own client, which reads the snapshot and control documents, sets no `ReadFrom`: it reads the primary.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = [ReplicaReads.LETTUCE_CONNECTION_FACTORY])
@@ -178,10 +179,13 @@ class CoSecSnapshotAutoConfiguration {
             reactiveTemplates: ObjectProvider<org.springframework.data.redis.core.ReactiveStringRedisTemplate>,
         ): SmartInitializingSingleton = SmartInitializingSingleton {
             ReplicaReads.check(
-                listOfNotNull(
-                    templates.ifUnique?.let { ReplicaReads.nameOf(beans, it) to it.connectionFactory },
-                    reactiveTemplates.ifUnique?.let { ReplicaReads.nameOf(beans, it) to it.connectionFactory },
-                )
+                ReplicaReads.injected(beans, templates, org.springframework.data.redis.core.StringRedisTemplate::class.java) {
+                    it.connectionFactory
+                } + ReplicaReads.injected(
+                    beans,
+                    reactiveTemplates,
+                    org.springframework.data.redis.core.ReactiveStringRedisTemplate::class.java
+                ) { it.connectionFactory }
             )
         }
     }
@@ -442,18 +446,33 @@ internal object ReplicaReads {
     fun nameOf(beans: ListableBeanFactory, instance: Any): String =
         beans.getBeanNamesForType(instance.javaClass).firstOrNull { beans.getBean(it) === instance } ?: "?"
 
-    /** Each of [templates], by bean name, with its connection factory. */
+    /**
+     * The templates of [type] CoSec may be injected with, by bean name, with their connection factories: the only or
+     * primary one when there is one, else every one, since an injection point then resolves by parameter name.
+     */
+    fun <T : Any> injected(
+        beans: ListableBeanFactory,
+        provider: ObjectProvider<T>,
+        type: Class<T>,
+        factoryOf: (T) -> Any?,
+    ): List<Pair<String, Any?>> {
+        provider.ifUnique?.let { return listOf(nameOf(beans, it) to factoryOf(it)) }
+        return beans.getBeansOfType(type).map { (name, template) -> name to factoryOf(template) }
+    }
+
+    /** Each of [templates], by bean name, with its connection factory: those that read from replicas fail startup. */
     fun check(templates: List<Pair<String, Any?>>) {
-        for ((name, factory) in templates) {
-            val readFrom = (factory as? LettuceConnectionFactory)?.clientConfiguration?.readFrom?.orElse(null) ?: continue
+        val replicas = templates.mapNotNull { (name, factory) ->
+            val readFrom = (factory as? LettuceConnectionFactory)?.clientConfiguration?.readFrom?.orElse(null)
             // ReadFrom.UPSTREAM and ReadFrom.MASTER are two instances of one class.
-            check(readFrom.javaClass == ReadFrom.UPSTREAM.javaClass) {
-                "CoSec's Redis template [$name] reads from replicas (${readFrom.javaClass.simpleName}): a replica " +
-                    "lags the primary, and CoSec reads Redis as its store of record. Read from the upstream: remove " +
-                    "spring.data.redis.lettuce.read-from, or the client customizer that sets ReadFrom on the factory " +
-                    "of [$name]; a template of your own may read from replicas when it is not the one CoSec injects " +
-                    "(the only one, or the @Primary one)."
-            }
+            readFrom?.takeIf { it.javaClass != ReadFrom.UPSTREAM.javaClass }?.let { "[$name] (${it.javaClass.simpleName})" }
+        }
+        check(replicas.isEmpty()) {
+            "CoSec's Redis template ${replicas.joinToString()} reads from replicas: a replica lags the primary, and " +
+                "CoSec reads Redis as its store of record. Read from the upstream: remove " +
+                "spring.data.redis.lettuce.read-from, or the client customizer that sets ReadFrom on its factory; a " +
+                "template of your own may read from replicas when it is not one CoSec may be injected with (with " +
+                "several templates of a type, mark the one CoSec uses @Primary)."
         }
     }
 }
