@@ -363,12 +363,13 @@ Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {
 ### 锁定的缓存设置导致启动失败 {#startup-fails-on-a-locked-cache-setting}
 
 ```text
+Cache[PolicySnapshotCache] - ttl is pinned by cosec to ...; ...
 Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
-某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上锁定的字段，例如快照存储的
-`ttl`、`unknown-read` 或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
-能让该条目启动，但 CoSec 约束的字段保持原值（[优先级](./configuration.md#precedence)）。
+某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上固定或锁定的字段，例如快照存储的
+`ttl` 或 `unknown-read`（固定），或者它的 `key-prefix`（锁定）。删掉该设置，或者让定制器排除 CoSec 的缓存
+（`supports(cacheName)`）。`unlock` 只能作用于锁定的字段：在其中列出固定的字段同样使启动失败（[优先级](./configuration.md#precedence)）。
 
 ```text
 cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.
@@ -378,12 +379,11 @@ cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forev
 改为记录告警。设置了锁定字段的条目无论该项如何都会启动失败。
 
 ```text
-cocache.caches configures undeclared caches [ChangeRequestCache]; declared caches: [...]
+cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches: [...]
 ```
 
-该条目指向本实例不创建的缓存：没有运行控制面的实例上的控制面缓存、没有 `MembershipLoader` 时的 `MembershipCache`，或者关闭
-JWT 时的吊销表。所有服务共用一份配置时会遇到它。把这类条目放进创建该缓存的服务的配置，或者在其他服务上设置
-`cocache.caches-validation: warn`。
+该条目指向没有谁会创建的缓存，通常是拼错的名字。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的
+条目（没有运行控制面的服务上的控制面缓存）照常启动；请改正名字。
 
 ### 缓存 key 重叠导致启动失败 {#startup-fails-on-overlapping-cache-keys}
 

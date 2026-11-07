@@ -126,14 +126,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
   its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
   `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
-- **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
-  field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
-  any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
-  fields keep their values anyway. **`cocache.caches sets unknown keys [...]`**: CoCache's own check of a misspelled
-  or inapplicable per-cache key; fix the key (`cocache.caches-validation: warn` only logs it). **`cocache.caches
-  configures undeclared caches [...]`**: an entry for a CoSec cache this instance does not create (a control-plane
-  cache without the control plane, `MembershipCache` without a `MembershipLoader`, a revocation table with JWT off),
-  usually from a configuration shared by every service; move it or set `caches-validation: warn` there. **`Cache[<name>] - its
+- **`Cache[<CoSec cache>] - ... pinned by cosec`** or **`... locked by cosec`**: a `cocache.caches.[name].*` entry or a
+  `CacheSpecCustomizer` sets a field CoSec pins (a store of record's `ttl` or `unknown-read`) or locks (the snapshot
+  store's `local-max-age`, any `key-prefix`) on its caches. Remove the setting or exclude CoSec's caches; never suggest
+  `unlock`: a pinned field has none, and listing it fails startup too. **`cocache.caches sets unknown keys [...]`**:
+  CoCache's own check of a misspelled or inapplicable per-cache key; fix the key (`cocache.caches-validation: warn`
+  only logs it). **`cocache.caches configures undeclared caches [...]`**: the name matches no cache, usually a typo;
+  CoSec publishes every name it may create, so an entry for a CoSec cache this instance does not create starts. **`Cache[<name>] - its
   storage keys (...) overlap those of Cache[<other>]`**: an application cache and a CoSec cache would share Redis
   keys; give the application's cache another prefix or namespace (`cosec.key-prefix` moves every instance's data).
   **An `IllegalStateException` naming a channel pattern** such as

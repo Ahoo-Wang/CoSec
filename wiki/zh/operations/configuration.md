@@ -319,12 +319,13 @@ Redis 中。
 | `cocache.backend` | `redis`（默认）或 `memory`。使用 `memory` 时实例之间不共享任何内容，驱逐检查总是通过，每个实例启动时都没有文档：仅用于本地开发和测试。 |
 | `cocache.defaults.cache.*`、`cocache.defaults.store.*` | 只填补缓存的声明没有写出的字段。CoSec 的缓存声明了它们依赖的字段，所以这些配置影响不大：`MembershipCache` 属于 `cache`，其余 CoSec 缓存都属于 `store`（[优先级](#precedence)）。 |
 | `cocache.overrides.cache.*`、`cocache.overrides.store.*` | 收紧所有缓存的陈旧界限（`local-max-age`、`absent-ttl`）与 `read-failure`，CoSec 锁定的字段除外。 |
-| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误），以及为本实例不创建的缓存写的条目，同样启动失败，除非 `cocache.caches-validation: warn`：控制面的缓存只在运行控制面的实例上存在，`MembershipCache` 只在有 `MembershipLoader` 时存在，吊销表只在启用 JWT 时存在（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。 |
+| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 固定或锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误）同样启动失败，除非 `cocache.caches-validation: warn`（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的条目（没有运行控制面的服务上的控制面缓存、没有 `MembershipLoader` 时的 `MembershipCache`、关闭 JWT 时的吊销表）照常启动。 |
 | `cocache.key-prefix` | 无：CoSec 锁定自己的前缀 [`cosec.key-prefix`](#key-prefix)。 |
 | `cocache.redis.command-timeout` | 一条 Redis 命令最多用多久（默认 `2s`）。超时的快照读取算作读取失败（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `cocache.redis.channel-mode` | `pubsub` 或 `sharded` 失效。所有实例以及控制面必须一致。 |
 | `cocache.redis.assume-maxmemory-policy` | 读不到 `INFO memory` 时 CoCache 自己的驱逐检查假定的策略。CoSec 的文档和记录是 `Store`，所以 `allkeys-*`、或读不到策略又没有设置此项时，CoCache 拒绝启动；`cosec.authorization.snapshot.eviction-check=warn` 改变不了这一点（[Redis 要求](./storage.md#redis-requirements)）。 |
-| `cocache.redis.store-eviction-check` | `volatile-*` 策略遇到 `ttl` 有限的 `Store`（吊销表与影子缓存）时 CoCache 怎么做：`warn`（默认）、`fail` 或 `off`。 |
+| `cocache.redis.store-eviction-check` | `volatile-*` 策略遇到策略中 `ttl` 有限的 `Store`（影子缓存）时 CoCache 怎么做：`warn`（默认）、`fail` 或 `off`。它不计入吊销表：吊销表的条目各带自己的寿命，`volatile-*` 同样可能驱逐它们；CoSec 自己的检查只接受 `noeviction`（[Redis 要求](./storage.md#redis-requirements)）。 |
+| `cocache.redis.store-eviction-check-interval` | CoCache 多久重读一次策略，用于它的日志与 `storeEviction` 健康详情。CoSec 自己每个 `revalidate-interval` 重读一次，用于 `cosecSnapshotEviction`。 |
 | `spring.data.redis.*` | CoCache 连接的 Redis，也是限流器和 Redis API key 存储使用的 Redis。 |
 
 控制面的缓存和影子缓存以与快照存储相同的锁定创建，同样的配置规则也适用于它们。
@@ -341,18 +342,19 @@ Redis 中。
 4. 应用的 CoCache `CacheSpecCustomizer` bean；
 5. `cocache.overrides.*`，只能收紧；
 6. `cocache.caches.[<CacheName>].*`；
-7. CoSec 的约束，最后执行，在 `unlock` 之后也执行。
+7. CoSec 的固定与约束，最后执行。
 
-因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authorization.cache.token.*` 配置项。CoSec 锁定部分字段
-（CoCache 的 `lock`）：全局层跳过它们，设置了它们的 `cocache.caches` 条目使启动失败（除非该条目在 `unlock` 中列出它，
-即 CoCache 的破窗开关），修改它们的定制器抛出异常。其中一些还受到约束（第 7 步），连 `unlock` 也改变不了：
+因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authorization.cache.token.*` 配置项。CoSec 固定部分字段
+（CoCache 的 `pin`）：它们的值不变，全局层跳过它们，修改它们的定制器抛出异常，设置了它们、或在 `unlock` 中列出它们的
+`cocache.caches` 条目使启动失败：它们没有破窗开关。另一些字段被锁定（`lock`）：条目只有在 `unlock` 中列出它，即 CoCache
+的破窗开关，才能设置它。少数字段受到约束（第 7 步）：条目可以设置它们，值被限制在范围之内：
 
-| 缓存 | 锁定 | 约束 | 原因 |
-|---|---|---|---|
-| `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ReferenceIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
-| `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache` | `unknown-read` | `unknown-read: throw` | 故障不能读成“没有样本”或“没有实例”。 |
-| `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
-| `RevokedTokenCache`、`RevokedSubjectCache` | — | — | 作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。 |
-| 每个 CoSec 缓存 | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |
+| 缓存 | 固定 | 锁定 | 约束 | 原因 |
+|---|---|---|---|---|
+| `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ReferenceIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl` 永不过期，`unknown-read: throw` | 快照存储的 `local-max-age` | — | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
+| `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache` | `unknown-read: throw` | — | — | 故障不能读成“没有样本”或“没有实例”。 |
+| `MembershipCache` | `read-failure: throw`、`unknown-read: throw` | — | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
+| `RevokedTokenCache`、`RevokedSubjectCache` | — | — | — | 作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。 |
+| 每个 CoSec 缓存 | — | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |
 
 **下一步：** 文档存在哪里、实例如何读取它们，见[存储与缓存](./storage.md)。

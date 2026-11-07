@@ -439,13 +439,14 @@ yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noev
 ### Startup fails on a locked cache setting
 
 ```text
+Cache[PolicySnapshotCache] - ttl is pinned by cosec to ...; ...
 Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
-A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
-the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
-the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
-([Precedence](./configuration.md#precedence)).
+A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec pins or locks on its caches,
+such as the `ttl` or `unknown-read` of the snapshot store (pinned) or its `key-prefix` (locked). Remove the setting, or
+exclude CoSec's caches from the customizer (`supports(cacheName)`). `unlock` reaches only a locked field: listing a
+pinned one fails startup too ([Precedence](./configuration.md#precedence)).
 
 ```text
 cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.
@@ -455,13 +456,12 @@ CoCache's own check: the entry sets a key CoCache does not define, or one that d
 key; `cocache.caches-validation: warn` logs it instead. An entry that sets a locked field fails whatever that says.
 
 ```text
-cocache.caches configures undeclared caches [ChangeRequestCache]; declared caches: [...]
+cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches: [...]
 ```
 
-The entry names a cache this instance does not create: a control-plane cache on an instance without the control plane,
-`MembershipCache` without a `MembershipLoader`, or a revocation table with JWT off. A configuration shared by every
-service hits this. Keep such entries in the configuration of the services that create the cache, or set
-`cocache.caches-validation: warn` on the others.
+The entry names a cache no one creates, usually a misspelled name. CoSec publishes the name of every cache it may
+create, so an entry for a CoSec cache this instance does not create (a control-plane cache on a service without the
+control plane) starts; fix the name.
 
 ### Startup fails on overlapping cache keys
 

@@ -110,10 +110,14 @@ contain `:`, so a key names one document only.
   - CoCache's, for its `Store`s, which CoSec's documents and records are: an `allkeys-*` policy always fails startup,
     and so does an `INFO` it cannot read, whatever `eviction-check` says. With a Redis that denies `INFO`, also set
     [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) to the policy
-    you have set (`noeviction`).
+    you have set (`noeviction`). CoCache accepts `volatile-*` while no `Store`'s policy has a `ttl`, but the revocation
+    tables' entries each carry a lifetime of their own, which `volatile-*` may evict before it ends, so that a revoked
+    token is accepted again: CoSec's check is the one that refuses it.
 - **Checked again while it runs.** CoSec's check reads every node's `maxmemory-policy` again every
   `revalidate-interval`, on a thread of its own, so a later `CONFIG SET maxmemory-policy`, a failover to a node set up
-  otherwise or a restart is seen; CoCache's runs only at startup. While a node may evict, the `cosecSnapshotEviction` health indicator is `DOWN` with an
+  otherwise or a restart is seen. (CoCache's also checks a `Store` created after startup, and, with
+  `cocache.redis.store-eviction-check-interval`, reads the policy again too, but only logs and reports `storeEviction`
+  in its health details.) While a node may evict, the `cosecSnapshotEviction` health indicator is `DOWN` with an
   `eviction` detail that says why, and the instance logs an `ERROR` when that starts, with either `eviction-check`
   ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). A policy that cannot be read is `DOWN` too
   under `fail`; under `warn`, which accepted that at startup, it is `UP` with `eviction: unknown`. Requests are not
