@@ -87,7 +87,8 @@ class ReactiveRedisRateLimiterTest {
         }
         val template = ReactiveStringRedisTemplate(factory)
         repeat(10_000) {
-            val limiter = ReactiveRedisRateLimiter(template, if (random.nextBoolean()) prefixes.random(random) else prefix())
+            val limiter =
+                ReactiveRedisRateLimiter(template, if (random.nextBoolean()) prefixes.random(random) else prefix())
             // The engine's rule ids, or anything that does not begin with `}`.
             val rule = if (random.nextBoolean()) rules.random(random) else text(random.nextInt(0, 6)).trimStart('}')
             val (current, previous) = limiter.keysOf(rule, text(random.nextInt(0, 8)), random.nextLong(1, 1L shl 40))
