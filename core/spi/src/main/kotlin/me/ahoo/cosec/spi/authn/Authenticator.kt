@@ -121,8 +121,16 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
         }
-        // RC1-52 (`IDN-10`): an id with an unpaired surrogate would share a Redis key with another id. An authenticator
-        // that gives one throws here, which the pipeline answers 503, as it answers any authenticator that throws.
+    }
+
+    /**
+     * RC1-52 (`IDN-10`): an id with an unpaired surrogate would share a Redis key with another id. Another authenticator
+     * that gives one throws here, from the public constructors, which the pipeline answers 503, as it answers any
+     * authenticator that throws. CoSec's own authenticators check the ids where they read them (a token's claims, an
+     * [me.ahoo.cosec.spi.apikey.ApiKey], a forwarded identity), so the constructor they use does not scan them twice
+     * on every request.
+     */
+    private fun requireWellFormed() {
         require(wellFormed()) {
             "Principal [${Identifiers.printable(id.value)}] of tenant [${Identifiers.printable(tenant.value)}] holds an " +
                 "id with an unpaired UTF-16 surrogate: its id, tenant, credential id or memberships."
@@ -163,7 +171,9 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         breakGlass = false,
         issuedAt = null,
         apiKeyCredential = false
-    )
+    ) {
+        requireWellFormed()
+    }
 
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
@@ -185,7 +195,9 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         breakGlass = false,
         issuedAt = null,
         apiKeyCredential = false,
-    )
+    ) {
+        requireWellFormed()
+    }
 
     /**
      * Whether an API key proved the principal, a workload's credential: so CoSec's API key authenticator says, by
