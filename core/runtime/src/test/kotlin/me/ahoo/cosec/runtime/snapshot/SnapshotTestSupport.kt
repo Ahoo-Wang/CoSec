@@ -51,6 +51,17 @@ class ManualClock(@Volatile var now: Instant = Instant.parse("2026-10-21T08:00:0
     override fun instant(): Instant = now
 }
 
+/** Monotonic time a test moves by hand, for [SnapshotSource.nanoTime]: apart from [ManualClock], as on a real host. */
+class ManualNanoTime : LongSupplier {
+    private val now = AtomicLong()
+
+    fun advance(duration: Duration) {
+        now.addAndGet(duration.toNanos())
+    }
+
+    override fun getAsLong(): Long = now.get()
+}
+
 /** What [FakeCompiler] produces: the revision, the entries, and which entries failed to compile (RFC 0003 F4). */
 data class Compiled(val key: SnapshotKey, val revision: Long, val entries: List<String>, val broken: Set<String>)
 

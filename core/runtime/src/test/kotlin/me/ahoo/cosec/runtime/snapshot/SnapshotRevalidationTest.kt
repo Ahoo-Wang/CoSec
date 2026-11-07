@@ -326,18 +326,19 @@ class SnapshotRevalidationTest {
     }
 
     /**
-     * #1215, `SNP-6`: a pass that has finished no document for `storeReadTimeout` has no read in flight; what holds it
-     * is a compilation. The next tick starts a new pass, so one compilation that never ends does not hold back the
-     * revalidation of every other document.
+     * #1215, `SNP-6`: a pass that has finished no document for `storeReadTimeout` and has no read in flight is held only
+     * by a compilation. The next tick starts a new pass, so a compilation that never ends does not hold back the
+     * revalidation of the documents that pass reaches.
      */
     @Test
     fun aPassHeldOnlyByACompilationDoesNotHoldBackTheNext() {
         val parked = CopyOnWriteArrayList<Runnable>()
         val stuck = AtomicBoolean()
         val compile = Executor { if (stuck.get()) parked += it else it.run() }
-        val clock = ManualClock()
+        val elapsed = ManualNanoTime()
         val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
-        testSource(store, options = options, clock = clock, compileExecutor = compile).use { source ->
+        testSource(store, options = options, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
             val apps = installed(source, 3)
             store.dropNotifications = true
             store.put(apps[0], document(2, "changed"))
@@ -350,11 +351,11 @@ class SnapshotRevalidationTest {
             others.forEach { key -> store.readLog.count { it == key }.assert().isEqualTo(1) }
 
             // Slow, not stalled: the tick owes a pass and reads nothing.
-            clock.advance(options.storeReadTimeout)
+            elapsed.advance(options.storeReadTimeout)
             val owed = source.tick()
             others.forEach { key -> store.readLog.count { it == key }.assert().isEqualTo(1) }
 
-            clock.advance(Duration.ofSeconds(1))
+            elapsed.advance(Duration.ofSeconds(1))
             source.tick().assert().isSameAs(owed)
             others.forEach { key -> store.readLog.count { it == key }.assert().isEqualTo(2) }
 
@@ -364,6 +365,96 @@ class SnapshotRevalidationTest {
             first.isDone.assert().isTrue()
             owed.isDone.assert().isTrue()
             source.peek(apps[0].appId)!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /**
+     * #1215, `SNP-6`: stalled means no document finished for `storeReadTimeout`, counted from the last one, not from the
+     * start. A pass whose compilations are slow but still finishing is not abandoned (it would start again from the
+     * first document every `storeReadTimeout`, and the documents after it would never be reached), and a step of the
+     * wall clock is not time passing.
+     */
+    @Test
+    fun aPassThatKeepsFinishingDocumentsIsNotAbandoned() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val clock = ManualClock()
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
+        testSource(store, options = options, clock = clock, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            val apps = installed(source, 3)
+            store.dropNotifications = true
+            store.put(SnapshotKey.Platform, document(2))
+            apps.forEach { store.put(it, document(2, "${it.appId}-2")) }
+            stuck.set(true)
+            store.readLog.clear()
+            val first = source.tick()
+            // Both lanes wait for a compilation, with no read in flight.
+            parked.assert().hasSize(2)
+            store.readLog.assert().hasSize(2)
+
+            // 20 s in, one compilation ends: the pass finished a document, and reads the next.
+            elapsed.advance(Duration.ofSeconds(20))
+            parked.removeAt(0).run()
+            store.readLog.assert().hasSize(3)
+            parked.assert().hasSize(2)
+
+            // 31 s in, 11 s after its last document, and the wall clock steps an hour: slow, not stalled.
+            elapsed.advance(Duration.ofSeconds(11))
+            clock.advance(Duration.ofHours(1))
+            val owed = source.tick()
+            store.readLog.assert().hasSize(3)
+
+            // Past `storeReadTimeout` after its last document: stalled, and the next pass starts.
+            elapsed.advance(Duration.ofSeconds(20))
+            source.tick().assert().isSameAs(owed)
+            store.readLog.size.assert().isGreaterThan(3)
+
+            stuck.set(false)
+            while (parked.isNotEmpty()) {
+                parked.removeAt(0).run()
+            }
+            first.isDone.assert().isTrue()
+            owed.isDone.assert().isTrue()
+        }
+    }
+
+    /**
+     * #1215, `SNP-6`: a pass with a read in flight is never abandoned, whatever either clock says: not when the wall
+     * clock steps forward, nor when a late tick comes after `storeReadTimeout` but before the timeouts of those reads
+     * have fired. So the reads of an abandoned pass and of the pass after it never add up past `reloadConcurrency`.
+     */
+    @Test
+    fun aPassWithAReadInFlightIsNeverAbandoned() {
+        val clock = ManualClock()
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 2)
+        testSource(store, options = options, clock = clock).use { source ->
+            source.nanoTime = elapsed
+            installed(source, 4)
+            store.hold = true
+            store.readLog.clear()
+            val first = source.tick()
+            repeat(2) { store.pending.removeAt(0).release() }
+            store.pending.assert().hasSize(2)
+
+            clock.advance(options.storeReadTimeout.multipliedBy(2))
+            val owed = source.tick()
+            store.pending.assert().hasSize(2)
+
+            elapsed.advance(options.storeReadTimeout.plusSeconds(1))
+            source.tick().assert().isSameAs(owed)
+            store.pending.assert().hasSize(2)
+
+            var peak = 0
+            while (!owed.isDone) {
+                store.pending.removeAt(0).release()
+                peak = maxOf(peak, store.pending.size)
+            }
+            first.isDone.assert().isTrue()
+            peak.assert().isLessThanOrEqualTo(2)
         }
     }
 }

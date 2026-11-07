@@ -78,8 +78,16 @@ class ReactiveRedisRateLimiterTest {
         val prefixes = listOf("cosec:rate-limiter", "{cosec}:rate-limiter", "a{b:rate-limiter", "a}b{c}:rl", "x{", "")
         val rules = listOf("rule", "a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
         fun text(length: Int) = (0 until length).map { BUCKET_CHARACTERS.random(random) }.joinToString("")
+
+        // A random prefix, unless it is one the limiter refuses: its first `{` immediately followed by `}`.
+        fun prefix(): String = generateSequence { text(random.nextInt(0, 10)) }.first { candidate ->
+            val trimmed = candidate.trimEnd(':')
+            val brace = trimmed.indexOf('{')
+            brace < 0 || trimmed.getOrNull(brace + 1) != '}'
+        }
+        val template = ReactiveStringRedisTemplate(factory)
         repeat(10_000) {
-            val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefixes.random(random))
+            val limiter = ReactiveRedisRateLimiter(template, if (random.nextBoolean()) prefixes.random(random) else prefix())
             // The engine's rule ids, or anything that does not begin with `}`.
             val rule = if (random.nextBoolean()) rules.random(random) else text(random.nextInt(0, 6)).trimStart('}')
             val (current, previous) = limiter.keysOf(rule, text(random.nextInt(0, 8)), random.nextLong(1, 1L shl 40))

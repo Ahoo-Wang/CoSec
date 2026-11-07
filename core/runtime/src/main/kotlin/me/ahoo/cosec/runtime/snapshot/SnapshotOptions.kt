@@ -24,9 +24,11 @@ import java.time.Duration
  */
 data class SnapshotOptions(
     /**
-     * How often every installed document is revalidated with a conditional read: the bound on how long a change whose
-     * invalidation was lost, or whose reload failed, goes unseen (`SNP-6`). At least [MIN_REVALIDATE_INTERVAL], at most
-     * [MAX_REVALIDATE_INTERVAL], less than [lagWarn], and less than [failClosedMaxLag] when [failClosedTenants] are set.
+     * How often a pass starts that revalidates every installed document with a conditional read; while the previous
+     * pass is still in flight, the next starts as soon as it ends (#1215). A change whose invalidation was lost, or whose
+     * reload failed, is installed by the first pass that reaches its document after the change is readable (`SNP-6`).
+     * At least [MIN_REVALIDATE_INTERVAL], at most [MAX_REVALIDATE_INTERVAL], less than [lagWarn], and less than
+     * [failClosedMaxLag] when [failClosedTenants] are set.
      */
     val revalidateInterval: Duration = Duration.ofSeconds(10),
     /** Lag above which a document is logged at WARN and reported to [SnapshotMetrics.onLagExceeded]. */
@@ -87,8 +89,8 @@ data class SnapshotOptions(
 
     companion object {
         /**
-         * The longest [revalidateInterval]: how long, at worst, an instance serves a document after the store changed
-         * it and the invalidation was lost (RC1-50).
+         * The longest [revalidateInterval] (RC1-50): the passes that install a change whose invalidation was lost start
+         * at least this often, unless the one before is still in flight.
          */
         val MAX_REVALIDATE_INTERVAL: Duration = Duration.ofMinutes(5)
 
