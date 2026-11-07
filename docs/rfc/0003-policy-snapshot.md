@@ -351,6 +351,7 @@ CacheSpec.builder<SnapshotKey, SnapshotDocument>("PolicySnapshotCache")
 > - **一个前缀（`SNP-9`，RC1-46）。** `cosec.key-prefix`（默认 `cosec`）取代 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 与 `cosec.api-key.key-prefix`。一个部署写进 Redis 的每个 key 都在它下面：快照文档、控制面记录、候选、影子报告、吊销、成员关系、API Key（`<p>:api-key`）、限流计数（`<p>:rate-limiter`，原为固定值）与社交登录的 OAuth state（`<p>:oauth:state`，原为固定值）。默认配置下 key 的字节不变。
 > - **旧前缀让启动失败。** 环境里还设着三个旧前缀之一时，不论 `cosec.unknown-properties` 怎么设，启动都失败。错误信息列出要搬的数据族，并说明吊销与 API Key 要先复制，否则按旧前缀吊销的 token 会重新被接受。`cosec.key-prefix` 未设时，按快照文档的前缀计算要搬的数据族（第 2 轮审查 M1）。
 > - **不经 starter 的缓存也被固定（`SNP-3` 修订，RC1-45）。** `createPolicySnapshotCache` 对任何 spec 施加 `storeOfRecord()`、快照的编解码器与 key 编码器，并去掉 key 过滤器、按条目的 TTL、版本化写入与加载器；`CoSecCacheAssembler.assemble` 在 customizer 之后恢复每个 spec 的编解码器、加载器、key 过滤器与 TTL 函数。
+> - **运行时的淘汰策略与主节点读（2026-11-07，#1240，RC1-47）。** `SNP-3` 仍是启动规则。启动之后，淘汰策略每 `revalidate-interval` 在探针路径之外定时重读一次，由单独的指示器 `cosecSnapshotEviction` 报告：可能淘汰时 DOWN；`eviction-check: warn` 下读不到时 UP 并带 `eviction: unknown`，`fail` 下读不到时 DOWN。它是告警信号，不属于就绪组；`cosecSnapshot` 只报告安装状态。请求路径不变：丢失的文档在见过它的实例上本来就 fail closed。CoSec 可能注入的 Redis 模板必须从主节点读（Lettuce 的 `ReadFrom` 是 upstream），否则启动失败并点名模板；CoCache 自己的客户端不设 `ReadFrom`，从主节点读。
 
 ### 4.2 两层接口
 
