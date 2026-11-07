@@ -180,6 +180,8 @@ public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCache : me/ahoo/co
 	public synthetic fun lookup (Ljava/lang/Object;)Lme/ahoo/cocache/api/Lookup;
 	public fun lookup (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cocache/api/Lookup;
 	public fun lookupAll (Ljava/util/Collection;)Ljava/util/Map;
+	public synthetic fun lookupRemote (Ljava/lang/Object;)Lme/ahoo/cocache/api/Lookup$Known;
+	public fun lookupRemote (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Lme/ahoo/cocache/api/Lookup$Known;
 	public synthetic fun put (Ljava/lang/Object;Ljava/lang/Object;)V
 	public synthetic fun put (Ljava/lang/Object;Ljava/lang/Object;Ljava/time/Duration;)V
 	public fun put (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)V
