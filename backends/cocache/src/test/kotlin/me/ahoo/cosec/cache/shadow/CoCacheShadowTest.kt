@@ -83,8 +83,8 @@ class CoCacheShadowTest {
 
     @Test
     fun `the control plane's candidate is what an instance reads, until it is withdrawn`() = runBlocking<Unit> {
-        val control = node().let { CoCacheControlStore.create(it.runtime, it.cache, keyPrefix) }
-        val instance = CoCacheCandidateStore.create(node().runtime, keyPrefix)
+        val control = node().let { CoCacheControlStore.create(it.factory, it.cache, keyPrefix) }
+        val instance = CoCacheCandidateStore.create(node().factory, keyPrefix)
         instance.candidate(key).assert().isNull()
         val body = """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}"""
         val document = SnapshotDocument(2, 5, Instant.parse("2026-11-01T00:00:00Z"), body.encodeToByteArray())
@@ -100,7 +100,7 @@ class CoCacheShadowTest {
 
     @Test
     fun `reports written at once by many instances are all kept`() = runBlocking<Unit> {
-        val sinks = (1..4).map { CoCacheShadowReports.create(node().runtime, keyPrefix, clock) }
+        val sinks = (1..4).map { CoCacheShadowReports.create(node().factory, keyPrefix, clock) }
         sinks.mapIndexed { i, sink ->
             async {
                 repeat(
@@ -118,7 +118,7 @@ class CoCacheShadowTest {
     /** Round-2 review R1: each instance's report has a key of its own, which an ACL can confine that instance to. */
     @Test
     fun `each instance's report has its own key, and one under another's key is not counted`() = runBlocking<Unit> {
-        val sink = CoCacheShadowReports.create(node().runtime, keyPrefix, clock)
+        val sink = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
         sink.write(report("i0", 1))
         sink.write(report("i1", 2))
         // Read directly, from another node: one report per key, `<p>:shadow:report:<window>:<instance>`.
@@ -139,7 +139,7 @@ class CoCacheShadowTest {
         reports.async().put("c1@1:i1", report("i2", 9)).await()
         assertThrownBy<IllegalStateException> { runBlocking { sink.reports("c1@1") } }
         // So is a listed instance whose report is gone: the instance that vanishes may be the one that saw errors.
-        reports.async().invalidate("c1@1:i1").await()
+        reports.async().delete("c1@1:i1").await()
         assertThrownBy<IllegalStateException> { runBlocking { sink.reports("c1@1") } }
         // An id that would make a key ambiguous, or a negative count, is never written.
         listOf(report("x:i3", 1), report("i3", -1), report("i3", 1).copy(window = "c1@1:i0")).forEach { bad ->
@@ -149,7 +149,7 @@ class CoCacheShadowTest {
 
     @Test
     fun `statuses older than a minute are not counted`() = runBlocking<Unit> {
-        val sink = CoCacheShadowReports.create(node().runtime, keyPrefix, clock)
+        val sink = CoCacheShadowReports.create(node().factory, keyPrefix, clock)
         val installed = mapOf(key to InstalledDocument(5, Duration.ofSeconds(2)))
         sink.write(InstanceStatus("old", clock.now, installed))
         clock.now = clock.now.plusSeconds(45)

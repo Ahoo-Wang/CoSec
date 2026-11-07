@@ -169,6 +169,29 @@ class SliceTest {
         }
     }
 
+    /**
+     * An id whose UTF-8 form loses a character, an unpaired surrogate (UTF-8 writes `?` for it), is a valid app or
+     * tenant id, but Redis cannot key it losslessly: `beta\uD800` would read the document of `beta?`. CoCache 8
+     * (alpha.5) refuses such a key, so its documents cannot be read: unavailable, never decided on another's document.
+     * Ids from a JSON body or token can carry one (`"\uD800"`), HTTP headers and percent-decoded paths cannot.
+     */
+    @Test
+    fun `an id Redis cannot key losslessly is unavailable, never decided on another's document`() {
+        slice.publish(SnapshotKey.Tenant("beta?"), beta)
+        evaluate("GET", "/admin", "bob@beta?").proceed.assert().isTrue()
+        evaluate("GET", "/admin", "bob@beta\uD800").let {
+            it.proceed.assert().isFalse()
+            it.status.assert().isEqualTo(503)
+            it.slug().assert().isEqualTo("unavailable")
+        }
+        evaluate("GET", "/orders/1", "alice@acme:clerk", app = "order\uDC00").let {
+            it.proceed.assert().isFalse()
+            it.status.assert().isEqualTo(503)
+        }
+        // A DENY that decides without the document still applies.
+        evaluate("DELETE", "/orders/1", "bob@beta\uD800").status.assert().isEqualTo(403)
+    }
+
     @Test
     fun `problems are written as problem+json with the request id`() {
         val outcome = evaluate("DELETE", "/orders/1", "alice@acme:clerk")

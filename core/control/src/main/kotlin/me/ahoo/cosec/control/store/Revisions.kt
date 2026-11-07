@@ -374,7 +374,7 @@ class Revisions(
         while (document != null && digest != null && document.revision > latest) {
             missing += RevisionEntry(document.revision, digest, document.publishedAt)
             val parent = document.provenance?.parent ?: break
-            digest = SnapshotDigest(hex(parent.digest))
+            digest = SnapshotDigest.parse(parent.digest)
             document = store.record(key, digest)?.let { decode(key, it) }
         }
         val repaired = missing.sortedBy { it.revision }
@@ -397,7 +397,7 @@ class Revisions(
         var current = head(key) ?: return null
         while (current.revision > revision) {
             val parent = current.document.provenance?.parent ?: return null
-            val digest = SnapshotDigest(hex(parent.digest))
+            val digest = SnapshotDigest.parse(parent.digest)
             val record = store.record(key, digest) ?: return null
             current = Head(key, decode(key, record), StoredDocument(record, digest))
         }
@@ -457,7 +457,7 @@ class Revisions(
         var document = head.document
         while (true) {
             val parent = document.provenance?.parent ?: return ChainCheck.Intact(document.revision)
-            val record = store.record(key, SnapshotDigest(hex(parent.digest)))
+            val record = store.record(key, SnapshotDigest.parse(parent.digest))
             if (record == null) {
                 return if (parent.revision >= floor) ChainCheck.Broken(parent) else ChainCheck.Intact(document.revision)
             }
@@ -684,11 +684,5 @@ class Revisions(
         }
 
         private fun requireDocumentKey(key: SnapshotKey): SnapshotKey = key.also { ownerOf(it) }
-
-        private fun hex(text: String): ByteArray = ByteArray(
-            text.length / 2
-        ) { text.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() }
-
-        private const val HEX = 16
     }
 }

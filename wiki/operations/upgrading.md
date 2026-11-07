@@ -791,7 +791,9 @@ At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it
 platform document could silently drop its DENY statements. It reads it from `INFO memory`. When `INFO` fails or is
 not allowed, startup fails too, and also when the CoCache backend is a wrapper or a custom backend it
 cannot read. If you have set `noeviction` yourself, set `cosec.authorization.snapshot.eviction-check=warn`: startup
-goes on and logs a warning that starts with `!!!`.
+goes on and logs a warning that starts with `!!!`. CoCache 8, which keeps CoSec's documents as `Store`s, checks the
+policy too and is not told by that setting: also set `cocache.redis.assume-maxmemory-policy=noeviction`
+([Redis requirements](./storage.md#redis-requirements)).
 
 #### Each instance decides from a snapshot
 

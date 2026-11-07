@@ -410,11 +410,22 @@ public abstract interface class me/ahoo/cosec/spi/snapshot/SnapshotChangeListene
 }
 
 public final class me/ahoo/cosec/spi/snapshot/SnapshotDigest {
+	public static final field Companion Lme/ahoo/cosec/spi/snapshot/SnapshotDigest$Companion;
+	public static final field PATTERN Ljava/lang/String;
+	public static final field SHA_256 Ljava/lang/String;
+	public static final field SHA_256_BYTES I
+	public fun <init> (Ljava/lang/String;[B)V
 	public fun <init> ([B)V
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAlgorithm ()Ljava/lang/String;
 	public fun hashCode ()I
 	public final fun toByteArray ()[B
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/snapshot/SnapshotDigest$Companion {
+	public final fun isDigest (Ljava/lang/String;)Z
+	public final fun parse (Ljava/lang/String;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 }
 
 public final class me/ahoo/cosec/spi/snapshot/SnapshotDocument {

@@ -13,7 +13,9 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.StoreSpec
+import me.ahoo.cocache.core.codec.StringCodec
+import me.ahoo.cocache.core.policy.DefaultPolicies
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.context.properties.bind.Binder
@@ -21,21 +23,22 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import java.time.Duration
 
 class CacheConfigurationTest {
+    private val spec = StoreSpec.builder<String, String>("Revocations").codec(StringCodec).build()
 
     @Test
     fun nullsKeepCoCacheDefaults() {
-        CacheConfiguration(localMaxAge = null, maximumSize = null).toCachePolicy(CachePolicy.DEFAULT).toString()
-            .assert().isEqualTo(CachePolicy.DEFAULT.toString())
+        CacheConfiguration(localMaxAge = null, maximumSize = null).applyTo(spec).policy.toString()
+            .assert().isEqualTo(DefaultPolicies.STORE.toString())
     }
 
     @Test
-    fun toCachePolicyWithAllOptions() {
+    fun applyToWithAllOptions() {
         val policy = CacheConfiguration(
             initialCapacity = 16,
             maximumSize = 100,
             localMaxAge = Duration.ofMinutes(10),
             expireAfterAccess = Duration.ofMinutes(5),
-        ).toCachePolicy(CachePolicy.DEFAULT)
+        ).applyTo(spec).policy
         policy.local.initialCapacity.assert().isEqualTo(16)
         policy.local.maximumSize.assert().isEqualTo(100L)
         policy.local.expireAfterAccess.assert().isEqualTo(Duration.ofMinutes(5))
@@ -44,7 +47,7 @@ class CacheConfigurationTest {
 
     @Test
     fun tokenDefaults() {
-        val policy = CacheProperties().token.toCachePolicy(CachePolicy.DEFAULT)
+        val policy = CacheProperties().token.applyTo(spec).policy
         policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
         policy.local.maximumSize.assert().isEqualTo(100_000L)
     }

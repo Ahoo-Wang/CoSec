@@ -86,10 +86,10 @@ class InMemorySnapshotDocumentStore : SnapshotDocumentStore {
                 .putLong(document.publishedAt.epochSecond)
                 .putInt(document.publishedAt.nano)
                 .array()
-            val digest = MessageDigest.getInstance("SHA-256")
+            val digest = MessageDigest.getInstance(SnapshotDigest.SHA_256)
             digest.update(header)
             digest.update(document.bodyBytes())
-            return SnapshotDigest(digest.digest())
+            return SnapshotDigest(SnapshotDigest.SHA_256, digest.digest())
         }
     }
 }

@@ -49,7 +49,7 @@ class DocumentCacheTest {
 
     private fun key(index: Int) = SnapshotKey.Tenant("t$index")
 
-    private fun digest(seed: Int) = SnapshotDigest(ByteArray(20) { seed.toByte() })
+    private fun digest(seed: Int) = SnapshotDigest(ByteArray(32) { seed.toByte() })
 
     @Test
     fun `the least recently used document leaves first`() {

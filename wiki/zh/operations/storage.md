@@ -30,15 +30,15 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 ### Redis 是权威存储 {#redis-is-the-store-of-record}
 
 文档和控制面的记录没有其他副本：背后没有数据库，也没有能在缓存未命中时补上数据的 loader。Redis 里有什么，每个实例就
-用什么做决策。由此有三条规则，CoSec 在任何 CoCache 定制器或 `cocache.*` 配置项之后应用它们，因此任何配置都无法削弱
-它们（[优先级](./configuration.md#precedence)）：
+用什么做决策，因此它们是 CoCache 的 `Store`。由此有三条规则，CoSec 在任何 CoCache 定制器或 `cocache.*` 配置项之上
+锁定并约束它们，因此任何配置都无法削弱它们（[优先级](./configuration.md#precedence)）：
 
 - **永不过期。** 文档和控制面记录写入时不带 TTL。过期会悄悄删除一个文档，而删掉的 DENY 会放宽访问。
 - **读取失败就是失败。** Redis 读取失败绝不会变成"没有文档"（[Redis 不可用时](#when-redis-is-unavailable)）。
 - **CoSec 无法解码的值使读取失败，并留在 Redis 中。** 它永远不会被回收（删除），因为回收会删掉唯一的副本。用普通
   Redis 命令写入的值就属于这种值：只通过控制面或 `cosec-migrate` 写入文档（[发布文档](#publishing-documents)）。
 
-**CoCache 定制器还能改变什么。** CoSec 还会在它们之后恢复决定缓存内容的部分：命名空间、key 编码、编解码器、加载器、key 过滤器和按条目的生存期。无法读取的吊销使读取失败；成员关系总会过期，不带抖动，读取失败时失败即拒绝。缓存策略的其余部分仍由应用决定：每个缓存的 `localMaxAge`、`degradedLocalMaxAge`、本地缓存的大小和 `expireAfterAccess`、`refreshWindow`、`lease`、`load`，以及成员关系以外的 `ttlJitter`；两个吊销缓存还有 `absentTtl`、`readFailure` 和 `invalidateFailure`；成员关系还有 `ttl`（永不为空）、`absentTtl` 和 `invalidateFailure`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销缓存上更长的 `localMaxAge`、`degradedLocalMaxAge` 或 `absentTtl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authorization.cache.token.local-max-age`，30 秒）；更长的成员关系 `ttl` 会让已移除的角色多生效这么久。`cocache.*` 配置项同样能改变它们。
+**CoCache 定制器还能改变什么。** CoSec 锁定决定缓存内容的部分：key 前缀、命名空间、key 编码、编解码器、数据来源、key 过滤器和按条目的生存期（[优先级](./configuration.md#precedence)）。无法读取的吊销使读取失败；成员关系总会过期，不带抖动，读取失败时失败即拒绝。缓存策略的其余部分仍由应用经定制器和 `cocache.*` 配置项决定：每个缓存的本地缓存大小和 `expireAfterAccess`，以及快照存储以外的 `local-max-age`；两个吊销表还有 `absent-ttl` 和 `unknown-read`；成员关系还有 `ttl`（永不为 forever）、`absent-ttl`、`lease-*`、`load-*` 和 `invalidate-failure`。这些都不会替换缓存的内容，但有些会延长实例依据已读内容行事的时间。吊销表上更长的 `local-max-age` 或 `absent-ttl`，会在吊销的失效消息丢失时让被吊销的令牌多被接受这么久（默认的界是 `cosec.authorization.cache.token.local-max-age`，30 秒）；更长的成员关系 `ttl` 会让已移除的角色多生效这么久。
 
 ### Redis key {#redis-keys}
 
@@ -50,7 +50,7 @@ key 都在它之下（`SNP-9`）。
 | Key | 写入者 | 内容 |
 |---|---|---|
 | `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订 |
-| `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址 |
+| `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址（`SHA-256:` 加 64 位十六进制，与 CoCache 的计算相同） |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引 |
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目 |
 | `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它 |
@@ -71,8 +71,12 @@ key 都在它之下（`SNP-9`）。
 
 - 多个部署共用一个 Redis 时，给每个部署各自的 `cosec.key-prefix`：前缀不同，就不共享任何 key，一个部署签发的 API key
   不会被另一个接受，限流计数器也互不相干。
-- 除限流计数器、API key 和 OAuth 状态以外，每个 key 都是 CoCache 值。每个 CoCache 命名空间有自己的失效通道
-  `cocache:inv:<namespace>`（例如 `cocache:inv:cosec:snapshot`），所以前缀不同的部署在同一个 Redis 上互不干扰。
+- 除限流计数器、API key 和 OAuth 状态以外，每个 key 都是 CoCache 8 的值。CoCache 在条目之前最后一个 `:` 处拆分每个
+  key 路径：`<s>:control:revision` 是 key 前缀 `<s>:control:` 加命名空间 `revision`。每一个都有自己的失效通道
+  `{key 前缀}inv:{命名空间}`：`<s>:inv:snapshot`、`<s>:inv:candidate`、`<s>:control:inv:revision`、
+  `<s>:shadow:inv:report`、`<s>:token:inv:revoked`、`<s>:token:subject:inv:revoked`、`<s>:inv:membership`。通道与它的
+  key 在同一个前缀下，所以前缀不同的部署在同一个 Redis 上互不干扰，而针对 `<s>:control:*` 的一条 ACL 规则同时覆盖控制面
+  的 key 和通道。
 
 ### Redis 要求 {#redis-requirements}
 
@@ -80,12 +84,18 @@ key 都在它之下（`SNP-9`）。
   可能驱逐一个文档：已经装入它的实例会失败即拒绝，但之后才加载它的实例会把被驱逐的应用文档或租户文档读成不存在，于是
   其中的 DENY 语句悄悄失效。使用 `noeviction`，并按数据量规划 Redis 的容量。
 - **启动检查。** 使用 Redis 后端时，每个实例在启动时从 `INFO memory` 读取每个节点的 `maxmemory-policy`；托管 Redis
-  通常禁用 `CONFIG`，但允许 `INFO`。某个节点不是 `noeviction`、`INFO` 失败或被拒绝、或者 CoCache 后端无法被检查看穿
-  （包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
-  [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
-  `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
-- **运行期间再次检查。** 每个实例每个 `revalidate-interval` 在自己的线程上再次读取每个节点的 `maxmemory-policy`，
-  因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现。只要某个节点可能驱逐，
+  通常禁用 `CONFIG`，但允许 `INFO`。有两个检查读取它：
+  - CoSec 自己的检查（`SNP-3`），检查创建快照存储的 CoCache 运行时背后的 Redis：某个节点不是 `noeviction`、`INFO`
+    失败或被拒绝、或者 CoCache 后端无法被检查看穿（包装过的或自定义的后端），默认都会使启动失败。Redis 拒绝 `INFO` 而你已经自行设置了 `noeviction` 时，需要
+    [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot)：实例照常启动，并记录一条以
+    `!!!` 开头的 `WARN`（[故障排查](./troubleshooting.md#startup-fails-on-the-eviction-check)）。
+  - CoCache 针对其 `Store` 的检查，CoSec 的文档和记录都是 `Store`：`allkeys-*` 策略总是使启动失败，读不到 `INFO`
+    同样如此，与 `eviction-check` 无关。Redis 拒绝 `INFO` 时，还要把
+    [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) 设为你设置的策略
+    （`noeviction`）。
+- **运行期间再次检查。** CoSec 的检查每个 `revalidate-interval` 在自己的线程上再次读取每个节点的
+  `maxmemory-policy`，因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现；CoCache 的检查
+  只在启动时运行。只要某个节点可能驱逐，
   `cosecSnapshotEviction` 健康指示器就是 `DOWN`，并在 `eviction` 详情里说明原因，实例在开始时记录一条 `ERROR`；两种
   `eviction-check` 都是如此（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。读不到策略时，`fail` 下也是
   `DOWN`；`warn` 在启动时已经接受了这一点，所以是 `UP`，详情为 `eviction: unknown`。请求不会因此被拒绝：已装入的文档保持
@@ -100,7 +110,10 @@ key 都在它之下（`SNP-9`）。
   自己的）的客户端配置 CoSec 读不到：请把它配置为从主节点读。
 - **Redis 客户端。** CoCache 根据 `spring.data.redis.*` 构建自己的 Lettuce 客户端；它需要的版本、拓扑和 ACL 命令见
   [CoCache 文档](https://cocache.ahoo.me/operations/#acl)。启动检查和健康指示器需要 `INFO`（`+info`），CoCache 列出的
-  命令已包含它。
+  命令已包含它。通道跟随 key 前缀：允许 `&<s>:*`，或上面的每个
+  `&{key 前缀}inv:*`。使用 `cocache.redis.channel-mode: pubsub` 时，还要允许 CoCache 的探测
+  `~cocache:!probe:*` 和 `&cocache:!probe:*`，它不跟随前缀。每个缓存在创建时向自己的通道发布一个空帧，所以缺少通道权限
+  会使启动失败，并指出需要允许的模式。
 
 ### 谁可以写哪些 key {#who-may-write-which-keys}
 
@@ -181,14 +194,14 @@ sequenceDiagram
 
 ### 重新确认在 Redis 上的开销 {#what-revalidation-costs-redis}
 
-条件读在 Redis 主线程上对整份已存储的文档做哈希来比较摘要，所以即使文档没有变化，Redis 花费的时间也与文档大小成正比：1 KiB
-约 12 µs，128 KiB 约 0.4 ms，1 MiB 约 2.9 ms，4 MiB 约 12 ms；节点做哈希时不执行其他任何命令
-（[测量](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)）。一个节点上的负载约为
-实例数 × 每个实例持有的全部文档的开销 ÷ `revalidate-interval`：100 个实例每 10 秒确认一份 1 MiB 的平台文档，约占它的 3%。
+条件读只比较 CoCache 8 保存在值头部的摘要，文档没有变化时不传输任何内容，所以它的开销与文档大小无关：从 1 KiB 到 4 MiB，
+每份文档约 7 到 13 µs 的 Redis 时间（[测量](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/perf/conditional-read/README.md)）。
+一个节点上的负载约为实例数 × 每个实例持有的文档数 × 该开销 ÷ `revalidate-interval`：100 个实例每 10 秒确认 10 份文档，
+约占它的 0.1%。
 
-- 调大 [`revalidate-interval`](./configuration.md#snapshot)，最长 5 分钟且小于 `lag-warn`（也一起调大）：开销按比例下降，
-  错过失效消息的实例也晚同样的时间才跟上。
-- 让平台文档保持小巧。每个实例都持有它；租户特有的策略属于租户文档，只有服务该租户的实例才持有。
+- 只有当文档数量多到连这一开销都要紧时，才调大 [`revalidate-interval`](./configuration.md#snapshot)，最长 5 分钟且小于
+  `lag-warn`（也一起调大）：错过失效消息的实例也晚同样的时间才跟上。
+- 仍然让平台文档保持小巧。每个实例都持有它，而变化了的文档要整份读取；租户特有的策略属于租户文档，只有服务该租户的实例才持有。
 
 ## Redis 不可用时 {#when-redis-is-unavailable}
 

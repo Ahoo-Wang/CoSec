@@ -15,9 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
-import me.ahoo.cocache.spring.boot.CoCacheProperties
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -28,8 +26,7 @@ import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.COCACHE_AUTO_CONFIGURATION
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
-import org.springframework.beans.factory.ObjectProvider
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -42,24 +39,20 @@ import kotlin.time.toKotlinDuration
  * Memberships from the application's [MembershipLoader], cached in Redis for every instance (RFC 0006 §5.5.2), whenever
  * `cosec-cocache` is present: the pipeline asks it for API keys and for tokens that carry
  * `cosec.membership: "provider"`. Entries expire
- * after one minute ([CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL]); `cocache.caches.MembershipCache.ttl` changes that.
+ * after one minute ([CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL]); `cocache.caches.[MembershipCache].ttl` changes that, and
+ * `forever` is one minute.
  */
 @AutoConfiguration(before = [CoSecPipelineAutoConfiguration::class], afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.CoCacheMembershipProvider"])
-@ConditionalOnBean(CacheRuntime::class, MembershipLoader::class)
+@ConditionalOnBean(CoCacheFactory::class, MembershipLoader::class)
 @EnableConfigurationProperties(CacheProperties::class, RuntimeAuthorizationProperties::class, CoSecProperties::class)
 class CoSecMembershipAutoConfiguration {
     @Bean(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
     @ConditionalOnMissingBean
-    fun cosecMembershipCache(
-        runtime: CacheRuntime,
-        cosec: CoSecProperties,
-        customizers: ObjectProvider<CacheSpecCustomizer>,
-        cocacheProperties: ObjectProvider<CoCacheProperties>,
-    ): MembershipCache = cosecCacheAssembler(runtime, customizers, cocacheProperties)
-        .create(MembershipCache::class.java, CoSecCacheSpecs.membership(cosec.keyPrefix))
+    fun cosecMembershipCache(factory: CoCacheFactory, cosec: CoSecProperties): MembershipCache =
+        factory.createCoSecCache(MembershipCache::class.java, CoSecCacheSpecs.membership(cosec.keyPrefix))
 
     @Bean
     @ConditionalOnMissingBean(MembershipProvider::class)

@@ -17,10 +17,9 @@ package me.ahoo.cosec.cache.control
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.Codec
-import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
-import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -60,7 +59,7 @@ internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  *
  * | Cache | Redis key |
  * |---|---|
- * | revision records | `<p>:control:revision:<docKey>:<digest>` |
+ * | revision records | `<p>:control:revision:<docKey>:SHA-256:<hex>` |
  * | revision index | `<p>:control:revisions:<docKey>` |
  * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
  * | leases | `<p>:control:lease:<name>` |
@@ -69,105 +68,80 @@ internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * | change requests | `<p>:control:change:<changeId>` |
  * | staging slots | `<p>:control:stage:<docKey>` |
  *
- * All of them are [storeOfRecord] (`ttl = null`, failed reads throw), applied last: records and indexes are not data-plane
- * policy data, but reading a failure as "absent" would let the control plane publish on a wrong base (RFC 0007 §5.2).
- * Leases expire through the lifetime of each write instead. Keys and values are encoded explicitly, without reflection.
+ * Digests in keys and values are [SnapshotDigest]'s text form, `SHA-256:<hex>`.
+ *
+ * All of them are [storeOfRecord] `Store`s, locked by [CoSecCacheSpecs.locks] (`ttl` forever, failed reads throw):
+ * records and indexes are not data-plane policy data, but reading a failure as "absent" would let the control plane
+ * publish on a wrong base (RFC 0007 §5.2). Leases expire through the lifetime of each write instead. Keys and values are
+ * encoded explicitly, without reflection.
  */
 internal object ControlCacheSpecs {
-    fun revisionRecord(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<RevisionRecordKey, SnapshotDocument> =
-        CacheSpec.builder<RevisionRecordKey, SnapshotDocument>(CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(RevisionRecordKeyEncoder)
-            .codec(SnapshotDocumentCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun revisionRecord(keyPrefix: String = CoSec.COSEC): StoreSpec<RevisionRecordKey, SnapshotDocument> =
+        storeOfRecord(
+            CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME,
+            keyPrefix,
+            RevisionRecordKeyEncoder,
+            SnapshotDocumentCodec,
+        ).build()
 
-    fun revisionIndex(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<SnapshotKey, RevisionIndex> =
-        CacheSpec.builder<SnapshotKey, RevisionIndex>(CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(RevisionIndexCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun revisionIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, RevisionIndex> =
+        storeOfRecord(
+            CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME,
+            keyPrefix,
+            SnapshotKeyEncoder,
+            RevisionIndexCodec
+        ).build()
 
-    fun referenceIndex(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<ReferenceKey, Set<SnapshotKey>> =
-        CacheSpec.builder<ReferenceKey, Set<SnapshotKey>>(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(ReferenceKeyEncoder)
-            .codec(SnapshotKeySetCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun referenceIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<ReferenceKey, Set<SnapshotKey>> =
+        storeOfRecord(
+            CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+            keyPrefix,
+            ReferenceKeyEncoder,
+            SnapshotKeySetCodec,
+        ).build()
 
-    fun changeRequest(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<ChangeId, ChangeRequest> =
-        CacheSpec.builder<ChangeId, ChangeRequest>(CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it.value }
-            .codec(ChangeRequestCacheCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun changeRequest(keyPrefix: String = CoSec.COSEC): StoreSpec<ChangeId, ChangeRequest> =
+        storeOfRecord(
+            CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<ChangeId> { it.value },
+            ChangeRequestCacheCodec,
+        ).build()
 
-    fun stage(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<SnapshotKey, StageSlot> =
-        CacheSpec.builder<SnapshotKey, StageSlot>(CoSecCacheSpecs.STAGE_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.STAGE_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(StageSlotCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun stage(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, StageSlot> =
+        storeOfRecord(CoSecCacheSpecs.STAGE_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, StageSlotCodec).build()
 
     /** What [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read: each entry with when it was listed. */
-    fun list(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, Map<String, Instant>> =
-        CacheSpec.builder<String, Map<String, Instant>>(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(ListedCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun list(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Map<String, Instant>> =
+        storeOfRecord(
+            CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            ListedCodec
+        ).build()
 
     /** What [CoCacheControlStore.apps] reads: one value, under the key [CoCacheControlStore]'s `APP_LIST`. */
-    fun appList(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, AppList> =
-        CacheSpec.builder<String, AppList>(CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(AppListCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun appList(keyPrefix: String = CoSec.COSEC): StoreSpec<String, AppList> =
+        storeOfRecord(
+            CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            AppListCodec
+        ).build()
 
-    fun lease(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, String> =
-        CacheSpec.builder<String, String>(CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(StringCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun lease(keyPrefix: String = CoSec.COSEC): StoreSpec<String, String> =
+        storeOfRecord(
+            CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            StringCodec
+        ).build()
 }
 
-/** `<docKey>:<digest>`. Document keys never contain a second `:`, so the encoding is injective. */
+/**
+ * `<docKey>:<digest>`, the digest as `SHA-256:<hex>`. A document key ends before the first `:` after its kind (ids hold
+ * no `:`), so the encoding is injective.
+ */
 internal object RevisionRecordKeyEncoder : KeyEncoder<RevisionRecordKey> {
     override fun encode(key: RevisionRecordKey): String = "${SnapshotKeyEncoder.encode(key.document)}:${key.digest}"
 }
@@ -206,8 +180,8 @@ private fun JsonNode.instant(what: String): Instant = try {
 
 private fun JsonNode.digest(what: String): SnapshotDigest {
     val text = text(what)
-    if (!DIGEST.matches(text)) malformed(what, "[$text] is not a digest")
-    return SnapshotDigest(ByteArray(text.length / 2) { text.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() })
+    if (!SnapshotDigest.isDigest(text)) malformed(what, "[$text] is not a digest")
+    return SnapshotDigest.parse(text)
 }
 
 private fun JsonNode.long(what: String): Long =
@@ -227,9 +201,6 @@ private fun JsonNode.only(what: String, vararg names: String) {
     val unknown = properties().map { it.key }.toSet() - names.toSet()
     if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
 }
-
-private val DIGEST = Regex("^[0-9a-f]{40}$")
-private const val HEX = 16
 
 /** A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`. */
 internal object RevisionIndexCodec : Codec<RevisionIndex> {

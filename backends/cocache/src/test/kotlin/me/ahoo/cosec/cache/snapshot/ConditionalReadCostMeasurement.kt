@@ -26,9 +26,10 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 /**
- * What one revalidation costs Redis per document size (RC1-50, roadmap §7): CoCache 6's conditional read hashes the
- * whole stored value with `redis.sha1hex` in a Lua script on Redis's main thread to compare digests, so an unchanged
- * document still costs time in proportion to its size. Not part of `check`: `./gradlew :cocache:measureConditionalRead`
+ * What one revalidation costs Redis per document size (RC1-50, roadmap §7). CoCache 8 compares the digest in the
+ * value's header, so the cost does not depend on the size (docs/perf/conditional-read/). CoCache 6's conditional read
+ * hashed the whole stored value with `redis.sha1hex` in a Lua script on Redis's main thread, so an unchanged document
+ * cost time in proportion to its size. Not part of `check`: `./gradlew :cocache:measureConditionalRead`
  * against a Redis on localhost:6379, on a quiet machine. It prints, and writes to `build/conditional-read.md`, per size:
  * the Redis server time per call (`INFO commandstats`, the delta of the scripting commands) and the client's p50 and p99.
  */

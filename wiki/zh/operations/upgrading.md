@@ -451,6 +451,8 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 启动时 CoSec 读取 Redis 的 `maxmemory-policy`，不是 `noeviction` 就拒绝启动，因为被驱逐的平台文档会让其中的 DENY 悄无声息地失效。
 它从 `INFO memory` 读取。`INFO` 失败或不被允许时，启动同样失败；CoCache 后端是包装器或检查读不了的自定义后端时也一样。如果你已经
 自行设置了 `noeviction`，请设置 `cosec.authorization.snapshot.eviction-check=warn`：启动继续，并记录一条以 `!!!` 开头的警告。
+CoCache 8 把 CoSec 的文档保存为 `Store`，它也检查这一策略，并且不受上述设置影响：还要设置
+`cocache.redis.assume-maxmemory-policy=noeviction`（[Redis 要求](./storage.md#redis-requirements)）。
 
 #### 每个实例依据快照决策 {#each-instance-decides-from-a-snapshot}
 

@@ -73,7 +73,7 @@ class MovedHeadsTest {
 
     @Test
     fun `a head that moved is recorded with what the analysis finds now`() = runBlocking<Unit> {
-        val digest = SnapshotDigest(ByteArray(20) { 1 })
+        val digest = SnapshotDigest(ByteArray(32) { 1 })
         val change = checked(mapOf(SnapshotKey.Platform to digest, ACME to digest))
         val found = moved.detect(change, change, null, candidate, ALICE_OP)!!
         found.kind.assert().isEqualTo(ChangeEvent.Kind.HEADS_MOVED)
@@ -114,7 +114,7 @@ class MovedHeadsTest {
 
     @Test
     fun `a failure to record is only logged - the publish stands`() = runBlocking<Unit> {
-        val change = checked(mapOf(SnapshotKey.Platform to SnapshotDigest(ByteArray(20) { 1 })))
+        val change = checked(mapOf(SnapshotKey.Platform to SnapshotDigest(ByteArray(32) { 1 })))
         var asked = false
         moved.record(change, change, null, candidate, ALICE_OP) {
             asked = true

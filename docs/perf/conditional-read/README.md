@@ -3,10 +3,28 @@
 RC review batch D1 (RC1-50, roadmap §7): every instance confirms each installed snapshot document every
 `cosec.authorization.snapshot.revalidate-interval` with CoCache's conditional read (`RedisSnapshotDocumentStore.readIfChanged`).
 In CoCache 6 that read is a Lua script that hashes the whole stored value with `redis.sha1hex` to compare digests, on
-Redis's main thread, so an unchanged document costs Redis time in proportion to its size. CoCache 8.0 keeps the digest
-in the value's header and compares only that (its RFC 0005 §4.7, format 2); until then the cost below holds.
+Redis's main thread, so an unchanged document costs Redis time in proportion to its size. CoCache 8.0 keeps the SHA-256
+digest in the value's header and compares only that (its RFC 0005 §4.7, format 2): the cost no longer depends on the
+document's size ([CoCache 8](#cocache-8), below).
 
-## Result
+## CoCache 8 {#cocache-8}
+
+Measured 2026-11-04 on CoCache 8.0.0-alpha.2 with the same harness, Redis and machine as below (Redis 7.4.12 in Docker,
+18-CPU arm64 Mac, 500 unchanged conditional reads per size after 50 to warm up):
+
+| Document | Redis time per call | Client p50 | Client p99 |
+|---|---|---|---|
+| 1 KiB | 12.7 µs | 437 µs | 1,305 µs |
+| 16 KiB | 8.8 µs | 257 µs | 505 µs |
+| 128 KiB | 6.8 µs | 178 µs | 431 µs |
+| 1.0 MiB | 7.5 µs | 198 µs | 498 µs |
+| 4.0 MiB | 7.6 µs | 189 µs | 422 µs |
+
+About 7 to 13 µs of Redis time per call whatever the size: at 4 MiB about 1,500 times less than on CoCache 6. The
+estimates below now hold only for CoCache 6; on CoCache 8, 100 instances revalidating any number of documents every 10
+seconds cost a node about 100 × documents × 8 µs ÷ 10 s.
+
+## CoCache 6 {#cocache-6}
 
 Measured 2026-11-03 with `./gradlew :cocache:measureConditionalRead` (`ConditionalReadCostMeasurement`, opt-in, not part
 of `check`) against Redis 7.4.12 in Docker on an 18-CPU arm64 Mac, 500 unchanged conditional reads per size after 50 to

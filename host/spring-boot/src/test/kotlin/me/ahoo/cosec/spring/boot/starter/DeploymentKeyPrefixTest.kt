@@ -100,10 +100,14 @@ class DeploymentKeyPrefixTest {
     fun `every key family the starter wires lives under cosec key-prefix`() {
         runner.run { context ->
             context.startupFailure.assert().isNull()
-            val namespaces = context.getBean(CacheRuntime::class.java).field<Set<String>>("namespaces")
+            val runtime = context.getBean(CacheRuntime::class.java)
             // The snapshot, control, candidate and shadow caches, the revocations and the memberships at least.
-            namespaces.size.assert().isGreaterThanOrEqualTo(MINIMUM_CACHES)
-            namespaces.forEach { it.assert().startsWith("$prefix:") }
+            runtime.cacheNames.size.assert().isGreaterThanOrEqualTo(MINIMUM_CACHES)
+            runtime.cacheNames.forEach { name ->
+                checkNotNull(
+                    runtime.admin(name)
+                ).keyspace.storagePrefix.assert().describedAs(name).startsWith("$prefix:")
+            }
             context.getBean(ApiKeyStore::class.java).assert().isInstanceOf(RedisApiKeyStore::class.java)
             context.getBean(ApiKeyStore::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
             context.getBean(ApiKeyReader::class.java).assert().isInstanceOf(RedisApiKeyReader::class.java)
