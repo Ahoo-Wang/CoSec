@@ -388,6 +388,116 @@ class ControlHttpTest {
             .assert().isEqualTo("A rejection needs a reason.")
     }
 
+    /** Requests whose fields do not parse, each with what its 400's detail holds. */
+    private val malformed: List<Case> = run {
+        val request = """"tenant":"acme","principal":"bob","action":"order:read","resource":"order/1""""
+        val proposal = """"document":"tenant:acme","base":1"""
+        // Method, path, body, and what the detail holds.
+        listOf(
+            Case("POST", "/changes", """{$proposal,"operations":{}}""", "[operations] is not an array"),
+            Case(
+                "POST",
+                "/changes",
+                """{$proposal,"operations":[],"confirmations":{}}""",
+                "[confirmations] is not an array",
+            ),
+            Case(
+                "POST",
+                "/changes",
+                """{"document":"tenant:acme","base":"1","operations":[]}""",
+                "[base] is not an integer",
+            ),
+            Case("POST", "/changes", """{"document":"nowhere","base":1,"operations":[]}""", "names no document"),
+            Case("POST", "/changes", """{$proposal,"operations":[{"op":"explode"}]}""", "[operations]: "),
+            Case(
+                "POST",
+                "/documents/tenant:acme:apply",
+                """{"document":{"schema":1},"mode":"MERGE"}""",
+                "[document]: ",
+            ),
+            Case("POST", "/documents/tenant:acme:rollback", """{"revision":"one"}""", "[revision] is not an integer"),
+            Case("POST", "/changes/a b:publish", null, "[change] is not a change id"),
+            Case(
+                "POST",
+                "/changes/c1:publish",
+                """{"ack":{"window":"w","counts":{"NARROWED":"x"}}}""",
+                "[counts] is not an integer",
+            ),
+            Case("POST", "/changes/c1:publish", """{"ack":{"window":"w","counts":[]}}""", "[counts] is not an object"),
+            Case(
+                "POST",
+                "/changes/c1:publish",
+                """{"ack":{"window":"w","counts":{},"x":1}}""",
+                "Unknown fields [x] in [ack]",
+            ),
+            Case("POST", "/break-glass/c1:approve", "{}", "[candidate] is missing", plato),
+            Case(
+                "POST",
+                "/break-glass",
+                """{"principal":"plato","expiresAt":"2026-11-01T01:00:00Z","reason":" "}""",
+                "Break-glass needs a reason.",
+                plato,
+            ),
+            Case(
+                "DELETE",
+                "/break-glass/glass",
+                null,
+                "Revoking break-glass needs a reason.",
+                plato,
+                mapOf("reason" to " "),
+            ),
+            Case("POST", "/simulate", """{"request":{$request,"roles":"admin"}}""", "[roles] is not an array"),
+            Case("POST", "/simulate", """{"request":{$request,"roles":[1]}}""", "[roles] is not a string"),
+            Case("POST", "/simulate", """{"request":{$request,"headers":[]}}""", "[headers] is not an object"),
+            Case("POST", "/simulate", """{"request":{$request,"headers":{"x-a":[1]}}}""", "[headers] is not a string"),
+            Case(
+                "POST",
+                "/simulate",
+                """{"request":{$request,"requestAttributes":{"a":1}}}""",
+                "[requestAttributes] is not a string",
+            ),
+            Case("POST", "/simulate", """{"request":{$request,"time":1}}""", "[time] is not a string"),
+            Case("POST", "/simulate", """{"request":{$request},"candidate":"a b"}""", "[candidate] is not a change id"),
+            Case("POST", "/simulate", """{"request":[]}""", "[request] is not an object"),
+            Case(
+                "POST",
+                "/explain",
+                """{"request":{$request},"at":{"platform":"1"}}""",
+                "[platform] is not an integer",
+            ),
+            Case(
+                "POST",
+                "/explain",
+                """{"request":{$request},"at":{"platform":1,"x":1}}""",
+                "Unknown fields [x] in [at]",
+            ),
+            Case("POST", "/analyze", """{"query":{"tenant":"acme","resource":"order/1"}}""", "[action] is missing"),
+        )
+    }
+
+    /**
+     * RC1-39, `CTL-24`: every field of every route is read by the control plane's own checks, so what does not parse is
+     * a 400 that names it, and what is the control plane's own check says so in its own words.
+     */
+    @Test
+    fun `every malformed field is named in the control plane's own words`() {
+        for (case in malformed) {
+            val (status, problem) = call(case.method, case.path, case.body, case.security ?: alice, case.query)
+            status.assert().describedAs("${case.method} ${case.path} ${case.body}").isEqualTo(400)
+            problem.get("detail").asString().assert().describedAs("${case.method} ${case.path}").contains(case.detail)
+        }
+    }
+
+    /** A request and what its 400's detail holds; by alice unless [security] says otherwise. */
+    private class Case(
+        val method: String,
+        val path: String,
+        val body: String?,
+        val detail: String,
+        val security: RequestSecurity? = null,
+        val query: Map<String, String> = emptyMap(),
+    )
+
     /**
      * RC1-39: a stored document that does not decode, perhaps one a newer version wrote during a rolling upgrade, is no
      * fault of the caller's: a 500 without detail, and the error is logged with its key. Before, it was a 400 that showed
