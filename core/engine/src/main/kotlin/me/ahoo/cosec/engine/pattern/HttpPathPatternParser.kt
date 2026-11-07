@@ -144,12 +144,31 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
                 }
 
                 '}' -> throw invalid(begin + index, "} is not opened")
-                else -> literal.append(char)
+                else -> {
+                    if (isLoneSurrogate(text, index)) {
+                        throw invalid(begin + index, "a lone surrogate half is no character a path can hold")
+                    }
+                    literal.append(char)
+                }
             }
             index++
         }
         flush()
         return tokens
+    }
+
+    /**
+     * Whether the character at [index] is half of a surrogate pair without its other half (review L4 of #1200). No
+     * decoded path holds one (a malformed UTF-8 sequence decodes to U+FFFD), and Spring's regular expression reads the
+     * pattern by code points, so such a literal would match the middle of a pair where Spring matches nothing.
+     */
+    private fun isLoneSurrogate(text: String, index: Int): Boolean {
+        val char = text[index]
+        return when {
+            char.isHighSurrogate() -> index + 1 >= text.length || !text[index + 1].isLowSurrogate()
+            char.isLowSurrogate() -> index == 0 || !text[index - 1].isHighSurrogate()
+            else -> false
+        }
     }
 
     /** Registers the variable [name] and returns its index. */

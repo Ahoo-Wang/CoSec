@@ -460,7 +460,15 @@ Before production:
   a gateway that fronts several.
 - On a gateway, mark `cosec-identity: true` only the routes to your own services that are not `lb://`, and serve
   actuator on a management port.
-- Run Redis with `maxmemory-policy noeviction` ([Storage](../operations/storage.md)).
+- Treat write access to Redis as access to every decision: whoever can write CoSec's keys can rewrite the documents
+  every request is decided with, and revoke or restore tokens. Connect to Redis over TLS (`rediss://`, or
+  `spring.data.redis.ssl.enabled`), so that no one on the network between can read or change what instances read, and
+  give the control plane and the data-plane instances the users of
+  [Who may write which keys](../operations/storage.md#who-may-write-which-keys): the instances only read the documents.
+- Run Redis with `maxmemory-policy noeviction`, and read it from the primary
+  ([Redis requirements](../operations/storage.md#redis-requirements)).
+- Limit the control API per tenant with a platform rate limit rule
+  ([Rate limiting](../policies/rate-limiting.md#the-control-api)).
 - Register a REQUIRED decision listener before anyone needs break-glass.
 - Put DENYs that must always apply in policies without a condition, and never grant on a header the client
   writes.

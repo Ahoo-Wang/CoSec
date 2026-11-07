@@ -1,0 +1,17 @@
+# Rule: CTL-24
+# Mutant: a stored value that does not decode is the caller's 400, its message in the detail
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index ab09705a..10f8185a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -164,7 +164,7 @@ class ControlHttp(private val plane: ControlPlane) {
+         log.error(
+             e
+         ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
+-        return problem(Problem.INTERNAL_ERROR, requestId, null)
++        return problem(Problem.INVALID_REQUEST, requestId, e.message)
+     }
+ 
+     private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {

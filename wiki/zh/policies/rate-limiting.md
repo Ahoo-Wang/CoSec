@@ -113,6 +113,43 @@ flowchart LR
 
 除外部属性不可用以外，因任何其他原因无法读取桶时，即使没有 `strictFailure` 也会拒绝请求。失败日志每十秒最多记录一次。跳过宽松规则是[失败即拒绝](../guide/security-model.md)的文档化例外之一；对防范滥用的规则（例如登录尝试）设置 `strictFailure`，只用于平滑负载的规则则不要设置。
 
+## 控制 API {#the-control-api}
+
+[控制 API](./testing.md#the-control-plane) 部署在管道之后，因此平台规则像限制其他路径一样限制它；以 `scope.tenant` 为
+`key` 时，每个租户各有一个桶。覆盖那些会编译、求值或检查的路由：`cosec.control.http.base-path` 及其 `/v1` 之下的
+`simulate`、`explain`、`analyze` 和 `changes`：
+
+```json
+{
+  "id": "control-per-tenant",
+  "action": "http:POST",
+  "resource": [
+    "http:path:/cosec/control/v1/simulate",
+    "http:path:/cosec/control/v1/explain",
+    "http:path:/cosec/control/v1/analyze",
+    "http:path:/cosec/control/v1/changes",
+    "http:path:/cosec/control/v1/changes/*"
+  ],
+  "key": "scope.tenant",
+  "permitsPerSecond": 0.5,
+  "windowSeconds": 60
+}
+```
+
+- 规则写在平台文档里：租户自己的规则在自己的桶里计数，从不放宽它。
+- 桶是调用者的租户，在管道放行请求之后、控制面授权之前计数：管道放进这些路径的该租户的每个主体都会消耗它，不论是不是
+  管理员；每个 `(platform)` 主体都消耗平台的桶。在管道中只把控制路径放行给绑定了控制角色的主体，这样其他主体无法挡住一个
+  租户的管理员。
+- 桶耗尽时，在控制 API 做任何工作之前就答 `429`。控制 API 只服务这些确切的路径：末尾带 `/` 或含空段（`//`）的路径是
+  `404`，因此这些模式覆盖它服务的每个请求。
+- 不要把 break-glass 的路由（`/break-glass` 及其下）放进这条规则：给它们单独一条规则，或者不限，这样耗尽的桶永远不会挡住
+  紧急撤销。`changes/*` 仍覆盖 break-glass 的三个步骤：让已审批的 break-glass 授予生效的 `:publish`、恢复卡住的撤销的
+  `:publish`，以及 break-glass 变更的 `:abandon`。给平台的桶留出余量，或者用
+  `"condition": {"not": {"eq": ["scope.tenant", "(platform)"]}}` 把平台主体排除在这条规则之外。
+- `documents/{key}:apply` 和 `:rollback` 也会提出变更，可以加入这条规则。
+
+不会替你发布这样的规则，`cosec-migrate bootstrap` 也不会：限额取决于部署的规模。
+
 ## 发布规则 {#publishing-rules}
 
 规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1`、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。

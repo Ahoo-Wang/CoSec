@@ -375,10 +375,10 @@ cosec:
 启用 `cosec-control`（以及 `cosec-cocache`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
 
 - **先经过管道。** 控制请求对宿主来说是普通请求：你的文档必须放行它（例如对已认证调用方放行 `http:path:/cosec/control/v1/**` 上的 `http:POST`），否则它会像其他请求一样被拒绝。在平台文档发布之前，每个请求（包括控制路由）都是 `503`，因此第一份平台文档要通过 `cosec-migrate publish` 发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。
-- **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
+- **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`，两种栈上都在读取请求体之前。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
 - **请求体大小。** 在 WebMvc 上最多读取 `cosec.control.http.max-body-size`（默认 `16MB`）；更大的请求体返回 `400` `invalid-request`，且不会被读取。在 WebFlux 上，请求体受 Spring 的 `spring.codec.max-in-memory-size`（默认 256 KB）限制：在接收大文档的控制面宿主上请调大它。
 - **网关宿主。** 网关的全局过滤器只作用于网关路由，因此 starter 额外添加一个只作用于基础路径的 `PipelineWebFilter`。控制路由像在 WebFlux 宿主上一样被授权；网关的路由仍由网关过滤器处理。
 
-控制 API 以相同格式回应 problem，类型除上文所列外还有它自己的：`not-found`（`404`）、`conflict`（`409`）、`gone`（`410`）、`precondition-failed`（`412`）、`unprocessable`（`422`）和 `precondition-required`（`428`）。`400`、`409`、`410`、`412`、`422` 和 `428` 会在 `detail` 成员中解释调用方自己的请求；`401`、`403`、`404`、`500` 和 `503` 不带任何细节，因此拒绝永远不会透露某个文档、变更或 DENY 是否存在。
+控制 API 以相同格式回应 problem，类型除上文所列外还有它自己的：`not-found`（`404`）、`conflict`（`409`）、`gone`（`410`）、`precondition-failed`（`412`）、`unprocessable`（`422`）和 `precondition-required`（`428`）。`400`、`409`、`410`、`412`、`422` 和 `428` 会在 `detail` 成员中解释调用方自己的请求；`401`、`403`、`404`、`500` 和 `503` 不带任何细节，因此拒绝永远不会透露某个文档、变更或 DENY 是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段，从不带异常消息；存储的文档或记录解码失败是 `500`。
 
 **下一步：** 签发、刷新和吊销适配器读取的令牌，见[认证](./authentication.md)。

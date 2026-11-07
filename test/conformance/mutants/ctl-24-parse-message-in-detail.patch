@@ -1,0 +1,17 @@
+# Rule: CTL-24
+# Mutant: a client field that does not parse has its exception's message in the 400 detail
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+index ab09705a..a005fe3f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
+@@ -568,7 +568,7 @@ class ControlHttp(private val plane: ControlPlane) {
+     } catch (e: InvalidControlRequestException) {
+         throw e
+     } catch (e: IllegalArgumentException) {
+-        throw InvalidControlRequestException("[$name] is not $what.", e)
++        throw InvalidControlRequestException("[$name] is not $what: ${e.message}", e)
+     } catch (e: ArithmeticException) {
+         throw InvalidControlRequestException("[$name] is not $what.", e)
+     } catch (e: DateTimeException) {

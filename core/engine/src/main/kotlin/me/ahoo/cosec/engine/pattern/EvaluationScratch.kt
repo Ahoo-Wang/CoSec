@@ -17,15 +17,18 @@ package me.ahoo.cosec.engine.pattern
  * Scratch memory of one evaluation, made when the evaluation first needs it and then reused: the table
  * [SegmentGlob.table] works in, and the marks of the repeated targets each pass has evaluated (`ALG-9`). An evaluation
  * that needs neither makes none, so it adds nothing to the hot path. Not thread-safe: one evaluation owns it.
+ *
+ * Open only so that a test can count the glob segments a walk decides (review L3 of #1200); no subclass is loaded in
+ * production, so [words] stays a direct call.
  */
-internal class EvaluationScratch {
+internal open class EvaluationScratch {
     private var words: LongArray? = null
 
     /** The evaluator's marks of repeated targets, two bits per slot; null until a pass reaches one. */
     var marks: LongArray? = null
 
-    /** At least [size] words, with unspecified contents. */
-    fun words(size: Int): LongArray {
+    /** At least [size] words, with unspecified contents: one call per glob segment decided ([SegmentGlob.table]). */
+    open fun words(size: Int): LongArray {
         val current = words
         if (current != null && current.size >= size) {
             return current

@@ -197,7 +197,9 @@ class Changes(
     ): ChangeRequest {
         val head = revisions.head(key)
         val (kind, owner) = Revisions.ownerOf(key)
-        require(desired.kind == kind && desired.owner == owner) { "The desired document is not a document of [$key]." }
+        requireRequest(desired.kind == kind && desired.owner == owner) {
+            "The desired document is not a document of [$key]."
+        }
         return propose(author, key, head?.revision ?: 0, Operations.diff(key, head?.document, desired, mode), note)
     }
 
@@ -394,7 +396,7 @@ class Changes(
      * with escalations goes on to `AWAITING_APPROVAL`.
      */
     suspend fun skipShadow(operator: Operator, id: ChangeId, reason: String): ChangeRequest {
-        require(reason.isNotBlank()) { "Skipping the shadow window needs a reason." }
+        requireRequest(reason.isNotBlank()) { "Skipping the shadow window needs a reason." }
         val change = visible(operator, id)
         if (PublishRules.exempt(change, revisions.head(change.key))) {
             authority.require(operator, change.key, ControlActions.PUBLISH)
@@ -460,7 +462,7 @@ class Changes(
      * principal when the change sets a boundary (`BDY-2`). Its slot is released.
      */
     suspend fun reject(operator: Operator, id: ChangeId, reason: String): ChangeRequest {
-        require(reason.isNotBlank()) { "A rejection needs a reason." }
+        requireRequest(reason.isNotBlank()) { "A rejection needs a reason." }
         val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
         authority.requireBoundaryOperator(operator, change)

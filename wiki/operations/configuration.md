@@ -168,7 +168,7 @@ of your own replaces both.
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. |
-| `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. |
+| `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. Either way the instance reads the policy again every `revalidate-interval`, and the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict; a policy it cannot read is `DOWN` under `fail` and `UP` with `eviction: unknown` under `warn` ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). |
 
 ## Shadow windows
 
@@ -272,7 +272,7 @@ credential is ever revoked.
 |---|---|---|---|
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
 | `cosec.control.http.base-path` | string | `/cosec/control` | Where the control API is served. Its routes are under `{base-path}/v1`, so moving the API keeps the version. |
-| `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread; a request without a permitted principal has no body read at all (`401`). On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. |
+| `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread. On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. On either stack, a request without a permitted principal has no body read at all (`401`). |
 | `cosec.control.revisions.max-count` | int | `50` | Revisions always kept per document; older ones are reclaimed once also older than `min-age`. Revisions an open change rests on are kept. |
 | `cosec.control.revisions.min-age` | duration | `7d` | Revisions younger than this are always kept. |
 | `cosec.control.revisions.orphan-age` | duration | `1h` | Records of conflicted publishes are removed once this old. |

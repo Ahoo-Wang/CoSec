@@ -226,9 +226,11 @@ object CoSecCacheSpecs {
      * [me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache], never through an interface proxy (RFC 0003 §10).
      *
      * Redis must not evict these keys: run it with `maxmemory-policy noeviction`. Under an `allkeys-*` policy a
-     * document can vanish. An instance that had read it fails closed (RFC 0003 §4.4 F2a), but an instance that starts
-     * afterwards reads it as absent (F2): without the policies document there are no global policies, so a global DENY
-     * no longer applies.
+     * document can vanish. An instance that had read it fails closed (RFC 0003 §4.4 F2a). An instance that reads it
+     * afterwards, a new one or one that evicted its copy, reads it as absent (F2): an absent platform document still
+     * fails every request closed (RFC 0006's `platformRequired`), but an absent app or tenant document is an empty one,
+     * so its DENY statements silently stop applying (RC1-47). The starter checks the policy at startup (`SNP-3`) and
+     * reads it again for its health indicator.
      */
     fun policySnapshot(
         keyPrefix: String = CoSec.COSEC,

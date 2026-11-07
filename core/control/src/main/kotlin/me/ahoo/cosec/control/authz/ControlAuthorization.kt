@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.authz
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -243,7 +244,7 @@ object ControlResources {
 
     /** An owner or scope part that would add a segment could make one document's resource look like another's. */
     private fun segment(value: String): String {
-        require(value.isNotEmpty() && '/' !in value) { "[$value] is not one resource segment." }
+        requireRequest(value.isNotEmpty() && '/' !in value) { "[$value] is not one resource segment." }
         return value
     }
 }
