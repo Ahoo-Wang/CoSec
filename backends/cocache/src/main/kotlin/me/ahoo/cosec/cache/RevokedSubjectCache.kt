@@ -14,6 +14,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Store
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 
@@ -31,9 +32,17 @@ interface RevokedSubjectCache : Store<String, Long> {
     companion object {
         /**
          * `{length of tenant}:{tenant}:{principal}`. The length keeps the key unambiguous whatever characters the ids
-         * contain.
+         * contain, and neither id may hold an unpaired UTF-16 surrogate, which the Redis key would write as `?`
+         * (RC1-52, `IDN-10`): the key of `alice\uD800` would be the key of `alice?`.
+         *
+         * @throws IllegalArgumentException when [tenant] or [principal] holds one
          */
-        fun key(tenant: TenantId, principal: PrincipalId): String =
-            "${tenant.value.length}:${tenant.value}:${principal.value}"
+        fun key(tenant: TenantId, principal: PrincipalId): String {
+            require(Identifiers.isWellFormed(tenant.value) && Identifiers.isWellFormed(principal.value)) {
+                "Principal [${Identifiers.printable(principal.value)}] of tenant [${Identifiers.printable(tenant.value)}] " +
+                    "names no key: an unpaired UTF-16 surrogate would share it with another id."
+            }
+            return "${tenant.value.length}:${tenant.value}:${principal.value}"
+        }
     }
 }

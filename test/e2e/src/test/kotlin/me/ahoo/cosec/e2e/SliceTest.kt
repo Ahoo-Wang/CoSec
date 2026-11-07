@@ -170,26 +170,18 @@ class SliceTest {
     }
 
     /**
-     * An id whose UTF-8 form loses a character, an unpaired surrogate (UTF-8 writes `?` for it), is a valid app or
-     * tenant id, but Redis cannot key it losslessly: `beta\uD800` would read the document of `beta?`. CoCache 8
-     * (alpha.5) refuses such a key, so its documents cannot be read: unavailable, never decided on another's document.
-     * Ids from a JSON body or token can carry one (`"\uD800"`), HTTP headers and percent-decoded paths cannot.
+     * An id whose UTF-8 form loses a character, an unpaired surrogate (UTF-8 writes `?` for it), would share its Redis
+     * key with the id that has `?` in its place: `beta\uD800` would read the document of `beta?`, which allows
+     * everything. CoSec refuses such an id where it enters (`IDN-10`), and CoCache 8 would refuse the key below that:
+     * through the assembled path on real Redis, it is never decided on another's document.
      */
     @Test
-    fun `an id Redis cannot key losslessly is unavailable, never decided on another's document`() {
+    fun `an id Redis cannot key losslessly is never decided on another's document`() {
         slice.publish(SnapshotKey.Tenant("beta?"), beta)
         evaluate("GET", "/admin", "bob@beta?").proceed.assert().isTrue()
-        evaluate("GET", "/admin", "bob@beta\uD800").let {
-            it.proceed.assert().isFalse()
-            it.status.assert().isEqualTo(503)
-            it.slug().assert().isEqualTo("unavailable")
-        }
-        evaluate("GET", "/orders/1", "alice@acme:clerk", app = "order\uDC00").let {
-            it.proceed.assert().isFalse()
-            it.status.assert().isEqualTo(503)
-        }
-        // A DENY that decides without the document still applies.
-        evaluate("DELETE", "/orders/1", "bob@beta\uD800").status.assert().isEqualTo(403)
+        evaluate("GET", "/admin", "bob@beta\uD800").proceed.assert().isFalse()
+        evaluate("GET", "/orders/1", "alice@acme:clerk", app = "order\uDC00").proceed.assert().isFalse()
+        evaluate("DELETE", "/orders/1", "bob@beta\uD800").proceed.assert().isFalse()
     }
 
     @Test

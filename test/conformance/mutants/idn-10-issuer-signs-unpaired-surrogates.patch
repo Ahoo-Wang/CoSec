@@ -1,0 +1,17 @@
+# Rule: IDN-10
+# Mutant: CoSec's token issuer signs a principal with an unpaired surrogate, which java-jwt writes as ?, a token of another principal
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+index a7b95686..26bc75b3 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+@@ -110,7 +110,7 @@ class JwtTokenConverter(
+         // RC1-52 (`IDN-10`): java-jwt writes an unpaired surrogate as `?`, so the token would be another principal's,
+         // another tenant's, or carry another value; and a token with one would be refused when it is presented. Fail
+         // where it is issued instead.
+-        require(wellFormed(principal)) {
++        require(wellFormed(principal) || true) {
+             "Principal [${Identifiers.printable(principal.id)}] holds an unpaired UTF-16 surrogate in its id, tenant, " +
+                 "roles, policies or attributes: a token cannot carry it."
+         }

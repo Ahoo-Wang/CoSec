@@ -134,10 +134,9 @@ class CoCacheRevocationReaderTest {
     }
 
     /**
-     * A key Redis cannot hold losslessly (an unpaired surrogate, which UTF-8 turns into `?`) is refused by CoCache 8
-     * (alpha.5) on reads and writes. It is not the degraded read: the reader throws, which the pipeline answers 503,
-     * and never says "not revoked" for it. Before, `x\uD800` and `x\uDBFF` shared one Redis key, `x?`, with each other
-     * and with a literal `x?`.
+     * A key Redis cannot hold losslessly (an unpaired surrogate, which UTF-8 turns into `?`) is refused on reads and
+     * writes, by the revocation tables' keys (`IDN-10`) and by CoCache 8 itself. It is not the degraded read: the
+     * reader throws and never says "not revoked" for it, though the tables read a failed Redis read as absent.
      */
     @Test
     fun aKeyRedisCannotHoldIsAnErrorNotARevocationMiss() = runBlocking<Unit> {

@@ -806,6 +806,8 @@ fun interface RateLimiter {
 
 > **实现说明（2026-11-07，#1231，审计 issue #1229，`OBL-4`）**：Redis 限流器的计数 key 改为 `<prefix>:rate-limiter:{<rule>:<bucket>}:<window>`。脚本原子地读写一个桶的当前与前一个窗口，两个 key 带同一个 hash tag，所以在 Redis Cluster 上落在同一个 slot；此前两者跨槽（CROSSSLOT），Cluster 上没有 `strictFailure` 的规则全被跳过，有 `strictFailure` 的规则让每个放行请求 503。不同的桶仍分散到各个 slot，除非 key 前缀自带 hash tag。使 tag 为空的两种输入被拒绝：第一个 `{` 紧跟 `}` 的前缀（构造限流器时，即启动失败），以 `}` 开头的规则 id（计数时，按限流器失败处理；引擎从不产生这样的 id）。上文"滚动升级时新旧实例共享同一组桶"不再成立：从 alpha.2 或 7.x 滚动升级时，新旧版本的实例同时服务期间，以及最后一个旧实例停止后的至多两个窗口内，一条规则至多放行两倍的上限（`upgrading.md`）。
 
+> **实现说明（2026-11-07，#1254，RC1-52，`IDN-10`）**：按 key 计数的限流桶命名为 `g:<值>`；值里有落单的 UTF-16 代理项时为 `e:<转义后的值>`（`\` 加倍，每个落单的代理项写成 `\uXXXX`）。这种命名是单射，且结果是良构的 UTF-16，所以这样的值不会与别的值共用一个桶。不按限流器失败处理：没有 `strictFailure` 时失败会跳过规则，能把代理项放进 key 值的调用方就完全不被计数。转义在引擎里做（`CompiledRateLimit.keyedBucket`），所以自定义的 `RateLimiter` 也只收到良构的桶。
+
 ## 9. 观察：`DecisionEvent` 与监听器
 
 ### 9.1 SPI

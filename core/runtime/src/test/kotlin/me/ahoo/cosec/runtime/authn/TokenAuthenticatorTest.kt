@@ -132,6 +132,40 @@ class TokenAuthenticatorTest {
         memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("editor"))
     }
 
+    /**
+     * RC1-52, `IDN-10`: a JSON token can claim an id with an unpaired surrogate (`"\uD800"`), which a Redis key writes
+     * as `?`. Such a token is invalid (401 `token-invalid`), and no revocation is read for it: its keys would be another's.
+     */
+    @Test
+    fun aTokenClaimingAnIdWithAnUnpairedSurrogateIsInvalid() = runTest {
+        val asked = ArrayList<String>()
+        val revocations = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = false.also { asked += tokenId }
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                null.also { asked += principal.value }
+        }
+        val tokens = listOf<() -> TokenPrincipal>(
+            { token(SimplePrincipal("alice\uD800")) },
+            { token(inTenant("beta\uD800")) },
+            { token(inTenant("\uDC00beta")) },
+            { SimpleTokenPrincipal("jti\uD800", SimplePrincipal("alice"), issuedAt) },
+            { token(SimplePrincipal("alice", roles = setOf("admin\uDC00"))) },
+            { token(SimplePrincipal("alice", roles = setOf("admin@team\uD800"))) },
+            { token(SimplePrincipal("alice", policies = setOf("p\uD800"))) },
+        )
+        for (token in tokens) {
+            authenticate(token, revocations).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
+        }
+        asked.assert().isEmpty()
+
+        // A surrogate pair is one character like any other.
+        val paired =
+            authenticate({ token(inTenant("beta\uD83D\uDE00", SimplePrincipal("alice\uD83D\uDE00"))) }, revocations)
+        paired.principal().tenant.assert().isEqualTo(TenantId("beta\uD83D\uDE00"))
+        asked.assert().containsExactly("jti-1", "alice\uD83D\uDE00")
+    }
+
     /** Stands in for `cosec-jwt`'s `JwtTokenVerifier`, CoSec's own verifier, which this module cannot depend on. */
     private class OwnVerifier(tokens: Map<String, () -> TokenPrincipal>) : CoSecTokenVerifier {
         private val verifier = Verifier(tokens)

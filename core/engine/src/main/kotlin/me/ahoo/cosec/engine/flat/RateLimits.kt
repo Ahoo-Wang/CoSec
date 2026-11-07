@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
@@ -61,6 +62,38 @@ class CompiledRateLimit internal constructor(
 
         /** The prefix of a keyed bucket, so a key value literally named `global` is not the shared bucket. */
         const val KEYED_BUCKET_PREFIX = "g:"
+
+        /** The prefix of the bucket of a key value with an unpaired UTF-16 surrogate, escaped ([keyedBucket]). */
+        const val ESCAPED_BUCKET_PREFIX = "e:"
+
+        /**
+         * The bucket of the key value [value]: [KEYED_BUCKET_PREFIX] and the value, as 7.x names it. A value with an
+         * unpaired UTF-16 surrogate has no UTF-8 encoding, and a limiter writes its counters' keys as UTF-8: Spring's
+         * template would hold `?` in its place, and the value would count in another value's bucket (RC1-52). Its
+         * bucket is [ESCAPED_BUCKET_PREFIX] and the value with each `\` doubled and each unpaired surrogate as its
+         * `\uXXXX` escape: well formed, its own, and every other value keeps the bucket it had.
+         */
+        fun keyedBucket(value: String): String {
+            if (Identifiers.isWellFormed(value)) {
+                return KEYED_BUCKET_PREFIX + value
+            }
+            val bucket = StringBuilder(ESCAPED_BUCKET_PREFIX.length + value.length + ESCAPE_LENGTH)
+            bucket.append(ESCAPED_BUCKET_PREFIX)
+            for (index in value.indices) {
+                val c = value[index]
+                when {
+                    c == '\\' -> bucket.append("\\\\")
+                    Identifiers.isUnpairedSurrogateAt(value, index) ->
+                        bucket.append("\\u").append(c.code.toString(HEX).uppercase().padStart(ESCAPE_DIGITS, '0'))
+                    else -> bucket.append(c)
+                }
+            }
+            return bucket.toString()
+        }
+
+        private const val HEX = 16
+        private const val ESCAPE_DIGITS = 4
+        private const val ESCAPE_LENGTH = 6
 
         /** The id of [id] within the counters, for a rule of the [kind] document of [owner]. */
         fun counterId(kind: DocumentKind, owner: String, id: String): String = when (kind) {

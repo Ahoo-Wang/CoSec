@@ -18,6 +18,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
@@ -212,7 +213,8 @@ class ChangeChecks(
                     "V2",
                     "$.bindings[$i].app",
                     "binding [${printable(binding.id.value)}] is in app [${printable(app)}], which cannot be an app id " +
-                        "(blank, *, ':' or a control character, or over ${ScopeResolver.MAX_APP_ID_LENGTH} characters): " +
+                        "(blank, *, ':', a control character or an unpaired surrogate, or over " +
+                        "${ScopeResolver.MAX_APP_ID_LENGTH} characters): " +
                         "no request is ever in it. Remove the binding; a change that only removes it is valid.",
                     BAD_REQUEST,
                 )
@@ -220,9 +222,8 @@ class ChangeChecks(
         }
     }
 
-    /** [text] for a finding: a control character as its `\uXXXX` escape. */
-    private fun printable(text: String): String =
-        text.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }.joinToString("")
+    /** [text] for a finding: a control character or an unpaired surrogate as its `\uXXXX` escape. */
+    private fun printable(text: String): String = Identifiers.printable(text)
 
     /**
      * Bindings of an app or tenant candidate whose policy is defined neither by it nor by the platform, nor, for a

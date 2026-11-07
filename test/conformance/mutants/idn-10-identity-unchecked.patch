@@ -1,0 +1,16 @@
+# Rule: IDN-10
+# Mutant: a forwarded identity may name a tenant, principal, role or credential with an unpaired surrogate
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityCodecTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityCodec.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityCodec.kt
+index 1cb18efd..ffd9c582 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityCodec.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityCodec.kt
+@@ -255,7 +255,6 @@ object IdentityCodec {
+     private fun JsonNode.text(path: String): String {
+         if (!isString) throw malformed("$path is not a string")
+         val text = asString()
+-        if (!Identifiers.isWellFormed(text)) throw malformed("$path holds an unpaired surrogate")
+         return text
+     }
+ 

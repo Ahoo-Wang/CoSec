@@ -182,7 +182,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             null
         }
         val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
-        CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty()
+        CompiledRateLimit.keyedBucket(value.orEmpty())
     } catch (error: Throwable) {
         if (!catches(error)) {
             throw error

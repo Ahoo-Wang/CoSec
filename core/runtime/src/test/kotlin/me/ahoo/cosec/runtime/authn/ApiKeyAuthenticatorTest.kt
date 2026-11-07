@@ -123,4 +123,25 @@ class ApiKeyAuthenticatorTest {
         }
         error!!.message.assert().isEqualTo("store down")
     }
+
+    /**
+     * RC1-52, `IDN-10`: a key record whose id, principal, tenant or cap holds an unpaired surrogate is no key: it cannot
+     * be made, so a store that reads one back fails its lookup, which the pipeline answers 503, as a store that cannot be
+     * read. It is never taken for the principal whose id has `?` in its place.
+     */
+    @Test
+    fun aKeyRecordWithAnIdHoldingAnUnpairedSurrogateCannotBeMade() {
+        val records = listOf<() -> ApiKey>(
+            { ApiKey("key\uD800", "svc", "acme", null) },
+            { ApiKey("key", "svc\uDC00", "acme", null) },
+            { ApiKey("key", "svc", "beta\uD800", null) },
+            { ApiKey("key", "svc", "acme", setOf("billing@team\uD800")) },
+        )
+        for (record in records) {
+            val error = runCatching(record).exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
+            error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
+        }
+        ApiKey("key\uD83D\uDE00", "svc", "acme", setOf("billing")).id.assert().isEqualTo("key\uD83D\uDE00")
+    }
 }

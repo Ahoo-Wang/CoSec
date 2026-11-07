@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "IDN-10"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A token of alice in tenant beta\\uD83D\\uDE00, whose surrogates are a pair (one character), is the tenant it names: alice reads her orders there.",
+  "documents": {
+    "tenants": {
+      "beta\ud83d\ude00": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "beta\ud83d\ude00"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "beta\ud83d\ude00",
+      "id": "alice"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

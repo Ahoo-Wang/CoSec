@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -39,6 +40,22 @@ class CoSecParametersTest {
         read(null, "cosec-app-id" to listOf("shop"))!!.appId.assert().isEqualTo("shop")
         read("CoSec-Space-Id=team+a&x=1")!!.spaceId.assert().isEqualTo("team a")
         read("%43oSec-Device-Id=phone")!!.deviceId.assert().isEqualTo("phone")
+    }
+
+    /**
+     * RC1-52: no `CoSec-*` parameter can carry an unpaired surrogate. A query decodes as UTF-8, which has no encoding for
+     * one: a surrogate half written in UTF-8 form (`%ED%A0%80`) decodes to U+FFFD, never to the surrogate, so it is not
+     * the id with `?` in its place either. Hosts give header values as ISO-8859-1 characters, which holds no surrogate.
+     */
+    @Test
+    fun aQueryCannotCarryAnUnpairedSurrogate() {
+        for (half in listOf("%ED%A0%80", "%ED%B0%80", "%ED%A0%80%ED%B0%80")) {
+            val parameters = read("CoSec-App-Id=shop$half&CoSec-Space-Id=team$half&CoSec-Device-Id=d$half")!!
+            for (value in listOf(parameters.appId, parameters.spaceId, parameters.deviceId)) {
+                Identifiers.isWellFormed(value).assert().describedAs(Identifiers.printable(value)).isTrue()
+                value.assert().contains("\uFFFD").doesNotContain("?")
+            }
+        }
     }
 
     @Test

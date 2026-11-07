@@ -211,11 +211,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
   fails answers "not revoked" instead (the documented exception to fail closed).
-- **One id is 503** and the log says `... has an unpaired UTF-16 surrogate at index[<i>] ...`: the tenant, app or
-  principal id, or the token id, holds a lone surrogate (only a token claim or a JSON body can carry one). Redis keys
-  are UTF-8, so CoCache refuses the key and CoSec reads none of that id's documents, memberships or revocations: it
-  fails closed. CoSec's `Loading snapshot document [...] failed.` line shows the surrogate as `?`, so it looks like
-  another id. Fix the issuer or client; there is nothing to configure.
+- **An id with an unpaired UTF-16 surrogate** (IDN-10, RC1-52): an authenticator gave a principal whose id, tenant,
+  credential id or claimed roles hold one (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16
+  surrogate`), an API key record names one (`API key [<id>] holds an id ...`), or the `MembershipProvider` answered a
+  space, role or policy id with one (`The membership provider answered an id with an unpaired UTF-16 surrogate`). A
+  Redis key would hold `?` in its place, sharing another id's key, so the request fails closed. Fix the source: an id
+  is Unicode text. Logs write such a surrogate as `\uD800`, never `?`: `beta\uD800` is not the tenant `beta?`.
 - **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
   the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
   it again without `--dry-run`).
@@ -243,6 +244,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
 - `token-invalid` for a token whose `tenantId` claim is not a string, or whose `attributes` name `apiKeyId` (reserved
   for API keys).
+- `token-invalid` for a token whose `sub`, `tenantId`, `jti`, `roles` or `policies` hold an unpaired UTF-16 surrogate,
+  which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
+  documents, memberships and revocations. CoSec's own `JwtTokenConverter` refuses to sign one (login fails with
+  `holds an unpaired UTF-16 surrogate`). Fix the issuer or the user store; surrogate pairs (emoji) are fine.
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 
@@ -276,7 +281,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 The service reads the caller from `CoSec-Identity`, which only the CoSec gateway sets (it strips the client's own). No
 header: anonymous. Otherwise never anonymous:
 
-- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, over
+- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
+  surrogate (IDN-10), over
   `cosec.pipeline.gateway.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
@@ -312,6 +318,8 @@ header: anonymous. Otherwise never anonymous:
 - Denied requests never spend permits. A rule that never applies has a non-matching action (namespace), resource or
   condition. Rules count per document: an app's or tenant's rule has its own buckets.
 - A limiter failure skips the rule unless `strictFailure: true` (then 503, not 429).
+- A `key` value with an unpaired UTF-16 surrogate counts in a bucket of its own, `e:` and the value escaped (`\uD800`,
+  `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values keep `g:<value>`.
 - On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
   counters have no hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure` every permit is
   503. Upgrade; counters are `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`. A `cosec.key-prefix` with
@@ -333,7 +341,9 @@ logged at `INFO` (`Control API <method> <path> (request <requestId>) is 400: <re
 authorized on the tenant that decides the request, `(0)` for one without a `principal` (an anonymous request that
 names another tenant is 400), and refuse with 400 a header their documents read sent with different values, as
 enforcement does, and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or
-256 per segment; path parameters are removed as there) or a typed id over those lengths. A 429 on the
+256 per segment; path parameters are removed as there) or a typed id over those lengths. Any control request whose
+path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is 400
+before its route reads it (`The request holds a string with an unpaired UTF-16 surrogate`, IDN-10). A 429 on the
 control API is the pipeline's: a platform rate limit rule on its paths (per tenant with `key: "scope.tenant"`). A
 request without a permitted credential is 401 before any of its body is read. Large bodies on WebFlux need
 `spring.codec.max-in-memory-size`; on WebMvc a body over `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the

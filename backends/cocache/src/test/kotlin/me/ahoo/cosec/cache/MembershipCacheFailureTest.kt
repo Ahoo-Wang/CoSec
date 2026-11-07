@@ -126,8 +126,9 @@ class MembershipCacheFailureTest {
     }
 
     /**
-     * A principal or tenant id Redis cannot key losslessly (an unpaired surrogate) is refused by CoCache 8 (alpha.5)
-     * before anything is read or loaded: an error, never "unknown" or "no memberships", and the loader is not asked.
+     * A principal or tenant id Redis cannot key losslessly (an unpaired surrogate) is refused before anything is read
+     * or loaded, by the membership key (`IDN-10`) and by CoCache 8 itself: an error, never "unknown" or "no
+     * memberships", and the loader is not asked.
      */
     @Test
     fun aKeyRedisCannotHoldIsAnErrorNeverNoMemberships() {

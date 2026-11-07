@@ -255,6 +255,86 @@ class ControlHttpTest {
         }
     }
 
+    /**
+     * RC1-52 (`IDN-10`): a control request whose path, query or body holds a string with an unpaired surrogate is a 400,
+     * before any route reads it: a JSON escape (`"\uD800"`) writes one, and a Redis key would write it as `?`, so a
+     * change of tenant `beta\uD800` would be one of `beta?`. Nothing is changed. A surrogate pair is a character as any.
+     */
+    @Test
+    fun `a request holding an unpaired surrogate is a 400, wherever it holds it`() {
+        val made = fixture.ids.get()
+        fun refused(response: Pair<Int, JsonNode>, what: String) {
+            response.first.assert().describedAs(what).isEqualTo(400)
+            response.second.get("detail").asString().assert().describedAs(what).contains("unpaired UTF-16 surrogate")
+        }
+        val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order","space":"team-a",""" +
+            """"action":"order:read","resource":"order/1","time":"2026-11-01T00:00:00Z"}"""
+        val policy = """{"id":"more","statements":[{"effect":"allow","action":"order:read"}]}"""
+        val proposal = """{"document":"tenant:acme","base":1,"operations":[{"op":"putPolicy","policy":$policy}]}"""
+        for (escape in listOf("\\uD800", "\\uDC00")) {
+            refused(
+                call("POST", "/simulate", """{"request":${request.replace("\"acme\"", "\"acme$escape\"")}}"""),
+                "tenant"
+            )
+            refused(
+                call("POST", "/simulate", """{"request":${request.replace("\"bob\"", "\"bob$escape\"")}}"""),
+                "principal"
+            )
+            refused(
+                call("POST", "/simulate", """{"request":${request.replace("ops@team-a", "ops@team-a$escape")}}"""),
+                "role"
+            )
+            refused(call("POST", "/changes", proposal.replace("tenant:acme", "tenant:beta$escape")), "document key")
+            refused(call("POST", "/changes", proposal.replace("\"more\"", "\"more$escape\"")), "policy id")
+            // Jackson's parser refuses such a field name itself: not JSON, a 400 as well.
+            call(
+                "POST",
+                "/changes",
+                proposal.replace("{\"op\"", "{\"x$escape\":1,\"op\"")
+            ).first.assert().isEqualTo(400)
+            refused(
+                call(
+                    "POST",
+                    "/break-glass",
+                    """{"principal":"plato$escape","expiresAt":"2026-11-01T01:00:00Z","reason":"x"}""",
+                    security = plato
+                ),
+                "break-glass principal",
+            )
+        }
+        refused(call("GET", "/documents/tenant:beta\uD800"), "path")
+        refused(call("GET", "/changes/c1\uDC00"), "change id")
+        refused(call("GET", "/changes/c1", query = mapOf("x\uD800" to "y")), "query name")
+        refused(
+            call("DELETE", "/break-glass/glass", security = plato, query = mapOf("reason" to "done\uD800")),
+            "query"
+        )
+        fixture.ids.get().assert().describedAs("no change was made").isEqualTo(made)
+
+        val paired = call("POST", "/simulate", """{"request":${request.replace("\"bob\"", "\"bob\\uD83D\\uDE00\"")}}""")
+        paired.first.assert().isEqualTo(200)
+    }
+
+    /** RC1-52: the bytes of a surrogate half in UTF-8 form are no JSON string, and a change id cannot hold one either. */
+    @Test
+    fun `a surrogate half in UTF-8 form, and a change id with one, are refused`() {
+        val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order","space":"team-a",""" +
+            """"action":"order:read","resource":"order/1","time":"2026-11-01T00:00:00Z"}"""
+        val raw = """{"request":${request.replace("\"acme\"", "\"acme\u0000\"")}}""".encodeToByteArray()
+        val index = raw.indexOf(0)
+        val cesu = raw.copyOfRange(0, index) + byteArrayOf(0xED.toByte(), 0xA0.toByte(), 0x80.toByte()) +
+            raw.copyOfRange(index + 1, raw.size)
+        runBlocking {
+            http.handle(
+                ControlHttpRequest("POST", "/simulate", emptyMap(), cesu),
+                alice
+            )
+        }.status.assert().isEqualTo(400)
+        val changeId = runCatching { ChangeId("c1\uD800") }.exceptionOrNull()
+        changeId.assert().isInstanceOf(IllegalArgumentException::class.java)
+        changeId!!.message!!.assert().contains("[c1\\uD800]")
+    }
+
     /** RC1-44 (`DOC-5`): a request body with a duplicate key is refused, never read as whichever value came last. */
     @Test
     fun `a body with a duplicate key is refused`() {
