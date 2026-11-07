@@ -365,6 +365,16 @@ sealed interface ScopeResolution {
   2026-10-26 修订（RFC 0006 Q27）：响应体是 problem+json，匿名主体（包括带 `CoSec-Space-Id` 的匿名请求）得到 `unauthorized`（凭证被拒绝时是 `token-*`），
   已认证主体得到 `scope-rejected`；`APP_MISMATCH` 与 `SPACE_NOT_MEMBER` 的区别只进审计（RFC 0006 §6.1）。
 
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：
+> - **路由 app（SCP-2，RC1-6）。** 路由的 `cosec-app-id` 是宿主 app，先于 `cosec.authorization.scope.app-id`，按本节的设计实现；客户端声明的 `CoSec-App-Id` 只在两者都没有时生效。适配器只传原值，由管道判断。不是字符串，或不符合 app id 规则时，请求是 500，由管道判定，日志记录路由 id 与值的类型。
+> - **app id 规则（SCP-7，RC1-15）。**
+>   - `ScopeResolver.isValidAppId` 也拒绝控制字符，一次扫描完成；租户 id 用同一规则。
+>   - `SnapshotKey.App` 只接受合法的 app id。
+>   - 控制面校验拒绝文档里命名非法 app 的绑定：`V2`，400，检查整个候选。
+>   - 早期版本写下的这类 app，在存量数据里一律跳过：引用、检查、授出分析、反向引用集合、app 列表、变更记录。
+>   - 读不出的变更记录答 `409 change-unreadable`，只对能读平台文档的平台主体；对其他人和不存在的变更一样。
+> - **`CoSec-*` 参数（SCP-4，RC1-16）。** 空白值与非空值并存是二义的，答 400；只有全部空白才算没发送。空白只指 ASCII 空白，Unicode 空格算一个值。
+
 ### 4.7 黑名单：规则加名单
 
 | 部分 | 7.x | 8.0（本阶段） |
@@ -548,6 +558,11 @@ RFC 0002 §4.3 证明了：没有错误的输入上，层顺序与扁平顺序�
 每个策略内按语句下标。于是没有错误时，第一条命中的 DENY（或在没有 DENY 命中时第一条命中的 ALLOW）与 7.x 按（层，组，规则）顺序的第一条
 是同一条，经来源映射（§8.2）后门槛直接比较。
 
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1，`ALG-9`）**：一次扫描（DENY 或 ALLOW）中，同一份文档里指向同一策略的多条绑定只评估一次策略，附加两次的策略也只评估一次。所以一条策略在一次扫描中的成本至多是"绑定它的每份文档一次，附加一次"（平台、app、租户三份文档，至多三次加一次），不再随绑定数成倍增长（第 1 轮审查 M1：绑定让一条策略的成本成倍增长，RC1-8 的路径模式上界因此不成立）。同一份文档里，同一个策略 id 的每条能解析的绑定都解析到同一个编译后的策略，所以跳过时不需要在运行时比较任何东西。
+> - **决策与报告不变**：与逐条评估每个绑定的结果相同。候选顺序中的第一条绑定报告命中或记下错误，后面的绑定沿用它的结果。
+> - **实现**：编译时，文档里策略 id 被不止一条绑定引用的绑定得到一个槽位（`BoundEntry.repeat`、`CompiledDocument.repeats`）。`CandidateOrder` 把这样的条目交给 `CandidateVisitor.repeated`，`FlatEvaluator` 在一个位图里标记（文档，槽位，扫描），之后的同槽位绑定跳过。位图在这次评估的 `EvaluationScratch` 里，只在扫描遇到这样的条目时才分配。附加的去重在 `CandidateOrder` 中。每条绑定指向不同策略的文档不付任何代价。
+> - **trace 重放而不重新评估**：后面的绑定记下第一条绑定的结果，带着它自己的 `via` 与 `afterDecision`；`explain` 列出的行与以前相同。
+
 ### 6.4 `evaluate(request, snapshot)` 与适用性查找
 
 ```kotlin
@@ -676,6 +691,14 @@ RFC 0003 的 `SnapshotSource`（单飞、有序安装、条件读重新校验、
 | 成员关系 | 不进快照；`MembershipProvider` 的结果不经 `SnapshotSource` |
 
 ---
+
+> **实现说明（2026-11-03，#1194，RC 修复批次 C，TNT-4，RC1-17）**：
+> - **什么时候读 app 文档。** 租户文档把某个 app 的 `perm:` 策略绑定给 `Anyone` 或某个主体时，视图会读取那个 app 的文档，即使请求在该 app 里没有角色，这样的绑定因此能解析。
+>   - 编译器给每个编译后的租户文档记下它需要哪些 app（`boundApps`、`needsApp`）。查找是一次集合查询，不做 I/O。
+>   - 读不到 app 文档时 fail closed。
+> - **`CandidateOrder`。** 对 `Anyone` 绑定，也从 app 文档解析 app 的权限策略。只是把原来解析不了的绑定解析出来，候选顺序和组合方式都不变。
+> - **副作用。** 读 app 文档也会带来它的限流规则，`rate-limiting.md` 写明了。
+> - **规则只有一处。** 一个请求读哪些文档，由一个规则决定（`ViewDocuments.appOf`）。执法、`simulate`、`explain` 和影子比较共用它（CTL-3），见 [RFC 0007](0007-control-plane.md) 的批次 C 说明。
 
 ## 8. 一次性数据转换工具 `cosec-migrate`
 

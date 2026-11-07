@@ -1,0 +1,18 @@
+# Rule: SNP-6
+# Mutant: a revalidate-interval under a second is accepted, so 1ms rereads every document from Redis every millisecond
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfigurationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
+index 16191a26..a9c0d0d1 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
+@@ -115,9 +115,6 @@ data class SnapshotOptions(
+             revalidateInterval.isNegative || revalidateInterval.isZero ->
+                 "must be positive: the periodic revalidation cannot be turned off"
+ 
+-            revalidateInterval < MIN_REVALIDATE_INTERVAL ->
+-                "must be at least $MIN_REVALIDATE_INTERVAL: each pass reads every installed document from the store"
+-
+             revalidateInterval > MAX_REVALIDATE_INTERVAL -> "must be at most $MAX_REVALIDATE_INTERVAL"
+             revalidateInterval >= lagWarn -> "must be less than the lag warning threshold ($lagWarn)"
+             failClosedTenants.isNotEmpty() && revalidateInterval >= failClosedMaxLag ->

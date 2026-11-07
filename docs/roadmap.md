@@ -222,8 +222,13 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1188 | CoCache 6.7.0 → 6.10.0：6.9 起读失败与删除失败模式默认不设置（没有加载器的缓存都抛出），撤销缓存显式设 `degrade`（PIP-7），权威存储的缓存另钉 `InvalidateFailureMode.THROW`（6.7 的 `RETRY` 晚到的删除可能删掉其间的新写入），成员关系缓存的删除仍重试；`SNP-3` 的淘汰检查改读 `INFO memory`（需要 `+info`）；`cosec-cocache` 的 ABI 只增 25 行 | ✅ 2026-11-02 合入（`d10bd61e`） |
 | #1191 | #1188 之后的共享文档（RFC 0003、0004、0007、0008 与路线图） | ✅ 已合入 |
 | #1192 | `fix(control)!`：B2 后续，R4-1–R4-6 与 RC1-51：撤销先授权再读槽；并发抢占或头移动后最多再撤销 3 次；`DELETE /break-glass/{id}` 只在绑定不再生效时答 2xx，平台头上没有该 id 的绑定即 404，不是 break-glass 绑定即 409；撤销仍在生效绑定的变更只有作者能放弃，每次放弃写 `ABANDONED` 事件（break-glass 的为 REQUIRED）；规则 BRK-10、BRK-11；两轮独立审查加协调者核实最后一轮 | ✅ 2026-11-02 合入（`a0d0ad63`） |
+| #1194 | `fix(gateway)!`：RC 修复批次 C，网关与租户隔离的边缘（RC1-5、6、15–19、48、49）：身份转发按 scheme 选择加入，凭据（头、查询参数、`authorization` cookie）不下行，执法放行清掉客户端的 `CoSec-Identity`，路由 app 先于配置，网关上暴露的 Actuator 端点启动失败，租户把 app 的 `perm:` 策略绑给 `Anyone` 或主体时读取 app 文档，控制面与执法读同一组文档；规则 IDN-7、IDN-8、IDN-9、STA-2 与 SCP-2/4/7、TNT-4、PIP-10、CTL-3 的修订；JMH 分摊定位后吞吐回到 `main` 的 A/A 区间；四轮独立审查，所有发现在本 PR 内修完 | ✅ 2026-11-03 合入（`8bc0e6e1`） |
+| #1197、#1198 | 外部 IdP 放到 8.1 并单独写 RFC；网关也去掉 `authorization` cookie 的决定；RFC 0010 复查（C4 公共 data class 归类、C5 实例状态的格式级别） | ✅ 已合入 |
+| #1199 | #1194 之后的共享文档（RFC 0004、0006、0007、0008、0011，审查记录与路线图） | ✅ 已合入（`071f7b68`） |
+| #1200 | `fix(runtime)!`：RC 修复批次 D1，数据面（RC1-7、8、14、38、43–46、50，非数组 `roles`/`policies` 声明 401，失效通知测试的竞态，`SharedLock`，条件读取的测量）：无文档条目单独计数（SNP-7），路径模式按 glob 单位限额、动态规划匹配（DOC-4），一次评估中同一文档对同一策略的多条绑定只评一次（ALG-9），文档读到的请求头重复即 400（PIP-12），`revalidate-interval` 为 1 秒到 5 分钟（SNP-6），VM 错误装入失败修订（SNP-8），唯一的 `cosec.key-prefix` 且旧前缀配置启动失败（SNP-9），一个严格的 mapper（DOC-5）；两轮独立审查 | ✅ 2026-11-05 合入（`27234d4c`）。第 1 轮 M1–M3、L1–L8 与第 2 轮 M1（SNP-9 启动信息按它建议的前缀列出迁移的数据族）、L1、L2 都在本 PR 内修完，协调者核对第 2 轮修复；第 2 轮的 L3–L6 留给 D2 |
+| #1230 | #1200 之后的共享文档（审查记录的 batch D 观察项与 D1 的两轮审查，RFC 0003、0004、0005、0006、0008、0011 的实现说明，路线图，wiki 路线图的 M7 状态）；D2 的决定；审计 issue #1205–#1229 的分批 | 进行中 |
 
-**2026-11-02 状态（接手者从这里继续）**：
+**2026-11-06 状态（接手者从这里继续）**：
 
 | 事项 | 状态 | 下一步 |
 |---|---|---|
@@ -231,11 +236,40 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | B2 合入后的共享文档 | ✅ #1190 | — |
 | #1188 CoCache 6.7.0 → 6.10.0 | ✅ 已合入（`d10bd61e`），协调者对照代码审查；共享文档随 #1188 之后的文档 PR | — |
 | B2 后续 PR | ✅ #1192 | — |
-| 批次 C（网关） | 下一个派发 | RC1-5、6、15–19、48、49，按审查记录 Fix plan 的决定；实现会话做，只读会话复审 |
-| 批次 D 与其余 RC 前事项 | 未开始 | 见 §10；批次 D 含 RC1-50 与失效通知测试的竞态 |
+| 批次 C（网关） | ✅ #1194，四轮独立复审，所有发现在 PR 内修完；共享文档 #1199 | — |
+| 批次 D（DoS、快照、泄露） | D1 ✅ #1200，两轮独立复审，所有中级问题在 PR 内修完；共享文档 #1230。D2 已规划，未开始 | D2 的范围与决定见审查记录的 "Decisions for batch D2"：RC1-39、40、41、47，控制面 API 的按租户限流（用平台的限流规则，不加新机制），D1 第 2 轮复审的 L3–L6，simulate/explain 对重复请求头与执法一致。控制面文档列表的结构随 CoCache 8（#1203）一起换，不在 D2。两轮复审的原始报告已不在协调者的笔记目录里，以 #1200 的描述与审查记录为准 |
+| 审计 issue #1205–#1229（2026-11-05/06） | 25 个，见下表。都在 `27234d4c` 或 `b425773f` 的独立副本中用临时测试复现，没有改生产代码。没有高级问题；可能放行的只有 #1222（同一 JVM 的多个 Spring context 共用一个认证器注册表），影响最广的是 Redis Cluster 上限流整体失效（#1229） | 分成 E1a、E1b、E2、E3（下表）。顺序：E1a → D2 → E2 → E3 → E1b。#1224 等维护者的决定（§8） |
 | #866、#1163 | Renovate，与 main 冲突 | 等 Renovate rebase；#1163 是运行时依赖，须维护者确认 |
+| #1203 | 维护者自己的草稿：CoCache 8.0.0-alpha.3 的下游试用，标明不合入 | 由维护者决定何时转到 CoCache 8；不在协调者的主线上 |
 
-接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：批次 C（网关，含身份转发按 scheme 选择加入）→ 批次 D（DoS、快照、泄露，含 Lettuce `SharedLock` 观察项）→ 第 2 轮（按模块）→ `cosec-engine`/`cosec-runtime` 公共 API 归类与 testkit 夹具 → RC。
+**审计 issue 的分批**（协调者 2026-11-06；严重程度按审查记录的标准：放行、跨租户、提权、fail open 为高，削弱纵深防御或廉价的拒绝服务为中）。每个批次一个实现会话，PR 用 `Closes #…` 关闭它的 issue，并按 issue 的复现步骤写回归测试；性能项附 `jmh-ab.yml` 的前后对比：
+
+| 批次 | Issue | 严重程度 | 要点与已定的修法 |
+|---|---|---|---|
+| E1a 数据面正确性 | #1229（cocache） | 中 | Redis Cluster 上限流脚本的两个窗口 key 跨槽（CROSSSLOT）：没有 `strictFailure` 的规则全部被跳过（文档化的例外，于是 Cluster 上限流整体失效），有 `strictFailure` 的规则让每个放行请求 503。修法：两个窗口 key 用共同的 hash tag `{<rule>:<bucket>}`，不同桶仍可分片；滚动升级期间新旧实例分开计数，至多两个窗口（这段时间的上限至多翻倍），写进 `upgrading.md`；加 Cluster 回归，与快照的 Cluster 目标一样可选运行 |
+| | #1208（engine） | 中 | 平台边界的条件读外部属性时，属性计划漏掉它，合法请求 `BoundaryUnavailable`（503，fail closed）。计划纳入这次请求实际适用的边界，策略与语句两层条件都算 |
+| | #1215（runtime） | 中 | 周期性重新校验的轮次互相叠加，后端变慢时读并发按轮次放大。合并进行中的轮次，欠下的一轮在完成后补跑；失效通知的即时重载与冷加载不变，`SNP-6` 的上界不变 |
+| | #1209（runtime） | 低 | `AuthorizationChecker` 丢失只由阶段 A 提供的外部属性，结果取决于有没有无关的阶段 B 提供者（fail closed）。检查路径显式获取它需要的外部属性 |
+| | #1228（runtime） | 低 | 身份转发拒绝 `Float`、`BigDecimal` 等合法数字，已放行的请求变 500。只规范化能无损表示的标准数字类型，范围、精度与非有限值的检查不变 |
+| E2 控制面 | #1207 | 中 | 延迟的发布清理删掉后续修订仍有效的反向引用，于是仍被引用的平台策略可以删除（之后的请求 503，fail closed），RC1-9 依赖的索引失真。修法按 issue 的分析：索引保持引用的超集并在删除时核对当前头，或让索引带上引用方的修订；只加一次"先读头"仍有跨 key 竞态 |
+| | #1205 | 低 | 修订 diff 漏掉同 id 限流规则、`limits`、`attributes` 与 `boundary` 的内容修改。按章节的完整内容（或稳定摘要）比较 |
+| | #1206 | 低 | 访问审查列出只属于别的租户的主体与角色绑定（多报，数据面不受影响）。先按主体的租户过滤 |
+| | #1227（含 cocache） | 低 | 放弃旧变更的延迟清理删掉接管槽位的新变更的候选。新变更的窗口因此没有样本，到 `max-duration` 以证据不足关闭，发布需要发布者确认，所以不是静默放行。候选按预期的窗口条件删除（`ControlStore` 可以加条件删除，GA 前 SPI 不考虑兼容） |
+| | #1210（runtime、cocache） | 低 | 已结束的影子窗口永久保留，每 10 秒重写一次报告并刷新其 TTL。确认窗口结束且最终报告写入后回收 |
+| | #1226 | 低 | 历史修订的正文删除暂时失败后不再重试，旧记录永久遗留。移出索引时同时持久化待删任务，删除成功后再移除 |
+| | #1214（cocache） | 低（规模） | 实例心跳共享一个 key，集群读写量按实例数的平方增长。按实例分 key，与影子报告的按实例 key 同一设计；写明存储格式与滚动升级 |
+| | #1218、#1219、#1217 | 低（性能） | 一次变更的每条操作都确认同样三份文档（一次变更一批授权，结束时复核摘要，不延长缓存）；维护任务重复读 open changes、`reclaim` 按文档乘以变更扫描；摘要改用 `HexFormat`（与 #1203 的 `SnapshotDigest` 改动有冲突面） |
+| E3 迁移、宿主与登录 | #1225（migrate） | 中 | `publish --dry-run` 静默执行真实发布：运维以为是演练，实际改了授权。按子命令声明允许的选项，建 Redis 客户端之前拒绝其他选项 |
+| | #1220（migrate） | 中 | `api-keys` 先改写 key 再写恢复报告，失败或重跑丢失迁移计划，key 失去原来的角色（fail closed，但数据丢失）。先持久化计划，重跑复用或拒绝覆盖 |
+| | #1224（migrate、control） | 中 | `partition plan` 生成的计划被 V2 拒绝（`[p] is a platform policy's id`），文档化的分区流程第一步就走不通。RFC 0007 自身矛盾：N2（Q15）要求拒绝，§9.4 第 1 步依赖"内容相同"的窗口。等维护者的决定（§8） |
+| | #1221（migrate） | 低 | 分区计划直接用租户 id 作文件名，含 `/` 的合法 id 写出失败。复用 `ConvertedDirectory.fileOf` 的编码 |
+| | #1222（login、spring-boot） | 中 | 进程级的认证器注册表（`DefaultAuthenticationProvider` 是 `object`）跨 Spring context 串扰，并保留已关闭 context 的 bean：同一 JVM 的多个 context 中，一个 context 的登录接受另一个 context 的认证器接受的凭据。只在同一 JVM 有多个 context 时发生，但那时可能放行。starter 改为每个 context 一个注册表，`AuthenticationProvider` 的入口行为不变 |
+| | #1223（spring-boot） | 低 | 网关模式的下游服务因没用到的 `cosec-cocache` 要求 Redis，启动失败。只在用到 Redis 数据面的模式要求它 |
+| E1b 热路径性能 | #1211、#1212、#1213、#1216 | 低（性能） | 属性规划复用语句索引（与 #1208 同一处，排在 E1a 之后）；条件结果缓存随独立条件数平方增长；`Headers.of` 一次遍历；缺失的租户文档每请求重建空索引。每项都是热路径改动，附 JMH 前后对比 |
+
+顺序的理由：E1a 有两项中级问题在数据面（#1229 让一项安全功能在支持的部署上整体失效），先于全是低级问题的 D2；E2 与 D2 都改 `cosec-control`，依次做；E3 中的 #1224 等决定，其余不阻塞（#1222 可能放行，但只在同一 JVM 有多个 Spring context 时；若维护者认为常见，E3 可以提到 D2 之前）；E1b 只是性能，放在正确性之后。
+
+接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性）→ D2（控制面与运维）→ E2（控制面）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
@@ -243,12 +277,12 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - #1108（`fix(runtime)`，N3 重新编译覆盖加载中的槽位，审查发现 S4）：按旧平台编译的加载不安装，无法重新编译即 fail closed 并按退避重试；新规则 `SNP-4`（`pending`，S1b 把它移到 `timing`）；变异体拆成 4 个，全部被杀死。已合入。
 - **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。S2–S4 的删除 PR 已合入（#1114，见 §6）。S5 文档（#1131）、RFC 0008 PR-5/PR-6 与 RC 安全审查第 1 轮均已完成。
 - 后续项（#1114 审查）：`SnapshotConsistencyPropertyTest`（SNP-1）的视图由测试内的副本拼装，补一个经生产 `DocumentSnapshotViews`、在并发重新发布下的 runtime 级变体；`migrate/` 改用不需要匹配器的读取器，去掉 `OgnlSandbox` 与 `ognl`（L8 余项）。
-- 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。**2026-10-29 第二次失败**（#1162 的 CI，该 PR 只改 node 版本）：`Expecting empty but was: [platform]`，即等待期内 `platform` 键的失效通知没有送达。按本条规则升级：RC 批次 D 优先调查失效通知是否会丢（CoCache 6 的发布与订阅、重连期间、多实例），而不是重跑了事；结论与修复写进 `docs/security/8.0-rc-review.md`。**2026-10-30 第三次失败**（#1183 的 CI，[41056508374](https://github.com/Ahoo-Wang/CoSec/actions/runs/41056508374)，该 PR 只改文档）：同样是 `Expecting empty but was: [platform]`。三次都在与代码无关的 PR 上，说明不是某次改动引入的，而是 `main` 上已有的行为。**2026-10-30 只读调查的结论（更正上文"没有送达"的说法）**：这条断言在 `subscription.close()` 与 `clear()` 之后，失败的含义是关闭之后还多收到一次 `platform`，不是漏收（漏收会报 10 s 等待超时）。原因是测试本身：等待"收到自己的写"时，同步的 `notifyChanged` 已使计数达标，Redis 回声仍在途；CoCache 的 `dispatch` 在消息到达时取监听器列表的快照，回声在关闭之后落到列表里。CoCache 6.9.0 的改动不覆盖 `dispatch`，升级修不好它。生产上：CoCache 的通道按约定至多一次，重新订阅与心跳失败都会触发全量重载，但非原子发布失败、集群总线断链、坏帧等情形丢失后没有重置；兜底是 `SnapshotSource` 每 `revalidate-interval`（默认 10 s）对每份已安装文档的条件读，丢失后的陈旧期以此为界，平台、app、租户文档相同；控制面不依赖失效通知。由此发现 RC1-50：`revalidate-interval: 0` 关掉这层兜底，陈旧无界。测试修复（先等回声到达，再用第二个订阅作正向屏障，不放宽断言）与 RC1-50 归入批次 D，见审查记录。
-- 观察项（RC 批次 D，2026-10-29）：`SnapshotStoreBlockHoundTest#aColdLoadOverTheStoreNeverBlocksTheCaller` 在 #1164 的 CI 上失败一次（main 最近 15 次全绿，#1164 未改 `cocache`）。阻塞点在 Lettuce 内部：并发冷加载时 `DefaultEndpoint.write` → `SharedLock.incrementWriters` 的 `ReentrantLock` 在争用下 park（经 `MaintenanceAwareExpiryWriter`、CoCache 的 `RedisRemoteStore.readAsync`）。要查清：是 Lettuce 维护通知（maintenance events）等路径持有独占锁时的真实短暂阻塞，还是测试的并发方式造成；据此决定关闭该特性、预热连接，或按 Lettuce 自己的 BlockHound 集成放行 `SharedLock` 并写明理由。不得为了变绿而放宽守护。
-- 观察项（RC 批次 D，#1181 审查，2026-10-30）：CoCache 的条件读（`getIfChanged`）在 Redis 的 Lua 中对整份存储值做 `sha1hex` 来比较摘要；数据面 `SnapshotSource` 的条件重新验证也走它（`RedisSnapshotDocumentStore.readIfChanged`），所以每次重新验证的 Redis 线程时间与文档大小成正比（1 MB 文档量级为毫秒）。批次 D 量化它；可请 CoCache 会话把摘要存进值的头部，使条件读与大小无关（CoCache 新版本是运行时依赖升级，需维护者确认）。**CoCache 会话答复（2026-10-30）**：摘要存头部要改线格式，只能在 CoCache 8.0 做（其 RFC 0005 §4.7 的格式 2，条件读只比较 64 字节头部；摘要算法仍是 SHA-1，CoSec 持久化的摘要照常有效），6.x 做不了，8.0 尚无日期。6.x 期间可选的缓解（批次 D 评估）：调大 `revalidate-interval`；或在文档旁维护修订号，先比修订号再条件读——但修订号与文档的写入不是原子的，修订号写失败会让实例跳过重新验证，可能无界陈旧，与 RC1-50 同类，不能接受，除非能证明有界。CoCache 6.10.0 计划包含两项通道改动：`Subscription.close()` 写明已在投递中的回调可能在其返回后到达；`dispatch` 捕获 `Throwable`（`VirtualMachineError` 除外），一个监听器出错不影响其他监听器。更正：非原子发布模式下发布失败会作为写失败抛给调用方，未收到帧的节点陈旧以 `localMaxAge` 为界。Lettuce `SharedLock` 的 park 发生在调用方线程上 dispatch 命令时，CoCache 无相关配置，批次 D 直接查 Lettuce。
+- 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。**2026-10-29 第二次失败**（#1162 的 CI，该 PR 只改 node 版本）：`Expecting empty but was: [platform]`，即等待期内 `platform` 键的失效通知没有送达。按本条规则升级：RC 批次 D 优先调查失效通知是否会丢（CoCache 6 的发布与订阅、重连期间、多实例），而不是重跑了事；结论与修复写进 `docs/security/8.0-rc-review.md`。**2026-10-30 第三次失败**（#1183 的 CI，[41056508374](https://github.com/Ahoo-Wang/CoSec/actions/runs/41056508374)，该 PR 只改文档）：同样是 `Expecting empty but was: [platform]`。三次都在与代码无关的 PR 上，说明不是某次改动引入的，而是 `main` 上已有的行为。**2026-10-30 只读调查的结论（更正上文"没有送达"的说法）**：这条断言在 `subscription.close()` 与 `clear()` 之后，失败的含义是关闭之后还多收到一次 `platform`，不是漏收（漏收会报 10 s 等待超时）。原因是测试本身：等待"收到自己的写"时，同步的 `notifyChanged` 已使计数达标，Redis 回声仍在途；CoCache 的 `dispatch` 在消息到达时取监听器列表的快照，回声在关闭之后落到列表里。CoCache 6.9.0 的改动不覆盖 `dispatch`，升级修不好它。生产上：CoCache 的通道按约定至多一次，重新订阅与心跳失败都会触发全量重载，但非原子发布失败、集群总线断链、坏帧等情形丢失后没有重置；兜底是 `SnapshotSource` 每 `revalidate-interval`（默认 10 s）对每份已安装文档的条件读，丢失后的陈旧期以此为界，平台、app、租户文档相同；控制面不依赖失效通知。由此发现 RC1-50：`revalidate-interval: 0` 关掉这层兜底，陈旧无界。测试修复（先等回声到达，再用第二个订阅作正向屏障，不放宽断言）与 RC1-50 归入批次 D，见审查记录。**已由 #1200 关闭**：测试按此修复，RC1-50 即 `SNP-6`。
+- 观察项（RC 批次 D，2026-10-29）：`SnapshotStoreBlockHoundTest#aColdLoadOverTheStoreNeverBlocksTheCaller` 在 #1164 的 CI 上失败一次（main 最近 15 次全绿，#1164 未改 `cocache`）。阻塞点在 Lettuce 内部：并发冷加载时 `DefaultEndpoint.write` → `SharedLock.incrementWriters` 的 `ReentrantLock` 在争用下 park（经 `MaintenanceAwareExpiryWriter`、CoCache 的 `RedisRemoteStore.readAsync`）。要查清：是 Lettuce 维护通知（maintenance events）等路径持有独占锁时的真实短暂阻塞，还是测试的并发方式造成；据此决定关闭该特性、预热连接，或按 Lettuce 自己的 BlockHound 集成放行 `SharedLock` 并写明理由。不得为了变绿而放宽守护。**已由 #1200 关闭**：只放行 `SharedLock.incrementWriters`（不放行 `doExclusive`，lettuce#2510），重连时的等待由 `requestQueueSize` 约束并写进 `storage.md`，starter 不改客户端。
+- 观察项（RC 批次 D，#1181 审查，2026-10-30）：CoCache 的条件读（`getIfChanged`）在 Redis 的 Lua 中对整份存储值做 `sha1hex` 来比较摘要；数据面 `SnapshotSource` 的条件重新验证也走它（`RedisSnapshotDocumentStore.readIfChanged`），所以每次重新验证的 Redis 线程时间与文档大小成正比（1 MB 文档量级为毫秒）。批次 D 量化它；可请 CoCache 会话把摘要存进值的头部，使条件读与大小无关（CoCache 新版本是运行时依赖升级，需维护者确认）。**CoCache 会话答复（2026-10-30）**：摘要存头部要改线格式，只能在 CoCache 8.0 做（其 RFC 0005 §4.7 的格式 2，条件读只比较 64 字节头部；摘要算法仍是 SHA-1，CoSec 持久化的摘要照常有效），6.x 做不了，8.0 尚无日期。6.x 期间可选的缓解（批次 D 评估）：调大 `revalidate-interval`；或在文档旁维护修订号，先比修订号再条件读——但修订号与文档的写入不是原子的，修订号写失败会让实例跳过重新验证，可能无界陈旧，与 RC1-50 同类，不能接受，除非能证明有界。CoCache 6.10.0 计划包含两项通道改动：`Subscription.close()` 写明已在投递中的回调可能在其返回后到达；`dispatch` 捕获 `Throwable`（`VirtualMachineError` 除外），一个监听器出错不影响其他监听器。更正：非原子发布模式下发布失败会作为写失败抛给调用方，未收到帧的节点陈旧以 `localMaxAge` 为界。Lettuce `SharedLock` 的 park 发生在调用方线程上 dispatch 命令时，CoCache 无相关配置，批次 D 直接查 Lettuce。**已由 #1200 关闭**：按文档大小测量（`docs/perf/conditional-read/`），公式与缓解写进 `storage.md`，不另存修订号；与大小无关的条件读等 CoCache 8（#1203 的试用中每种大小 7–13 µs）。
 - 后续项（#1181 审查）：控制面 API 没有按租户的速率限制，租户管理员可以循环调用 propose 等昂贵操作，归入批次 D 评估；控制面的单一文档列表 `<p>:control:list:documents` 随租户数增长、回收任务每轮整份读取，换成不需要整份读取的结构。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
-- 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。归入 RC 批次 D（2026-10-30）。
+- 后续项（#1144 审查）：`Jwts.toPrincipal` 遇到非数组的 `roles`/`policies` 声明时 NPE，表现为 500（已是 fail closed），改为 `TokenVerificationException`（401）。归入 RC 批次 D（2026-10-30）。**已由 #1200 关闭**（`PIP-6` 修订）。
 - 后续项（#1149 审查）：未知主体的短期负缓存（被拒的请求不受限流，已删除主体的 key 每次都问提供者）；`RedisApiKeyReader` 的本地缓存（现在每个 API Key 请求都读 Redis）；签发 API Key 本身经授权（现在能写 key 存储的人可以为任何主体签发）。
 - 后续项（CI，2026-10-29）：main 上的 Docker 作业推送阿里云镜像仓库时多次挂住，撞上 30 分钟超时（ghcr 几秒完成），连带 AOT 冒烟被跳过。把阿里云镜像同步拆成单独的非阻塞作业（在 ghcr 推送与 AOT 冒烟之后，失败不影响 main 的状态）。
 - RC 前（#1155 审查）：把 `cosec-engine` 与 `cosec-runtime` 的每个公共声明归为"文档化的 API"或 `@InternalCoSecApi`，以 wiki 写到的为准；GA 冻结 ABI 转储之前完成，否则之后收窄就是破坏性变更。同时决定 `cosec-cocache` 的四个公开缓存接口（`RevokedTokenCache`、`RevokedSubjectCache`、`MembershipCache`、`PolicySnapshotCache`）是否仍公开继承 CoCache 的 `Cache`：只要继承，CoCache 每给 `Cache` 加一个方法，CoSec 的转储就随之变化（#1188 因 CoCache 6.8 的版本化写入多出 25 行）。
@@ -266,6 +300,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | 事项 | 背景 | 协调者的建议 |
 |---|---|---|
 | 何时发 8.0 RC / GA | RFC 0001 §6：由维护者决定 | 等 RC 前提全部满足后再议 |
+| #1224：分区流程与 V2 | RFC 0007 N2（Q15）要求控制面拒绝租户文档使用平台已有的策略 id（V2 照此实现）；§9.4 的第 1 步却要经 `apply` 在租户文档里放入平台策略的完全相同的副本，数据面对内容相同的两层同名正常解析。所以 `partition plan → apply` 第一步就被拒绝。A：V2 只接受与平台策略编译结果完全相同的副本；平台的那条还在时，拒绝对这份副本的任何修改，所以控制面进不了"两层同名但内容不同"的 fail closed 状态；平台删除自己的那条时，租户里的副本是绑定重新解析到的目标，按新授予分析（内容相同即无新授予）。B：8.0 不提供分区流程，删除 `partition plan` 与 §9.4，迁移从一开始就用 `--partition by-owner`，分区移到 8.1 | A：它是 RFC 0007 §9.4 原本的设计，已发布的 alpha 文档教的就是它；完全相同的副本改变不了任何决定。B 更简单，但收回一项文档化的迁移路径。E3 只有 #1224 等这个决定 |
 
 ## 9. 维护者决定（2026-10-26 起）
 
@@ -326,13 +361,40 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **RC1-36 的偏离**：`cosec:platform-admin` 可以绑定在平台文档与平台租户自己的文档中，租户与 app 文档中的绑定编译失败（`bootstrap` 把第一位管理员绑定在平台租户文档中，拒绝它会把所有管理员锁在外面） | 2026-11-01 | [RFC 0007](rfc/0007-control-plane.md) 的 B2 实现说明、[RC 审查](security/8.0-rc-review.md) 的 Fix plan |
 | **默认按协调者的推荐推进，重要决策与维护者讨论**（重申 2026-10-28 的决定） | 2026-11-02 | 仅记在本文；维护者："默认按你推荐，重要决策跟我讨论。" |
 | **B2 第四轮审查的低级问题 R4-1–R4-6 与 RC1-51 合为一个后续 PR**，排在 CoCache 6.10.0 适配之后、批次 C 之前（协调者决定）：都不放行请求，不阻止 B2 合入 | 2026-11-02 | [RC 审查](security/8.0-rc-review.md) 的 Fix plan |
+| **网关也不转发 `authorization` cookie**（#1194 复审 R1-4，由低级提为阻塞）：管道从这个 cookie 读 token，所以它是凭据；与其他凭据同一开关，`forward-authorization=false`（默认）时每条路由都去掉，为 `true` 时只留给接收身份的路由（IDN-7）；其他 cookie 不动 | 2026-11-03 | 维护者："按你推荐"；#1194 |
+| **外部 IdP（OIDC/JWKS、令牌内省、OIDC 登录）放到 8.1，用单独的 RFC 设计**，GA 前不做（重申 RFC 0010 Q2）：以后加入是纯新增，唯一的线上协议改动（C3）已在 GA 前完成；RC 前的公共声明归类不能收掉 RFC 0010 列出的接缝 | 2026-11-03 | 维护者："Add to roadmap"；[RFC 0010](rfc/0010-ga-extension-points.md) §1、Q2 |
+| **RFC 0010 复查：GA 前再加两项**。C4：公共 `data class` 逐个归类，只留永不增长的值，加架构规则，会增长的封闭集合在 KDoc 和 `extending.md` 写明；与 RC 前的公共声明归类合为一步，覆盖所有发布模块。C5：`InstanceStatus` 加格式级别，文档格式的发布门槛随 8.1 第一个文档新字段加入 | 2026-11-03 | 维护者："Write the addendum"；[RFC 0010](rfc/0010-ga-extension-points.md) 2026-11-03 复查、Q4–Q6 |
+| **批次 D1 的协调者决定**（RC1-8 等）：超限模式按其他编译错误答 422；路径模式的成本按 glob 单位（token 与字面量字符）限额，每份文档 2,048 单位，常量按"一份文档的最坏情况在 CI 上每请求约 1 ms 以内"实测选定；捕获改为动态规划，不再回溯；一次评估中，同一文档对同一策略的多条绑定只评一次（ALG-9，不改变决策与报告）；不设语句数上限；`revalidate-interval` 为 1 秒到 5 分钟；一个 `cosec.key-prefix` 取代三个前缀，三个旧前缀配置不论 `cosec.unknown-properties` 都让启动失败，并列出要迁移的数据族；RC1-14 只写文档，可放弃的超时留到 8.1 | 2026-11-03 至 2026-11-04 | 协调者按推荐（维护者："默认按你推荐"）；#1200 |
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关）→ D（DoS、快照、泄露；失效通知已查清不是丢失（测试竞态），批次 D 修测试并处理 RC1-50，再查 Lettuce `SharedLock` 在争用下的阻塞）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → `cosec-engine`/`cosec-runtime` 公共声明归类 → 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
+- **2026-10-30 起的顺序**：RC 修复批次 B1（✅ #1181）→ B2（✅ #1185）→ CoCache 6.10.0 适配（✅ #1188）→ B2 后续（✅ #1192）→ C（网关，✅ #1194）→ D（DoS、快照、泄露；D1 数据面 ✅ #1200）→ 审计 issue E1a → D2（控制面与运维）→ E2 → E3 → E1b（审计 issue #1205–#1229 的分批见 §7）→ 第 2 轮（按模块的正确性审查）→ `cosec-testkit` 的公开 Pipeline 夹具 → 公共声明归类与 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5（覆盖所有发布模块，不收掉 RFC 0010 列出的接缝）→ 其余 RC 前事项（阿里云镜像推送拆成非阻塞作业、`cosec-migrate` 发行包、播种文档、macOS kqueue 排障、网关内存默认值）→ 维护者决定 RC/GA 的时间。2026-10-28 起的顺序已全部完成。
 
 可以穿插进行（不在主线上）：
 
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
 - （已由 2026-10-29 的决定取代：不再逐个补做已合入 PR 的两轮审查，改为对 RC 候选提交做两轮整体审查，见 [RFC 0008 §3.9](rfc/0008-conformance-and-direct-build.md) 修订。）
+
+GA 之后（8.1），在 8.0 GA 之前不派发：
+
+- **外部身份提供者（IdP）的 RFC**，8.1 的第一份设计（2026-11-03 决定）。范围：
+  - 资源服务器模式：用 JWKS 验签，issuer 映射到租户，校验 audience，声明经平台文档里的显式映射才成为角色（[RFC 0009](rfc/0009-identity-and-credentials.md) §4.3）；
+  - 不透明 token 的内省（RFC 7662）；
+  - `cosec-login`/`cosec-social` 里的 OIDC 授权码登录。
+
+  SAML 不做，交给 Keycloak 一类的代理型 IdP。
+  - **接缝**：都是新增，见 [RFC 0010](rfc/0010-ga-extension-points.md) §1：
+    - 新的 `Authenticator` 实现；
+    - `MembershipProvider` 带声明的默认方法重载；
+    - 平台文档的可选映射字段；
+    - `RejectReason` 的新常量。
+  - **设计时要回答**：
+    - JWKS 的获取与缓存不阻塞事件循环；
+    - JWKS 不可用时 fail closed，以及已缓存密钥能用多久；
+    - 算法白名单（防算法混淆）；
+    - 拒绝 `jku`/`x5u`（防 SSRF）；
+    - 密钥轮换；
+    - 一个部署同时接受 CoSec 自己的 token 和外部 token 时怎么组合认证器；
+    - 拒绝带 `act` 的 token：这道闸门今天只在 `cosec-jwt` 的 `Jwts.toPrincipal`，要移到每个认证器都经过的地方。
+- **委托（RFC 8693 `act`）**，[RFC 0009](rfc/0009-identity-and-credentials.md) 已定在 8.1：外部 IdP 的 token exchange 是它的主要来源，两份 RFC 一起排期。

@@ -85,6 +85,25 @@
         "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
       ],
       "pending": null
+    },
+    {
+      "id": "ALG-9",
+      "source": "RFC 0004 §6.1, §6.3; review M1 of #1200",
+      "statement": "A pass evaluates a policy at most once for all the bindings of one document that reach it, and a policy attached twice once: so a policy costs a pass at most one evaluation per document that binds it, and one for the attachments. The decision and the statement and binding it reports are those of evaluating every binding: the first one in candidate order reports the match or records the error.",
+      "level": "engine",
+      "guards": [
+        "engine:RepeatedBindingsTest#many bindings of one document cost one evaluation per pass",
+        "engine:RepeatedBindingsTest#role bindings across the principal's roles cost one evaluation",
+        "engine:RepeatedBindingsTest#a platform policy costs at most one evaluation per document that binds it",
+        "engine:RepeatedBindingsTest#tenant bindings of an app permission cost one evaluation",
+        "engine:RepeatedBindingsTest#an attachment claimed many times costs one evaluation",
+        "engine:RepeatedBindingsTest#the trace lists the later bindings with the first one's outcomes"
+      ],
+      "properties": [
+        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode",
+        "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
+      ],
+      "pending": null
     }
   ]
 }

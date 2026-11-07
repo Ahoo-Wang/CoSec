@@ -1,10 +1,10 @@
 {
   "rules": [
-    "PIP-9"
+    "PIP-12"
   ],
-  "polarity": "positive",
+  "polarity": "negative",
   "level": "pipeline",
-  "description": "X-Debug sent twice with different values has no single value: the DENY that reads it is indeterminate (503), not decided by whichever value comes first.",
+  "description": "X-Debug is sent twice with the same value, which is one value: no 400; the DENY reads 0 and the ALLOW permits.",
   "documents": {
     "platform": {
       "policies": [
@@ -57,7 +57,7 @@
     "headers": {
       "X-Debug": [
         "0",
-        "1"
+        "0"
       ]
     }
   },
@@ -65,7 +65,7 @@
     "result": "authenticated"
   },
   "expect": {
-    "status": 503,
-    "type": "unavailable"
+    "status": 200,
+    "proceed": true
   }
 }

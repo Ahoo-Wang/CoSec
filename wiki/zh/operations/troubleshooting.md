@@ -42,9 +42,11 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求无法被无歧义地读取，因此在认证之前就被拒绝。审计事件的 `kind` 为 `BAD_REQUEST`。原因：
 
 - 路径含有 `.` 或 `..` 段，或者有格式错误的百分号转义；
-- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的非空值（在请求头和查询字符串之间，或在其中
-  任一处之内），或者它的查询值有格式错误的百分号转义；
+- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的值（在请求头和查询字符串之间，或在其中
+  任一处之内），空白值与非空白值同时出现也算（例如请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=`），或者它的查询值有格式错误的百分号转义。每个参数只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
+- 某个请求头以不同的值发送了多次，而决策所依据的文档在条件、边界或限流规则中读取它，无论语句的效果是什么，也无论它是否适用于本请求（`PIP-12`）。这一项在认证和
+  确定作用域之后、文档已知时检查。只发送一次该请求头，或只用一个值。最常见的是代理会追加的请求头，例如 `X-Forwarded-For`：两层代理各追加一行时，视图中读取它的文档使每个请求都为 `400`，即使读取它的语句只覆盖 `DELETE` 而请求是 `GET`；平台的语句会对每个租户这样做。让代理发送合并后的一行，或者通过宿主只解析一次的 `environment.ip` 读取客户端地址；
 - 在 `cosec.pipeline.mode=gateway` 的服务上，`CoSec-Identity` 头无法读取（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 修复客户端（[Web 集成](../integration/web.md)）。在控制 API 上，`400` 会在 `detail` 中说明问题
@@ -67,8 +69,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 - **令牌：** 签发方和本服务必须使用相同的 [`cosec.jwt.secret` 和 `cosec.jwt.algorithm`](./configuration.md#jwt)。
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
-- **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key
-  设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
+- **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），`roles` 或 `policies` 声明不是字符串数组，`attributes`
+  声明不是对象，或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key 设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -112,8 +114,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 请求声明的作用域不能授予这个调用方：
 
-- `CoSec-App-Id` 指定的应用不是宿主的 [`cosec.authorization.scope.app-id`](./configuration.md#authorization)，或者
-  是一个不能作为应用 id 的值；
+- `CoSec-App-Id` 指定的应用不是宿主的应用：在网关上是路由元数据 `cosec-app-id`，否则是
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)；或者是一个不能作为应用 id 的值（空白、`*`、含 `:` 或控制字符、或超过 128 个字符）；
 - `CoSec-Space-Id` 指定的空间中主体没有任何角色。
 
 发送宿主的应用或者不发送，并发送主体是其成员的空间（[信任边界](../guide/security-model.md#trust-boundaries)）。
@@ -162,6 +164,8 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 - `The credential of [<subject>] never expires: a service could not bound the identity.`：没有 `expires-at` 的 API key（或没有
   `exp` 的令牌）。给 key 设置过期时间，或把该路由的元数据设为 `cosec-identity: false`。
+
+元数据 `cosec-app-id` 不能作为应用 id（为空、`*`、含 `:` 或控制字符、或超过 128 个字符）的路由，每个请求都回答 `500`，并随上面那条未建模异常的日志记下 `The cosec-app-id of route [<routeId>] cannot be an app id: ...`：修正该元数据（[网关](../integration/web.md#gateway)）。值不是字符串（数字、布尔值、列表或映射）时也是如此，日志为 `The cosec-app-id of route [<routeId>] is a <type>, not a string: ...`：给值加上引号，并只写一个应用。
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`、`Claim [<name>] is <n> characters, over 1024.`
   或 `Claim [<name>] is a <type>, not a string, number or boolean.`：减少角色或
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity)，或在网关和服务上都调大 `max-size`。
@@ -182,10 +186,10 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **实例访问不到 Redis。** 它继续使用已装入的内容做决策，超过 `lag-warn`（60 秒）后以 `WARN` 记录
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过 `lag-escalate`（5 分钟）后以
   `ERROR` 记录 `... is stale: not confirmed for <lag>.`。恢复 Redis。
-- **实例错过了失效消息。** 它会在 [`revalidate-interval`](./configuration.md#snapshot)（10 秒）内跟上。Redis 正常而
-  间隔更长，说明周期确认被关掉了（`revalidate-interval: 0`）。
+- **实例错过了失效消息。** 它会在 [`revalidate-interval`](./configuration.md#snapshot)（默认 10 秒，最多 5 分钟）内跟上。
+  周期确认不能关闭：Redis 正常而间隔更长，说明实例的确认轮次在失败，它的日志会写明原因。
 - **实例读的是另一个命名空间。** 所有实例和控制面必须共用
-  [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot) 和同一个 Redis。
+  [`cosec.key-prefix`](./configuration.md#key-prefix) 和同一个 Redis。
 - **Redis 丢了写入。** 故障切换后实例可能以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`：重新发布这个变更。
 
@@ -203,6 +207,8 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
 
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
+
+**每个请求都是匿名的。** 网关只把身份转发给接收身份的路由：指向已注册服务的路由（`uri: lb://...`），或元数据为 `cosec-identity: true` 的路由。指向 `http://` 或 `https://` 又没有该元数据的路由，或元数据为 `cosec-identity: false` 的路由，不发送身份，所以其后的服务看到的是匿名请求。路由指向你自己的服务时，给它标上 `cosec-identity: true`（[转发身份](../integration/web.md#forwarding-the-identity)）。自己校验令牌、而不再收到令牌的服务，需要 `cosec.gateway.identity.forward-authorization=true` 以及这样的路由。
 
 ## 实例未就绪 {#instance-is-not-ready}
 
@@ -224,6 +230,11 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``：`http.header.` 之后的名称含有 ASCII
   字母、数字和 ``!#$%&'*+-.^_`|~`` 之外的字符，例如空格或形似字母。
 - 条件读取的 `ext.*` 属性既没有在平台文档中声明，也没有宿主的属性提供者提供。变更按控制面宿主的属性提供者编译。
+- 路径模式超出开销上界（`DOC-4`，[策略语言](../policies/language.md#path-pattern-bounds)）：`the pattern is <n> characters, more
+  than 2048`；`segment [<s>] has <n> parts (*, ?, {name} and the text between them), more than 16`，其中连续的 `*` 算一个；
+  或者在 `$` 处的 `The document's path pattern segments that mix *, ? or {name} with other text hold <n> tokens and literal
+  characters in all, more than 2048`。把长的通配段拆成整段（单独占一段的 `*` 或 `{name}` 不计开销），让通配段中的文本保持简短，或把多条语句的模式合并成更少的几条；前导 `**` 之后的片段计两次。在数据面上，
+  超出上界的已存储文档会被装入为失败，读取它的请求回答 `503`。
 
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
 
@@ -278,6 +289,21 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。从 7.x capability 迁移过来的应用要自己添加这些模块（[模块、制品与包](./upgrading.md#modules-artifacts-and-packages)）。
 
+### 暴露了 actuator 端点导致启动失败 {#startup-fails-on-an-exposed-actuator-endpoint}
+
+```text
+Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port, where CoSec does not authorize them: anyone who reaches the gateway reaches them, and [gateway] writes its routes. ... (STA-2, https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-an-exposed-actuator-endpoint).
+cosec.gateway.unprotected-endpoints lists [gateway], which it never accepts: that endpoint writes the gateway's routes. ...
+```
+
+在 Spring Cloud Gateway 宿主上，CoSec 只授权网关的路由；除非 `management.server.port` 指定了其他端口，它的 actuator 端点都在应用端口上。第一条消息列出在那里暴露的、`health` 以外的端点。任选其一：
+
+- 把 actuator 放到单独的端口上，并置于网络策略之后：`management.server.port=8081`（`server.port` 以外的任何端口）；
+- 少暴露一些端点：`management.endpoints.web.exposure.include=health`；
+- 在 [`cosec.gateway.unprotected-endpoints`](./configuration.md#gateway) 中列出由其他手段保护的端点，例如位于网络策略之后的 `prometheus`。
+
+第二条消息：`gateway` 会修改路由，所以那里从不接受它；把它放在管理端口上，或者完全不暴露（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。
+
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 
 ```text
@@ -293,6 +319,27 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 使用 `warn` 时，实例照常启动，并以 `WARN` 记录同样的文本，以 `!!!` 开头，以 `Starting anyway (eviction-check=warn).`
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档
 会被读成不存在，其中的 DENY 语句不再生效。
+
+### 重新确认间隔导致启动失败 {#startup-fails-on-the-revalidation-interval}
+
+```text
+cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the periodic revalidation cannot be turned off.
+```
+
+失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：至少 1 秒（每一轮都从 Redis 读取每个已安装的文档）、不超过
+5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。要为大文档节省
+Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
+
+### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
+
+```text
+CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
+  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
+  API keys: cosec:api-key -> b:api-key
+  ...
+```
+
+环境中仍然设置了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 或 `cosec.api-key.key-prefix`，它们已被 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代（`SNP-9`）。无论 [`cosec.unknown-properties`](./configuration.md#unknown-properties) 如何设置，启动都会失败：旧布局可能把令牌吊销和 API key 保存在与现在读取的前缀不同的前缀下，而没人读取的吊销会让被它吊销的令牌再次通过。消息列出会移动的 key 族，根据旧值和应设置的 `cosec.key-prefix` 计算得出：已设置时为当前值，未设置时为快照文档的前缀。先把令牌吊销和 API key 复制到新的 key 下（`COPY`，或保留过期时间的 `RENAME`），把 `cosec.key-prefix` 设为快照文档所在的前缀，然后移除旧配置项（[升级](./upgrading.md#from-8-0-0-alpha-2)）。
 
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 
@@ -372,6 +419,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误，或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。 | 修正请求；`detail` 指出问题。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。 | |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
+| `409` `change-unreadable` | 该变更的记录由之前的构建为一个不能作为应用 id 的应用写入（空白、`*`、含控制字符或超过 128 个字符）；控制面所在的主机在每一轮维护中记录 `Change [<id>] is skipped: it is of [<key>], which no document key can name`。它既无法查看也无法放弃。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-2)。 |
 | `410` | 请求的修订没有保留。 | |
 | `428` | 发布需要确认影子窗口的计数。 | 带上该窗口的 `ack` 再次发布。 |
 | `503` | 动作的授权无法决定（没有平台文档、Redis 不可用）、存储无法读取、发布时读不到审批人的吊销（日志中写着 `the revocations of the approver could not be read`；变更保留其审批），或者 `REQUIRED` 变更监听器没有记录一个受控步骤。没有 `REQUIRED` 变更监听器时使用 break-glass：`break-glass needs a REQUIRED change listener, and none is configured`。 | 恢复 Redis 或监听器的存储（[控制面变更日志](./observability.md#control-plane-change-log)）。 |

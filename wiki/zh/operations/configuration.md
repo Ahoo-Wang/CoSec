@@ -64,6 +64,17 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 - **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi` 和 Spring Boot Actuator 就存在；像其他 actuator
   端点一样决定是否暴露它。
 
+## Key 前缀 {#key-prefix}
+
+一个部署写入 Redis 的每个 key 都在同一个前缀之下（`SNP-9`）：快照文档、控制面记录、影子报告、吊销、成员关系、API key、
+限流计数器和 OAuth 状态（[Redis key](./storage.md#redis-keys)）。同一个 Redis 上前缀不同的两个部署不共享任何 key。
+它取代了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`：
+设置其中任何一项的环境都会启动失败，无论 `cosec.unknown-properties` 如何设置（[故障排查](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)）。
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。 |
+
 ## 管道 {#pipeline}
 
 `cosec.pipeline.*`：如何读取并限定一个请求。
@@ -85,26 +96,34 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`，匿名调用方为 `401`）。不设置时由请求声明它的应用（[信任边界](../guide/security-model.md#trust-boundaries)）。 |
+| `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`，匿名调用方为 `401`）。不设置时由请求声明它的应用（[信任边界](../guide/security-model.md#trust-boundaries)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。 |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
 | `cosec.authorization.routes.location` | 逗号分隔的资源位置 | `classpath:cosec-routes.json` | WebFlux 或 WebMvc 宿主在启动时加载的路由映射。位置不存在，或映射无法解析，启动失败。设置为空表示不使用路由映射：每个请求都在 `http` 命名空间中授权。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
 
-## 网关身份 {#gateway-identity}
+## 网关 {#gateway}
 
-`cosec.gateway.identity.*`，用于 Spring Cloud Gateway 宿主（`cosec-gateway`）：网关转发给其后服务的内容。对有主体的
-放行，它把 `CoSec-Identity` 设为自己验证过的身份（格式见
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)）。
-无论这些配置项、模式或 `cosec.enabled` 如何，它总是移除客户端发来的 `CoSec-Identity`。元数据为 `cosec-identity: false`
-的路由不转发身份。
+`cosec.gateway.*`，用于按策略决策的 Spring Cloud Gateway 宿主（`cosec-gateway`）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.gateway.identity.enabled` | boolean | `true` | 转发已验证的身份。关闭后，网关仍然移除客户端的身份。 |
+| `cosec.gateway.unprotected-endpoints` | 端点 id 集合 | 空 | 可以在网关应用端口上通过 HTTP 暴露的 actuator 端点：CoSec 不授权它们，它们由其他手段保护。其他任何 `health` 以外的端点在那里暴露都会使启动失败（`STA-2`）；会修改路由的 `gateway` 从不接受。在单独的 `management.server.port` 上可以暴露任何端点（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。 |
+
+## 网关身份 {#gateway-identity}
+
+`cosec.gateway.identity.*`，用于 Spring Cloud Gateway 宿主（`cosec-gateway`）：网关转发给其后服务的内容。对有主体的
+放行，它在接收身份的路由上把 `CoSec-Identity` 设为自己验证过的身份（格式见
+[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)）：指向已注册服务的路由（`lb://`），或元数据为 `cosec-identity: true` 的路由。元数据为
+`cosec-identity: false` 的路由，以及指向其他 URI 又没有该元数据的路由，不接收身份（[转发身份](../integration/web.md#forwarding-the-identity)）。
+无论这些配置项、模式或 `cosec.enabled` 如何，网关总是移除客户端发来的 `CoSec-Identity`。
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.gateway.identity.enabled` | boolean | `true` | 把已验证的身份转发给接收身份的路由。关闭后，网关仍然移除客户端的身份。 |
 | `cosec.gateway.identity.claims` | 属性名集合 | 空 | 作为 `claims` 随身份一起转发的主体属性，如 `name` 和 `email`（对 JWT 而言是其 `attributes` 声明中的 key，不是顶层声明）：最多 1024 个字符的字符串、数字和布尔值。其他值使请求失败（`500`）。 |
 | `cosec.gateway.identity.max-size` | data size | `8KB` | 编码后更大的身份使请求失败即拒绝（`500`），而不是被截断。 |
-| `cosec.gateway.identity.forward-authorization` | boolean | `false` | 客户端的 `Authorization` 头是否仍然发往下游。关闭时，网关从它转发的每个请求中移除该头：其后的服务不需要令牌。只对代表用户调用其他 API 的服务打开。放在 cookie 中的令牌仍会被转发。 |
+| `cosec.gateway.identity.forward-authorization` | boolean | `false` | 客户端的凭证是否仍然发往下游：`Authorization` 头、API key 头（`cosec.pipeline.api-key-header`）、`authorization` 查询参数和 `authorization` cookie。关闭时，网关从它转发的每个请求中移除它们（cookie 从每个 `Cookie` 头中移除，其他 cookie 保留）：其后的服务不需要凭证。打开时，它们只发往本会接收身份的路由（`lb://`，或 `cosec-identity: true`），无论 `cosec.gateway.identity.enabled` 是否打开。只对要再次校验令牌或代表用户调用其他 API 的服务打开。 |
 
 永不过期的凭证（没有 `expires-at` 的 API key）无法被转发：它的放行得到 `500`。
 
@@ -125,9 +144,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.snapshot.key-prefix` | string | `cosec` | 快照文档、控制面记录和影子 key 所在的 Redis 命名空间，去掉末尾的 `:`。读取同一个平台的所有服务以及控制面必须使用同一个值。 |
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | CoCache 中文档的本地副本可以为冷加载提供多久，之后重新询问 Redis。无论缓存定制器或 `cocache.*` 配置项设置了什么，都以它为准。 |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久用条件读向 Redis 确认一次每个已装入的文档。`0` 关闭周期确认；失效消息仍会重新加载变化的文档。 |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久用条件读向 Redis 确认一次每个已装入的文档：失效消息丢失时，变化最多这么久不被看到（`SNP-6`）。至少为 `1s`、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。每一轮在 Redis 上花费的 CPU 与文档大小成正比（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | 文档超过这个时长未被确认时，以 `WARN` 记录。不得超过 `lag-escalate`。 |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | 文档超过这个时长未被确认时，以 `ERROR` 记录为陈旧。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。其他租户继续基于已装入的文档决策。 |
@@ -174,8 +192,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.api-key.store` | `memory`、`redis` | `memory` | `memory`：下面配置的 key。`redis`：所有实例共享的 key；需要 `cosec-cocache`、一个 `StringRedisTemplate` 和一个 `ReactiveStringRedisTemplate`。 |
-| `cosec.api-key.key-prefix` | string | `cosec:api-key` | `redis` 存储的 Redis key 前缀，去掉末尾的 `:`。与其他前缀都无关（[Redis key](./storage.md#redis-keys)）。 |
+| `cosec.api-key.store` | `memory`、`redis` | `memory` | `memory`：下面配置的 key。`redis`：所有实例共享的 key，位于 `<cosec.key-prefix>:api-key` 下；需要 `cosec-cocache`、一个 `StringRedisTemplate` 和一个 `ReactiveStringRedisTemplate`。 |
 | `cosec.api-key.keys[n].*` | list | 空 | `memory` 存储的 key；使用 `redis` 时忽略。 |
 
 请求头由 [`cosec.pipeline.api-key-header`](#pipeline) 决定。API key 需要一个 `MembershipProvider` Bean，否则应用无法启动（`IDN-6`，[API key](../integration/authentication.md#api-keys)）。`cosec.api-key.keys` 的每一项如下，任何其他字段都会导致启动失败：
@@ -198,7 +215,6 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.cache.key-prefix` | string | `cosec` | 吊销 key 的前缀，去掉末尾的 `:`。与 `cosec.authorization.snapshot.key-prefix` 无关。 |
 | `cosec.authorization.cache.token.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
 
 ### 本地缓存设置 {#local-cache-settings}

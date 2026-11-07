@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: a $Version header dropped whole leaves the cookies read from it in the request handed on
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 46e39a10..1ad2e90e 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -178,7 +178,7 @@ class PipelineGatewayFilter(
+         dropped: List<String>,
+     ) : ServerHttpRequestDecorator(request) {
+         private val cookies: MultiValueMap<String, HttpCookie> = LinkedMultiValueMap<String, HttpCookie>().apply {
+-            val inDropped = if (dropped.isEmpty()) emptySet() else dropped.flatMapTo(HashSet(), ::pairsOf)
++            val inDropped = emptySet<Pair<String, String>>()
+             request.cookies.forEach { (name, values) ->
+                 val kept = values.filter { withoutCookieToken("$name=${it.value}") != null && (name to it.value) !in inDropped }
+                 if (kept.isNotEmpty()) put(name, kept)

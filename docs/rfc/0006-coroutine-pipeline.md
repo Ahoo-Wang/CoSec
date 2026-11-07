@@ -533,6 +533,10 @@ class Pipeline internal constructor(/* 认证器、成员关系、快照、属�
   （与现在的 `SecurityDecision.responseHeaders` 相同）。
 - 503 **不带** `Retry-After`：CoSec 不知道依赖何时恢复（Q1）。需要的部署在网关层配置。
 
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：上表多了两种情形：
+> - **重复的请求头是 400（`PIP-12`，RC1-38）。** 一个请求把某个头发了多次且值不同，而视图读到的文档中有语句、策略条件、边界或限流规则的条件与 key 读这个头（`http.header.<name>`，或经 `http.origin`、`http.referer` 读 `Origin`、`Referer`）：管道在评估之前经 `StatusMapping` 答 400 `invalid-request`，不论语句的效果，也不论它是否适用于这个请求。每个 `CompiledDocument` 记下它读的头（`headersRead`，全部经 `ConditionChecker.attribute` 解析，所以从不含凭据头）。此前读这个头的 DENY 出错，决定为 Indeterminate 即 503，泄露了这条 DENY 的存在和它读的头。值相同的重复算一个值，没有文档读的头不检查。`PIP-9` 相应修订，它的 503 场景移到 `PIP-12`。`simulate` 与 `explain` 仍然评估这样的请求（答 Indeterminate），与执法一致的处理在 D2。
+> - **格式错误的令牌声明是 401（`PIP-6` 修订）。** `roles` 或 `policies` 为 null 或不是字符串数组、`attributes` 不是对象时，`Jwts.toPrincipal` 抛出 `TokenVerificationException`：按匿名评估，拒绝时答 401 `token-invalid`。此前是空指针，答 500（已是 fail closed）。
+
 ### 6.2 响应体
 
 > **2026-10-26 修订（Q27）**：本节重写。原文是"`AuthorizeResult` 这个类型在 PR-10 删除，响应体的形状保留（`{"authorized": false, "reason": "..."}`），`reason` 的取值换成
@@ -647,6 +651,27 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
 - 不在已经是协程的上下文里调用 `runBlocking`：Servlet 过滤器运行在容器线程上，不是协程。Spring MVC 的挂起控制器方法在过滤器之后执行，与此无关。
 - 允许的请求：WebFlux 把校验后的 `SecurityContext` 写进 Reactor `Context` 和 exchange 属性（现在的 `writeSecurityContext`、`setSecurityContext`），WebMvc 写进
   `SecurityContextHolder` 并在 `finally` 中清除（现在的 [`AuthorizationFilter`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt) 已经这样做）。
+
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：网关的身份与凭据，以下几处补充本节：
+> - **身份转发按 scheme 选择加入（IDN-7，RC1-49）。**
+>   - 路由 URI 的 scheme 恰为 `lb`（`lb://`、`lb:ws://` 等）时，默认接收 `CoSec-Identity`。
+>   - 其他路由要元数据 `cosec-identity` 恰为 `true`（布尔或字符串），其他任何值都不接收。
+>   - 网关在每个路由请求上把 `cosec.identity.forward` 设为 `true` 或 `false`，管道只在 `true` 时转发。
+> - **凭据不下行（IDN-8，RC1-5）。**
+>   - `cosec.gateway.identity.forward-authorization`（默认 `false`）关闭时，网关从每个转发的请求去掉以下凭据：
+>     - `Authorization` 头；
+>     - API Key 头（按 `cosec.pipeline.api-key-header` 给它的名字）；
+>     - `authorization` 查询参数（不论编码与大小写）；
+>     - `authorization` cookie（名字不分大小写）。
+>   - 打开时，这些凭据只留给接收身份的路由。
+>   - cookie 的改写方式：
+>     - 去掉那一对和一个相邻的 `;`，其余的对逐字节保留；
+>     - 前导 `$Version` 头有两处修正；
+>     - 只剩分隔符的头不发；
+>     - 请求解析出的 cookie 与改写后的头一致。
+> - **执法放行清掉客户端的 `CoSec-Identity`（IDN-9，RC1-18）。** 每个执法模式的放行都在 `Outcome.forward` 里写明 `CoSec-Identity: null`，WebFlux 与 WebMvc 适配器把 `Outcome.forward` 应用到下传的请求，网关本来就如此。网关模式（`IdentityGate`）不清，网关后面的服务保留网关发的头。
+> - **路由 app。** 路由的 `cosec-app-id` 原样以 `HttpFacts.routeApp` 交给管道，适配器不判断，见 [RFC 0004](0004-unified-model.md) §4.6 的说明。
+> - **身份头不签名（RC1-19）。** `CoSec-Identity` 在 8.0 不签名，信任边界是网关与服务之间的网络（`security-model.md`）。加签名或受众是新成员，要升 `v`（[RFC 0010](0010-ga-extension-points.md) 10-29 的约束 2）。
 
 ### 7.4 取消、超时与 fail closed
 

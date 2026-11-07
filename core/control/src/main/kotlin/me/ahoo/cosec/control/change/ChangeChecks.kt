@@ -22,6 +22,7 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.document.DocumentCompileException
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
@@ -145,6 +146,7 @@ class ChangeChecks(
             findings += Finding("V2", "$", "the document is ${bytes.size} bytes, more than ${options.maxDocumentBytes}", BAD_REQUEST)
         }
         reservedNames(operations, kind, findings)
+        appIds(candidate, findings)
         val checkedWith = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
         val platform = if (key == SnapshotKey.Platform) {
             candidate
@@ -196,6 +198,33 @@ class ChangeChecks(
     }
 
     /**
+     * Every app the candidate names is an app id (SCP-7, R2-1 of #1194's review): the document format takes any id but
+     * `*` in a binding's `app`, and builds before this one stored such bindings, but no request is ever in an app the
+     * rule refuses, and no key names its document. The whole candidate is checked, its head's entries included: a
+     * document that holds one must drop it in its next change, and a change that only drops it is valid. The stored
+     * document stays readable: such a binding is inert on the data plane.
+     */
+    private fun appIds(candidate: PolicyDocument, findings: MutableList<Finding>) {
+        for ((i, binding) in candidate.bindings.withIndex()) {
+            val app = (binding.scope.app as? Match.Exactly)?.value?.value ?: continue
+            if (!ScopeResolver.isValidAppId(app)) {
+                findings += Finding(
+                    "V2",
+                    "$.bindings[$i].app",
+                    "binding [${printable(binding.id.value)}] is in app [${printable(app)}], which cannot be an app id " +
+                        "(blank, *, ':' or a control character, or over ${ScopeResolver.MAX_APP_ID_LENGTH} characters): " +
+                        "no request is ever in it. Remove the binding; a change that only removes it is valid.",
+                    BAD_REQUEST,
+                )
+            }
+        }
+    }
+
+    /** [text] for a finding: a control character as its `\uXXXX` escape. */
+    private fun printable(text: String): String =
+        text.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }.joinToString("")
+
+    /**
      * Bindings of an app or tenant candidate whose policy is defined neither by it nor by the platform, nor, for a
      * tenant binding of exactly one app, by that app's document (RFC 0007 §3.1 N1).
      */
@@ -214,6 +243,8 @@ class ChangeChecks(
             val policy = binding.policy.value
             if (policy in defined) continue
             val app = (binding.scope.app as? Match.Exactly)?.value?.value
+            // An app no key can name has no document to resolve in; V2 already refuses the binding (appIds).
+            if (app != null && !SnapshotKey.App.isValidAppId(app)) continue
             val inApp = candidate.kind == DocumentKind.TENANT && app != null && policy in apps.getOrPut(app) {
                 val head = context.head(SnapshotKey.App(app))
                 checkedWith[SnapshotKey.App(app)] = head?.digest

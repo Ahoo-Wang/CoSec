@@ -303,11 +303,17 @@ internal class RecordingMetrics : SnapshotMetrics {
 /** Runs tasks on the calling thread: compilation becomes synchronous, so single-threaded tests are deterministic. */
 val directExecutor: Executor = Executor { it.run() }
 
-/** A source with no periodic revalidation: tests call [SnapshotSource.revalidate] or [SnapshotSource.tick] instead. */
+/**
+ * The periodic pass cannot be turned off (`SNP-6`). Tests that drive loads and revalidations themselves use the longest
+ * interval the default `lagWarn` allows, so the pass never runs within one of them.
+ */
+internal val QUIET_PASS: Duration = SnapshotOptions().lagWarn.minusSeconds(1)
+
+/** A source whose periodic pass never runs within a test: tests call [SnapshotSource.revalidate] or [SnapshotSource.tick]. */
 internal fun testSource(
     store: SnapshotDocumentStore,
     compiler: FakeCompiler = FakeCompiler(),
-    options: SnapshotOptions = SnapshotOptions(revalidateInterval = Duration.ZERO),
+    options: SnapshotOptions = SnapshotOptions(revalidateInterval = QUIET_PASS),
     clock: Clock = ManualClock(),
     metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
     compileExecutor: Executor? = directExecutor,
@@ -343,7 +349,7 @@ internal fun <P : Any, A : Any> appSource(
     store,
     SnapshotKey.Platform,
     sharedCompiler,
-    listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps)),
+    listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps, options.maxAbsent)),
     options,
     clock,
     metrics,

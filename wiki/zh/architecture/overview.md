@@ -109,7 +109,7 @@ sequenceDiagram
 - **路由。** 无法规范化的路径或有歧义的 `CoSec-*` 参数得到 `400`（第 2 步）。[路由映射](./extending.md#route-maps)把匹配到的请求变成作用于类型化资源的 `service:verb` 动作；其他请求则是作用于 `http:path:<path>` 的 `http:<METHOD>`。
 - **认证。** `Authenticator` 把令牌或 API key 变成主体（第 3 步）。被拒绝的凭证按匿名主体求值；认证器失败或超时得到 `503`。
 - **成员关系与 A 阶段。** A 阶段属性（决定要加载什么的属性，例如黑名单）与成员关系一起获取（第 4、5 步）。成员关系来自令牌的声明；对 API key，以及带有 provider 标记的令牌，来自 `MembershipProvider`，并按 key 的上限收窄。提供者不认识或认为已停用的主体，其凭证被拒绝，请求按匿名决策。成员关系来源失败、超时或返回错误类型的成员关系时得到 `503`，绝不当作“没有角色”。
-- **作用域。** `ScopeResolver` 把声明的应用和空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；绑定了应用（`cosec.authorization.scope.app-id`）的服务使用该应用，并拒绝声明了其他应用的请求；默认空间以外的空间要求主体在其中有角色。作用域被拒绝即为拒绝（见[信任边界](../guide/security-model.md#trust-boundaries)）。
+- **作用域。** `ScopeResolver` 把声明的应用和空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；绑定了应用（`cosec.authorization.scope.app-id`，或在网关上路由的 `cosec-app-id`）的服务使用该应用，并拒绝声明了其他应用的请求；默认空间以外的空间要求主体在其中有角色。作用域被拒绝即为拒绝（见[信任边界](../guide/security-model.md#trust-boundaries)）。
 - **快照视图。** 快照源从内存中给出视图（平台文档、应用文档、租户文档），缺什么就加载什么（第 7 步）。被黑名单拦截的请求只加载平台文档。
 - **B 阶段。** 有属性提供者声明 B 阶段属性时，引擎的 `plan` 列出本请求可能读取的外部属性，只获取这些属性，每个提供者并行、各有超时（第 8、9 步）。一个提供者失败，只会让它自己的属性不可用。
 - **决策。** 引擎给出 `Permit`（附带义务）、`Deny` 或 `Indeterminate`（第 10 步）。
@@ -124,7 +124,7 @@ sequenceDiagram
 
 ## 扁平引擎 {#the-flat-engine}
 
-引擎（[`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色时该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
+引擎（[`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（编译后的租户文档持有这个应用集合，判断只需一次查找）该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
 
 ### 候选顺序 {#candidate-order}
 
@@ -150,7 +150,7 @@ sequenceDiagram
 3. 之后才检查 ALLOW 语句；第一个匹配得到 `Permit`。什么都没匹配是不指向任何语句的 `Deny`（隐式拒绝）。
 4. 受平台边界约束的租户，其 Permit 只有在某个边界语句也匹配时才保持为 Permit。
 
-包括 break-glass 和边界在内的精确规则见[安全模型](../guide/security-model.md)。语句较多的策略按动作、资源和条件键建立索引，所以一个候选只需检查可能匹配的语句。不追踪的求值什么都不记录，几乎不分配内存；追踪求值器（用于 `cosec.pipeline.trace-level` 下的决策事件和 `explain`）是一个单独的类，热路径里没有追踪代码。
+包括 break-glass 和边界在内的精确规则见[安全模型](../guide/security-model.md)。语句较多的策略按动作、资源和条件键建立索引，所以一个候选只需检查可能匹配的语句。同一个文档中有多条绑定指向的策略每一轮只求值一次（`ALG-9`）：策略 id 也被该文档其他绑定指名的绑定在文档编译时得到一个槽位，求值器在位集中记录一轮已求值的槽位，位集只在遇到这种绑定时才分配，所以没有这种绑定的文档在这方面没有任何开销。路径模式按文档设有上界（`DOC-4`，[路径模式的上界](../policies/language.md#path-pattern-bounds)）。不追踪的求值什么都不记录，几乎不分配内存；追踪求值器（用于 `cosec.pipeline.trace-level` 下的决策事件和 `explain`）是一个单独的类，热路径里没有追踪代码。
 
 ## 策略快照 {#policy-snapshots}
 
@@ -160,8 +160,8 @@ sequenceDiagram
 
 - **热路径。** `peek` 是内存中的同步查找，没有 future、没有 I/O，可以在事件循环上调用。只有未命中才会走 `load`。
 - **单飞。** 同一个键的并发加载共享一次读取和一次编译。编译在一个小的有界线程池上运行（`compile-threads`）；队列满时加载按失败即拒绝处理。同一个键按加载开始的顺序安装（`SNP-2`，`SnapshotInstallOrderPropertyTest`）。
-- **有界内存。** 平台文档在启动时加载，从不淘汰。应用文档和租户文档按需加载，超过 `max-apps`、`max-tenants` 后按最近最少使用淘汰；可以预热指定的文档。
-- **重新验证。** 每个已安装的文档每隔 `revalidate-interval`（默认 10 秒）对权威存储做一次条件读取，摘要未变时不传输内容。存储发来的变更通知会让重新加载更早发生。冷键先读一次（可能来自本地副本），随即用条件读取确认。
+- **有界内存。** 平台文档在启动时加载，从不淘汰。应用文档和租户文档按需加载，超过 `max-apps`、`max-tenants` 后按最近最少使用淘汰；可以预热指定的文档。存储中没有文档的 id 分开保存，每个文档族最多 256 个，只相互淘汰（`SNP-7`）。
+- **重新验证。** 每个已安装的文档每隔 `revalidate-interval`（默认 10 秒）对权威存储做一次条件读取，摘要未变时不传输内容。它是变更通知丢失时唯一的界，因此不能关闭，最长 5 分钟（`SNP-6`）。存储发来的变更通知会让重新加载更早发生。冷键先读一次（可能来自本地副本），随即用条件读取确认。
 - **失败即拒绝。** 已安装文档期间读取失败时保留已安装的修订，并报告延迟。存在但无法解码或编译的文档被安装为*失败*。冷读取失败或未在 `cold-load-timeout` 内完成时，按失败应答。一个曾经有文档的键读到“不存在”是失败，而不是“没有策略”。失败的文档作为*未解析*排除在视图之外，除非有 DENY 匹配，否则决策为 `Indeterminate`。使用 starter 时，缺失的平台文档也视为未解析，所以在发布平台文档之前，所有请求都按失败即拒绝处理。
 
 存储是一个 SPI，`SnapshotDocumentStore`。使用 `cosec-cocache` 时它是 [`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt)：Redis 是权威存储，CoCache 保留最多 `local-max-age` 的本地副本，条件读取绕过所有本地副本，CoCache 的失效频道传递变更通知。没有它时，starter 使用内存存储。Redis 键、`noeviction` 要求和 Redis 不可用时的行为见[存储](../operations/storage.md)；`cosec.authorization.snapshot.*` 属性见[配置](../operations/configuration.md)。

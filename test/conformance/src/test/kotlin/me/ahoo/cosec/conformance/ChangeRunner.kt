@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.SimulatedRequest
+import me.ahoo.cosec.control.api.SnapshotVersion
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
@@ -112,6 +113,7 @@ import java.time.Instant
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
+ *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
  *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
  *            { "revokeBreakGlass": { "change": "c2", "by": "rita", "binding": "glass" } },  // DELETE /break-glass/glass
@@ -279,39 +281,42 @@ object ChangeRunner : ScenarioRunner {
             val results = node.required("steps").values().map { step ->
                 val (action, argument) = step.fields().entries.singleOrNull()
                     ?: throw ScenarioFormatException("A step is one action: $step")
-                if (action == "advance") {
-                    clock.now = clock.now.plus(Duration.parse(argument.text()))
-                    "advanced"
-                } else if (action == "vanish") {
-                    vanished += argument.text()
-                    "vanished"
-                } else if (action == "outage") {
-                    engine.outage = argument.bool()
-                    if (engine.outage) "down" else "up"
-                } else if (action == "report") {
-                    report(argument)
-                } else if (action == "simulate") {
-                    simulate(argument)
-                } else if (action in CREDENTIAL_STEPS) {
-                    credentials(action, argument)
-                } else if (action == "revokeBreakGlass") {
-                    revoke(argument)
-                } else if (action == "rateLimits") {
-                    val head = revisions.head(documentKey(argument.text()))
-                    "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
-                } else {
-                    try {
-                        step(action, argument).also { named[it.id.value] = it }.state.name
-                    } catch (error: ChangeRejectedException) {
-                        "refused ${error.status}"
-                    }
-                }
+                result(action, argument)
             }
             val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
             val escalations = named.keys.associateWith { id -> changes.get(ChangeId(id)).escalations.map { it.reason } }
                 .filterValues { it.isNotEmpty() }
             val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
             return Outcome.Changed(results, errors, heads, escalations)
+        }
+
+        /** One step's result, as `expect.steps` writes it. */
+        private suspend fun result(action: String, argument: JsonNode): String = when (action) {
+            "advance", "vanish", "outage" -> environment(action, argument)
+            "report" -> report(argument)
+            "simulate" -> simulate(argument)
+            "explain" -> explain(argument)
+            in CREDENTIAL_STEPS -> credentials(action, argument)
+            "revokeBreakGlass" -> revoke(argument)
+            "rateLimits" -> {
+                val head = revisions.head(documentKey(argument.text()))
+                "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
+            }
+            else -> try {
+                step(action, argument).also { named[it.id.value] = it }.state.name
+            } catch (error: ChangeRejectedException) {
+                "refused ${error.status}"
+            }
+        }
+
+        /** What happens around the control plane between steps: time passes, an instance vanishes, an outage. */
+        private fun environment(action: String, argument: JsonNode): String = when (action) {
+            "advance" -> "advanced".also { clock.now = clock.now.plus(Duration.parse(argument.text())) }
+            "vanish" -> "vanished".also { vanished += argument.text() }
+            else -> {
+                engine.outage = argument.bool()
+                if (engine.outage) "down" else "up"
+            }
         }
 
         /** What happens to the operators' credentials and the instance's audit between steps ([CREDENTIAL_STEPS]). */
@@ -405,14 +410,46 @@ object ChangeRunner : ScenarioRunner {
          */
         private suspend fun simulate(argument: JsonNode): String = try {
             argument.only("by", "request", "candidate")
-            val request = argument.required("request").also {
-                it.only("tenant", "principal", "roles", "app", "space", "action", "resource", "headers", "requestAttributes")
+            val result = plane.simulate(
+                by(argument),
+                simulatedRequest(argument.required("request")),
+                argument.get("candidate")?.text()?.let(::ChangeId)
+            )
+            shown(result.enforced) + (result.candidate?.let { "; candidate ${shown(it)}" } ?: "")
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
+        }
+
+        /**
+         * The control plane's `explain` (RFC 0007 §10.3), at `at` (the revisions an audit event recorded) or at the
+         * heads: the decision as [simulate] writes it, then `at <platform>/<app>/<tenant>`, the revisions it decided
+         * on (`-` for an app document it did not read).
+         */
+        private suspend fun explain(argument: JsonNode): String = try {
+            argument.only("by", "request", "at")
+            val at = argument.get("at")?.let {
+                it.only("platform", "app", "tenant")
+                SnapshotVersion(
+                    it.required("platform").asLong(),
+                    it.get("app")?.asLong(),
+                    it.required("tenant").asLong()
+                )
             }
+            val result = plane.explain(by(argument), simulatedRequest(argument.required("request")), at)
+            val version = result.version
+            shown(result.decision) + " at ${version.platform}/${version.app ?: "-"}/${version.tenant}"
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
+        }
+
+        private fun shown(decision: DecisionView) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "")
+
+        private fun simulatedRequest(request: JsonNode): SimulatedRequest {
+            request.only("tenant", "principal", "roles", "app", "space", "action", "resource", "headers", "requestAttributes")
             val action = request.required("action").text().split(':', limit = 2)
             val resource = request.required("resource").text().split('/', limit = 2)
-            val tenant = TenantId(request.required("tenant").text())
-            val simulated = SimulatedRequest(
-                tenant = tenant,
+            return SimulatedRequest(
+                tenant = TenantId(request.required("tenant").text()),
                 principal = request.get("principal")?.text(),
                 roles = request.get("roles")?.strings().orEmpty(),
                 app = request.get("app")?.text().orEmpty(),
@@ -424,15 +461,6 @@ object ChangeRunner : ScenarioRunner {
                 requestAttributes = request.get("requestAttributes")?.fields().orEmpty()
                     .mapValues { (_, value) -> value.text() },
             )
-            val result = plane.simulate(
-                by(argument),
-                simulated,
-                argument.get("candidate")?.text()?.let(::ChangeId)
-            )
-            fun shown(decision: DecisionView) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "")
-            shown(result.enforced) + (result.candidate?.let { "; candidate ${shown(it)}" } ?: "")
-        } catch (error: ChangeRejectedException) {
-            "refused ${error.status}"
         }
 
         /** A publish's `ack`: `"summary"` acknowledges the window's summary, `{ "NARROWED": 1 }` other counts. */

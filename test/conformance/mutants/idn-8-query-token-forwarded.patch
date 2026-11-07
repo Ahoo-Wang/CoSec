@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the gateway leaves the query alone, so the authorization query parameter goes downstream
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 3c6ddd10..b8ae7ffb 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -121,7 +121,7 @@ class PipelineGatewayFilter(
+                         }
+                     }
+                 }
+-            if (!credentials) {
++            if (false) {
+                 val query = request.uri.rawQuery
+                 val kept = withoutQueryToken(query)
+                 if (kept != query) {

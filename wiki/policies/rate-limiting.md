@@ -66,8 +66,9 @@ patterns, and its condition. A window allows `permitsPerSecond × windowSeconds`
 Which rules a request is held to:
 
 - the platform document's rules, for every permitted request;
-- the app document's rules, when the request read that document: it has an app and the principal holds a role in the
-  request's space ([Role permissions](./role-permissions.md#app-documents));
+- the app document's rules, when the request read that document: it has an app, and the principal holds a role in the
+  request's space or the tenant's document binds one of the app's permission policies to `Anyone` or to a principal
+  ([Role permissions](./role-permissions.md#app-documents));
 - the tenant document's rules, for requests of that tenant.
 
 They run in that order, and in document order within a document. Each matching rule spends one permit. The first rule
@@ -106,7 +107,7 @@ refused requests are not counted.
 
 | Limiter | Used when | Scope |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `cosec:rate-limiter:<rule>:<bucket>:<window>` and expire after two windows. |
+| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>:<window>` and expire after two windows. |
 | `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. Keeps at most 100,000 buckets and drops buckets idle for an hour; a dropped bucket starts again from zero. |
 
 Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has

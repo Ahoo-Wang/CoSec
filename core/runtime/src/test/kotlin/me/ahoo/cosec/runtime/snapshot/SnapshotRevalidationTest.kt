@@ -24,7 +24,10 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Clock
 import java.time.Duration
 
-/** Lost and early notifications (F9), resets (F10), revision regressions (F11) and per-tenant fail-closed (F15). */
+/**
+ * Lost and early notifications (F9), resets (F10), revision regressions (F11), per-tenant fail-closed (F15), and the
+ * bounds of the periodic pass that recovers from a lost notification (`SNP-6`, RC1-50).
+ */
 class SnapshotRevalidationTest {
     private val store = ControllableStore().apply {
         put(SnapshotKey.Platform, document(1))
@@ -48,7 +51,7 @@ class SnapshotRevalidationTest {
 
     @Test
     fun f9NotificationBeforeTheChangeIsReadableConvergesOnPeriodicRevalidation() {
-        val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL)
         appSource(
             store,
             FakeCompiler(),
@@ -151,7 +154,7 @@ class SnapshotRevalidationTest {
     fun f11RegressionIsDetectedAcrossEviction() {
         val metrics = RecordingMetrics()
         store.put(APP_A, document(7, "a7"))
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 1)
         testSource(store, options = options, metrics = metrics).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
@@ -167,7 +170,7 @@ class SnapshotRevalidationTest {
     fun f15FailClosedTenantFailsOnceLagPassesItsBound() {
         val clock = ManualClock()
         val options = SnapshotOptions(
-            revalidateInterval = Duration.ZERO,
+            revalidateInterval = QUIET_PASS,
             failClosedTenants = setOf("strict"),
             failClosedMaxLag = Duration.ofMinutes(30),
         )
@@ -196,7 +199,7 @@ class SnapshotRevalidationTest {
         val clock = ManualClock()
         val options =
             SnapshotOptions(
-                revalidateInterval = Duration.ZERO,
+                revalidateInterval = QUIET_PASS,
                 failClosedTenants = setOf("strict"),
                 failClosedMaxLag = Duration.ofMinutes(1)
             )
@@ -217,6 +220,52 @@ class SnapshotRevalidationTest {
             source.load().join()
             clock.advance(Duration.ofDays(365))
             assertDoesNotThrow { source.checkFresh(source.peek()!!, "any") }
+        }
+    }
+
+    /** `SNP-6`: revalidation asks the store of record, never a local copy that may predate the change it missed. */
+    @Test
+    fun revalidationAsksTheStoreNeverALocalCopy() {
+        testSource(store).use { source ->
+            source.load().join()
+            store.dropNotifications = true
+            store.localCopies[SnapshotKey.Platform] = document(1)
+            store.put(SnapshotKey.Platform, document(2))
+
+            source.revalidate().join()
+
+            source.peek()!!.policiesCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /** RC1-50: the periodic pass is the only bound on a lost invalidation, so it can be neither off nor unbounded. */
+    @Test
+    fun theRevalidationIntervalCannotTurnThePassOffOrUnbindIt() {
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ZERO) }
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ofSeconds(-1)) }
+        // A floor of a second (review L1 of #1200): below a millisecond the schedule could not even run.
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ofNanos(500_000)) }
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = Duration.ofMillis(999)) }
+        SnapshotOptions(revalidateInterval = SnapshotOptions.MIN_REVALIDATE_INTERVAL).revalidateInterval.assert()
+            .isEqualTo(Duration.ofSeconds(1))
+        val longest = SnapshotOptions.MAX_REVALIDATE_INTERVAL
+        val lag = longest.multipliedBy(2)
+        SnapshotOptions(revalidateInterval = longest, lagWarn = lag, lagEscalate = lag)
+            .revalidateInterval.assert().isEqualTo(longest)
+        assertThrows<IllegalArgumentException> {
+            SnapshotOptions(revalidateInterval = longest.plusMillis(1), lagWarn = lag, lagEscalate = lag)
+        }
+        // A lag report must mean a missed pass, not the schedule.
+        assertThrows<IllegalArgumentException> { SnapshotOptions(revalidateInterval = SnapshotOptions().lagWarn) }
+        val failClosed = Duration.ofSeconds(30)
+        SnapshotOptions(revalidateInterval = failClosed, failClosedMaxLag = failClosed)
+            .revalidateInterval.assert().isEqualTo(failClosed)
+        assertThrows<IllegalArgumentException> {
+            SnapshotOptions(
+                revalidateInterval = failClosed,
+                failClosedTenants = setOf("strict"),
+                failClosedMaxLag = failClosed
+            )
         }
     }
 }

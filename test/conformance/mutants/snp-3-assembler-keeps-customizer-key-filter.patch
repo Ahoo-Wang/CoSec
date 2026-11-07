@@ -1,0 +1,16 @@
+# Rule: SNP-3
+# Mutant: the assembler keeps a customizer's key filter, which can hide revocations
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.authorization.cache.StoreOfRecordOverrideTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CoSecCacheAssembler.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CoSecCacheAssembler.kt
+index fc869c42..b760c50c 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CoSecCacheAssembler.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CoSecCacheAssembler.kt
+@@ -68,7 +68,6 @@ class CoSecCacheAssembler(
+         builder.versionedLoader = spec.versionedLoader
+         builder.versionedAsyncLoader = spec.versionedAsyncLoader
+         builder.versioned = spec.versioned
+-        builder.keyFilter = spec.keyFilter
+         builder.ttlOf = spec.ttlOf
+         return builder.build()
+     }

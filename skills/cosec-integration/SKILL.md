@@ -127,11 +127,44 @@ Use `$cosec-policy-author` to write the documents. Storage details: https://cose
 
 ## Services behind a CoSec gateway
 
-The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity
-it verified (tenant, principal, app, space, the roles there, credential id and expiry, and the claims named in
-`cosec.gateway.identity.claims`). It no longer forwards `Authorization` unless
-`cosec.gateway.identity.forward-authorization=true`. Route metadata `cosec-identity: false` opts a route out. A
+The gateway strips any client `CoSec-Identity` and, on a permit for an authenticated principal, forwards the identity it
+verified (tenant, principal, app, space, the roles there, credential id and expiry, and the claims named in
+`cosec.gateway.identity.claims`) to a route that receives it: a route to a registered service (`uri: lb://...`), or one
+whose metadata says `cosec-identity: true`. Any other route, and one marked `cosec-identity: false`, gets none: mark
+your own `http(s)://` services `true`, never a third party. It forwards no credentials (`Authorization`, the API key
+header, the `authorization` query parameter, the `authorization` cookie) unless
+`cosec.gateway.identity.forward-authorization=true`, and then only to a route that would receive the identity. A
 credential without expiry (an API key without `expires-at`) makes the gateway answer 500.
+
+On a gateway that fronts several apps, give each route its app with the metadata `cosec-app-id` (it takes precedence
+over `cosec.authorization.scope.app-id`), or the client chooses the app, and with it whose DENYs apply:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: billing
+              uri: lb://billing           # lb://: receives the identity
+              predicates: [Path=/billing/**]
+              metadata:
+                cosec-app-id: billing     # the app of this route's requests
+            - id: orders
+              uri: https://orders.internal
+              predicates: [Path=/orders/**]
+              metadata:
+                cosec-app-id: order
+                cosec-identity: true      # an http(s) route receives the identity only when marked
+management:
+  server:
+    port: 8081   # actuator off the application port: CoSec does not authorize it (STA-2)
+```
+
+A gateway host does not start while an actuator endpoint other than `health` is exposed on its application port:
+serve actuator on `management.server.port`, expose only `health`, or list the protected ones in
+`cosec.gateway.unprotected-endpoints` (never `gateway`).
 
 A service behind it either keeps deciding itself (default `cosec.pipeline.mode=enforce`: same documents, keys and Redis
 as the gateway, and `forward-authorization=true` so it gets the token), or trusts the gateway:
@@ -178,8 +211,9 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   starter wires `CoCacheMembershipProvider`. A key whose principal the provider does not know or knows as deactivated is
   `token-invalid`. A user's key is a personal access token; a workload principal's key is a service account's.
   Keys stored before 8.0 are converted with `cosec-migrate api-keys`.
-- Clients send `CoSec-App-Id` (unless the host sets `scope.app-id`) and `CoSec-Space-Id` for a non-default space; a
-  space needs a role there, or the request is denied (403 `scope-rejected`; 401 for an anonymous caller). Details:
+- Clients send `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
+  `CoSec-Space-Id` for a non-default space, each once; a space needs a role there, or the request is denied (403
+  `scope-rejected`; 401 for an anonymous caller). Details:
   https://cosec.ahoo.me/integration/authentication.
 
 ## Adapters and checks in code

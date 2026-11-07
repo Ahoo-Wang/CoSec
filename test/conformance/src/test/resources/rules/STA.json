@@ -16,6 +16,20 @@
         "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup"
       ]
+    },
+    {
+      "id": "STA-2",
+      "source": "RFC 0011 D2 (RC1-48)",
+      "statement": "On a Spring Cloud Gateway host in enforce mode, startup fails when an actuator endpoint other than health, of any kind (an operation endpoint, or a controller endpoint such as Spring Cloud Gateway's own gateway), is exposed over HTTP on the application port (management.server.port unset or the application's), naming the endpoints, what to set and the documentation, unless cosec.gateway.unprotected-endpoints lists it; that property never accepts gateway, wherever it is served. On a separate management port, or with the management server off, any endpoint may be exposed.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#the gateway endpoint on the application port fails startup",
+        "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#controller endpoints are checked as every other endpoint is",
+        "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#endpoints on a separate management port start",
+        "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#a listed endpoint starts, but gateway is never accepted",
+        "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#health alone starts"
+      ]
     }
   ]
 }

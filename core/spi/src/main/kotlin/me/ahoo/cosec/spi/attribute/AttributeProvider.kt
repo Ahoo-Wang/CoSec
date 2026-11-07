@@ -28,6 +28,8 @@ import kotlin.time.Duration
  * the call to its own bounded executor (RFC 0006 §7.7). A failure is reported by throwing, never by leaving values out:
  * a value left out is *absent* (a comparison with it is false), a failure makes every attribute asked for *unavailable*
  * and the statements reading them follow their `onMissing`.
+ * Its timeout is cooperative: the pipeline cancels a late call and waits for it to return, so a blocking client goes
+ * in `runInterruptible(myDispatcher)` and keeps timeouts of its own (RC1-14, `wiki/architecture/extending.md`).
  */
 @CoSecSpi
 interface AttributeProvider {

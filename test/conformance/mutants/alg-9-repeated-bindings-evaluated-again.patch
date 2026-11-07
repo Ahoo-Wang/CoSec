@@ -1,0 +1,17 @@
+# Rule: ALG-9
+# Mutant: every binding of a policy evaluates it again, so N bindings multiply its cost
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RepeatedBindingsTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index c16392b4..ff9dfedb 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -303,7 +303,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+      * that binds one costly policy many times costs one evaluation, and a policy costs at most one per document.
+      */
+     override fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean =
+-        firstThrough(repeatBit(via, slot)) && candidate(policy, via)
++        candidate(policy, via)
+ 
+     /** The bit of [slot] of [via]'s document in the current pass. */
+     protected fun repeatBit(via: BindingRef.Bound, slot: Int): Int {

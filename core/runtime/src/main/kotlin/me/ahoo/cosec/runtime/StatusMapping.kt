@@ -29,6 +29,13 @@ import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 internal object StatusMapping {
     private const val OK = 200
     private val NO_FORWARD: Map<String, String?> = emptyMap()
+
+    /**
+     * What a permit of the pipeline hands on: no `CoSec-Identity` (RC1-18). Only a gateway's service behind trusts the
+     * header, and an enforcing host's handler, or whatever it calls, must never see one a client wrote; a gateway puts
+     * the identity it verified in its place ([forwarding]).
+     */
+    private val STRIP_IDENTITY: Map<String, String?> = mapOf(IdentityCodec.HEADER to null)
     private const val CONTENT_TYPE = "Content-Type"
 
     /** 400 `invalid-request`: an ambiguous path or `CoSec-*` parameter. The engine never sees the request. */
@@ -64,7 +71,7 @@ internal object StatusMapping {
                 },
                 Basis.Decided(decision),
                 checkNotNull(security) { "A permit must carry who may proceed." },
-                NO_FORWARD,
+                STRIP_IDENTITY,
             )
             is Decision.Deny -> problem(denied(decision, authn), requestId, traceId, Basis.Decided(decision))
             is Decision.Indeterminate ->

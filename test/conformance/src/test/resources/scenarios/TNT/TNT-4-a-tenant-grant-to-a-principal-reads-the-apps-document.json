@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "TNT-4"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RC1-17: acme binds order's perm:order/read to alice herself, scoped to order. She has no role in order: the view reads order's document anyway, and the grant permits.",
+  "documents": {
+    "apps": {
+      "order": {
+        "policies": [
+          {
+            "id": "perm:order/no-reads",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET"
+              }
+            ]
+          },
+          {
+            "id": "perm:order/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/read"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-App-Id": "order"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

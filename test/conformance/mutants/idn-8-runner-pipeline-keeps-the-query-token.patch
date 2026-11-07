@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the pipeline returns the query unchanged; R1-3: the conformance runner alone must see the query token reach the backend
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 3a6059ab..e1595716 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -124,7 +124,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+      * (`cosec.pipeline.allow-query-token`), a backend might.
+      */
+     @InternalCoSecApi
+-    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, AUTHORIZATION)
++    fun withoutQueryToken(rawQuery: String?): String? = rawQuery
+ 
+     /**
+      * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;

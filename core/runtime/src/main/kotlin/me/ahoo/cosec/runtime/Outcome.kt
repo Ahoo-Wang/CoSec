@@ -37,9 +37,10 @@ class Outcome internal constructor(
     /** Who may proceed, and in what scope: non-null exactly when [proceed]. Adapters expose it as a `SecurityContext`. */
     val security: RequestSecurity?,
     /**
-     * Headers a gateway sets on the request it forwards, when [proceed]; a null value removes the header. A gateway
-     * that forwards the verified identity always names `CoSec-Identity` here: the identity, or null to strip whatever
-     * the client sent.
+     * Headers the adapter sets on the request it hands on when [proceed], to the handler or to a gateway's route; a null
+     * value removes the header. A permit of the [Pipeline] always names `CoSec-Identity` here: the identity a gateway
+     * forwards to the route, or null to strip whatever the client sent (RC1-18). A service behind a gateway names
+     * nothing, and its handler keeps the identity the gateway sent.
      */
     val forward: Map<String, String?>,
 ) {

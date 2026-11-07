@@ -46,6 +46,8 @@ sealed interface Outcome {
         val proceed: Boolean,
         val type: String?,
         val identity: Pair<Boolean, JsonNode?> = false to null,
+        /** Through a gateway: the caller's credentials its backend receives, sorted (RC1-5). */
+        val credentials: List<String> = emptyList(),
     ) : Outcome
 
     /** The caller went away and the pipeline made no outcome at all (RFC 0006 §7.4). */

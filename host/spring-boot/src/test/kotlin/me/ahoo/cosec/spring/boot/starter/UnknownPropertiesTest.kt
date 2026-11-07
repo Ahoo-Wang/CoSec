@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
@@ -25,6 +26,10 @@ import org.springframework.core.env.MapPropertySource
 import org.springframework.core.env.StandardEnvironment
 import org.springframework.core.env.SystemEnvironmentPropertySource
 import org.springframework.core.io.ByteArrayResource
+import java.net.URLClassLoader
+import java.nio.file.Path
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 
 /** A `cosec.*` key CoSec does not read fails startup, with what 8.0 replaced it with when it was a 7.x key. */
 class UnknownPropertiesTest {
@@ -228,5 +233,25 @@ class UnknownPropertiesTest {
             val message = context.startupFailure!!.messages()
             message.assert().contains("CoSec does not read 5 cosec.* properties,")
         }
+    }
+
+    /**
+     * Review L4 of #1200: any jar may carry hand-written Spring metadata, which is not a format CoSec defines, so a
+     * duplicate key in it is read, the last one winning, rather than failing CoSec's startup.
+     */
+    @Test
+    fun `third-party metadata with a duplicate key is read`(@TempDir directory: Path) {
+        val metadata = directory.resolve("META-INF").createDirectories()
+            .resolve("additional-spring-configuration-metadata.json")
+        metadata.writeText(
+            """{"properties": [{"name": "cosec.third-party.flag", "type": "java.util.Map", "type": "java.lang.Boolean"}]}"""
+        )
+        val loader = URLClassLoader(arrayOf(directory.toUri().toURL()), null)
+        val environment = StandardEnvironment()
+        environment.propertySources.addFirst(MapPropertySource("test", mapOf("cosec.third-party.flag" to "true")))
+        UnknownProperties.load(loader).of(environment).assert().isEmpty()
+        // The last `type` won: the property is no map, so a key under it is unknown.
+        environment.propertySources.addFirst(MapPropertySource("more", mapOf("cosec.third-party.flag.x" to "1")))
+        UnknownProperties.load(loader).of(environment).assert().containsExactly("cosec.third-party.flag.x")
     }
 }

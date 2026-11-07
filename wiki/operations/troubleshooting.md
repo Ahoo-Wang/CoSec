@@ -46,9 +46,18 @@ The request cannot be read without ambiguity, so it is refused before authentica
 `BAD_REQUEST`. Causes:
 
 - the path has `.` or `..` segments, or a malformed percent-escape;
-- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different non-blank values, between the
-  header and the query string or within either, or its query value has a malformed percent-escape;
+- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different values, between the header
+  and the query string or within either, a blank one beside a non-blank one included (`?CoSec-Space-Id=` with the
+  header `CoSec-Space-Id: s1`), or its query value has a malformed percent-escape. Send each parameter once, or leave
+  it out;
 - a route map captures a value that would change the resource id's segments;
+- a header was sent more than once with different values, and a document the request is decided on reads it, in a
+  condition, a boundary or a rate limit rule, whichever the statement's effect and whether it applies to this request
+  (`PIP-12`). This one is checked after authentication and the scope, once the documents are known. Send the header
+  once, or with one value. A header proxies append to, such as `X-Forwarded-For`, is the usual case: two proxies that
+  each add a line make every request of a view whose documents read it a `400`, even a `GET` when the statement that
+  reads it covers only `DELETE`, and a platform statement does this for every tenant. Have the proxies send one
+  combined line, or read the client address as `environment.ip`, which the host resolves once;
 - on a service in `cosec.pipeline.mode=gateway`, a `CoSec-Identity` header that cannot be read
   ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
@@ -73,8 +82,9 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 
 - **Token:** the issuer and this service must share [`cosec.jwt.secret` and `cosec.jwt.algorithm`](./configuration.md#jwt).
   With `cosec.jwt.enabled=false` every token is rejected.
-- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), or an
-  `attributes` claim that names `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
+- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), a `roles` or
+  `policies` claim that is not an array of strings, an `attributes` claim that is not an object, or one that names
+  `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
   rename the attribute ([Authentication](../integration/authentication.md#tokens)).
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
@@ -128,8 +138,9 @@ deciding statement, then explain the request ([Find out what decided](#find-out-
 
 The scope the request declares cannot be granted to this caller:
 
-- `CoSec-App-Id` names an app other than the host's [`cosec.authorization.scope.app-id`](./configuration.md#authorization),
-  or an id that cannot be an app id;
+- `CoSec-App-Id` names an app other than the host's: on a gateway, the route's metadata `cosec-app-id`, else
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization); or an id that cannot be an app id (blank,
+  `*`, with `:` or a control character, or longer than 128 characters);
 - `CoSec-Space-Id` names a space where the principal has no role.
 
 Send the host's app, or none, and a space the principal is a member of
@@ -182,6 +193,12 @@ On a gateway, a permit whose identity cannot be forwarded is a `500` too, logged
 
 - `The credential of [<subject>] never expires: a service could not bound the identity.`: an API key without
   `expires-at` (or a token without `exp`). Give the key an expiry, or set the route's metadata `cosec-identity: false`.
+
+A route whose metadata `cosec-app-id` cannot be an app id (empty, `*`, with `:` or a control character, or longer than
+128 characters) answers `500` on every request, logged as `The cosec-app-id of route [<routeId>] cannot be an app id:
+...` with the unmodelled-exception line above: fix the metadata ([Gateway](../integration/web.md#gateway)). One that
+is not a string (a number, a boolean, a list or a map) does the same, logged as `The cosec-app-id of route [<routeId>]
+is a <type>, not a string: ...`: quote the value, and give one app.
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`, `Claim [<name>] is <n> characters,
   over 1024.` or `Claim [<name>] is a <type>, not a string, number or boolean.`: fewer roles or
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity), or a larger `max-size` on the gateway and
@@ -209,10 +226,10 @@ plane published.
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN` after `lag-warn` (60 seconds),
   `... is stale: not confirmed for <lag>.` at `ERROR` after `lag-escalate` (5 minutes). Restore Redis.
 - **The instance missed an invalidation message.** It catches up within
-  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds). A longer gap with Redis healthy means the periodic
-  pass is off (`revalidate-interval: 0`).
+  [`revalidate-interval`](./configuration.md#snapshot) (10 seconds by default, at most 5 minutes). The pass cannot be
+  turned off: a longer gap with Redis healthy means the instance's revalidation pass is failing; its log says why.
 - **The instance reads another namespace.** Every instance and the control plane must share
-  [`cosec.authorization.snapshot.key-prefix`](./configuration.md#snapshot) and the Redis.
+  [`cosec.key-prefix`](./configuration.md#key-prefix) and the Redis.
 - **Redis lost the write.** After a failover the instance may log
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`: publish the change again.
 
@@ -232,6 +249,13 @@ read as anonymous:
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
+
+**Every request is anonymous.** The gateway forwards the identity only to a route that receives it: a route to a
+registered service (`uri: lb://...`), or one whose metadata says `cosec-identity: true`. A route to `http://` or
+`https://` without that metadata, or with `cosec-identity: false`, sends no identity, so the service behind sees
+anonymous requests. Mark the route `cosec-identity: true` when it leads to your own service
+([Forwarding the identity](../integration/web.md#forwarding-the-identity)). A service that verifies the token itself
+and stopped receiving it needs `cosec.gateway.identity.forward-authorization=true` and such a route.
 
 ## Instance is not ready
 
@@ -258,6 +282,13 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
   a character outside ASCII letters, digits and ``!#$%&'*+-.^_`|~``, such as a space or a look-alike letter.
 - A condition on an `ext.*` attribute the platform document does not declare and no attribute provider of the host
   serves. A change is compiled against the attribute providers of the control host.
+- A path pattern over a cost bound (`DOC-4`, [Policy language](../policies/language.md#path-pattern-bounds)):
+  `the pattern is <n> characters, more than 2048`; `segment [<s>] has <n> parts (*, ?, {name} and the text between
+  them), more than 16`, where consecutive `*` count once; or, at `$`, `The document's path pattern segments that mix
+  *, ? or {name} with other text hold <n> tokens and literal characters in all, more than 2048`. Split a long glob
+  into whole segments (`*` or `{name}` alone in a segment costs nothing), keep the text of a glob segment short, or
+  fold several statements' patterns into fewer; a segment after a leading `**` counts twice. On the data
+  plane a stored document over a bound is installed as failed, and the requests that read it answer `503`.
 
 ## Shadow window blocked by a candidate error
 
@@ -322,6 +353,25 @@ The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a g
 check, as it needs `cosec-gateway` instead. An application that moved from 7.x's capabilities adds the modules
 themselves ([Modules, artifacts and packages](./upgrading.md#modules-artifacts-and-packages)).
 
+### Startup fails on an exposed actuator endpoint
+
+```text
+Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port, where CoSec does not authorize them: anyone who reaches the gateway reaches them, and [gateway] writes its routes. ... (STA-2, https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-an-exposed-actuator-endpoint).
+cosec.gateway.unprotected-endpoints lists [gateway], which it never accepts: that endpoint writes the gateway's routes. ...
+```
+
+On a Spring Cloud Gateway host, CoSec authorizes the gateway's routes only, and its actuator endpoints are on the
+application port unless `management.server.port` names another. The first message lists the endpoints other than
+`health` exposed there. Do one of:
+
+- serve actuator on its own port, behind a network policy: `management.server.port=8081` (any port but `server.port`);
+- expose fewer endpoints: `management.endpoints.web.exposure.include=health`;
+- list the endpoints something else protects in
+  [`cosec.gateway.unprotected-endpoints`](./configuration.md#gateway), such as `prometheus` behind a network policy.
+
+The second message: `gateway` changes routes, so it is never accepted there; serve it on a management port, or not
+at all ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)).
+
 ### Startup fails on the eviction check
 
 ```text
@@ -338,6 +388,37 @@ you have set `noeviction` yourself, set
 With `warn` the instance starts and logs the same text at `WARN`, starting with `!!!` and ending with
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really
 evicts, an app or tenant document loaded after it was evicted is read as absent, and its DENY statements stop applying.
+
+### Startup fails on the revalidation interval
+
+```text
+cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the periodic revalidation cannot be turned off.
+```
+
+The periodic revalidation is the only bound on a document change whose invalidation message was lost (`SNP-6`), so it
+cannot be off or unbounded. The message says which bound the value breaks: at least 1 second (each pass reads every
+installed document from Redis), at most 5 minutes, less than `lag-warn`, and with `fail-closed.tenants` less than
+`fail-closed.max-lag`
+([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on large documents, raise it within those
+bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
+
+### Startup fails on a removed key prefix
+
+```text
+CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
+  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
+  API keys: cosec:api-key -> b:api-key
+  ...
+```
+
+The environment still sets `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` or
+`cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). Startup fails
+whatever [`cosec.unknown-properties`](./configuration.md#unknown-properties) says: the old layout may keep token revocations and API
+keys under another prefix than the one now read, and a revocation nobody reads lets the token it revoked through
+again. The message lists the families that would move, computed from the old values and the
+`cosec.key-prefix` to set: the current one, or, while it is unset, the snapshot documents' prefix. Copy the token revocations and the API keys to their new keys first (`COPY`, or `RENAME`, which
+keeps their expiry), set `cosec.key-prefix` to where the snapshot documents are, then remove the old properties
+([Upgrading](./upgrading.md#from-8-0-0-alpha-2)).
 
 ### Startup fails without a token store
 
@@ -423,6 +504,7 @@ principal sets a tenant's boundary`.
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type, or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). | Fix the request; `detail` names the problem. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. | |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
+| `409` `change-unreadable` | The change's record was written by an earlier build for an app that cannot be an app id (blank, `*`, a control character, over 128 characters); the control host logs `Change [<id>] is skipped: it is of [<key>], which no document key can name` on every maintenance pass. It can be neither shown nor abandoned. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading.md#from-8-0-0-alpha-2) says. |
 | `410` | The revision asked for is not kept. | |
 | `428` | Publishing needs an acknowledgement of the shadow window's counts. | Publish again with the `ack` of that window. |
 | `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, an approver's revocations could not be read on publish (`the revocations of the approver could not be read` in the log; the change keeps its approval), or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |

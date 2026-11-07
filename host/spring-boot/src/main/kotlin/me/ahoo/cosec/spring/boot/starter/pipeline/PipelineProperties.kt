@@ -75,10 +75,29 @@ internal fun credentialHeaders(environment: Environment): Set<String> = setOf(
         ?: PipelineProperties.DEFAULT_API_KEY_HEADER,
 )
 
+/** `cosec.gateway.*`: what a Spring Cloud Gateway host lets through besides its routes. */
+@ConfigurationProperties(prefix = GatewayProperties.PREFIX)
+class GatewayProperties {
+    /**
+     * Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize
+     * them, because something else protects them. Any other one but `health` fails startup (`STA-2`, RC1-48); `gateway`,
+     * which writes routes, is never accepted here.
+     */
+    var unprotectedEndpoints: Set<String> = emptySet()
+
+    companion object {
+        const val PREFIX = CoSec.COSEC_PREFIX + "gateway"
+        const val UNPROTECTED_ENDPOINTS_KEY = "$PREFIX.unprotected-endpoints"
+    }
+}
+
 /** `cosec.gateway.identity.*`: what a gateway forwards to the services behind it (`CoSec-Identity`). */
 @ConfigurationProperties(prefix = GatewayIdentityProperties.PREFIX)
 class GatewayIdentityProperties {
-    /** Whether a gateway forwards the verified identity; a route opts out with metadata `cosec-identity: false`. */
+    /**
+     * Whether a gateway forwards the verified identity: to a `lb://` route, or a route with metadata
+     * `cosec-identity: true`; never to one with `cosec-identity: false` (RC1-49).
+     */
     var enabled: Boolean = true
 
     /** The token claims forwarded besides the identity, such as `name` and `email`: strings, numbers, booleans. */
@@ -88,8 +107,10 @@ class GatewayIdentityProperties {
     var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
 
     /**
-     * Whether the client's `Authorization` header still goes downstream with the identity. Off: a service behind needs
-     * no token. Turn it on only for services that call other APIs on the user's behalf.
+     * Whether the client's credentials still go downstream, to the routes that receive the identity: the
+     * `Authorization` header, the API key header (`cosec.pipeline.api-key-header`) and the `authorization` query
+     * parameter (RC1-5). Off: a service behind needs none. Turn it on only for services that verify the token again or
+     * call other APIs on the user's behalf.
      */
     var forwardAuthorization: Boolean = false
 
@@ -142,14 +163,17 @@ class RuntimeAuthorizationProperties {
     }
 
     class Snapshot {
-        /** The Redis namespace of the snapshot documents, shared by every service that reads the same platform. */
-        var keyPrefix: String = CoSec.COSEC
-
         /**
          * How long an instance serves its local copy of a document before it asks Redis again; the one value for the
          * snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.
          */
         var localMaxAge: Duration = Duration.ofSeconds(30)
+
+        /**
+         * How often every installed document is confirmed against Redis: the bound on a lost invalidation (`SNP-6`).
+         * At least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than
+         * `fail-closed.max-lag`; anything else fails startup.
+         */
         var revalidateInterval: Duration = Duration.ofSeconds(10)
         var lagWarn: Duration = Duration.ofSeconds(60)
         var lagEscalate: Duration = Duration.ofMinutes(5)

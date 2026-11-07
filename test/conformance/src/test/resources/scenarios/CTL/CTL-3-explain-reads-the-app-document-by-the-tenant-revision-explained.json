@@ -1,0 +1,119 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "R2-2 of #1194's review: explain decides whether the app document was read with the tenant document at the revision explained, not the head's. acme's revision 1 binds order's perm:order/read to Anyone, so bob's roleless request read order's document and was permitted; revision 2 drops the binding. Explained at the revisions an audit event recorded, 1/1/1, it is that permit, by order's policy; explained now, it is the implicit deny, with no app document read.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "order": {
+        "policies": [
+          {
+            "id": "perm:order/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": "*",
+            "app": "order",
+            "space": "*",
+            "policy": "perm:order/read"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "explain": {
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "order",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removeBinding": "reads"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "explain": {
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "order",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        },
+        "at": {
+          "platform": 1,
+          "app": 1,
+          "tenant": 1
+        }
+      }
+    },
+    {
+      "explain": {
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [],
+          "app": "order",
+          "space": "",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by perm:order/read at 1/1/1",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "Permit by perm:order/read at 1/1/1",
+      "Deny at 1/-/2"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
+import jakarta.servlet.http.HttpServletRequest
 import kotlinx.coroutines.awaitCancellation
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
@@ -81,12 +82,14 @@ import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.mock.web.server.MockServerWebExchange
+import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import java.net.InetSocketAddress
 import java.net.URI
 import java.time.Duration
 import java.time.Instant
+import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.CoroutineContext
@@ -112,6 +115,8 @@ class WebAdapterParityTest {
         val proceeded: Boolean,
         val principal: String?,
         val scope: String?,
+        /** The `CoSec-Identity` values the handler, or the gateway's route, was handed. */
+        val identity: List<String> = emptyList(),
     ) {
         val contentType: String? get() = headers["content-type"]?.single()
         val requestId: String? get() = headers["cosec-request-id"]?.single()
@@ -295,17 +300,17 @@ class WebAdapterParityTest {
 
     private fun webflux(scenario: Scenario): Written = reactive(scenario) { exchange, record ->
         PipelineWebFilter(gates.getValue(scenario.pipeline), contributors)
-            .filter(exchange, WebFilterChain { record(it.getSecurityContext()) })
+            .filter(exchange, WebFilterChain { record(it) })
     }
 
     private fun gateway(scenario: Scenario): Written = reactive(scenario) { exchange, record ->
         PipelineGatewayFilter(pipelines.getValue(scenario.pipeline), contributors)
-            .filter(exchange, GatewayFilterChain { record(it.getSecurityContext()) })
+            .filter(exchange, GatewayFilterChain { record(it) })
     }
 
     private fun reactive(
         scenario: Scenario,
-        filter: (MockServerWebExchange, (SecurityContext?) -> Mono<Void>) -> Mono<Void>,
+        filter: (MockServerWebExchange, (ServerWebExchange) -> Mono<Void>) -> Mono<Void>,
     ): Written {
         val request = MockServerHttpRequest.method(HttpMethod.valueOf(scenario.method), URI.create(scenario.path))
             .remoteAddress(InetSocketAddress("127.0.0.1", 50000))
@@ -313,9 +318,11 @@ class WebAdapterParityTest {
         val exchange = MockServerWebExchange.from(request)
         var proceeded: SecurityContext? = null
         var called = false
-        filter(exchange) { context ->
+        var identity: List<String> = emptyList()
+        filter(exchange) { handed ->
             called = true
-            proceeded = context
+            proceeded = handed.getSecurityContext()
+            identity = handed.request.headers[IdentityCodec.HEADER].orEmpty()
             Mono.empty()
         }.block(Duration.ofSeconds(5))
         val response = exchange.response
@@ -335,6 +342,7 @@ class WebAdapterParityTest {
             proceeded = called,
             principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
+            identity = identity,
         )
     }
 
@@ -346,9 +354,12 @@ class WebAdapterParityTest {
         val response = MockHttpServletResponse()
         val chain = MockFilterChain()
         var proceeded: SecurityContext? = null
+        var identity: List<String> = emptyList()
         val filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors)
         filter.doFilter(request, response) { req, _ ->
-            proceeded = (req as MockHttpServletRequest).getSecurityContext()
+            val handed = req as HttpServletRequest
+            proceeded = handed.getSecurityContext()
+            identity = Collections.list(handed.getHeaders(IdentityCodec.HEADER))
             chain.doFilter(req, response)
         }
         return Written(
@@ -360,6 +371,7 @@ class WebAdapterParityTest {
             proceeded = chain.request != null,
             principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
+            identity = identity,
         )
     }
 
@@ -592,6 +604,36 @@ class WebAdapterParityTest {
         } else {
             webflux.proceeded.assert().isFalse()
             webflux.body.assert().contains("\"type\":\"https://cosec.ahoo.me/problems/${scenario.type}\"")
+        }
+    }
+
+    /**
+     * IDN-9, RC1-18: an enforcing host hands its handler no `CoSec-Identity` a client sent, through any adapter, so a
+     * service that calls on to services behind a gateway cannot relay a forged one. Behind a gateway, the header is the
+     * gateway's: WebMvc and WebFlux hand it on unchanged.
+     */
+    @Test
+    fun `the three adapters hand on no client identity`() {
+        val forged = Scenario(
+            "a client's identity on a permit",
+            path = "/public/page",
+            headers = mapOf(IdentityCodec.HEADER to "forged", "X-Debug" to "0"),
+            status = 200,
+            type = null,
+        )
+        val written = listOf(webflux(forged), gateway(forged), servlet(forged))
+        for (adapter in written) {
+            adapter.proceeded.assert().isTrue()
+            adapter.identity.assert().isEmpty()
+        }
+        written[1].assert().isEqualTo(written[0])
+        written[2].assert().isEqualTo(written[0])
+
+        val sent = identityScenarios().first()
+        val behind = listOf(webflux(sent), servlet(sent))
+        for (adapter in behind) {
+            adapter.proceeded.assert().isTrue()
+            adapter.identity.assert().containsExactly(sent.headers.getValue(IdentityCodec.HEADER))
         }
     }
 

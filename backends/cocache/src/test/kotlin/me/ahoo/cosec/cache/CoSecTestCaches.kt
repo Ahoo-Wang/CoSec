@@ -24,7 +24,6 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 
 /**
@@ -38,12 +37,12 @@ internal class CoSecTestCaches(
     val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
 
     val revokedTokenCache: RevokedTokenCache by lazy {
-        runtime.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix))
+        runtime.createCache(CoSecCacheSpecs.revokedToken(keyPrefix))
     }
 
     val revokedSubjectCache: RevokedSubjectCache by lazy {
         runtime.createCache(
-            CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix)
+            CoSecCacheSpecs.revokedSubject(keyPrefix)
         )
     }
 

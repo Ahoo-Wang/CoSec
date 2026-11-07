@@ -33,6 +33,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -231,12 +232,26 @@ class Changes(
      * tells nothing of which exist. What the decision cannot equalize is the store read of a change that exists.
      */
     suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest {
-        val reachable = stored(id)?.takeIf { TenantIsolation.allows(operator, it.key) }
+        // The decision on the platform document, when an unreadable change made it already: the 404 path reuses it.
+        var platformRead: ControlDecision? = null
+        val stored = try {
+            stored(id)
+        } catch (e: UnnamedDocumentException) {
+            // A change of an app no key can name (R3-4 of #1194's review), and an app document is the platform's: its
+            // principals who may read the platform learn it is there (409); anyone else gets what a missing change gets.
+            if (operator.platform) {
+                val decision = authority.decide(operator, SnapshotKey.Platform, ControlActions.READ)
+                if (decision == ControlDecision.PERMIT) throw e
+                platformRead = decision
+            }
+            null
+        }
+        val reachable = stored?.takeIf { TenantIsolation.allows(operator, it.key) }
         if (reachable != null && reachable.author == operator.actor) {
             return expired(reachable)
         }
         val key = reachable?.key ?: if (operator.platform) SnapshotKey.Platform else SnapshotKey.Tenant(operator.tenant.value)
-        val decision = authority.decide(operator, key, ControlActions.READ)
+        val decision = platformRead ?: authority.decide(operator, key, ControlActions.READ)
         if (decision == ControlDecision.PERMIT && reachable != null) {
             return expired(reachable)
         }
@@ -247,13 +262,17 @@ class Changes(
         }
     }
 
-    /** The stored change [id]; a store that cannot be read is a 503, never "no change". */
+    /**
+     * The stored change [id]; a store that cannot be read is a 503, never "no change". A change of an app no key can name
+     * is an [UnnamedDocumentException], however the store wraps it: that record reads no better on a retry.
+     */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun stored(id: ChangeId): ChangeRequest? = try {
         store.change(id)?.value
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        UnnamedDocumentException.of(e)?.let { throw it }
         throw ChangeRejectedException(UNAVAILABLE, "change ${id.value} could not be read", e)
     }
 

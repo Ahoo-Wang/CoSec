@@ -1,0 +1,17 @@
+# Rule: IDN-9
+# Mutant: a permit of the pipeline names no header, so an enforcing host hands on a client's CoSec-Identity
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityForwardingTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.WebAdapterParityTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt
+index d866ee64..4e42d76d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt
+@@ -71,7 +71,7 @@ internal object StatusMapping {
+                 },
+                 Basis.Decided(decision),
+                 checkNotNull(security) { "A permit must carry who may proceed." },
+-                STRIP_IDENTITY,
++                NO_FORWARD,
+             )
+             is Decision.Deny -> problem(denied(decision, authn), requestId, traceId, Basis.Decided(decision))
+             is Decision.Indeterminate ->

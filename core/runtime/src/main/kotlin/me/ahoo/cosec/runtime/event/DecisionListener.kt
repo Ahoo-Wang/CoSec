@@ -23,6 +23,8 @@ import kotlin.coroutines.EmptyCoroutineContext
  * that fails or times out only turns a permit into 503 (§9.4). Like every SPI of the pipeline it must not block the
  * calling thread; a REQUIRED one should also be idempotent by [DecisionEvent.id], as a write that timed out may still
  * have succeeded.
+ * Its timeout is cooperative: the pipeline cancels a late call and waits for it to return, so a blocking client goes
+ * in `runInterruptible(myDispatcher)` and keeps timeouts of its own (RC1-14, `wiki/architecture/extending.md`).
  */
 @CoSecSpi
 interface DecisionListener {

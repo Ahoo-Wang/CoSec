@@ -43,3 +43,17 @@ tasks.withType<Test>().configureEach {
         inputs.property(name, providers.environmentVariable(name).orElse(""))
     }
 }
+
+// RC1-50: what a conditional read costs Redis per document size, against a Redis on localhost:6379. Not part of check:
+// run it on a quiet machine, and record the result in docs/perf/conditional-read/.
+val measuredSources = the<SourceSetContainer>()["test"]
+tasks.register<Test>("measureConditionalRead") {
+    group = "verification"
+    description = "Measures CoCache's conditional read per document size against Redis on localhost:6379."
+    testClassesDirs = measuredSources.output.classesDirs
+    classpath = measuredSources.runtimeClasspath
+    filter { includeTestsMatching("*.ConditionalReadCostMeasurement") }
+    systemProperty("cosec.measure.conditionalRead", "true")
+    outputs.upToDateWhen { false }
+    testLogging { showStandardStreams = true }
+}

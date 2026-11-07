@@ -32,11 +32,14 @@
     },
     {
       "id": "TNT-4",
-      "source": "RFC 0007 §9.3, Q14 (N1)",
-      "statement": "A tenant document may bind an app's permission policy only scoped to that app; the binding resolves the policy from that app's document in the same view, and anywhere else the document does not compile.",
+      "source": "RFC 0007 §9.3, Q14 (N1); RC1-17",
+      "statement": "A tenant document may bind an app's permission policy only scoped to that app; the binding resolves the policy from that app's document in the same view, and anywhere else the document does not compile. A request in that app reads the app's document whenever its tenant's document binds one of the app's permission policies to Anyone or to a principal, roles or not.",
       "level": "engine",
       "guards": [
-        "runtime:PolicyDocumentCompilerTest#permission policies live in their app's document"
+        "runtime:PolicyDocumentCompilerTest#permission policies live in their app's document",
+        "runtime:PolicyDocumentCompilerTest#a tenant document names the apps its bindings of their permissions need",
+        "runtime:SuspendingSnapshotSourceTest#theViewOfATenantThatNeedsTheAppHasIt",
+        "engine:FlatEngineTest#a tenant binding an app's permission policy without roles needs the app's document"
       ],
       "pending": null
     }

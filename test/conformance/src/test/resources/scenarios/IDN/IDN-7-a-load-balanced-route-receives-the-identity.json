@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "IDN-7"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice is permitted on a route to lb://backend without cosec-identity metadata: a registered service is inside the trust boundary, so its backend receives the verified identity, never the client's.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": {
+      "tenant": "acme",
+      "sub": "alice",
+      "app": "",
+      "space": "",
+      "jti": "t1",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://backend"
+    }
+  }
+}

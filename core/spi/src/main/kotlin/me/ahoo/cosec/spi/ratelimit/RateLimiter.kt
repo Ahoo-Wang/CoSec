@@ -19,6 +19,8 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
 /**
  * SPI (RFC 0006 §8.4): counts permits per bucket of a rate limit rule. Like every SPI of the pipeline it must not block
  * the calling thread. A failure is reported by throwing; the rule's `strictFailure` decides what it means (§8.3).
+ * Its timeout is cooperative: the pipeline cancels a late call and waits for it to return, so a blocking client goes
+ * in `runInterruptible(myDispatcher)` and keeps timeouts of its own (RC1-14, `wiki/architecture/extending.md`).
  */
 @CoSecSpi
 fun interface RateLimiter {

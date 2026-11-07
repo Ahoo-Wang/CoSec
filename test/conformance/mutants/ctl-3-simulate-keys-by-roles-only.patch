@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: simulate and explain read an app's document only with roles, as before RC1-17: a roleless request a tenant's Anyone or principal binding permits is decided without it
+# Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
+index 31b65c93..066ca62f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
+@@ -148,7 +148,7 @@ class Simulator(
+      * decided with, binds one of the app's permission policies to `Anyone` or to a principal.
+      */
+     fun keys(scope: Scope, tenant: PolicyDocument?): List<SnapshotKey> {
+-        val app = ViewDocuments.appOf(scope) { tenant != null && it in PolicyDocumentCompiler.boundApps(tenant) }
++        val app = ViewDocuments.appOf(scope) { false }
+         return listOfNotNull(
+             SnapshotKey.Platform,
+             SnapshotKey.Tenant(scope.tenant.value),

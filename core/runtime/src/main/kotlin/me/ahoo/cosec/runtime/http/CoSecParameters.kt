@@ -16,9 +16,12 @@ package me.ahoo.cosec.runtime.http
 /**
  * The `CoSec-*` request parameters a client may send as a header or as a query parameter. Empty means not sent.
  *
- * `SCP-4` (RFC 0008 §3.2): a parameter is sent once, or several times with one value. When its non-blank values
- * differ, whether between the header and the query or within either, the request cannot be interpreted without
- * ambiguity and is rejected with 400: the pipeline and the backend could otherwise read different scopes.
+ * `SCP-4` (RFC 0008 §3.2): a parameter is sent once, or several times with one value. When its values differ, whether
+ * between the header and the query or within either, the request cannot be interpreted without ambiguity and is
+ * rejected with 400: the pipeline and the backend could otherwise read different scopes. A blank value next to a
+ * non-blank one differs too (RC1-16): a backend that reads the blank one would be in the default space. Only values
+ * that are all blank read as not sent, and blank means ASCII whitespace only: a value of Unicode spaces is a value,
+ * which a backend's `trim()` keeps.
  */
 class CoSecParameters internal constructor(val appId: String, val spaceId: String, val deviceId: String) {
     companion object {
@@ -44,26 +47,47 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
             return CoSecParameters(appId, spaceId, deviceId)
         }
 
-        /** The one non-blank value, empty when there is none, null when there are several. */
+        /**
+         * The one non-blank value, empty when every value is blank or there is none, null when two differ: two
+         * non-blank ones, or a blank one beside a non-blank one. Indexed, so it allocates nothing.
+         */
         private fun single(headers: List<String>, query: List<String>?): String? {
-            val fromHeaders = single("", headers) ?: return null
-            return if (query == null) fromHeaders else single(fromHeaders, query)
+            // Most requests send a parameter once, or not at all: one value can disagree with nothing.
+            if (query == null && headers.size <= 1) {
+                val only = if (headers.isEmpty()) return "" else headers[0]
+                return if (isBlank(only)) "" else only
+            }
+            val value = firstNonBlank(headers) ?: query?.let(::firstNonBlank) ?: return ""
+            return if (allAre(value, headers) && (query == null || allAre(value, query))) value else null
         }
 
-        /** [value] joined with the non-blank [candidates]: null as soon as two differ. Indexed, so it allocates nothing. */
-        private fun single(value: String, candidates: List<String>): String? {
-            var single = value
-            for (index in candidates.indices) {
-                val candidate = candidates[index]
-                if (candidate.isBlank() || candidate == single) {
-                    continue
+        private fun firstNonBlank(values: List<String>): String? {
+            for (index in values.indices) {
+                if (!isBlank(values[index])) {
+                    return values[index]
                 }
-                if (single.isNotEmpty()) {
-                    return null
-                }
-                single = candidate
             }
-            return single
+            return null
+        }
+
+        private fun allAre(value: String, values: List<String>): Boolean {
+            for (index in values.indices) {
+                if (values[index] != value) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        /** Empty, or only ASCII whitespace (tab, line feed, form feed, carriage return, space), never Unicode spaces. */
+        internal fun isBlank(value: String): Boolean {
+            for (index in value.indices) {
+                when (value[index]) {
+                    ' ', '\t', '\n', '\u000C', '\r' -> continue
+                    else -> return false
+                }
+            }
+            return true
         }
     }
 }

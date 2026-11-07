@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "SCP-4"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RC1-16: CoSec-Space-Id is s1 in the header and empty in the query. A backend that reads the query would be in the default space while CoSec checked s1: 400 before authentication.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "http": {
+    "query": "CoSec-Space-Id=",
+    "headers": {
+      "CoSec-Space-Id": "s1"
+    }
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

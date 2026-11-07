@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -45,6 +48,7 @@ import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
+import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
@@ -104,7 +108,15 @@ class Simulator(
         return ScopeResolver.resolve(subject, DeclaredScope(request.app, request.space), HostScope(null))
     }
 
-    fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation {
+    fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation =
+        decide(request, scope, documents).evaluation
+
+    /**
+     * [evaluate], with what its view read (R2-5 of #1194's review): [keys] says which documents to fetch from the raw
+     * tenant document, but when that document does not compile the view, as enforcement's, reads no app document for a
+     * roleless request. What a caller reports or checks against is what the view read.
+     */
+    internal fun decide(request: SimulatedRequest, scope: Scope, documents: Documents): Decided {
         val memberships = MembershipClaims.parse(request.roles, request.policies)
         val subject = Subject(
             id = request.principal ?: ANONYMOUS,
@@ -125,7 +137,8 @@ class Simulator(
             resource = request.resource,
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),
         )
-        return engine.evaluate(
+        val view = view(scope, documents)
+        val evaluation = engine.evaluate(
             FlatRequest(
                 authz,
                 scope,
@@ -133,17 +146,38 @@ class Simulator(
                 request.time,
                 HttpAttributes(Headers.of(request.headers), request.requestAttributes),
             ),
-            view(scope, documents),
+            view,
             TraceLevel.FULL
+        )
+        return Decided(evaluation, scope, view.version!!)
+    }
+
+    /** An evaluation, and the documents its view read with their revisions. */
+    internal class Decided(val evaluation: FlatEvaluation, scope: Scope, version: ViewVersion) {
+        /** The revisions the view read: an app's only when it took the app's document (its revision, 0 for none). */
+        val version = SnapshotVersion(version.platform, version.app, version.tenant ?: 0)
+
+        /** The documents the view read: the platform's, the tenant's, and the app's when it took it. */
+        val read: List<SnapshotKey> = listOfNotNull(
+            SnapshotKey.Platform,
+            SnapshotKey.Tenant(scope.tenant.value),
+            version.app?.let { SnapshotKey.App(scope.app.value) },
         )
     }
 
-    /** The documents of [scope]: the platform's, the tenant's, and the app's when the scope has roles in an app. */
-    fun keys(scope: Scope): List<SnapshotKey> = listOfNotNull(
-        SnapshotKey.Platform,
-        SnapshotKey.Tenant(scope.tenant.value),
-        scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }?.let { SnapshotKey.App(it.value) },
-    )
+    /**
+     * The documents a request in [scope] reads, by enforcement's rule ([ViewDocuments.appOf], RC1-17): the platform's,
+     * the tenant's, and the app's when the scope has roles in an app or [tenant], the tenant's document the request is
+     * decided with, binds one of the app's permission policies to `Anyone` or to a principal.
+     */
+    fun keys(scope: Scope, tenant: PolicyDocument?): List<SnapshotKey> {
+        val app = ViewDocuments.appOf(scope) { tenant != null && it in PolicyDocumentCompiler.boundApps(tenant) }
+        return listOfNotNull(
+            SnapshotKey.Platform,
+            SnapshotKey.Tenant(scope.tenant.value),
+            app?.let { SnapshotKey.App(it.value) },
+        )
+    }
 
     /**
      * The view enforcement would read (`DocumentSnapshotViews` with `platformRequired`): an absent platform document is
@@ -159,19 +193,24 @@ class Simulator(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        val app = scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }
+        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's, as before.
+        val tenantCauses = ArrayList<Cause>(0)
+        val tenant = documentOf(documents.tenant, compiler, tenantCauses) {
+            CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
+        }
+        val app = ViewDocuments.appOf(scope) { tenant?.needsApp(it) == true }
+        val appDocument = app?.let { id ->
+            documentOf(
+                documents.app,
+                compiler,
+                unresolved
+            ) { CompiledDocument.app(AppId(id.value), emptyList(), emptyList()) }
+        }
+        unresolved += tenantCauses
         return SnapshotView(
             platform,
-            app?.let { id ->
-                documentOf(
-                    documents.app,
-                    compiler,
-                    unresolved
-                ) { CompiledDocument.app(AppId(id.value), emptyList(), emptyList()) }
-            },
-            documentOf(documents.tenant, compiler, unresolved) {
-                CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
-            },
+            appDocument,
+            tenant,
             unresolved,
             version = ViewVersion(
                 documents.platform?.revision ?: 0,

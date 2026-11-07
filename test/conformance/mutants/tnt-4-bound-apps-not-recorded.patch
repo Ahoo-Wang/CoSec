@@ -1,0 +1,17 @@
+# Rule: TNT-4
+# Mutant: the compiler records no app a tenant binds without roles, so the view never reads it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.PolicyDocumentCompilerTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+index 7c3e82c6..b57d87a5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+@@ -149,7 +149,7 @@ class PolicyDocumentCompiler(
+                         document.bindings,
+                         rateLimits,
+                         document.boundary?.value,
+-                        boundApps(document),
++                        emptySet(),
+                     )
+             }
+         } catch (error: IllegalArgumentException) {

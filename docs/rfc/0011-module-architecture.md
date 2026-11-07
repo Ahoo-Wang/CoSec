@@ -174,6 +174,13 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 
 RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保留为薄契约模块）不变，内容按 §3 收窄。
 
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：D2 的启动检查多了一个 `STA-2`，与 `STA-1` 并列。它由 `CoSecGatewayEndpointCheckAutoConfiguration` 实现，在启动时检查网关宿主：
+> - **检查条件：** 执法模式，且 CoSec 打开。
+> - **失败条件：** 应用端口上通过 HTTP 暴露了 `health` 以外的 Actuator 端点，除非 `cosec.gateway.unprotected-endpoints` 列出了它。`gateway` 端点在任何端口上都不能列入。
+> - **按真实端点检查：** 包括 Spring Cloud Gateway 自己的 `@RestControllerEndpoint`。
+
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1，`DOC-5`，RC1-44）**：D3 的"一个 mapper"同时是一个严格的 mapper：`CoSecJson.mapper` 打开 `STRICT_DUPLICATE_DETECTION`，所以 CoSec 读的每种存储格式（文档、API Key、成员关系、影子报告、吊销、`cosec-migrate` 读的 7.x 输入）与每个控制面请求体都拒绝重复的 key，不再按后出现的值读。吊销缓存改用它，不再用应用的 `ObjectMapper`。唯一的例外是 starter 读 Spring 的配置元数据（`UnknownProperties`）：那不是 CoSec 的格式，用 `without(STRICT_DUPLICATE_DETECTION)` 读，后出现的值生效。
+
 ## 7. 交付
 
 | PR | 内容 | 前置 |

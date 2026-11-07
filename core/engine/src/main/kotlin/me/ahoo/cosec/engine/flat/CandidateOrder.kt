@@ -14,12 +14,20 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 
 /** Receives the candidates of one request, in [CandidateOrder]. */
 internal interface CandidateVisitor {
     /** [policy] applies through [via]. Returns true to stop. */
     fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean
+
+    /**
+     * [policy] applies through [via], one of several bindings of its document that reach it ([BoundEntry.repeat] is
+     * [slot]). An evaluator need not evaluate it again through the later ones (`ALG-9`); listing them all, this calls
+     * [candidate]. Returns true to stop.
+     */
+    fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean = candidate(policy, via)
 
     /** A binding that would apply to the request had it not expired. */
     fun expired(via: BindingRef.Bound)
@@ -36,7 +44,8 @@ internal interface CandidateVisitor {
  *
  * 0. the blacklist rule;
  * 1. platform `Anyone` bindings, then 2. tenant ones, by policy id;
- * 3. attachments in claim order, then principal bindings of the platform and the tenant, by binding id;
+ * 3. attachments in claim order (a policy claimed twice once), then principal bindings of the platform and the tenant,
+ *    by binding id;
  * 4. role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a
  *    role in document (grant) order;
  * 5. break-glass bindings of the principal, by binding id, last.
@@ -54,6 +63,9 @@ internal interface CandidateVisitor {
  * so a key is never more than its principal (`BND-9`, `IDN-2`, RC1-1).
  */
 internal object CandidateOrder {
+    /** Up to this many attachments are compared pairwise, which allocates nothing. */
+    private const val PAIRWISE = 16
+
     fun forEach(request: FlatRequest, view: SnapshotView, effect: Effect, visitor: CandidateVisitor): Boolean {
         if (visitor.candidate(BuiltinPolicies.blacklist, BindingRef.Builtin)) {
             return true
@@ -67,7 +79,7 @@ internal object CandidateOrder {
         if (visit(platform.anyone, request, platform, visitor)) {
             return true
         }
-        if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor)) {
+        if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor, app)) {
             return true
         }
         if (principal != null && principal(principal, request, platform, tenantDocument, effect, visitor, app)) {
@@ -121,8 +133,13 @@ internal object CandidateOrder {
         visitor: CandidateVisitor,
     ): Boolean {
         val attachments = request.memberships.attachments
+        // A policy claimed twice is attached once (`ALG-9`): a few claims are compared pairwise, many through a set.
+        val claimed = if (attachments.size > PAIRWISE) HashSet<String>(attachments.size * 2) else null
         for (i in attachments.indices) {
             val id = attachments[i].value
+            if (if (claimed == null) claimedBefore(attachments, i) else !claimed.add(id)) {
+                continue
+            }
             val own = tenant?.policy(id)
             val shared = platform.policy(id)
             if (own != null && shared != null && !own.sameContent(shared)) {
@@ -133,6 +150,16 @@ internal object CandidateOrder {
             if (policy == null) {
                 visitor.missing(id)
             } else if (visitor.candidate(policy, policy.attached)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun claimedBefore(attachments: List<PolicyId>, index: Int): Boolean {
+        val id = attachments[index].value
+        for (i in 0 until index) {
+            if (attachments[i].value == id) {
                 return true
             }
         }
@@ -156,8 +183,9 @@ internal object CandidateOrder {
     }
 
     /**
-     * [app] resolves a tenant role binding to that app's permission policy (RFC 0007 §9.3, N1): the binding is scoped to
-     * the app, so it is in scope only on a request whose view read that app's document.
+     * [app] resolves a tenant binding, of `Anyone`, a principal or a role, to that app's permission policy (RFC 0007
+     * §9.3, N1): the binding is scoped to the app, so it is in scope only on a request in that app, whose view reads
+     * that app's document, roles or not (`CompiledDocument.needsApp`, RC1-17).
      */
     private fun visit(
         entries: Array<BoundEntry>?,
@@ -186,11 +214,23 @@ internal object CandidateOrder {
                 ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
             if (policy == null) {
                 visitor.missing(entry.policyId)
-            } else if (visitor.candidate(policy, entry.via)) {
+            } else if (candidate(visitor, policy, entry)) {
                 return true
             }
         }
         return false
+    }
+
+    /**
+     * [policy] through [entry], as one of several bindings of its document to it when it is one (`ALG-9`). Inline: it
+     * runs for every applicable binding, so it costs [visit] a field read and a branch, not a call.
+     */
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun candidate(visitor: CandidateVisitor, policy: CompiledPolicy, entry: BoundEntry): Boolean {
+        if (entry.repeat < 0) {
+            return visitor.candidate(policy, entry.via)
+        }
+        return visitor.repeated(policy, entry.via, entry.repeat)
     }
 
     private fun inScope(entry: BoundEntry, tenant: String, app: String, space: String): Boolean =

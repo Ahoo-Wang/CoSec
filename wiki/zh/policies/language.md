@@ -17,7 +17,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、角色绑定、限流规则。 |
 | 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、限流规则。 |
 
-键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
+键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
 一个租户文档：
 
@@ -191,6 +191,21 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `caseSensitive` | `true` | 为 `false` 时比较字面量忽略 ASCII 大小写。 |
 | `decodeAndParseSegments` | `true` | 为 `true` 时按百分号解码、去掉 `;` 参数后的值匹配每个片段；为 `false` 时按收到的原文匹配，但 `%2F` 仍读作 `/`。 |
 
+### 路径模式的上界 {#path-pattern-bounds}
+
+一个请求匹配某个文档的所有模式的开销有上界（`DOC-4`），与条件一样（[上限](#limits)）。超出上界的模式无法编译：
+
+| 上界 | 限制 |
+|---|---|
+| `http:path:` 模式 | `http:path:` 之后最多 2,048 个字符，即管道接受的最长路径 |
+| 类型化资源模式 | 最多 2,058 个字符 |
+| 把 `*`、`?` 或 `{name}` 与其他文本混在一起的片段，例如 `report-*.pdf` | 最多 16 个部分：每个 `*`、`?` 和 `{name}`，以及它们之间的每段文本。连续的 `*` 算一个：`a**b` 就是 `a*b` |
+| 一个文档中所有这样的片段，跨越它的策略、边界和限流规则 | 合计最多 2,048 个通配单位：每个片段的部分数加上其中文本的字符数，所以 `report-*.pdf` 是 3 个部分和 11 个字符，共 14 个单位。前导 `**` 或 `{*name}` 之后的片段计两次，`key` 读取捕获变量的限流规则也计两次 |
+
+字面量片段、整段的 `*` 或 `{name}`、`**` 和 `{*name}` 不计开销：只有把它们与文本混在一起的片段需要搜索匹配，而其中的文本可能在请求片段的每个位置上都被比较一次，所以一个字符与一个部分的开销相同。前导 `**` 之后的片段会与两个片段比较，以捕获变量为 `key` 的规则先匹配再捕获：因此它们计两次。这些上界在 8.0 中是固定的。在数据面上，超出上界的已存储文档会被装入为失败，读取它的请求失败即拒绝。
+
+无论有多少条绑定生效，每个策略在每一遍中对每个绑定它的文档最多求值一次，另加附加策略的一次求值（`ALG-9`）。因此预算限定了匹配一个文档的模式给一个请求带来的开销：一个文档把全部预算都用在对每条路径都是候选的模式上时，对管道接受的最长路径片段（256 个字符），最坏情况下每个请求约 0.45 ms，其策略同时被附加时约为两倍（`GlobBoundBenchmark` 的最坏输入，在 CI 运行器上）。它分配所捕获的值：ASCII 值时每个请求约 0.25 MB，Latin-1 以外的值时约 0.6 MB。影子窗口还会求值它的候选文档，候选文档有自己的预算。
+
 ## 路径变量 {#path-variables}
 
 类型化或 HTTP 模式中的 `{name}`，以及 HTTP 模式中的 `{*name}`，会捕获一个变量。只有捕获它的那条语句能读取它，形式为 `resource.var.<name>`，用在该语句自己的条件或限流规则的 `key` 中：
@@ -266,7 +281,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `http.origin`、`http.referer` | String | `Origin` 和 `Referer` 请求头，读取方式与 `http.header.*` 相同。 |
 | `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写；值不是带主机的 URL 时缺失。 |
 | `http.origin.host.labels`、`http.referer.host.labels` | Labels | 该主机的标签，倒序（`api.example.com` 为 `com.example.api`），小写；供 `prefix` 使用。 |
-| `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；对元数据声明不传播身份（`cosec-identity: false`）的路由，还设置 `request.attributes.cosec.identity.forward`（`false`）。WebFlux 和 WebMvc 不设置任何值。 |
+| `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；还设置 `request.attributes.cosec.identity.forward`：在接收转发身份的路由上（`lb://` 路由，或元数据为 `cosec-identity: true` 的路由）为 `true`，在其他路由上为 `false`。WebFlux 和 WebMvc 不设置任何值。 |
 | `ext.<provider>.<name>` | 声明的类型 | [外部属性](#external-attributes-and-onmissing)。 |
 
 不在此表中的路径无法编译。
@@ -281,8 +296,9 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 （[`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)），
 再加上宿主读取 API key 的请求头（用 `cosec.pipeline.api-key-header` 改名时）：starter 在数据面和控制面编译每个文档时也拒绝它，管道也从不为条件读取它。
 
-同一请求头出现多次且每份值都相同时，读作该值。各份值不同时，该请求头没有单一的值，读取它的语句出错：基于它的 DENY
-让请求成为 Indeterminate（`503`），除非另有 DENY 匹配；基于它的 ALLOW 不匹配。第一份或最后一份值永远不会单独决定结果。
+同一请求头出现多次且每份值都相同时，读作该值。各份值不同时，该请求头没有单一的值，第一份或最后一份值也永远不会单独决定结果：
+只要请求所依据的文档中任何语句、策略条件、边界或限流 `key` 读取这个请求头，管道就在求值之前回答 `400` `invalid-request`（`PIP-12`）。
+无论语句的效果是什么、能否作用于该请求都是如此，因此这个回答既不告诉客户端有 DENY 读取这个请求头，也不告诉它是哪一个。
 
 ### 匹配角色 {#matching-roles}
 

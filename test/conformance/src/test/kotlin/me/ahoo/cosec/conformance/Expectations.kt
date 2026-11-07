@@ -37,6 +37,7 @@ import tools.jackson.databind.node.JsonNodeFactory
  * { "keys": ["a"], "admits": true, "implies": "YES", "evaluations": { "c1": true } }   // analysis
  * { "status": 200, "proceed": true }                                   // pipeline
  * { "status": 200, "proceed": true, "identity": { "sub": "alice", ... } } // pipeline of a gateway: what it forwards
+ * { "status": 200, "proceed": true, "credentials": ["authorization"] }  // through a gateway: credentials forwarded
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
  * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
@@ -179,6 +180,12 @@ object Expectations {
         if (outcome.proceed) put("proceed", true)
         outcome.type?.let { put("type", it) }
         if (outcome.identity.first) set("identity", outcome.identity.second ?: json.nullNode())
+        if (outcome.credentials.isNotEmpty()) {
+            set(
+                "credentials",
+                json.arrayNode().apply { outcome.credentials.forEach(::add) }
+            )
+        }
     }
 
     private fun entry(entry: ProtectedEntry): String = when (entry) {

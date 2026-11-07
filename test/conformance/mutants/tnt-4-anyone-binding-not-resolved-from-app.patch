@@ -1,0 +1,17 @@
+# Rule: TNT-4
+# Mutant: a tenant's Anyone binding of an app's permission policy is not resolved from the app's document
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEngineTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+index 13e298ec..b1898d13 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+@@ -67,7 +67,7 @@ internal object CandidateOrder {
+         if (visit(platform.anyone, request, platform, visitor)) {
+             return true
+         }
+-        if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor, app)) {
++        if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor)) {
+             return true
+         }
+         if (principal != null && principal(principal, request, platform, tenantDocument, effect, visitor, app)) {

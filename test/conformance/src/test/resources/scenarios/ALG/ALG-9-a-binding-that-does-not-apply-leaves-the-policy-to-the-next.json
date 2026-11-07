@@ -1,0 +1,58 @@
+{
+  "rules": [
+    "ALG-9"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The first of three bindings has expired and the second is scoped to another app: neither evaluates the policy, so the third, which applies, reports the DENY.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "d",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:a",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d",
+          "expiresAt": "2026-01-01T00:00:00Z"
+        },
+        {
+          "id": "g:b",
+          "subject": "*",
+          "app": "other",
+          "space": "*",
+          "policy": "d"
+        },
+        {
+          "id": "g:c",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "d"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "d",
+      "statement": 0,
+      "via": {
+        "binding": "g:c",
+        "document": "platform"
+      }
+    }
+  }
+}

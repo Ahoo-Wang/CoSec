@@ -71,6 +71,19 @@ These have no switch:
 - **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi` and Spring Boot Actuator are;
   expose it like any actuator endpoint.
 
+## Key prefix
+
+Every key a deployment writes to Redis lives under one prefix (`SNP-9`): snapshot documents, control-plane records,
+shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states
+([Redis keys](./storage.md#redis-keys)). Two deployments on one Redis that use different prefixes share nothing.
+It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
+`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, whatever `cosec.unknown-properties`
+says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. |
+
 ## Pipeline
 
 `cosec.pipeline.*`: how one request is read and bounded.
@@ -92,26 +105,36 @@ These have no switch:
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A request that declares another app with `CoSec-App-Id` is rejected (`403` `scope-rejected`, `401` for an anonymous caller). Unset, requests declare their app ([Trust boundaries](../guide/security-model.md#trust-boundaries)). |
+| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A request that declares another app with `CoSec-App-Id` is rejected (`403` `scope-rejected`, `401` for an anonymous caller). Unset, requests declare their app ([Trust boundaries](../guide/security-model.md#trust-boundaries)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
 | `cosec.authorization.routes.location` | comma-separated resource locations | `classpath:cosec-routes.json` | The route maps a WebFlux or WebMvc host loads at startup. A location that does not exist, or a map that does not parse, fails startup. Set it empty to run without a route map: every request is then authorized in the `http` namespace. A Spring Cloud Gateway host ignores it and loads no route map. |
 
+## Gateway
+
+`cosec.gateway.*`, on a Spring Cloud Gateway host (`cosec-gateway`) that decides with policies.
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.gateway.unprotected-endpoints` | set of endpoint ids | empty | Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize them, because something else protects them. Any other one but `health` fails startup there (`STA-2`); `gateway`, which changes routes, is never accepted. On a separate `management.server.port` any endpoint may be exposed ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)). |
+
 ## Gateway identity
 
 `cosec.gateway.identity.*`, on a Spring Cloud Gateway host (`cosec-gateway`): what the gateway forwards to the
 services behind it. On a permit with a principal it sets `CoSec-Identity` to the identity it verified (format:
-[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)).
-It always removes a `CoSec-Identity` the client sent, whatever these properties, the mode or `cosec.enabled` say. A
-route with the metadata `cosec-identity: false` forwards no identity.
+[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)),
+on a route that receives it: a route to a registered service (`lb://`), or one with the metadata
+`cosec-identity: true`. A route with `cosec-identity: false`, or to any other URI without the metadata, receives no
+identity ([Forwarding the identity](../integration/web.md#forwarding-the-identity)). The gateway always removes a
+`CoSec-Identity` the client sent, whatever these properties, the mode or `cosec.enabled` say.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.gateway.identity.enabled` | boolean | `true` | Forward the verified identity. Off, the gateway still strips the client's. |
+| `cosec.gateway.identity.enabled` | boolean | `true` | Forward the verified identity to the routes that receive it. Off, the gateway still strips the client's. |
 | `cosec.gateway.identity.claims` | set of attribute names | empty | Principal attributes forwarded with the identity as `claims`, such as `name` and `email` (for a JWT, keys of its `attributes` claim, not top-level claims): strings of at most 1024 characters, numbers and booleans. Any other value fails the request (`500`). |
 | `cosec.gateway.identity.max-size` | data size | `8KB` | A larger encoded identity fails the request closed (`500`) rather than being cut. |
-| `cosec.gateway.identity.forward-authorization` | boolean | `false` | Whether the client's `Authorization` header still goes downstream. Off, the gateway removes it from every request it forwards: a service behind it needs no token. Turn it on only for services that call other APIs on the user's behalf. A token in a cookie is still forwarded. |
+| `cosec.gateway.identity.forward-authorization` | boolean | `false` | Whether the client's credentials still go downstream: the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`), the `authorization` query parameter and the `authorization` cookie. Off, the gateway removes them from every request it forwards (the cookie from each `Cookie` header, other cookies kept): a service behind it needs none. On, they go only to the routes that would receive the identity (`lb://`, or `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` is on. Turn it on only for services that verify the token again or call other APIs on the user's behalf. |
 
 A credential that never expires (an API key without `expires-at`) cannot be forwarded: its permits are answered `500`.
 
@@ -133,9 +156,8 @@ of your own replaces both.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.snapshot.key-prefix` | string | `cosec` | The Redis namespace of the snapshot documents, the control plane's records and the shadow keys, with a trailing `:` removed. Every service that reads the same platform, and the control plane, must use the same value. |
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read. `0` turns the periodic pass off; invalidation messages still reload changed documents. |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read: the longest a change whose invalidation message was lost goes unseen (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |
@@ -182,8 +204,7 @@ With JWT enabled, startup fails unless revocations can be recorded and read: `co
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.api-key.store` | `memory`, `redis` | `memory` | `memory`: the keys configured below. `redis`: keys shared by every instance; needs `cosec-cocache`, a `StringRedisTemplate` and a `ReactiveStringRedisTemplate`. |
-| `cosec.api-key.key-prefix` | string | `cosec:api-key` | Redis key prefix of the `redis` store, with a trailing `:` removed. Independent of every other prefix ([Redis keys](./storage.md#redis-keys)). |
+| `cosec.api-key.store` | `memory`, `redis` | `memory` | `memory`: the keys configured below. `redis`: keys shared by every instance, under `<cosec.key-prefix>:api-key`; needs `cosec-cocache`, a `StringRedisTemplate` and a `ReactiveStringRedisTemplate`. |
 | `cosec.api-key.keys[n].*` | list | empty | Keys of the `memory` store; ignored with `redis`. |
 
 The header is [`cosec.pipeline.api-key-header`](#pipeline). API keys need a `MembershipProvider` bean, or the
@@ -208,7 +229,6 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.cache.key-prefix` | string | `cosec` | Prefix of the revocation keys, with a trailing `:` removed. Independent of `cosec.authorization.snapshot.key-prefix`. |
 | `cosec.authorization.cache.token.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
 
 ### Local cache settings

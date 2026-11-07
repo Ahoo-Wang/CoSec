@@ -15,11 +15,13 @@
 
 package me.ahoo.cosec.runtime.shadow
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -84,10 +86,11 @@ object ShadowCodec {
             instance to InstanceStatus(
                 instance,
                 Instant.parse(node.need("at").text()),
-                node.need("documents").properties().associate { (key, document) ->
-                    document.only("revision", "lagMillis")
-                    documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
-                },
+                node.need("documents").properties().filterNot { (key, _) -> unnamed(instance, key) }
+                    .associate { (key, document) ->
+                        document.only("revision", "lagMillis")
+                        documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
+                    },
             )
         }
     }
@@ -150,6 +153,27 @@ object ShadowCodec {
         )
     }
 
+    /**
+     * Whether [key], a document [instance] reported installed, is an app an earlier build named (any id without `:`)
+     * that the app id rule now refuses (R2-1 of #1194's review). No change can be of it, so that entry alone is
+     * skipped, with a WARN; the rest of the instance's status is kept.
+     */
+    private fun unnamed(instance: String, key: String): Boolean {
+        val unnamed = SnapshotKeyText.isUnnamedApp(key)
+        if (unnamed) {
+            log.warn {
+                "Instance [${printable(instance)}] reports [${printable(key)}] installed, which no document key can " +
+                    "name (SCP-7): that entry is skipped."
+            }
+        }
+        return unnamed
+    }
+
+    /** [text], stored content quoted in a message or a log line, with its control characters escaped (RC1-15). */
+    private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
+
+    private val log = KotlinLogging.logger {}
+
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform
         text.startsWith("app:") -> SnapshotKey.App(text.removePrefix("app:"))
@@ -162,7 +186,7 @@ object ShadowCodec {
     private fun read(bytes: ByteArray): JsonNode = try {
         reader.readTree(bytes) ?: malformed("empty")
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A shadow value is not JSON: ${error.originalMessage}", error)
+        throw SnapshotFormatException("A shadow value is not JSON: ${printable(error.originalMessage)}", error)
     }
 
     private inline fun <T> guarded(block: () -> T): T = try {
@@ -170,11 +194,11 @@ object ShadowCodec {
     } catch (error: SnapshotFormatException) {
         throw error
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${error.originalMessage}", error)
+        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.originalMessage)}", error)
     } catch (error: IllegalArgumentException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${error.message}", error)
+        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.message)}", error)
     } catch (error: java.time.format.DateTimeParseException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${error.message}", error)
+        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.message)}", error)
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")
@@ -193,6 +217,6 @@ object ShadowCodec {
     }
 
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
-        "A shadow value is malformed: $reason."
+        "A shadow value is malformed: ${printable(reason)}."
     )
 }

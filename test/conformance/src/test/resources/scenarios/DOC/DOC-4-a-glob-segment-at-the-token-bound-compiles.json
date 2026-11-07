@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "DOC-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A segment of 16 tokens ({v}, seven a* pairs and b), the bound: the DENY compiles and matches a 256-character segment.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "globs",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/{v}a*a*a*a*a*a*a*b"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "globs",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "globs"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "globs",
+      "statement": 0,
+      "via": {
+        "binding": "globs",
+        "document": "platform"
+      }
+    }
+  }
+}

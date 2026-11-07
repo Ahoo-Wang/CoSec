@@ -64,12 +64,9 @@ internal object Jwts {
         }
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
-        val policyClaim = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY)
-        val policies = if (policyClaim.isMissing) emptySet() else policyClaim.asList(String::class.java).toSet()
-        val rolesClaim = decodedAccessToken.getClaim(RoleCapable.ROLE_KEY)
-        val roles = if (rolesClaim.isMissing) emptySet() else rolesClaim.asList(String::class.java).toSet()
-        val attributesClaim = decodedAccessToken.getClaim(CoSecPrincipal::attributes.name)
-        val attributes = if (attributesClaim.isMissing) emptyMap<String, Any>() else attributesClaim.asMap()
+        val policies = strings(decodedAccessToken, PolicyCapable.POLICY_KEY)
+        val roles = strings(decodedAccessToken, RoleCapable.ROLE_KEY)
+        val attributes = attributesOf(decodedAccessToken)
         val principal =
             withMembershipMarker(SimplePrincipal(principalId, policies, roles, attributes), decodedAccessToken)
         val tenantId = tenantOf(decodedAccessToken)
@@ -85,6 +82,33 @@ internal object Jwts {
         }
         @Suppress("UNCHECKED_CAST")
         return SimpleTokenTenantPrincipal(delegate = tokenPrincipal, tenant = SimpleTenant(tenantId)) as T
+    }
+
+    /**
+     * The strings of the array claim [name], empty when the token has none. A claim that is there but is not an array of
+     * strings (`null`, a string, an object, an array holding a number) makes the token invalid (401): read as empty, a
+     * malformed `roles` claim would quietly drop the roles a DENY is bound to, and it used to fail as a 500.
+     */
+    private fun strings(decodedAccessToken: DecodedJWT, name: String): Set<String> {
+        val claim = decodedAccessToken.getClaim(name)
+        if (claim.isMissing) {
+            return emptySet()
+        }
+        val values = claim.asList(Any::class.java)
+            ?: throw TokenVerificationException("The token's [$name] claim is not an array.")
+        return values.mapTo(LinkedHashSet()) {
+            it as? String ?: throw TokenVerificationException("The token's [$name] claim holds a value that is not a string.")
+        }
+    }
+
+    /** The token's `attributes` claim, empty when it has none; one that is not an object makes the token invalid (401). */
+    private fun attributesOf(decodedAccessToken: DecodedJWT): Map<String, Any> {
+        val name = CoSecPrincipal::attributes.name
+        val claim = decodedAccessToken.getClaim(name)
+        if (claim.isMissing) {
+            return emptyMap()
+        }
+        return claim.asMap() ?: throw TokenVerificationException("The token's [$name] claim is not an object.")
     }
 
     /**

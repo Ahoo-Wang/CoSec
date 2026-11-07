@@ -11,7 +11,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ## 从 8.0.0-alpha.2 升级 {#from-8-0-0-alpha-2}
 
-8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档无需迁移。
+8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档无需迁移。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
 
 - **任意类型的 token 属性**（RC1-2、`GRT-5`）。分析按引擎的方式读取 `subject.attributes.*`，布尔值和数字读作它们的文本。token 中写着 `"suspended": true` 时，条件为未被 `suspended` 的 ALLOW 不再算作作者持有。代码中，`Operator.attributes` 与 `Grantor.attributes` 是 `Map<String, Any>`，即 token 声明原样，alpha.2 只保留了字符串。
 - **会到期的绑定**（RC1-3、`GRT-3`）。作者经带 `expiresAt` 的绑定持有的权限，只包含自身绑定不晚于它到期的授出；没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级，短缺为 `EXPIRY`。
@@ -30,6 +30,25 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **break-glass**（RC1-27、RC1-29、RC1-30）：`cosec-migrate` 不写 break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）；`BreakGlass.request` 自行派生绑定 id，不再有 `binding` 参数；审批 break-glass 需要 REQUIRED 变更监听器（否则 `503`，`BRK-3`）。
 - **撤销 break-glass 按效果作答**（R4-1）。`DELETE /break-glass/{bindingId}` 只在该绑定在平台文档的头上不再生效之后才返回 `200`，无论是谁删除的。撤销后绑定仍在生效时，现在返回 `409`，`detail` 写明调用方的变更所处的状态（`CONFLICTED` 等），此前返回的是带着该变更的 `200`：把 `200` 当作"已撤销"而不看 `state` 的客户端，需要处理这个 `409`。平台文档中没有的绑定 id 现在返回 `404`；该 id 的绑定不是 break-glass 绑定时（无论是否到期）返回 `409`（`binding [<id>] is not a break-glass binding`）；两者都不提议任何变更，此前都返回带着 `DRAFT` 变更的 `200`（`BRK-11`）。被另一个撤销抢占，或遇到已变化的头的撤销，会再撤销一次，至多再试三次。
 - **放弃变更**（RC1-51、`BRK-10`）。撤销仍在生效的 break-glass 绑定的变更只有其作者能放弃：其他人（包括被撤销的主体）得到 `403`。请改为再撤销一次该绑定，这会发布停住的撤销，或抢走它的暂存槽。每次放弃都记一条新的变更事件 `ABANDONED`；放弃 break-glass 变更需要 REQUIRED 变更监听器（否则 `503`）。处理每一种 `ChangeEvent.Kind` 的变更监听器要加上 `ABANDONED`。
+- **身份转发改为按 scheme 选择加入**（RC1-49、`IDN-7`）。网关只把 `CoSec-Identity` 转发给指向已注册服务的路由（`uri: lb://...`、`lb:ws://...`），或元数据为 `cosec-identity: true` 的路由；`false` 仍然让任何路由都不接收，`true` 以外的值都按 `false` 处理。**经 `http://` 或 `https://` 指向你自己服务的路由不再收到身份，其后的服务看到的是匿名请求**：升级网关之前，给这些路由的元数据加上 `cosec-identity: true`，不要给指向第三方的路由加（[转发身份](../integration/web.md#forwarding-the-identity)）。请求属性 `cosec.identity.forward` 现在在每个被路由的请求上都是 `true` 或 `false`，过去只设为 `false`。
+- **不向下游转发任何凭证**（RC1-5、`IDN-8`）。除 `Authorization` 外，网关还从它转发的每个请求中移除 API key 头（`cosec.pipeline.api-key-header`，无论名称设成什么）和 `authorization` 查询参数。自己读取它们的服务需要 `cosec.gateway.identity.forward-authorization=true`；打开后，它们现在只发往本会接收身份的路由（`lb://`，或 `cosec-identity: true`），因此指向第三方的路由一个也收不到。
+- **`authorization` cookie 也留在网关**（`IDN-8`）。在同一个开关下，网关从它转发的每个 `Cookie` 头中移除它（名称比较不区分大小写），其他 cookie 保留；不再剩下任何 cookie 的头不发送。从这个 cookie 读取令牌的服务需要 `forward-authorization=true`，以及一条本会接收身份的路由。
+- **路由指定它的应用**（RC1-6、`SCP-2`）。路由元数据 `cosec-app-id` 是该路由上请求的应用，优先于 `cosec.authorization.scope.app-id`：在这样的路由上，声明了其他应用的请求为 `403` `scope-rejected`（匿名调用方为 `401`），没有声明的请求取路由的应用、它的角色绑定及其中的 DENY。没有这项元数据的路由沿用网关的宿主应用，或客户端声明的应用。在面向多个应用的网关上，给每条路由指定它的应用。不是字符串、或不能作为应用 id 的 `cosec-app-id` 使该路由的每个请求失败：数字形式的应用 id 要加引号。
+- **网关上的 actuator**（RC1-48、`STA-2`）。按策略决策的网关宿主，在其应用端口上（`management.server.port` 未设置，或与 `server.port` 相同）通过 HTTP 暴露了 `health` 以外的 actuator 端点时不再启动：CoSec 授权的是网关的路由，不是这些端点。把 actuator 放到单独的端口上并置于网络策略之后，只暴露 `health`，或在新配置项 `cosec.gateway.unprotected-endpoints` 中列出由其他手段保护的端点；它从不接受 `gateway`（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。`cosec-gateway-server` 和 `k8s/` 只暴露 `health`。
+- **空白的 `CoSec-*` 值与另一个值同时出现即有歧义**（RC1-16、`SCP-4`）：请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=` 现在是 `400` `invalid-request`，过去取 `s1`。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如 `%E3%80%80`）是一个值：单独出现时，它是主体必须在其中有角色的空间。每个参数只发送一次。
+- **应用 id 拒绝控制字符**（RC1-15、`SCP-7`），与租户 id 相同：声明的应用含控制字符时为 `403` `scope-rejected`（匿名调用方为 `401`），宿主应用含控制字符时启动失败。
+- **控制面只接受应用 id**（`SCP-7`）。应用 id 不为空白、不是 `*`、不含 `:` 和控制字符，且不超过 128 个字符；之前的构建接受任何不含 `:` 的应用。现在其他应用中的绑定是位于 `$.bindings[i].app` 的 `V2` 发现（`400`）；由于检查的是整个候选，仍然含有这种绑定的文档无法发布其他任何变更：它的下一个变更必须移除它，而只移除它的变更是合法的。`analyze` 对这种应用回答 `400`。**升级控制面之前**，移除这种应用中的租户绑定，放弃这种应用文档上未结束的变更，并清空以这种 id 发布的应用文档（发布一个没有策略和绑定的修订），这会移除它们的反向引用。遗留下来的内容不会阻断任何东西，但会一直存在：保留这种绑定的文档仍然可读，而该绑定不授予任何东西，因为没有请求会属于这个应用；这种应用上未结束的变更不再可读，因此控制 API 对它回答 `409` `change-unreadable`，它既无法查看也无法放弃，维护任务每一轮都会跳过它并记录一条 WARN，直到它的记录被移除；实例状态、应用列表或反向引用中指向这种应用的条目会被跳过，实例状态和反向引用的条目会记录一条 WARN。
+- **按策略决策的宿主丢弃客户端的 `CoSec-Identity`**（RC1-18、`IDN-9`）。`enforce` 模式的 WebFlux 或 Spring MVC 宿主会从处理器看到的请求中移除该头，因此它从不转递客户端写的身份。在那里读取它的代码读到的是任何客户端都能写的内容；请读取 `SecurityContext`。
+- **租户把应用权限授给 `Anyone` 或某个主体的绑定现在能解析**（RC1-17、`TNT-4`）。该应用中的请求现在无论主体有什么角色都读取应用文档，因此绑定中的 DENY 或 ALLOW 生效（过去这样的请求都是 `503`），应用文档的限流规则也随之生效。`simulate`、`explain` 和影子窗口按同一规则读取它（`CTL-3`）。代码中，`CompiledDocument.tenant` 接收集合 `boundApps`，由 `CompiledDocument.needsApp` 回答；自行构造的 `ShadowListener` 需要已安装的视图（`views`），才能比较让请求读取应用文档的租户候选，没有视图时上报 `CANDIDATE_ERROR`。
+- **一个 key 前缀**（RC1-46、`SNP-9`）。[`cosec.key-prefix`](./configuration.md#key-prefix) 取代 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`。仍设置其中任何一项的环境无论 `cosec.unknown-properties` 如何都会启动失败，错误消息列出哪些 key 族会移到当前的 `cosec.key-prefix` 之下，以及从哪里移到哪里。每个 key 都在它之下：API key 在 `<p>:api-key` 下，过去固定的限流计数器和社交登录的 OAuth 状态分别在 `<p>:rate-limiter` 和 `<p>:oauth:state` 下（[Redis key](./storage.md#redis-keys)）。使用默认值时每个 key 都还在原处。设置过这三项之一的部署，改为把 `cosec.key-prefix` 设成原来的快照前缀；**保存在其他前缀下的吊销和 API key 不再被读取**，在那里吊销的令牌会重新被接受：切换之前，把每个这样的 key 复制到新前缀下（`COPY`，或保留过期时间的 `RENAME`）。成员关系会自行重新填充。`cosec-migrate api-keys` 不再接受 `--api-key-prefix`：它转换 `<--key-prefix>:api-key` 下的 key。
+- **`revalidate-interval` 不能关闭周期确认**（RC1-50、`SNP-6`）。失效消息丢失时，周期确认是唯一的界，因此 `cosec.authorization.snapshot.revalidate-interval` 必须至少为 `1s`（每一轮都从 Redis 读取每个已安装的文档）、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败并指出该配置项，`SnapshotOptions` 也同样拒绝。把 `0` 换成范围内的值；更长的间隔可以降低确认在 Redis 上的开销（[存储](./storage.md#what-revalidation-costs-redis)）。
+- **路径模式有开销上界**（RC1-8、`DOC-4`）。`http:path:` 模式不超过 2,048 个字符，把 `*`、`?` 或 `{name}` 与其他文本混在一起的段最多 16 个部分（连续的 `*` 算一个），一个文档中这样的片段合计最多 2,048 个通配单位（它们的部分数加上文本的字符数，前导 `**` 之后的片段和以捕获变量为 key 的限流规则计两次），类型化模式不超过 2,058 个字符（[策略语言](../policies/language.md#path-pattern-bounds)）。控制面对超出上界的变更回答 `COMPILE` 发现（`422`），位置为该模式或 `$`。之前发布、含有这种模式的文档在升级后的实例上不再能编译，读取它的每个请求都失败关闭：升级数据面之前，改写它并发布。
+- **每个策略在每一遍中对每个绑定它的文档只求值一次**（`ALG-9`），无论该文档有多少条绑定生效；在附加策略中声明两次的策略只附加一次。决策及其报告的语句和绑定都不变：报告的是候选顺序中的第一条绑定。追踪按第一条绑定的结果列出之后的绑定，不再重新求值。
+- **文档读取的请求头重复出现时为 `400`**（RC1-38、`PIP-12`）。请求以不同的值多次发送某个请求头，而它的视图所读文档中的任何语句、策略条件、边界或限流 key 读取这个请求头（包括 `Origin` 和 `Referer`）时，管道在求值之前回答 `400` `invalid-request`；过去读取它的 DENY 使请求为 `503`，读取它的 ALLOW 不匹配。相同的重复值算一个值（[Web](../integration/web.md#responses-and-status-codes)）。
+- **格式错误的 `roles`、`policies` 或 `attributes` 声明是无效令牌**（`PIP-6`）：`401` `token-invalid`，按匿名求值，过去是 `500`。
+- **处处拒绝重复的 key**（RC1-44、`DOC-5`）。任何含重复 key 的存储格式（API key、成员关系、影子报告、吊销）和控制面请求体都无法读取：存储的值为 `503`，请求体为 `400`。`cosec-migrate` 也拒绝含重复 key 的 7.x 导出和文件。
+- **CoSec 的缓存无论由谁构建都保留其固定项**（RC1-45、`SNP-3`）。`createPolicySnapshotCache` 对任何 spec 都应用权威存储的策略、快照的编解码器，并去掉 key 过滤器、按条目的 TTL 和加载器；`CacheSpecCustomizer` 不再能改变 CoSec 缓存的编解码器、加载器、key 过滤器或按条目的 TTL。
+- **编译时栈溢出的文档失败关闭**（RC1-43、`SNP-8`），与其他编译错误一样，而不再保留之前的修订。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
@@ -176,7 +195,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
-`--key-prefix` 是 8.0 的快照前缀，与 `cosec.authorization.snapshot.key-prefix` 相同。
+`--key-prefix` 是部署的前缀，与 [`cosec.key-prefix`](./configuration.md#key-prefix) 相同。
 
 `publish` 之后，只通过控制面修改策略。再次运行 `convert` 和 `publish` 不会更新已存在的文档。
 
@@ -253,7 +272,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 7.x 的限流规则文件（`cosec.limiter.*`）已删除。`convert --rate-limit-rules` 把规则翻译成平台文档的限流规则。与 7.x 一样，规则作用于策略
 放行的请求：第一条耗尽的规则返回 `429`，被拒绝的请求不消耗许可。带 `strictFailure` 的规则在限流器失败时，现在返回 `503` 而不是 `429`（R3）。
-存在 `ReactiveStringRedisTemplate` bean 时，Redis 限流器使用相同的 key（`cosec:rate-limiter:<rule>:<bucket>:<window>`）；否则每个实例
+存在 `ReactiveStringRedisTemplate` bean 时，Redis 限流器使用相同的 key（`cosec:rate-limiter:<rule>:<bucket>:<window>`，位于 `cosec.key-prefix` 下）；否则每个实例
 各自计数。见[限流](../policies/rate-limiting.md)。
 
 ### 响应与状态码 {#responses-and-status-codes}
@@ -352,7 +371,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 - **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
 - **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
 
-**转换已存储的 key。** `cosec-migrate api-keys` 读取 `--api-key-prefix`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
+**转换已存储的 key。** `cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
 
 ```bash
 cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
@@ -385,14 +404,14 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 | 位置 | 7.x | 8.0 |
 |---|---|---|
-| 网关 | 转发客户端的 `Authorization` 头。 | 无需设置：对有主体的放行，它设置 `CoSec-Identity`，并总是去掉客户端自己发来的。`cosec.gateway.identity.claims` 指定要转发的主体属性；路由元数据 `cosec-identity: false` 让该路由不转发。除非 `cosec.gateway.identity.forward-authorization=true`，转发的请求中会去掉 `Authorization` 头（[网关身份](./configuration.md#gateway-identity)）。 |
+| 网关 | 转发客户端的 `Authorization` 头。 | 对有主体的放行，它在指向已注册服务的路由（`lb://`）上、以及元数据为 `cosec-identity: true` 的其他路由上设置 `CoSec-Identity`；它总是去掉客户端自己发来的。`cosec.gateway.identity.claims` 指定要转发的主体属性；路由元数据 `cosec-identity: false` 让该路由不接收身份。除非 `cosec.gateway.identity.forward-authorization=true`，转发的请求中会去掉 `Authorization` 头、API key 头、`authorization` 查询参数和 `authorization` cookie（[网关身份](./configuration.md#gateway-identity)）。 |
 | 其后的每个服务 | `cosec.inject.enabled=true` | `cosec.pipeline.mode=gateway`（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）：没有 key、策略、快照或 Redis；除非它签发令牌，否则设置 `cosec.jwt.enabled=false`。只有网关可以访问到该服务（网络策略、私有网络、mTLS）；其他能访问到它的人声称自己是谁就是谁。 |
 | 应用代码 | 从 `SecurityContext` 读取调用方。 | 相同。附加策略不被转发，角色是网关决策时所在作用域中的角色。 |
 
 永不过期的凭证（例如没有 `expires-at` 的 API key）不会被转发：网关对它的放行返回 `500`。给这类 key 设置过期时间，或让它们的路由不转发身份。
 
 在 CoSec 网关之后、自己校验令牌的服务不再收到 `Authorization` 头。要么在网关上设置 `cosec.gateway.identity.forward-authorization=true`，
-要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 cookie 中的令牌仍会被转发。
+并经 `lb://` 或带 `cosec-identity: true` 的路由访问该服务，要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 `authorization` cookie 中的令牌在同一个开关下也会被移除。
 
 ### 存储与 Redis {#storage-and-redis}
 
@@ -590,7 +609,7 @@ key 代表它之下的每个 key。
 | `cosec.api-key.store-blocking` | 已删除。 |
 | `cosec.jwt.token-revocation.enabled` | 已删除：吊销始终开启（[令牌吊销始终开启](#token-revocation-is-always-on)）。 |
 
-`cosec.authorization.cache.key-prefix` 和 `cosec.authorization.cache.token.*` 保留。
+`cosec.authorization.cache.token.*` 保留。`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix` 由 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代，它是一个部署写入的每个 key 的前缀。
 
 新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别、模式）、`cosec.gateway.identity.*`、`cosec.unknown-properties`、
 `cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、

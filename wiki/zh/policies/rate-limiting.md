@@ -60,7 +60,7 @@ flowchart LR
 请求受哪些规则约束：
 
 - 平台文档的规则，对每个被允许的请求；
-- 应用文档的规则，当请求读取了该文档时：请求有应用，且主体在请求空间中拥有角色（[角色权限](./role-permissions.md#app-documents)）；
+- 应用文档的规则，当请求读取了该文档时：请求有应用，且主体在请求空间中拥有角色，或租户的文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体（[角色权限](./role-permissions.md#app-documents)）；
 - 租户文档的规则，对该租户的请求。
 
 它们按这个顺序运行，同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。规则是叠加的：租户或应用规则永远不会替换或放宽平台规则，即使 id 相同；只有请求匹配的每条规则都还有许可时，请求才能通过。
@@ -84,7 +84,7 @@ flowchart LR
 
 | 限流器 | 何时使用 | 范围 |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | classpath 中有 `cosec-cocache`，且存在 `ReactiveStringRedisTemplate` bean | 整个集群，由 Lua 脚本原子地检查并计数，不阻塞调用线程。计数器位于 `cosec:rate-limiter:<rule>:<bucket>:<window>`，两个窗口后过期。 |
+| `ReactiveRedisRateLimiter` | classpath 中有 `cosec-cocache`，且存在 `ReactiveStringRedisTemplate` bean | 整个集群，由 Lua 脚本原子地检查并计数，不阻塞调用线程。计数器位于 `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>:<window>`，两个窗口后过期。 |
 | `LocalRateLimiter` | 其他情况 | 每个 JVM 独立：有 N 个实例时，实际限制是 N 倍。最多保留 100,000 个桶，空闲一小时的桶会被丢弃；被丢弃的桶从零重新计数。 |
 
 自定义的 `RateLimiter` bean 会替换两者（[扩展](../architecture/extending.md)）。每次调用受 `cosec.authorization.rate-limit.timeout`（默认 `500ms`，[配置](../operations/configuration.md)）约束；超时视为失败。

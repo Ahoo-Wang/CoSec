@@ -37,9 +37,13 @@ import java.time.ZoneOffset
 
 /**
  * `PIP-10`: a gateway forwards the identity it verified to the services behind it, and only that: the outcome always
- * names `CoSec-Identity`, so whatever the client sent is stripped.
+ * names `CoSec-Identity`, so whatever the client sent is stripped. `IDN-7`: only to a route the gateway marks as
+ * receiving it. `IDN-9`: without an issuer, a permit still strips the client's.
  */
 class IdentityForwardingTest {
+    /** What the gateway sets on a route that receives the identity (RC1-49). */
+    private val routed = mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "true")
+
     private val now = Instant.parse("2026-11-01T00:00:00Z")
     private val credential = Identity.Credential(Identity.Method.JWT, "t1", now.plusSeconds(3600))
     private val alice = AuthnResult.Authenticated(
@@ -71,7 +75,7 @@ class IdentityForwardingTest {
         authn: AuthnResult,
         decision: Decision = PipelineFixtures.PERMIT,
         issuer: IdentityIssuer = IdentityIssuer(setOf("name"), clock = Clock.fixed(now, ZoneOffset.UTC)),
-        attributes: Map<String, String> = emptyMap(),
+        attributes: Map<String, String> = routed,
     ): Outcome = runBlocking {
         PipelineFixtures.pipeline(PipelineFixtures.authenticator(authn), PipelineFixtures.StubEngine(decision)) {
             it.copy(identity = issuer)
@@ -138,6 +142,16 @@ class IdentityForwardingTest {
             .assert().containsEntry(IdentityCodec.HEADER, null)
     }
 
+    /** RC1-49: fail closed on what the gateway did not mark: no route, or anything but `true`. */
+    @Test
+    fun `a request no route marks as receiving the identity forwards none`() {
+        for (attributes in listOf(emptyMap(), mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "TRUE"))) {
+            val outcome = evaluate(alice, attributes = attributes)
+            outcome.proceed.assert().isTrue()
+            outcome.forward.assert().isEqualTo(mapOf(IdentityCodec.HEADER to null))
+        }
+    }
+
     @Test
     fun `an identity too large to forward fails the request closed`() {
         val tiny = IdentityIssuer(maxBytes = 32, clock = Clock.fixed(now, ZoneOffset.UTC))
@@ -167,11 +181,21 @@ class IdentityForwardingTest {
         outcome.proceed.assert().isFalse()
     }
 
+    /** RC1-18: an enforcing host hands its handler no `CoSec-Identity`; a refused request is handed on to nobody. */
     @Test
-    fun `without an issuer nothing is forwarded`() {
+    fun `without an issuer a permit strips the client's identity and forwards none`() {
         val outcome = runBlocking {
-            PipelineFixtures.pipeline(PipelineFixtures.authenticator(alice)).evaluate(facts())
+            PipelineFixtures.pipeline(PipelineFixtures.authenticator(alice)).evaluate(facts(routed))
         }
-        outcome.forward.assert().isEmpty()
+        outcome.proceed.assert().isTrue()
+        outcome.forward.assert().isEqualTo(mapOf(IdentityCodec.HEADER to null))
+        val denied = runBlocking {
+            PipelineFixtures.pipeline(
+                PipelineFixtures.authenticator(alice),
+                PipelineFixtures.StubEngine(PipelineFixtures.EXPLICIT_DENY),
+            ).evaluate(facts())
+        }
+        denied.proceed.assert().isFalse()
+        denied.forward.assert().isEmpty()
     }
 }

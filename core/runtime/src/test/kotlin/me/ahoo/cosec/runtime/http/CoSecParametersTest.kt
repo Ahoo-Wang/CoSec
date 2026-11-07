@@ -48,8 +48,29 @@ class CoSecParametersTest {
     }
 
     @Test
-    fun blankValuesAreNotValues() {
-        read("CoSec-App-Id=", "CoSec-App-Id" to listOf(" ", "shop"))!!.appId.assert().isEqualTo("shop")
+    fun onlyBlankValuesAreNotValues() {
+        read("CoSec-App-Id=&CoSec-App-Id=%20%09", "CoSec-App-Id" to listOf(" ", ""))!!.appId.assert().isEmpty()
+    }
+
+    /** RC1-16: a backend that reads the blank one would be in another space than CoSec checked. */
+    @ParameterizedTest
+    @ValueSource(strings = ["CoSec-App-Id", "CoSec-Space-Id", "CoSec-Device-Id"])
+    fun aBlankValueBesideAValueIsAmbiguous(name: String) {
+        read("$name=", name to listOf("s1")).assert().isNull()
+        read("$name=s1&$name=%20").assert().isNull()
+        read(null, name to listOf(" ", "s1")).assert().isNull()
+        read("$name=s1", name to listOf("")).assert().isNull()
+    }
+
+    /** RC1-16: blank is ASCII whitespace only; Unicode spaces survive a backend's `trim()`, so they are a value. */
+    @Test
+    fun unicodeSpacesAreAValue() {
+        read("CoSec-Space-Id=%E3%80%80")!!.spaceId.assert().isEqualTo("\u3000")
+        read("CoSec-Space-Id=%C2%A0", "CoSec-Space-Id" to listOf("s1")).assert().isNull()
+        read("CoSec-Space-Id=%E3%80%80", "CoSec-Space-Id" to listOf("s1")).assert().isNull()
+        CoSecParameters.isBlank(" \t\n\u000C\r").assert().isTrue()
+        CoSecParameters.isBlank("\u000B").assert().isFalse()
+        CoSecParameters.isBlank("\u00A0").assert().isFalse()
     }
 
     @ParameterizedTest

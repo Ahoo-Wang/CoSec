@@ -1,0 +1,17 @@
+# Rule: DOC-4
+# Mutant: a path pattern may be longer than any path
+# Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+index 6eb561e9..361c68d7 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
+@@ -33,7 +33,7 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
+         if (pattern.isEmpty()) {
+             throw invalid(0, "the pattern is empty")
+         }
+-        if (pattern.length > HttpPathPattern.MAX_LENGTH) {
++        if (pattern.length > Int.MAX_VALUE - 1) {
+             throw invalid(
+                 HttpPathPattern.MAX_LENGTH,
+                 "the pattern is ${pattern.length} characters, more than ${HttpPathPattern.MAX_LENGTH}: no path is longer",

@@ -34,6 +34,12 @@ sealed class ResourcePattern {
     /** Whether the resource matches, without capturing: allocates nothing beyond parsing the path once. */
     abstract fun matches(target: ResourceTarget): Boolean
 
+    /** [match], an evaluation's: glob segments use the table of [scratch]. */
+    internal open fun match(target: ResourceTarget, scratch: ScratchSource): Captures? = match(target)
+
+    /** [matches], an evaluation's: glob segments use the table of [scratch]. */
+    internal open fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean = matches(target)
+
     /** Every resource; captures nothing. */
     object AnyResource : ResourcePattern() {
         override val variableNames: List<String> = emptyList()
@@ -57,6 +63,25 @@ sealed class ResourcePattern {
 
         override fun matches(target: ResourceTarget): Boolean =
             target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments))
+
+        // Only glob segments use the table: a pattern without one takes the plain path, and never makes it.
+        override fun match(target: ResourceTarget, scratch: ScratchSource): Captures? {
+            if (path.globUnits == 0) {
+                return match(target)
+            }
+            if (target.resource.type != HTTP_TYPE) {
+                return null
+            }
+            return path.match(target.httpPath(path.decodeAndParseSegments), scratch.scratch())
+        }
+
+        override fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean {
+            if (path.globUnits == 0) {
+                return matches(target)
+            }
+            return target.resource.type == HTTP_TYPE &&
+                path.matches(target.httpPath(path.decodeAndParseSegments), scratch.scratch())
+        }
 
         override fun equals(other: Any?): Boolean = other is Http && other.path == path
 
@@ -123,6 +148,13 @@ sealed class ResourcePattern {
         /** The resource type of HTTP requests. */
         const val HTTP_TYPE: String = "http"
         const val HTTP_PREFIX: String = "http:path:"
+
+        /**
+         * The longest resource pattern, in characters (code points): `http:path:` and the longest path pattern,
+         * [HttpPathPattern.MAX_LENGTH], which no request path exceeds; a typed pattern, which matches ids built from such
+         * paths, is held to the same length (RC1-8, `DOC-4`).
+         */
+        const val MAX_LENGTH: Int = HTTP_PREFIX.length + HttpPathPattern.MAX_LENGTH
         private const val ID_SEPARATOR = '/'
 
         /**
@@ -137,6 +169,14 @@ sealed class ResourcePattern {
             if (pattern.startsWith(HTTP_PREFIX)) {
                 val path = pattern.substring(HTTP_PREFIX.length)
                 return Http(HttpPathPattern.compile(path, caseSensitive, decodeAndParseSegments))
+            }
+            val length = pattern.codePointCount(0, pattern.length)
+            if (length > MAX_LENGTH) {
+                throw InvalidPatternException(
+                    pattern,
+                    MAX_LENGTH,
+                    "the pattern is $length characters, more than $MAX_LENGTH"
+                )
             }
             if (!caseSensitive || !decodeAndParseSegments) {
                 throw InvalidPatternException(pattern, 0, "only http:path: patterns take path options")

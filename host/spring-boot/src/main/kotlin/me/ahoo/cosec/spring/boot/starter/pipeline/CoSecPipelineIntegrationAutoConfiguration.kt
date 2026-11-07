@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import io.micrometer.core.instrument.MeterRegistry
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.cosec.kafka.KafkaAuditListener
@@ -28,6 +32,7 @@ import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
+import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
@@ -61,6 +66,7 @@ import org.springframework.kafka.core.KafkaOperations
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
 @EnableConfigurationProperties(
+    CoSecProperties::class,
     AuditProperties::class,
     KafkaAuditProperties::class,
     MetricsProperties::class,
@@ -100,9 +106,8 @@ class CoSecPipelineIntegrationAutoConfiguration {
         class Redis {
             @Bean
             @ConditionalOnMissingBean
-            fun cosecRedisRateLimiter(template: ReactiveStringRedisTemplate): RateLimiter = ReactiveRedisRateLimiter(
-                template
-            )
+            fun cosecRedisRateLimiter(template: ReactiveStringRedisTemplate, cosec: CoSecProperties): RateLimiter =
+                ReactiveRedisRateLimiter(template, CoSecCacheSpecs.rateLimiterPrefix(cosec.keyPrefix))
         }
 
         @Bean

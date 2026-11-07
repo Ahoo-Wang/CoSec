@@ -47,7 +47,7 @@ import kotlin.system.exitProcess
  * bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
  * repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
- * api-keys --redis redis://localhost:6379 [--api-key-prefix cosec:api-key] [--key-prefix cosec] --out ./api-keys
+ * api-keys --redis redis://localhost:6379 [--key-prefix cosec] --out ./api-keys
  *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
  * ```
  *
@@ -66,7 +66,6 @@ object MigrateMain {
     const val FAILED = 1
     const val USAGE = 2
     private const val SCAN_COUNT = 1000L
-    private const val DEFAULT_API_KEY_PREFIX = "cosec:api-key"
 
     /** The commands that accept `--cluster`: the others read or write Redis with plain clients that do not. */
     private val CLUSTER_COMMANDS = listOf("publish", "bootstrap", "repair-references")
@@ -82,7 +81,7 @@ object MigrateMain {
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
-          api-keys --redis <uri> [--api-key-prefix <p>] [--key-prefix <p>] --out <dir> [--memberships <file>]
+          api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--memberships <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
     """.trimIndent()
 
@@ -148,7 +147,7 @@ object MigrateMain {
         companion object {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
-                "rate-limit-rules", "platform-admin", "redis", "api-key-prefix", "role-prefix",
+                "rate-limit-rules", "platform-admin", "redis", "role-prefix",
                 "memberships", "grant-to-principal",
             )
             private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
@@ -321,13 +320,15 @@ object MigrateMain {
     }
 
     /**
-     * `api-keys` (RFC 0009 §4.4): converts the keys under `--api-key-prefix` to the format of RFC 0009 and writes the
+     * `api-keys` (RFC 0009 §4.4): converts the keys under `<--key-prefix>:api-key`, where the deployment reads them
+     * (`SNP-9`), to the format of RFC 0009 and writes the
      * change report. With `--dry-run`, or when a key is refused, nothing is written to Redis. Keys already converted are
      * left as they are, so a run can be repeated; each key is rewritten only while it still holds what was read.
      */
     private fun apiKeys(options: Options, out: PrintStream): Int {
         val uri = options.required("redis")
-        val apiKeyPrefix = (options.value("api-key-prefix") ?: DEFAULT_API_KEY_PREFIX).trimEnd(':')
+        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        val apiKeyPrefix = CoSecCacheSpecs.apiKeyPrefix(keyPrefix)
         val outDirectory = Path.of(options.required("out"))
         val dryRun = options.flag("dry-run")
         val memberships = options.value("memberships")?.let { MembershipsExport.read(Files.readAllBytes(Path.of(it))) }
@@ -338,7 +339,7 @@ object MigrateMain {
             client.connect().use { connection ->
                 val commands = connection.sync()
                 val stored = StoredApiKeys.read(commands, apiKeyPrefix) { pattern -> scan(commands, pattern) }
-                val plan = controlStore(uri, options.value("key-prefix") ?: CoSec.COSEC) { store ->
+                val plan = controlStore(uri, keyPrefix) { store ->
                     ApiKeyMigration(
                         StoredDocuments(store),
                         memberships,

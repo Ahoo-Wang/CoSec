@@ -19,6 +19,7 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.DocumentKind
 
@@ -57,10 +58,20 @@ class CompiledDocument private constructor(
     internal val boundary: String? = null,
     /** Its rate limit rules, in document order (RFC 0006 §8.1): a permit's obligations come from them. */
     val rateLimits: List<CompiledRateLimit> = emptyList(),
+    /** For a tenant document, [needsApp]'s apps; empty for the other kinds. */
+    private val boundApps: Set<String> = emptySet(),
 ) {
     /** Whether one of its policies or rate limit rules reads an external attribute (RFC 0006 §5.4.2). */
     internal val readsExternal: Boolean =
         policies.values.any { it.readsExternal } || rateLimits.any { it.externals.isNotEmpty() }
+
+    /**
+     * The request headers any of its policies, boundaries or rate limit rules (their conditions and keys) reads, in lower
+     * case. A request that sent one of them with different values cannot be decided on its value, whichever statement
+     * reads it: the pipeline answers it 400 before evaluating (`PIP-12`, RC1-38), so the answer does not tell a DENY
+     * from an ALLOW, nor whether the statement applied.
+     */
+    val headersRead: List<String> = headersOf(policies, boundaries, rateLimits)
 
     /** `Anyone` bindings, by policy id, then binding id. */
     internal val anyone: Array<BoundEntry>
@@ -77,7 +88,14 @@ class CompiledDocument private constructor(
     /** The ids of the break-glass bindings. */
     private val breakGlassIds: Set<String>
 
+    /**
+     * How many policy ids several of its bindings name ([BoundEntry.repeat]): a pass evaluates each such policy once,
+     * whatever the number of bindings (`ALG-9`).
+     */
+    internal val repeats: Int
+
     init {
+        checkGlobBudget(policies, boundaries, rateLimits)
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
         require(!(kind == DocumentKind.TENANT && boundary != null && owner == TenantId.PLATFORM.value)) {
             "The platform tenant has no boundary"
@@ -93,10 +111,11 @@ class CompiledDocument private constructor(
         for (rule in rateLimits) {
             require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
         }
+        val slots = repeatSlots(bindings)
         val ids = HashSet<String>()
         for (binding in bindings) {
             require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
-            val entry = entry(binding)
+            val entry = entry(binding, slots[binding.policy.value] ?: NOT_REPEATED)
             when (val subject = binding.subject) {
                 SubjectRef.Anyone -> anyone += entry
                 is SubjectRef.Principal -> {
@@ -112,6 +131,31 @@ class CompiledDocument private constructor(
         this.principals = principals.sortedById()
         this.roles = roles.mapValues { it.value.toTypedArray() }
         this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
+        this.repeats = slots.size
+    }
+
+    /**
+     * A slot for each policy id several of [bindings] name, in binding order; none for an id bound once. Two bindings of
+     * one document that name an id and both resolve resolve to the same policy: the document's own, else the
+     * platform's, else that of the one app both are scoped to ([CandidateOrder]), since one scoped to any app finds
+     * only the platform's.
+     */
+    private fun repeatSlots(bindings: List<Binding>): Map<String, Int> {
+        if (bindings.size < 2) {
+            return emptyMap()
+        }
+        val counts = HashMap<String, Int>(bindings.size * 2)
+        for (binding in bindings) {
+            counts.merge(binding.policy.value, 1, Int::plus)
+        }
+        val slots = HashMap<String, Int>()
+        for (binding in bindings) {
+            val id = binding.policy.value
+            if (counts.getValue(id) > 1 && id !in slots) {
+                slots[id] = slots.size
+            }
+        }
+        return slots
     }
 
     /**
@@ -121,7 +165,7 @@ class CompiledDocument private constructor(
     fun isBreakGlass(via: BindingRef): Boolean =
         via is BindingRef.Bound && via.document == kind && via.id.value in breakGlassIds
 
-    private fun entry(binding: Binding): BoundEntry {
+    private fun entry(binding: Binding, repeat: Int): BoundEntry {
         // The candidate order reads role bindings from app and tenant documents and everything else from platform and
         // tenant documents (RFC 0004 §4.3, §6.3). A binding anywhere else would never be a candidate: a DENY lost.
         when (kind) {
@@ -167,6 +211,7 @@ class CompiledDocument private constructor(
             space = binding.scope.space.exactSpace(),
             roleTenant = (binding.subject as? SubjectRef.Role)?.tenant?.value,
             expiresAt = binding.expiresAt ?: Long.MAX_VALUE,
+            repeat = repeat,
         )
     }
 
@@ -194,6 +239,14 @@ class CompiledDocument private constructor(
         }
     }
 
+    /**
+     * Whether a request in [app] reads that app's document whatever its roles, because this tenant document binds one of
+     * the app's permission policies to `Anyone` or to a principal (RFC 0007 §9.3, RC1-17): without it the binding could
+     * not resolve. A role binding needs no such entry: it applies only with a role in the scope, and then the app's
+     * document is read anyway. One set lookup, so the view key stays O(1) and the hot path does no I/O to decide it.
+     */
+    fun needsApp(app: String): Boolean = app in boundApps
+
     internal fun policy(id: String): CompiledPolicy? = policies[id]
 
     /** The platform's boundary policy [id], or null. */
@@ -206,6 +259,8 @@ class CompiledDocument private constructor(
     internal fun role(role: String): Array<BoundEntry>? = roles[role]
 
     companion object {
+        private const val NOT_REPEATED = -1
+
         // Plain comparators: kotlin.comparisons is not among the packages the engine may use (EnginePurityTest).
         private val BY_ID = Comparator<BoundEntry> { a, b -> a.via.id.value.compareTo(b.via.id.value) }
         private val BY_POLICY_THEN_ID = Comparator<BoundEntry> { a, b ->
@@ -228,8 +283,61 @@ class CompiledDocument private constructor(
                 is Match.Exactly -> value.value
             }
 
+        /**
+         * [headersRead] of a document of [policies], [boundaries] and [rateLimits]. An empty document, which a view
+         * builds per request for an app or tenant with no stored document, allocates nothing here.
+         */
+        private fun headersOf(
+            policies: Map<String, CompiledPolicy>,
+            boundaries: Map<String, CompiledPolicy>,
+            rateLimits: List<CompiledRateLimit>,
+        ): List<String> {
+            if (policies.isEmpty() && boundaries.isEmpty() && rateLimits.isEmpty()) {
+                return emptyList()
+            }
+            val names = LinkedHashSet<String>()
+            policies.values.forEach { names.addAll(it.headers) }
+            boundaries.values.forEach { names.addAll(it.headers) }
+            for (rule in rateLimits) {
+                names.addAll(rule.statement.headers)
+                rule.key?.let(HeadersRead::headerOf)?.let(names::add)
+            }
+            return if (names.isEmpty()) emptyList() else names.toList()
+        }
+
+        /**
+         * `DOC-4`: the glob units of every pattern of the document, at most [MAX_GLOB_UNITS]. A rate limit rule whose key
+         * reads a captured variable counts twice: its statement is matched, then captured for the key. Free when empty.
+         */
+        private fun checkGlobBudget(
+            policies: Map<String, CompiledPolicy>,
+            boundaries: Map<String, CompiledPolicy>,
+            rateLimits: List<CompiledRateLimit>,
+        ) {
+            if (policies.isEmpty() && boundaries.isEmpty() && rateLimits.isEmpty()) {
+                return
+            }
+            val units = policies.values.sumOf { it.globUnits } + boundaries.values.sumOf { it.globUnits } +
+                rateLimits.sumOf { it.statement.globUnits * if (it.key?.kind == Attribute.Kind.RESOURCE_VAR) 2 else 1 }
+            require(units <= MAX_GLOB_UNITS) {
+                "The document's path pattern segments that mix *, ? or {name} with other text hold $units tokens " +
+                    "and literal characters in all, more than $MAX_GLOB_UNITS"
+            }
+        }
+
         /** The most statements a boundary policy may hold (RFC 0007 §7.6). */
         const val MAX_BOUNDARY_STATEMENTS: Int = 64
+
+        /**
+         * The most glob units one document's path patterns hold in all (RC1-8, `DOC-4`): the tokens of every segment
+         * that mixes `*`, `?` or `{name}` with other text
+         * ([me.ahoo.cosec.engine.pattern.HttpPathPattern.MAX_SEGMENT_TOKENS]) and the characters of its literals, twice
+         * after a leading `**` and for a rate limit rule keyed by a captured variable. Matching such a segment takes at
+         * most its units times the path segment's length in steps, and the pipeline accepts no segment longer than 256
+         * characters. A pass evaluates a policy once for each document that binds it, however often (`ALG-9`), so this
+         * bounds what matching one document's patterns costs a request; `GlobBoundBenchmark` measures it at the bound.
+         */
+        const val MAX_GLOB_UNITS: Int = 2048
 
         /**
          * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.
@@ -288,7 +396,9 @@ class CompiledDocument private constructor(
 
         /**
          * The document of [tenant]: its own policies and bindings, and the platform [boundary] it is held to instead
-         * of the default (only the platform writes it, RFC 0007 Q11).
+         * of the default (only the platform writes it, RFC 0007 Q11). [boundApps] are the apps whose permission
+         * policies [bindings] grant to `Anyone` or to a principal ([needsApp]): the snapshot compiler knows which
+         * policies are an app's, the engine does not.
          */
         fun tenant(
             tenant: TenantId,
@@ -296,6 +406,7 @@ class CompiledDocument private constructor(
             bindings: List<Binding>,
             rateLimits: List<CompiledRateLimit> = emptyList(),
             boundary: String? = null,
+            boundApps: Set<String> = emptySet(),
         ): CompiledDocument =
             CompiledDocument(
                 DocumentKind.TENANT,
@@ -304,6 +415,8 @@ class CompiledDocument private constructor(
                 bindings,
                 boundary = boundary,
                 rateLimits = rateLimits,
+                // Almost every tenant binds no app's permissions: the empty set answers without hashing.
+                boundApps = if (boundApps.isEmpty()) emptySet() else boundApps.toHashSet(),
             )
 
         private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {
@@ -335,4 +448,10 @@ internal class BoundEntry(
     val roleTenant: String?,
     /** Applies while the request time is before it. */
     val expiresAt: Long,
+    /**
+     * The slot of its policy id among the document's [CompiledDocument.repeats] when other bindings of the document name
+     * it too, else -1. Such a binding is a candidate only while its pass has not evaluated the policy through
+     * another one (`ALG-9`): the results depend on the request and the policy, never on the binding.
+     */
+    val repeat: Int,
 )

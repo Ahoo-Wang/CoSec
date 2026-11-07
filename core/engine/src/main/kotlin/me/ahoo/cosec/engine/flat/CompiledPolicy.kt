@@ -58,6 +58,15 @@ class CompiledPolicy(
     internal val externals: Array<Attribute> =
         condition?.let { ConditionAttributes.of(it).filter(Attribute::external).distinct().toTypedArray() } ?: NO_ATTRIBUTES
 
+    /** The glob units of its statements (`DOC-4`). */
+    internal val globUnits: Int = this.statements.sumOf { it.globUnits }
+
+    /** The request headers its condition and its statements' conditions read (`PIP-12`). */
+    internal val headers: Array<String> = HeadersRead.merge(
+        condition?.let { HeadersRead.of(ConditionAttributes.of(it)) } ?: NO_HEADERS,
+        this.statements.map { it.headers },
+    )
+
     /** Whether the policy reads any external attribute, in its condition or a statement's. */
     internal val readsExternal: Boolean = externals.isNotEmpty() || statements.any { it.externals.isNotEmpty() }
 

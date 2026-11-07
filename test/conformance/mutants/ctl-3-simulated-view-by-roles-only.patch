@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: the simulated view compiles an app's document only with roles, so the tenant binding that needs it stays unresolved
+# Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
+index 31b65c93..7c5d5768 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
+@@ -175,7 +175,7 @@ class Simulator(
+         val tenant = documentOf(documents.tenant, compiler, tenantCauses) {
+             CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
+         }
+-        val app = ViewDocuments.appOf(scope) { tenant?.needsApp(it) == true }
++        val app = ViewDocuments.appOf(scope) { false }
+         val appDocument = app?.let { id ->
+             documentOf(
+                 documents.app,

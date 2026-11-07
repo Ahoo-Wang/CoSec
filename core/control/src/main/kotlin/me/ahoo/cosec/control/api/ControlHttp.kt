@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
@@ -124,6 +125,13 @@ class ControlHttp(private val plane: ControlPlane) {
         } catch (e: JacksonException) {
             problem(Problem.INVALID_REQUEST, requestId, e.originalMessage)
         } catch (e: Exception) {
+            val unnamed = UnnamedDocumentException.of(e)
+            if (unnamed != null) {
+                // R3-4 of #1194's review: the record no longer reads under the app id rule; no retry helps, and the answer
+                // never echoes the stored id. The log line names it, escaped.
+                log.warn { "Control API ${request.method} ${request.path} (request $requestId): ${unnamed.message}" }
+                return problem(Problem.CHANGE_UNREADABLE, requestId, CHANGE_UNREADABLE_DETAIL)
+            }
             log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
             problem(Problem.INTERNAL_ERROR, requestId, null)
         }
@@ -540,6 +548,9 @@ class ControlHttp(private val plane: ControlPlane) {
         FORBIDDEN(ProblemType.FORBIDDEN, detailed = false),
         NOT_FOUND("not-found", "Not Found", 404, detailed = false),
         CONFLICT("conflict", "Conflict", 409, detailed = true),
+
+        /** A stored change of an app no document key can name (SCP-7): after [CONFLICT], so [of] never picks it. */
+        CHANGE_UNREADABLE("change-unreadable", "Change Unreadable", 409, detailed = true),
         GONE("gone", "Gone", 410, detailed = true),
         PRECONDITION_FAILED("precondition-failed", "Precondition Failed", 412, detailed = true),
         UNPROCESSABLE("unprocessable", "Unprocessable Content", 422, detailed = true),
@@ -595,6 +606,10 @@ class ControlHttp(private val plane: ControlPlane) {
         query[name]?.toLongOrNull() ?: throw IllegalArgumentException("[$name] is a revision number.")
 
     companion object {
+        private const val CHANGE_UNREADABLE_DETAIL = "This change can no longer be read: it is of an app that cannot be " +
+            "an app id under the current rule (SCP-7), so it can be neither shown nor abandoned. An operator removes its " +
+            "record from the control store."
+
         const val JSON: String = "application/json"
         const val PROBLEM_JSON: String = "application/problem+json"
         private const val GET = "GET"

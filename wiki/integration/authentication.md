@@ -347,7 +347,7 @@ identity of a credential that never expires ([Forwarding the identity](./web.md#
 key by adding the new one, moving the client over, then removing the old one.
 
 **In Redis**, shared by every instance and changeable at runtime: set `cosec.api-key.store: redis` (needs
-`cosec-cocache`; keys live under `cosec.api-key.key-prefix`, default `cosec:api-key`). The pipeline reads them with
+`cosec-cocache`; keys live under `<cosec.key-prefix>:api-key`, default `cosec:api-key`). The pipeline reads them with
 the non-blocking `RedisApiKeyReader`. Manage keys through the `RedisApiKeyStore` bean:
 
 | Call | Effect |
@@ -425,11 +425,13 @@ trusts a token without verifying it.
   expiry and revocation, and decides with the same documents.
 
 To decide again, set `cosec.gateway.identity.forward-authorization=true` on the gateway: by default it removes the
-`Authorization` header before forwarding. Give the services and the gateway the same `cosec.jwt.secret`, the same
-Redis, and the same `cosec.authorization.snapshot.key-prefix`, so they read the same documents and the same
-revocations. The gateway sets `CoSec-Request-Id` to its own request id ([Gateway](./web.md#gateway)), so each
-service's outcome carries the same id. Set `cosec.authorization.scope.app-id` on each service, and
-`cosec.authorization.remote-ip.max-trusted-index` to the number of proxies in front of it, the gateway included
-([Trust boundaries](../guide/security-model.md#trust-boundaries)).
+`Authorization` header, the API key header, the `authorization` query parameter and the `authorization` cookie before
+forwarding, and even with it on, it forwards them only on a route that would receive the identity: a `lb://` route,
+or one marked `cosec-identity: true` ([Forwarding the identity](./web.md#forwarding-the-identity)). Give the services
+and the gateway the same `cosec.jwt.secret`, the same Redis, and the same `cosec.key-prefix`,
+so they read the same documents and the same revocations. The gateway sets `CoSec-Request-Id` to its own request id
+([Gateway](./web.md#gateway)), so each service's outcome carries the same id. Set `cosec.authorization.scope.app-id`
+on each service, and `cosec.authorization.remote-ip.max-trusted-index` to the number of proxies in front of it, the
+gateway included ([Trust boundaries](../guide/security-model.md#trust-boundaries)).
 
 **Next:** ask for decisions from your own code, in [Checks in code](./checks.md).

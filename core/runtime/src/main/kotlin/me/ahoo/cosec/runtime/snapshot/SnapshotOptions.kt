@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 
 /**
@@ -20,7 +23,11 @@ import java.time.Duration
  * "confirmed after measurement" may change once §4.8 has real numbers.
  */
 data class SnapshotOptions(
-    /** How often every installed document is revalidated with a conditional read. Zero disables the periodic pass. */
+    /**
+     * How often every installed document is revalidated with a conditional read: the bound on how long a change whose
+     * invalidation was lost, or whose reload failed, goes unseen (`SNP-6`). At least [MIN_REVALIDATE_INTERVAL], at most
+     * [MAX_REVALIDATE_INTERVAL], less than [lagWarn], and less than [failClosedMaxLag] when [failClosedTenants] are set.
+     */
     val revalidateInterval: Duration = Duration.ofSeconds(10),
     /** Lag above which a document is logged at WARN and reported to [SnapshotMetrics.onLagExceeded]. */
     val lagWarn: Duration = Duration.ofSeconds(60),
@@ -35,6 +42,11 @@ data class SnapshotOptions(
     val maxApps: Int = 1024,
     /** The most tenant documents held at once (RFC 0004 Q15); the least recently used one is evicted beyond it. */
     val maxTenants: Int = 1024,
+    /**
+     * The most entries per family for documents the store does not hold, apart from [maxApps] and [maxTenants]: ids
+     * a client chooses never evict a document that exists (`SNP-7`, RC1-7). The least recently used one goes beyond it.
+     */
+    val maxAbsent: Int = DEFAULT_MAX_ABSENT,
     val compileThreads: Int = 2,
     /** Compilations waiting for a thread; beyond it a load fails closed (RFC 0003 §6 F8). */
     val compileQueueCapacity: Int = 64,
@@ -50,12 +62,15 @@ data class SnapshotOptions(
     val rejectedReloadRetry: Duration = Duration.ofMillis(200),
 ) {
     init {
-        require(!revalidateInterval.isNegative) { "revalidateInterval must not be negative." }
+        revalidateIntervalProblem(revalidateInterval, lagWarn, failClosedTenants, failClosedMaxLag)?.let {
+            throw IllegalArgumentException("revalidateInterval $it.")
+        }
         require(lagWarn <= lagEscalate) { "lagWarn must not exceed lagEscalate." }
         require(!failClosedMaxLag.isNegative) { "failClosedMaxLag must not be negative." }
         require((!coldLoadTimeout.isNegative && !coldLoadTimeout.isZero)) { "coldLoadTimeout must be positive." }
         require(maxApps > 0) { "maxApps must be positive." }
         require(maxTenants > 0) { "maxTenants must be positive." }
+        require(maxAbsent > 0) { "maxAbsent must be positive." }
         require(compileThreads > 0) { "compileThreads must be positive." }
         require(compileQueueCapacity > 0) { "compileQueueCapacity must be positive." }
         require(reloadConcurrency > 0) { "reloadConcurrency must be positive." }
@@ -67,6 +82,48 @@ data class SnapshotOptions(
             !prewarmInitialBackoff.isNegative && !prewarmInitialBackoff.isZero && prewarmInitialBackoff <= prewarmMaxBackoff
         ) {
             "prewarmInitialBackoff must be positive and must not exceed prewarmMaxBackoff."
+        }
+    }
+
+    companion object {
+        /**
+         * The longest [revalidateInterval]: how long, at worst, an instance serves a document after the store changed
+         * it and the invalidation was lost (RC1-50).
+         */
+        val MAX_REVALIDATE_INTERVAL: Duration = Duration.ofMinutes(5)
+
+        /**
+         * The shortest [revalidateInterval]: every pass reads every installed document from the store, so a shorter one
+         * would keep Redis busy for nothing (review L1 of #1200), and below a millisecond the schedule cannot run at all.
+         */
+        val MIN_REVALIDATE_INTERVAL: Duration = Duration.ofSeconds(1)
+
+        const val DEFAULT_MAX_ABSENT: Int = 256
+
+        /**
+         * Why [revalidateInterval] cannot be used with these lag settings, or null when it can (`SNP-6`): the periodic
+         * pass is the only bound on a lost invalidation, so it cannot be turned off, and a lag report must mean a
+         * missed pass, not the schedule. The host names its own property in the error.
+         */
+        @InternalCoSecApi
+        fun revalidateIntervalProblem(
+            revalidateInterval: Duration,
+            lagWarn: Duration,
+            failClosedTenants: Set<String>,
+            failClosedMaxLag: Duration,
+        ): String? = when {
+            revalidateInterval.isNegative || revalidateInterval.isZero ->
+                "must be positive: the periodic revalidation cannot be turned off"
+
+            revalidateInterval < MIN_REVALIDATE_INTERVAL ->
+                "must be at least $MIN_REVALIDATE_INTERVAL: each pass reads every installed document from the store"
+
+            revalidateInterval > MAX_REVALIDATE_INTERVAL -> "must be at most $MAX_REVALIDATE_INTERVAL"
+            revalidateInterval >= lagWarn -> "must be less than the lag warning threshold ($lagWarn)"
+            failClosedTenants.isNotEmpty() && revalidateInterval >= failClosedMaxLag ->
+                "must be less than the fail-closed maximum lag ($failClosedMaxLag)"
+
+            else -> null
         }
     }
 }

@@ -201,6 +201,22 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 >
 > **实现说明（2026-10-27，#1097）**：登记表新增 `startup` 级别：与 `build` 一样，它的规则由所列的测试守护，没有场景在该级别运行（`RuleCoverageTest`）。`SNP-3`（启动时检查 `noeviction`）改为 `startup`，不再 `pending`。
 
+> **实现说明（2026-11-03，#1194，RC 修复批次 C）**：登记表的变动：
+> - 新增 `IDN-7`（身份转发按 scheme 选择加入）。
+> - 新增 `IDN-8`（凭据不下行：头、查询参数、cookie）。它由属性测试守护，场景运行器自己判断哪些凭据到了后端：用字面名字，查询与 cookie 也自己解析，不借用被测的函数。
+> - 新增 `IDN-9`（执法放行清掉客户端的 `CoSec-Identity`，`build` 级，由三个适配器的一致性测试守护）。
+> - 新增 `STA-2`（网关上暴露的 Actuator 端点，`startup` 级）。
+> - 修订 `SCP-2`、`SCP-4`、`SCP-7`、`TNT-4`、`PIP-10`、`CTL-3`。
+> - 场景格式新增 `explain` 一步，用来驱动控制面的 `explain`。
+
+> **实现说明（2026-11-04，#1200，RC 修复批次 D1）**：登记表的变动：
+> - 新增 `SNP-6`（周期性重新校验不能关掉，间隔 1 秒到 5 分钟，`startup` 级）、`SNP-9`（一个 `cosec.key-prefix`，旧前缀让启动失败，`startup` 级）。
+> - 新增 `SNP-7`（不存在的文档单独计数）、`SNP-8`（编译以 `VirtualMachineError` 结束也装为失败），都是 `timing` 级，由性质测试守护。
+> - 新增 `ALG-9`（一次扫描中，一份文档对同一策略的多条绑定只评估一次）、`DOC-4`（路径模式的成本上界），都是 `engine` 级。
+> - 新增 `PIP-12`（读到的请求头重复且值不同即 400，`pipeline` 级）、`DOC-5`（一个严格的 mapper，`build` 级）。
+> - 修订 `PIP-6`（格式错误的 `roles`、`policies`、`attributes` 声明是无效凭据）、`PIP-9`（值不同的重复头见 `PIP-12`）、`SNP-3`（不经 starter 创建的快照缓存同样固定，customizer 换不掉 CoSec 缓存的编解码器、加载器、key 过滤器与按条目的期限）。
+> - #1200 的 `:conformance:mutationCheck`：新增的变异体与补丁涉及改动文件的已有变异体，第 0 轮 43 个、第 1 轮审查修复后 37 个，全部被杀死（清单见 PR 描述的 Mutants 一节）。
+
 ### 3.3 场景语料
 
 每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：

@@ -83,6 +83,11 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   (one segment, captured) or a final `**`; or `http:path:<pattern>` (Spring-like: literals, `?`, `*`, `{name}`,
   `**` and `{*name}` at the start or end; no `{name:regex}`). An object form adds `caseSensitive` and
   `decodeAndParseSegments` (both default `true`) to an `http:path:` pattern.
+- Pattern bounds (DOC-4; over one, the document does not compile): an `http:path:` pattern is at most 2,048
+  characters; a segment that mixes `*`, `?` or `{name}` with text (`report-*.pdf`) has at most 16 parts, consecutive
+  `*` counting once; one document's such segments hold at most 2,048 glob units in all, a unit per part and per
+  character of their text (`report-*.pdf` is 14), twice after a leading `**`. Prefer whole-segment `*`, `{name}` and
+  `**`, which cost nothing, and keep the text in glob segments short.
 - A DENY on a bare type (`order`) does not compile: it would only cover the empty id. Write `order/**`.
 - How a request gets its action: on WebFlux and WebMvc hosts a route map (`cosec-routes.json`) maps method and path to
   `service:verb` on a typed resource (`order/{orderId}`); any request no route matches keeps `http:<METHOD>` on
@@ -119,10 +124,10 @@ use `not`. Attributes:
 - `environment.ip` (IP), `environment.time`, `environment.device`, `environment.blocked` (bool);
 - `http.header.<name>` (name case-insensitive), `http.origin`, `http.referer`, `http.origin.host`,
   `http.referer.host` (lower case), `*.host.labels`, `request.attributes.<name>` (the gateway sets
-  `request.attributes.cosec.audit.routeId`, its route id, and `cosec.identity.forward` = `false` on routes that opt out
-  of identity propagation; WebFlux and WebMvc set none). A header sent more than once
-  with different values has no value: a DENY on it is Indeterminate (503), an ALLOW on it does not match; identical
-  copies read as one. **No attribute reference may read a credential header**, neither a condition nor a rate limit `key`:
+  `request.attributes.cosec.audit.routeId`, its route id, and `cosec.identity.forward`: `true` on routes that receive
+  the forwarded identity, `false` on the others; WebFlux and WebMvc set none). A header sent more than once
+  with different values has no value: when any document of the request's view reads it, whatever the effect, the
+  request is answered 400 `invalid-request` before evaluation (PIP-12); identical copies read as one. **No attribute reference may read a credential header**, neither a condition nor a rate limit `key`:
   `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, `cosec-identity` (any case)
   do not compile. Headers are client input:
   never treat one as identity;
@@ -175,6 +180,10 @@ Where each binding may live:
 | Platform | `*`, principals (tenant required); no roles | its own policies, built-ins |
 | App | roles only (tenant absent = any tenant); app must be this app or `*` | its own `perm:<app>/...` policies |
 | Tenant | `*`, principals and roles of this tenant (tenant may be omitted) | its own, the platform's, and `perm:<app>/...` scoped to exactly that app |
+
+A request reads an app's document when the principal has a role in the request's space, or when its tenant's document
+binds one of that app's `perm:` policies to `*` or to a principal: such a binding resolves for a principal without
+roles too, and the app document's rate limit rules then apply to the request.
 
 A document binds at most 1,000 principals: grant users through roles in tokens or a membership provider, not
 principal bindings. Binding ids are unique per document. A tenant may not define a policy id the platform also defines:
