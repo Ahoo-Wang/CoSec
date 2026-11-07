@@ -1,0 +1,16 @@
+# Rule: SNP-6
+# Mutant: a finished document is not progress, so a pass still finishing documents is abandoned storeReadTimeout after it started
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 3d80418c..db500589 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -644,7 +644,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+         val abandoned: Boolean get() = reads.get() == ABANDONED
+ 
+         fun progressed() {
+-            progressedAt = nanoTime.asLong
+         }
+ 
+         /** A read of this pass starting, or null once the pass is abandoned. */
