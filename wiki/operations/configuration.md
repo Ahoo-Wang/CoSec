@@ -76,6 +76,9 @@ These have no switch:
 Every key a deployment writes to Redis lives under one prefix (`SNP-9`): snapshot documents, control-plane records,
 shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states
 ([Redis keys](./storage.md#redis-keys)). Two deployments on one Redis that use different prefixes share nothing.
+Within one application, CoCache refuses to create a cache whose storage keys would overlap another's, so a prefix that
+puts a CoSec cache under one of the application's own caches fails startup
+([Troubleshooting](./troubleshooting.md#startup-fails-on-overlapping-cache-keys)).
 It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
 `cosec.api-key.key-prefix`: an environment that sets one of them fails startup, whatever `cosec.unknown-properties`
 says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
@@ -334,7 +337,7 @@ Every CoCache duration needs a unit (`2s`, `10m`); a bare number fails startup.
 | `cocache.backend` | `redis` (default) or `memory`. With `memory` nothing is shared between instances, the eviction checks pass, and every instance starts with no documents: local development and tests only. |
 | `cocache.defaults.cache.*`, `cocache.defaults.store.*` | Fill only what a cache's declaration leaves unwritten. CoSec's caches declare what they depend on, so these change little: `MembershipCache` is a `cache`, every other CoSec cache a `store` ([Precedence](#precedence)). |
 | `cocache.overrides.cache.*`, `cocache.overrides.store.*` | Tighten staleness bounds (`local-max-age`, `absent-ttl`) and `read-failure` over every cache, except for the fields CoSec locks. |
-| `cocache.caches.[<CacheName>].*` | The policy of one cache, by the names above. Setting a field CoSec locks fails startup ([Precedence](#precedence)). |
+| `cocache.caches.[<CacheName>].*` | The policy of one cache, by the names above. Setting a field CoSec locks fails startup ([Precedence](#precedence)). So does a key CoCache does not know or that does not apply to that cache, usually a typo, unless `cocache.caches-validation: warn` ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)). |
 | `cocache.key-prefix` | None: CoSec locks its own prefix, [`cosec.key-prefix`](#key-prefix). |
 | `cocache.redis.command-timeout` | How long one Redis command may take (`2s` by default). A snapshot read that times out is a failed read ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `cocache.redis.channel-mode` | `pubsub` or `sharded` invalidation. Every instance, and the control plane, must agree. |

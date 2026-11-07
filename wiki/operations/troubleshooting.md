@@ -173,6 +173,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, on every request | No platform document is published: a new deployment, or a Redis that lost it. `cosec-migrate bootstrap` writes only the platform tenant's document. Until a platform document exists every request is `503`, the control API included. On a new deployment, readiness refuses traffic until the first one is installed ([Instance is not ready](#instance-is-not-ready)). Readiness latches once it accepts: a document lost later does not make it refuse again, so every request fails closed with `503`, and only the `cosecSnapshot` health indicator goes DOWN. That turns readiness DOWN only if you add `cosecSnapshot` to the readiness group, which during a Redis outage turns 503s into connection failures. | Publish one with `cosec-migrate publish` ([The first documents](./storage.md#the-first-documents)). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, for some tenants only | The tenant is in [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot), and the oldest document its requests read was last confirmed longer ago than `fail-closed.max-lag` (`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`). | Restore Redis; see [Decisions use an old revision](#decisions-use-an-old-revision). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | A document the request needs could not be read in time (Redis down or slow on a cold load), cannot be decoded or compiled, or disappeared from Redis after it was seen. A failed load and a lost document are logged with the document's name: `Loading snapshot document [<doc>] failed.`, `Snapshot document [<doc>] disappeared from the store; failing closed.` | Restore Redis, or publish a readable revision of the document ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
+| `INDETERMINATE: SourceUnavailable`, `MembershipUnavailable` or `AUTHENTICATOR_UNAVAILABLE`, for one id only | The request's tenant, app or principal id, or its token id, holds an unpaired UTF-16 surrogate: a token claim or a JSON body can carry one (`"\uD800"`), an HTTP header or a percent-decoded path cannot. Redis keys are UTF-8, which cannot hold it, so CoCache refuses the key (`... has an unpaired UTF-16 surrogate at index[<i>] ...`) and CoSec reads none of that id's documents, memberships or revocations. CoSec's own `Loading snapshot document [<doc>] failed.` line prints the id with `?` in place of the surrogate. | Issue well-formed ids from the token issuer or the client. |
 | `INDETERMINATE: MissingPolicies`, `AmbiguousPolicy` / `missing_policies` | A binding or an attachment names a policy the documents do not define, or a policy id both the tenant and the platform define. | Fix the document through the control plane. |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). With `CoCacheMembershipProvider`, a `MembershipLoader` that does not answer within that time fails its load (`The membership loader did not answer within ...`), and the next request tries again. | Fix the provider or its store. |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | A statement needs an external attribute whose provider failed or timed out (`<provider> failed to fetch [...]` at `WARN`). | Fix the provider, or raise [`cosec.authorization.attributes.timeout`](./configuration.md#authorization). |
@@ -439,6 +440,26 @@ A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a fie
 the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
 the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
 ([Precedence](./configuration.md#precedence)).
+
+```text
+cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.
+```
+
+CoCache's own check: the entry sets a key CoCache does not define, or one that does not apply to that cache. Fix the
+key; `cocache.caches-validation: warn` logs it instead. An entry that sets a locked field fails whatever that says.
+
+### Startup fails on overlapping cache keys
+
+```text
+Cache[PolicySnapshotCache] - its storage keys (cosec:snapshot:…) overlap those of Cache[<other>] (cosec:…): one prefix starts the other, ...
+```
+
+Two caches of one application would write the same Redis keys: one storage prefix (`{key prefix}{namespace}:`) is, or
+starts, the other. CoSec's own caches never overlap each other, so the other cache is the application's: a CoCache cache
+under CoSec's [`cosec.key-prefix`](./configuration.md#key-prefix), or a `cosec.key-prefix` such as `cocache` that puts
+CoSec's caches under the application's. Give the application's cache another prefix or namespace: `cosec.key-prefix`
+is where every instance, the control plane and `cosec-migrate` find CoSec's data, so it changes only for all of them
+at once ([Redis keys](./storage.md#redis-keys)).
 
 ### Startup fails on a channel permission
 

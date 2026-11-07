@@ -129,7 +129,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
-  fields keep their values anyway. **An `IllegalStateException` naming a channel pattern** such as
+  fields keep their values anyway. **`cocache.caches sets unknown keys [...]`**: CoCache's own check of a misspelled
+  or inapplicable per-cache key; fix the key (`cocache.caches-validation: warn` only logs it). **`Cache[<name>] - its
+  storage keys (...) overlap those of Cache[<other>]`**: an application cache and a CoSec cache would share Redis
+  keys; give the application's cache another prefix or namespace (`cosec.key-prefix` moves every instance's data).
+  **An `IllegalStateException` naming a channel pattern** such as
   `[&cosec:control:inv:*]`: the Redis ACL denies the cache's invalidation channel; allow `&<prefix>:*`.
 - **`CoSec's Redis template [<bean>] reads from replicas (ReadFrom...)`**: the Lettuce client behind the template CoSec
   injects (the only `StringRedisTemplate` / `ReactiveStringRedisTemplate`, or the `@Primary` one), named in the message,
@@ -204,6 +208,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
   fails answers "not revoked" instead (the documented exception to fail closed).
+- **One id is 503** and the log says `... has an unpaired UTF-16 surrogate at index[<i>] ...`: the tenant, app or
+  principal id, or the token id, holds a lone surrogate (only a token claim or a JSON body can carry one). Redis keys
+  are UTF-8, so CoCache refuses the key and CoSec reads none of that id's documents, memberships or revocations: it
+  fails closed. CoSec's `Loading snapshot document [...] failed.` line shows the surrogate as `?`, so it looks like
+  another id. Fix the issuer or client; there is nothing to configure.
 - **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
   the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
   it again without `--dry-run`).
