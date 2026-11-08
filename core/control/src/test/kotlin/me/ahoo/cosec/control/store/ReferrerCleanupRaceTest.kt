@@ -114,7 +114,11 @@ class ReferrerCleanupRaceTest {
     @Test
     fun `a reference indexed without a revision is removed by a later drop and raised by a later reference`() =
         runBlocking<Unit> {
-            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))), "p1")
+            publish(
+                SnapshotKey.Platform,
+                candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))),
+                "p1"
+            )
             publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"))), "t1")
             // As 8.0.0-alpha.3 indexed it: a set of keys, read at revision 0.
             val indexed = memory.referrers(SnapshotKey.Platform, shared)!!

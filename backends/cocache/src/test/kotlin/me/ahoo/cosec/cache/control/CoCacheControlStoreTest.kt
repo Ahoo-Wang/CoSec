@@ -477,6 +477,36 @@ class CoCacheControlStoreTest {
         backend.close()
     }
 
+    /** #1207: each referrer with the revision of it that last indexed the reference. */
+    @Test
+    fun `the referrers codec reads back what it writes, the set alpha 3 wrote too, and rejects anything else`() {
+        val referrers = mapOf(
+            SnapshotKey.Tenant("b") to 1L,
+            SnapshotKey.Platform to 0L,
+            SnapshotKey.App("order") to 12L
+        )
+        ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
+        ReferrersCodec.encode(referrers).decodeToString().assert()
+            .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
+        // The array of keys 8.0.0-alpha.3 wrote: every member at revision 0.
+        ReferrersCodec.decode(
+            """["tenant:b"]""".encodeToByteArray()
+        ).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
+        listOf(
+            "1",
+            "\"tenant:b\"",
+            """["policies"]""",
+            """["tenant:a:b"]""",
+            "[1]",
+            """{"policies":1}""",
+            """{"tenant:b":-1}""",
+            """{"tenant:b":"1"}""",
+            """{"tenant:b":1.5}""",
+        ).forEach { text ->
+            assertThrownBy<SnapshotFormatException> { ReferrersCodec.decode(text.encodeToByteArray()) }
+        }
+    }
+
     @Test
     fun `the codecs read back what they write and reject anything else`() {
         val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
@@ -493,14 +523,6 @@ class CoCacheControlStoreTest {
         RevisionIndexCodec.encode(
             reclaiming
         ).decodeToString().assert().endsWith(""""floor":2,"reclaiming":["$digest"]}""")
-        val referrers = mapOf(
-            SnapshotKey.Tenant("b") to 1L,
-            SnapshotKey.Platform to 0L,
-            SnapshotKey.App("order") to 12L
-        )
-        ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
-        ReferrersCodec.encode(referrers).decodeToString().assert()
-            .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
         listOf(
             "",
             "[]",
@@ -520,21 +542,6 @@ class CoCacheControlStoreTest {
             """{"entries":[],"pending":[],"floor":1,"reclaiming":["zz"]}""",
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
-        }
-        // The array of keys 8.0.0-alpha.3 wrote: every member at revision 0.
-        ReferrersCodec.decode("""["tenant:b"]""".encodeToByteArray()).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
-        listOf(
-            "1",
-            "\"tenant:b\"",
-            """["policies"]""",
-            """["tenant:a:b"]""",
-            "[1]",
-            """{"policies":1}""",
-            """{"tenant:b":-1}""",
-            """{"tenant:b":"1"}""",
-            """{"tenant:b":1.5}""",
-        ).forEach { text ->
-            assertThrownBy<SnapshotFormatException> { ReferrersCodec.decode(text.encodeToByteArray()) }
         }
         RevisionRecordKeyEncoder.encode(RevisionRecordKey(SnapshotKey.Tenant("acme"), digest))
             .assert().isEqualTo("tenant:acme:SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
