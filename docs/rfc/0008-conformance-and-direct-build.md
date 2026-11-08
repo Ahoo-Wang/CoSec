@@ -805,10 +805,10 @@ RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
 | L17 | 没有使用者的版本目录条目 | `gradle/libs.versions.toml`：`testcontainers` 版本与 `testcontainers-bom`（没有任何构建脚本引用）；插件别名 `kotlin-kapt`（模块用 `kotlin("kapt")` 应用） | 遗留条目 | 清理 PR；不依赖切换，可以提前做（§4.6.3） | G3 |
-| L18 | `ognl` 的版本与约束 | `gradle/libs.versions.toml`；`bom/dependencies/build.gradle.kts` 的 `constraints` | RFC 0005 PR-9 删除 OGNL，但清单里没有版本目录和约束 | 切换 PR | G3 |
+| L18 | `ognl` 的版本与约束 | `gradle/libs.versions.toml`；`bom/dependencies/build.gradle.kts` 的 `constraints`（2026-11-08 移除，见 Q12） | RFC 0005 PR-9 删除 OGNL，但清单里没有版本目录和约束 | 切换 PR | G3 |
 | L19 | `hamcrest` | 根 `build.gradle.kts` 的 `testImplementation`、`cosec-dependencies` 的约束、版本目录；61 个测试文件在用 | AGENTS.md 约定用 FluentAssert（已有 195 个测试文件在用），hamcrest 是早期的写法 | 清理 PR：切换后剩下的测试改用 FluentAssert，再删除依赖（§6 Q12） | G3 |
 | L20 | 默认的 `guava` 依赖 | 根 `build.gradle.kts` 给每个非纯模块加 `implementation("com.google.guava:guava")`。`main` 中只有 `core/.../limiter/LocalRateLimiter.kt`、`core/.../policy/action/PathActionMatcher.kt`（切换时删除）和 `social/.../justauth/JustAuthProvider.kt`（`MoreObjects`）用到它 | 早期的全局默认 | 清理 PR：只在用到的模块里显式声明（§6 Q12） | G3 |
-| L21 | 回放用的日志配置 | `config/logback-parity.xml`；`core/core/build.gradle.kts`、`backends/cocache/build.gradle.kts` 中引用它的 `jvmArgs` | 只给 §4.2 的回放与比较任务使用 | 切换 PR | 删除即守护 |
+| L21 | 回放用的日志配置 | `config/logback-parity.xml`（2026-11-08 改名 `logback-property-stress.xml`，只留给 `propertyStress`）；`core/core/build.gradle.kts`、`backends/cocache/build.gradle.kts` 中引用它的 `jvmArgs` | 只给 §4.2 的回放与比较任务使用 | 切换 PR | 删除即守护 |
 | L22 | `cosec-gateway-server` 的遗留构建配置 | `platform/gateway-server/build.gradle.kts`：应用了 `kotlin("kapt")`，但没有任何 `kapt` 依赖；`-Dspring.cloud.bootstrap.enabled=true` 加上 `src/main/resources/bootstrap.yaml`、`src/dist/config/bootstrap.yaml`，而 bootstrap 里只有 `spring.application.name` | kapt 什么也不做；bootstrap 上下文是 Spring Cloud 2020 起不再推荐的旧机制 | 清理 PR：删除 kapt；bootstrap 的内容并入 `application.yaml`，`k8s/cosec-gateway-config.yaml` 同步修改 | — |
 
 **(f) 文档与 skills**
@@ -934,7 +934,7 @@ RFC 0002–0007 中"并入 RFC 0008 的切换 PR"的标注不逐一改写，它�
 | Q9 | **`cosec-api` 的去留**（§4.6 L10、L11；AGENTS.md 要求先问） | **已决定**：保留模块，作为 8.0 的薄契约层（主体、token、认证、`SecurityContext`、审计事件、租户）。PR-5 删除切换之后在 `cosec-api` 之外没有 `main` 引用的类型，包括现在就没有引用的 `InternalIds`；并入 `model/` 留到 8.0 之后再议 | RFC 0006 Q5 已决定不改名、不合并现有模块。剩下的契约有外部实现者（token、认证），搬家只会多一次破坏性变更，换不来收益 |
 | Q10 | **切换租户认证**（§4.6 L12） | **已决定**：保留切换租户的认证，前提是有测试。RFC 0008 PR-5 为 `AbstractSwitchTenantAuthentication` 与 `SwitchTenantCredentials` 补上测试；没有测试，它就不能留到 RC | 它是写进文档的扩展点，但 `main` 和测试里都没有使用者，等于没人验证过。8.0 的租户与成员关系（RFC 0004 §4.5）改变了它的前提 |
 | Q11 | **`PolicyTestKit` 的 8.0 形态**（§4.6 L15） | **已决定**：在切换 PR 中基于 8.0 文档重写，复用一致性套件的场景格式（§3.3）与 `engine` runner；7.x 的形式与 `cosec-policy-test/` 删除；暂不单独建 `cosec-testkit` 模块 | 用户的策略测试与规范场景是同一件事，两种格式只会分叉；RFC 0001 §4 的 `cosec-testkit` 是否拆成模块，可以等 runner 稳定之后再定 |
-| Q12 | **依赖变更**（§4.6 L17–L20；AGENTS.md 要求先问） | **已决定**：全部删除：`testcontainers` 的版本与 BOM、`kotlin-kapt` 插件别名、`ognl`（随切换）、`hamcrest`（剩下的测试改用 FluentAssert 之后）；`guava` 不再作为每个模块的默认依赖，只在用到的模块里显式声明 | 都没有使用者，或者只有遗留的使用者；只删不加，版本不变 |
+| Q12 | **依赖变更**（§4.6 L17–L20；AGENTS.md 要求先问） | **已决定**：全部删除：`testcontainers` 的版本与 BOM、`kotlin-kapt` 插件别名、`ognl`（随切换；版本目录保留给 `cosec-migrate`，2026-11-08 起不再发布约束）、`hamcrest`（剩下的测试改用 FluentAssert 之后）；`guava` 不再作为每个模块的默认依赖，只在用到的模块里显式声明 | 都没有使用者，或者只有遗留的使用者；只删不加，版本不变 |
 | Q13 | **`main` 的版本号**（§4.6 L30） | **已决定**（维护者 2026-10-26 更正）：PR-5 把 `gradle.properties` 改为 `8.0.0-alpha.1`。这只是版本字符串，不发布任何版本（RFC 0001 §6 不变）；RC 的版本号仍由发布 PR 按 CONTRIBUTING.md §7 设置 | `main` 是 8.0 线，`version=7.0.0` 会让本地构建与文档示例看起来像 7.0 |
 | Q14 | **`cosec-social`**（§4.6 L39） | **已决定**：保留，8.0 不改造：它在登录时用 OAuth 换取 token，不在请求路径上，RFC 0006 的 `Authenticator` 不涉及它。PR-5 只清理注释 | RFC 0001 §4 把它列为 `cosec-authn-social`，所以它属于目标架构。但如果维护者不打算继续维护 JustAuth 集成，8.0 是删除它的唯一窗口 |
 | Q15 | **守护的实现方式**（§4.6.2） | **已决定**：不引入新依赖：G1、G7 用 ArchUnit（已有），放在 `conformance/`；G2 用 detekt 内置的 `ForbiddenComment`；G3、G6 用根项目的 Gradle 任务；G4 用 `wiki/scripts/` 下的 Node 脚本 | 都是几十行的检查，现有工具链已经够用；版本目录检查插件之类的工具是新依赖，收益不抵维护成本 |

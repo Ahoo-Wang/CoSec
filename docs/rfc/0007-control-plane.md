@@ -373,7 +373,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
        Conflict    → c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
        结果未知     → getIfChanged(key, digest(d))：Unchanged 即已写入，否则按 Conflict 处理（与 RedisSnapshotPublisher 相同）
   5. revisions:<key> 追加 (修订号, digest(d))                 CAS 循环；失败只记告警，索引可以重建
-  6. 从反向索引中删除 b 有而 d 没有的引用
+  6. 从反向索引中删除 b 有而 d 没有的引用，除非更晚的修订又索引了它
   7. c → PUBLISHED（CAS）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）
 ```
 
@@ -429,7 +429,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 
 - 体积不作为删除条件：按体积删除会让最近几天的修订突然不可解释。每份文档的记录总字节数作为指标 `cosec.control.revisions.bytes` 暴露，超过
   `cosec.control.revisions.warn-bytes`（默认 256 MB）告警。M13 的问题由数量和时间约束，大文档的部署调小 `max-count`。
-- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除经 CoCache 的 `evict`。
+- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除用 CoCache 的 `delete`、`deleteIfMatch`。
 - 数据面的 `explain` 需要的是决策时的修订：审计保留期比 7 天长的部署要么调大 `min-age`，要么接受较早的决策只能在当前快照上解释（`explain` 返回 410，§10.2）。
 
 ### 5.8 跨文档引用：反向引用索引
@@ -463,6 +463,8 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 ---
 
 > **实现说明（2026-10-27，#1087）**：`bootstrap` 写入的绑定 id 是 `platform-admin-<principal>`；`publish` 经 `ControlStore` 写修订（`kind = MIGRATE`），拒绝期限超过 `--break-glass-max-duration` 的 break-glass 绑定。
+
+> **实现说明（2026-11-08，#1268）**：反向索引的每个引用方带上最后索引它的修订，发布后只删除不高于自身修订的条目（`CTL-25`，#1207），所以并发发布同一引用方时“超集”仍然成立。索引条目写在更晚的修订旁边，`history` 不读头之上的条目。回收把从索引取出的内容记入 `RevisionIndex.reclaiming`，失败的删除会重试（#1226），租约用 `deleteIfMatch` 释放。候选只有在仍是该变更的窗口时才撤回，在一次原子操作里完成（`CTL-26`，#1227，§5.5、§6.4）；实例在候选撤回且最后一份报告写入后停止上报（#1210）。
 
 ## 6. 发布流程
 
