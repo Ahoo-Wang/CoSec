@@ -468,9 +468,10 @@ under whatever name that gives it), the `authorization` query parameter, and the
 `Cookie` header, its name matched ignoring case (a header left with no cookie is not sent), and from the cookies a
 later filter or a `forward:` route's handler reads. A compromised service so never sees a token or a key it could
 replay at the gateway. Other cookies go downstream as they came, each pair byte for byte; the token's pair goes with
-one `;`, so no empty pair is left, and a header left with only empty pairs is not sent. A header whose leading
-`$Version` pair hides the token behind a `,` goes whole, with the cookies read from it, since its other pairs would
-read differently. Set
+one `;`, so no empty pair is left, and a header left with only empty pairs is not sent. Only the whitespace at the
+head of the result goes, since a field value cannot start with it. A header whose leading `$Version` pair hides the
+token behind a `,`, or in which a kept `$Version` pair would come to the head, goes whole, with the cookies read from
+it, since its other pairs would read differently. Set
 `cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or call
 other APIs on the user's behalf: the credentials then go to the routes that would receive the identity (a `lb://`
 route, or one marked `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` forwards it, and to no
