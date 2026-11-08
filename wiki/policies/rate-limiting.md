@@ -128,7 +128,7 @@ rule with the fewest permits left; a `429` carries those of the exhausted rule:
 | Header | Value |
 |---|---|
 | `RateLimit-Limit` | Permits per window of that rule, rounded up. |
-| `RateLimit-Remaining` | Permits left in its current window. |
+| `RateLimit-Remaining` | How many more requests its current window would allow right now, rounded up: a part of a permit left still admits one. |
 | `RateLimit-Reset` | Seconds until its current window ends, at least `1`. |
 | `Retry-After` | Only on `429`: the same as `RateLimit-Reset`. |
 

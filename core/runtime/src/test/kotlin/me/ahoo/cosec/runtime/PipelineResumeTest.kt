@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -39,6 +40,8 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 
 /**
  * T2 and T3 (RFC 0006 §7.2): after an SPI call really suspends, the pipeline goes on on the adapter's resume dispatcher
@@ -116,7 +119,51 @@ class PipelineResumeTest {
         engine.threads.single().assert().isSameAs(requestThread)
     }
 
+    /**
+     * What the request's thread context is when the pipeline goes on, read where the decision is made. Past the resume
+     * it has to be the request's own (the trace, the MDC), and the thread that resumed has to get its own back (#1274).
+     */
+    private fun assertThreadContextFollows(pipeline: Pipeline, seen: List<String?>) {
+        val context = ResumeDispatcher(resume) + requestContext.asContextElement(REQUEST)
+        startOn(eventLoop, context) { pipeline.evaluate(facts()) }
+        seen.assert().containsExactly(REQUEST)
+        // The thread is single: this runs once the resumed part is over.
+        resumeThread.submit<String?> { requestContext.get() }.get(10, TimeUnit.SECONDS).assert().isNull()
+    }
+
+    private fun contextRecordingEngine(seen: MutableList<String?>) = StubEngine {
+        seen += requestContext.get()
+        PERMIT
+    }
+
+    @Test
+    fun threadContextFollowsAColdSnapshotLoad() {
+        val seen = CopyOnWriteArrayList<String?>()
+        val installed = InstalledViews()
+        val views = LoadingViews { key -> completedOn(clientIo, installed.peek(key)) }
+        assertThreadContextFollows(pipeline(engine = contextRecordingEngine(seen), views = views), seen)
+    }
+
+    @Test
+    fun threadContextFollowsAnAuthenticatorThatSuspends() {
+        val seen = CopyOnWriteArrayList<String?>()
+        assertThreadContextFollows(pipeline(suspendingAuthenticator(), contextRecordingEngine(seen)), seen)
+    }
+
+    /** The WebMvc bridge: `runBlocking`'s interceptor brings the pipeline back, and the context with it. */
+    @Test
+    fun threadContextFollowsWithoutAResumeDispatcher() {
+        val seen = CopyOnWriteArrayList<String?>()
+        val installed = InstalledViews()
+        val views = LoadingViews { key -> completedOn(clientIo, installed.peek(key)) }
+        val pipeline = pipeline(engine = contextRecordingEngine(seen), views = views)
+        runBlocking(requestContext.asContextElement(REQUEST)) { pipeline.evaluate(facts()) }
+        seen.assert().containsExactly(REQUEST)
+    }
+
     private companion object {
         const val RESUME = "test-resume"
+        const val REQUEST = "request-one"
+        val requestContext = ThreadLocal<String?>()
     }
 }
