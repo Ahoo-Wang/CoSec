@@ -26,7 +26,9 @@ internal class SecurityContextHolderTest {
     @Test
     fun test() {
         SecurityContextHolder.context.assert().isNull()
-        SecurityContextHolder.setContext(mockk<SecurityContext> { every { principal } returns SimpleTenantPrincipal.ANONYMOUS })
+        SecurityContextHolder.setContext(
+            mockk<SecurityContext> { every { principal } returns SimpleTenantPrincipal.ANONYMOUS }
+        )
         SecurityContextHolder.context!!.principal.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS)
         SecurityContextHolder.remove()
         assertThrownBy<IllegalArgumentException> {

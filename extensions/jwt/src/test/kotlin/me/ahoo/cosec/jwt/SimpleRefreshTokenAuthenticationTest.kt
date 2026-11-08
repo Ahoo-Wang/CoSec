@@ -40,7 +40,9 @@ class SimpleRefreshTokenAuthenticationTest {
         }).test()
             .consumeNextWith {
                 it.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
-                (it as TenantCapable).tenant.tenantId.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
+                (it as TenantCapable).tenant.tenantId.assert().isEqualTo(
+                    SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId
+                )
             }.verifyComplete()
     }
 }

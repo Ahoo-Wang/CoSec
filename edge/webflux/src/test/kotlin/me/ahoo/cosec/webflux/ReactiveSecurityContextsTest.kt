@@ -32,7 +32,9 @@ class ReactiveSecurityContextsTest {
     @Test
     fun writeSecurityContext() {
         Mono.empty<Void>()
-            .writeSecurityContext(mockk<SecurityContext> { every { principal } returns SimpleTenantPrincipal.ANONYMOUS })
+            .writeSecurityContext(
+                mockk<SecurityContext> { every { principal } returns SimpleTenantPrincipal.ANONYMOUS }
+            )
             .test()
             .expectAccessibleContext()
             .assertThat {
