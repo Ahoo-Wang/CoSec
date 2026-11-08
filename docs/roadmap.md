@@ -235,7 +235,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | #1255 | #1254 之后的共享文档（审查记录新增 RC1-52；RFC 0004、0006、0008、0009 的实现说明；路线图：E2 拆成 E2a 与 E2b，#1224 选 A，#1203 的三项决定） | ✅ 2026-11-07 合入（`83315628`） |
 | #1203 | `feat(cocache)!`：采用 CoCache 8.0.0（维护者的草稿，经 alpha.6、rc.1、rc.2 三次下游试用）：缓存为 CoCache 8 的 `Store`，以 lock 加 constrain 固定权威存储的属性；摘要为 SHA-256；存储 key 不变；CoCache 6 写的值一律 fail closed（吊销从不读成"没有吊销"）；新命令 `cosec-migrate cocache8` 迁移 alpha 部署的数据（标记 `<p>:meta:cocache8` 防止中途停下后误报成功）。一轮独立审查：M1（迁移的恢复路径报告成功而文档未发布）与 L1–L6 在 PR 内修完，协调者核对修复 | ✅ 2026-11-08 合入（`6e1f1c43`） |
 | #1267、v8.0.0-alpha.3 | 预览版，不承诺兼容性（维护者："CoCache 8.0.0 适配完成后，先发一版"）：GitHub prerelease、Maven Central、GitHub Packages、Docker 只推 `8.0.0-alpha.3`；内容为 alpha.2 之后的 RC 修复批次 B1–D2、审计批次 E1a、RC1-52 与 CoCache 8.0.0；`main` 保持 `8.0.0-alpha.3`。发布后通知了 Wow 的 V10 会话升级 | ✅ 2026-11-08 发布（`841e6172`） |
-| #SHAREDX | #1203 与 alpha.3 之后的共享文档（RFC 0001、0003、0004、0006、0007、0008 中 CoCache 6 的内容加上 CoCache 8 的实现说明；路线图：发布、易用性审查的决定与批次 F1、F2） | 进行中 |
+| #1272 | #1203 与 alpha.3 之后的共享文档（RFC 0001、0003、0004、0006、0007、0008 中 CoCache 6 的内容加上 CoCache 8 的实现说明；路线图：发布、易用性审查的决定与批次 F1、F2） | 进行中 |
 
 **2026-11-08 状态（接手者从这里继续）**：
 
