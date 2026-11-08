@@ -19,7 +19,6 @@ dependencies {
     api(platform(libs.springdoc.bom))
     api(platform(libs.fluent.assert.bom))
     constraints {
-        api(libs.ognl)
         api(libs.java.jwt)
         api(libs.ip2region)
         api(libs.guava)

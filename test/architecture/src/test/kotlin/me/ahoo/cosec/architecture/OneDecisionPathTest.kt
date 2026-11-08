@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime
+package me.ahoo.cosec.architecture
 
 import com.tngtech.archunit.core.domain.JavaCall.Predicates.target
 import com.tngtech.archunit.core.domain.properties.HasName.Predicates.name
@@ -21,6 +21,8 @@ import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
 import com.tngtech.archunit.lang.ArchRule
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
+import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.Problem
 
 /**
  * One decision path (RFC 0006 §6.3; `PIP-1`): `StatusMapping` is the only constructor of [Outcome] and [Problem] in
