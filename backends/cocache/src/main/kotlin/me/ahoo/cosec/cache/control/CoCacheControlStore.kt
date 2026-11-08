@@ -265,7 +265,9 @@ class CoCacheControlStore internal constructor(
                 return true
             }
         }
-        throw IllegalStateException("[$key] kept changing while it was removed; gave up after $MAX_LIST_ATTEMPTS attempts.")
+        throw IllegalStateException(
+            "[$key] kept changing while it was removed; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
     }
 
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */

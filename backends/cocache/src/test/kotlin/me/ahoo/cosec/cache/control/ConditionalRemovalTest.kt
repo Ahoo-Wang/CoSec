@@ -56,7 +56,9 @@ class ConditionalRemovalTest {
     private fun store(
         node: SnapshotNode,
         leases: Store<String, String> = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
-        candidates: Store<SnapshotKey, StoredCandidate> = node.runtime.create(ShadowCacheSpecs.candidate(node.keyPrefix)),
+        candidates: Store<SnapshotKey, StoredCandidate> = node.runtime.create(
+            ShadowCacheSpecs.candidate(node.keyPrefix)
+        ),
     ) = CoCacheControlStore(
         heads = node.cache,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),

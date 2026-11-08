@@ -510,7 +510,6 @@ class Revisions(
      * is tried again by the next pass; one of a record that became the head, a listed revision or a kept one since is
      * not tried at all.
      */
-    @Suppress("TooGenericExceptionCaught")
     suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed {
         if (!store.acquireLease("reclaim:$key", holder, retention.leaseDuration)) {
             return Reclaimed.NOTHING
@@ -548,24 +547,24 @@ class Revisions(
             return Reclaimed.NOTHING
         }
         // The index no longer lists them, so a failure here leaves unlisted records behind, never a listed one missing.
-        val deleted = ArrayList<SnapshotDigest>()
-        val failed = ArrayList<SnapshotDigest>()
-        for (digest in reclaiming) {
-            try {
-                store.removeRecord(key, digest)
-                deleted += digest
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.warn(e) { "[$key]: the record $digest could not be deleted; the next pass tries again." }
-                failed += digest
-            }
-        }
+        val (deleted, failed) = reclaiming.partition { delete(key, it) }
         if (deleted.isNotEmpty()) {
             updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
                 warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
         }
         return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
+    }
+
+    /** Deletes the record of [key] at [digest]; `false` when that failed, which the next pass tries again. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun delete(key: SnapshotKey, digest: SnapshotDigest): Boolean = try {
+        store.removeRecord(key, digest)
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "[$key]: the record $digest could not be deleted; the next pass tries again." }
+        false
     }
 
     /** The documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */

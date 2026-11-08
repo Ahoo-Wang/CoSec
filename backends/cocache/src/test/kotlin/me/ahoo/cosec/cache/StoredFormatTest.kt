@@ -18,8 +18,8 @@ package me.ahoo.cosec.cache
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.control.ChangeRequestCacheCodec
 import me.ahoo.cosec.cache.control.ListedCodec
-import me.ahoo.cosec.cache.control.RevisionIndexCodec
 import me.ahoo.cosec.cache.control.ReferrersCodec
+import me.ahoo.cosec.cache.control.RevisionIndexCodec
 import me.ahoo.cosec.cache.control.StageSlotCodec
 import me.ahoo.cosec.cache.shadow.ReportersCodec
 import me.ahoo.cosec.cache.shadow.ShadowReportCodec

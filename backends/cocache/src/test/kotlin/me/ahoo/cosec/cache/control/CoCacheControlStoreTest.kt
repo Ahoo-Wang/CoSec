@@ -155,7 +155,10 @@ class CoCacheControlStoreTest {
             } finally {
                 root.detachAppender(logged)
             }
-            store.referrers(SnapshotKey.Platform, shared)!!.value.keys.assert().containsExactly(SnapshotKey.Tenant("acme"))
+            store.referrers(
+                SnapshotKey.Platform,
+                shared
+            )!!.value.keys.assert().containsExactly(SnapshotKey.Tenant("acme"))
             val warning = logged.list.map { it.formattedMessage }.single { "back-reference set names" in it }
             warning.assert().contains("app:a\\u0001b").doesNotContain("\u0001")
         }
@@ -487,8 +490,14 @@ class CoCacheControlStoreTest {
         RevisionIndexCodec.encode(index).decodeToString().assert().doesNotContain("reclaiming")
         val reclaiming = index.copy(reclaiming = listOf(digest))
         RevisionIndexCodec.decode(RevisionIndexCodec.encode(reclaiming)).assert().isEqualTo(reclaiming)
-        RevisionIndexCodec.encode(reclaiming).decodeToString().assert().endsWith(""""floor":2,"reclaiming":["$digest"]}""")
-        val referrers = mapOf(SnapshotKey.Tenant("b") to 1L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 12L)
+        RevisionIndexCodec.encode(
+            reclaiming
+        ).decodeToString().assert().endsWith(""""floor":2,"reclaiming":["$digest"]}""")
+        val referrers = mapOf(
+            SnapshotKey.Tenant("b") to 1L,
+            SnapshotKey.Platform to 0L,
+            SnapshotKey.App("order") to 12L
+        )
         ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
         ReferrersCodec.encode(referrers).decodeToString().assert()
             .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")

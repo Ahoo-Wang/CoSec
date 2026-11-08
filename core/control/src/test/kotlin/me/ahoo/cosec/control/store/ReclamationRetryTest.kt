@@ -66,7 +66,14 @@ class ReclamationRetryTest {
 
     private suspend fun published(): SnapshotDigest {
         clock.now = clock.now.plus(Duration.ofHours(1))
-        return (revisions.publish(ACME, revisions.head(ACME), candidate(ACME), publication()) as PublishOutcome.Published)
+        return (
+            revisions.publish(
+                ACME,
+                revisions.head(ACME),
+                candidate(ACME),
+                publication()
+            ) as PublishOutcome.Published
+            )
             .digest
     }
 

@@ -118,7 +118,11 @@ class DiffAndAccessReviewTest {
 
     @Test
     fun `a rate limit rule of the same id with another quota changes the sections - #1205`() {
-        sectionsChanged(acme, document(acme, rateLimits = listOf(quota(1.0))), document(acme, rateLimits = listOf(quota(100.0))))
+        sectionsChanged(
+            acme,
+            document(acme, rateLimits = listOf(quota(1.0))),
+            document(acme, rateLimits = listOf(quota(100.0)))
+        )
             .assert().isTrue()
     }
 
@@ -134,8 +138,22 @@ class DiffAndAccessReviewTest {
     @Test
     fun `limits other than the cost, an attribute's type and the boundary change the sections`() {
         val platform = SnapshotKey.Platform
-        val boundary = PolicyDefinition(PolicyId("fence"), false, null, listOf(StatementSource("", Effect.ALLOW, listOf("*"))), boundary = true)
-        val other = PolicyDefinition(PolicyId("fence-2"), false, null, listOf(StatementSource("", Effect.ALLOW, listOf("*"))), boundary = true)
+        val boundary =
+            PolicyDefinition(
+                PolicyId("fence"),
+                false,
+                null,
+                listOf(StatementSource("", Effect.ALLOW, listOf("*"))),
+                boundary = true
+            )
+        val other =
+            PolicyDefinition(
+                PolicyId("fence-2"),
+                false,
+                null,
+                listOf(StatementSource("", Effect.ALLOW, listOf("*"))),
+                boundary = true
+            )
         sectionsChanged(
             platform,
             document(platform, listOf(boundary, other), limits = ConditionLimits(maxDepth = 8)),
@@ -143,8 +161,16 @@ class DiffAndAccessReviewTest {
         ).assert().isTrue()
         sectionsChanged(
             platform,
-            document(platform, listOf(boundary, other), attributes = listOf(Attribute.external("ext.geo.region", AttributeType.STRING))),
-            document(platform, listOf(boundary, other), attributes = listOf(Attribute.external("ext.geo.region", AttributeType.STRING_SET))),
+            document(
+                platform,
+                listOf(boundary, other),
+                attributes = listOf(Attribute.external("ext.geo.region", AttributeType.STRING))
+            ),
+            document(
+                platform,
+                listOf(boundary, other),
+                attributes = listOf(Attribute.external("ext.geo.region", AttributeType.STRING_SET))
+            ),
         ).assert().isTrue()
         sectionsChanged(
             platform,
@@ -155,7 +181,9 @@ class DiffAndAccessReviewTest {
 
     @Test
     fun `a catalog of as many groups with other permissions changes the sections`() {
-        fun catalog(permission: String) = Catalog(listOf(CatalogGroup("orders", permissions = listOf(CatalogPermission(permission)))))
+        fun catalog(
+            permission: String
+        ) = Catalog(listOf(CatalogGroup("orders", permissions = listOf(CatalogPermission(permission)))))
         sectionsChanged(
             order,
             document(order, catalog = catalog("order:read")),

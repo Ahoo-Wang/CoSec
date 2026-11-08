@@ -42,8 +42,8 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef
-import me.ahoo.cosec.model.appliesIn
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.appliesIn
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -428,14 +428,7 @@ class DefaultControlPlane(
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
             val entry = (if (key == SnapshotKey.Platform) platform else entry(key)) ?: continue
             for (binding in entry.document.bindings) {
-                // Only what can apply in the tenant reviewed, as the engine looks it up (#1206).
-                if (!binding.subject.appliesIn(query.tenant) || !inScope(
-                        binding.scope.app.exact {
-                            it.value
-                        },
-                        query.app
-                    ) || !inScope(binding.scope.space.exact { it.value }, query.space)
-                ) {
+                if (!applies(binding, query)) {
                     continue
                 }
                 val policy = entry.analyzed[binding.policy.value] ?: platform?.analyzed?.get(binding.policy.value)
@@ -527,6 +520,15 @@ class DefaultControlPlane(
             rateLimits = document.rateLimits,
         )
     )
+
+    /**
+     * Whether [binding] can apply to what [query] asks about: in its tenant, as the engine looks a subject up (#1206), and
+     * in its app and space.
+     */
+    private fun applies(binding: Binding, query: AccessQuery): Boolean =
+        binding.subject.appliesIn(query.tenant) &&
+            inScope(binding.scope.app.exact { it.value }, query.app) &&
+            inScope(binding.scope.space.exact { it.value }, query.space)
 
     /** A binding of [exact] (null: every value) applies to a query of [value] (null: any). */
     private fun inScope(exact: String?, value: String?): Boolean = exact == null || value == null || exact == value

@@ -91,7 +91,11 @@ class ReferrerCleanupRaceTest {
     @Test
     fun `a revision's removal that waits still removes the reference when nothing indexed it again`() =
         runBlocking<Unit> {
-            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))), "p1")
+            publish(
+                SnapshotKey.Platform,
+                candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))),
+                "p1"
+            )
             publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"))), "t1")
 
             store.armed = true
