@@ -98,7 +98,7 @@ flowchart LR
 | 响应头 | 值 |
 |---|---|
 | `RateLimit-Limit` | 该规则每个窗口的许可数，向上取整。 |
-| `RateLimit-Remaining` | 当前窗口剩余的许可数。 |
+| `RateLimit-Remaining` | 当前窗口此刻还会放行的请求数，向上取整：不足一个的剩余许可仍能放行一个请求。 |
 | `RateLimit-Reset` | 距当前窗口结束的秒数，至少为 `1`。 |
 | `Retry-After` | 仅在 `429` 上：与 `RateLimit-Reset` 相同。 |
 
