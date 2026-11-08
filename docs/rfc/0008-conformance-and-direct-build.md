@@ -10,6 +10,8 @@
 
 > **2026-11-08 修订（#1283，U11）**：三组属性改名：`cosec.pipeline.gateway.*` → `cosec.pipeline.identity.*`；`cosec.audit.required.timeout` → `cosec.observability.listener.required-timeout`；`cosec.authorization.cache.token.*` → `cosec.authentication.revocation.cache.*`。
 
+> **2026-11-08 修订（#1286）**：规则 `SCP-7` 标记为被 `SCP-10` 取代。
+
 ## 0. 结论先行
 
 到今天为止，RFC 0002–0007 的每个阶段都以"与 7.x 或与上一阶段等价"为切换门槛，用真实部署导出数据的离线回放来证明。
