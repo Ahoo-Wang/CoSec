@@ -500,8 +500,20 @@ class ControlRoundTwoFixesTest {
             listOf(Operation.PutPolicy(writer.copyAs("more"))),
             "x"
         )
-        val approval = Approval(pia.actor, clock.now, "c", emptyList(), pia.memberships, credentialId = "token-pia")
+        val approval = Approval(
+            pia.actor,
+            clock.now,
+            "c",
+            emptyList(),
+            pia.memberships,
+            credentialId = "token-pia",
+            issuedAt = clock.now,
+        )
         val written = ChangeRequestCodec.encode(change.copy(approval = approval))
+        // As written, the issue time included: publish checks the approver's revocations against it (RC1-11).
+        val readBack = ChangeRequestCodec.decode(written).approval!!
+        readBack.issuedAt.assert().isEqualTo(approval.issuedAt)
+        readBack.credentialId.assert().isEqualTo(approval.credentialId)
         val fields = listOf("memberships", "attributes", "principalBindings", "breakGlass", "credentialId", "issuedAt")
         val root = CoSecJson.mapper.readTree(written)
         fields.forEach { root.get("approval").has(it).assert().describedAs(it).isTrue() }
