@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.model.scope
+package me.ahoo.cosec.architecture
 
 import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.domain.JavaCodeUnit
@@ -25,6 +25,8 @@ import com.tngtech.archunit.lang.ArchRule
 import com.tngtech.archunit.lang.ConditionEvents
 import com.tngtech.archunit.lang.SimpleConditionEvent
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
+import me.ahoo.cosec.model.scope.Scope
+import me.ahoo.cosec.model.scope.ScopeResolver
 
 /**
  * Only [ScopeResolver] constructs a [Scope] (RFC 0004 §4.1, "the scope can be trusted"). Kotlin's `internal` keeps

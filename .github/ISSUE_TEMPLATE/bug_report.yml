@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: CoSec version
-      placeholder: "6.0.0"
+      placeholder: "8.0.0"
     validations:
       required: true
   - type: dropdown

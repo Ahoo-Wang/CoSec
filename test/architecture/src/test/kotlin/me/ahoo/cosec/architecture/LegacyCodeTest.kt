@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.architecture
 
 import com.tngtech.archunit.base.DescribedPredicate
 import com.tngtech.archunit.core.domain.JavaClass

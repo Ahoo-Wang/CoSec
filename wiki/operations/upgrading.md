@@ -139,7 +139,8 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `cosec.identity.forward` is now `true` or `false` on every routed request, where it was set only to `false`.
 - **No credential goes downstream** (RC1-5, `IDN-8`). Besides `Authorization`, the gateway removes the API key header
   (`cosec.pipeline.api-key-header`, under whatever name it gives) and the `authorization` query parameter from every
-  request it forwards. A service that reads them itself needs `cosec.gateway.identity.forward-authorization=true`;
+  request it forwards, whether or not the gateway itself reads a token from the query (only with
+  `cosec.pipeline.allow-query-token=true`, which is off by default). A service that reads them itself needs `cosec.gateway.identity.forward-authorization=true`;
   with it, they now go only to the routes that would receive the identity (`lb://`, or `cosec-identity: true`), so a
   route to a third party gets none.
 - **The `authorization` cookie stays at the gateway too** (`IDN-8`). Under the same switch, the gateway removes it from
