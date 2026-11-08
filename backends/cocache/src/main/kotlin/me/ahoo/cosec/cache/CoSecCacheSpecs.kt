@@ -31,6 +31,7 @@ import me.ahoo.cocache.core.policy.Ttl
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.Memberships
@@ -40,6 +41,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.time.Duration
+import java.time.temporal.ChronoUnit
 
 /**
  * CoSec's CoCache declarations.
@@ -169,7 +171,14 @@ object CoSecCacheSpecs {
      */
     val CACHE_NAMES: Set<String> = PATHS.keys
 
+    /**
+     * A read timeout CoCache keeps as the store's command timeout: it stores any value of 36,500 days or more as none
+     * (`PolicyField.READ_TIMEOUT`).
+     */
+    private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
+
     /** Where a cache keeps its entries: `{keyPrefix}{namespace}:{encodedKey}`, in CoCache's terms. */
+    @InternalCoSecApi
     data class Layout(val keyPrefix: String, val namespace: String) {
         /** `{keyPrefix}{namespace}`, the part of every storage key before `:` and the encoded key. */
         val storagePath: String get() = keyPrefix + namespace
@@ -224,7 +233,9 @@ object CoSecCacheSpecs {
      * fails closed with 503.
      *
      * The revocation tables read "not revoked" when Redis fails ([revokedToken]); an operator may still choose `throw`
-     * (`cocache.caches.[RevokedTokenCache].unknown-read`). The shadow caches fail a failed read.
+     * (`cocache.caches.[RevokedTokenCache].unknown-read`), but not a read timeout shorter than the store's command
+     * timeout, under which more reads would fail and read "not revoked". The shadow caches fail a failed read, and keep
+     * their declared lifetimes.
      *
      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
      */
@@ -244,12 +255,19 @@ object CoSecCacheSpecs {
 
             in SHADOW_CACHE_NAMES -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
-                lock(PolicyField.UNKNOWN_READ)
+                lock(PolicyField.UNKNOWN_READ, PolicyField.TTL)
                 constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                // The reports outlive any window, and a status counts for a minute (RFC 0007 §6.5): fixed, as on main.
+                val ttl = if (cacheName == INSTANCE_STATUS_CACHE_NAME) ShadowCacheSpecs.STATUS_TTL else ShadowCacheSpecs.REPORT_TTL
+                constrain(PolicyField.TTL) { Ttl.of(ttl) }
             }
 
-            REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> verify {
-                require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." }
+            REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> {
+                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
+                // A read that times out reads "not revoked" (unknown-read: absent, PIP-7): a timeout shorter than the
+                // store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
+                lock(PolicyField.READ_TIMEOUT)
+                constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
             }
 
             MEMBERSHIP_CACHE_NAME -> {

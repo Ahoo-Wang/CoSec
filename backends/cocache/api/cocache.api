@@ -21,20 +21,6 @@ public final class me/ahoo/cosec/cache/CoCacheTokenStore : me/ahoo/cosec/spi/tok
 	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
 }
 
-public final class me/ahoo/cosec/cache/CoSecCacheSpecs$Layout {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/cache/CoSecCacheSpecs$Layout;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/cache/CoSecCacheSpecs$Layout;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/cache/CoSecCacheSpecs$Layout;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getKeyPrefix ()Ljava/lang/String;
-	public final fun getNamespace ()Ljava/lang/String;
-	public final fun getStoragePath ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public abstract interface class me/ahoo/cosec/cache/MembershipCache : me/ahoo/cocache/api/Cache {
 	public static final field Companion Lme/ahoo/cosec/cache/MembershipCache$Companion;
 }

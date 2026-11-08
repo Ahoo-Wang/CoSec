@@ -73,7 +73,10 @@ class CacheTtlPolicyTest {
     private object Weakening : CacheLayers {
         override fun <K : Any, V : Any> apply(spec: StoreSpec<K, V>, locks: Locks): Layered<StoreSpec<K, V>> =
             CacheLayers.NONE.apply(
-                spec.toBuilder().unknownRead(UnknownReadMode.ABSENT).policy { ttl = Duration.ofMinutes(1) }.build(),
+                spec.toBuilder().unknownRead(UnknownReadMode.ABSENT).policy {
+                    ttl = Duration.ofMinutes(1)
+                    readTimeout = Duration.ofMillis(50)
+                }.build(),
                 locks,
             )
 
@@ -167,6 +170,25 @@ class CacheTtlPolicyTest {
                     spec.name,
                     PolicyField.UNKNOWN_READ
                 ).assert().describedAs(spec.name).isEqualTo("throw")
+                // Review L1 of #1203: the lifetimes stay the declared ones, as on main.
+                factory.runtime.policy(spec.name)!!.ttl.assert().describedAs(spec.name).isEqualTo(spec.policy.ttl)
+                CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.TTL).assert().isTrue()
+            }
+        }
+    }
+
+    /**
+     * Review L2 of #1203: a read that times out reads "not revoked" (`unknown-read: absent`, PIP-7), so no layer may give
+     * the revocation tables a read timeout shorter than the store's command timeout.
+     */
+    @Test
+    fun revocationTablesReadForTheWholeCommandTimeout() {
+        weakened { factory ->
+            listOf(CoSecCacheSpecs.revokedToken(), CoSecCacheSpecs.revokedSubject()).forEach { spec ->
+                factory.create(spec, CoSecCacheSpecs.locks(spec.name))
+                factory.runtime.policy(spec.name)!!.readTimeout.assert().describedAs(spec.name).isNull()
+                factory.effective(spec.name, PolicyField.READ_TIMEOUT).assert().isEqualTo("command-timeout")
+                CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.READ_TIMEOUT).assert().isTrue()
             }
         }
     }
