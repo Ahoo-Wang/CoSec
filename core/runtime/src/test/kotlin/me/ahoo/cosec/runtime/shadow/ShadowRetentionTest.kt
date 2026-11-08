@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Duration
@@ -180,6 +181,30 @@ class ShadowRetentionTest {
         recorder.record(key, "w", ShadowOutcome.SAME, 4, null)
         flush().assert().isEmpty()
         recorder.reports().assert().isEmpty()
+    }
+
+    @Test
+    fun `samples of a forgotten window are dropped only for the retention of ended windows`() {
+        val key = tenant(1)
+        val recorder = ShadowRecorder("i1", clock, endedRetention = Duration.ofMinutes(10))
+        recorder.forget("absent", 0).assert().isFalse()
+        recorder.record(key, "w", ShadowOutcome.SAME, 4, null)
+        recorder.forget("w", 1).assert().isTrue()
+        recorder.record(key, "w", ShadowOutcome.SAME, 4, null)
+        recorder.reports().assert().isEmpty()
+        // Forgetting another window later clears the ended windows older than the retention.
+        clock.now = clock.now.plus(Duration.ofMinutes(11))
+        recorder.record(key, "v", ShadowOutcome.SAME, 4, null)
+        recorder.forget("v", 1).assert().isTrue()
+        recorder.record(key, "w", ShadowOutcome.NARROWED, 4, null)
+        recorder.reports().single().counts.assert().isEqualTo(mapOf(ShadowOutcome.NARROWED to 1L))
+        assertThrownBy<IllegalArgumentException> {
+            ShadowRecorder(
+                "i1",
+                clock,
+                endedRetention = Duration.ofSeconds(-1)
+            )
+        }
     }
 
     @Test

@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache.control
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncStore
+import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.ConditionalDelete
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
@@ -26,6 +27,7 @@ import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
@@ -52,6 +54,34 @@ class ConditionalRemovalTest {
                 }
             }
         }
+
+    private fun unknown(): CacheWriteException =
+        CacheWriteException("candidate", "deleteIfMatch", IllegalStateException("timed out"), true)
+
+    /** The candidate store of one control store, its `deleteIfMatch` answered by [Candidates.answer] when set. */
+    private class Candidates(val real: Store<SnapshotKey, StoredCandidate>) {
+        var answer: ((SnapshotKey, Digest) -> CompletableFuture<ConditionalDelete>)? = null
+        val answering: Store<SnapshotKey, StoredCandidate> = object : Store<SnapshotKey, StoredCandidate> by real {
+            override fun async(): AsyncStore<SnapshotKey, StoredCandidate> =
+                object : AsyncStore<SnapshotKey, StoredCandidate> by real.async() {
+                    override fun deleteIfMatch(
+                        key: SnapshotKey,
+                        expected: Digest
+                    ): CompletableFuture<ConditionalDelete> =
+                        answer?.invoke(key, expected) ?: real.async().deleteIfMatch(key, expected)
+                }
+        }
+    }
+
+    private fun withCandidates(test: suspend (Candidates, CoCacheControlStore) -> Unit) {
+        val backend = RedisTarget.REDIS.backend()
+        SnapshotNode(backend, newKeyPrefix()).use { node ->
+            val candidates = Candidates(node.runtime.create(ShadowCacheSpecs.candidate(node.keyPrefix)))
+            val store = store(node, candidates = candidates.answering)
+            runBlocking { test(candidates, store) }
+        }
+        backend.close()
+    }
 
     private fun store(
         node: SnapshotNode,
@@ -113,6 +143,68 @@ class ConditionalRemovalTest {
             }
         }
         backend.close()
+    }
+
+    @Test
+    fun `a candidate replaced by another of the same window is read again and withdrawn`() =
+        withCandidates { candidates, store ->
+            val real = candidates.real
+            real.put(acme, StoredCandidate("c1@1", 4, document))
+            candidates.answer = { key, expected ->
+                candidates.answer = null
+                real.put(key, StoredCandidate("c1@1", 5, document))
+                real.async().deleteIfMatch(key, expected)
+            }
+            store.withdrawCandidate(acme, "c1@1").assert().isTrue()
+            store.candidate(acme).assert().isNull()
+        }
+
+    @Test
+    fun `a candidate that keeps changing is given up on`() = withCandidates { candidates, store ->
+        val real = candidates.real
+        real.put(acme, StoredCandidate("c1@1", 4, document))
+        var revision = 4L
+        candidates.answer = { key, expected ->
+            real.put(key, StoredCandidate("c1@1", ++revision, document))
+            real.async().deleteIfMatch(key, expected)
+        }
+        assertThrownBy<IllegalStateException> { runBlocking { store.withdrawCandidate(acme, "c1@1") } }
+        store.candidate(acme)!!.window.assert().isEqualTo("c1@1")
+    }
+
+    @Test
+    fun `a withdrawal whose outcome is unknown is read back`() = withCandidates { candidates, store ->
+        val real = candidates.real
+        // It removed it, and the reply was lost.
+        real.put(acme, StoredCandidate("c1@1", 4, document))
+        candidates.answer = { key, expected ->
+            real.async().deleteIfMatch(key, expected).thenCompose { CompletableFuture.failedFuture(unknown()) }
+        }
+        store.withdrawCandidate(acme, "c1@1").assert().isTrue()
+        store.candidate(acme).assert().isNull()
+
+        // It did not apply: still the value read, so the failure is the answer.
+        real.put(acme, StoredCandidate("c1@1", 4, document))
+        candidates.answer = { _, _ -> CompletableFuture.failedFuture(unknown()) }
+        assertThrownBy<CacheWriteException> { runBlocking { store.withdrawCandidate(acme, "c1@1") } }
+        store.candidate(acme)!!.window.assert().isEqualTo("c1@1")
+
+        // Another change staged meanwhile: not this caller's to remove.
+        candidates.answer = { key, _ ->
+            real.put(key, StoredCandidate("c2@2", 4, document))
+            CompletableFuture.failedFuture(unknown())
+        }
+        store.withdrawCandidate(acme, "c1@1").assert().isFalse()
+        store.candidate(acme)!!.window.assert().isEqualTo("c2@2")
+
+        // A failure whose outcome is known is thrown as it is.
+        candidates.answer = { _, _ ->
+            CompletableFuture.failedFuture(
+                CacheWriteException("candidate", "deleteIfMatch", IllegalStateException("refused"), false)
+            )
+        }
+        assertThrownBy<CacheWriteException> { runBlocking { store.withdrawCandidate(acme, "c2@2") } }
+        store.candidate(acme)!!.window.assert().isEqualTo("c2@2")
     }
 
     @Test
