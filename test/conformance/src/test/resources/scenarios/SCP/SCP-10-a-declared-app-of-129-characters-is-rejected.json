@@ -1,10 +1,10 @@
 {
   "rules": [
-    "SCP-7"
+    "SCP-10"
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "The client declares a:b without a host app; ':' separates document keys.",
+  "description": "One character over the 128 an app id may have.",
   "documents": {
     "platform": {
       "policies": [
@@ -30,7 +30,7 @@
     }
   },
   "request": {
-    "app": "a:b"
+    "app": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   },
   "expect": {
     "decision": "Rejected",

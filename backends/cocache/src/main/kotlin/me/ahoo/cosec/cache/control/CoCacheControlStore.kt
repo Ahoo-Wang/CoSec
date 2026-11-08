@@ -42,7 +42,6 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
@@ -189,22 +188,14 @@ class CoCacheControlStore internal constructor(
 
     /**
      * The listed changes that are not terminal. A terminal one is dropped; so is one missing for longer than
-     * [missingGrace], whose first write failed. One missing for less may be being written right now: it stays. So does
-     * one of an app no document key can name ([UnnamedDocumentException]): it cannot be read, so it is not known to be
-     * terminal, and each caller skips it when it reads it.
+     * [missingGrace], whose first write failed. One missing for less may be being written right now: it stays. One that
+     * does not decode fails this: it is not known to be terminal.
      */
-    @Suppress("TooGenericExceptionCaught")
     override suspend fun openChanges(): Set<ChangeId> {
         val listed = read(lists, OPEN_CHANGES)?.first.orEmpty()
         val expired = clock.instant().minus(missingGrace)
         val closed = listed.filterTo(HashMap()) { (id, listedAt) ->
-            val change = try {
-                read(changes, ChangeId(id))?.first
-            } catch (e: Exception) {
-                UnnamedDocumentException.of(e) ?: throw e
-                return@filterTo false
-            }
-            change?.state?.terminal ?: listedAt.isBefore(expired)
+            read(changes, ChangeId(id))?.first?.state?.terminal ?: listedAt.isBefore(expired)
         }.keys
         if (closed.isNotEmpty()) {
             updateList(OPEN_CHANGES) { it - closed }

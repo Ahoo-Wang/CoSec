@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.cache.control
 
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncStore
 import me.ahoo.cocache.api.CacheWriteException
@@ -44,11 +42,9 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
-import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -63,7 +59,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -119,12 +114,11 @@ class CoCacheControlStoreTest {
     )
 
     /**
-     * R3-1 of #1194's review: an app document an earlier build published under an id the app id rule now refuses left
-     * itself in the back-reference set of a platform policy it binds. That member is skipped, with an escaped WARN, so
-     * a publish that binds the policy still writes the set, and the member is gone with it.
+     * SCP-10: a back-reference set naming an app no key can name is a format error of the whole set, so a publish that
+     * would write it fails, and the set stays as it was until an operator repairs it.
      */
     @Test
-    fun `a back-reference set naming an app no key can name still takes a new referrer`() = runBlocking<Unit> {
+    fun `a back-reference set naming an app no key can name is a format error`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             val store = store(node)
@@ -141,27 +135,67 @@ class CoCacheControlStoreTest {
                     )
                 ).put(ReferenceKey(SnapshotKey.Platform, shared), """{"app:a\u0001b":1}""".encodeToByteArray())
             }
-            val logged = ListAppender<ILoggingEvent>().apply { start() }
-            val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
-            root.addAppender(logged)
-            try {
-                val outcome = revisions.publish(
+            formatError { store.referrers(SnapshotKey.Platform, shared) }.message.assert().doesNotContain("\u0001")
+            formatError {
+                revisions.publish(
                     SnapshotKey.Tenant("acme"),
                     null,
                     document(DocumentKind.TENANT, "acme", BINDS_SHARED),
                     BOOTSTRAP,
                 )
-                outcome.assert().isInstanceOf(PublishOutcome.Published::class.java)
-            } finally {
-                root.detachAppender(logged)
             }
-            store.referrers(
-                SnapshotKey.Platform,
-                shared
-            )!!.value.keys.assert().containsExactly(SnapshotKey.Tenant("acme"))
-            val warning = logged.list.map { it.formattedMessage }.single { "back-reference set names" in it }
-            warning.assert().contains("app:a\\u0001b").doesNotContain("\u0001")
+            revisions.head(SnapshotKey.Tenant("acme")).assert().isNull()
         }
+    }
+
+    /**
+     * The upgrade note's path: `repair-references` reads a set before it writes it, so the array form 8.0.0-alpha.3 wrote
+     * stops it until the set is deleted; it then writes the set again from the head, with the referrer's revision.
+     */
+    @Test
+    fun `repair stops at a set in the array form, and rebuilds it with revisions once it is deleted`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        val acme = SnapshotKey.Tenant("acme")
+        val reference = ReferenceKey(SnapshotKey.Platform, PolicyId("shared"))
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val revisions = Revisions(store(node), Clock.systemUTC())
+            revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
+            revisions.publish(acme, null, document(DocumentKind.TENANT, "acme", BINDS_SHARED), BOOTSTRAP)
+        }
+        CacheRuntime.builder().backend(backend).build().use { raw ->
+            raw.create(
+                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+            )
+                .put(reference, """["tenant:acme"]""".encodeToByteArray())
+        }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            formatError { Revisions(store(node), Clock.systemUTC()).repairReferences(acme) }
+        }
+        CacheRuntime.builder().backend(backend).build().use { raw ->
+            raw.create(
+                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+            )
+                .delete(reference)
+        }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val store = store(node)
+            Revisions(store, Clock.systemUTC()).repairReferences(acme).assert().isEqualTo(1)
+            store.referrers(SnapshotKey.Platform, reference.policy)!!.value.assert().isEqualTo(mapOf(acme to 1L))
+        }
+    }
+
+    /** The format error [block] fails with, however CoCache wraps what the codec threw. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun formatError(block: suspend () -> Unit): SnapshotFormatException {
+        val error = try {
+            block()
+            null
+        } catch (e: Exception) {
+            e
+        }
+        return generateSequence<Throwable>(checkNotNull(error) { "It did not fail." }) { it.cause }
+            .filterIsInstance<SnapshotFormatException>().first()
     }
 
     private fun document(kind: DocumentKind, owner: String, body: String) = PolicyDocumentCodec.decode(
@@ -171,11 +205,11 @@ class CoCacheControlStoreTest {
     )
 
     /**
-     * R2-1 of #1194's review: a stored open change of an app no document key can name (an earlier build wrote it) does
-     * not read, so it is not known to be terminal: the listing keeps it, without failing, and each caller skips it.
+     * SCP-10: a stored open change of an app no document key can name does not decode, so it is not known to be
+     * terminal: the listing fails, however CoCache wraps what the codec threw.
      */
     @Test
-    fun `an open change of an app no key can name stays listed and does not fail the listing`() = runBlocking<Unit> {
+    fun `an open change of an app no key can name fails the listing`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             val store = store(node)
@@ -193,16 +227,8 @@ class CoCacheControlStoreTest {
                     )
                 ).put(ChangeId("c1"), written.encodeToByteArray())
             }
-            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
-            // However CoCache wraps what the codec threw.
-            @Suppress("TooGenericExceptionCaught")
-            val error = try {
-                store.change(ChangeId("c1"))
-                null
-            } catch (e: Exception) {
-                e
-            }
-            UnnamedDocumentException.of(error!!)!!.key.assert().isEqualTo("app:a\\u0001b")
+            formatError { store.openChanges() }
+            formatError { store.change(ChangeId("c1")) }
         }
     }
 
@@ -479,7 +505,7 @@ class CoCacheControlStoreTest {
 
     /** #1207: each referrer with the revision of it that last indexed the reference. */
     @Test
-    fun `the referrers codec reads back what it writes, the set alpha 3 wrote too, and rejects anything else`() {
+    fun `the referrers codec reads back what it writes and rejects anything else`() {
         val referrers = mapOf(
             SnapshotKey.Tenant("b") to 1L,
             SnapshotKey.Platform to 0L,
@@ -488,16 +514,16 @@ class CoCacheControlStoreTest {
         ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
         ReferrersCodec.encode(referrers).decodeToString().assert()
             .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
-        // The array of keys 8.0.0-alpha.3 wrote: every member at revision 0.
-        ReferrersCodec.decode(
-            """["tenant:b"]""".encodeToByteArray()
-        ).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
         listOf(
             "1",
             "\"tenant:b\"",
+            // The array of keys 8.0.0-alpha.3 wrote.
+            """["tenant:b"]""",
             """["policies"]""",
             """["tenant:a:b"]""",
             "[1]",
+            // An app no key can name (SCP-10).
+            """{"app:a\u0001b":1}""",
             """{"policies":1}""",
             """{"tenant:b":-1}""",
             """{"tenant:b":"1"}""",

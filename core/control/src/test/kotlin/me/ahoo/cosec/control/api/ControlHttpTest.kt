@@ -74,12 +74,11 @@ class ControlHttpTest {
     }
 
     /**
-     * R3-4 of #1194's review: a change of an app no key can name (an earlier build wrote it) no longer reads. Shown or
-     * abandoned, it is a deliberate 409 that says an operator removes its record, never the stored id; to an operator who
-     * may not read the platform's documents, it is what a missing change is.
+     * SCP-10: a change whose record does not decode, one of an app no key can name included, fails closed: a 503 without
+     * detail to every caller, whatever they may read, so the answer tells nothing of why.
      */
     @Test
-    fun `a change that no longer reads is a 409 to the platform and a 404 to anyone else`() {
+    fun `a change that no longer reads is a 503 to every caller, without detail`() {
         val id = runBlocking {
             fixture.changes.propose(
                 fixture.plato,
@@ -91,14 +90,11 @@ class ControlHttpTest {
         }.id
         fixture.unreadable += id
         for ((method, path) in listOf("GET" to "/changes/${id.value}", "POST" to "/changes/${id.value}:abandon")) {
-            val (status, body) = call(method, path, security = plato)
-            status.assert().describedAs(path).isEqualTo(409)
-            body.get("type").asString().assert().isEqualTo("https://cosec.ahoo.me/problems/change-unreadable")
-            body.get("detail").asString().assert().contains("An operator removes its record").doesNotContain("a\u0001b")
-                .doesNotContain("\\u0001")
-            call(method, path, security = alice).first.assert().describedAs(path).isEqualTo(404)
-            // R4-1: a platform principal who may not read the platform document is anyone else too.
-            call(method, path, security = pia).first.assert().describedAs(path).isEqualTo(404)
+            for (caller in listOf(plato, alice, pia)) {
+                val (status, body) = call(method, path, security = caller)
+                status.assert().describedAs(path).isEqualTo(503)
+                body.has("detail").assert().describedAs(path).isFalse()
+            }
         }
     }
 

@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.cache.control
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
@@ -296,46 +295,16 @@ internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
         return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
-    /**
-     * The JSON array of keys 8.0.0-alpha.3 wrote, without revisions, reads as each indexed at revision 0, before any
-     * revision this build publishes: a later drop by the referrer removes it, and a later reference raises it.
-     *
-     * A member that is an app key earlier builds wrote and the app id rule now refuses is skipped, with a WARN (R3-1 of
-     * #1194's review): such a document can no longer be read or published, and so can never drop its own reference,
-     * while one such member would make every write and check of the set fail. Dropping it is safe: an extra referrer
-     * only ever blocks a deletion. Anything else that is not a document key, or a revision that is not a non-negative
-     * integer, is still malformed.
-     */
+    /** Anything but the object form, a member that is not a document key, or a negative revision, is malformed. */
     override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
         val root = read(bytes, WHAT)
-        val members: List<Pair<String, Long>> = when {
-            root.isArray -> root.items(WHAT).map { it.text(WHAT) to EARLIER_REVISION }
-            root.isObject -> root.properties().map { (key, revision) ->
-                val value = revision.long(WHAT)
-                if (value < 0) malformed(WHAT, "revision $value of [$key] is negative")
-                key to value
-            }
-
-            else -> malformed(WHAT, "$root is neither an object nor an array")
+        if (!root.isObject) malformed(WHAT, "$root is not an object")
+        return root.properties().associateTo(LinkedHashMap()) { (text, revision) ->
+            val value = revision.long(WHAT)
+            if (value < 0) malformed(WHAT, "revision $value of [$text] is negative")
+            (SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")) to value
         }
-        return members.mapNotNull { (text, revision) ->
-            val key = SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
-                log.warn {
-                    "A back-reference set names [${SnapshotKeyText.printable(text)}], which no document key can name " +
-                        "(SCP-7): that member is skipped."
-                }
-                return@mapNotNull null
-            } else {
-                malformed(WHAT, "[$text] is not a document key")
-            }
-            key to revision
-        }.toMap(LinkedHashMap())
     }
-
-    /** The revision a member of the array 8.0.0-alpha.3 wrote is read as. */
-    const val EARLIER_REVISION: Long = 0
-
-    private val log = KotlinLogging.logger {}
 }
 
 /**

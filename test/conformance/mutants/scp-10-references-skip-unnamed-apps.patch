@@ -1,0 +1,20 @@
+# Rule: SCP-10
+# Mutant: a binding in an app no key can name is skipped when a document's references are built, as before R4, so a head an alpha stored publishes and repairs
+# Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 2bec1fe1..ecb5f921 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -658,10 +658,7 @@ class Revisions(
+         for (binding in document.bindings) {
+             val app = (binding.scope.app as? Match.Exactly)?.value?.value
+             if (app != null && !SnapshotKey.App.isValidAppId(app)) {
+-                throw SnapshotFormatException(
+-                    "A document holds binding [${Identifiers.printable(binding.id.value)}] in app " +
+-                        "[${Identifiers.printable(app)}], which no document key can name (SCP-10)."
+-                )
++                continue
+             }
+             if (binding.policy in own) continue
+             references += SnapshotKey.Platform to binding.policy

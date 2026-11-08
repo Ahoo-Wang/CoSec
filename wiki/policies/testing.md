@@ -63,9 +63,8 @@ unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`), anywhere, is a `40
 a Redis key would write it as `?`, naming another id. A stored document or record that does not decode, such as
 one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
 of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
-trailing `/` or an empty segment is a `404`. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
-abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
-an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
+trailing `/` or an empty segment is a `404`. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
+every caller (`SCP-10`). The control
 host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
 
