@@ -210,7 +210,7 @@ class CookieTokenPropertyTest {
                 sent?.forEach { header ->
                     // Netty's own check of a header it sends: the gateway's routing filter copies it through this.
                     if (header !in original) {
-                        DefaultHttpHeaders(true).set(HttpHeaderNames.COOKIE, header)
+                        DefaultHttpHeaders().set(HttpHeaderNames.COOKIE, header)
                     }
                     hasCookie(header).assert().isTrue()
                     strict(header).none { isToken(it.first) }.assert().isTrue()
