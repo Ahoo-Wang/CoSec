@@ -91,19 +91,26 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 | 成员关系 | `<p>:membership:*` | 从 `MembershipLoader` 重新加载 | 删除；它们会重新填充 |
 | API key、限流计数器、OAuth 状态 | `<p>:api-key:*`、`<p>:rate-limiter:*`、`<p>:oauth:state:*` | 不变：由 Spring 的 Redis 模板保存，不经 CoCache | 不处理 |
 
-1. 发布或放弃每个进行中的变更，并结束每个破窗授权：存在暂存槽或候选时，除非指定 `--discard-pending`，命令拒绝执行；
-   含破窗绑定的文档也会被拒绝，与 `publish` 相同。
+1. 发布或放弃每个进行中的变更，并结束每个破窗授权：存在打开的变更（包括草稿）、暂存槽或候选时，除非指定
+   `--discard-pending`，命令拒绝执行；含破窗绑定的文档也会被拒绝，与 `publish` 相同。
 2. 如果 alpha.2 设置过被 `cosec.key-prefix` 取代的 key 前缀之一，先迁移那些 key（见上面的“一个 key 前缀”）：命令只读一个前缀。
 3. 停止所有 CoSec 实例，包括控制面。alpha.2 实例与 8.0.0 实例既读不了对方的值，也收不到对方的失效消息：CoCache 8 的失效通道
    以 key 前缀命名。
 4. 先看看会迁移什么，不写入任何内容：
    `cosec-migrate cocache8 --redis redis://localhost:6379 --key-prefix cosec --out ./cocache8 --dry-run`
-   （Redis Cluster 加 `--cluster` 并给出种子节点）。它会列出拒绝执行的原因。
-5. 去掉 `--dry-run` 再运行。它先把文档按 `publish` 读取的布局写到 `--out`，再写吊销（覆盖 CoCache 6 的值，所以任何时刻都不缺
-   吊销），然后删除其他 CoCache 6 的值，最后发布文档。如果它在删除之后中断，用 `cosec-migrate publish --to-redis <uri> --in
-   ./cocache8 --resume` 完成；再运行一次 `cocache8` 会发现没有需要迁移的内容。
+   （Redis Cluster 加 `--cluster` 并给出种子节点）。它会列出拒绝执行的原因：仍打开的变更（包括草稿）、`publish` 会拒绝的
+   文档、读不懂的值，或者既没有需要迁移的文档也没有平台文档。
+5. 去掉 `--dry-run` 再运行。它先把文档按 `publish` 读取的布局写到 `--out`，并写一个标记 `<p>:meta:cocache8`，再写吊销
+   （覆盖 CoCache 6 的值，所以任何时刻都不缺吊销），然后删除其他 CoCache 6 的值，发布文档，最后删除标记。如果它在删除之后
+   中断，不要再运行 `cocache8` 来完成：它看不到自己已删除的文档，标记还在时它会拒绝执行。用它打印的命令完成：
+   `cosec-migrate publish --to-redis <uri> --key-prefix <p> [--cluster] --in ./cocache8 --resume`，每份文档都重新发布后，
+   这条命令会删除标记。
 6. 启动 8.0.0 实例。每份文档的修订号从 1 重新开始；迁移之前的历史不会保留，如果需要，在第 5 步之前保存一份
    `<p>:control:revision:*`。
+
+摘要现在是 SHA-256，alpha.2 用的是 CoCache 6 的 SHA-1：控制 API 的修订历史、变更的基线与检查，以及提到摘要的事件，都写作
+`SHA-256:<64 位十六进制>`。自己实现的 `SnapshotDocumentStore` 必须给出 32 字节的 SHA-256 摘要，否则每次读取都失败即拒绝
+（[扩展](../architecture/extending.md#snapshot-document-stores)）。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
 

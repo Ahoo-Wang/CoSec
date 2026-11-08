@@ -294,22 +294,31 @@ again, not even through the revocation tables' "Redis failed, not revoked" degra
 | Memberships | `<p>:membership:*` | Loaded again from the `MembershipLoader` | Deleted; they fill again |
 | API keys, rate limit counters, OAuth states | `<p>:api-key:*`, `<p>:rate-limiter:*`, `<p>:oauth:state:*` | Unchanged: kept by Spring's Redis template, not CoCache | Nothing |
 
-1. Publish or abandon every change in flight, and end every break-glass grant: the run refuses a staging slot or a
-   candidate unless told `--discard-pending`, and refuses a document that holds a break-glass binding, as `publish`
-   does.
+1. Publish or abandon every change in flight, and end every break-glass grant: the run refuses an open change (a
+   draft included), a staging slot or a candidate unless told `--discard-pending`, and refuses a document that holds a
+   break-glass binding, as `publish` does.
 2. If alpha.2 set one of the key prefixes that `cosec.key-prefix` replaced, move those keys first ("One key prefix",
    above): the command reads one prefix.
 3. Stop every CoSec instance, the control plane included. An alpha.2 instance and an 8.0.0 instance read neither each
    other's values nor each other's invalidations, whose channels are named after the key prefix in CoCache 8.
 4. See what would move, writing nothing:
    `cosec-migrate cocache8 --redis redis://localhost:6379 --key-prefix cosec --out ./cocache8 --dry-run`
-   (`--cluster` with the seed nodes of a Redis Cluster). It lists what it refuses and why.
-5. Run it without `--dry-run`. It writes the documents to `--out` first, in the layout `publish` reads, then the
-   revocations (a write over the CoCache 6 value, so none is ever missing), then deletes the other CoCache 6 values,
-   then publishes the documents. If it stops after the deletions, `cosec-migrate publish --to-redis <uri> --in
-   ./cocache8 --resume` finishes; a second `cocache8` finds nothing left to move.
+   (`--cluster` with the seed nodes of a Redis Cluster). It lists what it refuses and why: a change still open, a
+   draft included, a document `publish` would refuse, a value it cannot read, or neither a document to move nor a
+   platform document.
+5. Run it without `--dry-run`. It writes the documents to `--out` first, in the layout `publish` reads, and a marker,
+   `<p>:meta:cocache8`, then the revocations (a write over the CoCache 6 value, so none is ever missing), then deletes
+   the other CoCache 6 values, then publishes the documents, and removes the marker. If it stops after the deletions,
+   do not run `cocache8` again to finish: it cannot see the documents it deleted, and it refuses while the marker is
+   there. Finish with the command it prints,
+   `cosec-migrate publish --to-redis <uri> --key-prefix <p> [--cluster] --in ./cocache8 --resume`, which removes the
+   marker once every document is published again.
 6. Start the 8.0.0 instances. Each document's revision starts again at 1; the history before the move is not carried
    over, so keep a copy of `<p>:control:revision:*` before step 5 if you need it.
+
+Digests are SHA-256 now, where alpha.2's were CoCache 6's SHA-1: the control API's revision history, a change's base
+and checks, and the events that name a digest write `SHA-256:<64 hex>`. A `SnapshotDocumentStore` of your own must
+produce 32-byte SHA-256 digests, or every read fails closed ([Extending](../architecture/extending.md#snapshot-document-stores)).
 
 ## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
 

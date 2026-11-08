@@ -347,6 +347,10 @@ the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and
 - Every method returns without blocking and never throws: a failure completes the future exceptionally. A stored value
   that cannot be decoded carries a `SnapshotFormatException` in its cause chain.
 - Never delete a document. A key that once had a document and then reads as absent fails closed.
+- A digest is a `SnapshotDigest`: 32 bytes of SHA-256, named by its algorithm, and nothing else (a SHA-1, a version
+  number or an ETag is refused when made, so every read fails closed). Hash the stored bytes, or whatever changes when
+  the document does; only your store interprets it. Its text form, in the control API and in events, is
+  `SHA-256:<64 hex>`.
 
 With `cosec-cocache`, the starter uses `RedisSnapshotDocumentStore`, and the control plane writes through the same Redis.
 Without it, the starter registers an `InMemorySnapshotDocumentStore`; put documents into it with `put(key, document)`, or
