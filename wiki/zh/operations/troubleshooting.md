@@ -363,7 +363,7 @@ Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {
 ### 锁定的缓存设置导致启动失败 {#startup-fails-on-a-locked-cache-setting}
 
 ```text
-Cache[PolicySnapshotCache] - ttl is pinned by cosec to ...; ...
+Cache[PolicySnapshotCache] - ttl is pinned by cosec to forever; ... can't override a pinned field.
 Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
