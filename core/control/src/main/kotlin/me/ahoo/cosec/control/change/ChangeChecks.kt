@@ -199,11 +199,9 @@ class ChangeChecks(
     }
 
     /**
-     * Every app the candidate names is an app id (SCP-7, R2-1 of #1194's review): the document format takes any id but
-     * `*` in a binding's `app`, and builds before this one stored such bindings, but no request is ever in an app the
-     * rule refuses, and no key names its document. The whole candidate is checked, its head's entries included: a
-     * document that holds one must drop it in its next change, and a change that only drops it is valid. The stored
-     * document stays readable: such a binding is inert on the data plane.
+     * Every app the candidate names is an app id (SCP-10): the document format takes any id but `*` in a binding's
+     * `app`, but no request is ever in an app the rule refuses, and no key names its document. The whole candidate is
+     * checked, its head's entries included.
      */
     private fun appIds(candidate: PolicyDocument, findings: MutableList<Finding>) {
         for ((i, binding) in candidate.bindings.withIndex()) {
@@ -215,7 +213,7 @@ class ChangeChecks(
                     "binding [${printable(binding.id.value)}] is in app [${printable(app)}], which cannot be an app id " +
                         "(blank, *, ':', a control character or an unpaired surrogate, or over " +
                         "${ScopeResolver.MAX_APP_ID_LENGTH} characters): " +
-                        "no request is ever in it. Remove the binding; a change that only removes it is valid.",
+                        "no request is ever in it. Remove the binding.",
                     BAD_REQUEST,
                 )
             }

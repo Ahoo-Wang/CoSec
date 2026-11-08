@@ -217,7 +217,7 @@ class ConverterTest {
     }
 
     /**
-     * SCP-7, R1-6 of #1194's review: a 7.x app id that no 8.0 request could declare names no app document. It is
+     * SCP-10, R1-6 of #1194's review: a 7.x app id that no 8.0 request could declare names no app document. It is
      * rejected with the other invalid ids, never a crash of the whole run.
      */
     @Test

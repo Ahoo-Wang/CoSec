@@ -414,9 +414,9 @@ class DefaultControlPlane(
         authority.require(operator, tenant, ControlActions.ANALYZE)
         val resource = enforceable(query.resource)
         val app = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
-            // The data plane never reads such an app (SCP-7): refused, and not echoed, since it may hold control characters.
+            // The data plane never reads such an app (SCP-10): refused, and not echoed, since it may hold control characters.
             if (!SnapshotKey.App.isValidAppId(app)) {
-                throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-7).")
+                throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-10).")
             }
             SnapshotKey.App(app)
         }

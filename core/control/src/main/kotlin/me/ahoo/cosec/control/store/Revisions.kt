@@ -16,6 +16,7 @@ package me.ahoo.cosec.control.store
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -655,12 +656,16 @@ class Revisions(
             own.forEach { references += SnapshotKey.Platform to it }
         }
         for (binding in document.bindings) {
+            val app = (binding.scope.app as? Match.Exactly)?.value?.value
+            if (app != null && !SnapshotKey.App.isValidAppId(app)) {
+                throw SnapshotFormatException(
+                    "A document holds binding [${Identifiers.printable(binding.id.value)}] in app " +
+                        "[${Identifiers.printable(app)}], which no document key can name (SCP-10)."
+                )
+            }
             if (binding.policy in own) continue
             references += SnapshotKey.Platform to binding.policy
-            val app = (binding.scope.app as? Match.Exactly)?.value?.value
-            // An app no key can name has no document to refer to (R2-1 of #1194's review): earlier builds stored such
-            // bindings, and the head that holds one must still publish the change that drops it.
-            if (document.kind == DocumentKind.TENANT && app != null && SnapshotKey.App.isValidAppId(app)) {
+            if (document.kind == DocumentKind.TENANT && app != null) {
                 references += SnapshotKey.App(app) to binding.policy
             }
         }

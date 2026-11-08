@@ -1,6 +1,6 @@
 {
   "rules": [
-    "SCP-7"
+    "SCP-10"
   ],
   "polarity": "negative",
   "level": "engine",

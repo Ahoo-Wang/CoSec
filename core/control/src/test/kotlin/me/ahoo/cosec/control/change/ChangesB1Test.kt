@@ -250,19 +250,11 @@ class ChangesB1Test {
         grant(changes).assert().containsExactly("UNREADABLE")
         // An entry that names no app document: it may be one the analysis would miss, so no entry is trusted, and the
         // apps it does name are not even read.
-        for (odd in listOf("not:an app", "", "*")) {
+        for (odd in listOf("not:an app", "", "*", " ", "a\u0001b", "x".repeat(129))) {
             list(AppList(setOf("billing", odd), complete = true))
             read.clear()
             grant(changes).assert().describedAs(odd).containsExactly("UNREADABLE")
             read.assert().describedAs(odd).doesNotContain(SnapshotKey.App("billing"))
-        }
-        // R2-1 of #1194's review: an entry an earlier build listed, which the app id rule now refuses, names a document
-        // no key can read and no request reads. It is dropped, and the rest of the list is trusted: billing's DENY is read.
-        for (refused in listOf(" ", "a\u0001b", "x".repeat(129))) {
-            list(AppList(setOf("billing", refused), complete = true))
-            read.clear()
-            grant(changes).assert().describedAs(refused).containsExactly("DENY_OVERLAP")
-            read.assert().describedAs(refused).contains(SnapshotKey.App("billing"))
         }
         // It cannot be read.
         list(AppList(setOf("billing"), complete = true))

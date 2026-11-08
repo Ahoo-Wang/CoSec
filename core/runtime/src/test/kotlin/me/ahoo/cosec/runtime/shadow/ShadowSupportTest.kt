@@ -195,15 +195,14 @@ class ShadowSupportTest {
                 """{"i1":{"at":"x","documents":{}}}""".encodeToByteArray()
             )
         }
-        // R2-1 of #1194's review: an instance of an earlier build reports an app no key can name now. That entry alone
-        // is skipped; a key no build ever wrote is still malformed.
+        // SCP-10: an app no key can name is a format error, as a key no build ever wrote is.
         val encoded = String(ShadowCodec.encodeStatuses(mapOf("i1" to status)))
         val odd = encoded.replace(
             "\"documents\":{",
             "\"documents\":{\"app:a\\u0001b\":{\"revision\":1,\"lagMillis\":0},"
         )
         odd.assert().isNotEqualTo(encoded)
-        ShadowCodec.decodeStatuses(odd.encodeToByteArray()).assert().isEqualTo(mapOf("i1" to status))
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(odd.encodeToByteArray()) }
         assertThrownBy<SnapshotFormatException> {
             ShadowCodec.decodeStatuses(odd.replace("app:a\\u0001b", "app:a:b").encodeToByteArray())
         }

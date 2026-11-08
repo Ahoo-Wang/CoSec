@@ -51,18 +51,16 @@ data class Confirmation(val policy: PolicyId, val statement: Int, val digest: St
 /**
  * The digest of a statement's content as the document format writes it, without any confirmation it carries, together
  * with the condition of its policy, which guards it as much as its own: what a [Confirmation] names. A statement, or a
- * policy condition, that changes no longer matches the confirmation given for it (review K4).
+ * policy condition, that changes no longer matches the confirmation given for it (review K4). One shape: the content
+ * is `{statement, policyCondition}`, `policyCondition` being `null` for a policy without a condition.
  */
 object StatementDigest {
     fun of(statement: StatementSource, policyCondition: Condition? = null): String {
         val bare = PolicyDefinition(PolicyId("statement"), false, policyCondition, listOf(unconfirmed(statement)))
         val tree = PolicyDocumentCodec.policyTree(bare)
-        val statementTree = tree.get("statements").get(0)
-        // Without a policy condition, the statement's own digest, as before: confirmations given for one still match.
-        val policyTree = tree.get("condition") ?: return EntryDigest.sha256(statementTree)
         val content = JsonNodeFactory.instance.objectNode()
-        content.set("statement", statementTree)
-        content.set("policyCondition", policyTree)
+        content.set("statement", tree.get("statements").get(0))
+        content.set("policyCondition", tree.get("condition") ?: JsonNodeFactory.instance.nullNode())
         return EntryDigest.sha256(content)
     }
 

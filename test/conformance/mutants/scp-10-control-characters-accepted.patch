@@ -1,4 +1,4 @@
-# Rule: SCP-7
+# Rule: SCP-10
 # Mutant: an app id may hold a control character, which reaches plain-text log lines
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test
 

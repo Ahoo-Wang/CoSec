@@ -431,10 +431,8 @@ store answers what the maintenance passes visit:
 
 - `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
 - `openChanges()`: the change requests that may still be open. It may name more, never fewer; callers read each
-  change and go by its state. A change whose record no longer reads because it is of an app the app id rule refuses
-  (an earlier build wrote it) makes `change(id)` throw `UnnamedDocumentException`, as `ChangeRequestCodec` does when
-  it decodes one: it cannot be known to be terminal, so it stays listed, and `openChanges()` must not fail for it.
-  Maintenance skips it; an operator removes its record.
+  change and go by its state. A listed change whose record does not decode fails `openChanges()` as it fails
+  `change(id)`: it cannot be known to be terminal, so maintenance stops until an operator removes its record.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
   removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
   `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
