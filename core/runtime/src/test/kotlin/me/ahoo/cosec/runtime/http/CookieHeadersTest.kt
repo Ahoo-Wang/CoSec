@@ -39,7 +39,7 @@ class CookieHeadersTest {
      */
     @Test
     fun `no empty pair is made`() {
-        CookieHeaders.without("authorization=t; session=s", "authorization").assert().isEqualTo(" session=s")
+        CookieHeaders.without("authorization=t; session=s", "authorization").assert().isEqualTo("session=s")
         CookieHeaders.without("a=1; authorization=t; b=2", "authorization").assert().isEqualTo("a=1; b=2")
         // R3-6: a pair of whitespace and `,` alone holds no cookie; a header left with only such pairs is not sent.
         CookieHeaders.without("authorization=t;,", "authorization").assert().isNull()
@@ -55,11 +55,19 @@ class CookieHeadersTest {
     @Test
     fun `kept pairs go on as they came`() {
         CookieHeaders.without("a=1 ;authorization=t;  b=2", "authorization").assert().isEqualTo("a=1 ;  b=2")
-        CookieHeaders.without(" \tAUTHORIZATION =t ; a=1", "authorization").assert().isEqualTo(" a=1")
-        CookieHeaders.without(" \$Version=1; authorization=t; \$Path=/; a=b", "authorization")
-            .assert().isEqualTo(" \$Version=1; \$Path=/; a=b")
-        // A kept `$Version` pair that comes to the head gets a space, or Netty would read the header as RFC 2965.
-        CookieHeaders.without("authorization=t;\$Version=1;a=b", "authorization").assert().isEqualTo(" \$Version=1;a=b")
+        // Only the whitespace at the head goes: a field value cannot start with it, and Netty refuses to send one.
+        CookieHeaders.without(" \tAUTHORIZATION =t ; a=1", "authorization").assert().isEqualTo("a=1")
+        CookieHeaders.without("authorization=t;\ta=1 ; b=2", "authorization").assert().isEqualTo("a=1 ; b=2")
+        // A kept `$Version` pair that would come to the head takes the header with it: Netty would read it as RFC 2965.
+        // Whitespace first is refused, an empty pair stops Python's `SimpleCookie`, a leading `,` makes it throw.
+        CookieHeaders.without("authorization=t;\$Version=1;a=b", "authorization").assert().isNull()
+        CookieHeaders.without("authorization=t; \$version=1; a=b", "authorization").assert().isNull()
+        CookieHeaders.without(" \$Version=1; authorization=t; \$Path=/; a=b", "authorization").assert().isNull()
+        // Not at the head, it stays where it was.
+        CookieHeaders.without(
+            "a=1; authorization=t; \$Version=1",
+            "authorization"
+        ).assert().isEqualTo("a=1; \$Version=1")
         // Netty skips a leading `$Version` up to its `;`: that `;` stays, or `$Version` would decode as a cookie.
         CookieHeaders.without("\$Version=1;authorization=t", "authorization").assert().isEqualTo("\$Version=1;")
         CookieHeaders.without("\$Version=1;authorization=t;a=b", "authorization").assert().isEqualTo("\$Version=1;a=b")
@@ -70,7 +78,7 @@ class CookieHeadersTest {
 
     @Test
     fun `a pair that hides it behind a comma or a quote goes whole`() {
-        CookieHeaders.without("a=1, authorization=t; b=2", "authorization").assert().isEqualTo(" b=2")
+        CookieHeaders.without("a=1, authorization=t; b=2", "authorization").assert().isEqualTo("b=2")
         CookieHeaders.without("a=\"x;authorization=t\"; b=2", "authorization").assert().isEqualTo("a=\"x; b=2")
     }
 
