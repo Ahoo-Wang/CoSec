@@ -375,7 +375,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 - `schema: 2` 不变，只增加可选字段。严格的读取器拒绝未知字段，所以**先升级全部数据面实例，再发布带 `roles` 的文档**。8.0 GA 前只写进升级说明；GA 之后由 RFC 0010 C5 的格式门槛保护，这也是要在 GA 前做的原因。
 - G1–G3 没有破坏性变更，Space id 的语义不变。§3.5 是破坏性变更，随 R7b 交付。
-- 7.x 迁移工具的输出不变，继续生成绑定。两种写法并存。
+- 7.x 迁移工具继续生成绑定（#1284 只改了星期的拼法）。两种写法并存。
 - `DocumentDiff`、`Operation`、`PolicyDocument`、`Catalog` 的公共签名变化，更新 ABI dump。
 - 热路径：查找结构不变，每个非 `spaced` 简写权限多一次 `scope.space` 比较。G1 带 `PipelineBenchmark` 的前后对比。
 
@@ -406,7 +406,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 | G2 | 操作、授权、摘要、分析、差异、引用、检查 | `cosec-control` |
 | G3 | 文档、skill、OpenAPI 生成器；与 F2 合并 | `wiki/`、`skills/`、`cosec-openapi` |
 
-整体顺序见 `docs/roadmap.md`。F2 的模型类图以本 RFC §2 为准。
+G1 与 G2 合成一个 PR：只有 G1 时，控制面能发布带 `roles` 的文档却不做授出分析。整体顺序见 `docs/roadmap.md`。F2 的模型类图以本 RFC §2 为准。
 
 ## 12. 非目标
 
