@@ -69,7 +69,8 @@ fun interface CandidateSource {
  * counts ([failures]) and answers no candidate: the shadow window misses samples, the enforced decision never notices.
  */
 class CachingCandidateSource(
-    private val store: CandidateStore,
+    /** The store of record it reads: what a [ShadowReporter] asks whether a window's candidate is still staged. */
+    val store: CandidateStore,
     private val compile: (SnapshotKey, SnapshotDocument) -> CompiledDocument,
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
     private val refreshAfter: Duration = Duration.ofSeconds(10),

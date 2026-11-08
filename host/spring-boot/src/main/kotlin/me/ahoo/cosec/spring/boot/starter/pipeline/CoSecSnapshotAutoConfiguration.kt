@@ -257,6 +257,11 @@ class CoSecSnapshotAutoConfiguration {
         ): CoCacheShadowReports =
             CoCacheShadowReports.create(factory, cosec.keyPrefix)
 
+        /**
+         * Reports every `report-interval`. A window is forgotten once its candidate is no longer staged and its last
+         * report is written (#1210), as read from the store of record [candidates] reads from; with an application's own
+         * [CandidateSource] that is not a [CachingCandidateSource], from the only [CandidateStore], else never.
+         */
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         fun cosecShadowReporting(
@@ -264,13 +269,18 @@ class CoSecSnapshotAutoConfiguration {
             sink: CoCacheShadowReports,
             source: SnapshotSource<CompiledDocument, CompiledDocument>,
             properties: RuntimeAuthorizationProperties,
+            candidates: CandidateSource,
+            stores: ObjectProvider<CandidateStore>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
             val installed = {
                 val now = clock.instant()
                 source.entries().filter { it.revision > 0 }.associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
             }
-            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval))
+            val store = (candidates as? CachingCandidateSource)?.store ?: stores.ifUnique
+            return ShadowReporting(
+                ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval, candidates = store)
+            )
         }
 
         companion object {
