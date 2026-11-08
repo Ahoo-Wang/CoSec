@@ -103,10 +103,18 @@ interface ControlStore : CandidateStore {
     suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean
 
     /**
-     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4),
-     * or removes it with `null`. Unconditional: the staging slot already makes its holder the only writer.
+     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4).
+     * Unconditional: the staging slot already makes its holder the only writer.
      */
-    suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?)
+    suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate)
+
+    /**
+     * Removes the candidate of [key] if it is still the one of [window], in one atomic step (#1227): a change withdraws
+     * its candidate once it is terminal, when another change may already hold the slot and have staged its own, which
+     * must stay. `true` when this removed it; `false` when the candidate is another window's or there is none. A
+     * removal whose outcome is unknown is resolved by reading back, never by removing unconditionally.
+     */
+    suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean
 
     /**
      * Every document this store has indexed revisions for, so reclamation can visit each (RFC 0007 §5.7). It may name
@@ -142,7 +150,11 @@ interface ControlStore : CandidateStore {
      */
     suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean
 
-    /** Gives up the lease [name] if [holder] still has it, so the next taker need not wait for it to expire. */
+    /**
+     * Gives up the lease [name] if [holder] still has it, so the next taker need not wait for it to expire. The check and
+     * the removal are one atomic step: a lease that expired meanwhile and that another holder took stays theirs, or two
+     * instances would run the same task at once.
+     */
     suspend fun releaseLease(name: String, holder: String)
 }
 

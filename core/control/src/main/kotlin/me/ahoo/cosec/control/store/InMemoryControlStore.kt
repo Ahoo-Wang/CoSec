@@ -137,10 +137,12 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
 
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = synchronized(lock) { candidates[key] }
 
-    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
-        synchronized(lock) {
-            if (candidate == null) candidates.remove(key) else candidates[key] = candidate
-        }
+    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate) {
+        synchronized(lock) { candidates[key] = candidate }
+    }
+
+    override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean = synchronized(lock) {
+        candidates[key]?.window == window && candidates.remove(key) != null
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =

@@ -94,8 +94,12 @@ class CoCacheShadowTest {
         read.baseRevision.assert().isEqualTo(4)
         read.document.assert().isEqualTo(document)
         control.candidate(key)!!.window.assert().isEqualTo("c1@1")
-        control.putCandidate(key, null)
+        // Only the candidate of the window named: another window's stays.
+        control.withdrawCandidate(key, "c0@1").assert().isFalse()
+        instance.candidate(key)!!.window.assert().isEqualTo("c1@1")
+        control.withdrawCandidate(key, "c1@1").assert().isTrue()
         instance.candidate(key).assert().isNull()
+        control.withdrawCandidate(key, "c1@1").assert().isFalse()
     }
 
     @Test
