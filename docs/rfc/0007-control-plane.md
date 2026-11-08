@@ -131,6 +131,8 @@
 
 > **2026-11-08 修订（#1283，`CTL-27`）**：内置的 `cosec:tenant-admin` 增加本租户文档 `doc/tenant/{t}` 上的 `cosec:skip-shadow`。
 
+> **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。 公开的 `409 change-unreadable` 和 `UnnamedDocumentException` 已删除；确认摘要只有一种形状，没有策略条件时也带 `policyCondition: null`。
+
 ## 0. 结论先行
 
 第 5 阶段结束时，数据面已经是"读快照 → 纯函数决策 → 义务与监听器"，但写入一侧还停在第 3 阶段：任何拿到 `SnapshotPublisher` 的代码都能改策略，

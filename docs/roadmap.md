@@ -310,7 +310,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R1 工具小修（✅ #1280） | `config/logback-parity.xml` 改名并删死条目；架构测试的包名；`ognl` 版本约束挪到 `cosec-migrate`；Issue 模板的版本占位；OTel 版本兜底 | 随时 |
 | R2 注释与守卫 | 34 处按旧版本解释行为的注释、规则文字、只属于 7.x 的排障条目；最后打开 detekt 的版本词守卫 | #1268 之后 |
 | R3 死代码（✅ #1281） | `FormatPatterns` 的死常量、`KafkaAuditEventSink`、`SimpleSecurityContext`、`AuthzRequest` 只写不读的字段（带 JMH） | F1 之前 |
-| R4 alpha 残留 | 无名 app 的容错（拆分 `SCP-7`）、alpha.3 数组读取、控制面为旧 alpha 保持的字节 | #1268 之后，G2 之前 |
+| R4 alpha 残留（✅ #1286） | 无名 app 的容错（拆分 `SCP-7`）、alpha.3 数组读取、控制面为旧 alpha 保持的字节 | #1268 之后，G2 之前 |
 | R5 格式与令牌收紧（✅ #1284） | 星期拼法只接受 `MON`…`SUN`；空字符串租户声明无效；限流规则 id 与桶名统一 | G1 之前 |
 | R6 凭证读取与启动检查 | `authorization` Cookie 默认关闭加开关；`CoSec-*` 只读头；删 7.x 键表、`warn` 模式、`RemovedKeyPrefixes` | #1273、F1 之后 |
 | R7a 审计记录 | `authorization.source` 改用绑定词汇，删死字段和 `PolicyType`；`KafkaAuditListener.destroy()` 要等队列写完（R3 发现） | 与 G1 对齐 |
@@ -319,7 +319,18 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R8 包名对齐 | `cocache`、`webmvc`、`spring-boot` | 其余批次之后，ABI 冻结前 |
 | R9 GA 收尾 | 最后一次 v7/v8 门禁后删除工作流；文档守卫词表；alpha 升级章节；路线图页；`guava` | GA tag 前 |
 
-整体顺序（#1273、#1268、R1、R3、F1、R5 已完成）：R4 → G1 + G2（同一个 PR，避免控制面能发布 `roles` 却不分析）→ R2 → R6 → R7a → R7b → R7c → F2（含 G3）→ E2b → E3 → E1b → 第二轮审查 → R8 → R9。
+**未关闭 issue 的分批**（2026-11-08 按摘要分诊，都自述 P2/P3，没有放行类问题；每个修复先复现）：
+
+| 批次 | 范围 | Issue |
+|---|---|---|
+| H1 | runtime：快照与后台任务 | #1245 #1251 #1252 #1266 #1274 #1260 |
+| H2 | control | #1235 #1243 #1253 #1263 #1265 #1275 |
+| H3 | starter 与后端 | #1234 #1238 #1242 #1271 #1236 #1223 |
+| H4 | edge、testkit、工具 | #1249 #1257 #1261 #1262 #1276 #1258 |
+
+E3 增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270。
+
+整体顺序（已完成到 R4）：H1 → G1 + G2（同一个 PR，避免控制面能发布 `roles` 却不分析）→ H2 → R2 → H3 → R6 → R7a → R7b → R7c → H4 → F2（含 G3）→ E2b → E3 → E1b → 第二轮审查 → R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
