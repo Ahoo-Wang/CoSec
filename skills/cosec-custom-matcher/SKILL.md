@@ -199,8 +199,10 @@ answers 500 rather than forward an identity that never expires.
 
 Replace `CoCacheControlStore` only to keep control-plane records outside Redis. Besides keyed, conditional reads and
 writes, implement `documents()` (every document with indexed revisions; may name more, never fewer),
-`openChanges()` (changes that may still be open; may name more, never fewer) and `acquireLease` / `releaseLease`
-(release only while the holder still has it). A failed read throws; never answer "absent". Start from
+`openChanges()` (changes that may still be open; may name more, never fewer), `acquireLease` / `releaseLease`
+(release only while the holder still has it, checked and removed in one atomic step), `withdrawCandidate(key, window)`
+(remove the candidate only while it is still that window's, in one atomic step), referrers with the revision that
+indexed each, and `RevisionIndex.reclaiming` kept with the index. A failed read throws; never answer "absent". Start from
 `InMemoryControlStore` and the KDoc of `core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
 
 ## IdGenerator: CoSec's ids

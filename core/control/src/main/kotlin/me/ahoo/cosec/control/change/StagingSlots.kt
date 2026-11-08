@@ -48,14 +48,15 @@ internal class StagingSlots(
         }
     }
 
-    /** Withdraws the candidate of [change]'s window, if it is still the staged one; a failure only leaves it to compare. */
+    /**
+     * Withdraws the candidate of [change]'s window, if it is still the staged one: one conditional removal, since another
+     * change may have taken the slot and staged its own meanwhile (#1227). A failure only leaves it to compare.
+     */
     @Suppress("TooGenericExceptionCaught")
     suspend fun withdraw(change: ChangeRequest) {
         val window = change.shadow?.window ?: return
         try {
-            if (store.candidate(change.key)?.window == window) {
-                store.putCandidate(change.key, null)
-            }
+            store.withdrawCandidate(change.key, window)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

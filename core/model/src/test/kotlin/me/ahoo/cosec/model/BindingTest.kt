@@ -118,4 +118,17 @@ class BindingTest {
         Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList(), listOf("a@b@c")).malformed.assert()
             .containsExactly("a@b@c")
     }
+
+    @Test
+    fun `a subject applies in the tenants the engine looks it up in`() {
+        val acme = TenantId("acme")
+        val globex = TenantId("globex")
+        SubjectRef.Anyone.appliesIn(acme).assert().isTrue()
+        SubjectRef.Principal(acme, PrincipalId("bob")).appliesIn(acme).assert().isTrue()
+        SubjectRef.Principal(globex, PrincipalId("bob")).appliesIn(acme).assert().isFalse()
+        SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("plato")).appliesIn(acme).assert().isFalse()
+        SubjectRef.Role(null, RoleId("editor")).appliesIn(acme).assert().isTrue()
+        SubjectRef.Role(acme, RoleId("editor")).appliesIn(acme).assert().isTrue()
+        SubjectRef.Role(globex, RoleId("editor")).appliesIn(acme).assert().isFalse()
+    }
 }

@@ -139,7 +139,7 @@ class CoCacheControlStoreTest {
                         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
                         ReferenceKeyEncoder
                     )
-                ).put(ReferenceKey(SnapshotKey.Platform, shared), """["app:a\u0001b"]""".encodeToByteArray())
+                ).put(ReferenceKey(SnapshotKey.Platform, shared), """{"app:a\u0001b":1}""".encodeToByteArray())
             }
             val logged = ListAppender<ILoggingEvent>().apply { start() }
             val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
@@ -155,7 +155,10 @@ class CoCacheControlStoreTest {
             } finally {
                 root.detachAppender(logged)
             }
-            store.referrers(SnapshotKey.Platform, shared)!!.value.assert().containsExactly(SnapshotKey.Tenant("acme"))
+            store.referrers(
+                SnapshotKey.Platform,
+                shared
+            )!!.value.keys.assert().containsExactly(SnapshotKey.Tenant("acme"))
             val warning = logged.list.map { it.formattedMessage }.single { "back-reference set names" in it }
             warning.assert().contains("app:a\\u0001b").doesNotContain("\u0001")
         }
@@ -442,10 +445,14 @@ class CoCacheControlStoreTest {
             store.putIndex(key, stored.digest, index).assert().isFalse()
 
             val shared = PolicyId("cosec:shared")
-            store.putReferrers(SnapshotKey.Platform, shared, null, setOf(key)).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, shared, null, mapOf(key to 3L)).assert().isTrue()
             val referrers = store.referrers(SnapshotKey.Platform, shared)!!
-            referrers.value.assert().containsExactly(key)
-            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptySet()).assert().isTrue()
+            referrers.value.assert().isEqualTo(mapOf(key to 3L))
+            // Another revision is another value: a removal read before it no longer matches.
+            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, mapOf(key to 4L)).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptyMap()).assert().isFalse()
+            val raised = store.referrers(SnapshotKey.Platform, shared)!!
+            store.putReferrers(SnapshotKey.Platform, shared, raised.digest, emptyMap()).assert().isTrue()
             store.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEmpty()
 
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()
@@ -470,6 +477,36 @@ class CoCacheControlStoreTest {
         backend.close()
     }
 
+    /** #1207: each referrer with the revision of it that last indexed the reference. */
+    @Test
+    fun `the referrers codec reads back what it writes, the set alpha 3 wrote too, and rejects anything else`() {
+        val referrers = mapOf(
+            SnapshotKey.Tenant("b") to 1L,
+            SnapshotKey.Platform to 0L,
+            SnapshotKey.App("order") to 12L
+        )
+        ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
+        ReferrersCodec.encode(referrers).decodeToString().assert()
+            .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
+        // The array of keys 8.0.0-alpha.3 wrote: every member at revision 0.
+        ReferrersCodec.decode(
+            """["tenant:b"]""".encodeToByteArray()
+        ).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
+        listOf(
+            "1",
+            "\"tenant:b\"",
+            """["policies"]""",
+            """["tenant:a:b"]""",
+            "[1]",
+            """{"policies":1}""",
+            """{"tenant:b":-1}""",
+            """{"tenant:b":"1"}""",
+            """{"tenant:b":1.5}""",
+        ).forEach { text ->
+            assertThrownBy<SnapshotFormatException> { ReferrersCodec.decode(text.encodeToByteArray()) }
+        }
+    }
+
     @Test
     fun `the codecs read back what they write and reject anything else`() {
         val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
@@ -479,9 +516,13 @@ class CoCacheControlStoreTest {
             floor = 2,
         )
         RevisionIndexCodec.decode(RevisionIndexCodec.encode(index)).assert().isEqualTo(index)
-        val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
-        SnapshotKeySetCodec.decode(SnapshotKeySetCodec.encode(keys)).assert().isEqualTo(keys)
-        SnapshotKeySetCodec.encode(keys).decodeToString().assert().isEqualTo("""["app:order","platform","tenant:b"]""")
+        // #1226: records left to delete are written only when there are some, so an index without is as before.
+        RevisionIndexCodec.encode(index).decodeToString().assert().doesNotContain("reclaiming")
+        val reclaiming = index.copy(reclaiming = listOf(digest))
+        RevisionIndexCodec.decode(RevisionIndexCodec.encode(reclaiming)).assert().isEqualTo(reclaiming)
+        RevisionIndexCodec.encode(
+            reclaiming
+        ).decodeToString().assert().endsWith(""""floor":2,"reclaiming":["$digest"]}""")
         listOf(
             "",
             "[]",
@@ -497,11 +538,10 @@ class CoCacheControlStoreTest {
                 64
             )}","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
             """{"entries":[],"pending":[],"floor":1,"x":1}""",
+            """{"entries":[],"pending":[],"floor":1,"reclaiming":"x"}""",
+            """{"entries":[],"pending":[],"floor":1,"reclaiming":["zz"]}""",
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
-        }
-        listOf("{}", """["policies"]""", """["tenant:a:b"]""", "[1]").forEach { text ->
-            assertThrownBy<SnapshotFormatException> { SnapshotKeySetCodec.decode(text.encodeToByteArray()) }
         }
         RevisionRecordKeyEncoder.encode(RevisionRecordKey(SnapshotKey.Tenant("acme"), digest))
             .assert().isEqualTo("tenant:acme:SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")

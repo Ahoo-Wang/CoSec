@@ -74,8 +74,19 @@ sealed interface ChainCheck {
     class Broken(val missing: ParentRevision) : ChainCheck
 }
 
-/** What [Revisions.reclaim] removed. */
-class Reclaimed(val records: List<SnapshotDigest>, val orphans: List<SnapshotDigest>) {
+/**
+ * What [Revisions.reclaim] did: the [records] and [orphans] it took out of the index, the records it [deleted] (those
+ * and any an earlier pass could not delete), and the ones whose deletion [failed], which the next pass tries again.
+ */
+class Reclaimed(
+    val records: List<SnapshotDigest>,
+    val orphans: List<SnapshotDigest>,
+    val deleted: List<SnapshotDigest> = records + orphans,
+    val failed: List<SnapshotDigest> = emptyList(),
+) {
+    /** Whether it changed anything or has something left to do. */
+    val any: Boolean get() = records.isNotEmpty() || orphans.isNotEmpty() || deleted.isNotEmpty() || failed.isNotEmpty()
+
     companion object {
         val NOTHING: Reclaimed = Reclaimed(emptyList(), emptyList())
     }
@@ -106,13 +117,14 @@ class RetentionPolicy(
  * [publish] writes in the order that never loses content and never lets the data plane see anything but the old or
  * the new head:
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
- * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
- *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
+ * 2. the back-references the candidate adds are added, each with the candidate's revision (the index stays a superset
+ *    of the true references), and an app document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
  * 3. the caller's precondition is read, and the head is replaced with `putIfMatch(expected = base digest)`: one key,
  *    one atomic step (P7). A conflict leaves the head as someone else wrote it and is reported, never retried on the
  *    new content (RFC 0007 §5.5);
- * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
- *    marks the app list complete when it names every app document the store lists.
+ * 4. the index gains the revision, and back-references only the base had are removed, unless a later revision has
+ *    indexed them again since (#1207); the platform's first revision marks the app list complete when it names every
+ *    app document the store lists.
  *
  * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged.
  *
@@ -171,7 +183,7 @@ class Revisions(
         val before = base?.let { references(it.document) }.orEmpty()
         val after = references(document)
         for ((target, policy) in after - before) {
-            check(updateReferrers(target, policy) { it + key }) {
+            check(updateReferrers(target, policy) { indexed(it, key, revision) }) {
                 "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
             }
         }
@@ -347,26 +359,52 @@ class Revisions(
     private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
         updateIndex(key) { index ->
             index.copy(
-                entries = index.entries.filter { it.revision < entry.revision } + entry,
+                // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
+                // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
+                entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
                 pending = index.pending.filter { it.digest != entry.digest },
             )
         } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
         for ((target, policy) in dropped) {
-            updateReferrers(target, policy) { it - key } ||
+            updateReferrers(target, policy) { dropped(it, key, entry.revision) } ||
                 warn("[$key] no longer refers to [$policy] of [$target], which stays indexed")
         }
     }
 
     /**
-     * The retained revisions of [key], oldest first. When the index is behind the head (a publish that failed after
-     * its head write, or a lost index), the missing entries are found along the head's `parent` chain and added.
+     * [referrers] with [key] at [revision]: a reference [publish] indexes before its head write. One already indexed
+     * by [revision] or a later revision (a publish that lost its race) stays as it is.
+     */
+    private fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+        val current = referrers[key]
+        return if (current != null && current >= revision) referrers else referrers + (key to revision)
+    }
+
+    /**
+     * [referrers] without [key], if [revision], which no longer refers, or an earlier revision indexed it. The removal
+     * runs after the head write, so a later revision may have indexed the reference again meanwhile (#1207): it stays,
+     * and so does one of a revision whose publish lost its race, a superset that blocks a deletion at most.
+     */
+    private fun dropped(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+        val current = referrers[key] ?: return referrers
+        return if (current <= revision) referrers - key else referrers
+    }
+
+    /**
+     * The retained revisions of [key], oldest first, none above its head. When the index is behind the head (a publish
+     * that failed after its head write, or a lost index), the missing entries are found along the head's `parent` chain
+     * and added.
      */
     suspend fun history(key: SnapshotKey): List<RevisionEntry> {
         val head = head(key) ?: return store.index(key)?.value?.entries.orEmpty()
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
-        val latest = indexed.latest?.revision ?: 0
+        // Nothing above the head: what a head that moved back (a partial loss of data) left in the index is not on the
+        // chain. A revision published after the head was read is left out of this read alone, and what reclamation
+        // removes comes from this list, so it is never taken for one to remove.
+        val entries = indexed.entries.filter { it.revision <= head.revision }
+        val latest = entries.lastOrNull()?.revision ?: 0
         if (head.revision <= latest) {
-            return indexed.entries
+            return entries
         }
         val missing = ArrayList<RevisionEntry>()
         var document: PolicyDocument? = head.document
@@ -385,7 +423,7 @@ class Revisions(
                 pending = index.pending.filter { pending -> repaired.none { it.digest == pending.digest } },
             )
         } || warn("[$key]: the rebuilt history could not be written back to the index")
-        return (indexed.entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
+        return (entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
     }
 
     /**
@@ -473,6 +511,11 @@ class Revisions(
      * most recent revisions and older than [RetentionPolicy.minAge], unless [keep] names them (the bases and rollback
      * targets of changes still open), and the orphans older than [RetentionPolicy.orphanAge]. One instance at a time:
      * without the lease it removes nothing.
+     *
+     * The index is written first, so a listed revision never misses its record; what it takes out goes to
+     * [RevisionIndex.reclaiming] in that same write, and is dropped from there once deleted (#1226). A deletion that fails
+     * is tried again by the next pass; one of a record that became the head, a listed revision or a kept one since is
+     * not tried at all.
      */
     suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed {
         if (!store.acquireLease("reclaim:$key", holder, retention.leaseDuration)) {
@@ -487,16 +530,23 @@ class Revisions(
                 entry.publishedAt.isBefore(now.minus(retention.minAge))
         }
         var orphans: List<SnapshotDigest> = emptyList()
+        var reclaiming: List<SnapshotDigest> = emptyList()
         val updated = updateIndex(key) { index ->
             val chain = index.entries.map { it.digest }.toSet()
             orphans = index.pending.filter { pending ->
                 pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
                     pending.since.isBefore(now.minus(retention.orphanAge))
             }.map { it.digest }
+            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
+            val pending = index.pending.filter { it.digest !in orphans }
+            val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head)
+            // What an earlier pass could not delete, unless it is live again; then what this pass takes out.
+            reclaiming = (index.reclaiming + removed.map { it.digest } + orphans).distinct().filter { it !in live }
             index.copy(
-                entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } },
-                pending = index.pending.filter { it.digest !in orphans },
+                entries = entries,
+                pending = pending,
                 floor = maxOf(index.floor, (removed.maxOfOrNull { it.revision } ?: 0) + 1),
+                reclaiming = reclaiming,
             )
         }
         if (!updated) {
@@ -504,13 +554,29 @@ class Revisions(
             return Reclaimed.NOTHING
         }
         // The index no longer lists them, so a failure here leaves unlisted records behind, never a listed one missing.
-        (removed.map { it.digest } + orphans).forEach { store.removeRecord(key, it) }
-        return Reclaimed(removed.map { it.digest }, orphans)
+        val (deleted, failed) = reclaiming.partition { delete(key, it) }
+        if (deleted.isNotEmpty()) {
+            updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
+                warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
+        }
+        return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
+    }
+
+    /** Deletes the record of [key] at [digest]; `false` when that failed, which the next pass tries again. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun delete(key: SnapshotKey, digest: SnapshotDigest): Boolean = try {
+        store.removeRecord(key, digest)
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "[$key]: the record $digest could not be deleted; the next pass tries again." }
+        false
     }
 
     /** The documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-        store.referrers(target, policy)?.value.orEmpty()
+        store.referrers(target, policy)?.value?.keys.orEmpty()
 
     /**
      * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
@@ -521,11 +587,11 @@ class Revisions(
         val head = head(key) ?: return 0
         var added = 0
         for ((target, policy) in references(head.document)) {
-            if (store.referrers(target, policy)?.value?.contains(key) == true) {
+            if (store.referrers(target, policy)?.value?.containsKey(key) == true) {
                 continue
             }
             check(
-                updateReferrers(target, policy) { it + key }
+                updateReferrers(target, policy) { indexed(it, key, head.revision) }
             ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
             added++
         }
@@ -627,11 +693,15 @@ class Revisions(
         return false
     }
 
-    private suspend fun updateReferrers(target: SnapshotKey, policy: PolicyId, change: (Set<SnapshotKey>) -> Set<SnapshotKey>): Boolean {
+    private suspend fun updateReferrers(
+        target: SnapshotKey,
+        policy: PolicyId,
+        change: (Map<SnapshotKey, Long>) -> Map<SnapshotKey, Long>,
+    ): Boolean {
         repeat(maxAttempts) {
             val current = store.referrers(target, policy)
             val next = change(current?.value.orEmpty())
-            if (current != null && next == current.value) {
+            if (next == (current?.value ?: emptyMap<SnapshotKey, Long>())) {
                 return true
             }
             if (store.putReferrers(target, policy, current?.digest, next)) {

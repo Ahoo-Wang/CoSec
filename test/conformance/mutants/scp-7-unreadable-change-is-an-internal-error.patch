@@ -3,12 +3,12 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index 4e43fc7e..60137085 100644
+index 121a7968..f312e437 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -125,7 +125,7 @@ class ControlHttp(private val plane: ControlPlane) {
-         } catch (e: JacksonException) {
-             problem(Problem.INVALID_REQUEST, requestId, e.originalMessage)
+@@ -141,7 +141,7 @@ class ControlHttp(private val plane: ControlPlane) {
+             }
+             problem(Problem.INVALID_REQUEST, requestId, null)
          } catch (e: Exception) {
 -            val unnamed = UnnamedDocumentException.of(e)
 +            val unnamed: UnnamedDocumentException? = null

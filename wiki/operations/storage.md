@@ -69,15 +69,15 @@ contain `:`, so a key names one document only.
 |---|---|---|
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
-| `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
-| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
-| `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
+| `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, and the records reclamation took out of it and has not yet seen deleted |
+| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
+| `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done, only while it still holds it (`CTL-26`) |
 | `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane, `cosec-migrate` | the documents that have revisions, and the change requests that may still be open, so the maintenance passes and `repair-references` can visit each |
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
-| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open |
-| `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; expires 8 days after its last write |
+| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open; the change it belongs to removes it, only while it is still its own (`CTL-26`) |
+| `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:instances` | every data-plane instance | each instance's installed revisions and their lag; expires 2 minutes after its last write, and entries older than a minute are ignored |
 | `<s>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
@@ -431,6 +431,8 @@ Every control-plane instance runs two maintenance passes while it runs, each fir
   older than `min-age` (7 days), and the records of publishes that never became the head once older than `orphan-age`
   (1 hour). It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
   reclaims nothing that pass. A lease per document (`reclaim:<doc>`) lets one instance at a time do each document.
+  The revision index no longer lists a record before it is deleted, and keeps it among those left to delete until
+  the deletion succeeds: a deletion that fails is tried again by the next pass.
 - **Closing shadow windows**, every [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)
   (1 minute), under the `shadow-windows` lease, so a window closes at most one interval late.
 

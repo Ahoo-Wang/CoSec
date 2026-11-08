@@ -92,13 +92,14 @@ public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cos
 	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putStage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/StageSlot;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun record (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun releaseLease (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/cache/control/CoCacheControlStore$Companion {

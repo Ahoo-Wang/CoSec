@@ -31,7 +31,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `GET /documents/{key}` | 当前修订。`{key}` 为 `platform`、`app:<appId>` 或 `tenant:<tenantId>`。 |
 | `GET /documents/{key}/revisions?before=&limit=` | 修订历史，最新的在前（`limit` 为 1 到 200，默认 20）。 |
 | `GET /documents/{key}/revisions/{revision}` | 某个保留的修订；已不再保留时返回 `410`。 |
-| `GET /documents/{key}/diff?from=&to=` | 两个修订之间新增、删除和修改的策略与绑定。 |
+| `GET /documents/{key}/diff?from=&to=` | 两个修订之间新增、删除和修改的策略与绑定，以及 `sections`：其余部分（目录、限制、属性、边界或限流规则）是否不同，按其内容比较。 |
 | `GET /documents/{key}/revisions/{revision}/propagation` | 最近上报的实例中有多少已安装该修订。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
@@ -196,6 +196,8 @@ flowchart LR
 
 窗口比较的是决策，所以只涉及[限流规则](./rate-limiting.md#publishing-rules)的变更在窗口中显示不出差异。
 
+窗口的候选暂存期间，实例每隔 `cosec.authorization.shadow.report-interval`（10 秒）写一次它对该窗口的报告。候选撤回之后（窗口关闭，或变更被放弃、驳回、发布或抢占），实例再写一次报告，然后忘掉这个窗口；报告在这最后一次写入 8 天后过期。变更只撤回自己的候选：期间另一个变更已占用暂存槽并暂存了自己的候选时，那个候选保留（`CTL-26`）。
+
 `POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。只创建或吊销 break-glass 绑定的变更没有窗口。
 
 ### 抢占被占用的暂存槽 {#taking-a-busy-slot}
@@ -270,7 +272,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 { "query": { "tenant": "acme", "app": "order", "space": "team-a", "action": "order:read", "resource": "order/42" } }
 ```
 
-响应列出 `allows` 和 `denies`：平台文档、租户文档以及（给出 `app` 时）应用文档中，作用域符合查询、且其策略有语句匹配该动作和资源的每个绑定，包括其文档、主体、应用、空间、策略和语句序号。`conditional` 标记带有条件的语句或策略，条件不会被求值。省略 `app` 和 `space` 时匹配任意应用或空间的绑定。你无权读取的文档计入 `hidden`，指向这些文档中策略的绑定计入 `opaque`。附加策略不会列出：它们取决于每个主体的成员关系。
+响应列出 `allows` 和 `denies`：平台文档、租户文档以及（给出 `app` 时）应用文档中，能在所查询租户生效、作用域符合查询、且其策略有语句匹配该动作和资源的每个绑定，包括其文档、主体、应用、空间、策略和语句序号。`conditional` 标记带有条件的语句或策略，条件不会被求值。省略 `app` 和 `space` 时匹配任意应用或空间的绑定。你无权读取的文档计入 `hidden`，指向这些文档中策略的绑定计入 `opaque`。附加策略不会列出：它们取决于每个主体的成员关系。绑定是否在该租户生效，按引擎查找它的方式判断：主体绑定只对该租户的主体生效，指定了租户的角色绑定只在该租户生效，未指定租户的角色绑定和 `Anyone` 在每个租户生效。所以平台中给 `principal:globex/bob` 的绑定不会列在 `acme` 下。
 
 ## CI 中的策略 {#policies-in-ci}
 
