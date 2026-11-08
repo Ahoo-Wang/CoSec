@@ -36,7 +36,7 @@ dependencies {
     implementation("org.springframework:spring-web")
     implementation("org.springframework:spring-expression")
     // Compile-only, as it was in cosec-core: convert never ran OGNL, and an `ognl` condition is rejected untranslated.
-    compileOnly("ognl:ognl")
+    compileOnly(libs.ognl)
     // Converted documents are checked by deciding requests with them through the 8.0 pipeline.
     testImplementation(project(":runtime"))
 }

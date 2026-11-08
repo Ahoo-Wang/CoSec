@@ -11,9 +11,8 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime
+package me.ahoo.cosec.architecture
 
-import me.ahoo.cosec.architecture.Projects
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
