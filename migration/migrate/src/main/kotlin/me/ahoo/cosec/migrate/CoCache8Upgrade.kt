@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.migrate
 
+import io.lettuce.core.ScanArgs
+import io.lettuce.core.ScanCursor
+import io.lettuce.core.api.sync.RedisKeyCommands
+import io.lettuce.core.api.sync.RedisStringCommands
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.core.CoCacheFactory
@@ -30,6 +34,7 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.node.ObjectNode
+import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Duration
 
@@ -49,6 +54,42 @@ interface RawRedis {
     fun pttl(key: String): Long
 
     fun del(keys: Collection<String>): Long
+
+    fun set(key: String, value: ByteArray)
+}
+
+/** [RawRedis] over Lettuce's commands, of a node or of a cluster, whose `SCAN` covers every node. */
+internal class LettuceRawRedis(
+    private val keys: RedisKeyCommands<ByteArray, ByteArray>,
+    private val strings: RedisStringCommands<ByteArray, ByteArray>,
+) : RawRedis {
+    override fun scan(pattern: String): List<String> {
+        val found = ArrayList<String>()
+        var cursor: ScanCursor = ScanCursor.INITIAL
+        do {
+            val result = keys.scan(cursor, ScanArgs.Builder.matches(pattern).limit(SCAN_COUNT))
+            result.keys.mapTo(found) { it.decodeToString() }
+            cursor = result
+        } while (!result.isFinished)
+        return found.distinct()
+    }
+
+    override fun type(key: String): String = keys.type(key.encodeToByteArray())
+
+    override fun get(key: String): ByteArray? = strings.get(key.encodeToByteArray())
+
+    override fun pttl(key: String): Long = keys.pttl(key.encodeToByteArray())
+
+    override fun del(keys: Collection<String>): Long =
+        this.keys.del(*keys.map { it.encodeToByteArray() }.toTypedArray())
+
+    override fun set(key: String, value: ByteArray) {
+        strings.set(key.encodeToByteArray(), value)
+    }
+
+    private companion object {
+        const val SCAN_COUNT = 1000L
+    }
 }
 
 /**
@@ -84,7 +125,14 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         val refusals: List<String>,
         /** SHA-256 of every CoCache 6 value read, by key, for the export's report. */
         val inputSha256: String,
+        /** An earlier run that deleted the documents and did not publish all of them, from its marker. */
+        val unfinished: Unfinished? = null,
+        /** Whether the platform document is a CoCache 8 head already. */
+        val platformHead: Boolean = false,
     )
+
+    /** What an earlier run's marker says: where it exported the documents, and which. */
+    class Unfinished(val out: String, val documents: List<String>)
 
     /** What [plan] has found so far. */
     private inner class Reading {
@@ -105,9 +153,17 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
             }
             input.update(storageKey.encodeToByteArray())
             input.update(raw)
+            if (raw[STATE_INDEX] !in STATES) {
+                // As CoCache6Format.scalar refuses it: deleting what it cannot read could drop a revocation.
+                refusals += "[$storageKey] holds a CoCache 6 value in an unknown state ${raw[STATE_INDEX]}."
+                return
+            }
             val encodedKey = storageKey.removePrefix("$path:")
             val value = raw[STATE_INDEX] == CoCache6Format.STATE_VALUE
             val payload = raw.copyOfRange(CoCache6Format.HEADER_SIZE, raw.size)
+            if (value && cacheName == CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME && encodedKey == OPEN_CHANGES) {
+                openChanges(storageKey, payload)
+            }
             if (value && cacheName in REVOCATIONS) {
                 // Written again over the old value, never deleted.
                 revocation(cacheName, storageKey, encodedKey, payload, refusals)?.let { revocations += it }
@@ -122,7 +178,21 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
             }
         }
 
-        fun plan(): Plan = Plan(
+        /** A change still open, a draft included, is one the upgrade would drop. */
+        @Suppress("TooGenericExceptionCaught")
+        private fun openChanges(storageKey: String, payload: ByteArray) {
+            val listed = try {
+                reader.readTree(payload) as? ObjectNode ?: error("not a JSON object")
+            } catch (error: RuntimeException) {
+                refusals += "[$storageKey] lists open changes that do not decode: ${error.message}"
+                return
+            }
+            if (!listed.isEmpty) {
+                pending += "$storageKey (${listed.propertyNames().joinToString()})"
+            }
+        }
+
+        fun plan(unfinished: Unfinished?, platformHead: Boolean): Plan = Plan(
             documents.values.associate { it },
             revocations,
             deletions,
@@ -130,6 +200,8 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
             skipped,
             refusals,
             input.digest().joinToString("") { "%02x".format(it) },
+            unfinished,
+            platformHead,
         )
     }
 
@@ -140,7 +212,31 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
             val path = CoSecCacheSpecs.storagePath(keyPrefix, cacheName)
             redis.scan(glob(path) + ":*").sorted().forEach { reading.read(cacheName, path, it) }
         }
-        return reading.plan()
+        val platform = "${CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME)}:" +
+            SnapshotKeyEncoder.PLATFORM
+        val platformHead = redis.type(platform) == STRING && redis.get(platform)?.let { !isCoCache6(it) } == true
+        return reading.plan(unfinished(), platformHead)
+    }
+
+    /** The marker an earlier run left, if it stopped between deleting the documents and publishing every one. */
+    fun unfinished(): Unfinished? {
+        val marker = redis.get(markerKey(keyPrefix)) ?: return null
+        val tree = reader.readTree(marker)
+        return Unfinished(tree.get(OUT).asString(), tree.get(DOCUMENTS).iterator().asSequence().map { it.asString() }.toList())
+    }
+
+    /**
+     * Deletes the marker of an interrupted run once every document it lists has a head again, as `publish --resume`
+     * leaves them: [hasHead] answers for an encoded document key. Whether it was deleted.
+     */
+    fun finish(hasHead: (SnapshotKey) -> Boolean): Boolean {
+        val unfinished = unfinished() ?: return false
+        val missing = unfinished.documents.filterNot { encoded -> SnapshotKeyEncoder.decode(encoded)?.let(hasHead) == true }
+        if (missing.isNotEmpty()) {
+            return false
+        }
+        redis.del(listOf(markerKey(keyPrefix)))
+        return true
     }
 
     /**
@@ -152,9 +248,19 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
     @Suppress("TooGenericExceptionCaught")
     fun check(plan: Plan, discardPending: Boolean): List<String> {
         val problems = ArrayList(plan.refusals)
+        plan.unfinished?.let {
+            problems += "An earlier cocache8 run did not finish: it deleted the CoCache 6 documents and stopped before " +
+                "it had published all of ${it.documents}, exported to ${it.out}. Do not run cocache8 to finish it: it " +
+                "cannot see the documents it deleted. Publish them from the export with publish --resume (below)."
+        }
+        if (plan.unfinished == null && plan.documents.isEmpty() && !plan.platformHead) {
+            problems += "There is neither a CoCache 6 document to move nor a platform document: a cocache8 run that " +
+                "stopped after deleting the documents leaves this. Publish them from its export with publish --resume, " +
+                "or publish the documents first."
+        }
         if (plan.pending.isNotEmpty() && !discardPending) {
             problems += "A change is in flight, in ${plan.pending}: publish or abandon it first, or discard it " +
-                "(--discard-pending); the upgrade keeps no staging slot and no candidate."
+                "(--discard-pending); the upgrade keeps no staging slot, candidate or open change."
         }
         if (plan.documents.isNotEmpty()) {
             try {
@@ -167,10 +273,19 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
     }
 
     /**
-     * Writes [plan], which [check] accepted: the revocations through [factory]'s CoCache 8 tables, then deletes the other
-     * CoCache 6 values, then publishes the documents through [store].
+     * Writes [plan], which [check] accepted. The documents go first to [out], in `publish`'s layout, and a marker
+     * (`<p>:meta:cocache8`) records it before anything in Redis changes; then the revocations through [factory]'s
+     * CoCache 8 tables, the deletion of the other CoCache 6 values and the documents through [store]. The marker goes only
+     * once every document is published: a run that stops in between leaves it, and a later run refuses to start.
      */
-    fun apply(plan: Plan, factory: CoCacheFactory, store: ControlStore): PublishResult? {
+    fun apply(plan: Plan, factory: CoCacheFactory, store: ControlStore, out: Path): PublishResult? {
+        if (plan.documents.isNotEmpty()) {
+            ConvertedDirectory.write(export(plan), out)
+            val marker = CoSecJson.mapper.createObjectNode()
+            marker.put(OUT, out.toAbsolutePath().toString())
+            marker.putArray(DOCUMENTS).apply { plan.documents.keys.forEach { add(SnapshotKeyEncoder.encode(it)) } }
+            redis.set(markerKey(keyPrefix), CoSecJson.mapper.writeValueAsBytes(marker))
+        }
         val tokens = factory.createLocked(CoSecCacheSpecs.revokedToken(keyPrefix))
         val subjects = factory.createLocked(CoSecCacheSpecs.revokedSubject(keyPrefix))
         for (revocation in plan.revocations) {
@@ -188,8 +303,22 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         if (plan.documents.isEmpty()) {
             return null
         }
-        return DocumentPublisher(store).publish(plan.documents)
+        val published = DocumentPublisher(store).publish(plan.documents)
+        redis.del(listOf(markerKey(keyPrefix)))
+        return published
     }
+
+    private fun export(plan: Plan): Conversion = Conversion(
+        plan.documents,
+        Provenance(emptyList(), emptyList()),
+        ConversionReport(
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            mapOf("documents" to plan.documents.size, "revocations" to plan.revocations.size),
+            plan.inputSha256,
+        ),
+    )
 
     private fun <V : Any> write(table: Store<String, V>, codec: Codec<V>, revocation: Revocation) {
         val value = codec.decode(revocation.value)
@@ -261,6 +390,19 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         private const val NO_EXPIRY = -1L
         private const val PROVENANCE = "provenance"
         private val PENDING = setOf(CoSecCacheSpecs.STAGE_CACHE_NAME, CoSecCacheSpecs.CANDIDATE_CACHE_NAME)
+        private val STATES = setOf(CoCache6Format.STATE_VALUE, CoCache6Format.STATE_MISSING, CoCache6Format.STATE_LEASE)
+        private const val OPEN_CHANGES = "open-changes"
+        private const val OUT = "out"
+        private const val DOCUMENTS = "documents"
+
+        /** Where a run records that it deleted the documents and has not published them all yet. */
+        fun markerKey(keyPrefix: String): String = "${keyPrefix.trimEnd(':')}:meta:cocache8"
+
+        /** The `publish` that finishes a run stopped after its deletions, complete. */
+        fun resumeCommand(uri: String, keyPrefix: String, cluster: Boolean, out: String): String =
+            "cosec-migrate publish --to-redis $uri --key-prefix $keyPrefix" +
+                (if (cluster) " --cluster" else "") + " --in $out --resume"
+
         private val REVOCATIONS = setOf(
             CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
             CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME

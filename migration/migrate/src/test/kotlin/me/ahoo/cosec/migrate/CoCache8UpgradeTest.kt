@@ -27,8 +27,12 @@ import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.createLocked
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -205,6 +209,85 @@ class CoCache8UpgradeTest {
         cocache8().let { (code, output) ->
             code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
             output.assert().contains("does not decode")
+        }
+        untouched()
+    }
+
+    /**
+     * Review M1 of #1203: a run that stops after it deleted the documents, before it published them all, leaves its
+     * marker. A second `cocache8` cannot see the deleted documents, so it refuses, naming the complete `publish
+     * --resume`; that publish finishes the run and clears the marker, after which `cocache8` finds nothing to move.
+     */
+    @Test
+    fun `a run that stops after deleting the documents is finished by publish, never by cocache8`() {
+        alphaDeployment()
+        val out = temp.resolve("out")
+        val failure = cocache8Store { factory, store ->
+            // The connection drops while the tenant document is published.
+            val failing = object : ControlStore by store {
+                override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument): HeadWrite {
+                    if (key is SnapshotKey.Tenant) error("connection lost")
+                    return store.putHead(key, expected, document)
+                }
+            }
+            val upgrade = CoCache8Upgrade(LettuceRawRedis(redis.sync(), redis.sync()), keyPrefix)
+            val plan = upgrade.plan()
+            runCatching { upgrade.apply(plan, factory, failing, out) }.exceptionOrNull()
+        }
+        failure.assert().isNotNull()
+        raw(CoCache8Upgrade.markerKey(keyPrefix)).assert().isNotNull()
+        val resume = "cosec-migrate publish --to-redis $REDIS --key-prefix $keyPrefix --in ${out.toAbsolutePath()} --resume"
+        run("cocache8", "--redis", REDIS, "--key-prefix", keyPrefix, "--out", temp.resolve("again").toString())
+            .let { (code, output) ->
+                code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+                output.assert().contains("An earlier cocache8 run did not finish").contains("Finish it with: $resume")
+            }
+        run("publish", "--to-redis", REDIS, "--key-prefix", keyPrefix, "--in", out.toString(), "--resume")
+            .let { (code, output) ->
+                code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+                output.assert().contains("Published tenant:acme").contains("The cocache8 run that stopped is finished")
+            }
+        raw(CoCache8Upgrade.markerKey(keyPrefix)).assert().isNull()
+        cocache8Store { _, store ->
+            runBlocking {
+                listOf(SnapshotKey.Platform, SnapshotKey.App("order"), SnapshotKey.Tenant("acme"))
+                    .forEach { store.head(it).assert().describedAs("$it").isNotNull() }
+            }
+        }
+        run("cocache8", "--redis", REDIS, "--key-prefix", keyPrefix, "--out", temp.resolve("third").toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+    }
+
+    /** Neither a document to move nor a platform head: what a stopped run leaves, never a reason to report success. */
+    @Test
+    fun `no document to move and no platform document is refused`() {
+        cocache6(key(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-1"), "true", ttlMillis = TEN_MINUTES)
+        cocache8().let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("neither a CoCache 6 document to move nor a platform document")
+        }
+        CoCache8Upgrade.isCoCache6(checkNotNull(raw(key(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-1"))))
+            .assert().isTrue()
+    }
+
+    /**
+     * Review L3 of #1203: an open change, a draft included, is in flight as much as a staged one; and a CoCache 6 header
+     * in a state CoCache 6 never wrote is refused, as `convert --from-redis` refuses it, never deleted.
+     */
+    @Test
+    fun `an open change, or a value in an unknown state, is refused`() {
+        alphaDeployment()
+        cocache6(key(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME, "open-changes"), "{\"draft-1\":\"2026-11-01T00:00:00Z\"}")
+        cocache8().let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("REFUSED A change is in flight").contains("draft-1")
+        }
+        untouched()
+        cocache6(key(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME, "open-changes"), "{}")
+        cocache6(key(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-odd"), "true", state = 'X'.code.toByte())
+        cocache8().let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("in an unknown state")
         }
         untouched()
     }

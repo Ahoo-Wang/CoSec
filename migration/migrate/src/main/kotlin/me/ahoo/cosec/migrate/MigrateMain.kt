@@ -24,6 +24,7 @@ import io.lettuce.core.api.sync.RedisKeyCommands
 import io.lettuce.core.api.sync.RedisStringCommands
 import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.codec.ByteArrayCodec
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
@@ -266,15 +267,32 @@ object MigrateMain {
     }
 
     private fun publish(options: Options, out: PrintStream): Int {
-        options.required("to-redis")
+        val uri = options.required("to-redis")
+        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        val cluster = options.flag("cluster")
         val input = Path.of(options.required("in"))
         val documents = ConvertedDirectory.read(input)
-        controlStore(options) { store ->
-            val result = DocumentPublisher(store).publish(documents, resume = options.flag("resume"))
-            result.written.forEach { out.println("Published $it") }
-            result.skipped.forEach { out.println("Already published, identical: $it") }
+        val finished = try {
+            controlStore(options) { store ->
+                val result = DocumentPublisher(store).publish(documents, resume = options.flag("resume"))
+                result.written.forEach { out.println("Published $it") }
+                result.skipped.forEach { out.println("Already published, identical: $it") }
+                // A cocache8 run that stopped after its deletions is finished once every document it listed has a head.
+                rawRedis(uri, cluster) { redis ->
+                    CoCache8Upgrade(redis, keyPrefix).finish { key -> runBlocking { store.head(key) } != null }
+                }
+            }
+        } catch (error: PublishException) {
+            out.println("Failed: ${error.message}")
+            out.println(
+                "Finish with: ${CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, input.toAbsolutePath().toString())}"
+            )
+            return FAILED
         }
         out.println("Published ${documents.size} document(s). The 7.x data is untouched.")
+        if (finished) {
+            out.println("The cocache8 run that stopped is finished: every document it deleted is published again.")
+        }
         return OK
     }
 
@@ -466,6 +484,7 @@ object MigrateMain {
      * families and refuses, writing nothing, what cannot be moved; else writes the documents to `--out` (the input of
      * `publish`, to finish a run that stops after it deleted them), then the revocations, deletions and documents.
      */
+    @Suppress("TooGenericExceptionCaught")
     private fun cocache8(options: Options, out: PrintStream): Int {
         val uri = options.required("redis")
         val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
@@ -484,6 +503,9 @@ object MigrateMain {
         )
         if (problems.isNotEmpty()) {
             problems.forEach { out.println("REFUSED $it") }
+            plan.unfinished?.let {
+                out.println("Finish it with: ${CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, it.out)}")
+            }
             out.println("Nothing was written.")
             return FAILED
         }
@@ -491,36 +513,30 @@ object MigrateMain {
             out.println("Dry run: nothing was written.")
             return OK
         }
+        val resume = CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, output.toAbsolutePath().toString())
         if (plan.documents.isNotEmpty()) {
-            ConvertedDirectory.write(exported(plan), output)
-            out.println("Wrote the documents to $output: `publish --in $output --resume` finishes a run that stops.")
+            out.println("Writing the documents to $output first. If this run stops after it deleted them, finish with: $resume")
         }
-        val published = rawRedis(uri, cluster) { redis ->
-            factory(uri, cluster) { factory ->
-                val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                CoCache8Upgrade(
-                    redis,
-                    keyPrefix
-                ).apply(plan, factory, CoCacheControlStore.create(factory, heads, keyPrefix))
+        val published = try {
+            rawRedis(uri, cluster) { redis ->
+                factory(uri, cluster) { factory ->
+                    val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                    CoCache8Upgrade(redis, keyPrefix)
+                        .apply(plan, factory, CoCacheControlStore.create(factory, heads, keyPrefix), output)
+                }
             }
+        } catch (error: Exception) {
+            out.println("FAILED ${error.message}")
+            if (plan.documents.isNotEmpty()) {
+                out.println("Do not run cocache8 again to finish: it cannot see the documents it deleted. Finish with: $resume")
+            }
+            return FAILED
         }
         out.println("Wrote ${plan.revocations.size} revocation(s) again, with what remains of their lifetimes.")
         out.println("Deleted ${plan.deletions.values.sumOf { it.size }} CoCache 6 value(s).")
         published?.written?.forEach { out.println("Published $it") }
         return OK
     }
-
-    private fun exported(plan: CoCache8Upgrade.Plan): Conversion = Conversion(
-        plan.documents,
-        Provenance(emptyList(), emptyList()),
-        ConversionReport(
-            emptyList(),
-            emptyList(),
-            emptyList(),
-            mapOf("documents" to plan.documents.size, "revocations" to plan.revocations.size),
-            plan.inputSha256,
-        ),
-    )
 
     /** Raw commands on the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
     private fun <T> rawRedis(uri: String, cluster: Boolean, block: (RawRedis) -> T): T {
@@ -546,29 +562,4 @@ object MigrateMain {
         }
     }
 
-    /** [RawRedis] over Lettuce's commands, of a node or of a cluster, whose `SCAN` covers every node. */
-    private class LettuceRawRedis(
-        private val keys: RedisKeyCommands<ByteArray, ByteArray>,
-        private val strings: RedisStringCommands<ByteArray, ByteArray>,
-    ) : RawRedis {
-        override fun scan(pattern: String): List<String> {
-            val found = ArrayList<String>()
-            var cursor: ScanCursor = ScanCursor.INITIAL
-            do {
-                val result = keys.scan(cursor, ScanArgs.Builder.matches(pattern).limit(SCAN_COUNT))
-                result.keys.mapTo(found) { it.decodeToString() }
-                cursor = result
-            } while (!result.isFinished)
-            return found.distinct()
-        }
-
-        override fun type(key: String): String = keys.type(key.encodeToByteArray())
-
-        override fun get(key: String): ByteArray? = strings.get(key.encodeToByteArray())
-
-        override fun pttl(key: String): Long = keys.pttl(key.encodeToByteArray())
-
-        override fun del(keys: Collection<String>): Long =
-            this.keys.del(*keys.map { it.encodeToByteArray() }.toTypedArray())
-    }
 }
