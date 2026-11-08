@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.gateway
 
+import io.netty.handler.codec.http.DefaultHttpHeaders
+import io.netty.handler.codec.http.HttpHeaderNames
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
@@ -154,16 +156,38 @@ class CookieTokenPropertyTest {
         }
     }
 
+    /**
+     * Whether [header] is rewritten to nothing, and only for a reason the rewrite has: no cookie is left, or a `$Version`
+     * pair would lead a header that did not start with one, or the leading `$Version` pair went. Read here independently
+     * of the rewrite, so a rewrite that drops a header for no reason fails.
+     */
+    private fun wentWhole(header: String): Boolean {
+        if (pipeline.withoutCookieToken(header) != null) {
+            return false
+        }
+        val pairs = header.split(';')
+        val token = { pair: String -> pair.split(',').any { isToken(it.substringBefore('=')) } }
+        val left = pairs.filterNot(token)
+        val head = left.joinToString(";").trimStart(' ', '\t')
+        val version = "\$Version"
+        (
+            left.all { pair -> pair.all { it.isWhitespace() || it == ',' } } ||
+                head.startsWith(version, ignoreCase = true) ||
+                (header.startsWith(version, ignoreCase = true) && token(pairs.first()))
+            ).assert().describedAs(header).isTrue()
+        return true
+    }
+
     /** A decoder of the older kind: `;` and `,` both separate cookies, and names are trimmed. */
     private fun splitting(header: String) = header.split(';', ',').map { it.substringBefore('=').trim() }
 
     @Test
     fun `no forwarded cookie header names the token, and every other cookie decodes as it did`() {
-        // The review's case: trimming the leading space made the header start with `$Version`, and Netty then dropped
-        // the `$Version` and `$Path` cookies it read before.
-        val example = listOf(" \$Version=1; authorization=t; \$Path=/; a=b")
-        forwarded(example)!!.flatMap(::strict).assert()
-            .isEqualTo(listOf("\$Version" to "1", "\$Path" to "/", "a" to "b"))
+        // The review's case: trimming the leading space would make the header start with `$Version`, and Netty would then
+        // drop the `$Version` and `$Path` cookies it read before. A forwarded value cannot keep the space, so it goes whole.
+        forwarded(listOf(" \$Version=1; authorization=t; \$Path=/; a=b")).assert().isNull()
+        // What a browser sends: the token first, then the rest. Netty refused the leading space this used to leave.
+        forwarded(listOf("authorization=abc; theme=dark")).assert().isEqualTo(listOf("theme=dark"))
         val random = Random(20261103)
         repeat(iterations) { iteration ->
             val headers = List(random.nextInt(1, 4)) { random.header() }
@@ -184,6 +208,10 @@ class CookieTokenPropertyTest {
                     }
                 }
                 sent?.forEach { header ->
+                    // Netty's own check of a header it sends: the gateway's routing filter copies it through this.
+                    if (header !in original) {
+                        DefaultHttpHeaders(true).set(HttpHeaderNames.COOKIE, header)
+                    }
                     hasCookie(header).assert().isTrue()
                     strict(header).none { isToken(it.first) }.assert().isTrue()
                     lax(header).none { isToken(it.first) }.assert().isTrue()
@@ -192,7 +220,8 @@ class CookieTokenPropertyTest {
                 // Every other cookie decodes as it did, under either decoder: same names, values and order (R2-6).
                 for (decode in listOf(::lax, ::strict)) {
                     val kept = sent.orEmpty().flatMap(decode)
-                    val expected = original.flatMap(decode).filterNot { isToken(it.first) }
+                    // A header that went whole forwards nothing; one may only when no rewrite keeps how it reads.
+                    val expected = original.filter { !wentWhole(it) }.flatMap(decode).filterNot { isToken(it.first) }
                     if (headers.none { it.commas }) {
                         kept.assert().isEqualTo(expected)
                     } else {
