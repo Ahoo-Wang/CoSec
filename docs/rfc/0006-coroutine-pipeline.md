@@ -178,6 +178,8 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 | `cosec-micrometer`、`cosec-kafka` | `cosec-runtime` | `MetricsListener`、`KafkaAuditListener` | — |
 | `cosec-cocache` | `cosec-runtime`（新增）、CoCache 6.7（含 `cocache-coroutines`） | `CoCacheMembershipProvider`、挂起的吊销检查、非阻塞的 `RedisRateLimiter` | SPI 签名中出现 Reactor 类型 |
 
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`cosec-cocache` 现在基于 CoCache 8.0.0（缓存为 `Store`，经 `CoCacheFactory` 创建），见 RFC 0003 §4 的说明；上表的 CoCache 6.7 只适用于当时。
+
 - 新依赖（Q7，AGENTS.md 要求先问）：`org.jetbrains.kotlinx:kotlinx-coroutines-core`、`-reactor`（只给 WebFlux / Gateway）、`-slf4j`（starter，MDC）、
   `-test` 与 `-debug`（测试；`-debug` 自带 BlockHound 集成，把 `Dispatchers.Default` 的工作线程标为不可阻塞）；`io.opentelemetry:opentelemetry-extension-kotlin`。
   不另写版本：Spring Boot 4 BOM 已经管理 `kotlinx-coroutines-bom` 与 `opentelemetry-bom`，各模块只写坐标，`gradle/libs.versions.toml` 只留一条说明（PR-1 #1025）。

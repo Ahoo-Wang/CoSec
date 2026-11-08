@@ -231,6 +231,8 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 
 > **实现说明（2026-11-07，#1254，RC1-52）**：登记表新增 `IDN-10`（`pipeline` 级）：含落单 UTF-16 代理项的 id 在进入处被拒绝，两个不同的 id 从不共用一个存储的 key。两个正例、一个反例场景（成对的代理项照常），12 个变异体全部被杀死；`idn-3-inactive-principal-accepted`、`scp-7-control-characters-accepted`、`scp-7-app-keys-take-any-id` 随代码重新生成。#1254 的审查确认：`main` 上自 #1240 起有 6 个变异体不再能应用，由 E2a 重新生成。
 
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`PIP-7` 新增两个守护：`cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout`（吊销表的 `read-timeout` 固定为命令超时）与 `cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked`（CoCache 6 写的吊销从不读成"没有吊销"）；`SNP-3` 的守护随 lock 加 constrain 改写，新增变异体 `snp-3-store-of-record-unknown-read-unconstrained`、`pip-7-revocation-read-timeout-unconstrained`，`snp-3-cache-outside-starter-unpinned` 与 `brk-3-migrate-writes-break-glass` 随代码重新生成。#1203 的 `mutationCheck` 31 个全部被杀死。
+
 ### 3.3 场景语料
 
 每个场景是 `test/conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：
@@ -526,7 +528,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 | `SnapshotSource`（单飞、有序安装、条件读重新校验、陈旧度、LRU、预热）、`SnapshotDocumentStore`、`InMemorySnapshotDocumentStore`、`SnapshotDocument`、`SnapshotOptions`、`SnapshotMetrics`、快照异常 | `core/core/src/main/kotlin/me/ahoo/cosec/snapshot/` | RFC 0004 §7.4 只换 key 与文档类型；RFC 0006 的挂起包装 |
 | `RedisSnapshotDocumentStore`、`PolicySnapshotCache`、`SnapshotRuntimeHints` | `backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/` | 数据面读取；控制面的头 |
 | `RedisSnapshotPublisher` 的条件写入（`putIfMatch`、冲突时重新读取、不加 `WAIT`） | 同上 | RFC 0007 PR-4 的 `CoCacheControlStore`；`SnapshotPublisher` 接口本身随切换删除（RFC 0007 Q25） |
-| CoCache 6.7 的条件写入与条件读 | `gradle/libs.versions.toml` | 不变 |
+| CoCache 6.7 的条件写入与条件读（2026-11-08 起为 CoCache 8.0.0，#1203） | `gradle/libs.versions.toml` | 不变 |
 | 扁平引擎、绑定索引、候选顺序、扁平 trace | `core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/` | 目标引擎；RFC 0005 PR-4 换掉 7.x 匹配器的适配 |
 | 租户、绑定、成员关系、`ScopeResolver`、条件 AST、索引键、`implies` | `core/model/src/main/kotlin/me/ahoo/cosec/model/` | 目标模型 |
 | 成员关系解析与按主体吊销 | `core/core/src/main/kotlin/me/ahoo/cosec/membership/`、`core/.../token/` | RFC 0006 PR-3 改为挂起 |
