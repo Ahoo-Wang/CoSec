@@ -74,6 +74,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   `eviction-check: fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`。它是告警：`cosecSnapshot` 不变，
   只有它属于就绪组。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
+- **没有使用者的公共 API 已移除。** `KafkaAuditEventSink`：starter 注册的是 `KafkaAuditListener`，它写入相同的 key 和 value。`SimpleSecurityContext` 及其扩展属性 `CoSecPrincipal.tenant`：请求的 `SecurityContext` 由管道创建，测试中请 mock 或自行实现该接口。引擎请求中的 `AuthzRequest.scope`、类 `me.ahoo.cosec.model.Scope`，以及 `Subject.roles`、`policies` 和 `root`，引擎都不读取：构造 `AuthzRequest` 或 `Subject` 的代码去掉这些参数即可。引擎使用的租户、角色和附加策略在 `FlatRequest.scope` 与 `FlatRequest.memberships` 中。`Subject.tenantId` 保留，供 stage A 的 `AttributeProvider` 使用，它在作用域解析之前运行。
 
 ### 经 CoCache 6 写入的数据 {#data-written-through-cocache-6}
 
@@ -554,7 +555,6 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token`（`cosec-runtime`） | `SimpleAccessToken`、`SimpleCompositeToken`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`、`RevocableTokenVerifier` |
 | `me.ahoo.cosec.principal` | `me.ahoo.cosec.api.principal`（`cosec-api`） | `SimplePrincipal`、`SimpleTenantPrincipal` |
 | `me.ahoo.cosec.tenant` | `me.ahoo.cosec.api.tenant`（`cosec-api`） | `SimpleTenant` |
-| `me.ahoo.cosec.context` | `me.ahoo.cosec.runtime.context`（`cosec-runtime`） | `SimpleSecurityContext` |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet`（`cosec-webmvc`） | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http`（`cosec-runtime`） | `RemoteIpResolver`、`XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit`（`cosec-spi`） | `AuditEventSink` |
@@ -567,8 +567,6 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 8.0 的 SPI 也在这些地方：`MembershipProvider` 和 `MembershipClaims` 在 `me.ahoo.cosec.spi.membership`，`SnapshotDocumentStore` 和 `InMemorySnapshotDocumentStore` 在 `me.ahoo.cosec.spi.snapshot`，`AttributeProvider` 在 `me.ahoo.cosec.spi.attribute`，`Authenticator` 在 `me.ahoo.cosec.spi.authn`；`SnapshotSource` 在 `me.ahoo.cosec.runtime.snapshot`，文档编解码器和编译器在 `me.ahoo.cosec.runtime.document`，路由映射在 `me.ahoo.cosec.runtime.route`（[扩展 CoSec](../architecture/extending.md#extension-points)）。
 
 **`CoSecJsonSerializer` 已删除。** CoSec 的 Jackson mapper 是 CoSec 内部的，核心模块的公共签名中不出现 Jackson 类型。用你自己的 mapper 序列化你自己的类型；用 `PolicyDocumentCodec` 读写策略文档。mapper 的配置没有变化，所以已存放在 Redis 中或已发送到 Kafka 的文档、令牌和记录照常可读。标注了 `@InternalCoSecApi` 的声明之所以公开，只是为了让 CoSec 的模块互相调用：它没有兼容性承诺，任何版本都可能改变，而且不显式 opt in 编译器就拒绝调用它。不要在应用中 opt in。
-
-**`KafkaAuditEventSink` 接收 `Executor`。** 它的第三个参数原来是 Reactor `Scheduler`，现在是 `java.util.concurrent.Executor`（默认是它自己的、带有界队列的单线程）。
 
 **CoSec 不再引入 CosId。** 在 7.x 中，`cosec-core`、`cosec-jwt` 和 `cosec-social` 在其 API 中带有 `cosid-core`，CoSec 的平台 `cosec-dependencies` 还导入了 `cosid-bom`。在 8.0 中只有 `cosec-cosid` 依赖 CosId，CoSec 的 BOM 都不导入它、也不设定它的版本，因此应用可以使用任意版本的 CosId，也可以不用，并自己声明它及其版本。CoSec 通过自己的端口 `IdGenerator`（`me.ahoo.cosec.spi.id`，位于 `cosec-spi`）生成 id。没有你自己的 bean 时，id 来自 `RandomIdGenerator`，即随机的版本 4 UUID。要继续使用 CosId 的 id（[Id](../architecture/extending.md#ids)）：
 
@@ -598,6 +596,8 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |
 | `BlacklistChecker` | 放在 `AttributeProvider` bean（`BlacklistAttributeProvider`）后面的 `BlacklistSource`。 |
 | `RequestAttributesAppender`、`GatewayRouteRequestAttributesAppender` | `AttributeProvider`。 |
+| `SimpleSecurityContext`、扩展属性 `CoSecPrincipal.tenant` | 无：请求的 `SecurityContext` 由管道创建。测试中请 mock 或自行实现该接口；主体的租户在 `TenantCapable` 上。 |
+| `KafkaAuditEventSink` | `KafkaAuditListener`，一个 `DecisionListener`，classpath 上有 `cosec-kafka` 时由 starter 注册（[可观测性](./observability.md)）。记录的 key 和 value 不变。 |
 | `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面（库或 HTTP API）；第一次写入用 `cosec-migrate publish`。 |
 | `LocalPolicyInitializer` 以及 `init-repository`/`force-refresh` | `cosec-migrate convert` 与 `publish`，或控制面的声明式 `apply`。 |
 | `CoSecExplainEndpoint`（`cosecExplain` actuator）、`AuthorizationExplainer`、`ExplainWarningCode` | 控制面的 `explain`（需要权限，可指定任一修订）；见[代码中的检查](../integration/checks.md)。 |

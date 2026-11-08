@@ -20,7 +20,6 @@ package me.ahoo.cosec.model
  */
 class AuthzRequest(
     val subject: Subject,
-    val scope: Scope,
     val action: Action,
     val resource: Resource,
     val environment: Environment,
@@ -28,14 +27,13 @@ class AuthzRequest(
 
 class Subject(
     val id: String,
+    /**
+     * The principal's tenant, for what is handed a subject before there is a scope: a stage-A `AttributeProvider` runs
+     * before the scope is resolved. The engine does not read it: its tenant is the resolved scope's.
+     */
     val tenantId: String,
     val authenticated: Boolean,
-    /** The roles as given, possibly with an `@space` suffix. The adapter scopes them. */
-    val roles: Set<String>,
-    val policies: Set<String>,
     val attributes: Map<String, Any>,
-    /** Decided beforehand by `RootPrincipalMatcher` (RFC 0002 stages 2–3); a break-glass binding replaces it later. */
-    val root: Boolean,
     /**
      * Whether what is bound to the principal by name (its attachments, and the principal bindings of the platform and
      * the tenant) grants it anything. False for a credential with a role cap (RFC 0009 §4.2): a cap means "only these
@@ -51,22 +49,6 @@ class Subject(
      */
     val breakGlass: Boolean,
 )
-
-/**
- * The scope a request is made in.
- *
- * It can only be [declared]: it comes from client headers or query parameters (`CoSec-App-Id`, `CoSec-Space-Id`) and
- * nobody has checked membership. Checked scopes are `me.ahoo.cosec.model.scope.Scope`, which only `ScopeResolver`
- * constructs (RFC 0004 §4.6).
- */
-class Scope private constructor(val tenantId: String, val appId: String, val spaceId: String, val source: Source) {
-    enum class Source { DECLARED, RESOLVED }
-
-    companion object {
-        fun declared(tenantId: String, appId: String, spaceId: String): Scope =
-            Scope(tenantId, appId, spaceId, Source.DECLARED)
-    }
-}
 
 /** For HTTP, `namespace` is `http` and `verb` the method. */
 class Action(val namespace: String, val verb: String)

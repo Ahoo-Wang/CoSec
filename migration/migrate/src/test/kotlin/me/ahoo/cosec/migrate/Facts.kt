@@ -16,7 +16,9 @@ package me.ahoo.cosec.migrate
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.principal.TenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
 import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable
 import me.ahoo.cosec.migrate.v7.api.context.request.DeviceIdCapable
@@ -33,7 +35,6 @@ import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
-import me.ahoo.cosec.runtime.context.SimpleSecurityContext
 import me.ahoo.cosec.runtime.document.JavaZones
 import java.net.URI
 import java.time.Clock
@@ -91,7 +92,7 @@ data class Facts(
         } else {
             SimpleTenantPrincipal.ANONYMOUS
         }
-        val context = SimpleSecurityContext(principal)
+        val context = PrincipalContext(principal)
         context.setPathVariables(pathVariables)
         return request to context
     }
@@ -260,4 +261,10 @@ internal object Matchers7x {
             { facts -> checked.evaluate(facts.input) }
         }
     }
+}
+
+/** What the 7.x evaluation reads of a context: the principal, its tenant, and the path variables it keeps there. */
+private class PrincipalContext(override val principal: TenantPrincipal) : SecurityContext {
+    override val tenant: Tenant get() = principal.tenant
+    override val attributes: MutableMap<String, Any> = HashMap()
 }

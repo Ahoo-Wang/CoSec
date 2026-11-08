@@ -46,10 +46,9 @@ interface FlatEngine {
 /**
  * What one evaluation over bindings reads besides the snapshot.
  *
- * Until the request model changes (RFC 0006), [request] holds the action, the resource, the environment and the
- * principal's id, attributes and whether it is authenticated. The rest of its subject (tenant, roles, policies, root)
- * is not read: [scope] and [memberships] replace it. The tenant comes from [scope] only, which is the subject's for
- * an authenticated principal and the default tenant for an anonymous one.
+ * [request] holds the action, the resource, the environment and the principal's id, attributes and whether it is
+ * authenticated. The roles and attachments are in [scope] and [memberships]. The tenant comes from [scope] only, which
+ * is the subject's for an authenticated principal and the default tenant for an anonymous one.
  *
  * Conditions read the request's attributes (RFC 0005 §3.2). The engine answers those it holds itself from these
  * fields; [attributes] answers the rest (`http.*`, `request.attributes.*`) and is never asked for the others.

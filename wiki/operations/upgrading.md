@@ -277,6 +277,13 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `cosec:approve` for the trust root, and accepts an API key's approval: approve and publish through upgraded
   instances only until the roll is done. An approval an older instance accepted names no credential, so an upgraded
   instance does not publish on it.
+- **Public API nothing used is gone.** `KafkaAuditEventSink`: `KafkaAuditListener` is what the starter registers,
+  and it writes the same key and value. `SimpleSecurityContext` and its extension `CoSecPrincipal.tenant`: the pipeline
+  makes the request's `SecurityContext`, and a test mocks or implements the interface. Of the engine's request,
+  `AuthzRequest.scope`, the class `me.ahoo.cosec.model.Scope`, and `Subject.roles`, `policies` and `root`, none of
+  which the engine read: code that builds an `AuthzRequest` or a `Subject` drops those arguments. The engine's tenant,
+  roles and attachments are in `FlatRequest.scope` and `FlatRequest.memberships`. `Subject.tenantId` stays, for a
+  stage-A `AttributeProvider`, which runs before there is a scope.
 
 ### Data written through CoCache 6
 
@@ -930,7 +937,6 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleAccessToken`, `SimpleCompositeToken`, `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`, `RevocableTokenVerifier` |
 | `me.ahoo.cosec.principal` | `me.ahoo.cosec.api.principal` (`cosec-api`) | `SimplePrincipal`, `SimpleTenantPrincipal` |
 | `me.ahoo.cosec.tenant` | `me.ahoo.cosec.api.tenant` (`cosec-api`) | `SimpleTenant` |
-| `me.ahoo.cosec.context` | `me.ahoo.cosec.runtime.context` (`cosec-runtime`) | `SimpleSecurityContext` |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
@@ -952,9 +958,6 @@ carries a Jackson type. Serialize your own types with your own mapper; read and 
 Redis or sent to Kafka read as before. A declaration marked `@InternalCoSecApi` is public only so CoSec's modules can
 call each other: it has no compatibility promise and can change in any release, and the compiler refuses a call to it
 without an explicit opt-in. Do not opt in from an application.
-
-**`KafkaAuditEventSink` takes an `Executor`.** Its third parameter was a Reactor `Scheduler`; it is now a
-`java.util.concurrent.Executor` (by default its own single thread with a bounded queue).
 
 **CoSec no longer brings CosId.** In 7.x, `cosec-core`, `cosec-jwt` and `cosec-social` had `cosid-core` in their API,
 and CoSec's platform, `cosec-dependencies`, imported `cosid-bom`. In 8.0 only `cosec-cosid` depends on CosId, and no
@@ -991,6 +994,8 @@ Code that uses any of these no longer compiles or is no longer called.
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |
 | `BlacklistChecker` | A `BlacklistSource` behind an `AttributeProvider` bean (`BlacklistAttributeProvider`). |
 | `RequestAttributesAppender`, `GatewayRouteRequestAttributesAppender` | `AttributeProvider`. |
+| `SimpleSecurityContext`, the extension `CoSecPrincipal.tenant` | None: the pipeline makes the request's `SecurityContext`. In a test, mock or implement the interface; a principal's tenant is on `TenantCapable`. |
+| `KafkaAuditEventSink` | `KafkaAuditListener`, a `DecisionListener` the starter registers when `cosec-kafka` is on the classpath ([Observability](./observability.md)). The record's key and value are the same. |
 | `PolicyRepository`, `AppRolePermissionRepository`, the Redis repositories and caches, `SnapshotPublisher`, `RedisSnapshotPublisher`, `PolicyHistory`, `RedisPolicyRevisionStore`, writes to `AppPermissionCache`/`RolePermissionCache` | The control plane (library or HTTP API) for writes; `cosec-migrate publish` for the first ones. |
 | `LocalPolicyInitializer` and `init-repository`/`force-refresh` | `cosec-migrate convert` and `publish`, or the control plane's declarative `apply`. |
 | `CoSecExplainEndpoint` (`cosecExplain` actuator), `AuthorizationExplainer`, `ExplainWarningCode` | The control plane's `explain` (authorized, and for any revision); see [Checks](../integration/checks.md). |

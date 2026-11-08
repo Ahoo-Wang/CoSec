@@ -26,7 +26,7 @@ import java.util.TreeMap
 internal object JsonSchemaWriter {
     const val DRAFT_07 = "http://json-schema.org/draft-07/schema#"
 
-    /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns.NOT_EXPRESSED]). */
+    /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns]). */
     const val NOT_SUFFICIENT = "Passing this schema is necessary, not sufficient: the compiler also checks what JSON " +
         "Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too."
 

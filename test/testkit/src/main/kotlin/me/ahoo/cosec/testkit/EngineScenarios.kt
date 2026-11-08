@@ -54,7 +54,6 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import tools.jackson.databind.JsonNode
 import java.time.Instant
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /** What evaluating an engine scenario produced, compared with its `expect` by [EngineExpectations]. */
 @ExperimentalCoSecApi
@@ -222,14 +221,10 @@ class EngineScenarios(
                 id = credential.id,
                 tenantId = scope.tenant.value,
                 authenticated = credential.authenticated,
-                roles = emptySet(),
-                policies = emptySet(),
                 attributes = credential.attributes,
-                root = false,
                 principalBindings = credential.principalBindings,
                 breakGlass = credential.breakGlass,
             ),
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = action,
             resource = resource,
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),

@@ -28,7 +28,6 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -194,10 +193,9 @@ class ApiKeyMigrationTest {
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return "scope-rejected"
         val subject =
-            Subject(principal, tenant.value, true, emptySet(), emptySet(), emptyMap(), false, principalBindings, false)
+            Subject(principal, tenant.value, true, emptyMap(), principalBindings, false)
         val request = AuthzRequest(
             subject,
-            Scope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action,
             Resource("x", "1", emptyMap()),
             Environment("10.0.0.1", "r", "", false),
