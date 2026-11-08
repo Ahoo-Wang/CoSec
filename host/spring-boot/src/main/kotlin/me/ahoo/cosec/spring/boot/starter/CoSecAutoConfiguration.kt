@@ -15,7 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
-import me.ahoo.cocache.spring.boot.CacheNameContributor
+import me.ahoo.cocache.spring.CacheNameContributor
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -43,7 +43,7 @@ class CoSecAutoConfiguration {
     }
 
     private companion object {
-        const val CACHE_NAME_CONTRIBUTOR = "me.ahoo.cocache.spring.boot.CacheNameContributor"
+        const val CACHE_NAME_CONTRIBUTOR = "me.ahoo.cocache.spring.CacheNameContributor"
         const val COSEC_CACHE_SPECS = "me.ahoo.cosec.cache.CoSecCacheSpecs"
     }
 }

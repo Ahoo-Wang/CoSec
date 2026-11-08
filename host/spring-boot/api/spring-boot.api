@@ -4,7 +4,7 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration {
 
 public class me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration$CacheNames {
 	public fun <init> ()V
-	public fun cosecCacheNameContributor ()Lme/ahoo/cocache/spring/boot/CacheNameContributor;
+	public fun cosecCacheNameContributor ()Lme/ahoo/cocache/spring/CacheNameContributor;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration {

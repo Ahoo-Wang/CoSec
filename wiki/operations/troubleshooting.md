@@ -439,7 +439,7 @@ yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noev
 ### Startup fails on a locked cache setting
 
 ```text
-Cache[PolicySnapshotCache] - ttl is pinned by cosec to forever; ... can't override a pinned field.
+Cache[PolicySnapshotCache] - cocache.caches.[PolicySnapshotCache].ttl is pinned by cosec to forever and can't be overridden.
 Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
