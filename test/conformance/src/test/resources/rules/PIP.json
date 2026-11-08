@@ -83,7 +83,9 @@
       "level": "pipeline",
       "guards": [
         "cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
-        "runtime:TokenAuthenticatorTest#otherFailuresPropagate"
+        "runtime:TokenAuthenticatorTest#otherFailuresPropagate",
+        "cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout",
+        "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked"
       ],
       "pending": null
     },

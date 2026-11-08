@@ -63,7 +63,7 @@ import java.time.Instant
  */
 class StoredFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
-    private val digest = SnapshotDigest(ByteArray(20) { it.toByte() })
+    private val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
     private val document = SnapshotDocument(
         2,
         5,
@@ -75,7 +75,9 @@ class StoredFormatTest {
      * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline (except
      * `apiKey`, `apiKey-uncapped`, `apiKey-empty-cap` and `memberships-inactive`, the formats of RFC 0009 PR-3): each was
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
-     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780.
+     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780. `revisionIndex` is
+     * the exception: its digests became CoCache 8's SHA-256 with the algorithm (`SHA-256:<hex>`), which replaced the
+     * SHA-1 hex digests of CoCache 6.
      */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
@@ -187,6 +189,19 @@ class StoredFormatTest {
         }
         assertThrows<JacksonException> { CoSecJson.mapper.readTree("""{"a":1,"a":2}""") }
         assertThrows<JacksonException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
+    }
+
+    /**
+     * The revocation tables are the only CoSec caches whose values CoCache's `JacksonCodec` writes, with [CoSecJson]'s
+     * mapper, for the declared `Boolean` and `Long`: CoCache 8.0.0-alpha.6 encodes by the declared type (#873), which
+     * for these final types writes what it always did.
+     */
+    @Test
+    fun `revocations`() {
+        val token = CoSecCacheSpecs.revokedToken().codec
+        pinned("revokedToken", true, token::encode, token::decode, "true")
+        val subject = CoSecCacheSpecs.revokedSubject().codec
+        pinned("revokedSubject", 1_761_955_200_000L, subject::encode, subject::decode, "1761955200000")
     }
 
     @Test

@@ -24,12 +24,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import me.ahoo.cocache.api.spi.CoherenceBackend
-import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.redis.RedisBackend
-import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
-import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.shadow.CoCacheCandidateStore
@@ -57,7 +54,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.SmartInitializingSingleton
@@ -94,25 +90,24 @@ class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cache.snapshot.PolicySnapshotCache"])
-    @ConditionalOnBean(CacheRuntime::class)
+    @ConditionalOnBean(CoCacheFactory::class)
     class Redis {
         /**
-         * The snapshot cache, customizable like every CoSec cache except for what [CoSecCacheSpecs.pinPolicySnapshot]
-         * keeps: one local max age, from `cosec.authorization.snapshot.local-max-age`.
+         * The snapshot store, created through CoCache's factory like every CoSec cache: the `cocache.*` properties and
+         * customizers apply to it, except for what [CoSecCacheSpecs.locks] keeps, such as its one local max age, from
+         * `cosec.authorization.snapshot.local-max-age`.
          */
         @Bean
         @ConditionalOnMissingBean
         fun cosecPolicySnapshotCache(
-            runtime: CacheRuntime,
-            customizers: ObjectProvider<CacheSpecCustomizer>,
-            cocacheProperties: ObjectProvider<CoCacheProperties>,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
             cosec: CoSecProperties,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
-            val base = CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, CachePolicy.DEFAULT, snapshot.localMaxAge)
-            val assembled = cosecCacheAssembler(runtime, customizers, cocacheProperties).assemble(base)
-            return runtime.createPolicySnapshotCache(CoSecCacheSpecs.pinPolicySnapshot(assembled, base))
+            return factory.createPolicySnapshotCache(
+                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge)
+            )
         }
 
         @Bean
@@ -120,13 +115,24 @@ class CoSecSnapshotAutoConfiguration {
         fun cosecRedisSnapshotDocumentStore(cache: PolicySnapshotCache): RedisSnapshotDocumentStore =
             RedisSnapshotDocumentStore(cache)
 
-        /** `SNP-3`: Redis must not evict snapshot documents, or a global DENY can silently vanish. */
+        /**
+         * `SNP-3`: Redis must not evict snapshot documents, or a global DENY can silently vanish. CoCache's own check of
+         * its `Store`s runs as well (`cocache.redis.store-eviction-check`): it fails startup on `allkeys-*` or a policy it
+         * cannot read, whatever this check's mode, unless `cocache.redis.assume-maxmemory-policy` names one.
+         *
+         * Both read the backend of the runtime the snapshot store is created on ([CoCacheFactory.runtime]), as CoCache's
+         * does since 8.0.0-alpha.6 (#874): an application's own `CacheRuntime` need not expose its backend as a bean,
+         * and a `CoherenceBackend` bean beside it may not be the Redis that holds the snapshot.
+         */
         @Bean
         fun cosecEvictionPolicyCheck(
-            backend: CoherenceBackend,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
         ): SmartInitializingSingleton = SmartInitializingSingleton {
-            EvictionPolicyCheck.check(EvictionPolicyCheck.read(backend), properties.snapshot.evictionCheck)
+            EvictionPolicyCheck.check(
+                EvictionPolicyCheck.read(factory.runtime.backend),
+                properties.snapshot.evictionCheck
+            )
         }
 
         /**
@@ -137,10 +143,10 @@ class CoSecSnapshotAutoConfiguration {
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         fun cosecEvictionPolicyMonitor(
-            backend: CoherenceBackend,
+            factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
         ): EvictionPolicyMonitor = EvictionPolicyMonitor(
-            { EvictionPolicyCheck.read(backend) },
+            { EvictionPolicyCheck.read(factory.runtime.backend) },
             properties.snapshot.revalidateInterval,
             properties.snapshot.evictionCheck,
         ).start()
@@ -198,7 +204,7 @@ class CoSecSnapshotAutoConfiguration {
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cache.shadow.CoCacheCandidateStore"])
-    @ConditionalOnBean(CacheRuntime::class)
+    @ConditionalOnBean(CoCacheFactory::class)
     @ConditionalOnProperty(
         prefix = RuntimeAuthorizationProperties.PREFIX + ".shadow",
         name = ["enabled"],
@@ -217,12 +223,12 @@ class CoSecSnapshotAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun cosecCandidateSource(
-            runtime: CacheRuntime,
+            factory: CoCacheFactory,
             stores: ObjectProvider<CandidateStore>,
             compiler: PlatformCompiler,
             cosec: CoSecProperties,
         ): CandidateSource {
-            val store = stores.ifUnique ?: CoCacheCandidateStore.create(runtime, cosec.keyPrefix)
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
             return CachingCandidateSource(store, compiler::compile)
         }
 
@@ -246,10 +252,10 @@ class CoSecSnapshotAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun cosecShadowReports(
-            runtime: CacheRuntime,
+            factory: CoCacheFactory,
             cosec: CoSecProperties,
         ): CoCacheShadowReports =
-            CoCacheShadowReports.create(runtime, cosec.keyPrefix)
+            CoCacheShadowReports.create(factory, cosec.keyPrefix)
 
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
@@ -372,7 +378,14 @@ private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions =
 /**
  * `SNP-3` (RFC 0003 §4.1): every Redis node's `maxmemory-policy` is `noeviction`. A policy that could not be read is
  * treated like an evicting one: a Redis whose `INFO memory` is denied or failed, or a backend this check cannot see
- * into (a wrapper, a custom backend), is not known to keep the snapshot, so it fails startup unless told to warn.
+ * into (a custom backend that unwraps to neither CoCache backend), is not known to keep the snapshot, so it fails
+ * startup unless told to warn. A wrapper such as `HookedBackend` is read through `CoherenceBackend.unwrap` (CoCache
+ * 8.0.0-rc.1).
+ *
+ * Stricter than CoCache's own check (`StoreEvictionRisk`), which accepts `volatile-*` at startup while every `Store`'s
+ * policy has no `ttl`: the revocation tables and the control plane's leases are `Store`s whose entries carry a lifetime
+ * of their own, which `volatile-*` may evict before it ends, and an evicted revocation accepts its token again. CoCache
+ * counts such a lifetime only once the instance has written or read one.
  */
 internal object EvictionPolicyCheck {
     private val log = KotlinLogging.logger {}
@@ -389,13 +402,18 @@ internal object EvictionPolicyCheck {
         data class Unreadable(val reason: String) : Reading
     }
 
-    fun read(backend: CoherenceBackend): Reading = when (backend) {
-        is InMemoryBackend -> Reading.NotRedis
-        is RedisBackend -> backend.maxmemoryPolicies()?.let { policies ->
-            // A cluster connection that knows no upstream node reads nothing (review L3 of #1240).
-            if (policies.isEmpty()) Reading.Unreadable(NO_NODE) else Reading.Policies(policies)
-        } ?: Reading.Unreadable("INFO memory failed or is not allowed")
-        else -> Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
+    fun read(backend: CoherenceBackend): Reading {
+        val redis = backend as? RedisBackend ?: backend.unwrap(RedisBackend::class.java)
+        if (redis != null) {
+            return redis.maxmemoryPolicies()?.let { policies ->
+                // A cluster connection that knows no upstream node reads nothing (review L3 of #1240).
+                if (policies.isEmpty()) Reading.Unreadable(NO_NODE) else Reading.Policies(policies)
+            } ?: Reading.Unreadable("INFO memory failed or is not allowed")
+        }
+        if (backend is InMemoryBackend || backend.unwrap(InMemoryBackend::class.java) != null) {
+            return Reading.NotRedis
+        }
+        return Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
     }
 
     private const val NO_NODE = "no Redis node answered INFO memory"

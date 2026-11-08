@@ -479,8 +479,8 @@ object ChangeRequestCodec {
     }
 
     private fun digest(text: String): SnapshotDigest {
-        if (!DIGEST.matches(text)) malformed("[$text] is not a digest")
-        return SnapshotDigest(ByteArray(text.length / 2) { text.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() })
+        if (!SnapshotDigest.isDigest(text)) malformed("[$text] is not a digest")
+        return SnapshotDigest.parse(text)
     }
 
     private fun read(bytes: ByteArray): JsonNode = try {
@@ -516,7 +516,4 @@ object ChangeRequestCodec {
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
         "A change request is malformed: ${printable(reason)}."
     )
-
-    private val DIGEST = Regex("^[0-9a-f]{40}$")
-    private const val HEX = 16
 }

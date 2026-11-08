@@ -595,7 +595,7 @@ The control plane and `cosec-migrate` record how each revision was published. It
 
 | Field | Meaning |
 |---|---|
-| `parent` | `{"revision", "digest"}` of the head this revision replaced (`digest`: 40 lowercase hex digits); absent for the first revision. |
+| `parent` | `{"revision", "digest"}` of the head this revision replaced (`digest`: `SHA-256:` and 64 lowercase hex digits, the store's digest); absent for the first revision. |
 | `change` | The change that published it. |
 | `kind` | `PUBLISH`, `ROLLBACK`, `BREAK_GLASS`, `EXPIRE`, `MIGRATE` or `BOOTSTRAP`. |
 | `publishedBy` | `{"tenant", "principal"}`. |

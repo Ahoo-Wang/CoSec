@@ -24,6 +24,7 @@ import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 import kotlin.coroutines.Continuation
@@ -130,6 +131,42 @@ class CoCacheRevocationReaderTest {
         backend.failAll = false
         reader.isRevoked(revoked).assert().isTrue()
         reader.subjectRevokedBefore(tenant, alice).assert().isEqualTo(issuedBefore)
+    }
+
+    /**
+     * Only reads fail (CoCache 8.0.0-rc.1's `HookedBackend.failReads`): the reader degrades to "not revoked", the
+     * documented exception, while a revocation made meanwhile still lands, and applies as soon as reads succeed again.
+     */
+    @Test
+    fun aRevocationMadeWhileReadsFailAppliesOnceTheyRecover() = runBlocking<Unit> {
+        val revoked = tokenId()
+        backend.failReads = true
+        CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1))
+        reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
+        reader.isRevoked(revoked).assert().isFalse()
+        backend.failReads = false
+        reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
+        reader.isRevoked(revoked).assert().isTrue()
+    }
+
+    /**
+     * A key Redis cannot hold losslessly (an unpaired surrogate, which UTF-8 turns into `?`) is refused on reads and
+     * writes, by the revocation tables' keys (`IDN-10`) and by CoCache 8 itself. It is not the degraded read: the
+     * reader throws and never says "not revoked" for it, though the tables read a failed Redis read as absent.
+     */
+    @Test
+    fun aKeyRedisCannotHoldIsAnErrorNotARevocationMiss() = runBlocking<Unit> {
+        val unpaired = "${tokenId()}\uD800"
+        refused { reader.isRevoked(unpaired) }
+        refused { reader.subjectRevokedBefore(tenant, PrincipalId("alice\uDBFF")) }
+        refused { reader.subjectRevokedBefore(TenantId("acme\uDC00"), alice) }
+        // The write is refused the same way, so no token is revoked under an id that is not its own.
+        refused { store.revoke(unpaired, Duration.ofMinutes(1)) }
+        reader.isRevoked(unpaired.dropLast(1) + "?").assert().isFalse()
+    }
+
+    private fun refused(call: suspend () -> Any?) {
+        assertThrows<IllegalArgumentException> { runBlocking { call() } }
     }
 
     private companion object {

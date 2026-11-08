@@ -93,7 +93,7 @@ class ControlPlaneTest {
             val body = """{"schema":2,"revision":${document.revision},"publishedAt":"2026-10-27T00:00:00Z","next":1}"""
             StoredDocument(
                 SnapshotDocument(document.schema, document.revision, document.publishedAt, body.encodeToByteArray()),
-                SnapshotDigest(ByteArray(20) { 7 }),
+                SnapshotDigest(ByteArray(32) { 7 }),
             )
         }
     }

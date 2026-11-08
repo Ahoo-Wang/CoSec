@@ -55,12 +55,11 @@ class StrictCacheFailureTest {
         ApplicationContextRunner()
             .withPropertyValues(
                 "cocache.backend=memory",
-                // A hooked in-memory backend: the SNP-3 check cannot read it, and need not.
-                "cosec.authorization.snapshot.eviction-check=warn",
-                // an application's defaults must not weaken CoSec's store of record
-                "cocache.defaults.read-failure=degrade",
-                "cocache.defaults.ttl=60s",
-                "cocache.defaults.foreign-format=reclaim",
+                // an application's global layers must not weaken CoSec's store of record
+                "cocache.defaults.cache.read-failure=degrade",
+                "cocache.defaults.cache.ttl=60s",
+                "cocache.defaults.store.local-max-age=1h",
+                "cocache.overrides.cache.ttl=60s",
                 "cosec.authorization.routes.location=",
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
@@ -80,7 +79,7 @@ class StrictCacheFailureTest {
                 val cache = context.getBean(PolicySnapshotCache::class.java)
                 val store = context.getBean(RedisSnapshotDocumentStore::class.java)
                 cache.put(SnapshotKey.Platform, SnapshotDocument(2, 1, Instant.EPOCH, PLATFORM.encodeToByteArray()))
-                // never expires in Redis, despite cocache.defaults.ttl
+                // never expires in Redis, whatever the global layers say
                 checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
                     .inspect(SnapshotKeyEncoder.PLATFORM).remote.ttl.assert().isNull()
 
@@ -90,7 +89,7 @@ class StrictCacheFailureTest {
                     .cause.assert().isInstanceOf(CacheReadException::class.java)
                 assertThrows<ExecutionException> { store.readIfChanged(SnapshotKey.Platform, null).get() }
                     .cause.assert().isInstanceOf(CacheReadException::class.java)
-                // the revocation check degrades on purpose (documented): a miss means "not revoked"
+                // the revocation check reads "not revoked" on purpose (documented, unknown-read: absent)
                 context.getBean(RevokedTokenCache::class.java)["jti"].assert().isNull()
             }
     }

@@ -90,8 +90,6 @@ class ControlRateLimitStarterTest {
         )
         .withPropertyValues(
             "cocache.backend=memory",
-            // The in-memory backend has no maxmemory-policy to read (SNP-3).
-            "cosec.authorization.snapshot.eviction-check=warn",
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             "cosec.authorization.routes.location=",
         )

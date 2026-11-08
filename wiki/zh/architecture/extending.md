@@ -230,6 +230,7 @@ fun interface RateLimiter {
 - `read(key)` 可以从本地副本应答（把副本的最大年龄报告为 `localCopyMaxAge`）；`readIfChanged(key, known)` 必须读取权威存储，摘要一致时应答 `Unchanged`；`subscribe(listener)` 在变更可读之后报告变更。
 - 每个方法都不阻塞地返回，且从不抛出异常：失败以异常方式完成 future。存储的值无法解码时，异常的 cause 链中要带有 `SnapshotFormatException`。
 - 永远不要删除文档。一个曾经有文档的键读到“不存在”时，会按失败即拒绝处理。
+- 摘要是 `SnapshotDigest`：32 字节的 SHA-256，并标明其算法，不接受别的（SHA-1、版本号或 ETag 在构造时就被拒绝，于是每次读取都失败即拒绝）。对存储的字节，或对随文档变化的任何东西做哈希；只有你的存储解读它。它在控制 API 与事件中的文本形式是 `SHA-256:<64 位十六进制>`。
 
 使用 `cosec-cocache` 时，starter 使用 `RedisSnapshotDocumentStore`，控制面也写入同一个 Redis。不使用时，starter 注册 `InMemorySnapshotDocumentStore`；用 `put(key, document)` 放入文档，或者改为声明自己的 `SnapshotDocumentStore` bean。在平台文档就位之前，请求都按失败即拒绝处理。
 

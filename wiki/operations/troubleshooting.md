@@ -178,6 +178,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, on every request | No platform document is published: a new deployment, or a Redis that lost it. `cosec-migrate bootstrap` writes only the platform tenant's document. Until a platform document exists every request is `503`, the control API included. On a new deployment, readiness refuses traffic until the first one is installed ([Instance is not ready](#instance-is-not-ready)). Readiness latches once it accepts: a document lost later does not make it refuse again, so every request fails closed with `503`, and only the `cosecSnapshot` health indicator goes DOWN. That turns readiness DOWN only if you add `cosecSnapshot` to the readiness group, which during a Redis outage turns 503s into connection failures. | Publish one with `cosec-migrate publish` ([The first documents](./storage.md#the-first-documents)). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, for some tenants only | The tenant is in [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot), and the oldest document its requests read was last confirmed longer ago than `fail-closed.max-lag` (`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`). | Restore Redis; see [Decisions use an old revision](#decisions-use-an-old-revision). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | A document the request needs could not be read in time (Redis down or slow on a cold load), cannot be decoded or compiled, or disappeared from Redis after it was seen. A failed load and a lost document are logged with the document's name: `Loading snapshot document [<doc>] failed.`, `Snapshot document [<doc>] disappeared from the store; failing closed.` | Restore Redis, or publish a readable revision of the document ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable` after upgrading from 8.0.0-alpha, with `401`s of revoked tokens turned `503` and the control API `500` | The data 8.0.0-alpha wrote through CoCache 6, which CoCache 8 does not read: `Cache[<name>] - key[<key>] holds content this cache cannot read (format[1], this node writes format[2]: not written in this node's format)`. It fails closed; nothing reads it as absent. | Stop every instance and run `cosec-migrate cocache8` ([Upgrading](./upgrading.md#data-written-through-cocache-6)). Do not delete these keys by hand, as the message suggests for a value that can be dropped: a deleted revocation accepts its token again, a deleted document leaves its tenant without its DENYs. |
 | `INDETERMINATE: MissingPolicies`, `AmbiguousPolicy` / `missing_policies` | A binding or an attachment names a policy the documents do not define, or a policy id both the tenant and the platform define. | Fix the document through the control plane. |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). With `CoCacheMembershipProvider`, a `MembershipLoader` that does not answer within that time fails its load (`The membership loader did not answer within ...`), and the next request tries again. | Fix the provider or its store. |
 | `INDETERMINATE: MembershipUnavailable` / `membership`, for some principals only | The `MembershipProvider` answered a space, role or policy id with an unpaired UTF-16 surrogate (`The membership provider answered an id with an unpaired UTF-16 surrogate for principal [<id>].`, `IDN-10`): such an id would share a Redis key with another, so the answer is not used. | Fix the provider's store: an id is Unicode text. |
@@ -425,6 +426,62 @@ With `warn` the instance starts and logs the same text at `WARN`, starting with 
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really
 evicts, an app or tenant document loaded after it was evicted is read as absent, and its DENY statements stop applying.
 
+CoCache 8 checks its `Store`s too, and `eviction-check=warn` does not reach that check:
+
+```text
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
+```
+
+The first: allow `INFO`, or set `cocache.redis.assume-maxmemory-policy: noeviction` once you have set `noeviction`
+yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noeviction`
+([Redis requirements](./storage.md#redis-requirements)).
+
+### Startup fails on a locked cache setting
+
+```text
+Cache[PolicySnapshotCache] - ... locked by cosec ...
+```
+
+A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
+the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
+([Precedence](./configuration.md#precedence)).
+
+```text
+cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.
+```
+
+CoCache's own check: the entry sets a key CoCache does not define, or one that does not apply to that cache. Fix the
+key; `cocache.caches-validation: warn` logs it instead. An entry that sets a locked field fails whatever that says.
+
+```text
+cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches: [...]
+```
+
+The entry names a cache no one creates, usually a misspelled name. CoSec publishes the name of every cache it may
+create, so an entry for a CoSec cache this instance does not create (a control-plane cache on a service without the
+control plane) starts; fix the name.
+
+### Startup fails on overlapping cache keys
+
+```text
+Cache[PolicySnapshotCache] - its storage keys (cosec:snapshot:…) overlap those of Cache[<other>] (cosec:…): one prefix starts the other, ...
+```
+
+Two caches of one application would write the same Redis keys: one storage prefix (`{key prefix}{namespace}:`) is, or
+starts, the other. CoSec's own caches never overlap each other, so the other cache is the application's: a CoCache cache
+under CoSec's [`cosec.key-prefix`](./configuration.md#key-prefix), or a `cosec.key-prefix` such as `cocache` that puts
+CoSec's caches under the application's. Give the application's cache another prefix or namespace: `cosec.key-prefix`
+is where every instance, the control plane and `cosec-migrate` find CoSec's data, so it changes only for all of them
+at once ([Redis keys](./storage.md#redis-keys)).
+
+### Startup fails on a channel permission
+
+A Redis ACL that denies a cache's invalidation channel fails its creation with an `IllegalStateException` naming the
+pattern to allow, such as `[&cosec:control:inv:*]`. Allow the channels under CoSec's prefixes, and CoCache's probe in
+`pubsub` mode ([Redis requirements](./storage.md#redis-requirements)).
+
 ### Startup fails because Redis is read from replicas {#startup-fails-because-redis-is-read-from-replicas}
 
 ```text
@@ -448,7 +505,7 @@ The periodic revalidation is the only bound on a document change whose invalidat
 cannot be off or unbounded. The message says which bound the value breaks: at least 1 second (each pass reads every
 installed document from Redis), at most 5 minutes, less than `lag-warn`, and with `fail-closed.tenants` less than
 `fail-closed.max-lag`
-([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on large documents, raise it within those
+([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 
 ### Startup fails on a removed key prefix
@@ -526,7 +583,7 @@ random one.
 | Message | Fix |
 |---|---|
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
-| `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | A `CacheSpecCustomizer` sets a loader on every cache; exclude `PolicySnapshotCache`. |
+| `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |

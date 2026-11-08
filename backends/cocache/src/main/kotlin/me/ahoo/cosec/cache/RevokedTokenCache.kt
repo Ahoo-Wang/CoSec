@@ -13,11 +13,11 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.Store
 import me.ahoo.cosec.model.Identifiers
 
 /**
- * Revoked Token Cache .
+ * Revoked Token Cache: a CoCache `Store`, since Redis holds the only copy of a revocation.
  *
  * Key is the token id (jti, [key]); value is `true` when the token has been revoked.
  * Entries are written with their own lifetime, the remaining lifetime of the revoked token's bound refresh token.
@@ -29,7 +29,7 @@ import me.ahoo.cosec.model.Identifiers
  * @author ahoo wang
  * @see CoCacheTokenStore
  */
-interface RevokedTokenCache : Cache<String, Boolean> {
+interface RevokedTokenCache : Store<String, Boolean> {
     companion object {
         /** Bounds how long a "not revoked" lookup is cached locally if an invalidation message is lost. */
         const val MISSING_TTL_SECONDS = 30L

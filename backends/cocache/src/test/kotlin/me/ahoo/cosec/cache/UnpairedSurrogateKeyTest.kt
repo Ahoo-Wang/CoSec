@@ -43,9 +43,10 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * RC1-52 on real Redis: CoCache 6 writes a key as UTF-8, and so does Spring's string template, so an unpaired UTF-16
- * surrogate is written as `?`. An id holding one would share its Redis key with the id that has `?` in its place: tenant
- * `beta\uD800` would read tenant `beta?`'s document. No id with one names a key, so no two ids share one (`IDN-10`).
+ * RC1-52 on real Redis: Redis keys are UTF-8, as Spring's string template writes them, so an unpaired UTF-16 surrogate
+ * is written as `?`. An id holding one would share its Redis key with the id that has `?` in its place: tenant
+ * `beta\uD800` would read tenant `beta?`'s document. No id with one names a key, so no two ids share one (`IDN-10`);
+ * CoCache 8 refuses such a key as well, CoCache 6 wrote it.
  */
 class UnpairedSurrogateKeyTest {
     private val redis = CoSecTestCaches.redisBackend()
@@ -61,6 +62,22 @@ class UnpairedSurrogateKeyTest {
     private fun <T> refused(read: () -> T): Throwable? = runCatching(read).fold({ value ->
         throw AssertionError("An id with an unpaired surrogate was read as another id's key, which holds [$value].")
     }) { it }
+
+    /**
+     * CoSec's own guards on the keys, on their own: CoCache 8 refuses such a key as well, so the reads below would fail
+     * without them. They stay as defense in depth, for a key that reaches Redis another way and for a CoCache that
+     * would not refuse it, with a message that names the id.
+     */
+    @Test
+    fun theKeysRefuseAnUnpairedSurrogateThemselves() {
+        RevokedTokenCache.key("jti").assert().isEqualTo("jti")
+        refused { RevokedTokenCache.key("jti\uD800") }.assert().isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("names no key")
+        refused { RevokedSubjectCache.key(tenant, PrincipalId("alice\uD800")) }
+            .assert().isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("names no key")
+        refused { MembershipCache.key(TenantId("acme\uDC00"), PrincipalId("alice")) }
+            .assert().isInstanceOf(IllegalArgumentException::class.java)
+    }
 
     @Test
     fun theUtf8EncodingOfAnUnpairedSurrogateIsAQuestionMark() {

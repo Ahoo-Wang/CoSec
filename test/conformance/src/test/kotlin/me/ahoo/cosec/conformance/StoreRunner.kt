@@ -150,7 +150,7 @@ object StoreRunner : ScenarioRunner {
             outcomes = answered,
             revision = head?.revision,
             parent = parent?.revision,
-            parentRecord = parent?.let { memory.record(key, SnapshotDigest(hex(it.digest))) != null },
+            parentRecord = parent?.let { memory.record(key, SnapshotDigest.parse(it.digest)) != null },
             records = memory.recordDigests(key).size,
             writes = writes,
         )
@@ -209,10 +209,6 @@ object StoreRunner : ScenarioRunner {
                 )
             },
         )
-    }
-
-    private fun hex(text: String): ByteArray = ByteArray(text.length / 2) {
-        text.substring(2 * it, 2 * it + 2).toInt(16).toByte()
     }
 
     private val ACTOR = Actor(TenantId("acme"), PrincipalId("alice"))

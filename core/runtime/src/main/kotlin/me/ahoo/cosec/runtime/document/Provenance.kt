@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime.document
 
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**
  * Where a published document came from (RFC 0007 §5.3): its parent revision, the change that published it, how, and
@@ -23,7 +24,7 @@ import me.ahoo.cosec.model.TenantId
  *
  * ```jsonc
  * "provenance": {
- *   "parent": { "revision": 42, "digest": "9f2c…" },     // absent for the first revision
+ *   "parent": { "revision": 42, "digest": "SHA-256:9f2c…" },     // absent for the first revision
  *   "change": "0QH8K3…",
  *   "kind": "PUBLISH",
  *   "publishedBy": { "tenant": "acme", "principal": "alice" },
@@ -50,16 +51,16 @@ data class Provenance(
 
 /**
  * The previous head: its revision and its digest, which is also the address of its revision record (RFC 0007 §5.2).
- * The digest is the store's, written as 40 lowercase hex digits.
+ * The digest is the store's, in [SnapshotDigest]'s text form: `SHA-256:` and 64 lowercase hex digits.
  */
 data class ParentRevision(val revision: Long, val digest: String) {
     init {
         require(revision > 0) { "A parent revision is positive, was $revision." }
-        require(DIGEST.matches(digest)) { "A parent digest is 40 lowercase hex digits, was [$digest]." }
+        require(DIGEST.matches(digest)) { "A parent digest is `SHA-256:` and 64 lowercase hex digits, was [$digest]." }
     }
 
     companion object {
-        val DIGEST: Regex = Regex("^[0-9a-f]{40}$")
+        val DIGEST: Regex = Regex(SnapshotDigest.PATTERN)
     }
 }
 

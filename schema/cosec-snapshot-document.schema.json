@@ -740,11 +740,11 @@
           "description": "The head this revision replaced; absent for the first revision.",
           "properties": {
             "digest": {
-              "description": "The store's digest of the parent: the address of its revision record.",
+              "description": "The store's SHA-256 digest of the parent, with its algorithm: the address of its revision record.",
               "examples": [
-                "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"
+                "SHA-256:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"
               ],
-              "pattern": "^[0-9a-f]{40}$",
+              "pattern": "^SHA-256:[0-9a-f]{64}$",
               "type": "string"
             },
             "revision": {

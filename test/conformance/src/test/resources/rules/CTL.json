@@ -276,6 +276,17 @@
         "control:ControlHttpTest#a stored document that does not decode is a 500 without detail, logged with its key"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-25",
+      "source": "RFC 0007 §5.8; #1207 (audit E2a)",
+      "statement": "The back-reference index stays a superset of what every head refers to: each referrer is indexed with the revision of it that last indexed the reference, and a revision removes only what it or an earlier revision of its document indexed, so a removal that runs after a later revision indexed the reference again leaves it, and the referenced policy cannot be removed.",
+      "level": "control",
+      "guards": [
+        "control:ReferrerCleanupRaceTest#a revision's late removal never drops a reference a later revision indexed again - #1207",
+        "control:ReferrerCleanupRaceTest#a revision's removal that waits still removes the reference when nothing indexed it again"
+      ],
+      "pending": null
     }
   ]
 }
