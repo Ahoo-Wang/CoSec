@@ -27,7 +27,7 @@
     },
     "appDocument": {
       "additionalProperties": false,
-      "description": "An app document: its catalog, its permission policies `perm:<app>/<permission>` and role bindings.",
+      "description": "An app document: its catalog, its permission policies `perm:<app>/<permission>`, its system roles and role bindings.",
       "properties": {
         "bindings": {
           "items": {
@@ -66,6 +66,12 @@
           "minimum": 1,
           "type": "integer"
         },
+        "roles": {
+          "items": {
+            "$ref": "#/definitions/appRole"
+          },
+          "type": "array"
+        },
         "schema": {
           "const": 2,
           "description": "The document format version.",
@@ -76,6 +82,62 @@
         "schema",
         "revision",
         "publishedAt"
+      ],
+      "type": "object"
+    },
+    "appRole": {
+      "additionalProperties": false,
+      "description": "A system role (RFC 0012 §5.1): it applies to every tenant, in any space a member holds it.",
+      "properties": {
+        "description": {
+          "description": "For display only.",
+          "examples": [
+            "Handles the warehouse"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "description": "Unique in its document. Not `*`, and without `@`, which separates a membership's role and space.",
+          "examples": [
+            "wms.clerk",
+            "night-shift"
+          ],
+          "pattern": "^(?!\\*$)[^@]+$",
+          "type": "string"
+        },
+        "name": {
+          "description": "For display only.",
+          "examples": [
+            "Clerk"
+          ],
+          "type": "string"
+        },
+        "permissions": {
+          "anyOf": [
+            {
+              "description": "Every permission the catalog defines.",
+              "enum": [
+                "*"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "examples": [
+                  "warehouse.read",
+                  "inbound.ship"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "description": "Catalog ids; possibly none."
+        }
+      },
+      "required": [
+        "id",
+        "permissions"
       ],
       "type": "object"
     },
@@ -1043,7 +1105,7 @@
     },
     "tenantDocument": {
       "additionalProperties": false,
-      "description": "A tenant document (RFC 0004 §7.1): the tenant's own policies and bindings.",
+      "description": "A tenant document (RFC 0004 §7.1): the tenant's own policies, bindings and custom roles.",
       "properties": {
         "bindings": {
           "items": {
@@ -1087,6 +1149,12 @@
           "minimum": 1,
           "type": "integer"
         },
+        "roles": {
+          "items": {
+            "$ref": "#/definitions/tenantRole"
+          },
+          "type": "array"
+        },
         "schema": {
           "const": 2,
           "description": "The document format version.",
@@ -1097,6 +1165,70 @@
         "schema",
         "revision",
         "publishedAt"
+      ],
+      "type": "object"
+    },
+    "tenantRole": {
+      "additionalProperties": false,
+      "description": "A custom role (RFC 0012 §5.2): it applies to this tenant only.",
+      "properties": {
+        "app": {
+          "description": "The app the role belongs to, and whose permissions it lists.",
+          "examples": [
+            "wms",
+            "order-service"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "description": "For display only.",
+          "examples": [
+            "Handles the warehouse"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "description": "Unique in its document. Not `*`, and without `@`, which separates a membership's role and space.",
+          "examples": [
+            "wms.clerk",
+            "night-shift"
+          ],
+          "pattern": "^(?!\\*$)[^@]+$",
+          "type": "string"
+        },
+        "name": {
+          "description": "For display only.",
+          "examples": [
+            "Clerk"
+          ],
+          "type": "string"
+        },
+        "permissions": {
+          "description": "Catalog ids of the app; possibly none.",
+          "items": {
+            "examples": [
+              "warehouse.read",
+              "inbound.ship"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "space": {
+          "description": "Absent: any space a member holds the role in. Otherwise only this one; empty is the default space.",
+          "examples": [
+            "",
+            "wh-01"
+          ],
+          "pattern": "^(?!\\*$)(?!\\().*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "app",
+        "permissions"
       ],
       "type": "object"
     },

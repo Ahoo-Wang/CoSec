@@ -48,6 +48,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -55,14 +56,19 @@ import java.time.Instant
 /** A revision as `history` lists it. */
 data class RevisionSummary(val revision: Long, val digest: String, val publishedAt: Instant)
 
-/** What changed between two revisions, entry by entry (RFC 0007 §10.1): the history of one policy is a view of it. */
+/**
+ * What changed between two revisions, entry by entry (RFC 0007 §10.1): the history of one policy is a view of it.
+ * [policies] and [bindings] are of the expanded documents (RFC 0012 §7.4), so a role's change, and what a catalog that
+ * grows gives a `"*"` role, shows as the bindings it derives; [roles] are the roles as written.
+ */
 data class DocumentDiff(
     val from: Long,
     val to: Long,
     val policies: EntryChanges,
     val bindings: EntryChanges,
+    val roles: EntryChanges,
     /**
-     * Whether anything besides the policies and bindings differs: the catalog, the limits, the attributes, the boundary
+     * Whether anything besides the policies, bindings and roles differs: the catalog, the limits, the attributes, the boundary
      * or the rate limits, compared by their whole content (#1205).
      */
     val sections: Boolean,
@@ -210,16 +216,22 @@ class DefaultControlPlane(
         val before = retained(key, from)
         val after = retained(key, to)
         val (kind, owner) = Revisions.ownerOf(key)
+        val expandedBefore = RoleExpansion.effective(before)
+        val expandedAfter = RoleExpansion.effective(after)
         return DocumentDiff(
             from,
             to,
             changes(
-                before.policies.associate { it.id.value to EntryDigest.of(it) },
-                after.policies.associate { it.id.value to EntryDigest.of(it) }
+                expandedBefore.policies.associate { it.id.value to EntryDigest.of(it) },
+                expandedAfter.policies.associate { it.id.value to EntryDigest.of(it) }
             ),
             changes(
-                before.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
-                after.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
+                expandedBefore.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
+                expandedAfter.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
+            ),
+            changes(
+                before.roles.associate { it.id.value to EntryDigest.of(it) },
+                after.roles.associate { it.id.value to EntryDigest.of(it) },
             ),
             sections(before) != sections(after),
         )
@@ -426,7 +438,7 @@ class DefaultControlPlane(
                 app -> application
                 else -> entry(key)
             } ?: continue
-            for (binding in entry.document.bindings) {
+            for (binding in entry.effective.bindings) {
                 if (!applies(binding, query)) {
                     continue
                 }
@@ -520,7 +532,7 @@ class DefaultControlPlane(
         after.keys.filter { it in before && before[it] != after[it] }.sorted(),
     )
 
-    /** The digest of [document]'s sections: the document encoded with its header fixed and no policies or bindings. */
+    /** The digest of [document]'s sections: the document encoded with its header fixed and no policies, bindings or roles. */
     private fun sections(document: PolicyDocument): String = CandidateDigest.of(
         PolicyDocument(
             kind = document.kind,

@@ -1,0 +1,94 @@
+{
+  "rules": [
+    "ROL-2"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A role with no permissions is only a role in the diff.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "draft",
+              "app": "wms",
+              "permissions": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "diff": {
+        "document": "tenant:acme",
+        "from": 1,
+        "to": 2
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "diff policies=[] bindings=[] roles=[+draft] sections=false"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

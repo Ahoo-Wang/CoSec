@@ -14,8 +14,8 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | 文档 | 键 | 每个……一份 | 包含 |
 |---|---|---|---|
 | 平台文档 | `platform` | 部署 | 所有租户共享的策略、面向任何人（`*`）和指定主体的绑定、break-glass 绑定、限流规则，以及只有平台能设置的 `limits`、`attributes`、`boundaries`。 |
-| 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、角色绑定、限流规则。 |
-| 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、限流规则。 |
+| 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、系统[角色](#roles)、角色绑定、限流规则。 |
+| 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、自定义[角色](#roles)、限流规则。 |
 
 键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
@@ -68,6 +68,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 |---|---|---|---|
 | `policies`、`bindings`、`rateLimits` | 是 | 是 | 是 |
 | `catalog` | | 是 | |
+| `roles` | | 是 | 是 |
 | `limits`、`attributes` | 是 | | |
 | `boundaries` | 是 | | |
 | `boundary` | | | 是 |
@@ -401,19 +402,35 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ## 目录 {#catalogs}
 
-应用文档的 `catalog` 列出应用提供的权限，供控制台和生成器使用。它不参与求值。
+应用文档的 `catalog` 列出应用提供的权限，供控制台和生成器使用。写了 `action` 的条目同时定义这个权限：策略 `perm:<appId>/<id>`，一条 ALLOW 语句。其他条目不参与求值。
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
 | `groups` | 数组，必填 | 权限分组。 |
 | `groups[].name` | 字符串，必填 | |
 | `groups[].description` | 字符串 | |
-| `groups[].spaced` | 布尔，默认 `false` | 该组权限是否打算按空间授予；仅作提示。 |
+| `groups[].spaced` | 布尔，默认 `false` | 用 `action` 写的权限在哪里生效：持有它的角色生效的任何空间；不写时只在默认空间，靠条件 `{ "eq": ["scope.space", ""] }`。 |
 | `groups[].permissions` | 数组，必填 | |
 | `groups[].permissions[].id` | 字符串，必填 | 权限 id；其策略为 `perm:<appId>/<id>`。 |
 | `groups[].permissions[].name`、`.description` | 字符串 | |
+| `groups[].permissions[].action` | 动作模式或非空数组 | 定义这个权限。写了 `action` 的条目和同 id 的策略不能同时存在；id 不能重复。 |
+| `groups[].permissions[].resource` | 同语句的 `resource`；需要 `action` | 不写表示任何资源。 |
 
-没有任何检查确保目录条目有对应的策略，反之亦然。见[角色权限](./role-permissions.md)。
+没有任何检查确保没有 `action` 的条目有对应的策略，反之亦然；这样的条目只用于显示，角色不能列出它。见[角色权限](./role-permissions.md#short-form-permissions)。
+
+## 角色 {#roles}
+
+应用文档（系统角色）和租户文档（自定义角色）可以有 `roles`：谁得到哪些权限，只写一次。概念和示例见[角色权限](./role-permissions.md#roles)。
+
+| 字段 | 文档 | 类型 | 含义 |
+|---|---|---|---|
+| `id` | 两种 | 字符串，必填 | 文档内唯一；不是 `*`，不含 `@`。 |
+| `app` | 租户 | 字符串，必填 | 角色所属的应用；合法的应用 id。 |
+| `space` | 租户 | 字符串 | 不写：任何空间。否则只在那个空间，`""` 是默认空间；不能是保留 id。 |
+| `name`、`description` | 两种 | 字符串 | 用于显示。 |
+| `permissions` | 两种 | id 数组，应用文档也可以写 `"*"` | 角色的权限，可以为空。 |
+
+角色为每个权限派生一条绑定 `role:<roleId>@<app>:<permission>`，策略是 `perm:<app>/<permission>`，主体是该角色（应用文档里不限租户，租户文档里是本租户），`app` 是角色的应用，`space` 是角色的空间或 `*`，排在手写绑定之后。与手写绑定相撞无法编译；`role:` 保留给这些绑定，变更不能写入。一份文档最多派生 50,000 条。
 
 ## 限流规则 {#rate-limit-rules}
 

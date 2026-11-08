@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -18,6 +20,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
@@ -25,10 +28,13 @@ import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.document.DocumentCompileException
+import me.ahoo.cosec.runtime.document.Expansion
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleExpansion
+import me.ahoo.cosec.runtime.document.RolePermissions
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -96,7 +102,7 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  *
  * - V1: the candidate must read back with the document codec; what fails is a 400 at its JSON path.
  * - V2: at most [ChangeOptions.maxDocumentBytes] encoded; the ids a change puts must not use the reserved prefixes
- *   `cosec:`, `g:` and `r:` (`perm:` is the app document's, which the compiler checks), unless it migrates or
+ *   `cosec:`, `g:`, `r:` and `role:` (`perm:` is the app document's, which the compiler checks), unless it migrates or
  *   bootstraps; a tenant policy must not reuse a platform policy's id (RFC 0007 §3.1 N2).
  * - V3, compile: every entry must compile, with the limits and external attributes of the platform document
  *   (RFC 0007 §3.1 N3): a `Broken` entry is a 422, never published. An app or tenant candidate's bindings must
@@ -106,7 +112,8 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  *   break-glass rules and the `nomatch` confirmation (ATR-6) are the compiler's; a candidate's boundary must be one the
  *   platform defines (below); protected entries and grants are [ChangeAuthority]'s.
  *
- * Changing the platform's limits or attributes does not recompile the other documents; it is a warning.
+ * Changing the platform's limits or attributes does not recompile the other documents; it is a warning. So are the two
+ * things about a tenant's role that deny nothing but surprise (RFC 0012 §7.5).
  */
 class ChangeChecks(
     private val options: ChangeOptions = ChangeOptions(),
@@ -193,7 +200,7 @@ class ChangeChecks(
                 else -> continue
             }
             RESERVED.firstOrNull { id.startsWith(it) }?.let { prefix ->
-                findings += Finding("V2", "operations[$i]", "[$id]: the prefix [$prefix] is reserved for built-in policies and cosec-migrate", UNPROCESSABLE)
+                findings += Finding("V2", "operations[$i]", "[$id]: the prefix [$prefix] is reserved for built-in policies, cosec-migrate and role expansion", UNPROCESSABLE)
             }
         }
     }
@@ -204,6 +211,7 @@ class ChangeChecks(
      * checked, its head's entries included.
      */
     private fun appIds(candidate: PolicyDocument, findings: MutableList<Finding>) {
+        // The bindings as written: a role's app is the compiler's to check, at the path the role writes it.
         for ((i, binding) in candidate.bindings.withIndex()) {
             val app = (binding.scope.app as? Match.Exactly)?.value?.value ?: continue
             if (!ScopeResolver.isValidAppId(app)) {
@@ -225,7 +233,8 @@ class ChangeChecks(
 
     /**
      * Bindings of an app or tenant candidate whose policy is defined neither by it nor by the platform, nor, for a
-     * tenant binding of exactly one app, by that app's document (RFC 0007 §3.1 N1).
+     * tenant binding of exactly one app, by that app's document (RFC 0007 §3.1 N1). Both are read expanded (RFC 0012
+     * §6.1): a binding a role derives must resolve, in what the app's short forms derive too.
      */
     private suspend fun unresolved(
         candidate: PolicyDocument,
@@ -234,29 +243,91 @@ class ChangeChecks(
         checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
         findings: MutableList<Finding>,
     ) {
-        val defined = candidate.policies.map {
+        // Over the limit the compile step has said so, and there is nothing expanded to look at.
+        val expansion = expansionOf(candidate) ?: return
+        val effective = expansion.document
+        val defined = effective.policies.map {
             it.id.value
         }.toSet() + platform?.policies?.map { it.id.value }.orEmpty() + BUILTIN
         val apps = HashMap<String, Set<String>>()
-        for ((i, binding) in candidate.bindings.withIndex()) {
+        for ((i, binding) in effective.bindings.withIndex()) {
             val policy = binding.policy.value
-            if (policy in defined) continue
-            val app = (binding.scope.app as? Match.Exactly)?.value?.value
-            // An app no key can name has no document to resolve in; V2 already refuses the binding (appIds).
-            if (app != null && !SnapshotKey.App.isValidAppId(app)) continue
-            val inApp = candidate.kind == DocumentKind.TENANT && app != null && policy in apps.getOrPut(app) {
-                val head = context.head(SnapshotKey.App(app))
-                checkedWith[SnapshotKey.App(app)] = head?.digest
-                head?.document?.policies?.map { it.id.value }?.toSet().orEmpty()
-            }
-            if (!inApp) {
-                findings += Finding("REFERENCES", "$.bindings[$i].policy", "[$policy] is defined neither here nor where this document may refer", UNPROCESSABLE)
-            }
+            if (policy in defined || inApp(candidate, binding, apps, context, checkedWith)) continue
+            val written = i < candidate.bindings.size
+            val path = expansion.bindingPath(i) + if (written) ".policy" else ""
+            findings += Finding("REFERENCES", path, "[$policy] is defined neither here nor where this document may refer", UNPROCESSABLE)
         }
+        roleWarnings(candidate, context, checkedWith, findings)
         val boundary = candidate.boundary ?: return
         if (platform?.policies?.none { it.id == boundary && it.boundary } != false) {
             findings += Finding("REFERENCES", "$.boundary", "[${boundary.value}] is not a boundary of the platform", UNPROCESSABLE)
         }
+    }
+
+    /**
+     * Whether [binding] of a tenant [candidate], scoped to one app, names a policy that app's document defines, or an app
+     * no key can name, which V2 already refuses (appIds): it has no document to resolve in.
+     */
+    private suspend fun inApp(
+        candidate: PolicyDocument,
+        binding: Binding,
+        apps: MutableMap<String, Set<String>>,
+        context: Context,
+        checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
+    ): Boolean {
+        val app = (binding.scope.app as? Match.Exactly)?.value?.value
+        if (app != null && !SnapshotKey.App.isValidAppId(app)) return true
+        return candidate.kind == DocumentKind.TENANT && app != null && binding.policy.value in apps.getOrPut(app) {
+            val head = context.head(SnapshotKey.App(app))
+            checkedWith[SnapshotKey.App(app)] = head?.digest
+            head?.document?.let(RoleExpansion::effective)?.policies?.map { it.id.value }?.toSet().orEmpty()
+        }
+    }
+
+    /**
+     * What a tenant's roles may mean other than what they seem to (RFC 0012 §7.5): one named as a system role of its app
+     * grants the union of both, and a permission of a role in one space that is restricted to the default space never
+     * applies there. Neither is a grant nobody analyzed, so both only warn.
+     */
+    private suspend fun roleWarnings(
+        candidate: PolicyDocument,
+        context: Context,
+        checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
+        findings: MutableList<Finding>,
+    ) {
+        if (candidate.kind != DocumentKind.TENANT) {
+            return
+        }
+        for ((r, role) in candidate.roles.withIndex()) {
+            val app = role.app?.value?.takeIf(SnapshotKey.App::isValidAppId) ?: continue
+            val key = SnapshotKey.App(app)
+            val head = context.head(key)
+            checkedWith[key] = head?.digest
+            val document = head?.document ?: continue
+            if (document.roles.any { it.id == role.id }) {
+                findings += roleWarning("$.roles[$r].id", "[${role.id.value}] is also a system role of app $app: a member holding it gets both")
+            }
+            val space = role.space?.value?.takeIf { it.isNotEmpty() } ?: continue
+            val listed = (role.permissions as? RolePermissions.Listed)?.ids.orEmpty()
+            val defaultSpaceOnly = document.catalog?.groups.orEmpty().filterNot { it.spaced }
+                .flatMap { it.permissions }.filter { it.actions != null }.mapTo(HashSet()) { it.id }
+            listed.withIndex().filter { it.value in defaultSpaceOnly }.forEach { (p, permission) ->
+                findings += roleWarning(
+                    "$.roles[$r].permissions[$p]",
+                    "[$permission] applies only in the default space, so it never applies in [$space]",
+                )
+            }
+        }
+    }
+
+    private fun roleWarning(path: String, message: String) =
+        Finding("REFERENCES", path, message, UNPROCESSABLE, Severity.WARNING)
+
+    /** [candidate] expanded; `null` when it derives more than the limit, which its compile finding reports. */
+    private fun expansionOf(candidate: PolicyDocument): Expansion? = try {
+        RoleExpansion.expand(candidate)
+    } catch (_: DocumentCompileException) {
+        null
     }
 
     /**
@@ -316,8 +387,9 @@ class ChangeChecks(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun uses(context: Context, tenant: SnapshotKey.Tenant, policy: PolicyId): Boolean? = try {
         context.head(tenant)?.document.let { document ->
-            document != null &&
-                (document.policies.any { it.id == policy } || document.bindings.any { it.policy == policy })
+            document != null && RoleExpansion.effective(document).let { effective ->
+                effective.policies.any { it.id == policy } || effective.bindings.any { it.policy == policy }
+            }
         }
     } catch (e: CancellationException) {
         throw e
@@ -371,6 +443,6 @@ class ChangeChecks(
         private const val UNPROCESSABLE = 422
         private const val UNAVAILABLE = 503
         private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
-        val RESERVED = listOf("cosec:", "g:", "r:")
+        val RESERVED = listOf("cosec:", "g:", "r:", RoleExpansion.BINDING_PREFIX)
     }
 }

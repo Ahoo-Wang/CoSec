@@ -139,6 +139,7 @@ internal object NomatchConfirmations {
             limits = candidate.limits,
             attributes = candidate.attributes,
             rateLimits = candidate.rateLimits,
+            roles = candidate.roles,
         ) to findings
     }
 

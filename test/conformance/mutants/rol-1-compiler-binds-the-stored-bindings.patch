@@ -1,0 +1,17 @@
+# Rule: ROL-1
+# Mutant: the compiler binds the document as stored, so a role grants nothing
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionPropertyTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+index 9f956ecb..f5b38002 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+@@ -164,7 +164,7 @@ class PolicyDocumentCompiler(
+                     document.boundary?.value
+                 )
+ 
+-            DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, effective.bindings, rateLimits)
++            DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, document.bindings, rateLimits)
+             DocumentKind.TENANT ->
+                 CompiledDocument.tenant(
+                     TenantId(document.owner),

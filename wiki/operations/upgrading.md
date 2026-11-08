@@ -15,6 +15,15 @@ observability. This page is the single home of migration steps. Release notes fo
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
 sets, its approved changes and a document that spells a day of the week another way (below).
 
+- **Roles and short-form permissions** (RFC 0012). A catalog entry can define its permission with `action` and
+  `resource`, and app and tenant documents can hold `roles` ([Role permissions](../policies/role-permissions.md#roles)).
+  `schema` stays 2, and nothing already published changes meaning. A document with either is not readable by an older
+  instance, whose strict reader refuses the unknown fields and fails it closed: **upgrade every data-plane instance
+  before publishing such a document**. A change may no longer put a policy or binding id starting with `role:`; what
+  already holds one stays readable. `GET /documents/{key}/diff` lists `roles`, and reports policies and bindings of the
+  expanded document. `POST /analyze` no longer counts a tenant's binding of a readable app's permission as opaque. In
+  code: `Operation` has `PutRole` and `RemoveRole`, and `DocumentDiff`, `CatalogPermission` and `PolicyDocument` gained
+  fields.
 - **Control-plane correctness** (audit batch E2a: #1205, #1206, #1207, #1210, #1226, #1227). A revision diff's
   `sections` compares the catalog, limits, attributes, boundary and rate limits by their content: a rule of the same id
   with another quota is a change. `POST /analyze` lists only the bindings that can apply in the tenant asked about, so a

@@ -1,0 +1,135 @@
+{
+  "rules": [
+    "ROL-9"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "alice may write role entries but not grant: adding a permission is refused, as a binding of it would be.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "held",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "write-roles",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "cosec:write",
+                "resource": "doc/tenant/acme/role/*"
+              },
+              {
+                "effect": "allow",
+                "action": "cosec:read",
+                "resource": "doc/tenant/acme"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "w",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "write-roles"
+          }
+        ],
+        "roles": [
+          {
+            "id": "helper",
+            "app": "wms",
+            "permissions": [
+              "read",
+              "edit"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "held"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "helper",
+              "app": "wms",
+              "permissions": [
+                "read",
+                "edit",
+                "ship"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 403"
+    ],
+    "errors": {},
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

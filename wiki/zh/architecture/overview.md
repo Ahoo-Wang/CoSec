@@ -156,6 +156,8 @@ sequenceDiagram
 
 策略以**快照文档**的形式到达引擎，每个键一个文档：平台文档、每个应用一个文档、每个租户一个文档。它们以 JSON（schema 2）存储，每个修订编译一次，以不可变的编译结果保存在内存中。视图只是对其中三个文档的引用，所以一次求值总是看到每个文档的同一个修订（`SNP-1`，由 `SnapshotConsistencyPropertyTest` 守护）。
 
+文档可以用简写形式写角色和权限（[角色权限](../policies/role-permissions.md#roles)）。存储时保持简写，由 [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt) 展开成普通的策略和绑定：编译、授出分析、引用索引和差异都读取展开结果，所以决定不依赖简写形式（`ROL-1`、`ROL-2`）。
+
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt) 持有它们：
 
 - **热路径。** `peek` 是内存中的同步查找，没有 future、没有 I/O，可以在事件循环上调用。只有未命中才会走 `load`。

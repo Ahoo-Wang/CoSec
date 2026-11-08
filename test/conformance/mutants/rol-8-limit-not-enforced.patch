@@ -1,0 +1,17 @@
+# Rule: ROL-8
+# Mutant: a document may derive any number of bindings
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..e960a41d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -105,7 +105,7 @@ object RoleExpansion {
+             return Expansion(document, document.policies.size, emptyList(), document.bindings.size, emptyList())
+         }
+         val grants = grants(document)
+-        if (grants > limit) {
++        if (grants < 0) {
+             throw DocumentCompileException(
+                 document.describe(),
+                 listOf(CompileError("$.roles", "the roles derive $grants bindings, more than $limit")),

@@ -1,0 +1,15 @@
+{
+  "rules": [
+    { "id": "ROL-1", "source": "RFC 0012 §6", "statement": "A document with roles and short-form permissions decides exactly as one with its RoleExpansion.effective form written out.", "level": "engine", "properties": ["runtime:RoleExpansionPropertyTest#ROL-1 a document with roles decides as its effective form written out"], "pending": null },
+    { "id": "ROL-2", "source": "RFC 0012 §6.1", "statement": "Compilation, the grant analysis, the reference index and the diff read the expanded document.", "level": "control", "pending": null },
+    { "id": "ROL-3", "source": "RFC 0012 §6.2", "statement": "A role of an app document that names an undefined permission does not compile; one of a tenant document is a REFERENCES finding, and on the data plane it fails closed.", "level": "engine", "pending": null },
+    { "id": "ROL-4", "source": "RFC 0012 §5.1, §7.4", "statement": "`*` is written only in an app document, and a catalog that grows shows as new derived bindings.", "level": "engine", "pending": null },
+    { "id": "ROL-5", "source": "RFC 0012 §4.3", "statement": "A permission with both an action and a hand-written policy does not compile.", "level": "engine", "pending": null },
+    { "id": "ROL-6", "source": "RFC 0012 §4.2", "statement": "A short-form permission of a group that is not spaced applies only in the default space.", "level": "engine", "pending": null },
+    { "id": "ROL-7", "source": "RFC 0012 §5.3, §6.2", "statement": "Role ids are validated, a derived binding id that collides does not compile, and `role:` is reserved to derived bindings.", "level": "engine", "pending": null },
+    { "id": "ROL-8", "source": "RFC 0012 §6.3", "statement": "A document whose roles derive more bindings than the limit does not compile.", "level": "engine", "pending": null },
+    { "id": "ROL-9", "source": "RFC 0012 §7.2, §7.3", "statement": "PutRole is analyzed per permission, what cannot be proved contained needs an approval, and adding a permission needs cosec:grant.", "level": "control", "pending": null },
+    { "id": "ROL-10", "source": "RFC 0012 §7.5", "statement": "A permission a tenant's role lists cannot be removed from its app.", "level": "control", "pending": null },
+    { "id": "ROL-11", "source": "RFC 0012 §5.2, §3.2", "statement": "A role applies only in its own app, and a role that names a space only in that space.", "level": "engine", "pending": null }
+  ]
+}

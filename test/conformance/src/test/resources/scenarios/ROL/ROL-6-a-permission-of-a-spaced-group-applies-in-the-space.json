@@ -1,0 +1,76 @@
+{
+  "rules": [
+    "ROL-6"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A spaced permission applies in any space the role applies in.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "read",
+              "ship"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk@wh-01"
+    ]
+  },
+  "request": {
+    "app": "wms",
+    "action": "wms:ship",
+    "space": "wh-01"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/ship",
+      "statement": 0,
+      "name": "ship",
+      "via": {
+        "binding": "role:clerk@wms:ship",
+        "document": "app"
+      }
+    }
+  }
+}

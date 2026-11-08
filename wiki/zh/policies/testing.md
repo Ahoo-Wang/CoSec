@@ -31,7 +31,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `GET /documents/{key}` | 当前修订。`{key}` 为 `platform`、`app:<appId>` 或 `tenant:<tenantId>`。 |
 | `GET /documents/{key}/revisions?before=&limit=` | 修订历史，最新的在前（`limit` 为 1 到 200，默认 20）。 |
 | `GET /documents/{key}/revisions/{revision}` | 某个保留的修订；已不再保留时返回 `410`。 |
-| `GET /documents/{key}/diff?from=&to=` | 两个修订之间新增、删除和修改的策略与绑定，以及 `sections`：其余部分（目录、限制、属性、边界或限流规则）是否不同，按其内容比较。 |
+| `GET /documents/{key}/diff?from=&to=` | 两个修订之间（[展开后](./role-permissions.md#roles)的文档）新增、删除和修改的策略与绑定，按原样的 `roles`，以及 `sections`：其余部分（目录、限制、属性、边界或限流规则）是否不同，按其内容比较。 |
 | `GET /documents/{key}/revisions/{revision}/propagation` | 最近上报的实例中有多少已安装该修订。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
@@ -141,6 +141,8 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `removePolicy` | `id`，可选 `ifMatch` | 删除策略。 |
 | `putBinding` | `binding`，可选 `ifMatch` | 新增绑定，或替换同 id 的绑定。 |
 | `removeBinding` | `id`，可选 `ifMatch` | 删除绑定。 |
+| `putRole` | `role`，可选 `ifMatch` | 新增角色，或整体替换同 id 的角色。适用于应用和租户文档。 |
+| `removeRole` | `id`，可选 `ifMatch` | 删除角色。 |
 | `putRateLimit` | `rateLimit`，可选 `ifMatch` | 添加限流规则，或在原位置替换同 id 的规则。 |
 | `removeRateLimit` | `id`，可选 `ifMatch` | 删除限流规则。 |
 | `putCatalog` | `catalog` | 设置应用文档的目录；没有 `catalog` 时删除目录。 |

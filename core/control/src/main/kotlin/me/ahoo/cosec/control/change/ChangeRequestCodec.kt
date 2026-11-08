@@ -286,6 +286,8 @@ object ChangeRequestCodec {
                 .set("rateLimit", PolicyDocumentCodec.rateLimitTree(operation.rule))
 
             is Operation.RemoveRateLimit -> item.put("op", "removeRateLimit").put("id", operation.id)
+            is Operation.PutRole -> item.put("op", "putRole").set("role", PolicyDocumentCodec.roleTree(operation.role))
+            is Operation.RemoveRole -> item.put("op", "removeRole").put("id", operation.id.value)
             is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes, is Operation.SetBoundary ->
                 sectionTree(item, operation)
         }
@@ -319,6 +321,8 @@ object ChangeRequestCodec {
         is Operation.RemoveBinding -> operation.ifMatch
         is Operation.PutRateLimit -> operation.ifMatch
         is Operation.RemoveRateLimit -> operation.ifMatch
+        is Operation.PutRole -> operation.ifMatch
+        is Operation.RemoveRole -> operation.ifMatch
         else -> null
     }
 
@@ -423,7 +427,7 @@ object ChangeRequestCodec {
     fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
         val (kind, owner) = Revisions.ownerOf(key)
         node.only(
-            "op", "policy", "id", "binding", "rateLimit", "catalog", "limits", "attributes", "boundary", "ifMatch",
+            "op", "policy", "id", "binding", "rateLimit", "role", "catalog", "limits", "attributes", "boundary", "ifMatch",
         )
         operation(node, kind, owner)
     }
@@ -446,6 +450,8 @@ object ChangeRequestCodec {
                 ifMatch
             )
             "removeRateLimit" -> Operation.RemoveRateLimit(node.need("id").text(), ifMatch)
+            "putRole" -> Operation.PutRole(PolicyDocumentCodec.decodeRole(node.need("role"), kind), ifMatch)
+            "removeRole" -> Operation.RemoveRole(RoleId(node.need("id").text()), ifMatch)
             else -> section(node, op)
         }
     }

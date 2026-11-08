@@ -1,0 +1,135 @@
+{
+  "rules": [
+    "ROL-9"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same operator only removes a permission: that grants nothing.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "held",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "write-roles",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "cosec:write",
+                "resource": "doc/tenant/acme/role/*"
+              },
+              {
+                "effect": "allow",
+                "action": "cosec:read",
+                "resource": "doc/tenant/acme"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "w",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "write-roles"
+          }
+        ],
+        "roles": [
+          {
+            "id": "helper",
+            "app": "wms",
+            "permissions": [
+              "read",
+              "edit"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "held"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "helper",
+              "app": "wms",
+              "permissions": [
+                "read"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

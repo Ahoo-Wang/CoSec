@@ -41,6 +41,8 @@ class PolicyDocumentValuesTest {
         val name: String,
         val type: StringType,
         val header: (String) -> String = { "" },
+        /** The roles of a tenant document, where a value is a role's: such a value is compiled there instead. */
+        val roles: ((String) -> String)? = null,
         val statement: (String) -> String = { """{"effect":"allow","action":"*"}""" },
     )
 
@@ -49,6 +51,7 @@ class PolicyDocumentValuesTest {
     private val platformDocument = definitions.getValue("platformDocument") as ObjectType
     private val attribute = (requireNotNull(platformDocument.field("attributes")).type as ArrayType).items as ObjectType
     private val rateLimit = definitions.getValue("rateLimit") as ObjectType
+    private val tenantRole = definitions.getValue("tenantRole") as ObjectType
 
     private val placements = listOf(
         Placement("actionPattern", definitions.getValue("actionPattern") as StringType) {
@@ -71,6 +74,14 @@ class PolicyDocumentValuesTest {
         Placement("rateLimits.id", rateLimit.string("id"), header = {
             """"rateLimits":[{"id":${json(it)},"action":"*","permitsPerSecond":1}],"""
         }),
+        Placement(
+            "role.id",
+            tenantRole.string("id"),
+            roles = { """[{"id":${json(it)},"app":"wms","permissions":[]}]""" }
+        ),
+        Placement("role.space", tenantRole.string("space"), roles = {
+            """[{"id":"r","app":"wms","space":${json(it)},"permissions":[]}]"""
+        }),
     )
 
     private fun ObjectType.string(name: String): StringType = requireNotNull(field(name)).type as StringType
@@ -85,17 +96,24 @@ class PolicyDocumentValuesTest {
             time?.let { """"condition":{"time":${json(it)}}""" },
         ).joinToString(",", "{", "}")
 
-    private fun compileError(placement: Placement, value: String): Exception? =
-        compileError(placement.statement(value), placement.header(value))
+    private fun compileError(placement: Placement, value: String): Exception? {
+        val roles = placement.roles ?: return compileError(placement.statement(value), placement.header(value))
+        val body = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","roles":${roles(value)}}"""
+        return compiling(SnapshotKey.Tenant("acme"), body)
+    }
 
     /** Null when the platform document holding [statement] (and [header] fields) compiles; otherwise why not. */
     private fun compileError(statement: String, header: String = ""): Exception? {
         val body = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z",$header""" +
             """"policies":[{"id":"p","statements":[$statement]}],""" +
             """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]}"""
+        return compiling(SnapshotKey.Platform, body)
+    }
+
+    private fun compiling(key: SnapshotKey, body: String): Exception? {
         val document = SnapshotDocument(2, 1, Instant.parse("2026-10-26T00:00:00Z"), body.encodeToByteArray())
         return try {
-            compiler.compile(SnapshotKey.Platform, document)
+            compiler.compile(key, document)
             null
         } catch (error: SnapshotFormatException) {
             error

@@ -632,6 +632,7 @@ class ControlHttp(private val plane: ControlPlane) {
         put("to", diff.to)
         set("policies", entries(diff.policies))
         set("bindings", entries(diff.bindings))
+        set("roles", entries(diff.roles))
         put("sections", diff.sections)
     }
 

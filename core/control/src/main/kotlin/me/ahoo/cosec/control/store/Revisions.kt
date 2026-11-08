@@ -26,6 +26,7 @@ import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.Provenance
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.runtime.document.ShadowWindow
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -347,6 +348,7 @@ class Revisions(
         attributes = candidate.attributes,
         boundary = candidate.boundary,
         rateLimits = candidate.rateLimits,
+        roles = candidate.roles,
         provenance = Provenance(
             parent = base?.let { ParentRevision(it.revision, it.digest.toString()) },
             change = publication.change,
@@ -613,8 +615,9 @@ class Revisions(
         if (base == null || key is SnapshotKey.Tenant) {
             return null
         }
-        val kept = candidate.policies.map { it.id }.toSet()
-        val blocked = base.document.policies.map { it.id }.filter { it !in kept }
+        // What a short form derives is a policy like any other: tenants' roles may refer to it (RFC 0012 §7.5).
+        val kept = RoleExpansion.effective(candidate).policies.map { it.id }.toSet()
+        val blocked = RoleExpansion.effective(base.document).policies.map { it.id }.filter { it !in kept }
             .associateWith { policy ->
                 val referrers = referrers(key, policy) - key
                 referrers.filterNotTo(HashSet()) { definesItself(it, policy) }
@@ -647,11 +650,15 @@ class Revisions(
      *
      * A tenant's own policy ids are indexed as uses of the platform's id too (RC1-9), so that the platform cannot add
      * a policy of an id a tenant already defines; readers tell the two apart by the tenant's head.
+     *
+     * The index is of what a document grants, so it reads the [expanded][RoleExpansion.effective] document (RFC 0012
+     * §7.5): an app must not remove a permission a tenant's role lists.
      */
-    private fun references(document: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
-        if (document.kind == DocumentKind.PLATFORM) {
+    private fun references(stored: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
+        if (stored.kind == DocumentKind.PLATFORM) {
             return emptySet()
         }
+        val document = RoleExpansion.effective(stored)
         val own = document.policies.map { it.id }.toSet()
         val references = LinkedHashSet<Pair<SnapshotKey, PolicyId>>()
         if (document.kind == DocumentKind.TENANT) {

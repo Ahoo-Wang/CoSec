@@ -146,7 +146,8 @@ class Changes(
         val head = revisions.head(key)
         // Keyed on what the change does, not on its kind (review K1).
         val breakGlass = BreakGlassRules.touches(operations, head?.document, clock.instant())
-        authority.authorize(author, key, operations, kind, breakGlass || kind == ProvenanceKind.BREAK_GLASS)
+        val glass = breakGlass || kind == ProvenanceKind.BREAK_GLASS
+        authority.authorize(author, key, operations, kind, glass, head?.document)
         requireAudit(breakGlass)
         if ((head?.revision ?: 0) != base) {
             throw ChangeRejectedException(CONFLICT, "[$key] is at revision ${head?.revision ?: 0}, not $base")
@@ -262,10 +263,6 @@ class Changes(
     internal suspend fun stagedOn(key: SnapshotKey): ChangeRequest? =
         store.stage(key)?.value?.holder?.let { stored(it) }?.let { expired(it) }
 
-    /** Whether [change] creates or alters a break-glass binding of its document's current head. */
-    private suspend fun touchesBreakGlass(change: ChangeRequest): Boolean =
-        BreakGlassRules.touches(change.operations, revisions.head(change.key)?.document, clock.instant())
-
     /**
      * Replays a `CONFLICTED` change (or one not staged yet: `DRAFT`, `CHECKED`) on the current head and runs every
      * check again (RFC 0007 §5.5): the candidate, its digest and its findings are new, and nothing earlier checks or
@@ -275,7 +272,7 @@ class Changes(
         val change = visible(author, id)
         authority.requireAuthor(author, change, "rebases")
         requireState(change, REBASABLE)
-        authority.authorize(author, change.key, change.operations, change.kind, touchesBreakGlass(change))
+        candidates.authorize(author, change)
         return transition(id, REBASABLE) { current ->
             val head = revisions.head(current.key)
             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
@@ -534,7 +531,7 @@ class Changes(
         authority.require(publisher, change.key, ControlActions.PUBLISH)
         requireState(change, setOf(ChangeState.READY))
         PublishRules.acknowledged(change, ack)
-        authority.authorize(publisher, change.key, change.operations, change.kind, touchesBreakGlass(change))
+        candidates.authorize(publisher, change)
         val head = revisions.head(change.key)
         if (head?.digest != change.base.digest) {
             // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).

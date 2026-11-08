@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "ROL-5"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "An entry that only names the permission and a hand-written policy of it, as before this form existed.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "g",
+              "permissions": [
+                {
+                  "id": "read"
+                }
+              ]
+            }
+          ]
+        },
+        "policies": [
+          {
+            "id": "perm:wms/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "wms:read"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "b",
+            "subject": {
+              "role": "clerk"
+            },
+            "app": "wms",
+            "space": "*",
+            "policy": "perm:wms/read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ]
+  },
+  "request": {
+    "app": "wms",
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/read",
+      "statement": 0,
+      "via": {
+        "binding": "b",
+        "document": "app"
+      }
+    }
+  }
+}
