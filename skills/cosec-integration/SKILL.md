@@ -85,10 +85,10 @@ Startup fails, on purpose, when:
   unreadable policy whatever CoSec's setting is. The policy is read again while the service runs: the
   `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict (with `warn`, a policy it cannot read is
   `UP`, `eviction: unknown`). It is an alert: keep it out of the readiness group.
-- **A `cocache.caches.[<CoSec cache>].*` entry or a `CacheSpecCustomizer` sets a field CoSec pins or locks** (the
-  snapshot store's `ttl`, `unknown-read`, `local-max-age` or `key-prefix`, say): startup fails, and `unlock` does not
-  reach a pinned field. Remove it, or exclude CoSec's caches from the customizer. An entry for a CoSec cache a service
-  does not create (a control-plane cache, in a configuration every service shares) is fine.
+- **A `cocache.caches.[<CoSec cache>].*` entry or a `CacheSpecCustomizer` sets a field CoSec locks** (the snapshot
+  store's `ttl`, `unknown-read`, `local-max-age` or `key-prefix`, say): startup fails. Remove it, or exclude CoSec's
+  caches from the customizer. An entry for a CoSec cache a service does not create (a control-plane cache, in a
+  configuration every service shares) is fine.
 - **Redis read from replicas.** The Redis templates CoSec injects (the only or the `@Primary`
   `StringRedisTemplate` / `ReactiveStringRedisTemplate`) must read the primary: `spring.data.redis.lettuce.read-from`
   (or a client customizer's `ReadFrom`) other than `upstream` on their factory fails startup.

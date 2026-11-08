@@ -63,6 +63,22 @@ class UnpairedSurrogateKeyTest {
         throw AssertionError("An id with an unpaired surrogate was read as another id's key, which holds [$value].")
     }) { it }
 
+    /**
+     * CoSec's own guards on the keys, on their own: CoCache 8 refuses such a key as well, so the reads below would fail
+     * without them. They stay as defense in depth, for a key that reaches Redis another way and for a CoCache that
+     * would not refuse it, with a message that names the id.
+     */
+    @Test
+    fun theKeysRefuseAnUnpairedSurrogateThemselves() {
+        RevokedTokenCache.key("jti").assert().isEqualTo("jti")
+        refused { RevokedTokenCache.key("jti\uD800") }.assert().isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("names no key")
+        refused { RevokedSubjectCache.key(tenant, PrincipalId("alice\uD800")) }
+            .assert().isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("names no key")
+        refused { MembershipCache.key(TenantId("acme\uDC00"), PrincipalId("alice")) }
+            .assert().isInstanceOf(IllegalArgumentException::class.java)
+    }
+
     @Test
     fun theUtf8EncodingOfAnUnpairedSurrogateIsAQuestionMark() {
         // The mechanism, which no CoSec change alters: why the ids below would share their keys.

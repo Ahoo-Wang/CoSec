@@ -382,9 +382,10 @@ private fun RuntimeAuthorizationProperties.Snapshot.options(): SnapshotOptions =
  * startup unless told to warn. A wrapper such as `HookedBackend` is read through `CoherenceBackend.unwrap` (CoCache
  * 8.0.0-rc.1).
  *
- * Stricter than CoCache's own check (`StoreEvictionRisk`), which accepts `volatile-*` while every `Store`'s policy has
- * no `ttl`: the revocation tables and the control plane's leases are `Store`s whose entries carry a lifetime of their
- * own, which `volatile-*` may evict before it ends, and an evicted revocation accepts its token again.
+ * Stricter than CoCache's own check (`StoreEvictionRisk`), which accepts `volatile-*` at startup while every `Store`'s
+ * policy has no `ttl`: the revocation tables and the control plane's leases are `Store`s whose entries carry a lifetime
+ * of their own, which `volatile-*` may evict before it ends, and an evicted revocation accepts its token again. CoCache
+ * counts such a lifetime only once the instance has written or read one.
  */
 internal object EvictionPolicyCheck {
     private val log = KotlinLogging.logger {}

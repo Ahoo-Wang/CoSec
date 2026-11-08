@@ -92,8 +92,8 @@ key 都在它之下（`SNP-9`）。
   - CoCache 针对其 `Store` 的检查，CoSec 的文档和记录都是 `Store`：`allkeys-*` 策略总是使启动失败，读不到 `INFO`
     同样如此，与 `eviction-check` 无关。Redis 拒绝 `INFO` 时，还要把
     [`cocache.redis.assume-maxmemory-policy`](./configuration.md#cocache-properties-that-affect-cosec) 设为你设置的策略
-    （`noeviction`）。只要没有哪个 `Store` 的策略带 `ttl`，CoCache 就接受 `volatile-*`；但吊销表的每个条目各带自己的寿命，
-    `volatile-*` 可能在它到期之前驱逐它，被吊销的令牌于是重新被接受：拒绝这种策略的是 CoSec 的检查。
+    （`noeviction`）。吊销表的每个条目各带自己的寿命，`volatile-*` 可能在它到期之前驱逐它，被吊销的令牌于是重新被接受。
+    CoCache 要等实例写入或读到过一个这样的条目才计入这种寿命，所以启动时它接受 `volatile-*`：拒绝这种策略的是 CoSec 的检查。
 - **运行期间再次检查。** CoSec 的检查每个 `revalidate-interval` 在自己的线程上再次读取每个节点的
   `maxmemory-policy`，因此之后的 `CONFIG SET maxmemory-policy`、切换到另一种配置的节点或重启都会被发现。（CoCache 的检查也会检查
   启动之后创建的 `Store`，设置了 `cocache.redis.store-eviction-check-interval` 时也会重读策略，但只记录日志，并在健康详情中

@@ -11,7 +11,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ## 从 8.0.0-alpha.2 升级 {#from-8-0-0-alpha-2}
 
-8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档无需迁移。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
+8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档的内容无需迁移，不过 8.0.0 经 CoCache 8 保存数据，而 CoCache 8 读不了 alpha.2 经 CoCache 6 写入的内容：请在所有实例停止后用 `cosec-migrate cocache8` 迁移（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
 
 - **任意类型的 token 属性**（RC1-2、`GRT-5`）。分析按引擎的方式读取 `subject.attributes.*`，布尔值和数字读作它们的文本。token 中写着 `"suspended": true` 时，条件为未被 `suspended` 的 ALLOW 不再算作作者持有。代码中，`Operator.attributes` 与 `Grantor.attributes` 是 `Map<String, Any>`，即 token 声明原样，alpha.2 只保留了字符串。
 - **会到期的绑定**（RC1-3、`GRT-3`）。作者经带 `expiresAt` 的绑定持有的权限，只包含自身绑定不晚于它到期的授出；没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级，短缺为 `EXPIRY`。
@@ -74,6 +74,36 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   `eviction-check: fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`。它是告警：`cosecSnapshot` 不变，
   只有它属于就绪组。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
+
+### 经 CoCache 6 写入的数据 {#data-written-through-cocache-6}
+
+8.0.0-alpha.2 经 CoCache 6 在 Redis 中保存数据；8.0.0 经 CoCache 8 保存，key 不变，但 CoCache 8 读不了 CoCache 6 的格式。它
+在这种格式中读到的内容按读不懂的内容处理，失败即拒绝：需要这种文档的请求是 `503`（`SourceUnavailable`），在其中被吊销的令牌
+或主体是 `503` 而不是 `401`，控制面 API 回答 `500`。没有任何读取会把这样的值当作不存在，所以被吊销的令牌绝不会重新被接受，
+吊销表“Redis 失败时视为未吊销”的降级也不会。
+
+| 数据 | Key | 迁移之前，在 8.0.0 上 | `cosec-migrate cocache8` |
+|---|---|---|---|
+| 快照文档 | `<p>:snapshot:*` | 读取它的每个请求都是 `503` | 作为每份文档的第 1 个修订重新发布（来源 `MIGRATE`，没有父修订：父修订的 SHA-1 摘要不是 CoCache 8 认识的摘要） |
+| 吊销 | `<p>:token:revoked:*`、`<p>:token:subject:revoked:*` | 被吊销的令牌或主体是 `503` | 重新写入，各自保留剩余的寿命 |
+| 控制面记录 | `<p>:control:*` | 控制面 API 回答 `500` | 删除：历史从重新发布的文档开始 |
+| 候选与影子报告 | `<p>:candidate:*`、`<p>:shadow:*` | 影子窗口无法报告 | 删除；仍在进行的变更会让命令拒绝执行（见下） |
+| 成员关系 | `<p>:membership:*` | 从 `MembershipLoader` 重新加载 | 删除；它们会重新填充 |
+| API key、限流计数器、OAuth 状态 | `<p>:api-key:*`、`<p>:rate-limiter:*`、`<p>:oauth:state:*` | 不变：由 Spring 的 Redis 模板保存，不经 CoCache | 不处理 |
+
+1. 发布或放弃每个进行中的变更，并结束每个破窗授权：存在暂存槽或候选时，除非指定 `--discard-pending`，命令拒绝执行；
+   含破窗绑定的文档也会被拒绝，与 `publish` 相同。
+2. 如果 alpha.2 设置过被 `cosec.key-prefix` 取代的 key 前缀之一，先迁移那些 key（见上面的“一个 key 前缀”）：命令只读一个前缀。
+3. 停止所有 CoSec 实例，包括控制面。alpha.2 实例与 8.0.0 实例既读不了对方的值，也收不到对方的失效消息：CoCache 8 的失效通道
+   以 key 前缀命名。
+4. 先看看会迁移什么，不写入任何内容：
+   `cosec-migrate cocache8 --redis redis://localhost:6379 --key-prefix cosec --out ./cocache8 --dry-run`
+   （Redis Cluster 加 `--cluster` 并给出种子节点）。它会列出拒绝执行的原因。
+5. 去掉 `--dry-run` 再运行。它先把文档按 `publish` 读取的布局写到 `--out`，再写吊销（覆盖 CoCache 6 的值，所以任何时刻都不缺
+   吊销），然后删除其他 CoCache 6 的值，最后发布文档。如果它在删除之后中断，用 `cosec-migrate publish --to-redis <uri> --in
+   ./cocache8 --resume` 完成；再运行一次 `cocache8` 会发现没有需要迁移的内容。
+6. 启动 8.0.0 实例。每份文档的修订号从 1 重新开始；迁移之前的历史不会保留，如果需要，在第 5 步之前保存一份
+   `<p>:control:revision:*`。
 
 ## 从 8.0.0-alpha.1 升级 {#from-8-0-0-alpha-1}
 

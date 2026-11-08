@@ -178,6 +178,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, on every request | No platform document is published: a new deployment, or a Redis that lost it. `cosec-migrate bootstrap` writes only the platform tenant's document. Until a platform document exists every request is `503`, the control API included. On a new deployment, readiness refuses traffic until the first one is installed ([Instance is not ready](#instance-is-not-ready)). Readiness latches once it accepts: a document lost later does not make it refuse again, so every request fails closed with `503`, and only the `cosecSnapshot` health indicator goes DOWN. That turns readiness DOWN only if you add `cosecSnapshot` to the readiness group, which during a Redis outage turns 503s into connection failures. | Publish one with `cosec-migrate publish` ([The first documents](./storage.md#the-first-documents)). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, for some tenants only | The tenant is in [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot), and the oldest document its requests read was last confirmed longer ago than `fail-closed.max-lag` (`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`). | Restore Redis; see [Decisions use an old revision](#decisions-use-an-old-revision). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | A document the request needs could not be read in time (Redis down or slow on a cold load), cannot be decoded or compiled, or disappeared from Redis after it was seen. A failed load and a lost document are logged with the document's name: `Loading snapshot document [<doc>] failed.`, `Snapshot document [<doc>] disappeared from the store; failing closed.` | Restore Redis, or publish a readable revision of the document ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable` after upgrading from 8.0.0-alpha, with `401`s of revoked tokens turned `503` and the control API `500` | The data 8.0.0-alpha wrote through CoCache 6, which CoCache 8 does not read: `Cache[<name>] - key[<key>] holds content this cache cannot read (format[1], this node writes format[2]: not written in this node's format)`. It fails closed; nothing reads it as absent. | Stop every instance and run `cosec-migrate cocache8` ([Upgrading](./upgrading.md#data-written-through-cocache-6)). Do not delete these keys by hand, as the message suggests for a value that can be dropped: a deleted revocation accepts its token again, a deleted document leaves its tenant without its DENYs. |
 | `INDETERMINATE: MissingPolicies`, `AmbiguousPolicy` / `missing_policies` | A binding or an attachment names a policy the documents do not define, or a policy id both the tenant and the platform define. | Fix the document through the control plane. |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). With `CoCacheMembershipProvider`, a `MembershipLoader` that does not answer within that time fails its load (`The membership loader did not answer within ...`), and the next request tries again. | Fix the provider or its store. |
 | `INDETERMINATE: MembershipUnavailable` / `membership`, for some principals only | The `MembershipProvider` answered a space, role or policy id with an unpaired UTF-16 surrogate (`The membership provider answered an id with an unpaired UTF-16 surrogate for principal [<id>].`, `IDN-10`): such an id would share a Redis key with another, so the answer is not used. | Fix the provider's store: an id is Unicode text. |
@@ -439,14 +440,13 @@ yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noev
 ### Startup fails on a locked cache setting
 
 ```text
-Cache[PolicySnapshotCache] - cocache.caches.[PolicySnapshotCache].ttl is pinned by cosec to forever and can't be overridden.
 Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
-A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec pins or locks on its caches,
-such as the `ttl` or `unknown-read` of the snapshot store (pinned) or its `key-prefix` (locked). Remove the setting, or
-exclude CoSec's caches from the customizer (`supports(cacheName)`). `unlock` reaches only a locked field: listing a
-pinned one fails startup too ([Precedence](./configuration.md#precedence)).
+A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
+the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
+([Precedence](./configuration.md#precedence)).
 
 ```text
 cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.

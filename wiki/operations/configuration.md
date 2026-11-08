@@ -337,12 +337,12 @@ Every CoCache duration needs a unit (`2s`, `10m`); a bare number fails startup.
 | `cocache.backend` | `redis` (default) or `memory`. With `memory` nothing is shared between instances, the eviction checks pass, and every instance starts with no documents: local development and tests only. |
 | `cocache.defaults.cache.*`, `cocache.defaults.store.*` | Fill only what a cache's declaration leaves unwritten. CoSec's caches declare what they depend on, so these change little: `MembershipCache` is a `cache`, every other CoSec cache a `store` ([Precedence](#precedence)). |
 | `cocache.overrides.cache.*`, `cocache.overrides.store.*` | Tighten staleness bounds (`local-max-age`, `absent-ttl`) and `read-failure` over every cache, except for the fields CoSec locks. |
-| `cocache.caches.[<CacheName>].*` | The policy of one cache, by the names above. Setting a field CoSec pins or locks fails startup ([Precedence](#precedence)). So does a key CoCache does not know or that does not apply to that cache, usually a typo, unless `cocache.caches-validation: warn` ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)). CoSec publishes the name of every cache it may create, so an entry for one this instance does not create (a control-plane cache on a service without the control plane, `MembershipCache` without a `MembershipLoader`, a revocation table with JWT off) starts. |
+| `cocache.caches.[<CacheName>].*` | The policy of one cache, by the names above. Setting a field CoSec locks fails startup ([Precedence](#precedence)). So does a key CoCache does not know or that does not apply to that cache, usually a typo, unless `cocache.caches-validation: warn` ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)). CoSec publishes the name of every cache it may create, so an entry for one this instance does not create (a control-plane cache on a service without the control plane, `MembershipCache` without a `MembershipLoader`, a revocation table with JWT off) starts. |
 | `cocache.key-prefix` | None: CoSec locks its own prefix, [`cosec.key-prefix`](#key-prefix). |
 | `cocache.redis.command-timeout` | How long one Redis command may take (`2s` by default). A snapshot read that times out is a failed read ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `cocache.redis.channel-mode` | `pubsub` or `sharded` invalidation. Every instance, and the control plane, must agree. |
 | `cocache.redis.assume-maxmemory-policy` | The policy CoCache's own eviction check assumes when `INFO memory` cannot be read. CoCache refuses to start with `allkeys-*`, or with an unreadable policy and this unset, because CoSec's documents and records are `Store`s; `cosec.authorization.snapshot.eviction-check=warn` does not change that ([Redis requirements](./storage.md#redis-requirements)). |
-| `cocache.redis.store-eviction-check` | What CoCache does with a `volatile-*` policy and a `Store` whose policy has a finite `ttl` (the shadow caches): `warn` (default), `fail` or `off`. It does not count the revocation tables, whose entries carry a lifetime of their own that `volatile-*` may also evict; CoSec's own check refuses every policy but `noeviction` ([Redis requirements](./storage.md#redis-requirements)). |
+| `cocache.redis.store-eviction-check` | What CoCache does with a `volatile-*` policy and a `Store` whose policy has a finite `ttl` (the shadow caches): `warn` (default), `fail` or `off`. It counts the revocation tables too, whose entries carry a lifetime of their own, but only once the instance has written or read one, so not at startup; CoSec's own check refuses every policy but `noeviction` from the start ([Redis requirements](./storage.md#redis-requirements)). |
 | `cocache.redis.store-eviction-check-interval` | How often CoCache reads the policy again, for its log and its `storeEviction` health detail. CoSec reads it again every `revalidate-interval` on its own, for `cosecSnapshotEviction`. |
 | `spring.data.redis.*` | The Redis CoCache connects to, and the one the rate limiter and the Redis API key store use. |
 
@@ -361,20 +361,19 @@ Every CoSec cache is assembled by CoCache's layers, field by field; a later step
 4. the application's CoCache `CacheSpecCustomizer` beans;
 5. `cocache.overrides.*`, which only tighten;
 6. `cocache.caches.[<CacheName>].*`;
-7. CoSec's pins and constraints, applied last.
+7. CoSec's constraints, applied last, after `unlock` too.
 
 So a `cocache.caches.[<CacheName>].*` property wins over the matching `cosec.authorization.cache.token.*` one. CoSec
-pins some fields (CoCache's `pin`): their value is fixed, the global layers skip them, a customizer that changes one
-throws, and a `cocache.caches` entry that sets one, or lists it in `unlock`, fails startup: they have no break glass.
-It locks others (`lock`): an entry may set one only by listing it in `unlock`, CoCache's break glass. A few are
-constrained (step 7): an entry may set them, and the value is held within bounds:
+locks some fields (CoCache's `lock`): the global layers skip them, a `cocache.caches` entry that sets one fails startup
+(unless the entry lists it in `unlock`, CoCache's break glass), and a customizer that changes one throws. Some are also
+constrained (step 7), so even `unlock` cannot change them:
 
-| Cache | Pinned | Locked | Constrained | Why |
-|---|---|---|---|---|
-| `PolicySnapshotCache` and the control plane's and shadow window's stores of record (`RevisionRecordCache`, `RevisionIndexCache`, `ReferenceIndexCache`, `ControlLeaseCache`, `ControlListCache`, `ControlAppListCache`, `ChangeRequestCache`, `StageCache`, `CandidateCache`) | `ttl` forever, `unknown-read: throw` | the snapshot store's `local-max-age` | — | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry or a failed read taken for "absent" would silently drop a document, and with it its DENY statements. As CoCache `Store`s, they never reclaim content they cannot read, and a failed delete throws instead of being retried later, when it could delete a newer write. |
-| `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache` | `unknown-read: throw` | — | — | An outage must not read as "no samples" or "no instance". |
-| `MembershipCache` | `read-failure: throw`, `unknown-read: throw` | — | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s` | A failed read must never become "no memberships", and a lost invalidation must expire. |
-| `RevokedTokenCache`, `RevokedSubjectCache` | — | — | — | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. |
-| every CoSec cache | — | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
+| Cache | Locked | Constrained | Why |
+|---|---|---|---|
+| `PolicySnapshotCache` and the control plane's and shadow window's stores of record (`RevisionRecordCache`, `RevisionIndexCache`, `ReferenceIndexCache`, `ControlLeaseCache`, `ControlListCache`, `ControlAppListCache`, `ChangeRequestCache`, `StageCache`, `CandidateCache`) | `ttl`, `unknown-read`; the snapshot store also `local-max-age` | `ttl` never expires, `unknown-read: throw` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry or a failed read taken for "absent" would silently drop a document, and with it its DENY statements. As CoCache `Store`s, they never reclaim content they cannot read, and a failed delete throws instead of being retried later, when it could delete a newer write. |
+| `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache` | `unknown-read` | `unknown-read: throw` | An outage must not read as "no samples" or "no instance". |
+| `MembershipCache` | `read-failure`, `unknown-read` | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s`, `read-failure` and `unknown-read: throw` | A failed read must never become "no memberships", and a lost invalidation must expire. |
+| `RevokedTokenCache`, `RevokedSubjectCache` | — | — | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. |
+| every CoSec cache | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
 
 **Next:** where the documents live and how instances read them, in [Storage and caching](./storage.md).
