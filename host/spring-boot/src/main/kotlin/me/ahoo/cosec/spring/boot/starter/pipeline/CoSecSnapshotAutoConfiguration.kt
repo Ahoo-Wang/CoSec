@@ -348,7 +348,7 @@ class CoSecSnapshotAutoConfiguration {
 }
 
 /** Runs [reporter] every interval from the start of the context until it closes. */
-class ShadowReporting(reporter: ShadowReporter) : AutoCloseable {
+class ShadowReporting(val reporter: ShadowReporter) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-shadow-reporter"))
 
     init {

@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.runtime.shadow
 
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -24,6 +27,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * #1210: an instance forgets a shadow window once its candidate is no longer staged and its last report is written,
@@ -51,9 +55,11 @@ class ShadowRetentionTest {
     private val staged = HashMap<SnapshotKey, StoredCandidate>()
     private val store = object : CandidateStore {
         var failing = false
+        var cancelled = false
 
         override suspend fun candidate(key: SnapshotKey): StoredCandidate? {
             check(!failing) { "the candidate store is down" }
+            if (cancelled) throw CancellationException("a future of the store was cancelled")
             return staged[key]
         }
     }
@@ -61,10 +67,12 @@ class ShadowRetentionTest {
     private val sink = object : ShadowReportSink {
         val written = ArrayList<ShadowReport>()
         var failing = false
+        var cancelled = false
         var onWrite: (ShadowReport) -> Unit = {}
 
         override suspend fun write(report: ShadowReport) {
             check(!failing) { "the report store is down" }
+            if (cancelled) throw CancellationException("a future of the sink was cancelled")
             written += report
             onWrite(report)
         }
@@ -205,6 +213,65 @@ class ShadowRetentionTest {
                 endedRetention = Duration.ofSeconds(-1)
             )
         }
+    }
+
+    /** L5 of #1268's review: a store's cancelled future is a failed read or write, and ends nothing but that step. */
+    @Test
+    fun `a cancelled future of a store fails its step and the reporter goes on`() {
+        val key = tenant(1)
+        stage(key, "w")
+        recorder.record(key, "w", ShadowOutcome.SAME, 4, null)
+        staged.clear()
+        store.cancelled = true
+        flush().single().window.assert().isEqualTo("w")
+        recorder.reports().map { it.window }.assert().containsExactly("w")
+        store.cancelled = false
+        sink.cancelled = true
+        flush().assert().isEmpty()
+        recorder.reports().map { it.window }.assert().containsExactly("w")
+        sink.cancelled = false
+        flush().single().window.assert().isEqualTo("w")
+        flush().assert().isEmpty()
+    }
+
+    @Test
+    fun `the reporter's own cancellation ends its cycle`() = runBlocking<Unit> {
+        val key = tenant(1)
+        stage(key, "w")
+        recorder.record(key, "w", ShadowOutcome.SAME, 4, null)
+        store.cancelled = true
+        var finished = false
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            cancel()
+            reporter.flush()
+            finished = true
+        }
+        job.join()
+        finished.assert().isFalse()
+    }
+
+    /** L6 of #1268's review: a sample that passed the first look, its window forgotten before it takes the window. */
+    @Test
+    fun `a sample that its window's forgetting overtakes is dropped, not kept as a new window`() {
+        val key = tenant(1)
+        var between: (() -> Unit)? = null
+        val hooked = object : Clock() {
+            override fun getZone(): ZoneId = ZoneOffset.UTC
+
+            override fun withZone(zone: ZoneId?): Clock = this
+
+            override fun instant(): Instant {
+                val run = between
+                between = null
+                run?.invoke()
+                return clock.now
+            }
+        }
+        val recorder = ShadowRecorder("i1", hooked)
+        recorder.record(key, "w", ShadowOutcome.SAME, 4, null)
+        between = { recorder.forget("w", 1).assert().isTrue() }
+        recorder.record(key, "w", ShadowOutcome.NARROWED, 4, null)
+        recorder.reports().assert().isEmpty()
     }
 
     @Test

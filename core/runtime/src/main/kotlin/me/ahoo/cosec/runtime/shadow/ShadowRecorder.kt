@@ -16,6 +16,7 @@ package me.ahoo.cosec.runtime.shadow
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -70,24 +71,22 @@ class ShadowRecorder(
             return
         }
         val now = clock.instant()
-        while (true) {
-            val state = windows.computeIfAbsent(window) { Window(key) }
-            synchronized(state) {
-                if (state.forgotten) {
-                    // Forgotten between the lookup and the lock: dropped, as a sample of an ended window.
-                    return
-                }
-                state.counts.merge(outcome, 1L, Long::plus)
-                baseRevision?.let(state.bases::add)
-                if (sample != null) {
-                    val samples = state.samples.getOrPut(outcome) { ArrayList() }
-                    if (samples.size < ShadowReport.MAX_SAMPLES) samples += sample
-                }
-                if (state.first == null) state.first = now
-                state.last = now
-                state.recorded++
+        val state = windows.computeIfAbsent(window) { Window(key) }
+        synchronized(state) {
+            if (state.forgotten || ended.containsKey(window)) {
+                // Forgotten since the look above: this sample is of an ended window, and this may be a new state for it.
+                windows.remove(window, state)
                 return
             }
+            state.counts.merge(outcome, 1L, Long::plus)
+            baseRevision?.let(state.bases::add)
+            if (sample != null) {
+                val samples = state.samples.getOrPut(outcome) { ArrayList() }
+                if (samples.size < ShadowReport.MAX_SAMPLES) samples += sample
+            }
+            if (state.first == null) state.first = now
+            state.last = now
+            state.recorded++
         }
     }
 
@@ -159,7 +158,8 @@ class ShadowReporter(
     private val installed: () -> Map<SnapshotKey, InstalledDocument>,
     private val clock: Clock = Clock.systemUTC(),
     private val interval: Duration = Duration.ofSeconds(10),
-    private val candidates: CandidateStore? = null,
+    /** Where it reads whether a window's candidate is still staged; without it, every window is kept. */
+    val candidates: CandidateStore? = null,
 ) {
     init {
         require(!interval.isNegative && !interval.isZero) { "The report interval is positive." }
@@ -169,7 +169,8 @@ class ShadowReporter(
     suspend fun flush() {
         val staged = HashMap<SnapshotKey, String?>()
         for (window in recorder.windows()) {
-            // Looked at before the report is taken: a sample after it is in a later report, never left out.
+            // The reports were taken first, so a window among them was staged before this read and a candidate gone now
+            // has really ended. A sample after its report is caught by forget, which compares what the report counted.
             val ended = ended(window, staged)
             val written = attempt("the shadow report of window ${window.report.window}") { sink.write(window.report) }
             if (ended && written) {
@@ -191,7 +192,10 @@ class ShadowReporter(
             staged[key] = try {
                 store.candidate(key)?.window
             } catch (e: CancellationException) {
-                throw e
+                // A store's cancelled future is a failed read; only this caller's own cancellation ends the cycle.
+                currentCoroutineContext().ensureActive()
+                log.debug(e) { "Reading the candidate of [$key] was cancelled; its windows are kept." }
+                return false
             } catch (e: Exception) {
                 log.debug(e) { "Reading the candidate of [$key] failed; its windows are kept." }
                 return false
@@ -214,7 +218,10 @@ class ShadowReporter(
         block()
         true
     } catch (e: CancellationException) {
-        throw e
+        // As for a read: only this caller's own cancellation ends the reporter's loop.
+        currentCoroutineContext().ensureActive()
+        log.warn(e) { "Writing $what was cancelled; the next cycle writes it again." }
+        false
     } catch (e: Exception) {
         log.warn(e) { "Writing $what failed; the next cycle writes it again." }
         false

@@ -150,7 +150,10 @@ class CoCacheControlStore internal constructor(
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
 
-    /** Emptied referrers are written as empty, never deleted: a delete cannot be conditional, and could drop a new one. */
+    /**
+     * Emptied referrers are written as empty, not deleted: the next writer always has a digest to name, and absent means
+     * never written.
+     */
     override suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,

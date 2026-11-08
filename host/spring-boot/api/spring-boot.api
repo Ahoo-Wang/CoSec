@@ -1159,6 +1159,7 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizati
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting : java/lang/AutoCloseable {
 	public fun <init> (Lme/ahoo/cosec/runtime/shadow/ShadowReporter;)V
 	public fun close ()V
+	public final fun getReporter ()Lme/ahoo/cosec/runtime/shadow/ShadowReporter;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/SnapshotEvictionHealthIndicator : org/springframework/boot/health/contributor/HealthIndicator {
