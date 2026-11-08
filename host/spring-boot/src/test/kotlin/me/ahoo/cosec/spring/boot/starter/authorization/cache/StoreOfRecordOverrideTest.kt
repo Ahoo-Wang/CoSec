@@ -51,7 +51,7 @@ import java.util.concurrent.ExecutionException
  * Neither an application's [CacheSpecCustomizer] nor a `cocache.*` property can weaken the policy snapshot store, which
  * is the store of record: it never expires, and a failed Redis read throws. CoSec creates it through CoCache's factory
  * with locks ([CoSecCacheSpecs.locks]): a property that sets a locked field fails startup, a customizer that changes one
- * throws, the global layers skip it, and `unlock` (breaking the glass) cannot reach the fields CoSec pins.
+ * throws, the global layers skip it, and even `unlock` (breaking the glass) leaves the constrained fields as they must be.
  * The revocation tables read "not revoked" when Redis fails, but an operator may make them fail closed.
  */
 @OptIn(InternalCoSecApi::class)
@@ -95,43 +95,34 @@ class StoreOfRecordOverrideTest {
         }
     }
 
-    private fun ApplicationContextRunner.refusedFor(why: String, vararg properties: String) =
+    private fun ApplicationContextRunner.refusedFor(vararg properties: String) =
         withPropertyValues(*properties).run { context ->
             assertThat(context).describedAs(properties.joinToString()).hasFailed()
             generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
-                .any { snapshot in it && "$why by ${CoSecCacheSpecs.LOCKED_BY}" in it }
+                .any { snapshot in it && "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }
                 .assert().describedAs(properties.joinToString()).isTrue()
         }
 
     /**
      * Fails for the lock, not for some other reason: since CoCache 8.0.0-alpha.4 an unknown or inapplicable key under
-     * `cocache.caches.[name]` fails startup too, which would pass a bare `hasFailed()`. A store of record's `ttl` and
-     * `unknown-read` are pinned (CoCache 8.0.0-rc.1), its layout and local max age locked.
+     * `cocache.caches.[name]` fails startup too, which would pass a bare `hasFailed()`.
      */
     @Test
     fun aPerCachePropertyCannotSetALockedField() {
-        listOf("ttl=60s", "unknown-read=absent").forEach {
-            contextRunner.refusedFor("pinned", "cocache.caches.[$snapshot].$it")
-        }
-        listOf("key-prefix=elsewhere:", "local-max-age=1h").forEach {
-            contextRunner.refusedFor("locked", "cocache.caches.[$snapshot].$it")
+        listOf("ttl=60s", "unknown-read=absent", "key-prefix=elsewhere:", "local-max-age=1h").forEach {
+            contextRunner.refusedFor("cocache.caches.[$snapshot].$it")
         }
     }
 
-    /**
-     * `unlock` is CoCache's break glass, but none reaches a pinned field: an entry that unlocks a store of record's `ttl`
-     * or `unknown-read` fails startup, so the store stays one that never expires and throws on a failed read.
-     */
+    /** `unlock` is CoCache's break glass: CoSec's constraints still run after it. */
     @Test
     fun breakingTheGlassStillLeavesAStoreOfRecord() {
-        listOf("ttl" to "60s", "unknown-read" to "absent").forEach { (field, value) ->
-            contextRunner.refusedFor(
-                "pinned",
-                "cocache.caches.[$snapshot].$field=$value",
-                "cocache.caches.[$snapshot].unlock=$field",
-            )
-        }
         contextRunner
+            .withPropertyValues(
+                "cocache.caches.[$snapshot].ttl=60s",
+                "cocache.caches.[$snapshot].unknown-read=absent",
+                "cocache.caches.[$snapshot].unlock=ttl,unknown-read",
+            )
             .run { context ->
                 assertThat(context).hasNotFailed()
                 val runtime = context.getBean(CacheRuntime::class.java)

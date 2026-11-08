@@ -3,11 +3,11 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.authorization.cache.StoreOfRecordOverrideTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
-index ce6369a..2ae5ed3 100644
+index e4056e1..cedabe6 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
 @@ -229,7 +229,7 @@ object CoSecCacheSpecs {
-      * startup. The membership `ttl` and `ttl-jitter` are constrained, not pinned: an entry may set them, within bounds.
+      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
       */
      fun locks(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
 -        lockLayout(*LayoutField.entries.toTypedArray())
