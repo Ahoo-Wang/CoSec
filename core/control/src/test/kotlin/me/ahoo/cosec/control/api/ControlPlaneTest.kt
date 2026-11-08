@@ -288,7 +288,7 @@ class ControlPlaneTest {
         plane.analyze(alice, query.copy(app = "billing")).allows.assert().isEmpty()
     }
 
-    /** SCP-7, R1-6 of #1194's review: the control plane takes no app the data plane could never read. */
+    /** SCP-10, R1-6 of #1194's review: the control plane takes no app the data plane could never read. */
     @Test
     fun `analyze refuses an app that cannot be an app id`() = runBlocking<Unit> {
         val query = AccessQuery(ACME, "order", "team-a", Action("order", "delete"), Resource("order", "1", emptyMap()))

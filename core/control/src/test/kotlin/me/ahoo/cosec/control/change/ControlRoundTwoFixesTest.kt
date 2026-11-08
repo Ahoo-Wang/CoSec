@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.control.change
 
-import java.time.Duration
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -69,6 +67,8 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.node.ObjectNode
+import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The round-2 review of the control plane (RFC 0007): a window sums one report per instance (R1), an approval keeps
@@ -493,7 +493,13 @@ class ControlRoundTwoFixesTest {
     /** One shape: every field of a stored approval is written, and reading one that lacks it is a format error. */
     @Test
     fun `a stored approval always has its fields, null where its credential did not say`() = runBlocking<Unit> {
-        val change = changes.propose(pia, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(writer.copyAs("more"))), "x")
+        val change = changes.propose(
+            pia,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("more"))),
+            "x"
+        )
         val approval = Approval(pia.actor, clock.now, "c", emptyList(), pia.memberships, credentialId = "token-pia")
         val written = ChangeRequestCodec.encode(change.copy(approval = approval))
         val fields = listOf("memberships", "attributes", "principalBindings", "breakGlass", "credentialId", "issuedAt")

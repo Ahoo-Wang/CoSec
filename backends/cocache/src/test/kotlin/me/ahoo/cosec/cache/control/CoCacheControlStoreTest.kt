@@ -42,7 +42,6 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
-import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
@@ -146,6 +145,43 @@ class CoCacheControlStoreTest {
                 )
             }
             revisions.head(SnapshotKey.Tenant("acme")).assert().isNull()
+        }
+    }
+
+    /**
+     * The upgrade note's path: `repair-references` reads a set before it writes it, so the array form 8.0.0-alpha.3 wrote
+     * stops it until the set is deleted; it then writes the set again from the head, with the referrer's revision.
+     */
+    @Test
+    fun `repair stops at a set in the array form, and rebuilds it with revisions once it is deleted`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        val acme = SnapshotKey.Tenant("acme")
+        val reference = ReferenceKey(SnapshotKey.Platform, PolicyId("shared"))
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val revisions = Revisions(store(node), Clock.systemUTC())
+            revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
+            revisions.publish(acme, null, document(DocumentKind.TENANT, "acme", BINDS_SHARED), BOOTSTRAP)
+        }
+        CacheRuntime.builder().backend(backend).build().use { raw ->
+            raw.create(
+                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+            )
+                .put(reference, """["tenant:acme"]""".encodeToByteArray())
+        }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            formatError { Revisions(store(node), Clock.systemUTC()).repairReferences(acme) }
+        }
+        CacheRuntime.builder().backend(backend).build().use { raw ->
+            raw.create(
+                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+            )
+                .delete(reference)
+        }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val store = store(node)
+            Revisions(store, Clock.systemUTC()).repairReferences(acme).assert().isEqualTo(1)
+            store.referrers(SnapshotKey.Platform, reference.policy)!!.value.assert().isEqualTo(mapOf(acme to 1L))
         }
     }
 

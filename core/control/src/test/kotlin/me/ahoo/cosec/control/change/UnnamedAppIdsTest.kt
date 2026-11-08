@@ -63,7 +63,13 @@ class UnnamedAppIdsTest {
             document.policies,
             document.bindings,
         )
-        val stored = SnapshotDocument(PolicyDocumentCodec.SCHEMA, next.revision, next.publishedAt, PolicyDocumentCodec.encode(next))
+        val stored =
+            SnapshotDocument(
+                PolicyDocumentCodec.SCHEMA,
+                next.revision,
+                next.publishedAt,
+                PolicyDocumentCodec.encode(next)
+            )
         harness.memory.putRecord(ACME, stored)
         harness.memory.putHead(ACME, base?.digest, stored)
     }
