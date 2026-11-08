@@ -290,7 +290,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 | 批次 | 内容 |
 |---|---|
-| F1 代码，GA 前 | U1 路由映射改为显式启用：`cosec.authorization.routes.location` 默认未设置；未设置而 `classpath:cosec-routes.json` 存在时启动失败并给出修法；零条路由的映射拒绝加载；启动时打印加载了什么。U2 修好 `cosecServiceGenerator`（改读 springdoc 的扫描结果）或撤下。U12 `AuthorizationChecker.decideAs` 与 `decide(security, app, …)` 改为 `@InternalCoSecApi`。U7 有 `cosec-cocache` 而没有 `CacheRuntime` 时启动失败并点名 CoCache starter。U9 网关模式下 `cosec.jwt.enabled` 默认 false。U15 宿主没有指定 app 时拒绝客户端声明的 `CoSec-App-Id`，除非 `cosec.authorization.scope.client-declared-app=true`。U10 `cosec:tenant-admin` 可以在本租户的文档上跳过影子窗口。U11 三组属性改名（`cosec.pipeline.gateway.*` → `cosec.pipeline.identity.*`；`cosec.audit.required.timeout` → `cosec.observability.listener.required-timeout`；`cosec.authorization.cache.token.*` → `cosec.authentication.revocation.cache.*`），旧键启动失败并指向新键 |
+| F1 代码，GA 前 | U1 路由映射改为显式启用：`cosec.authorization.routes.location` 默认未设置；未设置而 `classpath:cosec-routes.json` 存在时启动失败并给出修法；零条路由的映射拒绝加载；启动时打印加载了什么。U2 修好 `cosecServiceGenerator`（改读 springdoc 的扫描结果）或撤下。U12 `AuthorizationChecker.decideAs` 与 `decide(security, app, …)` 改为 `@InternalCoSecApi`。U7 有 `cosec-cocache` 而没有 `CacheRuntime` 时启动失败并点名 CoCache starter。U9 网关模式下 `cosec.jwt.enabled` 默认 false。U15（客户端声明 app）已取消，由 R7b 的 token 绑定 App 取代。U10 `cosec:tenant-admin` 可以在本租户的文档上跳过影子窗口。U11 三组属性改名（`cosec.pipeline.gateway.*` → `cosec.pipeline.identity.*`；`cosec.audit.required.timeout` → `cosec.observability.listener.required-timeout`；`cosec.authorization.cache.token.*` → `cosec.authentication.revocation.cache.*`），旧键启动失败并指向新键 |
 | F2 文档，F1 之后 | 维护者要的模型类图与关系、按场景组织的用法；U13 "简单模式"；U5 修好快速开始的死胡同（其平台文档不放行控制 API）；U3 路由映射与 `http:` 语句、限流的关系；U14 网关拓扑只有 `http` 命名空间 |
 | 8.1 | U4 处理器方法上的注解，启动时生成路由映射，不再维护文件（降低路由映射维护成本的主路径）；其余按报告 |
 
@@ -301,6 +301,24 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | G1，F1 之后 | 文档格式（`roles`、目录条目的 `action`、`resource`）、展开函数、编译、schema、JMH |
 | G2 | `putRole`、`removeRole`，授权、摘要、授出分析、差异、反向引用、检查 |
 | G3，与 F2 合并 | 文档、skill、OpenAPI 生成器改为简写权限 |
+
+**v6/v7 残留清理**（全仓审计的结论，维护者 2026-11-08 按建议定；目标是 GA 前达到理想架构，不为兼容 6.x、7.x 或 alpha 妥协）：
+
+| 批次 | 内容 | 时机 |
+|---|---|---|
+| R1 工具小修 | `config/logback-parity.xml` 改名并删死条目；架构测试的包名；`ognl` 版本约束挪到 `cosec-migrate`；Issue 模板的版本占位；OTel 版本兜底 | 随时 |
+| R2 注释与守卫 | 34 处按旧版本解释行为的注释、规则文字、只属于 7.x 的排障条目；最后打开 detekt 的版本词守卫 | #1268 之后 |
+| R3 死代码 | `FormatPatterns` 的死常量、`KafkaAuditEventSink`、`SimpleSecurityContext`、`AuthzRequest` 只写不读的字段（带 JMH） | F1 之前 |
+| R4 alpha 残留 | 无名 app 的容错（拆分 `SCP-7`）、alpha.3 数组读取、控制面为旧 alpha 保持的字节 | #1268 之后，G2 之前 |
+| R5 格式与令牌收紧 | 星期拼法只接受 `MON`…`SUN`；空字符串租户声明无效；限流规则 id 与桶名统一 | G1 之前 |
+| R6 凭证读取与启动检查 | `authorization` Cookie 默认关闭加开关；`CoSec-*` 只读头；删 7.x 键表、`warn` 模式、`RemovedKeyPrefixes` | #1273、F1 之后 |
+| R7a 审计记录 | `authorization.source` 改用绑定词汇，删死字段和 `PolicyType` | 与 G1 对齐 |
+| R7b 主体与令牌契约 | 验证结果与签发输入改成不可变值，删 `Delegated` 链；`SecurityContext` 只读；删 `RoleCapable` 等；`authenticated` 显式；token 绑定 App（RFC 0012 §3.5） | ABI 冻结前 |
+| R7c 登录协程化 | `cosec-login`、`cosec-social` 转 `suspend`，注册表改实例 | R7b 之后 |
+| R8 包名对齐 | `cocache`、`webmvc`、`spring-boot` | 其余批次之后，ABI 冻结前 |
+| R9 GA 收尾 | 最后一次 v7/v8 门禁后删除工作流；文档守卫词表；alpha 升级章节；路线图页；`guava` | GA tag 前 |
+
+整体顺序：#1273、#1268 → R1 → R3 → F1 → R5 → G1 → R4 → G2 → R2 → R6 → R7a → R7b → R7c → F2（含 G3）→ E2b → E3 → E1b → 第二轮审查 → R8 → R9。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
@@ -408,6 +426,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **易用性审查的决定**：F1 全部做（U1、U2、U12、U7、U9、U3、U14 与下面三项）；U15 客户端声明的 app 默认拒绝；U10 `cosec:tenant-admin` 获得本租户文档上的 `skip-shadow`；U11 三组属性在 GA 前改名；F2 写模型类图与场景化用法；U4 注解生成路由映射放到 8.1 | 2026-11-07 | 维护者在问答中选了每一项的推荐 |
 | **E2 拆成 E2a（正确性）与 E2b（规模与性能）**；E2a 先重新生成 D2 之后不再能应用的 6 个变异体；需要条件删除的修复（#1227、租约释放）在 CoCache 6 没有该能力时不在 CoSec 里绕过，留给 #1203 | 2026-11-07 | 协调者按推荐 |
 | **模型关系（RFC 0012）**：Binding 留在文档里；User、Organization 不进模型；App 保持平台级，租户开通状态不进文档；Operation、Space 角色不拆成两种；角色属于一个 App，可指定 Space；Space 对 App 是可选的，App 与 Space 的两种关系都支持，由角色的 `(app, space)` 决定，不加前缀校验；外部事实源经控制面同步；租户读目录和系统角色放 8.1；文档格式增加 `roles`、`action`、`resource`；非 `spaced` 权限用策略条件限制在默认空间；未指定 Space 的角色授出 `spaced` 权限需要 `(*, *)` 的持有，否则走审批；在 F1 之后、F2 之前实现 | 2026-11-08 | 维护者："按你推荐"、"两种都支持"、"空间概念不是每个App 必须的"、对照实际场景审查后"按结论修订"、"按建议定稿" |
+| **v6/v7 残留清理（R1–R9）**：Cookie 令牌默认关闭加开关；alpha 数据容错全删并拆分 `SCP-7`；主体与令牌契约重切；审计记录重切，Kafka 下游字段会变；登录模块转 `suspend`，取消 Reactor 例外；删 7.x 键表和 `warn` 模式；星期拼法、空租户声明、限流命名、`CoSec-*` 查询参数都收紧；包名与模块名对齐；v7/v8 门禁在 GA tag 前跑最后一次后删除；`ognl` 约束挪到 migrate，去掉 guava；alpha 升级章节 GA 时删；token 绑定 App 并入 R7b，U15 取消 | 2026-11-08 | 维护者："必须在GA前达到理想目标架构状态。不要为了向前兼容妥协"、"按建议定" |
 
 ## 10. 尚未派发的下一步
 

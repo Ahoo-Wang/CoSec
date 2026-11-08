@@ -1,8 +1,8 @@
 # RFC 0012：角色与权限的写法，以及 Space 的归属
 
 > 状态：已确认（2026-11-08，维护者："按建议定稿"） · 上位文档：[RFC 0001](0001-target-architecture.md) P11 ·
-> 修订：[RFC 0004](0004-unified-model.md) §4.9，[RFC 0007](0007-control-plane.md) §5.8、§7.1 ·
-> 基线：`main` @ `50e7945c` · 交付：§11 的 G1–G3，8.0 GA 之前合入
+> 修订：[RFC 0004](0004-unified-model.md) §4.6、§4.9，[RFC 0007](0007-control-plane.md) §5.8、§7.1，[RFC 0009](0009-identity-and-credentials.md) ·
+> 基线：`main` @ `50e7945c` · 交付：§11 的 G1–G3，§3.5 随 R7b，都在 8.0 GA 之前合入
 
 ## 0. 结论先行
 
@@ -12,6 +12,7 @@
 4. **Space 是可选的**，不用 Space 的 App 什么都不写。App 与 Space 的关系由角色上的 `(app, space)` 决定，所以“一个 App 多个 Space”和“一个 Space 跨多个 App”都支持，不需要新规则。
 5. **Binding 留在文档里**，继续作为唯一的授权关系（§8）。
 6. **事实源可以在 CoSec 之外**：身份系统通过控制面同步角色，不新增接口（§7.7）。
+7. **token 绑定 App**：token 声明它属于哪个 App，客户端不再声明 App。Space 仍由 token 列出范围、请求选择一个（§3.5）。
 
 ## 1. 问题
 
@@ -29,7 +30,7 @@
 | 角色属于一个 App，分系统和自定义两类，权限集合整体替换 | 角色属于一个 App；`putRole` 整体替换 |
 | 角色按 Space 存放，权限按角色和 Space 查找 | 角色可以指定 Space |
 | Space 属于一个 App，id 是生成的不透明值；另有跨产品的协作边界 | Space 既可属于一个 App，也可共享 |
-| 登录时只把当前 App 的角色放进 token | token 只带当前 App 的角色是好做法，但 CoSec 不强制 |
+| 登录时按 App 签发 token，只放当前 App 的角色 | token 绑定 App（§3.5） |
 | 租户 Owner 作为 token 里的一条 policy 下发 | 租户 Owner 走 attachment，授出分析按 `(*, *)` 计 |
 | 租户开通 App 有状态和有效期，认证时检查 | 开通状态不进文档 |
 | 角色变更以事件形式发生，事实源在身份系统，CoSec 是消费方 | 需要外部事实源的同步路径 |
@@ -115,7 +116,7 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 
 需要“授予一次，多个 App 都生效”时，用 `bindings` 把同一个角色绑到多个 App，这是显式的选择。
 
-持有 `wms` 角色 `R@S` 的成员请求 App `pos` 的 Space `S`：`ScopeResolver` 放行（成员在 `S` 里有角色），但 `pos` 的文档没有 `R` 的绑定，角色带不来任何权限。
+发给 `wms` 的 token 请求 App `pos`，在作用域解析时就被拒绝（§3.5），轮不到 Space。
 
 ### 3.3 为什么不用 `<app>:<space>` 前缀
 
@@ -129,13 +130,29 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 
 把 `Memberships.roles` 的键改成 `(app, space)` 要改 token 格式和 `MembershipProvider` SPI，跨 App 的场景还要逐个 App 重复授予。
 
-### 3.5 残余风险
+### 3.5 token 绑定 App（修订 RFC 0004 §4.6、RFC 0009）
 
-同一个 Role id 被两份 App 文档定义，而一个 token 又带着它访问这两个 App 时，两边的权限都生效，这是今天的语义。缓解办法：
+> 2026-11-08 维护者"按建议定"。随 R7b（主体与令牌契约重切）交付，不在 G1–G3 里。
 
-- 系统角色用不透明 id 或 `<app>.<role>`；
-- 文档推荐 token 只带当前 App 的角色；
-- 控制面告警（§7.5）。
+token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 只允许单个值。今天的 token 不声明 App，也不校验 audience：同一个签名密钥下，发给一个 App 的 token 在另一个 App 也有效，只要两边有同名角色就生效。
+
+`ScopeResolver` 按下表解析：
+
+| 宿主 App | 凭证 App | 结果 |
+|---|---|---|
+| `wms` | `wms` | `wms` |
+| `wms` | `pos` | 拒绝（`APP_MISMATCH`） |
+| `wms` | 未声明 | 拒绝（`APP_MISMATCH`） |
+| 未配置 | `wms` | `wms` |
+| 未配置 | 未声明 | 没有 App，不读 App 文档 |
+
+- 匿名请求没有凭证，App 取宿主的。
+- **客户端不再声明 App**：`CoSec-App-Id` 删除。易用性审查的 U15（`client-declared-app` 开关）取消。
+- token 里的角色都属于这个 App，同名系统角色不再跨 App 生效。
+- 一次登录访问多个 App 时，按 App 各换一个 token。操作控制面的 token 发给控制面的 App。
+- 已签发的 token 在配置了 App 的宿主上失效，这是破坏性变更，GA 前做。
+
+**Space 不绑定单个值。** token 用 `role@space` 列出可用范围（或由 `MembershipProvider` 给出），请求用 `CoSec-Space-Id` 选一个，`SPACE_NOT_MEMBER` 挡住其余。这是选择，不是授权；绑定单个值意味着每次切换 Space 都要换 token。要把 Agent、服务账号或 API key 限定在一个 Space，token 只列那个 Space 的角色即可。
 
 ## 4. 权限（修订 RFC 0004 §4.9）
 
@@ -314,7 +331,6 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 
 新增告警，都不构成越权（租户的授予仍经授出分析），但会让人困惑：
 
-- Role id 已被另一份 App 文档定义；
 - Tenant 文档的角色 id 与它的 App 的系统角色相同，结果是并集；
 - 指定了 Space 的角色包含非 `spaced` 权限，这项权限在那个 Space 里永远不生效。
 
@@ -358,14 +374,14 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 ## 9. 兼容与时机
 
 - `schema: 2` 不变，只增加可选字段。严格的读取器拒绝未知字段，所以**先升级全部数据面实例，再发布带 `roles` 的文档**。8.0 GA 前只写进升级说明；GA 之后由 RFC 0010 C5 的格式门槛保护，这也是要在 GA 前做的原因。
-- 没有破坏性变更：`ScopeResolver` 和 Space id 的语义都不变。
+- G1–G3 没有破坏性变更，Space id 的语义不变。§3.5 是破坏性变更，随 R7b 交付。
 - 7.x 迁移工具的输出不变，继续生成绑定。两种写法并存。
 - `DocumentDiff`、`Operation`、`PolicyDocument`、`Catalog` 的公共签名变化，更新 ABI dump。
 - 热路径：查找结构不变，每个非 `spaced` 简写权限多一次 `scope.space` 比较。G1 带 `PipelineBenchmark` 的前后对比。
 
 ## 10. 规范规则
 
-新增规则族 `ROL`。每条都有正反场景和变异体。
+新增规则族 `ROL`，并扩展 `SCP`。每条都有正反场景和变异体。
 
 | 规则 | 内容 |
 |---|---|
@@ -380,6 +396,7 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 | `ROL-9` | `PutRole` 按权限走授出分析，无法证明包含的走审批 |
 | `ROL-10` | 被租户角色引用的权限不能从 App 删除 |
 | `ROL-11` | 角色只在自己的 App 生效；指定了 Space 的角色只在那个 Space 生效 |
+| `SCP-10` | 凭证声明的 App 与宿主的 App 不同，或宿主有 App 而凭证未声明，作用域解析拒绝；请求不能声明 App（随 R7b） |
 
 ## 11. 交付
 
@@ -389,7 +406,7 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 | G2 | 操作、授权、摘要、分析、差异、引用、检查 | `cosec-control` |
 | G3 | 文档、skill、OpenAPI 生成器；与 F2 合并 | `wiki/`、`skills/`、`cosec-openapi` |
 
-建议顺序：F1 → G1 → G2 → F2（含 G3）→ E2b。F2 的模型类图以本 RFC §2 为准。
+整体顺序见 `docs/roadmap.md`。F2 的模型类图以本 RFC §2 为准。
 
 ## 12. 非目标
 
@@ -423,3 +440,4 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 | 非 `spaced` 权限用策略条件限制在默认空间 | §4.2 | 维护者 2026-11-08 "按建议定稿" |
 | 未指定 Space 的角色授出 `spaced` 权限，需要 `(*, *)` 的持有，否则走审批 | §7.3 | 维护者 2026-11-08 "按建议定稿" |
 | 在 F1 之后、F2 之前实现 | §11 | 维护者 2026-11-08 "按建议定稿" |
+| token 绑定 App，Space 不绑定单个值 | §3.5 | 维护者 2026-11-08 "按建议定" |
