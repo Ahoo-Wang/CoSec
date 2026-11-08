@@ -71,8 +71,9 @@ class SnapshotSlowLogTest {
             testSource(store, options = options, clock = clock).use { source ->
                 try {
                     source.load().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
-                    clock.advance(Duration.ofSeconds(3))
+                    // Held first: a tick between the two would confirm the document, and it would not lag at all.
                     store.hold = true
+                    clock.advance(Duration.ofSeconds(3))
                     appender.entered.await(TEST_LIMIT_SECONDS, TimeUnit.SECONDS).assert().isTrue()
 
                     val answer = source.load("cold-app").get(WITHIN_SECONDS, TimeUnit.SECONDS)
@@ -95,6 +96,8 @@ class SnapshotSlowLogTest {
             testSource(store, compiler, options, compileExecutor = null).use { source ->
                 source.nanoTime = nanos
                 source.load().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+                // No notification: its load would compile past the gate, and leave the pass nothing to stall on.
+                store.dropNotifications = true
                 store.put(SnapshotKey.Platform, document(2))
                 val gate = CountDownLatch(1)
                 compiler.gate = gate
