@@ -150,7 +150,7 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
 ```
 
 - `BEST_EFFORT` (default): queued off the request path into a bounded queue; a full queue drops the event.
-- `Delivery.REQUIRED`: runs before the response, within `cosec.audit.required.timeout` (1s); a failure or timeout turns
+- `Delivery.REQUIRED`: runs before the response, within `cosec.observability.listener.required-timeout` (1s); a failure or timeout turns
   a permit into 503. Make it idempotent by `event.id`. Use it only for an audit that must not be lost.
 - Events carry the decision, deciding statement (`by`) and binding (`via`), break-glass flag, snapshot revisions,
   subject, scope, action, resource, request summary, attribute statuses (never values), trace ids. They carry no

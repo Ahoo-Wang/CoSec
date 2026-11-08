@@ -149,6 +149,7 @@ class ControlPlaneTest {
                     listOf(allow("orders", action = "order:*", resource = "order/**")),
                     listOf(
                         control("admins", SubjectRef.Role(tenant, RoleId("admin")), BuiltinPolicies.TENANT_ADMIN),
+                        control("viewers", SubjectRef.Role(tenant, RoleId("viewer")), BuiltinPolicies.TENANT_VIEWER),
                         Binding(
                             BindingId("ops"),
                             SubjectRef.Role(tenant, RoleId("ops")),

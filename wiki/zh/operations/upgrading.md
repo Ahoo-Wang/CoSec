@@ -16,6 +16,21 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **控制面的正确性**（审计批次 E2a：#1205、#1206、#1207、#1210、#1226、#1227）。修订 diff 的 `sections` 按内容比较目录、限制、属性、边界和限流规则：同 id 的规则改了额度也算变化。`POST /analyze` 只列出能在所查询租户生效的绑定，所以平台中给别的租户的主体或角色的绑定不再列出。候选撤回、最后一次报告写入之后，实例忘掉这个影子窗口。代码方面：自己实现的 `ControlStore` 要实现 `withdrawCandidate(key, window)`（`putCandidate` 只接受候选，不再接受 `null`）、带每个引用方修订的 `referrers` 与 `putReferrers`（`Map<SnapshotKey, Long>`），并保存 `RevisionIndex.reclaiming`；`releaseLease` 必须在一步中检查并删除（[扩展](../architecture/extending.md#control-store)）。`ShadowRecorder.record` 的第一个参数是窗口的文档，`forget` 接受它最后一次报告计入的样本数，`ShadowReporter` 接受它读取已结束窗口所用的 `CandidateStore`。
 - **控制面实例一起升级。** alpha.3 写入的反向引用集合（`<p>:control:refs:*`，文档 key 的 JSON 数组）照常可读，每个引用方按修订 0 读取，之后在变化时带修订重新写入。alpha.3 的控制面实例读不了这样写入的集合，也读不了列有待删记录的修订索引，遇到它们即按失败关闭处理：它涉及这些集合的发布会失败，对该文档的回收会停止。先停掉 alpha.3 的控制面实例，再启动这个版本的。数据面实例不必按顺序：alpha.3 的实例只是会一直写已结束影子窗口的报告。
 
+- **三组配置项改名。** 旧 key 会作为未知配置项使启动失败：
+
+  | 旧 key | 新 key |
+  |---|---|
+  | `cosec.pipeline.gateway.max-age`、`cosec.pipeline.gateway.max-size` | `cosec.pipeline.identity.max-age`、`cosec.pipeline.identity.max-size` |
+  | `cosec.audit.required.timeout` | `cosec.observability.listener.required-timeout` |
+  | `cosec.authorization.cache.token.*` | `cosec.authentication.revocation.cache.*` |
+
+- **路由映射改为显式启用。** `cosec.authorization.routes.location` 默认未设置，未设置的宿主不加载路由映射，所以没有映射的 WebFlux 或 Spring MVC 服务无需任何配置。依赖默认读取 `classpath:cosec-routes.json` 的服务会启动失败，报错说明修法：把配置项设为该位置。没有路由的映射不再能加载（[路由映射](../integration/web.md#route-maps)）。
+- **`cosec.pipeline.mode=gateway` 时 `cosec.jwt.enabled` 默认为 `false`。** 网关之后也签发令牌的服务要设为 `true`；否则注入 `TokenConverter` 的地方找不到它。`enforce` 模式不变。
+- **`cosec:tenant-admin` 也持有 `cosec:skip-shadow`，且只在自己租户的文档上**（`CTL-27`），这扩大了租户管理员能做的事：它可以带着记录的原因跳过窗口，只收窄的变更也能抢占该文档上被占用的槽位。授出分析和审批不变。要保持原来的行为，改为绑定你自己的策略（[控制面](../policies/testing.md#the-control-plane)）。
+- **有 `cosec-cocache` 而没有 `CacheRuntime` 时启动失败**，并点名 `me.ahoo.cocache:cocache-spring-boot-starter`。这种组合本来就不能工作：结果是误导性的报错，或永远不就绪的实例。
+- **`cosecServiceGenerator` 端点读取 springdoc 的扫描结果**，需要 `springdoc-openapi-starter-webflux-api` 或 `-webmvc-api`。只有一个 `OpenAPI` bean 不再能让它生成；扫描不到任何操作时报错，而不是返回空文档。
+- **`AuthorizationChecker.decideAs` 和 `decide(security, app, action, resource)` 改为 `@InternalCoSecApi`**：它们属于控制面，应用不要启用。按请求自身的主体检查，用 `check` 和 `decide`（[代码中的检查](../integration/checks.md)）。
+
 ## 从 8.0.0-alpha.2 升级 {#from-8-0-0-alpha-2}
 
 8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档的内容无需迁移，不过 8.0.0 经 CoCache 8 保存数据，而 CoCache 8 读不了 alpha.2 经 CoCache 6 写入的内容：请在所有实例停止后用 `cosec-migrate cocache8` 迁移（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
@@ -160,8 +175,8 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
    阅读 `report.json` 中的语义改动。
 4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
 5. **更新配置**：改名或删除每一个 [7.x key](#removed-and-renamed-properties)，并对新属性做出决定。8.0 不读取的 `cosec.*` key 会让启动
-   失败，并给出替代它的配置。另外三种常见情况也会让启动失败：WebFlux 或
-   Spring MVC 宿主上 `classpath:cosec-routes.json` 没有路由映射（把 `cosec.authorization.routes.location` 设为一份映射，或设为空）；
+   失败，并给出替代它的配置。另外三种常见情况也会让启动失败：
+   `classpath:cosec-routes.json` 存在而 `cosec.authorization.routes.location` 没有指明它（把这个配置项设为它，或设为空）；
    使用 JWT 却既没有 `cosec-cocache` 也没有自己的吊销存储（[令牌吊销始终开启](#token-revocation-is-always-on)）；Redis 的驱逐策略不是
    `noeviction` 或读不到（[读不到 Redis 的驱逐策略时启动失败](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)）。
 6. **更新客户端和告警**：错误响应体、`reason` 取值和部分状态码变了（[响应与状态码](#responses-and-status-codes)）；审计字段、指标标签和
@@ -670,7 +685,7 @@ key 代表它之下的每个 key。
 | `cosec.authorization.cache.history.` | 已删除。 |
 | `cosec.authorization.cache.migration.` | 已删除。 |
 | `cosec.authorization.cache.token.concurrency-level` | 已删除：自 CoCache 5 起被忽略。 |
-| `cosec.authorization.cache.token.expire-after-write` | `cosec.authorization.cache.token.local-max-age`，一个时长（`30s`）。 |
+| `cosec.authorization.cache.token.expire-after-write` | `cosec.authentication.revocation.cache.local-max-age`，一个时长（`30s`）。 |
 | `cosec.authorization.cache.token.expire-unit` | 已删除：时长自带单位。`expire-after-access` 也是时长；不带单位的数字仍表示秒。 |
 | `cosec.authorization.gateway.enabled` | 已删除：网关过滤器随 `cosec-gateway` 提供。 |
 | `cosec.limiter.` | 已删除：限流规则在平台文档中（[限流规则变为义务](#rate-limit-rules-become-obligations)）；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
@@ -680,17 +695,16 @@ key 代表它之下的每个 key。
 | `cosec.api-key.store-blocking` | 已删除。 |
 | `cosec.jwt.token-revocation.enabled` | 已删除：吊销始终开启（[令牌吊销始终开启](#token-revocation-is-always-on)）。 |
 
-`cosec.authorization.cache.token.*` 保留。`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix` 由 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代，它是一个部署写入的每个 key 的前缀。
+`cosec.authorization.cache.token.*` 现在是 `cosec.authentication.revocation.cache.*`。`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix` 由 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代，它是一个部署写入的每个 key 的前缀。
 
 新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别、模式）、`cosec.gateway.identity.*`、`cosec.unknown-properties`、
 `cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、
-`cosec.authorization.snapshot.*`、`cosec.authorization.shadow.*`、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、
+`cosec.authorization.snapshot.*`、`cosec.authorization.shadow.*`、`cosec.authentication.revocation.*`、
 `cosec.audit.kafka.delivery`、`cosec.observability.listener.*` 和 `cosec.control.*`。
 
 升级时有两个默认值需要做出决定：
 
-- `cosec.authorization.routes.location` 默认为 `classpath:cosec-routes.json`。在 WebFlux 或 Spring MVC 宿主上，映射不存在会让启动失败；把这个
-  属性设为空即可不使用路由映射，此时每个请求都是 `http` 命名空间中针对其路径的动作。网关不加载路由映射。
+- `cosec.authorization.routes.location` 默认不设置，未设置的宿主不加载路由映射，此时每个请求都是 `http` 命名空间中针对其路径的动作。有映射的宿主要指明它；放在 `classpath:cosec-routes.json` 而配置项未设置时启动失败。网关不加载路由映射。
 - `cosec.authorization.scope.app-id` 默认不设置。只服务一个应用的宿主请设置它（规则 C4）。
 
 8.0 预览版期间有两项设置变化：

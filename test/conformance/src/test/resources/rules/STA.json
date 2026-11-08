@@ -14,7 +14,8 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a required Kafka audit without cosec-kafka fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a CosId generator for CoSec's ids without cosec-cosid fails startup",
         "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
-        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup"
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a CacheRuntime fails startup naming the CoCache starter"
       ]
     },
     {

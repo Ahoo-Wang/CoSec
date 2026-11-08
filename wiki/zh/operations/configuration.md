@@ -43,7 +43,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.enabled` | boolean | `true` | CoSec 的全部自动配置 |
 | `cosec.authentication.login.enabled` | boolean | `true` | 把凭证换成令牌的登录 bean：基于你的 `Authentication` bean 的 `CompositeAuthentication`、启用 JWT 时的 `TokenCompositeAuthentication`，以及社交登录。管道中对请求的认证不依赖它 |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`cosec-social`；需要 `cosec.authentication.login.enabled`） |
-| `cosec.jwt.enabled` | boolean | `true` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
+| `cosec.jwt.enabled` | boolean | `true`；`cosec.pipeline.mode=gateway` 时为 `false` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
 | `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
@@ -61,7 +61,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 - **限流器**：始终存在。有 `ReactiveStringRedisTemplate` bean 时（`cosec-cocache`）基于 Redis，否则按实例计数
   （[限流](#rate-limiting)）。
 - **令牌吊销**：启用 JWT 时始终开启（[启动](./troubleshooting.md#startup-fails-without-a-token-store)）。
-- **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi` 和 Spring Boot Actuator 就存在；像其他 actuator
+- **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi`、springdoc 和 Spring Boot Actuator 就存在；像其他 actuator
   端点一样决定是否暴露它。
 
 ## Key 前缀 {#key-prefix}
@@ -88,9 +88,9 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.pipeline.allow-query-token` | boolean | `false` | 也从 `authorization` 查询参数读取访问令牌。默认关闭，因为 URL 会进入访问日志、浏览器历史和 `Referer` 头。 |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | 携带 API key 的请求头。任何文档都不能读取它：宿主的每个编译器都像拒绝其他携带凭证的请求头一样拒绝对它的引用（[请求头](../policies/language.md#headers)）。 |
 | `cosec.pipeline.trace-level` | `off`、`full`、`exhaustive` | `off` | 引擎对每次求值记录多少追踪信息。决策事件以 `evaluationTrace` 携带这份追踪（`off` 时，以及请求没有到达引擎时为 null）；级别越高，每个请求花的时间越多。 |
-| `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务：启动时会以 `WARN` 提示这一点。JWT 不限于 `enforce` 模式：不签发令牌的服务应设置 `cosec.jwt.enabled=false`，否则启动时需要密钥和令牌存储。 |
-| `cosec.pipeline.gateway.max-age` | duration | `60s` | `gateway` 模式下，签发时间早于这个时长（再加 `cosec.authentication.revocation.skew`）的身份被拒绝：`401` `token-expired`。 |
-| `cosec.pipeline.gateway.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。 |
+| `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务：启动时会以 `WARN` 提示这一点。`gateway` 模式下 `cosec.jwt.enabled` 默认为 `false`：也签发令牌的服务要设为 `true`。 |
+| `cosec.pipeline.identity.max-age` | duration | `60s` | `gateway` 模式下，签发时间早于这个时长（再加 `cosec.authentication.revocation.skew`）的身份被拒绝：`401` `token-expired`。 |
+| `cosec.pipeline.identity.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。 |
 
 ## 授权 {#authorization}
 
@@ -102,7 +102,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。 |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
-| `cosec.authorization.routes.location` | 逗号分隔的资源位置 | `classpath:cosec-routes.json` | WebFlux 或 WebMvc 宿主在启动时加载的路由映射。位置不存在，或映射无法解析，启动失败。设置为空表示不使用路由映射：每个请求都在 `http` 命名空间中授权。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
+| `cosec.authorization.routes.location` | 逗号分隔的资源位置 | 未设置 | WebFlux 或 WebMvc 宿主在启动时加载的路由映射，日志会写明每份映射的服务和路由条数。位置不存在、映射无法解析或映射没有路由，启动失败。未设置时不加载路由映射，每个请求都在 `http` 命名空间中授权；但 `classpath:cosec-routes.json` 存在时启动失败，直到配置项指明它或设为空。设置为空表示明确不使用路由映射。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
 
 ## 网关 {#gateway}
 
@@ -212,12 +212,12 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 缓存 {#cache}
 
-`cosec.authorization.cache.*`：已吊销令牌和已吊销主体的缓存，在启用 JWT 且有 `cosec-cocache` 时创建。快照文档有自己的
+`cosec.authentication.revocation.cache.*`：已吊销令牌和已吊销主体的缓存，在启用 JWT 且有 `cosec-cocache` 时创建。快照文档有自己的
 配置项（[快照](#snapshot)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.cache.token.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
@@ -234,16 +234,16 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.audit.required.timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`（[决策监听器](./observability.md#decision-listeners)）。 |
 | `cosec.audit.kafka.topic` | string | `cosec-audit` | 审计事件的 Kafka topic。 |
 | `cosec.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | Kafka 审计监听器的投递方式。`required` 等待 broker 的确认，因此无法审计的放行会得到 `503`；生产者请配置 `acks=all`。为 `required` 而缺少 `cosec-kafka` 时启动失败（[STA-1](./troubleshooting.md#startup-fails-on-a-missing-module)）。 |
 
 ## 决策监听器 {#decision-listeners}
 
-`cosec.observability.listener.*`：`BEST_EFFORT` 决策监听器的队列（[决策监听器](./observability.md#decision-listeners)）。
+`cosec.observability.listener.*`：`REQUIRED` 决策监听器的时限，以及 `BEST_EFFORT` 决策监听器的队列（[决策监听器](./observability.md#decision-listeners)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
+| `cosec.observability.listener.required-timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`。 |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | 一个 `BEST_EFFORT` 监听器最多可以有多少个待处理的事件。队列满时丢弃下一个事件并计数（`cosec.listener.dropped`）。 |
 | `cosec.observability.listener.drain-timeout` | duration | `5s` | 关闭时，排队的事件还能继续发出多久；之后剩下的被丢弃。 |
 
@@ -337,14 +337,14 @@ Redis 中。
 1. CoCache 的类型默认值（`store`：没有 `ttl`，`local-max-age` 30 s；`cache`：`ttl` 1 h）；
 2. `cocache.defaults.cache.*` 或 `cocache.defaults.store.*`，只作用于 CoSec 的声明没有写出的字段；
 3. CoSec 的声明：快照存储取 `cosec.authorization.snapshot.local-max-age`，吊销表取
-   `cosec.authorization.cache.token.*` 和 `unknown-read: absent`（读取失败时回答“未吊销”；在第 6 步设置
+   `cosec.authentication.revocation.cache.*` 和 `unknown-read: absent`（读取失败时回答“未吊销”；在第 6 步设置
    `unknown-read: throw`，吊销检查就改为以 `503` 失败即拒绝）；
 4. 应用的 CoCache `CacheSpecCustomizer` bean；
 5. `cocache.overrides.*`，只能收紧；
 6. `cocache.caches.[<CacheName>].*`；
 7. CoSec 的约束，最后执行，在 `unlock` 之后也执行。
 
-因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authorization.cache.token.*` 配置项。CoSec 锁定部分字段
+因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authentication.revocation.cache.*` 配置项。CoSec 锁定部分字段
 （CoCache 的 `lock`）：全局层跳过它们，设置了它们的 `cocache.caches` 条目使启动失败（除非该条目在 `unlock` 中列出它，
 即 CoCache 的破窗开关），修改它们的定制器抛出异常。其中一些还受到约束（第 7 步），连 `unlock` 也改变不了：
 

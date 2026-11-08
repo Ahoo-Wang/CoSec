@@ -138,7 +138,7 @@ DENY 不能写裸资源类型，例如 `order`：它只覆盖 id 为空的那个
 }
 ```
 
-`path` 是 [HTTP 路径模式](#http-paths)。`resource` 是类型化资源，其片段是字面量或 `path` 中的变量。路由映射要么整体加载，要么不加载：有格式错误的路由，或同一方法下两条可能匹配同一请求的路由，都会让启动失败。包含 `/`（解码后的 `%2F`）的捕获值会改变资源 id 的片段，因此这样的请求会以 `400` 被拒绝。网关不加载路由映射：它的请求留在 `http` 命名空间。`cosecServiceGenerator/routes` 可以从服务的 OpenAPI 文档生成路由映射（[角色权限](./role-permissions.md#generating-a-catalog-from-openapi)）。
+`path` 是 [HTTP 路径模式](#http-paths)。`resource` 是类型化资源，其片段是字面量或 `path` 中的变量。路由映射要么整体加载，要么不加载：没有路由的映射、有格式错误的路由，或同一方法下两条可能匹配同一请求的路由，都会让启动失败。包含 `/`（解码后的 `%2F`）的捕获值会改变资源 id 的片段，因此这样的请求会以 `400` 被拒绝。网关不加载路由映射：它的请求留在 `http` 命名空间。`cosecServiceGenerator/routes` 可以从服务的 OpenAPI 文档生成路由映射（[角色权限](./role-permissions.md#generating-a-catalog-from-openapi)）。
 
 ## 资源 {#resources}
 
@@ -271,7 +271,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `scope.roles` | Set | 主体在请求空间中的角色。 |
 | `action.service`、`action.verb` | String | 动作的两部分。 |
 | `resource.type`、`resource.id` | String | 资源的两部分。 |
-| `resource.attributes.<name>` | String | 代码在检查时传入的资源属性。请求管道不设置任何值。 |
+| `resource.attributes.<name>` | String | 资源的属性。请求管道和文档中列出的检查都不设置；对象级规则把事实写进资源 id（[对象级规则](../integration/checks.md#object-level-rules)）。 |
 | `resource.var.<name>` | String | [路径变量](#path-variables)。 |
 | `environment.ip` | Ip | 客户端地址（[Web 集成](../integration/web.md)）。 |
 | `environment.time` | Instant | 请求时间；只有 `time` 读取它。 |

@@ -24,7 +24,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 `cosec:grant` 在每条绑定的作用域 `scope/<tenant>/<app>/<space>` 上检查：绑定任意 app 或任意空间时那一段为 `*`，默认空间为 `(default)`，所以限制在默认空间中授出的策略写 `scope/acme/order/(default)`。以 `(` 开头的空间 id 归 CoSec 所有，`(default)` 因而不会是你的空间。
 
-可以把三个内置策略绑定给运维人员：`cosec:platform-admin`（对所有文档的所有动作）、`cosec:tenant-admin`（对自己租户文档的 `read`、`write`、`grant`、`publish`、`simulate`、`explain`、`analyze`、`shadow-read`）和 `cosec:tenant-viewer`（同上，但没有 `write`、`grant` 和 `publish`）。
+可以把三个内置策略绑定给运维人员：`cosec:platform-admin`（对所有文档的所有动作）、`cosec:tenant-admin`（对自己租户文档的 `read`、`write`、`grant`、`publish`、`simulate`、`explain`、`analyze`、`shadow-read` 和 `skip-shadow`）和 `cosec:tenant-viewer`（同上，但没有 `write`、`grant`、`publish` 和 `skip-shadow`）。
 
 | 方法和路径 | 作用 |
 |---|---|
@@ -198,7 +198,7 @@ flowchart LR
 
 窗口的候选暂存期间，实例每隔 `cosec.authorization.shadow.report-interval`（10 秒）写一次它对该窗口的报告。候选撤回之后（窗口关闭，或变更被放弃、驳回、发布或抢占），实例再写一次报告，然后忘掉这个窗口；报告在这最后一次写入 8 天后过期。变更只撤回自己的候选：期间另一个变更已占用暂存槽并暂存了自己的候选时，那个候选保留（`CTL-26`）。
 
-`POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。只创建或吊销 break-glass 绑定的变更没有窗口。
+`POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。`cosec:tenant-admin` 只在自己租户的文档上持有它（`CTL-27`）。跳过窗口不改变审批：分析无法证明操作者已持有的授出仍要等待审批。只创建或吊销 break-glass 绑定的变更没有窗口。
 
 ### 抢占被占用的暂存槽 {#taking-a-busy-slot}
 

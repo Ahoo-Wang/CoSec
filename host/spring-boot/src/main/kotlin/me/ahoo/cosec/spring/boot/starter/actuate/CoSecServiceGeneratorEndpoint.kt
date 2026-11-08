@@ -21,6 +21,7 @@ import me.ahoo.cosec.openapi.generator.OpenAPIServiceGenerator
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.route.RouteMapCodec
+import org.springdoc.api.AbstractOpenApiResource
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
@@ -28,37 +29,67 @@ import org.springframework.boot.actuate.endpoint.annotation.Selector
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
+import org.springframework.util.ReflectionUtils
 import tools.jackson.databind.JsonNode
+import java.lang.reflect.Method
+import java.util.Locale
 
 /**
- * What this service declares, generated from its OpenAPI document (RFC 0005 §5.3, #1079): `routes`, the route map the
- * host loads from `cosec.authorization.routes.location`, and `app`, the app document to publish through the control
- * plane. Null when the service has no OpenAPI document.
+ * What this service declares, generated from the OpenAPI document springdoc scans from its handlers (RFC 0005 §5.3,
+ * #1079): `routes`, the route map the host loads from `cosec.authorization.routes.location`, and `app`, the app document
+ * to publish through the control plane.
+ *
+ * It fails rather than answering a document that maps nothing: without a scan to read, or with a scan that found no
+ * operation, there is nothing to generate, and an empty route map deployed by mistake drops every `service:verb` DENY.
  */
 @Endpoint(id = CoSecServiceGeneratorEndpoint.ID)
-class CoSecServiceGeneratorEndpoint(private val openAPIProvider: ObjectProvider<OpenAPI>) {
+class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvider<AbstractOpenApiResource>) {
     @ReadOperation
     fun generate(@Selector part: String): JsonNode? {
-        val openAPI = openAPIProvider.getIfAvailable() ?: return null
         val bytes = when (part) {
-            ROUTES -> RouteMapCodec.encode(OpenAPIServiceGenerator.routeMap(openAPI))
-            APP -> PolicyDocumentCodec.encode(OpenAPIServiceGenerator.appDocument(openAPI))
+            ROUTES -> RouteMapCodec.encode(OpenAPIServiceGenerator.routeMap(scanned()))
+            APP -> PolicyDocumentCodec.encode(OpenAPIServiceGenerator.appDocument(scanned()))
             else -> return null
         }
         return CoSecJson.mapper.readTree(bytes)
+    }
+
+    /**
+     * The document `/v3/api-docs` serves. An `OpenAPI` bean is not it: springdoc clones that one and adds the paths to
+     * the clone, so the bean never has any.
+     */
+    private fun scanned(): OpenAPI {
+        val resource = checkNotNull(springDoc.getIfUnique()) {
+            "springdoc serves no single OpenAPI document here (springdoc.api-docs.enabled=false, or GroupedOpenApi beans): " +
+                "$ID has nothing to read."
+        }
+        val scan = checkNotNull(SCAN) { "This springdoc has no AbstractOpenApiResource.getOpenApi(Locale) to read." }
+        ReflectionUtils.makeAccessible(scan)
+        val openAPI = ReflectionUtils.invokeMethod(scan, resource, Locale.getDefault()) as OpenAPI
+        check(!openAPI.paths.isNullOrEmpty()) { "springdoc scanned no operations: $ID has nothing to generate from." }
+        return openAPI
     }
 
     companion object {
         const val ID = "cosecServiceGenerator"
         const val ROUTES = "routes"
         const val APP = "app"
+
+        /**
+         * What springdoc's own preloading calls. Its public entry points each need an HTTP request of their web stack,
+         * and this endpoint has none; the test against a real springdoc is what ties this to a version.
+         */
+        private val SCAN: Method? =
+            ReflectionUtils.findMethod(AbstractOpenApiResource::class.java, "getOpenApi", Locale::class.java)
     }
 }
 
 @AutoConfiguration
-@ConditionalOnClass(OpenAPIServiceGenerator::class, Endpoint::class, OpenAPI::class)
+@ConditionalOnClass(OpenAPIServiceGenerator::class, Endpoint::class, AbstractOpenApiResource::class)
 class CoSecServiceGeneratorEndpointAutoConfiguration {
     @Bean
-    fun cosecServiceGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecServiceGeneratorEndpoint =
-        CoSecServiceGeneratorEndpoint(openAPIProvider)
+    fun cosecServiceGeneratorEndpoint(
+        springDoc: ObjectProvider<AbstractOpenApiResource>
+    ): CoSecServiceGeneratorEndpoint =
+        CoSecServiceGeneratorEndpoint(springDoc)
 }

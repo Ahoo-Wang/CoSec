@@ -38,8 +38,9 @@ app or any space, and `(default)` for the default space, so a policy that limits
 `scope/acme/order/(default)`. Space ids beginning with `(` are CoSec's, so `(default)` is never a space of yours.
 
 Three built-in policies can be bound to operators: `cosec:platform-admin` (every action on every document),
-`cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` on its own
-tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` and `publish`).
+`cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` and
+`skip-shadow` on its own tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant`, `publish` and
+`skip-shadow`).
 
 | Method and path | Does |
 |---|---|
@@ -286,8 +287,9 @@ after that last write. A change withdraws only its own candidate: when another c
 its own meanwhile, that one stays (`CTL-26`).
 
 `POST /changes/{id}:skip-shadow` with a `reason` stages a `CHECKED` change without a window; it needs
-`cosec:skip-shadow`, and the revision records that the window was skipped. A change that only creates or revokes
-break-glass bindings has no window.
+`cosec:skip-shadow`, and the revision records that the window was skipped. `cosec:tenant-admin` holds it on its own
+tenant's document only (`CTL-27`). Skipping a window changes nothing about approval: what the analysis cannot prove the
+operator holds still waits for it. A change that only creates or revokes break-glass bindings has no window.
 
 ### Taking a busy slot
 

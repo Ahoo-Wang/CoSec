@@ -85,7 +85,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 ## 路由映射 {#route-maps}
 
-路由映射为服务的每条路由指定一个动作和一个类型化资源，策略因此可以说 `order/42` 上的 `order:read`，而不是 `GET /orders/42`。WebFlux 和 WebMvc 宿主加载 `cosec.authorization.routes.location` 中列出的路由映射（默认 `classpath:cosec-routes.json`；可用逗号分隔多个）：
+路由映射为服务的每条路由指定一个动作和一个类型化资源，策略因此可以说 `order/42` 上的 `order:read`，而不是 `GET /orders/42`。WebFlux 和 WebMvc 宿主加载 `cosec.authorization.routes.location` 中列出的路由映射（可用逗号分隔多个；未设置时不加载）：
 
 ```json
 {
@@ -99,12 +99,13 @@ CoSec 授权的路径是应用内的请求路径：
 
 - 路由匹配方法与其 `method` 完全相同、路径匹配其 `path` 模式的请求。资源模板中的 `{变量}` 取自路径的捕获值。
 - 没有路由匹配的请求保留动作 `http:<METHOD>` 和资源 `http:path:<path>`。针对 `service:verb` 动作的语句永远覆盖不到它：没有任何路由会退回通配符。
-- 路由映射要么整体加载，要么完全不加载。位置不存在、文件格式错误（字段未知或缺失、键重复、值类型错误）、某条路由格式错误，或两条路由可能匹配同一个请求（方法相同、路径无法证明互不相交），都会导致启动失败并给出位置。若有意不使用路由映射，把该属性设为空值。
+- 路由映射要么整体加载，要么不加载。位置不存在、文件格式错误（未知或缺失的字段、重复的 key、类型错误的值）、文件没有路由、路由格式错误，或者两条路由可能匹配同一个请求（方法相同且路径不能证明互斥），都会使启动失败并指出位置。
+- 该配置项未设置时宿主不加载路由映射，除非 `classpath:cosec-routes.json` 存在：这时启动失败，直到配置项指明该文件，或设为空值以明确不使用路由映射。启动日志会写明加载的每份映射、它的服务和路由条数，或者没有映射。
 - 为空或含有 `/`（解码后的 `%2F`）的捕获值不能作为类型化资源 id 的一段：请求以 `400` `invalid-request` 拒绝，绝不会被当作另一个资源求值。
 
 Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `http` 命名空间。
 
-使用 `cosec-openapi` 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据服务的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
+使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据 springdoc 扫描到的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
 
 ## 响应与状态码 {#responses-and-status-codes}
 
@@ -337,14 +338,12 @@ spring:
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 
-网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`），并且除非它也签发令牌，应设置 `cosec.jwt.enabled=false`：
+网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`）。这个模式下 JWT 默认关闭；也签发令牌的服务设置 `cosec.jwt.enabled=true`：
 
 ```yaml
 cosec:
   pipeline:
     mode: gateway
-  jwt:
-    enabled: false
 ```
 
 在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
@@ -353,9 +352,9 @@ cosec:
 |---|---|
 | 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
 | 有效的身份 | 以该主体、在该作用域中继续。 |
-| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.gateway.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
+| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
 | 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
-| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.gateway.max-age`（60 秒） | `401` `token-expired` |
+| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.identity.max-age`（60 秒） | `401` `token-expired` |
 
 这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。
 

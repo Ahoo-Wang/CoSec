@@ -203,7 +203,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | 投递方式 | 失败时 |
 |---|---|---|
 | `BEST_EFFORT`（默认） | 不挂起地放入监听器自己的有界队列，在请求路径之外处理。队列满时丢弃事件。 | 记录日志并计数；响应不变。 |
-| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.audit.required.timeout` 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
+| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.observability.listener.required-timeout` 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
 
 - 经由 break-glass 绑定得到的 Permit 至少需要一个 REQUIRED 监听器，否则得到 `503`。
 - REQUIRED 监听器应按 `event.id` 保持幂等：超时的写入可能其实已经成功。
@@ -307,8 +307,8 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 }
 ```
 
-- starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（默认 `classpath:cosec-routes.json`，逗号分隔）。映射缺失或无效，或者有两个路由可能匹配同一个请求，都会让启动失败。默认位置也是如此：没有路由映射的 WebFlux 或 WebMvc 服务要把该属性设为空。网关宿主不加载路由映射。
-- 使用 `cosec-openapi` 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从服务的 OpenAPI 描述生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
+- starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（逗号分隔）。映射缺失或无效、映射没有路由，或者有两个路由可能匹配同一个请求，都会让启动失败。未设置时服务不加载路由映射，但 `classpath:cosec-routes.json` 存在时启动失败，直到该属性指明它或设为空。网关宿主不加载路由映射。
+- 使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从 springdoc 扫描到的 OpenAPI 文档生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
 
 文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMapCodec.kt)）。应用文档和目录见[角色权限](../policies/role-permissions.md)。
 

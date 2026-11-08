@@ -20,7 +20,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
-| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.audit.required.timeout`](./configuration.md#audit) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
+| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
 | `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
 
 The listeners the starter registers:

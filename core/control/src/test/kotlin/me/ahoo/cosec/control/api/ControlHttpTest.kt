@@ -111,8 +111,9 @@ class ControlHttpTest {
         change.get("state").asString().assert().isEqualTo("CHECKED")
         val id = change.get("id").asString()
         call("GET", "/changes/$id").first.assert().isEqualTo(200)
-        // tenant-admin holds no cosec:skip-shadow: refused, without saying why.
-        val (refused, problem) = call("POST", "/changes/$id:skip-shadow", """{"reason":"hurry"}""")
+        // tenant-viewer may read the change and holds no cosec:skip-shadow: refused, without saying why.
+        val viewer = fixture.engine.security(ControlPlaneTest.ACME, "vera", roles = listOf("viewer"))
+        val (refused, problem) = call("POST", "/changes/$id:skip-shadow", """{"reason":"hurry"}""", security = viewer)
         refused.assert().isEqualTo(403)
         problem.get("code").asString().assert().isEqualTo("FORBIDDEN")
         problem.has("detail").assert().isFalse()
@@ -176,7 +177,7 @@ class ControlHttpTest {
 
     @Test
     fun `documents, history and diffs`() {
-        call("GET", "/documents/tenant:acme").second.get("bindings").size().assert().isEqualTo(2)
+        call("GET", "/documents/tenant:acme").second.get("bindings").size().assert().isEqualTo(3)
         call("GET", "/documents/platform").first.assert().isEqualTo(403)
         call("GET", "/documents/platform", security = plato).first.assert().isEqualTo(200)
         call("GET", "/documents/tenant:acme/revisions").second.get(0).get("revision").asLong().assert().isEqualTo(1)
