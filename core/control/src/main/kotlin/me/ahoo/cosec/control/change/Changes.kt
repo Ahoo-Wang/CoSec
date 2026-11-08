@@ -36,12 +36,9 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
-import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
@@ -65,7 +62,7 @@ class ChangeRejectedException(
  *   the current heads, then writes with `putIfMatch(expected = base digest)`. A candidate that does not compile, a
  *   moved head, or a removed policy still referred to never reaches the head; the head is then unchanged.
  * - **One staged change per document** (RFC 0007 §5.5): staging takes the document's slot, a conditional write, and
- *   publishing, abandoning or expiring releases it. A slot whose holder is gone or finished is free.
+ *   publishing, abandoning or expiring releases it. A slot whose holder is gone, finished or no longer staged is free.
  *
  * - **Authorized, analyzed, approved** (RFC 0007 §7.2–§7.5, [ChangeAuthority]). Every step names its [Operator] and
  *   is checked before it writes: the hard rule of tenant isolation, then each target with the control plane's
@@ -293,7 +290,7 @@ class Changes(
     /**
      * Takes the document's staging slot for a `CHECKED` change and starts its shadow window (RFC 0007 §6.4): the
      * candidate goes to the `candidate:` namespace, named by the window, with the revision of its base, and the change is
-     * `SHADOWING`. 409 when the slot is held; a candidate that cannot be written releases the slot (503). The slot holds
+     * `SHADOWING`. 409 when the slot is held; a candidate that cannot be written gives the slot back (503). The slot holds
      * the document's publishing up, so [operator] needs `cosec:publish` on it.
      *
      * Creating or revoking a break-glass binding has no window (RFC 0007 Q12): such a change goes on at once, as if
@@ -304,33 +301,50 @@ class Changes(
         authority.require(operator, change.key, ControlActions.PUBLISH)
         requireState(change, setOf(ChangeState.CHECKED))
         val head = revisions.head(change.key)
-        takeSlot(operator, change, head)
         if (PublishRules.exempt(change, head)) {
-            return transition(
-                id,
-                setOf(ChangeState.CHECKED)
-            ) { it.copy(state = PublishRules.afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT) }
+            return reserved(operator, change, head) {
+                it.copy(state = PublishRules.afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT)
+            }
         }
         val now = clock.instant()
         val state = ShadowState("${id.value}@${now.toEpochMilli()}", now)
-        @Suppress("TooGenericExceptionCaught")
+        val candidate = slots.candidate(change, state) { candidates.applied(change, head?.document).first!! }
+        val shadowing = reserved(operator, change, head) { it.copy(state = ChangeState.SHADOWING, shadow = state) }
+        slots.write(shadowing, candidate) { undo(shadowing) }
+        audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor)
+        return shadowing
+    }
+
+    /**
+     * [change] moved out of `CHECKED` by [next], and only then given its document's staging slot (#1235): a holder is in
+     * a staged state from the moment it holds the slot, so a `CHECKED` holder is one nothing is working on any more, and
+     * no call still writing its candidate is taken for it. The move, one conditional write, decides between two calls
+     * staging one change. A change that does not get the slot, for whatever reason, is `CHECKED` again.
+     */
+    private suspend fun reserved(
+        operator: Operator,
+        change: ChangeRequest,
+        head: Head?,
+        next: suspend (ChangeRequest) -> ChangeRequest,
+    ): ChangeRequest {
+        val reserved = transition(change.id, setOf(ChangeState.CHECKED), next)
+        var taken = false
         try {
-            val candidate = candidates.applied(change, head?.document).first!!
-            val document = SnapshotDocument(
-                PolicyDocumentCodec.SCHEMA,
-                change.base.revision + 1,
-                now,
-                PolicyDocumentCodec.encode(candidate),
-            )
-            store.putCandidate(change.key, StoredCandidate(state.window, change.base.revision, document))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            slots.release(change)
-            throw ChangeRejectedException(UNAVAILABLE, "the candidate of [${change.key}] could not be staged", e)
+            takeSlot(operator, reserved, head)
+            taken = true
+            return reserved
+        } finally {
+            if (!taken) unreserve(reserved)
         }
-        return transition(id, setOf(ChangeState.CHECKED)) { it.copy(state = ChangeState.SHADOWING, shadow = state) }
-            .also { audit(ChangeEvent.Kind.SHADOW_STARTED, it, operator.actor) }
+    }
+
+    /** Gives [reserved] back ([StagingSlots.giveBack]), and makes the change `CHECKED` again unless it has moved on. */
+    private suspend fun unreserve(reserved: ChangeRequest) = slots.giveBack(reserved) { undo(reserved) }
+
+    private suspend fun undo(reserved: ChangeRequest) {
+        transition(reserved.id, setOf(reserved.state)) {
+            it.copy(state = ChangeState.CHECKED, skipShadow = null, shadow = null)
+        }
     }
 
     /**
@@ -387,8 +401,7 @@ class Changes(
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
         }
         requireState(change, setOf(ChangeState.CHECKED))
-        takeSlot(operator, change, revisions.head(change.key))
-        return transition(id, setOf(ChangeState.CHECKED)) {
+        return reserved(operator, change, revisions.head(change.key)) {
             it.copy(state = PublishRules.afterWindow(it), skipShadow = reason)
         }
     }
@@ -626,7 +639,7 @@ class Changes(
         candidate: PolicyDocument,
         publisher: Operator,
         again: String?,
-    ): ChangeRequest {
+    ): ChangeRequest = afterHead(change, outcome.revision) {
         var settled: ChangeRequest? = null
         var mine = true
         try {
@@ -634,13 +647,33 @@ class Changes(
             if (settled == null) {
                 // A retry settled it meanwhile, and recorded it (review D1).
                 mine = false
-                return read(change.id).value
+                return@afterHead read(change.id).value
             }
             audit(PublishRules.outcomeOf(change, settled), settled.publishedAgain(publisher, again), publisher.actor)
-            return settled
+            settled
         } finally {
             if (mine) recordMoved(settled ?: change, rechecked, base, candidate, publisher)
         }
+    }
+
+    /**
+     * [steps], which follow the head write of [revision] of [change], at once or on a retry, and do not respond to the
+     * caller's cancellation. What fails in them does not unpublish anything (#1263), so it is answered as what happened:
+     * the revision is written, and publishing the change again settles it, adding no revision. A cancellation that
+     * reaches here is therefore a store's own (a timeout inside it), never the caller's, which is still there afterwards.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun <T> afterHead(change: ChangeRequest, revision: Long, steps: suspend () -> T): T = try {
+        steps()
+    } catch (e: ChangeRejectedException) {
+        throw e
+    } catch (e: Exception) {
+        throw ChangeRejectedException(
+            UNAVAILABLE,
+            "[${change.key}] revision $revision is written, but change ${change.id.value} could not be settled; " +
+                "publishing it again settles it",
+            e,
+        )
     }
 
     /**
@@ -685,16 +718,18 @@ class Changes(
         taking: Boolean = false,
     ): ChangeRequest =
         withContext(NonCancellable) {
-            revisions.rewritten(change.key, own, first = change.base.revision == 0L)
-            val by = own.document.provenance?.publishedBy ?: retrier.actor
-            val settled = settledPublished(change, own.revision) ?: return@withContext read(change.id).value
-            try {
-                audit(PublishRules.outcomeOf(change, settled), settled, by)
-                settled
-            } finally {
-                val who = "${retrier.tenant.value}/${retrier.actor.principal.value}"
-                val how = if (taking) "settled by $who while taking the slot" else "retried by $who"
-                recordMoved(settled, change, null, own.document, retrier, by, unanalyzed = "$how, not re-analyzed")
+            afterHead(change, own.revision) {
+                revisions.rewritten(change.key, own, first = change.base.revision == 0L)
+                val by = own.document.provenance?.publishedBy ?: retrier.actor
+                val settled = settledPublished(change, own.revision) ?: return@afterHead read(change.id).value
+                try {
+                    audit(PublishRules.outcomeOf(change, settled), settled, by)
+                    settled
+                } finally {
+                    val who = "${retrier.tenant.value}/${retrier.actor.principal.value}"
+                    val how = if (taking) "settled by $who while taking the slot" else "retried by $who"
+                    recordMoved(settled, change, null, own.document, retrier, by, unanalyzed = "$how, not re-analyzed")
+                }
             }
         }
 

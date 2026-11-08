@@ -425,10 +425,13 @@ class ChangesB2Test {
         val failure = try {
             flaky.publish(PLATO, change.id)
             null
-        } catch (e: IllegalStateException) {
+        } catch (e: ChangeRejectedException) {
             e
         }
-        failure.assert().isNotNull()
+        // The answer says what happened (#1263): the revision is written, and publishing again settles it.
+        failure!!.status.assert().isEqualTo(503)
+        failure.message!!.assert().contains("revision 1 is written")
+        (failure.cause is IllegalStateException).assert().isTrue()
         flaky.get(change.id).state.assert().isEqualTo(ChangeState.READY)
         failing = false
         val again = flaky.publish(PLATO, change.id)

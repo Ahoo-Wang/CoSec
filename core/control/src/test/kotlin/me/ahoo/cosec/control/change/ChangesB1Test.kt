@@ -487,10 +487,12 @@ class ChangesB1Test {
         val failure = try {
             changes.publish(ALICE_OP, change.id)
             null
-        } catch (e: IllegalStateException) {
+        } catch (e: ChangeRejectedException) {
             e
         }
-        failure?.message.assert().isEqualTo("Redis is down")
+        // The answer says what happened (#1263), with what stopped it.
+        failure!!.message!!.assert().contains("revision 1 is written")
+        failure.cause!!.message.assert().isEqualTo("Redis is down")
         harness.revisions.head(ACME)!!.revision.assert().isEqualTo(1L)
         // The detection compared the platform's head, which the publish was checked with.
         readAfter.assert().contains(SnapshotKey.Platform)

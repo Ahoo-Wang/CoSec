@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "CTL-28"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A limit that is not an integer and attributes that are not an array are refused as malformed: the operation is never made into another value, and nothing is proposed.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "wire": {
+              "op": "setLimits",
+              "limits": {
+                "maxNodes": 64.5,
+                "maxDepth": 16,
+                "maxInValues": 64,
+                "maxCidrBlocks": 64,
+                "maxLiteralBytes": 4096,
+                "maxCost": 1024
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "wire": {
+              "op": "setAttributes",
+              "attributes": {}
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "malformed",
+      "malformed"
+    ],
+    "errors": {},
+    "heads": {
+      "platform": 0
+    }
+  }
+}

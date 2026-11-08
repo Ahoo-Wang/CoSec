@@ -308,6 +308,26 @@ class Simulator(
     }
 }
 
+/**
+ * Whether [candidate] decides differently from [enforced]. Everything a decision says counts, but a failure counts by
+ * what it is, its type and message: each side compiles on its own, so the same failure is two exceptions (#1253).
+ */
+internal fun differs(enforced: Decision, candidate: Decision): Boolean = comparable(enforced) != comparable(candidate)
+
+private fun comparable(decision: Decision): Any = when (decision) {
+    is Decision.Indeterminate -> when (val cause = decision.cause) {
+        is Cause.MatcherFailed -> listOf(cause::class, cause.at, cause.guard, failure(cause.error))
+        is Cause.SourceUnavailable -> listOf(cause::class, cause.document, failure(cause.error))
+        is Cause.BoundaryUnavailable -> listOf(cause::class, cause.boundary, failure(cause.error))
+        is Cause.MembershipUnavailable -> listOf(cause::class, failure(cause.error))
+        else -> cause
+    }
+
+    else -> decision
+}
+
+private fun failure(error: Throwable): Pair<Class<*>, String?> = error.javaClass to error.message
+
 /** A statement as a decision reports it to a caller: by policy, index and the binding it applied through. */
 data class StatementView(
     val policy: String,

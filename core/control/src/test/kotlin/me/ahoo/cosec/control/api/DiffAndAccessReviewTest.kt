@@ -18,6 +18,10 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.ControlActions
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeHarness
 import me.ahoo.cosec.control.change.ChangeOptions
@@ -28,8 +32,10 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.engine.flat.RateLimitSource
+import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
@@ -261,5 +267,85 @@ class DiffAndAccessReviewTest {
         )
         runBlocking { plane.analyze(PLATO, query) }.allows.map { it.binding }.toSet().assert()
             .isEqualTo(setOf("own-editor", "own-bob"))
+    }
+
+    private val orderRead = AccessQuery(
+        TenantId("acme"),
+        "order",
+        "",
+        Action("order", "read"),
+        Resource("order", "42", emptyMap()),
+    )
+
+    private fun permission(effect: Effect) = PolicyDefinition(
+        PolicyId("perm:order/read"),
+        attachable = false,
+        condition = null,
+        statements = listOf(StatementSource("", effect, listOf("order:read"), listOf(ResourceSource("order/**")))),
+    )
+
+    private fun inOrder(id: String, subject: SubjectRef, app: Match<AppId> = Match.Exactly(AppId("order"))) =
+        Binding(BindingId(id), subject, BindingScope(app, Match.Any), PolicyId("perm:order/read"))
+
+    @Test
+    fun `an allow of a readable app that a tenant binds is in the access review - #1243`() {
+        publish(document(order, policies = listOf(permission(Effect.ALLOW))), order)
+        val anyone = inOrder("app-reader", SubjectRef.Anyone)
+        val role = inOrder("app-role", SubjectRef.Role(TenantId("acme"), RoleId("editor")))
+        val principal = inOrder("app-bob", SubjectRef.Principal(TenantId("acme"), PrincipalId("bob")))
+        publish(document(acme, bindings = listOf(anyone, role, principal)), acme)
+
+        val report = runBlocking { plane.analyze(PLATO, orderRead) }
+
+        report.allows.map { it.binding }.assert().containsExactlyInAnyOrder("app-reader", "app-role", "app-bob")
+        report.allows.map { it.document }.toSet().assert().containsExactly("$acme")
+        report.denies.assert().isEmpty()
+        report.opaque.assert().isEqualTo(0)
+        report.hidden.assert().isEqualTo(0)
+    }
+
+    @Test
+    fun `a deny of a readable app that a tenant binds is in the access review - #1243`() {
+        publish(document(order, policies = listOf(permission(Effect.DENY))), order)
+        publish(document(acme, bindings = listOf(inOrder("app-reader", SubjectRef.Anyone))), acme)
+
+        val report = runBlocking { plane.analyze(PLATO, orderRead) }
+
+        report.denies.map { it.binding }.assert().containsExactly("app-reader")
+        report.allows.assert().isEmpty()
+        report.opaque.assert().isEqualTo(0)
+    }
+
+    @Test
+    fun `an app the caller may not read stays opaque - #1243`() {
+        publish(document(order, policies = listOf(permission(Effect.ALLOW))), order)
+        publish(document(acme, bindings = listOf(inOrder("app-reader", SubjectRef.Anyone))), acme)
+        val noOrder = ControlAuthorizer { _, action, resource ->
+            if (action == ControlActions.READ && resource.id == ControlResources.document(order).id) {
+                ControlDecision.DENY
+            } else {
+                ControlDecision.PERMIT
+            }
+        }
+        val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
+        val blind = DefaultControlPlane(harness.changes, revisions, ChangeAuthority(noOrder, options), Simulator())
+
+        val report = runBlocking { blind.analyze(PLATO, orderRead) }
+
+        report.allows.assert().isEmpty()
+        report.opaque.assert().isEqualTo(1)
+        report.hidden.assert().isEqualTo(1)
+    }
+
+    /** The data plane resolves an app's policy only for a binding scoped to that app, so a review does not either. */
+    @Test
+    fun `a binding not scoped to the app does not resolve the app's policy - #1243`() {
+        publish(document(order, policies = listOf(permission(Effect.ALLOW))), order)
+        publish(document(acme, bindings = listOf(inOrder("everywhere", SubjectRef.Anyone, Match.Any))), acme)
+
+        val report = runBlocking { plane.analyze(PLATO, orderRead) }
+
+        report.allows.assert().isEmpty()
+        report.opaque.assert().isEqualTo(1)
     }
 }
