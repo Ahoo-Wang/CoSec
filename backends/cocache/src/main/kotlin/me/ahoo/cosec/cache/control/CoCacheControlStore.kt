@@ -256,10 +256,7 @@ class CoCacheControlStore internal constructor(
             val deleted = try {
                 store.async().deleteIfMatch(key, cocacheDigest(digest)).await()
             } catch (error: CacheWriteException) {
-                if (!error.outcomeUnknown) throw error
-                val after = read(store, key) ?: return true
-                if (after.second == digest) throw error
-                return false
+                return removedAfter(store, key, digest, error)
             }
             if (deleted == ConditionalDelete.Deleted) {
                 return true
@@ -268,6 +265,21 @@ class CoCacheControlStore internal constructor(
         throw IllegalStateException(
             "[$key] kept changing while it was removed; gave up after $MAX_LIST_ATTEMPTS attempts."
         )
+    }
+
+    /**
+     * Whether a `deleteIfMatch` of [key] over [digest] that failed with [error] removed it: read back when its outcome
+     * is unknown. Still [digest] means it did not, and the failure is the answer.
+     */
+    private suspend fun <K : Any, V : Any> removedAfter(
+        store: Store<K, V>,
+        key: K,
+        digest: SnapshotDigest,
+        error: CacheWriteException,
+    ): Boolean {
+        val after = if (error.outcomeUnknown) read(store, key) else throw error
+        if (after?.second == digest) throw error
+        return after == null
     }
 
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */

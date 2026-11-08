@@ -318,7 +318,10 @@ object ChangeRunner : ScenarioRunner {
                     val hold = Late()
                     val running = async(hold) { result(inner, innerArgument) }
                     // Until it waits to withdraw a candidate, or ends without one.
-                    select { hold.paused.onAwait {}; running.onAwait {} }
+                    select {
+                        hold.paused.onAwait {}
+                        running.onAwait {}
+                    }
                     results += ""
                     late = hold to running
                     continue
