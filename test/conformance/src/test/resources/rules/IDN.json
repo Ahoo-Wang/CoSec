@@ -129,6 +129,22 @@
         "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
         "migrate:ConverterTest#an id with an unpaired surrogate is rejected, and nothing is converted"
       ]
+    },
+    {
+      "id": "IDN-11",
+      "source": "RFC 0004 §4.5.1 (RC1-22, R5)",
+      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. CoSec's issuer refuses to sign a token with an empty tenant.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenVerifierTest#anEmptyTenantIdIsInvalid",
+        "jwt:JwtTokenConverterTest#anEmptyTenantIsNotIssued",
+        "jwt:MembershipClaimsJwtTest#currentTokensWithoutTenantParseAsBefore",
+        "runtime:TokenAuthenticatorTest#aTokenClaimingAnEmptyTenantIsInvalid",
+        "runtime:RevocableTokenVerifierTest#verifyAndRefreshRefuseAnEmptyTenant",
+        "runtime:MembershipClaimsTest#tenantOfATokenWithoutTenantIsTheDefaultTenant",
+        "runtime:MembershipClaimsTest#tenantOfABlankTenantIsKeptAndRefusedByTheScope"
+      ]
     }
   ]
 }

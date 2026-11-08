@@ -109,7 +109,7 @@ class JwtTokenVerifierTest {
 
     /**
      * RC1-22: a `tenantId` claim that is not a string is an invalid token, never the default tenant with the token's
-     * roles. An absent or empty claim is the default tenant, as before.
+     * roles. An absent claim is the default tenant.
      */
     @Test
     fun aTenantIdThatIsNotAStringIsInvalid() {
@@ -128,6 +128,21 @@ class JwtTokenVerifierTest {
             .assert().isInstanceOf(TokenTenantPrincipal::class.java)
         jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(signed {})).assert()
             .isNotInstanceOf(TokenTenantPrincipal::class.java)
+    }
+
+    /** `IDN-11`: an empty `tenantId` claim is invalid on both paths that read one, never the default tenant. */
+    @Test
+    fun anEmptyTenantIdIsInvalid() {
+        val access = signed { withClaim("tenantId", "") }
+        val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
+            .sign(JwtFixture.ALGORITHM)
+        for (read in listOf<() -> TokenPrincipal>(
+            { jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(access)) },
+            { jwtTokenVerifier.refresh<TokenPrincipal>(SimpleCompositeToken(access, refresh)) },
+        )) {
+            val thrown = assertThrows(TokenVerificationException::class.java) { read() }
+            assertFalse(thrown is TokenExpiredException)
+        }
     }
 
     /**

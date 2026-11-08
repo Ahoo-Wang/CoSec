@@ -20,7 +20,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 | `roles` | 角色 id，写作 `role` 或 `role@space`（[角色与空间](#roles-and-spaces)）。为空时省略。 |
 | `policies` | 附加到主体的策略 id。为空时省略。 |
 | `attributes` | 任意的主体属性；条件通过 `subject.attributes.<name>` 读取。`apiKeyId` 由 CoSec 为 [API key](#api-keys) 设置，是保留名：带它的令牌按 `token-invalid` 拒绝，`JwtTokenConverter` 也不会签发这样的令牌。 |
-| `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。值不是字符串时令牌无效。 |
+| `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。值为空或不是字符串时令牌无效。 |
 | `cosec.membership` | 成员关系来自 `MembershipProvider` 时，以 `"provider"` 代替 `roles` 和 `policies`（[成员关系](#memberships)）。其他情况省略。 |
 | `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。`iat` 决定[吊销主体](#revoking-every-token-of-a-principal)时拒绝哪些令牌。 |
 
@@ -224,7 +224,7 @@ cosec:
 
 ## 租户 {#tenants}
 
-主体可以在某个租户内行事。由你的 `Authentication` 返回的主体决定：`TenantPrincipal`（例如 `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`）会把它的租户写入令牌的 `tenantId` 声明；没有该声明或该声明为空的令牌属于默认租户 `(0)`，该声明不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
+主体可以在某个租户内行事。由你的 `Authentication` 返回的主体决定：`TenantPrincipal`（例如 `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`）会把它的租户写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空或不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为租户 id 为空的主体签发令牌。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
 要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previousPrincipal)`：检查用户是否属于目标租户，并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。
 

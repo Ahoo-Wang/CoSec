@@ -75,9 +75,9 @@ class RateLimitObligationTest {
         )
         obligations(SnapshotView(platform, null, tenant())).assert().isEqualTo(
             listOf(
-                Obligation.RateLimit("shared", "global", limit, false),
-                Obligation.RateLimit("by-ip", "g:127.0.0.1", limit, false),
-                Obligation.RateLimit("by-order", "g:1", limit, false),
+                Obligation.RateLimit("platform/shared", "global", limit, false),
+                Obligation.RateLimit("platform/by-ip", "k:127.0.0.1", limit, false),
+                Obligation.RateLimit("platform/by-order", "k:1", limit, false),
             )
         )
     }
@@ -86,7 +86,7 @@ class RateLimitObligationTest {
     fun `an absent key value is the empty bucket`() {
         val platform = permitting(rule("by-tier", key = "subject.attributes.tier"))
         obligations(SnapshotView(platform, null, tenant())).single()
-            .assert().isEqualTo(Obligation.RateLimit("by-tier", "g:", limit, false))
+            .assert().isEqualTo(Obligation.RateLimit("platform/by-tier", "k:", limit, false))
     }
 
     /**
@@ -107,10 +107,10 @@ class RateLimitObligationTest {
         val buckets = values.map(::bucket)
         buckets.toSet().assert().describedAs("one bucket per value").hasSize(values.size)
         buckets.forEach { it.encodeToByteArray().decodeToString().assert().describedAs("well formed").isEqualTo(it) }
-        bucket("x?").assert().isEqualTo("g:x?")
-        bucket("x\uD83D\uDE00").assert().isEqualTo("g:x\uD83D\uDE00")
+        bucket("x?").assert().isEqualTo("k:x?")
+        bucket("x\uD83D\uDE00").assert().isEqualTo("k:x\uD83D\uDE00")
         bucket("x\uD800").assert().isEqualTo("e:x\\uD800")
-        bucket("x\\uD800").assert().isEqualTo("g:x\\uD800")
+        bucket("x\\uD800").assert().isEqualTo("k:x\\uD800")
         CompiledRateLimit.keyedBucket("\\\uDC00").assert().isEqualTo("e:\\\\\\uDC00")
     }
 
@@ -143,7 +143,7 @@ class RateLimitObligationTest {
         )
         val request = flatRequest(roles = listOf("viewer"))
         obligations(SnapshotView(platform, app, acme), request).map { (it as Obligation.RateLimit).ruleId }
-            .assert().containsExactly("r", "app:app/r", "tenant:acme/r")
+            .assert().containsExactly("platform/r", "app:app/r", "tenant:acme/r")
     }
 
     @Test
@@ -156,8 +156,8 @@ class RateLimitObligationTest {
         )
         obligations(SnapshotView(platform, null, tenant())).assert().isEqualTo(
             listOf(
-                Obligation.RateLimit("by-zone", null, limit, true),
-                Obligation.RateLimit("in-zone", null, limit, false),
+                Obligation.RateLimit("platform/by-zone", null, limit, true),
+                Obligation.RateLimit("platform/in-zone", null, limit, false),
             )
         )
         val fetched = flatRequest().let {
@@ -172,9 +172,9 @@ class RateLimitObligationTest {
         }
         obligations(SnapshotView(platform, null, tenant()), fetched).assert().isEqualTo(
             listOf(
-                Obligation.RateLimit("by-zone", "g:eu", limit, true),
-                Obligation.RateLimit("in-zone", "global", limit, false),
-                Obligation.RateLimit("skipped", "global", limit, false),
+                Obligation.RateLimit("platform/by-zone", "k:eu", limit, true),
+                Obligation.RateLimit("platform/in-zone", "global", limit, false),
+                Obligation.RateLimit("platform/skipped", "global", limit, false),
             )
         )
         // The plan fetches what the rules read.

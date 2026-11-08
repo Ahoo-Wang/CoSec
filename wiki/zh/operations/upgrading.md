@@ -11,10 +11,13 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
-8.0.0-alpha.3 是预览版，没有兼容性承诺。无需迁移：它保存的数据仍然可读。
+8.0.0-alpha.3 是预览版，没有兼容性承诺。无需迁移：它保存的数据仍然可读，只有用其他拼法写星期的文档例外（见下）。
 
 - **控制面的正确性**（审计批次 E2a：#1205、#1206、#1207、#1210、#1226、#1227）。修订 diff 的 `sections` 按内容比较目录、限制、属性、边界和限流规则：同 id 的规则改了额度也算变化。`POST /analyze` 只列出能在所查询租户生效的绑定，所以平台中给别的租户的主体或角色的绑定不再列出。候选撤回、最后一次报告写入之后，实例忘掉这个影子窗口。代码方面：自己实现的 `ControlStore` 要实现 `withdrawCandidate(key, window)`（`putCandidate` 只接受候选，不再接受 `null`）、带每个引用方修订的 `referrers` 与 `putReferrers`（`Map<SnapshotKey, Long>`），并保存 `RevisionIndex.reclaiming`；`releaseLease` 必须在一步中检查并删除（[扩展](../architecture/extending.md#control-store)）。`ShadowRecorder.record` 的第一个参数是窗口的文档，`forget` 接受它最后一次报告计入的样本数，`ShadowReporter` 接受它读取已结束窗口所用的 `CandidateStore`。
 - **控制面实例一起升级。** alpha.3 写入的反向引用集合（`<p>:control:refs:*`，文档 key 的 JSON 数组）照常可读，每个引用方按修订 0 读取，之后在变化时带修订重新写入。alpha.3 的控制面实例读不了这样写入的集合，也读不了列有待删记录的修订索引，遇到它们即按失败关闭处理：它涉及这些集合的发布会失败，对该文档的回收会停止。先停掉 alpha.3 的控制面实例，再启动这个版本的。数据面实例不必按顺序：alpha.3 的实例只是会一直写已结束影子窗口的报告。
+- **星期只有一种拼法**（批次 R5）。`daysOfWeek` 只接受 `MON`、`TUE`、`WED`、`THU`、`FRI`、`SAT` 和 `SUN`，这也是 schema 和[策略语言](../policies/language.md)一直列出的名称。`MONDAY`、`mon` 和 ` Fri ` 不再能编译：写入它们的变更被拒绝，保存了它们的文档被安装为失败，读取它的请求回答 `503`。升级前请把这些文档改用三字母名称发布。`cosec-migrate` 现在写三字母名称，并且仍然读取 7.x 接受的任何拼法。
+- **`tenantId` 声明为空时令牌无效**（批次 R5、`IDN-11`），过去它表示默认租户 `(0)`：读作没有租户，会把主体连同令牌的角色放进默认租户。请求按匿名评估，拒绝时回答 `401 token-invalid`，刷新这样的令牌也会失败。没有 `tenantId` 声明的令牌仍属于默认租户。自定义 `TokenVerifier` 的主体遵守同一规则；主体的租户 id 为空时，`JwtTokenConverter` 抛出 `IllegalArgumentException`：请不给它租户，或者用 `SimpleTenant.DEFAULT`。
+- **限流计数器只有一种形式**（批次 R5）。每条规则按它的文档和 id 计数：平台规则从原来的裸 id 改为 `platform/<id>`，应用和租户规则不变（`app:<appId>/<id>`、`tenant:<tenantId>/<id>`）。按 key 计数的桶是 `k:<value>`，不再是 `g:<value>`。文档中的规则 id 不变。Redis 计数器重新开始，所以每条规则的当前窗口从完整额度开始，两个版本同时服务时各自计数。你自己的 `RateLimiter`，以及读取 `Cause.RateLimiterUnavailable.ruleId` 或 `Basis.RateLimited.ruleId` 的代码，会看到新的名称。
 
 - **三组配置项改名。** 旧 key 会作为未知配置项使启动失败：
 
@@ -431,7 +434,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
   读取，执行方得到主体的权限。CoSec 自己从不签发这种令牌；接受其他签发方令牌的校验器在支持委托之前不得放行它们
   （[认证](../integration/authentication.md#tokens)）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时审计记录 `ALLOW`，
   原因只出现在决策事件的 `subject.rejected` 中。刷新或吊销这种令牌同样失败。
-- **`tenantId` 声明不是字符串**，或 `attributes` 声明中有 `apiKeyId`（CoSec 只为 API key 设置），令牌为 `token-invalid`；7.x 把这样的租户读作没有租户。
+- **`tenantId` 声明为空或不是字符串**，或 `attributes` 声明中有 `apiKeyId`（CoSec 只为 API key 设置），令牌为 `token-invalid`；7.x 把这样的租户读作没有租户。
   **`cosec.jwt.secret`** 对 `hmac256`、`hmac384`、`hmac512` 分别至少 32、48、64 个 UTF-8 字节，否则启动失败。
 - **break-glass（7.x 的 root）** 只作用于 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌，从不作用于自定义 `TokenVerifier` 的令牌，也不作用于其他认证器认可的主体（`BRK-8`）。
 - **租户切换与社交登录。** `AbstractSwitchTenantAuthentication.switchTenant` 回答用户在目标租户中的 `TenantMembership`，而不是一个主体，因此新令牌不会带上先前租户的角色。

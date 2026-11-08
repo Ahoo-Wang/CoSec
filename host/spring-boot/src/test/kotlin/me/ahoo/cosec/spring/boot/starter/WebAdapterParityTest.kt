@@ -200,7 +200,7 @@ class WebAdapterParityTest {
 
     /** Has permits for every rule but `limited`, whose bucket is exhausted: the 429 path (RFC 0006 §8.3). */
     private val rateLimiter = RateLimiter { ruleId, _, _ ->
-        val allowed = ruleId != "limited"
+        val allowed = ruleId != "platform/limited"
         RateLimitResult(allowed, 10, if (allowed) 9 else 0, java.time.Duration.ofSeconds(3))
     }
     private val app = compile(

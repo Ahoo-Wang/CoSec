@@ -27,7 +27,7 @@ The access token carries the principal, so authenticating a request needs no loo
 | `roles` | Role ids, written `role` or `role@space` ([Roles and spaces](#roles-and-spaces)). Left out when empty. |
 | `policies` | Ids of the policies attached to the principal. Left out when empty. |
 | `attributes` | Free-form principal attributes; conditions read them as `subject.attributes.<name>`. `apiKeyId`, which CoSec sets for an [API key](#api-keys), is reserved: a token that carries it is refused as `token-invalid`, and `JwtTokenConverter` does not issue one. |
-| `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). A value that is not a string makes the token invalid. |
+| `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). A value that is empty or not a string makes the token invalid. |
 | `cosec.membership` | `"provider"` in place of `roles` and `policies`, when they come from a `MembershipProvider` ([Memberships](#memberships)). Left out otherwise. |
 | `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
 
@@ -376,8 +376,9 @@ With API keys enabled and neither the in-memory store nor an `ApiKeyReader`, sta
 
 A principal may act within a tenant. The principal your `Authentication` returns decides it: a `TenantPrincipal`
 (such as `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`) puts its tenant in the token's `tenantId` claim;
-a token without the claim, or with an empty one, belongs to the default tenant `(0)`, and one whose claim is not a
-string (a number, `null`, an object) is invalid (`token-invalid`). The tenant decides which tenant
+a token without the claim belongs to the default tenant `(0)`, and one whose claim is empty or not a string (a number,
+`null`, an object) is invalid (`token-invalid`, `IDN-11`), so `JwtTokenConverter` refuses a principal whose tenant id is
+empty. The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 

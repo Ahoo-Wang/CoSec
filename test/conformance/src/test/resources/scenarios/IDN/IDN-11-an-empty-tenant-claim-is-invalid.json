@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "IDN-11"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A signed, unexpired token for alice whose tenantId claim is empty is not a token of the default tenant, where alice may read: it is rejected, and the request, evaluated as anonymous, is denied 401 token-invalid.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "(0)"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": ""
+    }
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}

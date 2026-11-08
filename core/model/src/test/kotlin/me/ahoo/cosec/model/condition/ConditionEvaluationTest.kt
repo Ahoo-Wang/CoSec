@@ -293,14 +293,14 @@ class ConditionEvaluationTest {
             Condition.Time(
                 notBefore = "1970-01-01T00:00:01Z",
                 notAfter = "1970-01-01T00:00:02Z",
-                daysOfWeek = listOf("fri", "MON"),
+                daysOfWeek = listOf("FRI", "MON"),
                 from = "00:00",
                 to = "00:00:01"
             )
         )
             .canonical.assert()
             .isEqualTo(
-                "{\"time\":{\"notBefore\":1000,\"notAfter\":2000,\"zone\":\"UTC\",\"daysOfWeek\":[\"MONDAY\",\"FRIDAY\"],\"from\":0,\"to\":1000000000}}"
+                "{\"time\":{\"notBefore\":1000,\"notAfter\":2000,\"zone\":\"UTC\",\"daysOfWeek\":[\"MON\",\"FRI\"],\"from\":0,\"to\":1000000000}}"
             )
         checked(
             Condition.Not(Condition.Exists("environment.ip"))

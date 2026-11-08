@@ -12,7 +12,8 @@ observability. This page is the single home of migration steps. Release notes fo
 
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
-8.0.0-alpha.3 is a preview with no compatibility promise. Nothing to migrate: what it stored still reads.
+8.0.0-alpha.3 is a preview with no compatibility promise. Nothing to migrate: what it stored still reads, except a
+document that spells a day of the week another way (below).
 
 - **Control-plane correctness** (audit batch E2a: #1205, #1206, #1207, #1210, #1226, #1227). A revision diff's
   `sections` compares the catalog, limits, attributes, boundary and rate limits by their content: a rule of the same id
@@ -30,6 +31,23 @@ observability. This page is the single home of migration steps. Release notes fo
   revision index that lists records left to delete, and fails closed on them: its publishes that touch one fail, and
   its reclamation of that document stops. Stop the alpha.3 control-plane instances before starting this version's.
   Data-plane instances need no order: an alpha.3 instance only keeps writing the reports of ended shadow windows.
+- **One spelling for a day of the week** (batch R5). `daysOfWeek` takes exactly `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`
+  and `SUN`, the names the schema and the [policy language](../policies/language.md) have always listed. `MONDAY`,
+  `mon` and ` Fri ` no longer compile: a change that writes one is refused, and a stored document that holds one is
+  installed as failed, so the requests that read it answer `503`. Publish such documents with the three-letter names
+  before you upgrade. `cosec-migrate` now writes those names, and still reads any spelling 7.x accepted.
+- **An empty `tenantId` claim makes the token invalid** (batch R5, `IDN-11`), where it used to mean the default tenant
+  `(0)`: read as no tenant, it put the principal in the default tenant with the token's roles. The request is evaluated
+  as anonymous, so a deny is `401 token-invalid`, and refreshing such a token fails. A token with no `tenantId` claim
+  stays in the default tenant. The principal of a custom `TokenVerifier` is held to the same rule, and
+  `JwtTokenConverter` throws `IllegalArgumentException` for a principal whose tenant id is empty: give it no tenant, or
+  `SimpleTenant.DEFAULT`.
+- **Rate limit counters have one form** (batch R5). Every rule counts under its document and its id: a platform rule
+  under `platform/<id>` where it had its bare id, and app and tenant rules as before (`app:<appId>/<id>`,
+  `tenant:<tenantId>/<id>`). A keyed bucket is `k:<value>`, no longer `g:<value>`. Rule ids in documents do not change.
+  The Redis counters start again, so each rule's current window begins with its full quota, and while two versions
+  serve they count apart. A `RateLimiter` of your own, and anything that reads `Cause.RateLimiterUnavailable.ruleId`
+  or `Basis.RateLimited.ruleId`, sees the new names.
 
 - **Three groups of properties are renamed.** An old key fails startup as unknown:
 
@@ -774,8 +792,8 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
   ([Authentication](../integration/authentication.md#tokens)). A deny is audited with the reason code
   `DELEGATION_UNSUPPORTED`; on a permit the audit records `ALLOW`, and the reason appears only in the decision event's
   `subject.rejected`. Refreshing or revoking such a token fails too.
-- **A `tenantId` claim that is not a string**, or an `attributes` claim that names `apiKeyId` (set by CoSec for API
-  keys only), makes the token `token-invalid`; 7.x read such a tenant as none. **`cosec.jwt.secret`** must be at least
+- **A `tenantId` claim that is empty or not a string**, or an `attributes` claim that names `apiKeyId` (set by CoSec for
+  API keys only), makes the token `token-invalid`; 7.x read such a tenant as none. **`cosec.jwt.secret`** must be at least
   32, 48 or 64 UTF-8 bytes for `hmac256`, `hmac384` or `hmac512`, or startup fails.
 - **Break-glass, 7.x's root,** applies only to a token CoSec's own `JwtTokenVerifier` verified, never to a token of a
   custom `TokenVerifier` or to a principal another authenticator accepted (`BRK-8`).

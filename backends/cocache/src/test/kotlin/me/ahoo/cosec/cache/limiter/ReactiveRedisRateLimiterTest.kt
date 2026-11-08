@@ -57,7 +57,7 @@ class ReactiveRedisRateLimiterTest {
         val exhausted = limiter.tryAcquire("rule", "global", limit)
         exhausted.allowed.assert().isFalse()
         exhausted.remaining.assert().isZero()
-        limiter.tryAcquire("rule", "g:other", limit).allowed.assert().isTrue()
+        limiter.tryAcquire("rule", "k:other", limit).allowed.assert().isTrue()
     }
 
     @Test
@@ -75,7 +75,8 @@ class ReactiveRedisRateLimiterTest {
     fun aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold() {
         val random = Random(1229)
         val prefixes = listOf("cosec:rate-limiter", "{cosec}:rate-limiter", "a{b:rate-limiter", "a}b{c}:rl", "x{", "")
-        val rules = listOf("rule", "a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
+        val rules =
+            listOf("platform/rule", "platform/a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
         fun text(length: Int) = (0 until length).map { BUCKET_CHARACTERS.random(random) }.joinToString("")
 
         // A random prefix, unless it is one the limiter refuses: its first `{` immediately followed by `}`.
@@ -134,11 +135,11 @@ class ReactiveRedisRateLimiterTest {
             val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(cluster), prefix) { FIXED_NOW }
             val limit = quotaOf(2)
             runBlocking {
-                for (rule in listOf("rule", "app:shop/quota", "tenant:acme/quota")) {
+                for (rule in listOf("platform/rule", "app:shop/quota", "tenant:acme/quota")) {
                     (0 until 16).forEach { bucket ->
-                        limiter.tryAcquire(rule, "g:b$bucket", limit).remaining.assert().isEqualTo(1)
-                        limiter.tryAcquire(rule, "g:b$bucket", limit).remaining.assert().isZero()
-                        limiter.tryAcquire(rule, "g:b$bucket", limit).allowed.assert().isFalse()
+                        limiter.tryAcquire(rule, "k:b$bucket", limit).remaining.assert().isEqualTo(1)
+                        limiter.tryAcquire(rule, "k:b$bucket", limit).remaining.assert().isZero()
+                        limiter.tryAcquire(rule, "k:b$bucket", limit).allowed.assert().isFalse()
                     }
                 }
             }

@@ -132,6 +132,12 @@ class TokenAuthenticatorTest {
         memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("editor"))
     }
 
+    /** `IDN-11`: only a token with no tenant claim is in the default tenant, whichever verifier read the claim. */
+    @Test
+    fun aTokenClaimingAnEmptyTenantIsInvalid() = runTest {
+        authenticate({ token(inTenant("")) }).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
+    }
+
     /**
      * RC1-52, `IDN-10`: a JSON token can claim an id with an unpaired surrogate (`"\uD800"`), which a Redis key writes
      * as `?`. Such a token is invalid (401 `token-invalid`), and no revocation is read for it: its keys would be another's.

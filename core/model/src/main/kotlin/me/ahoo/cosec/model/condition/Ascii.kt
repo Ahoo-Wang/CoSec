@@ -20,8 +20,6 @@ package me.ahoo.cosec.model.condition
 internal object Ascii {
     fun lowercase(c: Char): Char = if (c in 'A'..'Z') c + ('a' - 'A') else c
 
-    fun uppercase(c: Char): Char = if (c in 'a'..'z') c - ('a' - 'A') else c
-
     fun lowercase(value: String): String {
         if (value.none { it in 'A'..'Z' }) {
             return value
@@ -29,8 +27,6 @@ internal object Ascii {
         val chars = CharArray(value.length) { lowercase(value[it]) }
         return String(chars)
     }
-
-    fun uppercase(value: String): String = String(CharArray(value.length) { uppercase(value[it]) })
 
     /** Whether [value], folded, equals [folded], which is already in lower case. */
     fun equalsFolded(value: String, folded: String): Boolean =

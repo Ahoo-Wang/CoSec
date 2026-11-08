@@ -299,15 +299,14 @@ internal object IsoTime {
     }
 }
 
-/** The days of a week, Monday first, as `java.time.DayOfWeek` names them. */
+/** The days of a week, Monday first, as documents write them. */
 internal object DaysOfWeek {
-    val NAMES: List<String> = listOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
+    val NAMES: List<String> = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
     const val ALL: Int = 0b111_1111
 
-    /** As 7.x: trimmed, case-insensitive, full name or its first three letters. The day's bit, or null. */
+    /** The bit of the day [value] names, or null: only the exact [NAMES] are days, as the schema says. */
     fun parse(value: String): Int? {
-        val upper = Ascii.uppercase(value.trim())
-        val index = NAMES.indexOfFirst { it == upper || it.take(3) == upper }
+        val index = NAMES.indexOf(value)
         return if (index < 0) null else 1 shl index
     }
 

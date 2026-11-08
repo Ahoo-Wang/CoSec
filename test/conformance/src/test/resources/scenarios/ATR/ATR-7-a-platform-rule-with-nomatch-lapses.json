@@ -54,7 +54,7 @@
   ],
   "rateLimiter": {
     "exhausted": [
-      "zone"
+      "platform/zone"
     ]
   },
   "expect": {

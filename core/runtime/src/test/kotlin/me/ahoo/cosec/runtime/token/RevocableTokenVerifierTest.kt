@@ -72,6 +72,19 @@ class RevocableTokenVerifierTest {
         verify(exactly = 0) { tokenStore.isRevoked(any()) }
     }
 
+    /** `IDN-11`. */
+    @Test
+    fun verifyAndRefreshRefuseAnEmptyTenant() {
+        val principal = SimpleTokenPrincipal(
+            "tokenId",
+            SimpleTenantPrincipal(SimplePrincipal("alice"), SimpleTenant(""))
+        )
+        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns principal
+        every { tokenVerifier.refresh<TokenPrincipal>(compositeToken) } returns principal
+        assertThrows<TokenVerificationException> { revocableTokenVerifier.verify<TokenPrincipal>(accessToken) }
+        assertThrows<TokenVerificationException> { revocableTokenVerifier.refresh<TokenPrincipal>(compositeToken) }
+    }
+
     /** RC1-52, `IDN-10`: a token claiming an id with an unpaired surrogate is invalid, and the store is not asked. */
     @Test
     fun verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate() {

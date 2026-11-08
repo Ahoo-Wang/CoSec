@@ -327,7 +327,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `notBefore` | ISO 日期时间；在它之前条件为假。不带偏移量时按 `zone` 解读。 |
 | `notAfter` | ISO 日期时间；从它开始条件为假。必须晚于 `notBefore`。 |
 | `zone` | 时区 id：`UTC`（默认）、偏移量如 `+08:00` 或 `UTC+8`，或地区如 `Asia/Shanghai`。 |
-| `daysOfWeek` | 非空数组，元素为 `MON` … `SUN`。 |
+| `daysOfWeek` | 非空数组，元素为 `MON` … `SUN`，拼写必须完全一致：其他大小写或名称无法编译。 |
 | `from`、`to` | 一天中的时间，`HH:mm`、`HH:mm:ss` 或 `HH:mm:ss.fff`；要么都写要么都不写，且不能相等。窗口为 `[from, to)`。`from` 晚于 `to` 时窗口跨越午夜，凌晨部分属于窗口开始的那一天。 |
 
 `notBefore`、`notAfter`、`daysOfWeek` 或 `from`/`to` 至少写一个。

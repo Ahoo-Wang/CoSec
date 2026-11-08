@@ -391,7 +391,7 @@ An attribute is absent when the request has no value for it, such as `subject.id
 | `notBefore` | ISO date-time; the condition is false before it. Without an offset, read in `zone`. |
 | `notAfter` | ISO date-time; false from it on. Must be after `notBefore`. |
 | `zone` | Time zone id: `UTC` (the default), an offset such as `+08:00` or `UTC+8`, or a region such as `Asia/Shanghai`. |
-| `daysOfWeek` | Non-empty array of `MON` … `SUN`. |
+| `daysOfWeek` | Non-empty array of `MON` … `SUN`, spelled exactly so: any other case or name does not compile. |
 | `from`, `to` | Time of day `HH:mm`, `HH:mm:ss` or `HH:mm:ss.fff`; both or neither, and not equal. The window is `[from, to)`. When `from` is after `to` it crosses midnight, and its early-morning part belongs to the day it started on. |
 
 At least one of `notBefore`, `notAfter`, `daysOfWeek` or `from`/`to` is required.

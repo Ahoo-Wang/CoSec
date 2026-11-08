@@ -82,9 +82,10 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 
 - **Token:** the issuer and this service must share [`cosec.jwt.secret` and `cosec.jwt.algorithm`](./configuration.md#jwt).
   With `cosec.jwt.enabled=false` every token is rejected.
-- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), a `roles` or
+- **Claims CoSec refuses:** a `tenantId` claim that is empty or not a string (a number, `null`, an object), a `roles` or
   `policies` claim that is not an array of strings, an `attributes` claim that is not an object, or one that names
-  `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
+  `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a non-empty string, or no claim for the default
+tenant, and
   rename the attribute ([Authentication](../integration/authentication.md#tokens)).
 - **An id with an unpaired surrogate:** the token's `sub`, `tenantId`, `jti`, `roles` or `policies` holds an unpaired
   UTF-16 surrogate, which JSON writes as an escape such as `"beta\uD800"` (`IDN-10`). A Redis key holds `?` in its
@@ -318,6 +319,9 @@ Redis would take every instance out of rotation at once.
   a character outside ASCII letters, digits and ``!#$%&'*+-.^_`|~``, such as a space or a look-alike letter.
 - A condition on an `ext.*` attribute the platform document does not declare and no attribute provider of the host
   serves. A change is compiled against the attribute providers of the control host.
+- `` is not a day of the week: `<value>` ``: `daysOfWeek` takes exactly `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT` and
+  `SUN`, not `MONDAY`, `mon` or ` Fri ` ([Policy language](../policies/language.md)). On the data plane a stored
+  document that spells a day another way is installed as failed, and the requests that read it answer `503`.
 - A path pattern over a cost bound (`DOC-4`, [Policy language](../policies/language.md#path-pattern-bounds)):
   `the pattern is <n> characters, more than 2048`; `segment [<s>] has <n> parts (*, ?, {name} and the text between
   them), more than 16`, where consecutive `*` count once; or, at `$`, `The document's path pattern segments that mix
