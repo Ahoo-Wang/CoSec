@@ -86,48 +86,43 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         val inputSha256: String,
     )
 
-    /** Reads every family CoSec keeps through CoCache under [keyPrefix]; writes nothing. */
-    fun plan(): Plan {
+    /** What [plan] has found so far. */
+    private inner class Reading {
         val documents = sortedMapOf<String, Pair<SnapshotKey, PolicyDocument>>()
         val revocations = ArrayList<Revocation>()
         val deletions = sortedMapOf<String, MutableList<String>>()
         val pending = ArrayList<String>()
         val skipped = ArrayList<String>()
         val refusals = ArrayList<String>()
-        val input = MessageDigest.getInstance("SHA-256")
-        for (cacheName in CoSecCacheSpecs.CACHE_NAMES.sorted()) {
-            val path = CoSecCacheSpecs.storagePath(keyPrefix, cacheName)
-            for (storageKey in redis.scan(glob(path) + ":*").sorted()) {
-                val raw = if (redis.type(storageKey) == STRING) redis.get(storageKey) else null
-                if (raw == null || !isCoCache6(raw)) {
-                    skipped += storageKey
-                    continue
-                }
-                input.update(storageKey.encodeToByteArray())
-                input.update(raw)
-                val encodedKey = storageKey.removePrefix("$path:")
-                val value = raw[STATE_INDEX] == CoCache6Format.STATE_VALUE
-                val payload = raw.copyOfRange(CoCache6Format.HEADER_SIZE, raw.size)
-                when (cacheName) {
-                    CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME -> if (value) {
-                        revocation(cacheName, storageKey, encodedKey, payload, refusals)?.let { revocations += it }
-                    } else {
-                        deletions.getOrPut(cacheName) { ArrayList() } += storageKey
-                    }
+        val input: MessageDigest = MessageDigest.getInstance("SHA-256")
 
-                    else -> {
-                        deletions.getOrPut(cacheName) { ArrayList() } += storageKey
-                        if (value && cacheName == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) {
-                            document(storageKey, encodedKey, payload, refusals)?.let { documents[encodedKey] = it }
-                        }
-                        if (value && cacheName in PENDING) {
-                            pending += storageKey
-                        }
-                    }
-                }
+        /** Files the value under [storageKey] of [cacheName], whose storage path is [path]. */
+        fun read(cacheName: String, path: String, storageKey: String) {
+            val raw = if (redis.type(storageKey) == STRING) redis.get(storageKey) else null
+            if (raw == null || !isCoCache6(raw)) {
+                skipped += storageKey
+                return
+            }
+            input.update(storageKey.encodeToByteArray())
+            input.update(raw)
+            val encodedKey = storageKey.removePrefix("$path:")
+            val value = raw[STATE_INDEX] == CoCache6Format.STATE_VALUE
+            val payload = raw.copyOfRange(CoCache6Format.HEADER_SIZE, raw.size)
+            if (value && cacheName in REVOCATIONS) {
+                // Written again over the old value, never deleted.
+                revocation(cacheName, storageKey, encodedKey, payload, refusals)?.let { revocations += it }
+                return
+            }
+            deletions.getOrPut(cacheName) { ArrayList() } += storageKey
+            if (value && cacheName == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) {
+                document(storageKey, encodedKey, payload, refusals)?.let { documents[encodedKey] = it }
+            }
+            if (value && cacheName in PENDING) {
+                pending += storageKey
             }
         }
-        return Plan(
+
+        fun plan(): Plan = Plan(
             documents.values.associate { it },
             revocations,
             deletions,
@@ -138,11 +133,23 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         )
     }
 
+    /** Reads every family CoSec keeps through CoCache under [keyPrefix]; writes nothing. */
+    fun plan(): Plan {
+        val reading = Reading()
+        for (cacheName in CoSecCacheSpecs.CACHE_NAMES.sorted()) {
+            val path = CoSecCacheSpecs.storagePath(keyPrefix, cacheName)
+            redis.scan(glob(path) + ":*").sorted().forEach { reading.read(cacheName, path, it) }
+        }
+        return reading.plan()
+    }
+
     /**
      * Why [plan] may not be written, empty when it may: a refusal of [plan] itself, a document `publish` would refuse
      * (it does not compile, misses a reference, holds a break-glass binding, or there is no platform document), or a
      * change in flight unless [discardPending].
      */
+    // Whatever publish would throw refuses the run, with its message.
+    @Suppress("TooGenericExceptionCaught")
     fun check(plan: Plan, discardPending: Boolean): List<String> {
         val problems = ArrayList(plan.refusals)
         if (plan.pending.isNotEmpty() && !discardPending) {
@@ -190,6 +197,8 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         if (ttl == null) table.put(revocation.key, value) else table.put(revocation.key, value, ttl)
     }
 
+    // Whatever the table's codec throws refuses the run, with its message.
+    @Suppress("TooGenericExceptionCaught")
     private fun revocation(
         cacheName: String,
         storageKey: String,
@@ -218,6 +227,7 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
     }
 
     /** The document stored under [encodedKey], without its provenance; null, with a refusal, when it does not decode. */
+    @Suppress("TooGenericExceptionCaught")
     private fun document(
         storageKey: String,
         encodedKey: String,
@@ -251,6 +261,10 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
         private const val NO_EXPIRY = -1L
         private const val PROVENANCE = "provenance"
         private val PENDING = setOf(CoSecCacheSpecs.STAGE_CACHE_NAME, CoSecCacheSpecs.CANDIDATE_CACHE_NAME)
+        private val REVOCATIONS = setOf(
+            CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+            CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
+        )
         private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
         /** Whether [raw] is a scalar as CoCache 6 wrote it: its magic byte and format 1. */

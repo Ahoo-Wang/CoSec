@@ -136,8 +136,12 @@ class DocumentPublisher(
          * What [publish] checks before it writes anything, throwing what it would refuse: a platform document, every
          * document compiling, every app document's references resolving against it, and no break-glass binding.
          */
-        fun check(documents: Map<SnapshotKey, PolicyDocument>, compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()) {
-            val platform = requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
+        fun check(
+            documents: Map<SnapshotKey, PolicyDocument>,
+            compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()
+        ) {
+            val platform =
+                requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
             documents.values.forEach { document ->
                 compiler.compile(document)
                 compiler.checkReferences(document, platform)

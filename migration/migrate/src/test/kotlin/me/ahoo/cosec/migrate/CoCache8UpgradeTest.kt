@@ -87,7 +87,11 @@ class CoCache8UpgradeTest {
         cocache6(key(snapshot, "tenant:ghost"), "", state = CoCache6Format.STATE_MISSING)
         cocache6(key(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-1"), "true", ttlMillis = TEN_MINUTES)
         cocache6(key(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-absent"), "", state = CoCache6Format.STATE_MISSING)
-        cocache6(key(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, "4:acme:alice"), "$ISSUED_BEFORE", ttlMillis = TEN_MINUTES)
+        cocache6(
+            key(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, "4:acme:alice"),
+            "$ISSUED_BEFORE",
+            ttlMillis = TEN_MINUTES
+        )
         cocache6(key(CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME, "platform:$SHA1"), PLATFORM)
         cocache6(key(CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME, "platform"), "{}")
         cocache6(key(CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME, "shadow"), "holder")
@@ -148,9 +152,21 @@ class CoCache8UpgradeTest {
         raw("$keyPrefix:api-key:abc")!!.decodeToString().assert().isEqualTo("{\"plain\":true}")
         // The export is publish's input, to finish a run that stops after the deletions.
         ConvertedDirectory.read(temp.resolve("out")).keys
-            .assert().containsExactlyInAnyOrder(SnapshotKey.Platform, SnapshotKey.App("order"), SnapshotKey.Tenant("acme"))
+            .assert().containsExactlyInAnyOrder(
+                SnapshotKey.Platform,
+                SnapshotKey.App("order"),
+                SnapshotKey.Tenant("acme")
+            )
         // A second run finds nothing left to move.
-        val (again, second) = run("cocache8", "--redis", REDIS, "--key-prefix", keyPrefix, "--out", temp.resolve("again").toString())
+        val (again, second) = run(
+            "cocache8",
+            "--redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--out",
+            temp.resolve("again").toString()
+        )
         again.assert().describedAs(second).isEqualTo(MigrateMain.OK)
         second.assert().contains("0 document(s), 0 revocation(s)")
     }
@@ -200,7 +216,11 @@ class CoCache8UpgradeTest {
             key(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-1"),
             key(CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME, "platform"),
             key(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, "4:acme:alice"),
-        ).forEach { CoCache8Upgrade.isCoCache6(checkNotNull(raw(it)) { "$it is gone." }).assert().describedAs(it).isTrue() }
+        ).forEach {
+            CoCache8Upgrade.isCoCache6(
+                checkNotNull(raw(it)) { "$it is gone." }
+            ).assert().describedAs(it).isTrue()
+        }
     }
 
     private companion object {

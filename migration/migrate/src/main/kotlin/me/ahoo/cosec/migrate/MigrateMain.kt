@@ -498,7 +498,10 @@ object MigrateMain {
         val published = rawRedis(uri, cluster) { redis ->
             factory(uri, cluster) { factory ->
                 val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                CoCache8Upgrade(redis, keyPrefix).apply(plan, factory, CoCacheControlStore.create(factory, heads, keyPrefix))
+                CoCache8Upgrade(
+                    redis,
+                    keyPrefix
+                ).apply(plan, factory, CoCacheControlStore.create(factory, heads, keyPrefix))
             }
         }
         out.println("Wrote ${plan.revocations.size} revocation(s) again, with what remains of their lifetimes.")

@@ -81,7 +81,10 @@ class CoCache6ValuesTest {
     fun aRevocationCoCache6WroteIsAnErrorNeverNotRevoked() = runBlocking<Unit> {
         cocache6(storageKey(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-6"), "true")
         cocache6(storageKey(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, "jti-6-absent"), "", state = 'M')
-        cocache6(storageKey(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, RevokedSubjectCache.key(tenant, alice)), "1761955200000")
+        cocache6(
+            storageKey(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, RevokedSubjectCache.key(tenant, alice)),
+            "1761955200000"
+        )
         CoSecTestCaches(redis, keyPrefix).use { caches ->
             val store = CoCacheTokenStore(caches.revokedTokenCache, caches.revokedSubjectCache)
             foreign { runBlocking { store.reader.isRevoked("jti-6") } }
@@ -96,7 +99,13 @@ class CoCache6ValuesTest {
 
     @Test
     fun aSnapshotDocumentCoCache6WroteFailsClosed() {
-        cocache6(storageKey(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME, SnapshotKeyEncoder.encode(SnapshotKey.Tenant("acme"))), "{}")
+        cocache6(
+            storageKey(
+                CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME,
+                SnapshotKeyEncoder.encode(SnapshotKey.Tenant("acme"))
+            ),
+            "{}"
+        )
         SnapshotNode(redis, keyPrefix).use { node ->
             foreign { node.store.read(SnapshotKey.Tenant("acme")).get() }
         }
@@ -129,9 +138,14 @@ class CoCache6ValuesTest {
     /** Memberships cache what the loader answers: one CoCache 6 wrote is loaded again, never read as "none". */
     @Test
     fun membershipsCoCache6WroteAreLoadedAgain() = runBlocking<Unit> {
-        val stale = Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("stale"))), emptyList())
-        cocache6(storageKey(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, MembershipCache.key(tenant, alice)), MembershipsCodec.encode(stale).decodeToString())
-        val loaded = Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("admin"))), emptyList())
+        val stale =
+            Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("stale"))), emptyList())
+        cocache6(
+            storageKey(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, MembershipCache.key(tenant, alice)),
+            MembershipsCodec.encode(stale).decodeToString()
+        )
+        val loaded =
+            Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("admin"))), emptyList())
         val loads = AtomicInteger()
         CoSecTestCaches(redis, keyPrefix).use { caches ->
             val provider = CoCacheMembershipProvider(caches.membershipCache) { _, _ ->
