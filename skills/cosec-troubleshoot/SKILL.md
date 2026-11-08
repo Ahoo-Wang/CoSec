@@ -150,9 +150,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
   **`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32`**: the secret must be at least 32, 48 or
   64 UTF-8 bytes for `hmac256`, `hmac384`, `hmac512` (RFC 7518 §3.2); set a longer one on the issuer and every verifier.
-- **`The route map [classpath:cosec-routes.json] (cosec.authorization.routes.location) does not exist`**: add the route
-  map, or set the property empty to run without one. A `RouteMapException` names the location and route: malformed
-  route, a resource variable the path does not capture, or two routes for one method that may match the same request.
+- **`classpath:cosec-routes.json exists but cosec.authorization.routes.location is not set`**: set the property to it,
+  or to empty to run without a route map.
+- **`The route map [<location>] (cosec.authorization.routes.location) does not exist`**: add the route map, or correct
+  the property. A `RouteMapException` names the location and route: malformed route, a map with no routes, a resource
+  variable the path does not capture, or two routes for one method that may match the same request.
+- **`cosec-cocache needs a CacheRuntime bean`**: add `me.ahoo.cocache:cocache-spring-boot-starter`.
 - **`API keys are enabled, but no ApiKeyReader is available`**: `cosec.api-key.store=redis` needs a
   `ReactiveStringRedisTemplate`.
 - **`cosec.api-key.enabled=true needs a MembershipProvider bean`** (IDN-6): a key's memberships are its principal's.
@@ -207,7 +210,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   values`); an ALLOW on it then does not match. One value repeated reads as that value.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
   the log: see Rate limiting).
-- **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
+- **A REQUIRED decision listener failed or timed out** (`cosec.observability.listener.required-timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
   fails answers "not revoked" instead (the documented exception to fail closed).
 - **An id with an unpaired UTF-16 surrogate** (IDN-10, RC1-52): an authenticator gave a principal whose id, tenant,
@@ -286,10 +289,10 @@ header: anonymous. Otherwise never anonymous:
 
 - 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
   surrogate (IDN-10), over
-  `cosec.pipeline.gateway.max-size` (8KB), sent more than once, or a scope that does not resolve here.
+  `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
-- 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.gateway.max-age` (60s)
+- 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)
   plus the skew. Check clocks.
 - On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
   key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
@@ -299,8 +302,8 @@ header: anonymous. Otherwise never anonymous:
   Mark the route `cosec-identity: true` if it leads to your own service.
 - A backend that verifies tokens itself gets no credentials (`Authorization`, the API key header, the `authorization`
   query parameter, the `authorization` cookie) unless `cosec.gateway.identity.forward-authorization=true`, and then
-  only on a route that would receive the identity. A gateway-mode service that issues no tokens should set
-  `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
+  only on a route that would receive the identity. JWT is off by default on a gateway-mode service; one that issues
+  tokens sets `cosec.jwt.enabled=true`.
 - On the gateway, a 500 on every request of one route: its metadata `cosec-app-id` is not a valid app id, or not a
   string (a number, list or map: quote it, one app).
 

@@ -1,0 +1,159 @@
+{
+  "rules": [
+    "CTL-27"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "An administrator of acme skips the shadow window of acme's document and publishes.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "acme-reader",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "cosec:read",
+              "resource": "doc/tenant/acme"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "tia",
+          "subject": {
+            "principal": "tia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "tia-reads-acme",
+          "subject": {
+            "principal": "tia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "acme-reader"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "viewers",
+            "subject": {
+              "role": "viewer"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-viewer"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "vera": {
+      "tenant": "acme",
+      "roles": [
+        "viewer"
+      ]
+    },
+    "tia": {
+      "tenant": "(platform)"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "alice"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "alice"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

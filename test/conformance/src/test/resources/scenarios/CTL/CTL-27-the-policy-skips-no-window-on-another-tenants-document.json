@@ -1,0 +1,159 @@
+{
+  "rules": [
+    "CTL-27"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Tia is a platform principal bound to cosec:tenant-admin who may read acme's document: the policy is for tia's own tenant, so no skip on acme's. Neither does cosec:tenant-viewer skip. The change is still only CHECKED, and the head has not moved.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "acme-reader",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "cosec:read",
+              "resource": "doc/tenant/acme"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "tia",
+          "subject": {
+            "principal": "tia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "tia-reads-acme",
+          "subject": {
+            "principal": "tia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "acme-reader"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "viewers",
+            "subject": {
+              "role": "viewer"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-viewer"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "vera": {
+      "tenant": "acme",
+      "roles": [
+        "viewer"
+      ]
+    },
+    "tia": {
+      "tenant": "(platform)"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "tia"
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "vera"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "refused 403",
+      "refused 403"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

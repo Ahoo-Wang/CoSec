@@ -66,9 +66,9 @@ private val log = KotlinLogging.logger {}
  */
 @OptIn(InternalCoSecApi::class)
 class IdentityGate(
-    /** `cosec.pipeline.gateway.max-size`. */
+    /** `cosec.pipeline.identity.max-size`. */
     private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,
-    /** `cosec.pipeline.gateway.max-age`. */
+    /** `cosec.pipeline.identity.max-age`. */
     private val maxAge: Duration = DEFAULT_MAX_AGE,
     /** `cosec.authentication.revocation.skew`: how far the gateway's clock may be ahead of this service's. */
     private val skew: Duration = DEFAULT_SKEW,

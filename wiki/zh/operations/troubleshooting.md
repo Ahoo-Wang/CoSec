@@ -213,9 +213,9 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、大于 [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
-| `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
+| `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
 
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
 
@@ -313,6 +313,7 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `A WebFlux host needs cosec-webflux` | `cosec-webflux` |
 | `A Spring Cloud Gateway host needs cosec-gateway` | `cosec-gateway`；即使 `cosec.enabled=false` 也会检查，因为它的过滤器会剥离客户端的 `CoSec-Identity` 头 |
 | `cosec.api-key.store=redis needs cosec-cocache` | `cosec-cocache` 及其所需依赖（[模块](../guide/introduction.md#modules)），或改用 `store=memory` |
+| `cosec-cocache needs a CacheRuntime bean` | `me.ahoo.cocache:cocache-spring-boot-starter`（[模块](../guide/introduction.md#modules)） |
 | `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` 和 `spring-boot-starter-kafka`，或把 [`delivery`](./configuration.md#audit) 设为 `best-effort` |
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | 模块已在，但监听器没有创建：需要 `KafkaOperations` Bean（`spring-boot-starter-kafka` 及其 `spring.kafka.*` 配置）、`cosec.audit.enabled=true` 和 `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`，以及 `cosid-spring-boot-starter` 5.x 和它的 `cosid.*` 生成器；或者删除这个键，继续使用 CoSec 自己的 id |
@@ -456,11 +457,15 @@ Tokens are verified, but no revocation reader is available: add cosec-cocache or
 
 ### 路由映射导致启动失败 {#startup-fails-on-the-route-map}
 
+`classpath:cosec-routes.json exists but cosec.authorization.routes.location is not set, so it is not loaded: set it to classpath:cosec-routes.json, or to empty to run without a route map.`
+只有 [`cosec.authorization.routes.location`](./configuration.md#authorization) 指明时才加载路由映射，默认位置上的文件在配置项未设置时不会被加载，也不会有任何提示。把配置项设为该位置，或设为空，让每个请求都在 `http` 命名空间中授权。
+
 `The route map [<location>] (cosec.authorization.routes.location) does not exist; set the property empty to run without one.`
-WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不存在时启动失败。添加路由映射（actuator 端点
-`cosecServiceGenerator/routes` 可以从 OpenAPI 文档生成一份），把
-[`cosec.authorization.routes.location`](./configuration.md#authorization) 指向它，或者把该配置项设为空，让每个请求都在
-`http` 命名空间中授权。无法解析的路由映射同样使启动失败，并指出它的位置。
+配置项指向的位置没有文件。添加路由映射（actuator 端点 `cosecServiceGenerator/routes` 可以从 springdoc 扫描到的 OpenAPI 文档生成一份），或者修正配置项。
+
+无法解析或没有路由（`<location> $.routes: has no routes`）的路由映射同样使启动失败，并指出它的位置。
+
+启动日志会说明宿主加载了什么：每份映射一行 `Route map [<location>]: service [<service>], <n> routes.`，没有映射时是 `No route map: requests are authorized as http:<METHOD> on http:path:<path>.`
 
 ### 影子实例 id 导致启动失败 {#startup-fails-on-the-shadow-instance-id}
 

@@ -257,9 +257,9 @@ read as anonymous:
 
 | Status | Cause | Fix |
 |---|---|---|
-| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), is larger than [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
-| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
+| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 
@@ -380,6 +380,7 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `A WebFlux host needs cosec-webflux` | `cosec-webflux` |
 | `A Spring Cloud Gateway host needs cosec-gateway` | `cosec-gateway`; checked even with `cosec.enabled=false`, since its filter strips a client's `CoSec-Identity` header |
 | `cosec.api-key.store=redis needs cosec-cocache` | `cosec-cocache` with what it needs ([Modules](../guide/introduction.md#modules)), or use `store=memory` |
+| `cosec-cocache needs a CacheRuntime bean` | `me.ahoo.cocache:cocache-spring-boot-starter` ([Modules](../guide/introduction.md#modules)) |
 | `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` with `spring-boot-starter-kafka`, or set [`delivery`](./configuration.md#audit) to `best-effort` |
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | The module is there but the listener is not: a `KafkaOperations` bean (`spring-boot-starter-kafka` and its `spring.kafka.*` settings), `cosec.audit.enabled=true` and `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`, with `cosid-spring-boot-starter` 5.x and its `cosid.*` generators, or remove the key to keep CoSec's own ids |
@@ -549,11 +550,20 @@ secret on the issuer and on every service that verifies its tokens; the tokens s
 
 ### Startup fails on the route map
 
+`classpath:cosec-routes.json exists but cosec.authorization.routes.location is not set, so it is not loaded: set it to classpath:cosec-routes.json, or to empty to run without a route map.`
+A route map is loaded only when [`cosec.authorization.routes.location`](./configuration.md#authorization) names it, so a
+file at the default location with the property unset would be left out without a word. Set the property to that
+location, or to empty to authorize every request in the `http` namespace.
+
 `The route map [<location>] (cosec.authorization.routes.location) does not exist; set the property empty to run without one.`
-A WebFlux or WebMvc host loads `classpath:cosec-routes.json` by default, and fails when it is missing. Add the route
-map (the `cosecServiceGenerator/routes` actuator endpoint generates one from the OpenAPI document), point
-[`cosec.authorization.routes.location`](./configuration.md#authorization) at it, or set the property empty to authorize
-every request in the `http` namespace. A route map that does not parse fails startup too, naming its location.
+The property names a location with nothing there. Add the route map (the `cosecServiceGenerator/routes` actuator
+endpoint generates one from the OpenAPI document springdoc scans), or correct the property.
+
+A route map that does not parse, or has no routes (`<location> $.routes: has no routes`), fails startup too, naming its
+location.
+
+The startup log says what a host loaded: `Route map [<location>]: service [<service>], <n> routes.` for each map, or
+`No route map: requests are authorized as http:<METHOD> on http:path:<path>.`
 
 ### Startup fails on the shadow instance id
 

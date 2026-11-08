@@ -163,8 +163,8 @@ A route map (`cosec-routes.json`, loaded from `cosec.authorization.routes.locati
 ```
 
 `path` is an [HTTP path pattern](#http-paths). `resource` is a typed resource whose segments are literals or variables
-of `path`. A route map loads whole or not at all: a malformed route, or two routes of one method that the same request
-could match, fails startup. A captured value that holds `/` (a decoded `%2F`) would change the resource id's segments,
+of `path`. A route map loads whole or not at all: a map with no routes, a malformed route, or two routes of one method that the
+same request could match, fails startup. A captured value that holds `/` (a decoded `%2F`) would change the resource id's segments,
 so such a request is refused with `400`. A gateway loads no route map: its requests stay in the `http` namespace.
 `cosecServiceGenerator/routes` generates a route map from the service's OpenAPI document
 ([Role permissions](./role-permissions.md#generating-a-catalog-from-openapi)).
@@ -322,7 +322,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `scope.roles` | Set | The principal's roles in the request's space. |
 | `action.service`, `action.verb` | String | The two parts of the action. |
 | `resource.type`, `resource.id` | String | The two parts of the resource. |
-| `resource.attributes.<name>` | String | Attributes of a resource that code passes to a check. The request pipeline sets none. |
+| `resource.attributes.<name>` | String | Attributes of the resource. Neither the request pipeline nor the documented checks set any: an object-level rule puts its facts in the resource id ([Object-level rules](../integration/checks.md#object-level-rules)). |
 | `resource.var.<name>` | String | A [path variable](#path-variables). |
 | `environment.ip` | Ip | The client address ([Web integration](../integration/web.md)). |
 | `environment.time` | Instant | The request time; only `time` reads it. |

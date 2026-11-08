@@ -137,6 +137,19 @@ class RouteMapTest {
         matches("/orders/{id}", "/orders/1").assert().isTrue()
     }
 
+    @Test
+    fun `a route map with no routes does not load`() {
+        assertThrows<RouteMapException> { load("""{"service":"order","routes":[]}""") }.message.assert()
+            .contains("routes-0.json $.routes").contains("no routes")
+    }
+
+    @Test
+    fun `a route map with no routes fails the files beside it`() {
+        assertThrows<RouteMapException> {
+            load(file(route("GET", "/orders/{id}", "order:read", "order/{id}")), """{"service":"pay","routes":[]}""")
+        }.message.assert().contains("routes-1.json")
+    }
+
     @ParameterizedTest
     @CsvSource(
         delimiter = '|',

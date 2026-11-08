@@ -31,6 +31,33 @@ observability. This page is the single home of migration steps. Release notes fo
   its reclamation of that document stops. Stop the alpha.3 control-plane instances before starting this version's.
   Data-plane instances need no order: an alpha.3 instance only keeps writing the reports of ended shadow windows.
 
+- **Three groups of properties are renamed.** An old key fails startup as unknown:
+
+  | Old key | New key |
+  |---|---|
+  | `cosec.pipeline.gateway.max-age`, `cosec.pipeline.gateway.max-size` | `cosec.pipeline.identity.max-age`, `cosec.pipeline.identity.max-size` |
+  | `cosec.audit.required.timeout` | `cosec.observability.listener.required-timeout` |
+  | `cosec.authorization.cache.token.*` | `cosec.authentication.revocation.cache.*` |
+
+- **Route maps are opt-in.** `cosec.authorization.routes.location` is unset by default, and a host without it loads no
+  route map, so a WebFlux or Spring MVC service that has none needs no setting. A service that relies on
+  `classpath:cosec-routes.json` being read by default fails startup with a message that says what to do: set the
+  property to that location. A map with no routes no longer loads ([Route maps](../integration/web.md#route-maps)).
+- **`cosec.jwt.enabled` defaults to `false` with `cosec.pipeline.mode=gateway`.** A service behind a gateway that issues
+  tokens sets it to `true`; without it a `TokenConverter` is missing where one is injected. Nothing changes in `enforce` mode.
+- **`cosec:tenant-admin` also holds `cosec:skip-shadow`, on its own tenant's document only** (`CTL-27`), which widens
+  what a tenant administrator can do: it skips a window with a recorded reason, and a change that only narrows takes
+  a busy slot on that document. Grant analysis and approval are unchanged. To keep the old behaviour, bind a policy of
+  your own instead ([The control plane](../policies/testing.md#the-control-plane)).
+- **`cosec-cocache` without a `CacheRuntime` fails startup**, naming `me.ahoo.cocache:cocache-spring-boot-starter`. That
+  combination could not work: it ended in a misleading error or an instance that never became ready.
+- **The `cosecServiceGenerator` endpoint reads what springdoc scanned**, and needs `springdoc-openapi-starter-webflux-api`
+  or `-webmvc-api`. An `OpenAPI` bean alone no longer makes it generate; a scan that found no operation is an error
+  rather than an empty document.
+- **`AuthorizationChecker.decideAs` and `decide(security, app, action, resource)` are `@InternalCoSecApi`**: they are the
+  control plane's, and an application never opts in. Check as the request's own principal with `check` and `decide`
+  ([Checks in code](../integration/checks.md)).
+
 ## From 8.0.0-alpha.2 {#from-8-0-0-alpha-2}
 
 8.0.0-alpha.2 is a preview with no compatibility promise. These changes since then, from the
@@ -430,8 +457,8 @@ What is different, in short:
    [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
 5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
    new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
-   common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring
-   MVC host (set `cosec.authorization.routes.location` to a map, or empty), JWT without `cosec-cocache` and without a
+   common cases: a `classpath:cosec-routes.json` that `cosec.authorization.routes.location` does not name (set the
+   property to it, or to empty), JWT without `cosec-cocache` and without a
    revocation store of your own ([Token revocation is always on](#token-revocation-is-always-on)), and a Redis whose
    eviction policy is not `noeviction` or cannot be read
    ([Startup fails when Redis's eviction policy cannot be read](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)).
@@ -1092,7 +1119,7 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.authorization.cache.history.` | Removed. |
 | `cosec.authorization.cache.migration.` | Removed. |
 | `cosec.authorization.cache.token.concurrency-level` | Removed: ignored since CoCache 5. |
-| `cosec.authorization.cache.token.expire-after-write` | `cosec.authorization.cache.token.local-max-age`, a duration (`30s`). |
+| `cosec.authorization.cache.token.expire-after-write` | `cosec.authentication.revocation.cache.local-max-age`, a duration (`30s`). |
 | `cosec.authorization.cache.token.expire-unit` | Removed: the durations carry their unit. `expire-after-access` is a duration too; a bare number is still seconds. |
 | `cosec.authorization.gateway.enabled` | Removed: the gateway filter comes with `cosec-gateway`. |
 | `cosec.limiter.` | Removed: rate limit rules are in the platform document ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)); a different limiter key prefix needs a `RateLimiter` bean of your own. |
@@ -1102,20 +1129,20 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.api-key.store-blocking` | Removed. |
 | `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
 
-`cosec.authorization.cache.token.*` remains. `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix` are
+`cosec.authorization.cache.token.*` is now `cosec.authentication.revocation.cache.*`. `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix` are
 replaced by [`cosec.key-prefix`](./configuration.md#key-prefix), the prefix of every key a deployment writes.
 
 New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level, mode),
 `cosec.gateway.identity.*`, `cosec.unknown-properties`, `cosec.authorization.scope.app-id`,
 `cosec.authorization.{membership,attributes,rate-limit}.timeout`, `cosec.authorization.routes.location`,
-`cosec.authorization.snapshot.*`, `cosec.authorization.shadow.*`, `cosec.authentication.revocation.skew`,
-`cosec.audit.required.timeout`, `cosec.audit.kafka.delivery`, `cosec.observability.listener.*` and `cosec.control.*`.
+`cosec.authorization.snapshot.*`, `cosec.authorization.shadow.*`, `cosec.authentication.revocation.*`,
+`cosec.audit.kafka.delivery`, `cosec.observability.listener.*` and `cosec.control.*`.
 
 Two defaults need a decision during the upgrade:
 
-- `cosec.authorization.routes.location` defaults to `classpath:cosec-routes.json`. On a WebFlux or Spring MVC host a
-  missing map fails startup; set the property empty to run without one, in which case every request is an action of
-  the `http` namespace on its path. A gateway loads no route map.
+- `cosec.authorization.routes.location` is unset, and an unset host loads no route map: every request is an action of
+  the `http` namespace on its path. A host with a map names it; one left at `classpath:cosec-routes.json` with the
+  property unset fails startup. A gateway loads no route map.
 - `cosec.authorization.scope.app-id` is unset. Set it on a host that serves one app (rule C4).
 
 Two settings changed during the 8.0 previews:

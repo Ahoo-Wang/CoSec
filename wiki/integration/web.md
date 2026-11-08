@@ -114,7 +114,7 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
 
 A route map gives each route of a service an action and a typed resource, so policies speak of `order:read` on
 `order/42` rather than `GET /orders/42`. WebFlux and WebMvc hosts load the route maps listed in
-`cosec.authorization.routes.location` (default `classpath:cosec-routes.json`; a comma-separated list):
+`cosec.authorization.routes.location`, a comma-separated list; unset, a host loads none:
 
 ```json
 {
@@ -131,16 +131,18 @@ A route map gives each route of a service an action and a typed resource, so pol
 - A request no route matches keeps the action `http:<METHOD>` on the resource `http:path:<path>`. A statement on a
   `service:verb` action never covers it: no route falls back to a wildcard.
 - A route map loads whole or not at all. A location that does not exist, a malformed file (an unknown or missing
-  field, a repeated key, a value of the wrong type), a malformed route, or two routes one request could match (same
-  method, paths not provably disjoint) fails startup and names the location. Set the property to an empty value to
-  run without a route map on purpose.
+  field, a repeated key, a value of the wrong type), a file with no routes, a malformed route, or two routes one
+  request could match (same method, paths not provably disjoint) fails startup and names the location.
+- With the property unset the host loads no route map, unless `classpath:cosec-routes.json` exists: then startup
+  fails until the property names that file or is set to an empty value, which runs without a route map on purpose.
+  The startup log names each map loaded, its service and its route count, or says there is none.
 - A captured value that is empty or holds a `/` (a decoded `%2F`) cannot be a segment of a typed resource id: the
   request is refused with `400` `invalid-request`, never evaluated as another resource.
 
 A Spring Cloud Gateway host loads no route map: every gateway request is in the `http` namespace.
 
-With `cosec-openapi` and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a route map
-from the service's OpenAPI document, and `cosecServiceGenerator/app` the matching app document to publish through
+With `cosec-openapi`, springdoc and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a
+route map from the OpenAPI document springdoc scans, and `cosecServiceGenerator/app` the matching app document to publish through
 the control plane ([Role permissions](../policies/role-permissions.md)).
 
 ## Responses and status codes
@@ -480,15 +482,13 @@ other.
 ### Services behind the gateway
 
 A service behind the gateway sets `cosec.pipeline.mode=gateway` (the default is `enforce`). It needs only its web
-adapter (`cosec-webflux` or `cosec-webmvc`), and should set `cosec.jwt.enabled=false` unless it also issues
-tokens:
+adapter (`cosec-webflux` or `cosec-webmvc`). JWT is off in this mode; a service that also issues tokens sets
+`cosec.jwt.enabled=true`:
 
 ```yaml
 cosec:
   pipeline:
     mode: gateway
-  jwt:
-    enabled: false
 ```
 
 In this mode the adapter reads the forwarded identity through `IdentityGate`, and the starter wires no authenticator,
@@ -501,9 +501,9 @@ reach it**: how to enforce that, and the startup checks, are in
 |---|---|
 | No `CoSec-Identity` | Proceeds as the anonymous principal `(0)`; your code decides what it may see. |
 | A valid identity | Proceeds as that principal, in that scope. |
-| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.gateway.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
+| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
 | An unknown version, an `iat` in the future, or no `auth.exp` | `401` `token-invalid` |
-| `auth.exp` passed, or `iat` older than `cosec.pipeline.gateway.max-age` (60 seconds) | `401` `token-expired` |
+| `auth.exp` passed, or `iat` older than `cosec.pipeline.identity.max-age` (60 seconds) | `401` `token-expired` |
 
 The time checks allow `cosec.authentication.revocation.skew` (5 seconds) for the gateway's clock. The maximum age
 limits replaying a captured header inside the network: revocation is checked at the gateway only. The response

@@ -13,26 +13,9 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.core.StoreSpec
-import me.ahoo.cosec.api.CoSec
-import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.convert.DurationUnit
 import java.time.Duration
 import java.time.temporal.ChronoUnit
-
-/**
- * `cosec.authorization.cache.*`: the token revocation caches. The policy snapshot has its own properties
- * (`cosec.authorization.snapshot.*`); every cache's keys live under `cosec.key-prefix`.
- */
-@ConfigurationProperties(prefix = CacheProperties.PREFIX)
-class CacheProperties(
-    @NestedConfigurationProperty
-    var token: CacheConfiguration = CacheConfiguration(),
-) {
-    companion object {
-        const val PREFIX: String = CoSec.COSEC_PREFIX + "authorization.cache"
-    }
-}
 
 /**
  * Local (in-process) cache settings of the revocation caches, which they declare: `cocache.defaults.store.*` does not

@@ -182,8 +182,8 @@ see [Testing policies](./testing.md) and [Storage](../operations/storage.md).
 
 ## Generating a catalog from OpenAPI
 
-With `cosec-openapi`, the `cosecServiceGenerator` actuator endpoint generates both halves of a service's setup from
-its OpenAPI document:
+With `cosec-openapi` and springdoc, the `cosecServiceGenerator` actuator endpoint generates both halves of a service's
+setup from the OpenAPI document springdoc scans:
 
 - `cosecServiceGenerator/routes`: the [route map](./language.md#route-maps).
 - `cosecServiceGenerator/app`: the app document.

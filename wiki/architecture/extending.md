@@ -308,7 +308,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | Delivered | A failure |
 |---|---|---|
 | `BEST_EFFORT` (default) | Queued without suspending into the listener's own bounded queue, handled off the request path. A full queue drops the event. | Logged and counted; the response is unchanged. |
-| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.audit.required.timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
+| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.observability.listener.required-timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
 
 - A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
 - A REQUIRED listener should be idempotent by `event.id`: a write that timed out may still have succeeded.
@@ -464,12 +464,12 @@ service's terms. Mapped requests get the route's action; every other request kee
 }
 ```
 
-- The starter loads the route maps listed in `cosec.authorization.routes.location` (default
-  `classpath:cosec-routes.json`, comma-separated) at startup. A missing or invalid map, or two routes one request could
-  match, fails startup. That includes the default location: a WebFlux or WebMvc service without a route map sets the
-  property empty. A gateway host loads none.
-- With `cosec-openapi` and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both documents from
-  the service's OpenAPI description: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
+- The starter loads the route maps listed in `cosec.authorization.routes.location` (comma-separated) at startup. A
+  missing or invalid map, a map with no routes, or two routes one request could match, fails startup. Unset, the
+  service loads none, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is
+  set empty. A gateway host loads none.
+- With `cosec-openapi`, springdoc and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both
+  documents from the OpenAPI document springdoc scans: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
   (catalog and permission policies) to publish through the control plane.
 
 The file is read strictly: an unknown or missing field fails it

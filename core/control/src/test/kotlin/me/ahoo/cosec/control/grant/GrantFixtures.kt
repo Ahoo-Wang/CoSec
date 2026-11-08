@@ -126,5 +126,6 @@ internal object GrantFixtures {
             listOf("doc/tenant/{t}/**", "scope/{t}/**"),
             eqAttr("resource.var.t", "subject.tenant"),
         ),
+        allow(listOf("cosec:skip-shadow"), listOf("doc/tenant/{t}"), eqAttr("resource.var.t", "subject.tenant")),
     )
 }

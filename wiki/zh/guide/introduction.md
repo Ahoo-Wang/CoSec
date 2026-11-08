@@ -78,7 +78,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 通过 OAuth 社交登录 | `cosec-social` | |
 | 每次决策一个追踪 span | `cosec-opentelemetry` | |
 | 按结果统计的每次决策计时器 | `cosec-micrometer` | `io.micrometer:micrometer-core` |
-| 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-common` |
+| 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-webflux-api` 或 `-webmvc-api` |
 | 把决策事件（以及可选的控制面变更）发送到 Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
 | 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |

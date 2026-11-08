@@ -250,7 +250,7 @@ revoke. `TokenRevoker` is synchronous: call it off the event loop.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 
-- **"Not revoked" is cached locally for 30 seconds** (`cosec.authorization.cache.token.*`). A revocation through
+- **"Not revoked" is cached locally for 30 seconds** (`cosec.authentication.revocation.cache.*`). A revocation through
   `TokenRevoker` invalidates that answer on every instance at once. If the invalidation message is lost, or the
   revocation is written to Redis some other way, an instance may accept the token for up to 30 seconds more.
 - **A degraded read counts as "not revoked".** When Redis cannot be read, the revocation caches answer as for a

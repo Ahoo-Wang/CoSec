@@ -61,7 +61,7 @@ private val log = KotlinLogging.logger {}
  */
 class DecisionListeners(
     listeners: List<DecisionListener>,
-    /** `cosec.audit.required.timeout`: how long one REQUIRED listener may take. */
+    /** `cosec.observability.listener.required-timeout`: how long one REQUIRED listener may take. */
     val requiredTimeout: Duration = 1.seconds,
     /** `cosec.observability.listener.queue-capacity`: the events one BEST_EFFORT listener may have waiting. */
     queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,

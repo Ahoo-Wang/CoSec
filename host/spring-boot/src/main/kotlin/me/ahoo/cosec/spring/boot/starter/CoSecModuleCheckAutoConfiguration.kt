@@ -21,6 +21,7 @@ import me.ahoo.cosec.spring.boot.starter.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -28,6 +29,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
 import org.springframework.util.ClassUtils
 
 /**
@@ -35,8 +37,12 @@ import org.springframework.util.ClassUtils
  * would silently turn a protection off: no filter on a web host, a gateway that passes a client's `CoSec-Identity` on,
  * API keys with no store, a required audit with no listener. Each check here runs under the conditions of the feature
  * that needs the module, and fails startup naming the artifact to add. A module no feature needs may be missing.
+ *
+ * First of the auto-configurations, so that the bean a missing module would have made does not fail first with a
+ * message about something else.
  */
 @AutoConfiguration
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
 class CoSecModuleCheckAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
@@ -128,7 +134,8 @@ class CoSecModuleCheckAutoConfiguration {
 
     /**
      * `cosec-cocache` keeps snapshots, revocations, rate limits and API keys in Redis: without a Redis connection the
-     * rate limiter would fall back to one count per instance, and no snapshot could be read.
+     * rate limiter would fall back to one count per instance, and no snapshot could be read. Its caches are made by
+     * CoCache's starter: without a `CacheRuntime`, snapshots would fall back to an empty store that never gets ready.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
@@ -143,11 +150,22 @@ class CoSecModuleCheckAutoConfiguration {
                     "spring-boot-data-redis to the application's dependencies and configure Redis (STA-1)."
             }
         }
+
+        @Bean
+        fun cosecCoCacheStarterCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+            val present = ClassUtils.isPresent(CACHE_RUNTIME, context.classLoader) &&
+                context.getBeanNamesForType(ClassUtils.forName(CACHE_RUNTIME, context.classLoader)).isNotEmpty()
+            check(present) {
+                "cosec-cocache needs a CacheRuntime bean: add me.ahoo.cocache:cocache-spring-boot-starter to the " +
+                    "application's dependencies (STA-1)."
+            }
+        }
     }
 
     companion object {
         private const val COCACHE_MARKER = "me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore"
         private const val REACTIVE_REDIS_TEMPLATE = "org.springframework.data.redis.core.ReactiveStringRedisTemplate"
+        private const val CACHE_RUNTIME = "me.ahoo.cocache.core.CacheRuntime"
 
         fun requireModule(
             context: ApplicationContext,

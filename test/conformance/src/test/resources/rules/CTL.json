@@ -299,6 +299,18 @@
         "cocache:ConditionalRemovalTest#a lease another instance took after it was read is not released - lease race"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-27",
+      "source": "RFC 0007 §7.3, 2026-11-07 decision (usability review U10)",
+      "statement": "The built-in cosec:tenant-admin holds cosec:skip-shadow on its own tenant's document only: an administrator of a tenant skips the shadow window of that tenant's document, and the policy gives no one a skip on another tenant's document, not even a platform principal it is bound to.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#a tenant admin skips the window of its own tenant's document",
+        "control:ControlAuthorizationTest#a tenant admin who skips the window still waits for approval of what the analysis cannot prove",
+        "control:ControlAuthorizationTest#tenant admin held by a platform principal does not skip a tenant's window"
+      ],
+      "pending": null
     }
   ]
 }

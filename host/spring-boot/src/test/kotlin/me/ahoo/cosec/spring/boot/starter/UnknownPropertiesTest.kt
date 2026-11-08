@@ -16,6 +16,8 @@ package me.ahoo.cosec.spring.boot.starter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
@@ -83,10 +85,38 @@ class UnknownPropertiesTest {
             )
             message.assert().contains("cosec.limiter.enabled -> removed")
             message.assert().contains(
-                "cosec.authorization.cache.token.expire-after-write -> cosec.authorization.cache.token.local-max-age"
+                "cosec.authorization.cache.token.expire-after-write -> cosec.authentication.revocation.cache.local-max-age"
             )
             message.assert().contains("cosec.authorization.cache.token.expire-unit -> removed")
         }
+    }
+
+    /** U11: a key the rename left behind would silently stop doing what it says. */
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "cosec.pipeline.gateway.max-age=30s",
+            "cosec.pipeline.gateway.max-size=4KB",
+            "cosec.audit.required.timeout=2s",
+            "cosec.authorization.cache.token.local-max-age=10s",
+            "cosec.authorization.cache.token.maximum-size=10",
+        ],
+    )
+    fun `a renamed key fails startup`(key: String) {
+        runner.withPropertyValues(key).run { context ->
+            context.startupFailure!!.messages().assert().contains(key.substringBefore('='))
+        }
+    }
+
+    @Test
+    fun `the new names of the renamed keys are known`() {
+        runner.withPropertyValues(
+            "cosec.pipeline.identity.max-age=30s",
+            "cosec.pipeline.identity.max-size=4KB",
+            "cosec.observability.listener.required-timeout=2s",
+            "cosec.authentication.revocation.cache.local-max-age=10s",
+            "cosec.authentication.revocation.cache.maximum-size=10",
+        ).run { context -> context.startupFailure.assert().isNull() }
     }
 
     @Test

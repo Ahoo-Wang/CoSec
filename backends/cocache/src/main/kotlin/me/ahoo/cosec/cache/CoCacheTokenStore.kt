@@ -26,7 +26,7 @@ import java.time.Instant
  * so revocation is shared across instances.
  *
  * Local hits cost no network; cross-instance propagation is bounded by the
- * local cache TTL (default 30 seconds, `cosec.authorization.cache.token.*`).
+ * local cache TTL (default 30 seconds, `cosec.authentication.revocation.cache.*`).
  *
  * Revoking all tokens of a principal ([revokeSubject]) needs [subjectCache]; without it, it throws.
  *

@@ -62,7 +62,7 @@ Every other setting has a working default; all of them are listed in
 [Configuration](../operations/configuration.md). Two of the defaults matter for this guide:
 
 - the policy documents are read from Redis under the key prefix `cosec`, the one `cosec-migrate` writes to;
-- the route map is read from `classpath:cosec-routes.json`, and a missing file fails startup. You add it next.
+- no route map is loaded until a property names one, so a request is `http:<METHOD>` on its path. You add one next.
 
 ## Map routes to actions
 
@@ -79,9 +79,18 @@ instead of repeating paths. `src/main/resources/cosec-routes.json`:
 }
 ```
 
+Name it in `application.yaml`:
+
+```yaml
+cosec:
+  authorization:
+    routes:
+      location: classpath:cosec-routes.json
+```
+
 `GET /orders/42` is now the action `order:read` on the resource `order/42`. A request that no route matches keeps
-the action `http:<METHOD>` on its path: `GET /hello` is `http:GET` on `http:path:/hello`. To run without a route
-map, set `cosec.authorization.routes.location` to an empty value; every request is then in the `http` namespace.
+the action `http:<METHOD>` on its path: `GET /hello` is `http:GET` on `http:path:/hello`. A service without a route
+map leaves the file out and the property unset: every request is then in the `http` namespace.
 The format and its rules are in [Route maps](../integration/web.md#route-maps).
 
 ## Write a first policy

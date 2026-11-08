@@ -17,7 +17,9 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheConfiguration
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.core.env.Environment
 import org.springframework.util.unit.DataSize
@@ -44,12 +46,12 @@ class PipelineProperties {
     /** `enforce` decides with policies; `gateway` trusts the identity the gateway in front forwards (`CoSec-Identity`). */
     var mode: Mode = Mode.ENFORCE
 
-    /** `cosec.pipeline.gateway.*`: how a service behind a gateway reads the forwarded identity. */
-    val gateway = Gateway()
+    /** `cosec.pipeline.identity.*`: how a service behind a gateway reads the identity forwarded to it. */
+    val identity = Identity()
 
     enum class Mode { ENFORCE, GATEWAY }
 
-    class Gateway {
+    class Identity {
         /** An identity older than this (plus `cosec.authentication.revocation.skew`) is refused: 401 `token-expired`. */
         var maxAge: Duration = Duration.ofSeconds(60)
 
@@ -151,11 +153,12 @@ class RuntimeAuthorizationProperties {
 
     class Routes {
         /**
-         * The route maps WebFlux and WebMvc hosts load (RFC 0005 §5.3), comma-separated resource locations. A location
-         * that does not exist fails startup: without a map every request falls into the `http` namespace. Set it empty
-         * to run without a route map on purpose.
+         * The route maps WebFlux and WebMvc hosts load (RFC 0005 §5.3), comma-separated resource locations; a location
+         * that does not exist, or a map with no routes, fails startup. Unset, the host runs without a route map, every
+         * request in the `http` namespace, unless [DEFAULT_LOCATION] exists: then startup fails, so that a map someone
+         * shipped is never left out without a word. Empty runs without a route map on purpose.
          */
-        var location: String = DEFAULT_LOCATION
+        var location: String? = null
 
         companion object {
             const val DEFAULT_LOCATION = "classpath:cosec-routes.json"
@@ -241,24 +244,21 @@ class RevocationProperties {
     /** How much earlier than a subject revocation a token may have been issued and still be revoked by it. */
     var skew: Duration = Duration.ofSeconds(5)
 
+    /** The local tier of the token and subject revocation caches. */
+    @NestedConfigurationProperty
+    var cache: CacheConfiguration = CacheConfiguration()
+
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authentication.revocation"
     }
 }
 
-/** `cosec.audit.required.*` (RFC 0006 X8): how long a REQUIRED decision listener may take. */
-@ConfigurationProperties(prefix = RequiredListenerProperties.PREFIX)
-class RequiredListenerProperties {
-    var timeout: Duration = Duration.ofSeconds(1)
-
-    companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "audit.required"
-    }
-}
-
-/** `cosec.observability.listener.*` (RFC 0006 X8): the queues of the BEST_EFFORT decision listeners. */
+/** `cosec.observability.listener.*` (RFC 0006 X8): the bound on REQUIRED decision listeners, the queues of BEST_EFFORT ones. */
 @ConfigurationProperties(prefix = ListenerProperties.PREFIX)
 class ListenerProperties {
+    /** How long one REQUIRED listener may take; past it a permit becomes 503. */
+    var requiredTimeout: Duration = Duration.ofSeconds(1)
+
     /** The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it. */
     var queueCapacity: Int = DecisionListeners.DEFAULT_QUEUE_CAPACITY
 

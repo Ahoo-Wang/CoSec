@@ -14,6 +14,9 @@
 package me.ahoo.cosec.spring.boot.starter
 
 import io.mockk.mockk
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -29,12 +32,16 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 class CoSecModuleCheckAutoConfigurationTest {
     private val config = AutoConfigurations.of(CoSecModuleCheckAutoConfiguration::class.java)
     private val redis = { mockk<ReactiveStringRedisTemplate>(relaxed = true) }
+    private val runtime = { mockk<CacheRuntime>(relaxed = true) }
     private val plain = ApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
+        .withBean(CacheRuntime::class.java, runtime)
     private val servlet = WebApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
+        .withBean(CacheRuntime::class.java, runtime)
     private val reactive = ReactiveWebApplicationContextRunner().withConfiguration(config)
         .withBean(ReactiveStringRedisTemplate::class.java, redis)
+        .withBean(CacheRuntime::class.java, runtime)
 
     private fun failsNaming(runner: AbstractApplicationContextRunner<*, *, *>, artifact: String) {
         runner.run { context ->
@@ -155,6 +162,54 @@ class CoSecModuleCheckAutoConfigurationTest {
             generateSequence(failure) { it.cause }.any { "spring-boot-data-redis" in it.message.orEmpty() }
                 .assert().describedAs(failure.toString()).isTrue()
         }
+    }
+
+    private fun failsNamingTheStarter(runner: ApplicationContextRunner) {
+        runner.run { context ->
+            val failure = context.startupFailure
+            failure.assert().isNotNull()
+            generateSequence(
+                failure
+            ) { it.cause }.any { "me.ahoo.cocache:cocache-spring-boot-starter" in it.message.orEmpty() }
+                .assert().describedAs(failure.toString()).isTrue()
+        }
+    }
+
+    @Test
+    fun `cosec-cocache without a CacheRuntime fails startup naming the CoCache starter`() {
+        failsNamingTheStarter(
+            ApplicationContextRunner().withConfiguration(
+                config
+            ).withBean(ReactiveStringRedisTemplate::class.java, redis)
+        )
+    }
+
+    /** With JWT on, the token store that needs a cache would otherwise fail first, asking for the module already there. */
+    @Test
+    fun `the check comes before the beans that need a CacheRuntime`() {
+        failsNamingTheStarter(
+            ApplicationContextRunner()
+                .withConfiguration(
+                    AutoConfigurations.of(
+                        CoSecModuleCheckAutoConfiguration::class.java,
+                        CoSecTokenRevocationCacheAutoConfiguration::class.java,
+                        CoSecJwtAutoConfiguration::class.java,
+                    )
+                )
+                .withPropertyValues("cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_")
+                .withBean(ReactiveStringRedisTemplate::class.java, redis)
+        )
+    }
+
+    @Test
+    fun `with CoSec off, or without cosec-cocache, no CacheRuntime is needed`() {
+        val noRuntime = ApplicationContextRunner().withConfiguration(
+            config
+        ).withBean(ReactiveStringRedisTemplate::class.java, redis)
+        starts(noRuntime.withPropertyValues("cosec.enabled=false"))
+        starts(
+            noRuntime.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore"))
+        )
     }
 
     @Test
