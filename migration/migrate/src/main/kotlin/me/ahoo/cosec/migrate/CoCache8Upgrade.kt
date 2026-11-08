@@ -159,22 +159,30 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
                 return
             }
             val encodedKey = storageKey.removePrefix("$path:")
-            val value = raw[STATE_INDEX] == CoCache6Format.STATE_VALUE
-            val payload = raw.copyOfRange(CoCache6Format.HEADER_SIZE, raw.size)
-            if (value && cacheName == CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME && encodedKey == OPEN_CHANGES) {
-                openChanges(storageKey, payload)
+            if (raw[STATE_INDEX] == CoCache6Format.STATE_VALUE) {
+                value(cacheName, storageKey, encodedKey, raw.copyOfRange(CoCache6Format.HEADER_SIZE, raw.size))
+            } else {
+                // A cached absence or a load lease: no value, nothing to keep.
+                deletions.getOrPut(cacheName) { ArrayList() } += storageKey
             }
-            if (value && cacheName in REVOCATIONS) {
+        }
+
+        /** Files the CoCache 6 value [payload] stored under [storageKey]. */
+        private fun value(cacheName: String, storageKey: String, encodedKey: String, payload: ByteArray) {
+            if (cacheName in REVOCATIONS) {
                 // Written again over the old value, never deleted.
                 revocation(cacheName, storageKey, encodedKey, payload, refusals)?.let { revocations += it }
                 return
             }
             deletions.getOrPut(cacheName) { ArrayList() } += storageKey
-            if (value && cacheName == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) {
-                document(storageKey, encodedKey, payload, refusals)?.let { documents[encodedKey] = it }
-            }
-            if (value && cacheName in PENDING) {
-                pending += storageKey
+            when {
+                cacheName == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME ->
+                    document(storageKey, encodedKey, payload, refusals)?.let { documents[encodedKey] = it }
+
+                cacheName in PENDING -> pending += storageKey
+
+                cacheName == CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME && encodedKey == OPEN_CHANGES ->
+                    openChanges(storageKey, payload)
             }
         }
 
@@ -222,7 +230,10 @@ class CoCache8Upgrade(private val redis: RawRedis, private val keyPrefix: String
     fun unfinished(): Unfinished? {
         val marker = redis.get(markerKey(keyPrefix)) ?: return null
         val tree = reader.readTree(marker)
-        return Unfinished(tree.get(OUT).asString(), tree.get(DOCUMENTS).iterator().asSequence().map { it.asString() }.toList())
+        return Unfinished(
+            tree.get(OUT).asString(),
+            tree.get(DOCUMENTS).iterator().asSequence().map { it.asString() }.toList()
+        )
     }
 
     /**

@@ -225,7 +225,11 @@ class CoCache8UpgradeTest {
         val failure = cocache8Store { factory, store ->
             // The connection drops while the tenant document is published.
             val failing = object : ControlStore by store {
-                override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument): HeadWrite {
+                override suspend fun putHead(
+                    key: SnapshotKey,
+                    expected: SnapshotDigest?,
+                    document: SnapshotDocument
+                ): HeadWrite {
                     if (key is SnapshotKey.Tenant) error("connection lost")
                     return store.putHead(key, expected, document)
                 }

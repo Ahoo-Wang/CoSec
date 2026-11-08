@@ -20,8 +20,6 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.ScanArgs
 import io.lettuce.core.ScanCursor
 import io.lettuce.core.api.sync.RedisCommands
-import io.lettuce.core.api.sync.RedisKeyCommands
-import io.lettuce.core.api.sync.RedisStringCommands
 import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.codec.ByteArrayCodec
 import kotlinx.coroutines.runBlocking
@@ -285,7 +283,12 @@ object MigrateMain {
         } catch (error: PublishException) {
             out.println("Failed: ${error.message}")
             out.println(
-                "Finish with: ${CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, input.toAbsolutePath().toString())}"
+                "Finish with: ${CoCache8Upgrade.resumeCommand(
+                    uri,
+                    keyPrefix,
+                    cluster,
+                    input.toAbsolutePath().toString()
+                )}"
             )
             return FAILED
         }
@@ -515,7 +518,9 @@ object MigrateMain {
         }
         val resume = CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, output.toAbsolutePath().toString())
         if (plan.documents.isNotEmpty()) {
-            out.println("Writing the documents to $output first. If this run stops after it deleted them, finish with: $resume")
+            out.println(
+                "Writing the documents to $output first. If this run stops after it deleted them, finish with: $resume"
+            )
         }
         val published = try {
             rawRedis(uri, cluster) { redis ->
@@ -528,7 +533,9 @@ object MigrateMain {
         } catch (error: Exception) {
             out.println("FAILED ${error.message}")
             if (plan.documents.isNotEmpty()) {
-                out.println("Do not run cocache8 again to finish: it cannot see the documents it deleted. Finish with: $resume")
+                out.println(
+                    "Do not run cocache8 again to finish: it cannot see the documents it deleted. Finish with: $resume"
+                )
             }
             return FAILED
         }
@@ -561,5 +568,4 @@ object MigrateMain {
             client.shutdown()
         }
     }
-
 }
