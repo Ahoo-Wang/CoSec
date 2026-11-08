@@ -77,7 +77,8 @@ class StoredFormatTest {
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
      * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780. `revisionIndex` is
      * the exception: its digests became CoCache 8's SHA-256 with the algorithm (`SHA-256:<hex>`), which replaced the
-     * SHA-1 hex digests of CoCache 6.
+     * SHA-1 hex digests of CoCache 6. `referrers` is new with #1207: each referrer with the revision that indexed it,
+     * where `main` wrote a set of keys.
      */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
@@ -261,10 +262,6 @@ class StoredFormatTest {
             ReferrersCodec::encode,
             ReferrersCodec::decode,
             fixture("referrers")
-        )
-        // The set earlier builds wrote still reads, each member at revision 0.
-        ReferrersCodec.decode(fixture("keys").encodeToByteArray()).assert().isEqualTo(
-            mapOf(SnapshotKey.App("order") to 0L, SnapshotKey.Platform to 0L, SnapshotKey.Tenant("b") to 0L)
         )
         pinned(
             "listed",

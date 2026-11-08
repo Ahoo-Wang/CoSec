@@ -921,7 +921,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 	public fun cosecCandidateSource (Lme/ahoo/cocache/core/CoCacheFactory;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/snapshot/PlatformCompiler;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/ahoo/cosec/runtime/shadow/CandidateSource;
 	public fun cosecShadowListener (Lme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)Lme/ahoo/cosec/runtime/event/ShadowListener;
 	public fun cosecShadowRecorder (Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;
-	public fun cosecShadowReporting (Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting;
+	public fun cosecShadowReporting (Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/runtime/shadow/CandidateSource;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting;
 	public fun cosecShadowReports (Lme/ahoo/cocache/core/CoCacheFactory;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;
 }
 

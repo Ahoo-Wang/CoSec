@@ -139,7 +139,7 @@ class CoCacheControlStoreTest {
                         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
                         ReferenceKeyEncoder
                     )
-                ).put(ReferenceKey(SnapshotKey.Platform, shared), """["app:a\u0001b"]""".encodeToByteArray())
+                ).put(ReferenceKey(SnapshotKey.Platform, shared), """{"app:a\u0001b":1}""".encodeToByteArray())
             }
             val logged = ListAppender<ILoggingEvent>().apply { start() }
             val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
@@ -492,8 +492,6 @@ class CoCacheControlStoreTest {
         ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
         ReferrersCodec.encode(referrers).decodeToString().assert()
             .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
-        // The array of keys earlier builds wrote: every member at revision 0.
-        ReferrersCodec.decode("""["tenant:b"]""".encodeToByteArray()).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
         listOf(
             "",
             "[]",
@@ -517,9 +515,7 @@ class CoCacheControlStoreTest {
         listOf(
             "1",
             "\"tenant:b\"",
-            """["policies"]""",
-            """["tenant:a:b"]""",
-            "[1]",
+            """["tenant:b"]""",
             """{"policies":1}""",
             """{"tenant:b":-1}""",
             """{"tenant:b":"1"}""",

@@ -73,6 +73,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   `cosecSnapshotEviction` 在 Redis 可能驱逐快照时为 `DOWN`，每个 `revalidate-interval` 读一次；读不到策略时，
   `eviction-check: fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`。它是告警：`cosecSnapshot` 不变，
   只有它属于就绪组。
+- **控制面的正确性**（审计批次 E2a：#1205、#1206、#1207、#1210、#1226、#1227）。修订 diff 的 `sections` 按内容比较目录、限制、属性、边界和限流规则：同 id 的规则改了额度也算变化。`POST /analyze` 只列出能在所查询租户生效的绑定，所以平台中给别的租户的主体或角色的绑定不再列出。候选撤回、最后一次报告写入之后，实例忘掉这个影子窗口。代码方面：自己实现的 `ControlStore` 要实现 `withdrawCandidate(key, window)`（`putCandidate` 只接受候选，不再接受 `null`）、带每个引用方修订的 `referrers` 与 `putReferrers`（`Map<SnapshotKey, Long>`），并保存 `RevisionIndex.reclaiming`；`releaseLease` 必须在一步中检查并删除（[扩展](../architecture/extending.md#control-store)）。`ShadowRecorder.record` 的第一个参数是窗口的文档，`forget` 接受它最后一次报告计入的样本数，`ShadowReporter` 接受它读取已结束窗口所用的 `CandidateStore`。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
 
 ### 经 CoCache 6 写入的数据 {#data-written-through-cocache-6}

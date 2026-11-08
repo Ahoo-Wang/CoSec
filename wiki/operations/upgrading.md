@@ -269,6 +269,16 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `DOWN` while Redis may evict the snapshot, read every `revalidate-interval`; a policy it cannot read is `DOWN` under
   `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`. It is an alert: `cosecSnapshot` does not
   change, and only it belongs in the readiness group.
+- **Control-plane correctness** (audit batch E2a: #1205, #1206, #1207, #1210, #1226, #1227). A revision diff's
+  `sections` compares the catalog, limits, attributes, boundary and rate limits by their content: a rule of the same id
+  with another quota is a change. `POST /analyze` lists only the bindings that can apply in the tenant asked about, so a
+  platform binding of another tenant's principal or role is no longer listed. An instance forgets a shadow window
+  once its candidate is withdrawn and its last report is written. In code: a `ControlStore` of your own implements
+  `withdrawCandidate(key, window)` (`putCandidate` takes a candidate, no longer `null`), `referrers` and
+  `putReferrers` with each referrer's revision (`Map<SnapshotKey, Long>`), and keeps `RevisionIndex.reclaiming`;
+  `releaseLease` must check and remove in one step ([Extending](../architecture/extending.md#control-store)).
+  `ShadowRecorder.record` takes the window's document first, `forget` takes the samples its last report counted, and
+  `ShadowReporter` takes the `CandidateStore` it reads ended windows from.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

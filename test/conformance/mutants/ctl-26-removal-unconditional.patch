@@ -1,0 +1,18 @@
+# Rule: CTL-26
+# Mutant: the Redis store reads a candidate or lease, then deletes the key unconditionally, so a candidate staged or a lease taken by another instance in between is removed
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.control.ConditionalRemovalTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt
+index b0e02f08..46c0478e 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt
+@@ -254,7 +254,8 @@ class CoCacheControlStore internal constructor(
+                 return false
+             }
+             val deleted = try {
+-                store.async().deleteIfMatch(key, cocacheDigest(digest)).await()
++                store.async().delete(key).await()
++                ConditionalDelete.Deleted
+             } catch (error: CacheWriteException) {
+                 if (!error.outcomeUnknown) throw error
+                 val after = read(store, key) ?: return true

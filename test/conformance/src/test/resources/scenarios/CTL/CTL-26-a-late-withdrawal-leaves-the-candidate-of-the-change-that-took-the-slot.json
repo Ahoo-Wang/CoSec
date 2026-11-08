@@ -1,0 +1,79 @@
+{
+  "rules": [
+    "CTL-26"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 shadows tenant acme and is abandoned; its withdrawal of its candidate waits until c2 has taken the free slot and staged its own candidate. The withdrawal leaves c2's candidate: the data plane goes on sampling c2's window.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "write",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "late": {
+        "abandon": "c1"
+      }
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "staged": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "SHADOWING",
+      "ABANDONED",
+      "SHADOWING",
+      "staged c2"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

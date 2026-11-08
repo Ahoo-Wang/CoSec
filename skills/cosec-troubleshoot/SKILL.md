@@ -31,7 +31,7 @@ To see why without reproducing traffic, use the control plane (needs `cosec-cont
 `POST /cosec/control/v1/explain` with
 `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "policies": [], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42", "remoteIp": "10.0.0.1"}}`
 returns the decision and its trace; `POST /analyze` with a `query` (`tenant`, `app`, `space`, `action`, `resource`)
-lists the bindings that could permit or deny. External attributes are not fetched there, so a statement reading one is
+lists the bindings that could permit or deny in that tenant (another tenant's principals and roles are left out). External attributes are not fetched there, so a statement reading one is
 Indeterminate in an explanation.
 
 ## Interpret the status
