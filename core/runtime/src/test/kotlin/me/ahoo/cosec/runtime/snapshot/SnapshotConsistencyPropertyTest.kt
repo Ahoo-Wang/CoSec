@@ -55,7 +55,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * P7 (RFC 0003 §8.4, `SNP-1`): every evaluation reads one revision of each document. Every statement of a document is
@@ -103,8 +102,7 @@ class SnapshotConsistencyPropertyTest {
 
     private val request = FlatRequest(
         AuthzRequest(
-            subject = Subject("user", TENANT.value, true, emptySet(), emptySet(), emptyMap(), false, true, true),
-            scope = DeclaredRequestScope.declared(TENANT.value, "", ""),
+            subject = Subject("user", TENANT.value, true, emptyMap(), true, true),
             action = Action("http", "GET"),
             resource = Resource("http", "/x", emptyMap()),
             environment = Environment("127.0.0.1", "request", "", false),

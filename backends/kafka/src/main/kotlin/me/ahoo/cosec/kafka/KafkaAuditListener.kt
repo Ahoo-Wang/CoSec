@@ -34,7 +34,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Writes each decision event to [topic] as its audit record (RFC 0006 §9.5.3): the key is `[tenantId, principalId]`
- * and the value the audit event's JSON, as `KafkaAuditEventSink` writes them.
+ * and the value the audit event's JSON.
  *
  * - [Delivery.BEST_EFFORT] (`cosec.audit.kafka.delivery=best-effort`, the default): the pipeline's bounded queue drops
  *   events while Kafka falls behind; a failed send is logged.

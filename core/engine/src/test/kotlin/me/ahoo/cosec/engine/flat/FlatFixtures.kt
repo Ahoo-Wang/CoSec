@@ -278,9 +278,9 @@ fun flatRequest(
     val scope = (resolution as ScopeResolution.Resolved).scope
     val base = request(blocked = blocked)
     val subject =
-        Subject(principal, tenant, authenticated, emptySet(), emptySet(), emptyMap(), false, principalBindings, breakGlass)
+        Subject(principal, tenant, authenticated, emptyMap(), principalBindings, breakGlass)
     val resource = Resource("http", path, emptyMap())
-    val authz = AuthzRequest(subject, base.scope, base.action, resource, base.environment)
+    val authz = AuthzRequest(subject, base.action, resource, base.environment)
     return FlatRequest(authz, scope, memberships, time, Probes)
 }
 

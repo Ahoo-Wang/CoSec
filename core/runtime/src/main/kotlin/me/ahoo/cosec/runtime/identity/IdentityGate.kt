@@ -28,7 +28,6 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.DeclaredScope
-import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
@@ -50,7 +49,6 @@ import me.ahoo.cosec.spi.identity.IdentityFormatException
 import java.time.Clock
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
 
@@ -149,7 +147,7 @@ class IdentityGate(
         val subject = ScopeSubject(TenantId.DEFAULT, false, memberships)
         val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), facts.host)
         val scope = (resolution as ScopeResolution.Resolved).scope
-        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, scope, requestId, facts))
+        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, requestId, facts))
     }
 
     /** The principal the gateway verified, in the scope it decided in; null when that scope does not resolve here. */
@@ -179,21 +177,17 @@ class IdentityGate(
             identity.subject,
             identity.tenant,
             true,
-            emptySet(),
-            emptySet(),
             identity.claims,
-            false,
             principal.principalBindings,
             principal.breakGlass,
         )
-        val request = request(subject, scope, requestId, facts)
+        val request = request(subject, requestId, facts)
         return RequestSecurity(requestId, principal, scope, memberships, request, identity = identity)
     }
 
-    private fun request(subject: Subject, scope: Scope, requestId: String, facts: HttpFacts) =
+    private fun request(subject: Subject, requestId: String, facts: HttpFacts) =
         AuthzRequest(
             subject = subject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = Action("http", facts.method),
             resource = Resource("http", facts.rawPath, emptyMap()),
             environment = Environment(facts.remoteAddress, requestId, "", false),
@@ -207,10 +201,7 @@ class IdentityGate(
             CoSecPrincipal.ANONYMOUS_ID,
             TenantId.DEFAULT.value,
             false,
-            emptySet(),
-            emptySet(),
             emptyMap(),
-            false,
             false,
             false,
         )

@@ -496,28 +496,6 @@ public final class me/ahoo/cosec/runtime/authn/TokenAuthenticator$Companion {
 	public final fun getRESERVED_ATTRIBUTES ()Ljava/util/Set;
 }
 
-public final class me/ahoo/cosec/runtime/context/SimpleSecurityContext : me/ahoo/cosec/api/context/SecurityContext {
-	public static final field Companion Lme/ahoo/cosec/runtime/context/SimpleSecurityContext$Companion;
-	public fun <init> (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Lme/ahoo/cosec/api/tenant/Tenant;Ljava/util/Map;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Lme/ahoo/cosec/api/tenant/Tenant;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getAttributeValue (Ljava/lang/String;)Ljava/lang/Object;
-	public fun getAttributes ()Ljava/util/Map;
-	public fun getPrincipal ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
-	public fun getRequiredAttributeValue (Ljava/lang/String;)Ljava/lang/Object;
-	public fun getScope ()Lme/ahoo/cosec/api/context/SecurityScope;
-	public fun getTenant ()Lme/ahoo/cosec/api/tenant/Tenant;
-	public fun setAttributeValue (Ljava/lang/String;Ljava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/context/SimpleSecurityContext$Companion {
-	public final fun anonymous ()Lme/ahoo/cosec/api/context/SecurityContext;
-}
-
-public final class me/ahoo/cosec/runtime/context/SimpleSecurityContextKt {
-	public static final fun getTenant (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lme/ahoo/cosec/api/tenant/Tenant;
-}
-
 public final class me/ahoo/cosec/runtime/document/Actor {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-Zu1zXv4 ()Ljava/lang/String;

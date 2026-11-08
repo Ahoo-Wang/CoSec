@@ -9,7 +9,7 @@ index c78e9cb4..41358f99 100644
 @@ -262,7 +262,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
              )
          }
-         val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
+         val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
 -        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
 +        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
          // A new action and resource: what the request fetched was for its own. Every attribute this one needs is

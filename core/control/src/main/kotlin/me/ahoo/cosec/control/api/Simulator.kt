@@ -53,7 +53,6 @@ import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * A request to decide without making it (RFC 0007 §10.3): who asks, with which memberships, in which scope, for which
@@ -160,17 +159,13 @@ class Simulator(
             id = request.principal ?: ANONYMOUS,
             tenantId = scope.tenant.value,
             authenticated = request.principal != null,
-            roles = emptySet(),
-            policies = emptySet(),
             attributes = emptyMap(),
-            root = false,
             // As the credential would be (RFC 0009 §4.2): a key's cap drops principal bindings, a key gets no break-glass.
             principalBindings = request.principalBindings,
             breakGlass = request.breakGlass,
         )
         val authz = AuthzRequest(
             subject = subject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = request.action,
             resource = request.resource,
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),

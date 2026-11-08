@@ -75,7 +75,6 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
 
@@ -262,7 +261,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                 Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
-        val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
+        val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
         // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
         // fetched now, from stage A as from stage B (#1209).
@@ -419,7 +418,6 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
         val authz = AuthzRequest(
             subject = authzSubject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = action,
             resource = resource,
             environment = Environment(
@@ -600,10 +598,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
         tenantId = tenant.value,
         authenticated = principal != null,
-        roles = emptySet(),
-        policies = emptySet(),
         attributes = principal?.attributes.orEmpty(),
-        root = false,
         principalBindings = principal?.principalBindings ?: true,
         breakGlass = principal?.breakGlass ?: true,
     )
