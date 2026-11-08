@@ -297,6 +297,9 @@ internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
     }
 
     /**
+     * The JSON array of keys 8.0.0-alpha.3 wrote, without revisions, reads as each indexed at revision 0, before any
+     * revision this build publishes: a later drop by the referrer removes it, and a later reference raises it.
+     *
      * A member that is an app key earlier builds wrote and the app id rule now refuses is skipped, with a WARN (R3-1 of
      * #1194's review): such a document can no longer be read or published, and so can never drop its own reference,
      * while one such member would make every write and check of the set fail. Dropping it is safe: an extra referrer
@@ -305,11 +308,15 @@ internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
      */
     override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
         val root = read(bytes, WHAT)
-        if (!root.isObject) malformed(WHAT, "$root is not an object")
-        val members = root.properties().map { (key, revision) ->
-            val value = revision.long(WHAT)
-            if (value < 0) malformed(WHAT, "revision $value of [$key] is negative")
-            key to value
+        val members: List<Pair<String, Long>> = when {
+            root.isArray -> root.items(WHAT).map { it.text(WHAT) to EARLIER_REVISION }
+            root.isObject -> root.properties().map { (key, revision) ->
+                val value = revision.long(WHAT)
+                if (value < 0) malformed(WHAT, "revision $value of [$key] is negative")
+                key to value
+            }
+
+            else -> malformed(WHAT, "$root is neither an object nor an array")
         }
         return members.mapNotNull { (text, revision) ->
             val key = SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
@@ -324,6 +331,9 @@ internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
             key to revision
         }.toMap(LinkedHashMap())
     }
+
+    /** The revision a member of the array 8.0.0-alpha.3 wrote is read as. */
+    const val EARLIER_REVISION: Long = 0
 
     private val log = KotlinLogging.logger {}
 }

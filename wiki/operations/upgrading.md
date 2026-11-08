@@ -10,6 +10,27 @@ the data migration, what 8.0 decides differently, responses, authentication, sto
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
+
+8.0.0-alpha.3 is a preview with no compatibility promise. Nothing to migrate: what it stored still reads.
+
+- **Control-plane correctness** (audit batch E2a: #1205, #1206, #1207, #1210, #1226, #1227). A revision diff's
+  `sections` compares the catalog, limits, attributes, boundary and rate limits by their content: a rule of the same id
+  with another quota is a change. `POST /analyze` lists only the bindings that can apply in the tenant asked about, so a
+  platform binding of another tenant's principal or role is no longer listed. An instance forgets a shadow window
+  once its candidate is withdrawn and its last report is written. In code: a `ControlStore` of your own implements
+  `withdrawCandidate(key, window)` (`putCandidate` takes a candidate, no longer `null`), `referrers` and
+  `putReferrers` with each referrer's revision (`Map<SnapshotKey, Long>`), and keeps `RevisionIndex.reclaiming`;
+  `releaseLease` must check and remove in one step ([Extending](../architecture/extending.md#control-store)).
+  `ShadowRecorder.record` takes the window's document first, `forget` takes the samples its last report counted, and
+  `ShadowReporter` takes the `CandidateStore` it reads ended windows from.
+- **Upgrade the control-plane instances together.** The back-reference sets alpha.3 wrote
+  (`<p>:control:refs:*`, a JSON array of document keys) read as before, each referrer at revision 0, and are written
+  again with revisions as they change. An alpha.3 control-plane instance cannot read a set written that way, nor a
+  revision index that lists records left to delete, and fails closed on them: its publishes that touch one fail, and
+  its reclamation of that document stops. Stop the alpha.3 control-plane instances before starting this version's.
+  Data-plane instances need no order: an alpha.3 instance only keeps writing the reports of ended shadow windows.
+
 ## From 8.0.0-alpha.2 {#from-8-0-0-alpha-2}
 
 8.0.0-alpha.2 is a preview with no compatibility promise. These changes since then, from the
@@ -269,16 +290,6 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `DOWN` while Redis may evict the snapshot, read every `revalidate-interval`; a policy it cannot read is `DOWN` under
   `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`. It is an alert: `cosecSnapshot` does not
   change, and only it belongs in the readiness group.
-- **Control-plane correctness** (audit batch E2a: #1205, #1206, #1207, #1210, #1226, #1227). A revision diff's
-  `sections` compares the catalog, limits, attributes, boundary and rate limits by their content: a rule of the same id
-  with another quota is a change. `POST /analyze` lists only the bindings that can apply in the tenant asked about, so a
-  platform binding of another tenant's principal or role is no longer listed. An instance forgets a shadow window
-  once its candidate is withdrawn and its last report is written. In code: a `ControlStore` of your own implements
-  `withdrawCandidate(key, window)` (`putCandidate` takes a candidate, no longer `null`), `referrers` and
-  `putReferrers` with each referrer's revision (`Map<SnapshotKey, Long>`), and keeps `RevisionIndex.reclaiming`;
-  `releaseLease` must check and remove in one step ([Extending](../architecture/extending.md#control-store)).
-  `ShadowRecorder.record` takes the window's document first, `forget` takes the samples its last report counted, and
-  `ShadowReporter` takes the `CandidateStore` it reads ended windows from.
 - **During a rolling upgrade**, an app document an older instance creates is not in the app list; newer instances
   find it when they start and at each reclamation pass (`cosec.control.revisions.reclaim-interval`, 1 hour by default),
   and until then may analyze a grant without that app's DENYs. Create no app through an older instance while you roll,

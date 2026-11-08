@@ -521,10 +521,14 @@ class CoCacheControlStoreTest {
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
         }
+        // The array of keys 8.0.0-alpha.3 wrote: every member at revision 0.
+        ReferrersCodec.decode("""["tenant:b"]""".encodeToByteArray()).assert().isEqualTo(mapOf(SnapshotKey.Tenant("b") to 0L))
         listOf(
             "1",
             "\"tenant:b\"",
-            """["tenant:b"]""",
+            """["policies"]""",
+            """["tenant:a:b"]""",
+            "[1]",
             """{"policies":1}""",
             """{"tenant:b":-1}""",
             """{"tenant:b":"1"}""",

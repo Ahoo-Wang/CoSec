@@ -110,4 +110,20 @@ class ReferrerCleanupRaceTest {
             publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))), "p2")
                 .assert().isInstanceOf(PublishOutcome.Published::class.java)
         }
+
+    @Test
+    fun `a reference indexed without a revision is removed by a later drop and raised by a later reference`() =
+        runBlocking<Unit> {
+            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))), "p1")
+            publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"))), "t1")
+            // As 8.0.0-alpha.3 indexed it: a set of keys, read at revision 0.
+            val indexed = memory.referrers(SnapshotKey.Platform, shared)!!
+            memory.putReferrers(SnapshotKey.Platform, shared, indexed.digest, mapOf(ACME to 0L)).assert().isTrue()
+            publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"), binding("c", "other"))), "t2")
+            memory.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEqualTo(mapOf(ACME to 0L))
+            publish(ACME, candidate(ACME, bindings = listOf(binding("c", "other"))), "t3")
+            revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+            publish(ACME, candidate(ACME, bindings = listOf(binding("b", "shared"))), "t4")
+            memory.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEqualTo(mapOf(ACME to 4L))
+        }
 }
