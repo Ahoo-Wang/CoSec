@@ -42,6 +42,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
@@ -74,6 +75,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.testkit.ScenarioFormatException
@@ -365,6 +367,8 @@ object ChangeRunner : ScenarioRunner {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
                 "refused ${error.status}"
+            } catch (_: SnapshotFormatException) {
+                "malformed"
             }
         }
 
@@ -677,6 +681,8 @@ object ChangeRunner : ScenarioRunner {
             "putRateLimit" -> Operation.PutRateLimit(PolicyDocumentCodec.decodeRateLimit(value))
             "removeRateLimit" -> Operation.RemoveRateLimit(value.text())
             "setBoundary" -> Operation.SetBoundary(if (value.isNull) null else PolicyId(value.text()))
+            // As the control API's request bodies write it: what it refuses is the step's `malformed` (CTL-28).
+            "wire" -> ChangeRequestCodec.operation(key, value)
             else -> throw ScenarioFormatException("Unknown operation $name")
         }
     }

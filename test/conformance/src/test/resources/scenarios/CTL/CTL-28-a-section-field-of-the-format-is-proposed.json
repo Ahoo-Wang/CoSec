@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "CTL-28"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same operations, each field as the document format writes it, are proposed.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "wire": {
+              "op": "setLimits",
+              "limits": {
+                "maxNodes": 64,
+                "maxDepth": 16,
+                "maxInValues": 64,
+                "maxCidrBlocks": 64,
+                "maxLiteralBytes": 4096,
+                "maxCost": 1024
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "wire": {
+              "op": "setAttributes",
+              "attributes": [
+                {
+                  "path": "ext.geo.country",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}

@@ -127,7 +127,8 @@ class RetentionPolicy(
  *    indexed them again since (#1207); the platform's first revision marks the app list complete when it names every
  *    app document the store lists.
  *
- * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged.
+ * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged, a store's
+ * own timeout among them (#1263): the head write is the commit point.
  *
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
@@ -224,13 +225,15 @@ class Revisions(
         }
     }
 
-    /** [published], after the head write: a failure is only logged ([publish] says why that is safe). */
+    /**
+     * [published], after the head write: a failure is only logged ([publish] says why that is safe). So is a
+     * [CancellationException]: this runs without responding to the caller's cancellation, so one that reaches here is a
+     * store's own timeout (#1263); the caller's stays pending and takes effect when [publish] returns.
+     */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
         try {
             published(key, entry, dropped)
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             log.warn(e) {
                 "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
@@ -245,7 +248,7 @@ class Revisions(
      * `repair-references` leaves it: a platform head that was lost and is published again may find app documents a
      * rebuilt list does not name. A listed app without a head is one whose first publish stopped before its head
      * write; it does not count, since an app lists itself before its head is written. The head is written whatever this
-     * does, so a failure is only logged.
+     * does, so a failure is only logged, a store's own timeout among them, as in [settle].
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun completeOnNewStore() {
@@ -267,8 +270,6 @@ class Revisions(
                 }
             }
             warn("The app list kept changing and was not marked complete; grants over every app wait for approval")
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             log.warn(e) { "The app list could not be marked complete; grants over every app wait for approval." }
         }
@@ -419,9 +420,12 @@ class Revisions(
         val repaired = missing.sortedBy { it.revision }
         updateIndex(key) { index ->
             val known = index.entries.map { it.revision }.toSet()
+            // Against the index as it is at this attempt: reclamation may have taken some out since the chain was walked,
+            // and below its floor nothing comes back (#1265).
+            val retained = repaired.filter { it.revision >= index.floor }
             index.copy(
-                entries = (index.entries + repaired.filter { it.revision !in known }).sortedBy { it.revision },
-                pending = index.pending.filter { pending -> repaired.none { it.digest == pending.digest } },
+                entries = (index.entries + retained.filter { it.revision !in known }).sortedBy { it.revision },
+                pending = index.pending.filter { pending -> retained.none { it.digest == pending.digest } },
             )
         } || warn("[$key]: the rebuilt history could not be written back to the index")
         return (entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
@@ -459,8 +463,6 @@ class Revisions(
                     pending = index.pending.filter { it.digest != entry.digest },
                 )
             } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             log.warn(e) { "[$key] revision ${entry.revision} is published; its index entry could not be written." }
         }

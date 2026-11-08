@@ -1,0 +1,20 @@
+# Rule: CTL-6
+# Mutant: the slot is taken while the change is still CHECKED, so another change takes it from a call still staging
+# Tests: :control:test --tests me.ahoo.cosec.control.change.StageReservationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+index bdd2a263..a6c822c2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
+@@ -327,10 +327,10 @@ class Changes(
+         head: Head?,
+         next: suspend (ChangeRequest) -> ChangeRequest,
+     ): ChangeRequest {
++        takeSlot(operator, change, head)
+         val reserved = transition(change.id, setOf(ChangeState.CHECKED), next)
+         var taken = false
+         try {
+-            takeSlot(operator, reserved, head)
+             taken = true
+             return reserved
+         } finally {

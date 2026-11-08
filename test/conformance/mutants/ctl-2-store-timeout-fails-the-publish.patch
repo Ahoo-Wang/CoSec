@@ -1,0 +1,17 @@
+# Rule: CTL-2
+# Mutant: a store's own timeout after the head write is rethrown as the publish's outcome
+# Tests: :control:test --tests me.ahoo.cosec.control.store.CommittedRevisionTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 83a012c1..894971cc 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -234,6 +234,8 @@ class Revisions(
+     private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+         try {
+             published(key, entry, dropped)
++        } catch (e: CancellationException) {
++            throw e
+         } catch (e: Exception) {
+             log.warn(e) {
+                 "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +

@@ -1,0 +1,26 @@
+# Rule: CTL-28
+# Mutant: a limit of another JSON type is made into an integer
+# Tests: :control:test --tests me.ahoo.cosec.control.api.SectionFieldsHttpTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
+index 8b822cfa..1e89107b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
+@@ -465,9 +465,14 @@ object ChangeRequestCodec {
+     }
+ 
+     /** Limits as the document format reads them, with none left to its default: an operation states all six. */
+-    private fun limits(node: JsonNode): ConditionLimits = PolicyDocumentCodec.decodeLimits(node, "\$.limits").also {
+-        LIMIT_FIELDS.forEach { field -> node.need(field) }
+-    }
++    private fun limits(node: JsonNode): ConditionLimits = ConditionLimits(
++        node.need("maxNodes").asInt(),
++        node.need("maxDepth").asInt(),
++        node.need("maxInValues").asInt(),
++        node.need("maxCidrBlocks").asInt(),
++        node.need("maxLiteralBytes").asInt(),
++        node.need("maxCost").asInt(),
++    )
+ 
+     private fun documentKey(text: String): SnapshotKey = when {
+         text == "platform" -> SnapshotKey.Platform

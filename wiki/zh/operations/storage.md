@@ -341,6 +341,7 @@ app 的状态；以及 `repair-references` 读到的 `<s>:control:list:documents
   （1 小时）的发布记录。它从不删除头部，也不删除未结束变更所依赖的修订；某个未结束的变更读不到时，这一轮什么都不回收。
   每个文档一个租约（`reclaim:<doc>`），同一时间只有一个实例处理一个文档。
   修订索引先移出一条记录再删除它，并把它留在待删列表中，直到删除成功：删除失败的记录由下一轮重试。
+  同时进行的历史修复会略去低于索引下限的修订，所以已回收的修订不会回来。
 - **关闭影子窗口**，每隔 [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)（1 分钟），持有
   `shadow-windows` 租约，所以窗口最多晚一个间隔关闭。
 

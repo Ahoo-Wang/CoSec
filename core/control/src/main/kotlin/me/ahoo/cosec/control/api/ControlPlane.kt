@@ -304,7 +304,7 @@ class DefaultControlPlane(
             redaction.trace(enforced.evaluation),
             proposed?.let { redaction.decision(it.evaluation.decision) },
             proposed?.let { redaction.trace(it.evaluation) },
-            proposed != null && proposed.evaluation.decision != enforced.evaluation.decision,
+            proposed != null && differs(enforced.evaluation.decision, proposed.evaluation.decision),
         )
     }
 
@@ -413,30 +413,46 @@ class DefaultControlPlane(
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
         val resource = enforceable(query.resource)
-        val app = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
-            // The data plane never reads such an app (SCP-10): refused, and not echoed, since it may hold control characters.
-            if (!SnapshotKey.App.isValidAppId(app)) {
-                throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-10).")
-            }
-            SnapshotKey.App(app)
-        }
+        val app = queriedApp(query)
         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { entry(it) }
+        val application = app?.takeIf { it in readable }?.let { entry(it) }
         val found = AccessFindings(query, ResourceTarget(resource))
         for (key in readable) {
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
-            val entry = (if (key == SnapshotKey.Platform) platform else entry(key)) ?: continue
+            val entry = when (key) {
+                SnapshotKey.Platform -> platform
+                app -> application
+                else -> entry(key)
+            } ?: continue
             for (binding in entry.document.bindings) {
                 if (!applies(binding, query)) {
                     continue
                 }
-                val policy = entry.analyzed[binding.policy.value] ?: platform?.analyzed?.get(binding.policy.value)
-                found.add(key, binding, policy)
+                found.add(key, binding, analyzed(binding, entry, platform, application))
             }
         }
         return AccessReport(found.allows, found.denies, keys.size - readable.size, found.opaque)
     }
+
+    /** The app document [query] names, if any; one no key can name is refused (SCP-10), not echoed: it may hold control characters. */
+    private fun queriedApp(query: AccessQuery): SnapshotKey.App? = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
+        if (!SnapshotKey.App.isValidAppId(app)) {
+            throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-10).")
+        }
+        SnapshotKey.App(app)
+    }
+
+    /** The policy [binding] of [entry] names, as the engine resolves it: its own document, the platform, the app it is scoped to. */
+    private fun analyzed(
+        binding: Binding,
+        entry: DocumentCache.Entry,
+        platform: DocumentCache.Entry?,
+        app: DocumentCache.Entry?,
+    ): DocumentCache.AnalyzedPolicy? = entry.analyzed[binding.policy.value]
+        ?: platform?.analyzed?.get(binding.policy.value)
+        ?: app?.takeIf { binding.scope.app.exact { id -> id.value } == it.document.owner }?.analyzed?.get(binding.policy.value)
 
     /** What [analyze] finds, binding by binding: a policy that is not readable counts as opaque. */
     private inner class AccessFindings(private val query: AccessQuery, private val target: ResourceTarget) {
