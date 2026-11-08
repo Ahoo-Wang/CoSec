@@ -8,6 +8,8 @@
 > RFC 0007 PR-6 的分析部分提前作为单独的 PR 开工（§4.5）；RC 前提增加 AOT 冒烟、RC 安全审查与示例（§3.9）；新增过程规则（§4.7）。
 > 各处就地标注"2026-10-26 修订（路线图审查）"，被取代的原文保留。
 
+> **2026-11-08 修订（#1283，U11）**：三组属性改名：`cosec.pipeline.gateway.*` → `cosec.pipeline.identity.*`；`cosec.audit.required.timeout` → `cosec.observability.listener.required-timeout`；`cosec.authorization.cache.token.*` → `cosec.authentication.revocation.cache.*`。
+
 ## 0. 结论先行
 
 到今天为止，RFC 0002–0007 的每个阶段都以"与 7.x 或与上一阶段等价"为切换门槛，用真实部署导出数据的离线回放来证明。

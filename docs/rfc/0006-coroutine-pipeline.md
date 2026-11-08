@@ -15,6 +15,8 @@
 > 改为 RFC 9457 的 `application/problem+json`，只带客户端能据以行动的区分；显式拒绝与隐式拒绝在响应中合并为 `unauthorized`/`forbidden`。改动处：§5.7、
 > §6.1（`type`/`code` 列取代 `reason`）、§6.2（重写）、§6.3、§9.5.3、§10.2、§14 X5、§15.2 的 PR-2 与 PR-7、§15.3、§16 Q22 与新增的 Q27。
 
+> **2026-11-08 修订**：`required` 监听器的超时属性是 `cosec.observability.listener.required-timeout`（#1283）；`decideAs` 与 `decide(security, app, …)` 是内部 API（#1283）。限流计数器 id 统一为 `platform/<id>`、`app:<app>/<id>`、`tenant:<tenant>/<id>`，键控桶前缀是 `k:`（#1284）。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
