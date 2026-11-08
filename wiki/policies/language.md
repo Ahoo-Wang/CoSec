@@ -19,8 +19,8 @@ fails closed: `503` unless a DENY matches ([fail closed](../guide/security-model
 | Document | Key | One per | Holds |
 |---|---|---|---|
 | Platform | `platform` | deployment | Policies shared by every tenant, bindings for anyone (`*`) and for named principals, break-glass bindings, rate limit rules, and what only the platform sets: `limits`, `attributes`, `boundaries`. |
-| App | `app:<appId>` | app | The app's [catalog](#catalogs), its permission policies `perm:<appId>/<permission>`, role bindings, rate limit rules. |
-| Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), its `boundary`, rate limit rules. |
+| App | `app:<appId>` | app | The app's [catalog](#catalogs), its permission policies `perm:<appId>/<permission>`, system [roles](#roles), role bindings, rate limit rules. |
+| Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), custom [roles](#roles), its `boundary`, rate limit rules. |
 
 The key is how the [control plane](./testing.md) names a document. Every request reads the platform document and the
 document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the principal
@@ -79,6 +79,7 @@ control plane writes its own `revision`, `publishedAt` and `provenance` when it 
 |---|---|---|---|
 | `policies`, `bindings`, `rateLimits` | yes | yes | yes |
 | `catalog` | | yes | |
+| `roles` | | yes | yes |
 | `limits`, `attributes` | yes | | |
 | `boundaries` | yes | | |
 | `boundary` | | | yes |
@@ -484,20 +485,42 @@ matches. Anonymous principals have no attachments.
 
 ## Catalogs
 
-An app document's `catalog` lists the permissions the app offers, for consoles and generators. It takes no part in
-evaluation.
+An app document's `catalog` lists the permissions the app offers, for consoles and generators. An entry that writes
+`action` also defines its permission: the policy `perm:<appId>/<id>`, one ALLOW statement. No other entry takes part
+in evaluation.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `groups` | array, required | Groups of permissions. |
 | `groups[].name` | string, required | |
 | `groups[].description` | string | |
-| `groups[].spaced` | boolean, default `false` | Whether the group's permissions are meant to be granted per space; informational. |
+| `groups[].spaced` | boolean, default `false` | Where a permission written with `action` applies: in any space a role holding it applies in; without it, only in the default space, by the condition `{ "eq": ["scope.space", ""] }`. |
 | `groups[].permissions` | array, required | |
 | `groups[].permissions[].id` | string, required | The permission id; its policy is `perm:<appId>/<id>`. |
 | `groups[].permissions[].name`, `.description` | string | |
+| `groups[].permissions[].action` | action pattern or non-empty array | Defines the permission. An entry with `action` and a policy of its id do not compile; the id must not be repeated. |
+| `groups[].permissions[].resource` | as a statement's `resource`; needs `action` | Absent: any resource. |
 
-Nothing checks that a catalog entry has a policy, or the reverse. See [Role permissions](./role-permissions.md).
+Nothing checks that an entry without `action` has a policy, or the reverse; such an entry is only for display and no
+role can list it. See [Role permissions](./role-permissions.md#short-form-permissions).
+
+## Roles
+
+An app document (system roles) and a tenant document (custom roles) may hold `roles`: who gets which permissions,
+written once. [Role permissions](./role-permissions.md#roles) has the concept and its examples.
+
+| Field | Documents | Type | Meaning |
+|---|---|---|---|
+| `id` | both | string, required | Unique in the document; not `*`, without `@`. |
+| `app` | tenant | string, required | The app the role belongs to; a valid app id. |
+| `space` | tenant | string | Absent: any space. Otherwise only that space, `""` being the default space; not reserved. |
+| `name`, `description` | both | string | For display. |
+| `permissions` | both | array of ids, or `"*"` in an app document | The permissions of the role; possibly none. |
+
+A role derives one binding per permission, `role:<roleId>@<app>:<permission>`, of policy `perm:<app>/<permission>`,
+subject the role (of any tenant in an app document, of its tenant in a tenant document), `app` the role's app and
+`space` the role's space or `*`, after the hand-written bindings. A collision with a hand-written binding does not
+compile, and `role:` is reserved to these bindings: a change may not put one. A document derives at most 50,000.
 
 ## Rate limit rules
 

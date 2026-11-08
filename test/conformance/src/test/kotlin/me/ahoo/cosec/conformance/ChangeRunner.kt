@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.api.EntryChanges
 import me.ahoo.cosec.control.api.SimulatedRequest
 import me.ahoo.cosec.control.api.SnapshotVersion
 import me.ahoo.cosec.control.audit.ChangeEvent
@@ -57,9 +58,11 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
@@ -129,7 +132,10 @@ import java.time.Instant
  *            { "unaudited": true },            // later steps run on an instance without a REQUIRED change listener
  *            { "late": { "abandon": "c1" } } ], // the step runs until it withdraws a candidate, which waits until the
  *                                              // next step has run (#1227); its result is the step's
- *  operations also take { "putRateLimit": { ...a rule... } }, { "removeRateLimit": "id" } and { "setBoundary": "id" | null }
+ *  operations also take { "putRateLimit": { ...a rule... } }, { "removeRateLimit": "id" }, { "setBoundary": "id" | null },
+ *  { "putRole": { ...a role... } }, { "removeRole": "id" } and { "putCatalog": { ...a catalog... } | null }
+ *  { "diff": { "document": "tenant:acme", "from": 1, "to": 2 } } is the diff of two revisions, as a line of what it lists:
+ *  `diff policies=[+p] bindings=[+b,-c] roles=[~r] sections=false`
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
@@ -356,6 +362,7 @@ object ChangeRunner : ScenarioRunner {
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
+            "diff" -> diff(argument)
             "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
             "rateLimits" -> {
                 val head = revisions.head(documentKey(argument.text()))
@@ -366,6 +373,26 @@ object ChangeRunner : ScenarioRunner {
             } catch (error: ChangeRejectedException) {
                 "refused ${error.status}"
             }
+        }
+
+        private suspend fun diff(argument: JsonNode): String {
+            argument.only("document", "from", "to")
+            val plane = DefaultControlPlane(
+                changes,
+                revisions,
+                ChangeAuthority(ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }),
+            )
+            val found = plane.diff(
+                PLATFORM,
+                documentKey(argument.required("document").text()),
+                argument.required("from").longValue(),
+                argument.required("to").longValue(),
+            )
+            fun line(entries: EntryChanges): String = (
+                entries.added.map { "+$it" } + entries.removed.map { "-$it" } + entries.changed.map { "~$it" }
+                ).joinToString(",", "[", "]")
+            return "diff policies=${line(found.policies)} bindings=${line(found.bindings)} " +
+                "roles=${line(found.roles)} sections=${found.sections}"
         }
 
         /** What happens around the control plane between steps: time passes, an instance vanishes, an outage. */
@@ -677,8 +704,15 @@ object ChangeRunner : ScenarioRunner {
             "putRateLimit" -> Operation.PutRateLimit(PolicyDocumentCodec.decodeRateLimit(value))
             "removeRateLimit" -> Operation.RemoveRateLimit(value.text())
             "setBoundary" -> Operation.SetBoundary(if (value.isNull) null else PolicyId(value.text()))
-            else -> throw ScenarioFormatException("Unknown operation $name")
+            else -> roleOperation(kind, name, value)
         }
+    }
+
+    private fun roleOperation(kind: DocumentKind, name: String, value: JsonNode): Operation = when (name) {
+        "putRole" -> Operation.PutRole(PolicyDocumentCodec.decodeRole(value, kind))
+        "removeRole" -> Operation.RemoveRole(RoleId(value.text()))
+        "putCatalog" -> Operation.PutCatalog(if (value.isNull) null else PolicyDocumentCodec.decodeCatalog(value))
+        else -> throw ScenarioFormatException("Unknown operation $name")
     }
 
     fun documentKey(text: String): SnapshotKey = when {

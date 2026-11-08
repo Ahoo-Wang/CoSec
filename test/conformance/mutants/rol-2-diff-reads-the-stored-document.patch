@@ -1,0 +1,17 @@
+# Rule: ROL-2
+# Mutant: the diff lists the stored bindings: what a role derives is not shown
+# Tests: :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index 528f13a7..fd657022 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -217,7 +217,7 @@ class DefaultControlPlane(
+         val after = retained(key, to)
+         val (kind, owner) = Revisions.ownerOf(key)
+         val expandedBefore = RoleExpansion.effective(before)
+-        val expandedAfter = RoleExpansion.effective(after)
++        val expandedAfter = after
+         return DocumentDiff(
+             from,
+             to,

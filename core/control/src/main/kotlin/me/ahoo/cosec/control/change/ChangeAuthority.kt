@@ -33,6 +33,7 @@ import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.control.grant.ProtectedEntry
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -43,6 +44,8 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleDefinition
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
@@ -63,7 +66,7 @@ import kotlin.time.TimeSource
  *
  * 1. the hard rule ([TenantIsolation]): a 403 that no policy can lift;
  * 2. each target with the [authorizer]: `cosec:write` on each entry an operation touches, `cosec:grant` on the scope
- *    of each binding it puts, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
+ *    of each binding it puts and of each role that derives a binding it did not, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
  *    document. A deny is a 403, an indeterminate decision or an error a 503;
  * 3. for a candidate that checks clean, the grant analysis ([GrantAnalyzer]) of what it grants, as the operator, against
  *    the current heads. What it cannot prove contained is an [Escalation]: approval, never "probably fine" (GRT-2).
@@ -123,6 +126,8 @@ class ChangeAuthority(
         operations: List<Operation>,
         kind: ProvenanceKind = ProvenanceKind.PUBLISH,
         breakGlass: Boolean = kind == ProvenanceKind.BREAK_GLASS,
+        /** The document the operations apply to, which says what a role already derives. */
+        base: PolicyDocument? = null,
     ) {
         isolate(operator, key)
         if (kind == ProvenanceKind.BREAK_GLASS) {
@@ -135,43 +140,63 @@ class ChangeAuthority(
             require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
         }
         for (operation in operations) {
-            when (operation) {
-                is Operation.PutPolicy -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, POLICY, operation.policy.id.value)
-                )
-                is Operation.RemovePolicy -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, POLICY, operation.id.value)
-                )
-                is Operation.PutBinding -> {
-                    require(operator, ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
-                    require(operator, ControlActions.GRANT, scopeOf(key, operation.binding))
-                }
-
-                is Operation.RemoveBinding -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, BINDING, operation.id.value)
-                )
-                is Operation.PutRateLimit -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, RATE_LIMIT, operation.rule.id)
-                )
-                is Operation.RemoveRateLimit -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, RATE_LIMIT, operation.id)
-                )
-                is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
-                is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
-                is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
-                is Operation.SetBoundary -> boundary(operator, key)
-            }
+            authorizeOperation(operator, key, operation, base)
         }
+    }
+
+    private suspend fun authorizeOperation(operator: Operator, key: SnapshotKey, operation: Operation, base: PolicyDocument?) {
+        when (operation) {
+            is Operation.PutPolicy -> require(
+                operator,
+                ControlActions.WRITE,
+                entry(key, POLICY, operation.policy.id.value)
+            )
+            is Operation.RemovePolicy -> require(operator, ControlActions.WRITE, entry(key, POLICY, operation.id.value))
+            is Operation.PutBinding -> {
+                require(operator, ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
+                require(operator, ControlActions.GRANT, scopeOf(key, operation.binding))
+            }
+
+            is Operation.RemoveBinding -> require(
+                operator,
+                ControlActions.WRITE,
+                entry(key, BINDING, operation.id.value)
+            )
+            is Operation.PutRateLimit -> require(
+                operator,
+                ControlActions.WRITE,
+                entry(key, RATE_LIMIT, operation.rule.id)
+            )
+            is Operation.RemoveRateLimit -> require(
+                operator,
+                ControlActions.WRITE,
+                entry(key, RATE_LIMIT, operation.id)
+            )
+            is Operation.PutRole -> {
+                require(operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
+                newBinding(key, operation.role, base)?.let { require(operator, ControlActions.GRANT, scopeOf(key, it)) }
+            }
+
+            is Operation.RemoveRole -> require(operator, ControlActions.WRITE, entry(key, ROLE, operation.id.value))
+            is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
+            is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
+            is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
+            is Operation.SetBoundary -> boundary(operator, key)
+        }
+    }
+
+    /**
+     * A binding [role] would derive that [base]'s role of its id does not, or `null` when it only narrows (RFC 0012
+     * §7.2). A role has one scope, so one is enough to check `cosec:grant` on it. A binding of the same id in another
+     * space is a new binding: the space is what `cosec:grant` is about.
+     */
+    private fun newBinding(key: SnapshotKey, role: RoleDefinition, base: PolicyDocument?): Binding? {
+        val (kind, owner) = Revisions.ownerOf(key)
+        val catalog = RoleExpansion.definedInCatalog(base)
+        val before = base?.roles?.firstOrNull { it.id == role.id }
+            ?.let { RoleExpansion.bindings(kind, owner, it, catalog) }.orEmpty()
+            .mapTo(HashSet()) { it.id to it.scope.space }
+        return RoleExpansion.bindings(kind, owner, role, catalog).firstOrNull { (it.id to it.scope.space) !in before }
     }
 
     /**
@@ -330,7 +355,8 @@ class ChangeAuthority(
         now: Instant,
     ): GrantAnalysis = try {
         val tenant = TenantId(key.tenantId)
-        val named = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp)
+        val granted = GrantDocuments.of(candidate)
+        val named = (granted.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp)
             .toCollection(LinkedHashSet())
         var listed = listedApps(documents)
         val apps = LinkedHashMap<AppId, PolicyDocument?>()
@@ -357,7 +383,7 @@ class ChangeAuthority(
             operator.attributes,
             operator.principalBindings,
         )
-        analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
+        analyzer.analyze(grantor, snapshot, GrantChange(tenant, granted), trustRoot = false)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -440,7 +466,7 @@ class ChangeAuthority(
         documents: ChangeChecks.Context,
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
-        if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
+        if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
             escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
         }
         if (key is SnapshotKey.App) {
@@ -469,7 +495,9 @@ class ChangeAuthority(
             val referrers = documents.referrers(key, policy)
             val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
             for (tenant in tenants) {
-                val bindings = documents.head(tenant)?.document?.bindings.orEmpty().filter {
+                val bindings = documents.head(
+                    tenant
+                )?.document?.let(RoleExpansion::effective)?.bindings.orEmpty().filter {
                     it.policy == policy && it.scope.app == Match.Exactly(app)
                 }
                 for (binding in bindings) {
@@ -666,6 +694,7 @@ class ChangeAuthority(
         const val POLICY = "policy"
         const val BINDING = "binding"
         const val RATE_LIMIT = "rateLimit"
+        const val ROLE = "role"
         const val NOT_ANALYZED = "NOT_ANALYZED"
         const val BREAK_GLASS = "BREAK_GLASS"
 

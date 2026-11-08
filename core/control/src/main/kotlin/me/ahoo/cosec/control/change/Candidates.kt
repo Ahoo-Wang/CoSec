@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.RoleDefinition
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
@@ -41,6 +42,8 @@ object EntryDigest {
         sha256(PolicyDocumentCodec.bindingTree(binding, kind, owner))
 
     fun of(rule: RateLimitSource): String = sha256(PolicyDocumentCodec.rateLimitTree(rule))
+
+    fun of(role: RoleDefinition): String = sha256(PolicyDocumentCodec.roleTree(role))
 
     internal fun sha256(tree: JsonNode): String = hex(CoSecJson.mapper.writeValueAsBytes(tree))
 
@@ -69,6 +72,7 @@ object CandidateDigest {
                 attributes = candidate.attributes,
                 boundary = candidate.boundary,
                 rateLimits = candidate.rateLimits,
+                roles = candidate.roles,
             ),
         ),
     )
@@ -96,6 +100,7 @@ object Operations {
         private val policies = LinkedHashMap<String, PolicyDefinition>()
         private val bindings = LinkedHashMap<String, Binding>()
         private val rateLimits = LinkedHashMap<String, RateLimitSource>()
+        private val roles = LinkedHashMap<String, RoleDefinition>()
         private var catalog = base?.catalog
         private var limits = base?.limits
         private var attributes = base?.attributes
@@ -109,6 +114,7 @@ object Operations {
             base?.policies?.forEach { policies[it.id.value] = it }
             base?.bindings?.forEach { bindings[it.id.value] = it }
             base?.rateLimits?.forEach { rateLimits[it.id] = it }
+            base?.roles?.forEach { roles[it.id.value] = it }
         }
 
         fun apply(path: String, operation: Operation) {
@@ -125,7 +131,19 @@ object Operations {
                     put(path, rateLimits, operation.rule.id, operation.rule, operation.ifMatch, EntryDigest::of)
                 is Operation.RemoveRateLimit ->
                     remove(path, "rate limit", rateLimits, operation.id, operation.ifMatch, EntryDigest::of)
+                is Operation.PutRole -> putRole(path, operation)
+                is Operation.RemoveRole ->
+                    remove(path, "role", roles, operation.id.value, operation.ifMatch, EntryDigest::of)
                 else -> section(path, operation)
+            }
+        }
+
+        private fun putRole(path: String, operation: Operation.PutRole) {
+            val problem = operation.role.shapeProblem(kind)
+            if (problem != null) {
+                findings += Finding("OPERATION", path, problem, UNPROCESSABLE)
+            } else {
+                put(path, roles, operation.role.id.value, operation.role, operation.ifMatch, EntryDigest::of)
             }
         }
 
@@ -214,6 +232,7 @@ object Operations {
             attributes = attributes,
             boundary = boundary,
             rateLimits = rateLimits.values.toList(),
+            roles = roles.values.toList(),
         )
     }
 
@@ -236,7 +255,15 @@ object Operations {
             if (current != EntryDigest.of(binding, kind, owner)) operations += Operation.PutBinding(binding, current)
         }
         operations += rateLimits(base, desired)
+        val roles = base?.roles?.associateBy { it.id.value }.orEmpty()
+        for (role in desired.roles) {
+            val current = roles[role.id.value]?.let(EntryDigest::of)
+            if (current != EntryDigest.of(role)) operations += Operation.PutRole(role, current)
+        }
         if (mode == ApplyMode.REPLACE) {
+            val keepRoles = desired.roles.map { it.id }.toSet()
+            base?.roles?.filter { it.id !in keepRoles }
+                ?.forEach { operations += Operation.RemoveRole(it.id, EntryDigest.of(it)) }
             val keepRateLimits = desired.rateLimits.map { it.id }.toSet()
             base?.rateLimits?.filter { it.id !in keepRateLimits }
                 ?.forEach { operations += Operation.RemoveRateLimit(it.id, EntryDigest.of(it)) }

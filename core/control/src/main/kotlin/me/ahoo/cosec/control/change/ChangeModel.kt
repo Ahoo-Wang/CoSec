@@ -19,12 +19,14 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleDefinition
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -102,6 +104,11 @@ sealed interface Operation {
     class PutRateLimit(val rule: RateLimitSource, val ifMatch: String? = null) : Operation
 
     class RemoveRateLimit(val id: String, val ifMatch: String? = null) : Operation
+
+    /** Adds the role (RFC 0012 §7.1), or replaces the one of the same id as a whole. */
+    class PutRole(val role: RoleDefinition, val ifMatch: String? = null) : Operation
+
+    class RemoveRole(val id: RoleId, val ifMatch: String? = null) : Operation
 
     /** An app document's catalog; `null` removes it. */
     class PutCatalog(val catalog: Catalog?) : Operation

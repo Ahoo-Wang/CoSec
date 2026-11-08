@@ -194,7 +194,10 @@ class SchemaConformanceTest {
                 // A platform document without its own fields (limits, attributes) is also a valid tenant document,
                 // whose principals need not name their tenant: the schema cannot tell the kinds apart.
                 mutation.kind == MutationKind.DROP_REQUIRED && "$mutation".endsWith("#platformBinding.tenant)") &&
-                !mutation.document.has("limits") && !mutation.document.has("attributes")
+                !mutation.document.has("limits") && !mutation.document.has("attributes") ||
+                // A tenant role without its app is a system role, when the document is otherwise an app document's.
+                mutation.kind == MutationKind.DROP_REQUIRED && "$mutation".endsWith("#tenantRole.app)") &&
+                codecError(file, mutation.document) == null
             )
 
     /**

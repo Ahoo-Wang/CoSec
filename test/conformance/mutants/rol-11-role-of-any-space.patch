@@ -1,0 +1,17 @@
+# Rule: ROL-11
+# Mutant: a role that names a space applies in every space
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..00eeed6b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -195,7 +195,7 @@ object RoleExpansion {
+     private fun binding(kind: DocumentKind, owner: String, role: RoleDefinition, permission: String): Binding {
+         val app = if (kind == DocumentKind.APP) owner else requireNotNull(role.app) { "Checked by shapeProblem." }.value
+         val tenant = if (kind == DocumentKind.TENANT) TenantId(owner) else null
+-        val space: Match<SpaceId> = role.space?.let { Match.Exactly(it) } ?: Match.Any
++        val space: Match<SpaceId> = Match.Any
+         return Binding(
+             id = BindingId("$BINDING_PREFIX${role.id.value}@$app:$permission"),
+             subject = SubjectRef.Role(tenant, role.id),

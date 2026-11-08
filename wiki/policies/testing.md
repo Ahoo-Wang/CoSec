@@ -47,7 +47,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
-| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, and `sections`: whether anything else differs (the catalog, limits, attributes, boundary or rate limits), compared by their content. |
+| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, of the [expanded](./role-permissions.md#roles) documents, the `roles` as written, and `sections`: whether anything else differs (the catalog, limits, attributes, boundary or rate limits), compared by their content. |
 | `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
@@ -195,6 +195,8 @@ A change is a set of entry operations on one document, made on the revision you 
 | `removeBinding` | `id`, optional `ifMatch` | Removes a binding. |
 | `putRateLimit` | `rateLimit`, optional `ifMatch` | Adds the rate limit rule, or replaces the one with its id where it stands. |
 | `removeRateLimit` | `id`, optional `ifMatch` | Removes a rate limit rule. |
+| `putRole` | `role`, optional `ifMatch` | Adds the role, or replaces the one with its id as a whole. App and tenant documents. |
+| `removeRole` | `id`, optional `ifMatch` | Removes a role. |
 | `putCatalog` | `catalog` | Sets an app document's catalog; without `catalog`, removes it. |
 | `setLimits` | `limits` with all six limits | Sets the platform's limits; without `limits`, back to the defaults. |
 | `setAttributes` | `attributes` | Sets the platform's declared attributes; without `attributes`, removes them. |

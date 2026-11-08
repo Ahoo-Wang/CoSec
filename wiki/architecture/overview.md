@@ -302,6 +302,11 @@ tenant. They are stored as JSON (schema 2), compiled once per revision, and held
 documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
 
+A document may write roles and permissions in short form ([Role permissions](../policies/role-permissions.md#roles)).
+It is stored that way, and [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt)
+writes it out as plain policies and bindings: the compiler, the grant analysis, the reference index and the diff all read
+that, so nothing about a decision depends on the short form (`ROL-1`, `ROL-2`).
+
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt)
 holds them:
 

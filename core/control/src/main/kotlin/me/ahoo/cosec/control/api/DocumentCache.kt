@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -21,6 +23,7 @@ import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -34,7 +37,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * Bounded by [maxEntries] and by [maxHeap], an estimate of the heap it holds, the least recently used leaving first
  * (review M2 of #1240): a document weighs its stored size times [DECODED_FACTOR] once decoded, and times
  * [COMPILED_FACTOR] more for each compiled form it keeps, the factors measured on documents of many policies, many
- * bindings and many conditions (`DocumentCacheTest`). What `analyze` parses of it is not weighed. A candidate, which no
+ * bindings and many conditions (`DocumentCacheTest`). A document weighs [DERIVED_BINDING_BYTES] more stored bytes for
+ * each binding its roles derive (RFC 0012 §6.3): a few roles may expand far beyond what they store. What `analyze` parses
+ * of it is not weighed. A candidate, which no
  * digest names, is never kept, nor is a retained revision `explain` decides at: [Simulator] compiles those per call. Nor
  * is a document that, decoded and compiled once, would weigh more than half the bound (R2-L2 of #1240's review): it
  * would push every other entry out, and be pushed out by the next one, so it is decoded and compiled per call too.
@@ -63,7 +68,10 @@ internal class DocumentCache(
         private val compiled = LinkedHashMap<SnapshotDigest?, Lazy<Result<CompiledDocument>>>()
 
         /** What it is counted for in [heap], while it is held: guarded by the cache's lock. */
-        internal var weight: Long = size.toLong() * DECODED_FACTOR
+        internal var weight: Long = weighedBytes(size, document) * DECODED_FACTOR
+
+        /** What is enforced: the roles and short forms of [document], expanded, for `analyze` as for the engine. */
+        val effective: PolicyDocument by lazy(LazyThreadSafetyMode.PUBLICATION) { RoleExpansion.effective(document) }
 
         /**
          * Its compiled form with the platform document of digest [platform] (null: none), by [compile] the first time.
@@ -73,7 +81,7 @@ internal class DocumentCache(
         fun compiled(platform: SnapshotDigest?, compile: () -> CompiledDocument): Result<CompiledDocument> {
             val (compilation, added) = synchronized(compiled) { formFor(platform, compile) }
             if (added) {
-                weigh(this, size.toLong() * COMPILED_FACTOR)
+                weigh(this, weighedBytes(size, document) * COMPILED_FACTOR)
             }
             return compilation.value
         }
@@ -106,7 +114,7 @@ internal class DocumentCache(
         /** Its policies by id as `analyze` matches them, the first of an id: each one's patterns parsed once (RC1-41). */
         val analyzed: Map<String, AnalyzedPolicy> by lazy(LazyThreadSafetyMode.PUBLICATION) {
             val policies = LinkedHashMap<String, AnalyzedPolicy>()
-            document.policies.forEach { policies.putIfAbsent(it.id.value, AnalyzedPolicy(it, this)) }
+            effective.policies.forEach { policies.putIfAbsent(it.id.value, AnalyzedPolicy(it, this)) }
             policies
         }
     }
@@ -161,7 +169,7 @@ internal class DocumentCache(
     ): Entry = synchronized(entries) {
         entries[Key(key, digest)]?.let { return it }
         val entry = Entry(key, digest, document, size)
-        if (!admits(size)) {
+        if (!admits(weighedBytes(size, document))) {
             return entry
         }
         entries[Key(key, digest)] = entry
@@ -171,7 +179,11 @@ internal class DocumentCache(
     }
 
     /** Whether a document of [size] stored bytes, decoded and compiled once, weighs at most half the bound. */
-    fun admits(size: Int): Boolean = size.toLong() * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2
+    fun admits(size: Long): Boolean = size * (DECODED_FACTOR + COMPILED_FACTOR) <= maxHeap / 2
+
+    /** The stored bytes [document] weighs as: its own [size], and what its roles derive beyond it. */
+    private fun weighedBytes(size: Int, document: PolicyDocument): Long =
+        size.toLong() + RoleExpansion.grants(document) * DERIVED_BINDING_BYTES
 
     /** [entry]'s weight changes by [delta]: counted only while it is held, and what it pushes over the bound leaves. */
     private fun weigh(entry: Entry, delta: Long) = synchronized(entries) {
@@ -209,6 +221,9 @@ internal class DocumentCache(
 
         /** A compiled form's heap per stored byte of its document, at most about 7.5 as measured. */
         const val COMPILED_FACTOR: Int = 8
+
+        /** What one derived binding would take stored, written out. */
+        const val DERIVED_BINDING_BYTES: Long = 160
 
         /** Compiled forms kept per document: the current platform's, and the previous one's while a change propagates. */
         private const val VARIANTS = 2

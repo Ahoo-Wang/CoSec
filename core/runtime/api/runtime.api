@@ -522,11 +522,13 @@ public final class me/ahoo/cosec/runtime/document/CatalogGroup {
 }
 
 public final class me/ahoo/cosec/runtime/document/CatalogPermission {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getActions ()Ljava/util/List;
 	public final fun getDescription ()Ljava/lang/String;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
+	public final fun getResources ()Ljava/util/List;
 }
 
 public final class me/ahoo/cosec/runtime/document/DocumentCompileException : me/ahoo/cosec/model/CoSecException {
@@ -572,8 +574,8 @@ public final class me/ahoo/cosec/runtime/document/PolicyDefinition {
 }
 
 public final class me/ahoo/cosec/runtime/document/PolicyDocument {
-	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;JLjava/time/Instant;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Catalog;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/Provenance;Lme/ahoo/cosec/model/condition/ConditionLimits;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;JLjava/time/Instant;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Catalog;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/Provenance;Lme/ahoo/cosec/model/condition/ConditionLimits;Ljava/util/List;Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;JLjava/time/Instant;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Catalog;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/Provenance;Lme/ahoo/cosec/model/condition/ConditionLimits;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;JLjava/time/Instant;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Catalog;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/Provenance;Lme/ahoo/cosec/model/condition/ConditionLimits;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAttributes ()Ljava/util/List;
 	public final fun getBindings ()Ljava/util/List;
 	public final fun getBoundary-7sgtQuM ()Ljava/lang/String;
@@ -586,6 +588,7 @@ public final class me/ahoo/cosec/runtime/document/PolicyDocument {
 	public final fun getPublishedAt ()Ljava/time/Instant;
 	public final fun getRateLimits ()Ljava/util/List;
 	public final fun getRevision ()J
+	public final fun getRoles ()Ljava/util/List;
 }
 
 public final class me/ahoo/cosec/runtime/document/PolicyDocumentCodec {
@@ -602,8 +605,8 @@ public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler : me/ah
 	public static final field DEFAULT_PRINCIPAL_BINDING_LIMIT I
 	public static final field PERMISSION_PREFIX Ljava/lang/String;
 	public fun <init> ()V
-	public fun <init> (Lme/ahoo/cosec/engine/flat/PolicyCompiler;I)V
-	public synthetic fun <init> (Lme/ahoo/cosec/engine/flat/PolicyCompiler;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/engine/flat/PolicyCompiler;II)V
+	public synthetic fun <init> (Lme/ahoo/cosec/engine/flat/PolicyCompiler;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lme/ahoo/cosec/model/condition/AttributeCatalog;I)V
 	public synthetic fun <init> (Lme/ahoo/cosec/model/condition/AttributeCatalog;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun checkReferences (Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/runtime/document/PolicyDocument;)V
@@ -611,13 +614,14 @@ public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler : me/ah
 	public synthetic fun compile (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Ljava/lang/Object;
 	public fun compile (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/engine/flat/CompiledDocument;
 	public final fun getPrincipalBindingLimit ()I
+	public final fun getRoleGrantLimit ()I
 }
 
 public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion {
-	public final fun forPlatform (Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-	public static synthetic fun forPlatform$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-	public final fun of (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public final fun forPlatform (Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;I)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public static synthetic fun forPlatform$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;IILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public final fun of (Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;I)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
+	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;Lme/ahoo/cosec/model/condition/ConditionLimits;Lme/ahoo/cosec/model/condition/AttributeCatalog;ILjava/util/Set;IILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
 	public final fun permissionPrefix (Ljava/lang/String;)Ljava/lang/String;
 }
 
@@ -653,6 +657,45 @@ public final class me/ahoo/cosec/runtime/document/ProvenanceKind : java/lang/Enu
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/runtime/document/ProvenanceKind;
 	public static fun values ()[Lme/ahoo/cosec/runtime/document/ProvenanceKind;
+}
+
+public final class me/ahoo/cosec/runtime/document/RoleDefinition {
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/runtime/document/RolePermissions;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/runtime/document/RolePermissions;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getApp-UHuNvrE ()Ljava/lang/String;
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getId-l1CcKjo ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPermissions ()Lme/ahoo/cosec/runtime/document/RolePermissions;
+	public final fun getSpace-ISJu6RY ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/document/RoleExpansion {
+	public static final field BINDING_PREFIX Ljava/lang/String;
+	public static final field DEFAULT_ROLE_GRANT_LIMIT I
+	public static final field INSTANCE Lme/ahoo/cosec/runtime/document/RoleExpansion;
+	public final fun effective (Lme/ahoo/cosec/runtime/document/PolicyDocument;)Lme/ahoo/cosec/runtime/document/PolicyDocument;
+}
+
+public abstract interface class me/ahoo/cosec/runtime/document/RolePermissions {
+}
+
+public final class me/ahoo/cosec/runtime/document/RolePermissions$All : me/ahoo/cosec/runtime/document/RolePermissions {
+	public static final field INSTANCE Lme/ahoo/cosec/runtime/document/RolePermissions$All;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/document/RolePermissions$Listed : me/ahoo/cosec/runtime/document/RolePermissions {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lme/ahoo/cosec/runtime/document/RolePermissions$Listed;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/document/RolePermissions$Listed;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/RolePermissions$Listed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIds ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/runtime/document/ShadowWindow {

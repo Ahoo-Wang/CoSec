@@ -1,0 +1,17 @@
+# Rule: ROL-2, ROL-3
+# Mutant: the check of a tenant role reads the app head as stored: a short-form permission resolves nowhere
+# Tests: :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index c47d5517..b6f61c03 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -282,7 +282,7 @@ class ChangeChecks(
+         return candidate.kind == DocumentKind.TENANT && app != null && binding.policy.value in apps.getOrPut(app) {
+             val head = context.head(SnapshotKey.App(app))
+             checkedWith[SnapshotKey.App(app)] = head?.digest
+-            head?.document?.let(RoleExpansion::effective)?.policies?.map { it.id.value }?.toSet().orEmpty()
++            head?.document?.policies?.map { it.id.value }?.toSet().orEmpty()
+         }
+     }
+ 

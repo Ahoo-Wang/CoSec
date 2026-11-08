@@ -1,0 +1,114 @@
+{
+  "rules": [
+    "ROL-9"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "alice holds read through a system role, not edit: the role's edit fragment is not contained, and needs an approval.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "held",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "held"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "helper",
+              "app": "wms",
+              "permissions": [
+                "read",
+                "edit"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_COVERED"
+      ]
+    }
+  }
+}

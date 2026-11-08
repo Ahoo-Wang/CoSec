@@ -1,0 +1,17 @@
+# Rule: ROL-2, ROL-10
+# Mutant: the reference index is of the stored bindings: a tenant role is not indexed
+# Tests: :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 18dd09b2..8e6d2fa9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -655,7 +655,7 @@ class Revisions(
+         if (stored.kind == DocumentKind.PLATFORM) {
+             return emptySet()
+         }
+-        val document = RoleExpansion.effective(stored)
++        val document = stored
+         val own = document.policies.map { it.id }.toSet()
+         val references = LinkedHashSet<Pair<SnapshotKey, PolicyId>>()
+         if (document.kind == DocumentKind.TENANT) {

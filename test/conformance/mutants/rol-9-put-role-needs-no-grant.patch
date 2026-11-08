@@ -1,0 +1,17 @@
+# Rule: ROL-9
+# Mutant: PutRole does not check cosec:grant
+# Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index bdef6ddf..c0e3a68d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -174,7 +174,7 @@ class ChangeAuthority(
+             )
+             is Operation.PutRole -> {
+                 require(operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
+-                newBinding(key, operation.role, base)?.let { require(operator, ControlActions.GRANT, scopeOf(key, it)) }
++                newBinding(key, operation.role, base)?.let { require(operator, ControlActions.READ, scopeOf(key, it)) }
+             }
+ 
+             is Operation.RemoveRole -> require(operator, ControlActions.WRITE, entry(key, ROLE, operation.id.value))

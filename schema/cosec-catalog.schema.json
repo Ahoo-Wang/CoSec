@@ -26,7 +26,7 @@
         },
         "spaced": {
           "default": false,
-          "description": "Granted per space; informational.",
+          "description": "Whether a permission written with `action` applies in any space a role holding it applies in; without it, only in the default space (RFC 0012 §4.2).",
           "type": "boolean"
         }
       },
@@ -39,6 +39,21 @@
     "permission": {
       "additionalProperties": false,
       "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "cosec-snapshot-document.schema.json#/definitions/actionPattern"
+            },
+            {
+              "items": {
+                "$ref": "cosec-snapshot-document.schema.json#/definitions/actionPattern"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          ],
+          "description": "Defines the permission `perm:<app>/<id>` here (RFC 0012 §4): no hand-written policy of that id may exist."
+        },
         "description": {
           "examples": [
             "Read orders"
@@ -57,6 +72,21 @@
             "Read"
           ],
           "type": "string"
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "cosec-snapshot-document.schema.json#/definitions/resource"
+            },
+            {
+              "items": {
+                "$ref": "cosec-snapshot-document.schema.json#/definitions/resource"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          ],
+          "description": "Needs `action`. Absent: any resource."
         }
       },
       "required": [
@@ -65,7 +95,7 @@
       "type": "object"
     }
   },
-  "description": "An app's permission catalog (RFC 0004 §4.9): for UIs and generators; it takes no part in evaluation. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
+  "description": "An app's permission catalog (RFC 0004 §4.9, RFC 0012 §4): for UIs and generators; an entry with `action` also defines the permission. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "properties": {
     "groups": {
       "items": {

@@ -206,8 +206,12 @@ such an id is ambiguous and requests that need it fail closed.
 }
 ```
 
-Policies of an app document are named `perm:<appId>/<permission>` and cannot be attachable. The catalog is for UIs and
-generators only; it takes no part in evaluation (`spaced` is informational). The OpenAPI feature generates a route map and
+Policies of an app document are named `perm:<appId>/<permission>` and cannot be attachable. A catalog entry with `action`
+(and optional `resource`) also defines that permission in one line, and may not coexist with a hand-written policy of
+its id; in a group that is not `spaced` it applies only in the default space. Any other entry is only for UIs and
+generators. App documents (`"roles": [{ "id": "clerk", "permissions": ["read"] }]`, or `"permissions": "*"`) and tenant
+documents (each role also names its `app` and optionally one `space`) define roles, expanded into bindings before
+anything reads them; see https://cosec.ahoo.me/policies/role-permissions#roles. The OpenAPI feature generates a route map and
 an app document (`GET /actuator/cosecServiceGenerator/routes` and `/app`). Role grant semantics:
 https://cosec.ahoo.me/policies/role-permissions.
 

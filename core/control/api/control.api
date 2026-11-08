@@ -125,18 +125,20 @@ public final class me/ahoo/cosec/control/api/DecisionView {
 }
 
 public final class me/ahoo/cosec/control/api/DocumentDiff {
-	public fun <init> (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)V
+	public fun <init> (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)V
 	public final fun component1 ()J
 	public final fun component2 ()J
 	public final fun component3 ()Lme/ahoo/cosec/control/api/EntryChanges;
 	public final fun component4 ()Lme/ahoo/cosec/control/api/EntryChanges;
-	public final fun component5 ()Z
-	public final fun copy (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)Lme/ahoo/cosec/control/api/DocumentDiff;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/api/DocumentDiff;JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;ZILjava/lang/Object;)Lme/ahoo/cosec/control/api/DocumentDiff;
+	public final fun component5 ()Lme/ahoo/cosec/control/api/EntryChanges;
+	public final fun component6 ()Z
+	public final fun copy (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)Lme/ahoo/cosec/control/api/DocumentDiff;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/api/DocumentDiff;JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;ZILjava/lang/Object;)Lme/ahoo/cosec/control/api/DocumentDiff;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBindings ()Lme/ahoo/cosec/control/api/EntryChanges;
 	public final fun getFrom ()J
 	public final fun getPolicies ()Lme/ahoo/cosec/control/api/EntryChanges;
+	public final fun getRoles ()Lme/ahoo/cosec/control/api/EntryChanges;
 	public final fun getSections ()Z
 	public final fun getTo ()J
 	public fun hashCode ()I
@@ -755,6 +757,7 @@ public final class me/ahoo/cosec/control/change/EntryDigest {
 	public final fun of (Lme/ahoo/cosec/engine/flat/RateLimitSource;)Ljava/lang/String;
 	public final fun of (Lme/ahoo/cosec/model/Binding;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;)Ljava/lang/String;
 	public final fun of (Lme/ahoo/cosec/runtime/document/PolicyDefinition;)Ljava/lang/String;
+	public final fun of (Lme/ahoo/cosec/runtime/document/RoleDefinition;)Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/control/change/Escalation {
@@ -834,6 +837,13 @@ public final class me/ahoo/cosec/control/change/Operation$PutRateLimit : me/ahoo
 	public final fun getRule ()Lme/ahoo/cosec/engine/flat/RateLimitSource;
 }
 
+public final class me/ahoo/cosec/control/change/Operation$PutRole : me/ahoo/cosec/control/change/Operation {
+	public fun <init> (Lme/ahoo/cosec/runtime/document/RoleDefinition;Ljava/lang/String;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/document/RoleDefinition;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getIfMatch ()Ljava/lang/String;
+	public final fun getRole ()Lme/ahoo/cosec/runtime/document/RoleDefinition;
+}
+
 public final class me/ahoo/cosec/control/change/Operation$RemoveBinding : me/ahoo/cosec/control/change/Operation {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -852,6 +862,13 @@ public final class me/ahoo/cosec/control/change/Operation$RemoveRateLimit : me/a
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getId ()Ljava/lang/String;
+	public final fun getIfMatch ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/control/change/Operation$RemoveRole : me/ahoo/cosec/control/change/Operation {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getId-l1CcKjo ()Ljava/lang/String;
 	public final fun getIfMatch ()Ljava/lang/String;
 }
 
