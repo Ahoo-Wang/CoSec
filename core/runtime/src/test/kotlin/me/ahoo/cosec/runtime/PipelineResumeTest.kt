@@ -64,9 +64,15 @@ class PipelineResumeTest {
     private fun assertResumedOn(expected: String, pipeline: Pipeline, engine: StubEngine) {
         val (outcome, finishedOn) = startOn(eventLoop, ResumeDispatcher(resume)) { pipeline.evaluate(facts()) }
         outcome.proceed.assert().isTrue()
-        engine.threads.single().name.assert().isEqualTo(expected)
-        finishedOn.name.assert().isEqualTo(expected)
+        engine.threads.single().plainName.assert().isEqualTo(expected)
+        finishedOn.plainName.assert().isEqualTo(expected)
     }
+
+    /**
+     * The thread's name without what coroutines' debug mode (on under `-ea`) adds while a coroutine runs on it. The
+     * resume installs the context's elements, that one included, and it may not have been undone yet when this reads it.
+     */
+    private val Thread.plainName: String get() = name.substringBefore(" @")
 
     @Test
     fun authenticatorCompletingOnAClientThreadResumesOnTheResumeDispatcher() {
