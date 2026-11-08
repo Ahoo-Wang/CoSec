@@ -3,10 +3,10 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 18dd09b2..8e6d2fa9 100644
+index ec773baf..28a09508 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -655,7 +655,7 @@ class Revisions(
+@@ -658,7 +658,7 @@ class Revisions(
          if (stored.kind == DocumentKind.PLATFORM) {
              return emptySet()
          }

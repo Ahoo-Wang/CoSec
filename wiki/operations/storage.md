@@ -432,7 +432,8 @@ Every control-plane instance runs two maintenance passes while it runs, each fir
   (1 hour). It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
   reclaims nothing that pass. A lease per document (`reclaim:<doc>`) lets one instance at a time do each document.
   The revision index no longer lists a record before it is deleted, and keeps it among those left to delete until
-  the deletion succeeds: a deletion that fails is tried again by the next pass.
+  the deletion succeeds: a deletion that fails is tried again by the next pass. A history repair running at the same
+  time leaves out what falls below the index's floor, so what was reclaimed does not come back.
 - **Closing shadow windows**, every [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)
   (1 minute), under the `shadow-windows` lease, so a window closes at most one interval late.
 

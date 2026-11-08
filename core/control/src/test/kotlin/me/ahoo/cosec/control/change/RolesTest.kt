@@ -374,9 +374,8 @@ class RolesTest {
         val roles = (1..100).map { system("r$it", RolePermissions.Listed(listOf("read"))) }
         val document =
             PolicyDocument(plain.kind, plain.owner, 1, plain.publishedAt, emptyList(), emptyList(), roles = roles)
-        cached(
-            document
-        ).assert().isEqualTo(cached(plain) + 100 * DocumentCache.DERIVED_BINDING_BYTES * DocumentCache.DECODED_FACTOR)
+        val derived = 100 * DocumentCache.DERIVED_BINDING_BYTES * DocumentCache.DECODED_FACTOR
+        cached(document).assert().isEqualTo(cached(plain) + derived)
         PolicyDocumentCodec.encode(document).decodeToString().assert().contains("\"roles\"")
         Revisions.ownerOf(wms).second.assert().isEqualTo("wms")
     }

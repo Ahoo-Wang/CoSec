@@ -29,6 +29,13 @@ internal class CandidateChecks(
     private val clock: Clock,
     private val options: ChangeOptions,
 ) {
+    /** That [operator] may make [change]'s operations on its document's current head ([ChangeAuthority.authorize]). */
+    suspend fun authorize(operator: Operator, change: ChangeRequest) {
+        val head = context.head(change.key)?.document
+        val breakGlass = BreakGlassRules.touches(change.operations, head, clock.instant())
+        authority.authorize(operator, change.key, change.operations, change.kind, breakGlass, head)
+    }
+
     /**
      * Runs the checks of [change] on [head] and returns it `CHECKED` or `DRAFT`, with what they found; a clean
      * candidate is analyzed for what [operator] grants with it, and carries the escalations.

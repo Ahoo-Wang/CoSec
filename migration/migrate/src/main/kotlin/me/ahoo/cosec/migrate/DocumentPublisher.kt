@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.migrate
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.change.CandidateDigest
 import me.ahoo.cosec.control.store.ControlStore
@@ -120,7 +122,9 @@ class DocumentPublisher(
     ): PublishOutcome = try {
         revisions.publish(key, null, document, PUBLICATION)
     } catch (error: CancellationException) {
-        throw error
+        // The caller's own cancellation stays that; otherwise a store's own timeout, a failed write like any other (#1263).
+        currentCoroutineContext().ensureActive()
+        throw PublishException("Writing $key timed out: ${error.message}.", written.toList(), error)
     } catch (error: Exception) {
         throw PublishException("Writing $key failed: ${error.message}.", written.toList(), error)
     }

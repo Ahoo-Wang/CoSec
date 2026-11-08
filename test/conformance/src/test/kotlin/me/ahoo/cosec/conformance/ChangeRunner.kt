@@ -43,6 +43,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
@@ -77,6 +78,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.testkit.ScenarioFormatException
@@ -362,16 +364,23 @@ object ChangeRunner : ScenarioRunner {
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
-            "diff" -> diff(argument)
-            "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
-            "rateLimits" -> {
-                val head = revisions.head(documentKey(argument.text()))
-                "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
-            }
+            "diff", "staged", "rateLimits" -> read(action, argument)
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
                 "refused ${error.status}"
+            } catch (_: SnapshotFormatException) {
+                "malformed"
+            }
+        }
+
+        /** What a step reads of the documents, without changing them. */
+        private suspend fun read(action: String, argument: JsonNode): String = when (action) {
+            "diff" -> diff(argument)
+            "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
+            else -> {
+                val head = revisions.head(documentKey(argument.text()))
+                "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
             }
         }
 
@@ -704,11 +713,13 @@ object ChangeRunner : ScenarioRunner {
             "putRateLimit" -> Operation.PutRateLimit(PolicyDocumentCodec.decodeRateLimit(value))
             "removeRateLimit" -> Operation.RemoveRateLimit(value.text())
             "setBoundary" -> Operation.SetBoundary(if (value.isNull) null else PolicyId(value.text()))
-            else -> roleOperation(kind, name, value)
+            else -> otherOperation(key, kind, name, value)
         }
     }
 
-    private fun roleOperation(kind: DocumentKind, name: String, value: JsonNode): Operation = when (name) {
+    private fun otherOperation(key: SnapshotKey, kind: DocumentKind, name: String, value: JsonNode): Operation = when (name) {
+        // As the control API's request bodies write it: what it refuses is the step's `malformed` (CTL-28).
+        "wire" -> ChangeRequestCodec.operation(key, value)
         "putRole" -> Operation.PutRole(PolicyDocumentCodec.decodeRole(value, kind))
         "removeRole" -> Operation.RemoveRole(RoleId(value.text()))
         "putCatalog" -> Operation.PutCatalog(if (value.isNull) null else PolicyDocumentCodec.decodeCatalog(value))

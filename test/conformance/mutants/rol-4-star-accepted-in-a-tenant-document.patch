@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCodec.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCodec.kt
-index 65d91adc..e999c4d3 100644
+index 2354b407..49d1f3f3 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCodec.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCodec.kt
 @@ -176,7 +176,7 @@ object PolicyDocumentCodec {

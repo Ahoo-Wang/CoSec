@@ -487,10 +487,12 @@ class ChangesB1Test {
         val failure = try {
             changes.publish(ALICE_OP, change.id)
             null
-        } catch (e: IllegalStateException) {
+        } catch (e: ChangeRejectedException) {
             e
         }
-        failure?.message.assert().isEqualTo("Redis is down")
+        // The answer says what happened (#1263), with what stopped it.
+        failure!!.message!!.assert().contains("revision 1 is written")
+        failure.cause!!.message.assert().isEqualTo("Redis is down")
         harness.revisions.head(ACME)!!.revision.assert().isEqualTo(1L)
         // The detection compared the platform's head, which the publish was checked with.
         readAfter.assert().contains(SnapshotKey.Platform)
@@ -789,9 +791,11 @@ class ChangesB1Test {
         val change = changes.propose(ALICE_OP, ACME, 0, listOf(grant), "grant")
         changes.skipShadow(ALICE_OP, change.id, "test")
         changes.publish(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        // A copy under the list's lock: the listener may still be appending while this reads.
+        fun reviews() = synchronized(events) { events.filter { it.kind == ChangeEvent.Kind.REVIEW_NEEDED } }
         val detected = withTimeout(5_000) {
-            while (events.none { it.kind == ChangeEvent.Kind.REVIEW_NEEDED }) delay(10)
-            events.single { it.kind == ChangeEvent.Kind.REVIEW_NEEDED }
+            while (reviews().isEmpty()) delay(10)
+            reviews().single()
         }
         detected.moved.single().let {
             it.document.assert().isEqualTo("platform")

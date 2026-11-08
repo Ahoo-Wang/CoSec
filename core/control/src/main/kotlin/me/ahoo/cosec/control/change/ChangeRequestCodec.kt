@@ -51,6 +51,14 @@ import java.time.Instant
  */
 object ChangeRequestCodec {
     private val SHOWN_APPROVAL_FIELDS = listOf("approver", "at", "candidate", "covers")
+    private val LIMIT_FIELDS = listOf(
+        "maxNodes",
+        "maxDepth",
+        "maxInValues",
+        "maxCidrBlocks",
+        "maxLiteralBytes",
+        "maxCost"
+    )
     private val factory = JsonNodeFactory.instance
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
@@ -415,7 +423,8 @@ object ChangeRequestCodec {
     private fun JsonNode.textOrNull(): String? = if (isNull) null else text()
 
     /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */
-    internal fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
+    @InternalCoSecApi
+    fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
         val (kind, owner) = Revisions.ownerOf(key)
         node.only(
             "op", "policy", "id", "binding", "rateLimit", "role", "catalog", "limits", "attributes", "boundary", "ifMatch",
@@ -451,30 +460,20 @@ object ChangeRequestCodec {
     private fun section(node: JsonNode, op: String): Operation {
         return when (op) {
             "putCatalog" -> Operation.PutCatalog(node.get("catalog")?.let { PolicyDocumentCodec.decodeCatalog(it) })
-            "setLimits" -> Operation.SetLimits(
-                node.get("limits")?.let {
-                    ConditionLimits(
-                        it.need("maxNodes").asInt(),
-                        it.need("maxDepth").asInt(),
-                        it.need("maxInValues").asInt(),
-                        it.need("maxCidrBlocks").asInt(),
-                        it.need("maxLiteralBytes").asInt(),
-                        it.need("maxCost").asInt(),
-                    )
-                },
-            )
-
+            "setLimits" -> Operation.SetLimits(node.get("limits")?.let(::limits))
             "setBoundary" -> Operation.SetBoundary(node.get("boundary")?.let { PolicyId(it.text()) })
+            // The document format's rules, so a section never reads a value its document would refuse (#1275).
             "setAttributes" -> Operation.SetAttributes(
-                node.get("attributes")?.values()?.map {
-                    val type = PolicyDocumentCodec.ATTRIBUTE_TYPES[it.need("type").text()]
-                        ?: malformed("unknown attribute type ${it.get("type")}")
-                    Attribute.external(it.need("path").text(), type)
-                },
+                node.get("attributes")?.let { PolicyDocumentCodec.decodeAttributes(it, "\$.attributes") }
             )
 
             else -> malformed("unknown operation [$op]")
         }
+    }
+
+    /** Limits as the document format reads them, with none left to its default: an operation states all six. */
+    private fun limits(node: JsonNode): ConditionLimits = PolicyDocumentCodec.decodeLimits(node, "\$.limits").also {
+        LIMIT_FIELDS.forEach { field -> node.need(field) }
     }
 
     private fun documentKey(text: String): SnapshotKey = when {

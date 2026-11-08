@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
@@ -33,6 +34,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
@@ -54,9 +56,12 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -480,6 +485,76 @@ class ControlPlaneTest {
         simulator.compilations.get().assert().isEqualTo(compiled + 3)
         plane.simulate(alice, bob("read"))
         simulator.compilations.get().assert().isEqualTo(compiled + 3)
+    }
+
+    /** A policy reading an attribute only the platform declares: it stops compiling once the platform drops it. */
+    private fun geo(id: String = "geo", value: String = "NZ") =
+        allow(id, action = "order:none", condition = Condition.Eq("ext.geo.country", Literal.Str(value)))
+
+    private suspend fun platformDeclares(vararg attributes: Attribute) {
+        val head = revisions.head(SnapshotKey.Platform)!!
+        val document = PolicyDocument(
+            head.document.kind,
+            head.document.owner,
+            head.revision,
+            head.document.publishedAt,
+            head.document.policies,
+            head.document.bindings,
+            attributes = attributes.toList(),
+        )
+        revisions.publish(
+            SnapshotKey.Platform,
+            head,
+            document,
+            Publication("attrs", ProvenanceKind.BOOTSTRAP, plato.actor)
+        )
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+    }
+
+    /** Acme's document with [geo] added, and a change on top of it; the platform then stops declaring the attribute. */
+    private suspend fun brokenByThePlatform(vararg operations: Operation): ChangeRequest {
+        platformDeclares(Attribute.external("ext.geo.country", AttributeType.STRING))
+        val added = plane.propose(alice, TENANT, 1, listOf(Operation.PutPolicy(geo())), "geo")
+        added.state.assert().isEqualTo(ChangeState.CHECKED)
+        plane.skipShadow(plato, added.id, "test")
+        plane.publish(plato, added.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val change = plane.propose(alice, TENANT, 2, operations.toList(), "on top")
+        change.state.assert().isEqualTo(ChangeState.CHECKED)
+        platformDeclares()
+        return change
+    }
+
+    @Test
+    fun `the same compile failure on both sides does not differ - #1253`() = runBlocking<Unit> {
+        val change = brokenByThePlatform(Operation.PutPolicy(geo()))
+
+        val simulated = plane.simulate(plato, bob("read"), change.id)
+
+        simulated.enforced.decision.assert().isEqualTo("Indeterminate")
+        simulated.candidate.assert().isEqualTo(simulated.enforced)
+        simulated.differs.assert().isFalse()
+    }
+
+    @Test
+    fun `a candidate that fails another way differs from the enforced failure - #1253`() = runBlocking<Unit> {
+        val change = brokenByThePlatform(Operation.PutPolicy(geo("geo-too")))
+
+        val simulated = plane.simulate(plato, bob("read"), change.id)
+
+        simulated.enforced.decision.assert().isEqualTo("Indeterminate")
+        simulated.candidate!!.decision.assert().isEqualTo("Indeterminate")
+        simulated.differs.assert().isTrue()
+    }
+
+    @Test
+    fun `a candidate that repairs the failure differs - #1253`() = runBlocking<Unit> {
+        val change = brokenByThePlatform(Operation.RemovePolicy(PolicyId("geo")))
+
+        val simulated = plane.simulate(plato, bob("read"), change.id)
+
+        simulated.enforced.decision.assert().isEqualTo("Indeterminate")
+        simulated.candidate!!.decision.assert().isEqualTo("Permit")
+        simulated.differs.assert().isTrue()
     }
 
     companion object {

@@ -123,6 +123,8 @@ change's candidate too:
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
 full trace of candidates. Statements from documents you may not read are left out and counted as `redacted`.
+`differs` compares what the two decisions say, a failure by its kind and message, so the same compile failure on both
+sides does not differ.
 
 A simulation reads the documents enforcement reads: the platform's, the tenant's, and the app's when the request has
 roles in its app or the tenant document binds one of that app's permission policies to `Anyone` or to a principal
@@ -198,8 +200,8 @@ A change is a set of entry operations on one document, made on the revision you 
 | `putRole` | `role`, optional `ifMatch` | Adds the role, or replaces the one with its id as a whole. App and tenant documents. |
 | `removeRole` | `id`, optional `ifMatch` | Removes a role. |
 | `putCatalog` | `catalog` | Sets an app document's catalog; without `catalog`, removes it. |
-| `setLimits` | `limits` with all six limits | Sets the platform's limits; without `limits`, back to the defaults. |
-| `setAttributes` | `attributes` | Sets the platform's declared attributes; without `attributes`, removes them. |
+| `setLimits` | `limits` with all six limits, each a positive integer as in a document | Sets the platform's limits; without `limits`, back to the defaults. A value of another type is a `400`. |
+| `setAttributes` | `attributes`, an array as in a document | Sets the platform's declared attributes; without `attributes`, removes them. Anything but an array of attributes is a `400`. |
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
@@ -229,7 +231,9 @@ flowchart LR
 ```
 
 A document has at most one staged change (`SHADOWING`, `AWAITING_APPROVAL` or `READY`); staging another is a `409`
-until that one is published, abandoned, rejected or expired. A change that is not finished expires
+until that one is published, abandoned, rejected or expired. A change is staged before it takes the slot, so a call
+still writing its candidate holds the slot too; one that cannot write it, or is cancelled, gives the slot back and the
+change is `CHECKED` again. A change that is not finished expires
 `cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
 read after that, and the control plane's maintenance pass reads every open change each
 `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
@@ -455,7 +459,9 @@ goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved
 document's staging slot meanwhile, the change is `CONFLICTED`; if the candidate no longer compiles against the current
 documents, it is `DRAFT` with the findings. A publish whose revision was written but whose answer was lost is
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
-finishes what followed the write, and records the events as the publisher the revision names.
+finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
+the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
+publishing the change again settles it without adding a revision.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane
@@ -480,7 +486,8 @@ that can apply in the tenant asked about, whose scope fits the query and whose p
 action and resource, with its document,
 subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
 not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
-`hidden`, and bindings to policies in them in `opaque`. Attachments are not listed: they depend on each principal's
+`hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
+app's permission policies, as enforcement does, when you may read the app's document. Attachments are not listed: they depend on each principal's
 memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
 that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
 tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.

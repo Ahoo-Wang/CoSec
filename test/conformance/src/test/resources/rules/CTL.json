@@ -14,11 +14,14 @@
     {
       "id": "CTL-2",
       "source": "RFC 0007 §5.4",
-      "statement": "The revision record is written before the head, and the head carries its parent.",
+      "statement": "The revision record is written before the head, and the head carries its parent. The head write is the commit point: a store's own timeout after it is a failure of what follows the write, never the publish's outcome or the caller's cancellation.",
       "level": "control",
       "guards": [
         "control:RevisionsTest",
-        "cocache:RevisionChainTest"
+        "cocache:RevisionChainTest",
+        "control:CommittedRevisionTest#a store timeout indexing a written head still answers published - #1263",
+        "control:CommittedRevisionTest#a store timeout settling a published change says it is written, and a retry settles it - #1263",
+        "control:CommittedRevisionTest#a caller cancelled before the head write is cancelled and writes no head - #1263"
       ],
       "pending": null
     },
@@ -70,11 +73,14 @@
     {
       "id": "CTL-6",
       "source": "RFC 0007 §5.5",
-      "statement": "A document has at most one staged change; another stages only once it is published, abandoned or expired.",
+      "statement": "A document has at most one staged change; another stages only once it is published, abandoned or expired. A change is staged before it holds the slot, so a call still writing its candidate is never taken for a free slot, and what returns SHADOWING holds the slot and owns the candidate.",
       "level": "control",
       "guards": [
         "control:ControlFailClosedTest#one staged change per document",
-        "cocache:RevisionChainTest#changes stage one at a time across instances and publish once"
+        "cocache:RevisionChainTest#changes stage one at a time across instances and publish once",
+        "control:StageReservationTest#a stage writing its candidate keeps the slot from another change - #1235",
+        "control:StageReservationTest#a change is staged by the time it holds the slot - #1235",
+        "control:StageReservationTest#of two stages at once, the one that returns is the holder and owns the candidate - #1235"
       ],
       "pending": null
     },
@@ -309,6 +315,16 @@
         "control:ControlAuthorizationTest#a tenant admin skips the window of its own tenant's document",
         "control:ControlAuthorizationTest#a tenant admin who skips the window still waits for approval of what the analysis cannot prove",
         "control:ControlAuthorizationTest#tenant admin held by a platform principal does not skip a tenant's window"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-28",
+      "source": "RFC 0007 §10.2; #1275",
+      "statement": "An operation on a document's section reads its fields by the document format's rules: a field of the wrong type or out of range is refused, never made into another value, and an operation states every limit it sets.",
+      "level": "control",
+      "guards": [
+        "control:SectionFieldsHttpTest#a section field of the wrong type is a 400 and proposes nothing - #1275"
       ],
       "pending": null
     }

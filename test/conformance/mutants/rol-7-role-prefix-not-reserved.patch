@@ -3,10 +3,10 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index c47d5517..515e7265 100644
+index 6625b70e..2a63a060 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -445,6 +445,6 @@ class ChangeChecks(
+@@ -443,6 +443,6 @@ class ChangeChecks(
          private const val UNPROCESSABLE = 422
          private const val UNAVAILABLE = 503
          private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value

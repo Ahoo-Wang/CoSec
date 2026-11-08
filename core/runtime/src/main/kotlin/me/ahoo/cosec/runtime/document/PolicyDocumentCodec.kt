@@ -465,6 +465,12 @@ object PolicyDocumentCodec {
     @InternalCoSecApi
     fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
 
+    @InternalCoSecApi
+    fun decodeLimits(tree: JsonNode, path: String = ROOT): ConditionLimits = limits(DocumentNode(tree, path))
+
+    @InternalCoSecApi
+    fun decodeAttributes(tree: JsonNode, path: String = ROOT): List<Attribute> = attributes(DocumentNode(tree, path))
+
     fun encode(document: PolicyDocument): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(document))
 
     @InternalCoSecApi
