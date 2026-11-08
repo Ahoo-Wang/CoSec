@@ -100,7 +100,8 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         const val NAME = "tracing"
         const val SPAN_NAME = "cosec.authorize"
         private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-        private val INSTRUMENTATION_VERSION = TracingListener::class.java.`package`.implementationVersion ?: "unknown"
+        private val INSTRUMENTATION_VERSION =
+            instrumentationVersion(TracingListener::class.java.`package`.implementationVersion)
         private const val AUTHORIZE = CoSec.COSEC_PREFIX + "authorize."
         val TENANT_ID = stringKey(CoSec.COSEC_PREFIX + "tenant_id")
         val APP_ID = stringKey(CoSec.COSEC_PREFIX + "app_id")
@@ -114,6 +115,9 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         val STATEMENT_NAME = stringKey(AUTHORIZE + "statement.name")
         val BINDING_ID = stringKey(CoSec.COSEC_PREFIX + "binding.id")
         val SNAPSHOT_VERSION = stringKey(CoSec.COSEC_PREFIX + "snapshot.version")
+
+        /** The jar's `Implementation-Version`; classes that run from a directory have none. */
+        internal fun instrumentationVersion(manifestVersion: String?): String = manifestVersion ?: "unknown"
     }
 }
 
