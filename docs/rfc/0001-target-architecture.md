@@ -490,6 +490,8 @@ profile 引导的优化，峰值吞吐通常更低。所以 native 只是网关�
 
 > **2026-10-29 修订**：CoSec 不再依赖 CosId（#1170）。id 由 CoSec 自己的端口 `IdGenerator`（`cosec-spi`）生成；CosId 只出现在可选扩展
 > `cosec-cosid` 中，基于 CosId 5.0.0-alpha.2（2026-10-30 升到 5.0.0 正式版，#1180），由 starter 按类路径装配。下文关于 CosId 4.0 的内容只适用于 7.x。
+>
+> **2026-11-08 修订（#1203）**：CoSec 8.0 的存储层改为 **CoCache 8.0.0**（维护者 2026-11-07 决定：CoCache 8.0.0 正式版发布后、CoSec RC 之前采用；8.x 的兼容承诺从 8.0.0 开始）。下文关于 CoCache 6.x 的能力与版本只适用于 7.x 与 8.0.0-alpha.2 及以前的预览版。CoCache 8 不读 6.x 写的值：8.0 部署的数据由 `cosec-migrate cocache8` 迁移，每个读到的 6.x 值都 fail closed。具体落在哪里，见 RFC 0003 §4、RFC 0007 §5.2 的实现说明。
 
 **决定**：目标架构以 **CoCache 6.4** 和 **CosId 4.0** 为准，并随它们的后续版本更新。main 已升级到 CoCache 6.6.0 和 CosId 4.0.2（7.0）。
 两者的基线都是 JDK 17 与 Spring Boot 4，与 3.9 一致。

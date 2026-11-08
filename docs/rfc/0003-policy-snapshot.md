@@ -319,6 +319,14 @@ internal sealed interface DocumentState<out T> {
 
 ## 4. 分发：CoCache 6.x
 
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：本节按 CoCache 6 写成；自 #1203 起 CoSec 运行在 CoCache 8.0.0 上，以下几处与正文不同，其余设计不变。
+> - **缓存是 CoCache 8 的 `Store`**（快照、九个控制面缓存、三个影子缓存、两个吊销表；成员关系是带 `externallySourced()` 的 `Cache`），全部经 `CoCacheFactory` 用 `CoSecCacheSpecs.locks(name)` 创建：布局字段一律 lock；权威存储再 lock 加 constrain，把 `ttl` 固定为永不过期、`unknown-read` 固定为 `throw`；快照缓存还固定 `local-max-age`；影子缓存固定声明的 `ttl`；吊销表的 `read-timeout` 固定为命令超时，全局默认值改不动它（否则会扩大 `PIP-7` 的降级）。这些约束在 `cocache.caches.[name].unlock` 之后施加，所以"打破玻璃"也不能让策略过期，或让失败的读读成"不存在"。不经 starter 创建的快照缓存同样被固定（`SNP-3`）。
+> - **存储 key 与 CoCache 6 时逐字节相同**（`CoSecCacheSpecsTest#storageKeys`）：每个存储路径在最后一个 `:` 处拆成 `keyPrefix` 与 namespace，全部在 `cosec.key-prefix` 下（`SNP-9`）；失效通道为 `{keyPrefix}inv:{namespace}`。CoCache 8 交给监听器的是已编码的 key，`PolicySnapshotCache.snapshotKeyOf` 据此还原。
+> - **条件读只比较存储的摘要**（§4.5）：每次重新校验在 Redis 上约 7–13 µs，与文档大小无关（CoCache 6 在 4 MiB 时约 11.7 ms）。摘要是 SHA-256（`SnapshotDigest`，带算法名），持久化处写作 `SHA-256:<64 位十六进制>`。
+> - **读不懂的值 fail closed**：CoCache 8 读到 CoCache 6 写的值抛 `ForeignFormatException`：快照文档 503，吊销该令牌或主体 503（从不读成"没有吊销"），控制面记录 500。升级用 `cosec-migrate cocache8`，所有实例停机时运行（`upgrading.md`）。
+> - **淘汰策略**：CoCache 8 自带启动检查，CoSec 的检查（`SNP-3`、`cosecSnapshotEviction`）读的是保存快照的那个 Redis（`CoCacheFactory.runtime.backend`），两者并存。
+> - 文首 2026-11-02 关于 CoCache 6.9、6.10 失败模式的说明只适用于 CoCache 6。
+
 ### 4.1 存储
 
 ```kotlin

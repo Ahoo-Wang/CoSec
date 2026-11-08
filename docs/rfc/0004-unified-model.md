@@ -325,6 +325,8 @@ interface MembershipProvider {
 
 > **实现说明（2026-11-02，#1188）**：CoCache 6.9 起，没有加载器的缓存读失败默认抛出，所以降级读改由 CoSec 在两个吊销缓存上显式设为
 > `read-failure: degrade`；customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）。降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
+>
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：两个吊销表是 CoCache 8 的 `Store`，读失败按 `unknown-read: absent` 读作"没有吊销"（仍是 `PIP-7` 文档化的例外），但只在 Redis 读失败时：CoCache 6 写的值（包括缓存缺失标记）抛出格式错误，答 503，从不读成"没有吊销"（`CoCache6ValuesTest`）。吊销表的 `read-timeout` 固定为命令超时，`cocache.defaults.store.read-timeout` 一类的全局默认值不能把它缩短，否则更多的读会超时并读作"没有吊销"。
 
 ### 4.6 `ScopeResolver`
 
