@@ -18,8 +18,8 @@ package me.ahoo.cosec.cache
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.control.ChangeRequestCacheCodec
 import me.ahoo.cosec.cache.control.ListedCodec
+import me.ahoo.cosec.cache.control.ReferrersCodec
 import me.ahoo.cosec.cache.control.RevisionIndexCodec
-import me.ahoo.cosec.cache.control.SnapshotKeySetCodec
 import me.ahoo.cosec.cache.control.StageSlotCodec
 import me.ahoo.cosec.cache.shadow.ReportersCodec
 import me.ahoo.cosec.cache.shadow.ShadowReportCodec
@@ -77,7 +77,8 @@ class StoredFormatTest {
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
      * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780. `revisionIndex` is
      * the exception: its digests became CoCache 8's SHA-256 with the algorithm (`SHA-256:<hex>`), which replaced the
-     * SHA-1 hex digests of CoCache 6.
+     * SHA-1 hex digests of CoCache 6. `referrers` is new with #1207: each referrer with the revision that indexed it,
+     * where 8.0.0-alpha.3 wrote `keys`, a set of keys, which still reads.
      */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
@@ -254,13 +255,17 @@ class StoredFormatTest {
             StageSlotCodec::decode,
             fixture("stageSlot")
         )
-        val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
+        // #1207: each referrer with the revision of it that last indexed the reference.
         pinned(
-            "keys",
-            keys,
-            SnapshotKeySetCodec::encode,
-            SnapshotKeySetCodec::decode,
-            fixture("keys")
+            "referrers",
+            mapOf(SnapshotKey.Tenant("b") to 7L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 2L),
+            ReferrersCodec::encode,
+            ReferrersCodec::decode,
+            fixture("referrers")
+        )
+        // The set of keys 8.0.0-alpha.3 wrote still reads, each member at revision 0.
+        ReferrersCodec.decode(fixture("keys").encodeToByteArray()).assert().isEqualTo(
+            mapOf(SnapshotKey.App("order") to 0L, SnapshotKey.Platform to 0L, SnapshotKey.Tenant("b") to 0L)
         )
         pinned(
             "listed",

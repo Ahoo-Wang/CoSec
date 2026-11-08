@@ -1,0 +1,17 @@
+# Rule: CTL-25
+# Mutant: a revision that refers again to what is still indexed keeps the earlier revision, so the late removal of the revision between them takes it out
+# Tests: :control:test --tests me.ahoo.cosec.control.store.ReferrerCleanupRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 65da6263..f13c4cbb 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -375,7 +375,7 @@ class Revisions(
+      */
+     private fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+         val current = referrers[key]
+-        return if (current != null && current >= revision) referrers else referrers + (key to revision)
++        return if (current != null) referrers else referrers + (key to revision)
+     }
+ 
+     /**

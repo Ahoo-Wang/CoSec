@@ -286,7 +286,10 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
 - `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。如果某个变更属于应用 id 规则拒绝的应用（之前的构建写入的），它的记录不再可读，`change(id)` 会抛出 `UnnamedDocumentException`，`ChangeRequestCodec` 解码这种记录时也是如此：无法知道它是否已经结束，所以它继续列出，`openChanges()` 也不能因它而失败。维护任务跳过它；由运维人员移除它的记录。
-- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它。
+- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
+- `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。`putCandidate` 只负责写入。
+- `referrers` 和 `putReferrers`：每个引用方文档带上它最后一次登记该引用的修订，所以一个修订迟到的删除不会撤销更晚的修订重新登记的引用（`CTL-25`）。
+- `RevisionIndex.reclaiming`：回收已从索引中移出、尚未确认删除的记录；存储与索引的其余部分一起保存它。
 
 与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。
 

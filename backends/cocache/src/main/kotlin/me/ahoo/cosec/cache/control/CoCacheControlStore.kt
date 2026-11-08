@@ -18,6 +18,7 @@ package me.ahoo.cosec.cache.control
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cocache.api.ConditionalDelete
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
@@ -69,7 +70,7 @@ class CoCacheControlStore internal constructor(
     private val heads: Store<SnapshotKey, SnapshotDocument>,
     private val records: Store<RevisionRecordKey, SnapshotDocument>,
     private val indexes: Store<SnapshotKey, RevisionIndex>,
-    private val references: Store<ReferenceKey, Set<SnapshotKey>>,
+    private val references: Store<ReferenceKey, Map<SnapshotKey, Long>>,
     private val leases: Store<String, String>,
     private val changes: Store<ChangeId, ChangeRequest>,
     private val stages: Store<SnapshotKey, StageSlot>,
@@ -146,21 +147,24 @@ class CoCacheControlStore internal constructor(
     override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean =
         put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
 
-    /** An emptied set is written as empty, never deleted: a delete cannot be conditional, and could drop a new referrer. */
+    /**
+     * Emptied referrers are written as empty, not deleted: the next writer always has a digest to name, and absent means
+     * never written.
+     */
     override suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean = put(
         references,
         ReferenceKey(target, policy),
         expected,
         referrers,
-        digest(SnapshotKeySetCodec, referrers)
+        digest(ReferrersCodec, referrers)
     ) is Put.Written
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
@@ -216,13 +220,13 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = read(candidates, key)?.first
 
-    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
-        if (candidate == null) {
-            candidates.async().delete(key).await()
-        } else {
-            candidates.async().put(key, candidate).await()
-        }
+    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate) {
+        candidates.async().put(key, candidate).await()
     }
+
+    /** `deleteIfMatch` over the digest of the candidate of [window] as read, so another window's is never removed. */
+    override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
+        deleteIf(candidates, key) { it.window == window }
 
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
         val result = leases.async().putIfMatch(name, null, holder, duration).await()
@@ -232,11 +236,53 @@ class CoCacheControlStore internal constructor(
         return (read(leases, name)?.first) == holder
     }
 
-    /** Read, then removed if still [holder]'s: while it holds the lease no one else can take it, so nothing is lost. */
+    /**
+     * `deleteIfMatch` over the digest of [holder]'s lease as read: one that expired after the read and another instance
+     * took has another value, and stays. [holder] taking it again in between is the one case it removes after the read,
+     * and that lease is its own.
+     */
     override suspend fun releaseLease(name: String, holder: String) {
-        if (read(leases, name)?.first == holder) {
-            leases.async().delete(name).await()
+        deleteIf(leases, name) { it == holder }
+    }
+
+    /**
+     * Removes [key] if its value, read now, is [wanted], and only while it still is (`deleteIfMatch`). A conflict is
+     * read again: the value that replaced it may be wanted too. A removal whose outcome is unknown is read back: gone, or
+     * another value, means it is not this caller's to remove any more.
+     */
+    private suspend fun <K : Any, V : Any> deleteIf(store: Store<K, V>, key: K, wanted: (V) -> Boolean): Boolean {
+        repeat(MAX_LIST_ATTEMPTS) {
+            val (value, digest) = read(store, key) ?: return false
+            if (!wanted(value)) {
+                return false
+            }
+            val deleted = try {
+                store.async().deleteIfMatch(key, cocacheDigest(digest)).await()
+            } catch (error: CacheWriteException) {
+                return removedAfter(store, key, digest, error)
+            }
+            if (deleted == ConditionalDelete.Deleted) {
+                return true
+            }
         }
+        throw IllegalStateException(
+            "[$key] kept changing while it was removed; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
+    }
+
+    /**
+     * Whether a `deleteIfMatch` of [key] over [digest] that failed with [error] removed it: read back when its outcome
+     * is unknown. Still [digest] means it did not, and the failure is the answer.
+     */
+    private suspend fun <K : Any, V : Any> removedAfter(
+        store: Store<K, V>,
+        key: K,
+        digest: SnapshotDigest,
+        error: CacheWriteException,
+    ): Boolean {
+        val after = if (error.outcomeUnknown) read(store, key) else throw error
+        if (after?.second == digest) throw error
+        return after == null
     }
 
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */

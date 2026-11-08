@@ -1,0 +1,58 @@
+{
+  "rules": [
+    "CTL-26"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "c1 shadows tenant acme and is abandoned; its withdrawal waits until a later step, and nothing has staged meanwhile. The withdrawal removes c1's own candidate, so no candidate is staged.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "late": {
+        "abandon": "c1"
+      }
+    },
+    {
+      "advance": "PT1S"
+    },
+    {
+      "staged": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "ABANDONED",
+      "advanced",
+      "staged none"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

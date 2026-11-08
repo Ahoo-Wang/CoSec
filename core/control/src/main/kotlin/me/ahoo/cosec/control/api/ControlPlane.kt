@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.BreakGlass
+import me.ahoo.cosec.control.change.CandidateDigest
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
@@ -42,6 +43,7 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.appliesIn
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -59,7 +61,10 @@ data class DocumentDiff(
     val to: Long,
     val policies: EntryChanges,
     val bindings: EntryChanges,
-    /** Whether the sections (catalog, limits, attributes, rate limits) differ. */
+    /**
+     * Whether anything besides the policies and bindings differs: the catalog, the limits, the attributes, the boundary
+     * or the rate limits, compared by their whole content (#1205).
+     */
     val sections: Boolean,
 )
 
@@ -423,13 +428,7 @@ class DefaultControlPlane(
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
             val entry = (if (key == SnapshotKey.Platform) platform else entry(key)) ?: continue
             for (binding in entry.document.bindings) {
-                if (!inScope(
-                        binding.scope.app.exact {
-                            it.value
-                        },
-                        query.app
-                    ) || !inScope(binding.scope.space.exact { it.value }, query.space)
-                ) {
+                if (!applies(binding, query)) {
                     continue
                 }
                 val policy = entry.analyzed[binding.policy.value] ?: platform?.analyzed?.get(binding.policy.value)
@@ -505,13 +504,31 @@ class DefaultControlPlane(
         after.keys.filter { it in before && before[it] != after[it] }.sorted(),
     )
 
-    private fun sections(document: PolicyDocument): List<Any?> =
-        listOf(
-            document.catalog?.let { it.groups.size },
-            document.limits?.maxCost,
-            document.attributes?.map { it.path },
-            document.rateLimits.map { it.id }
+    /** The digest of [document]'s sections: the document encoded with its header fixed and no policies or bindings. */
+    private fun sections(document: PolicyDocument): String = CandidateDigest.of(
+        PolicyDocument(
+            kind = document.kind,
+            owner = document.owner,
+            revision = 1,
+            publishedAt = Instant.EPOCH,
+            policies = emptyList(),
+            bindings = emptyList(),
+            catalog = document.catalog,
+            boundary = document.boundary,
+            limits = document.limits,
+            attributes = document.attributes,
+            rateLimits = document.rateLimits,
         )
+    )
+
+    /**
+     * Whether [binding] can apply to what [query] asks about: in its tenant, as the engine looks a subject up (#1206), and
+     * in its app and space.
+     */
+    private fun applies(binding: Binding, query: AccessQuery): Boolean =
+        binding.subject.appliesIn(query.tenant) &&
+            inScope(binding.scope.app.exact { it.value }, query.app) &&
+            inScope(binding.scope.space.exact { it.value }, query.space)
 
     /** A binding of [exact] (null: every value) applies to a query of [value] (null: any). */
     private fun inScope(exact: String?, value: String?): Boolean = exact == null || value == null || exact == value

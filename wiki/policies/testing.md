@@ -46,7 +46,7 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
-| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions. |
+| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, and `sections`: whether anything else differs (the catalog, limits, attributes, boundary or rate limits), compared by their content. |
 | `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
@@ -279,6 +279,12 @@ fails closed on it.
 A window compares decisions, so a change that touches only [rate limit rules](./rate-limiting.md#publishing-rules)
 shows no difference there.
 
+An instance writes its report of a window every `cosec.authorization.shadow.report-interval` (10 seconds) while the
+window's candidate is staged. Once the candidate is withdrawn (the window closed, or the change was abandoned,
+rejected, published or preempted), it writes the report once more and forgets the window; the report expires 8 days
+after that last write. A change withdraws only its own candidate: when another change has taken the slot and staged
+its own meanwhile, that one stays (`CTL-26`).
+
 `POST /changes/{id}:skip-shadow` with a `reason` stages a `CHECKED` change without a window; it needs
 `cosec:skip-shadow`, and the revision records that the window was skipped. A change that only creates or revokes
 break-glass bindings has no window.
@@ -467,11 +473,14 @@ publish as any change. Which revisions are kept, and how long, is in [Storage](.
 ```
 
 The answer lists `allows` and `denies`: every binding (in the platform, tenant and, when `app` is given, app document)
-whose scope fits the query and whose policy has a statement matching the action and resource, with its document,
+that can apply in the tenant asked about, whose scope fits the query and whose policy has a statement matching the
+action and resource, with its document,
 subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
 not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
 `hidden`, and bindings to policies in them in `opaque`. Attachments are not listed: they depend on each principal's
-memberships.
+memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
+that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
+tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.
 
 ## Policies in CI
 

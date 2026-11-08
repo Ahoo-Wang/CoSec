@@ -53,6 +53,7 @@ public final class me/ahoo/cosec/model/BindingId {
 }
 
 public final class me/ahoo/cosec/model/BindingKt {
+	public static final fun appliesIn-Gw0kPas (Lme/ahoo/cosec/model/SubjectRef;Ljava/lang/String;)Z
 	public static final fun matches (Lme/ahoo/cosec/model/Match;Ljava/lang/Object;)Z
 	public static final fun matches-Fw6vjn8 (Lme/ahoo/cosec/model/Match;Ljava/lang/String;)Z
 	public static final fun matches-IJvzZDY (Lme/ahoo/cosec/model/Match;Ljava/lang/String;)Z

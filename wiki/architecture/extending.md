@@ -436,7 +436,15 @@ store answers what the maintenance passes visit:
   it decodes one: it cannot be known to be terminal, so it stays listed, and `openChanges()` must not fail for it.
   Maintenance skips it; an operator removes its record.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
-  removes the lease only while `holder` still has it.
+  removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
+  `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
+- `withdrawCandidate(key, window)`: removes a document's candidate only while it is still the one of `window`, in one
+  atomic step (`CTL-26`). A change withdraws its candidate once it is terminal, when another may already have staged
+  its own. `putCandidate` only writes.
+- `referrers` and `putReferrers`: each referring document with the revision of it that last indexed the reference, so
+  that a revision's late removal never takes back what a later revision indexed again (`CTL-25`).
+- `RevisionIndex.reclaiming`: the records reclamation took out of the index and has not yet seen deleted; a store
+  keeps it with the index, as it keeps the rest of it.
 
 Like the data plane's stores, a read that fails throws: it never answers "absent".
 

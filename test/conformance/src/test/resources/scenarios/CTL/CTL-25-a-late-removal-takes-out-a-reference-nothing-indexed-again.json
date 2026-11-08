@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "CTL-25"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Tenant acme binds the platform policy shared at revision 1 and drops it at revision 2, whose removal from the back-reference index waits until revision 3, which binds another policy: nothing refers to shared, the removal takes it out, and a platform candidate without shared publishes.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared",
+        "other"
+      ]
+    },
+    {
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "holdRemovals": true
+    },
+    {
+      "bindings": [
+        "other"
+      ]
+    },
+    {
+      "document": "platform",
+      "policies": [
+        "other"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

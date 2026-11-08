@@ -28,6 +28,17 @@ sealed interface SubjectRef {
     data object Anyone : SubjectRef
 }
 
+/**
+ * Whether a binding of this subject can apply to a request decided in [tenant], as the engine looks it up: a principal
+ * binding only in its principal's tenant, a role binding that names a tenant only there, a role binding without one and
+ * [SubjectRef.Anyone] in every tenant.
+ */
+fun SubjectRef.appliesIn(tenant: TenantId): Boolean = when (this) {
+    SubjectRef.Anyone -> true
+    is SubjectRef.Principal -> this.tenant == tenant
+    is SubjectRef.Role -> this.tenant == null || this.tenant == tenant
+}
+
 /** Where a binding applies. Every dimension is explicit; there is no implied default (RFC 0004 §3 I3). */
 class BindingScope(val app: Match<AppId>, val space: Match<SpaceId>)
 

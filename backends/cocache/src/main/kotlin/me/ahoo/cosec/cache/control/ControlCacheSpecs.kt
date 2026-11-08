@@ -93,12 +93,12 @@ internal object ControlCacheSpecs {
             RevisionIndexCodec
         ).build()
 
-    fun referenceIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<ReferenceKey, Set<SnapshotKey>> =
+    fun referenceIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<ReferenceKey, Map<SnapshotKey, Long>> =
         storeOfRecord(
             CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
             keyPrefix,
             ReferenceKeyEncoder,
-            SnapshotKeySetCodec,
+            ReferrersCodec,
         ).build()
 
     fun changeRequest(keyPrefix: String = CoSec.COSEC): StoreSpec<ChangeId, ChangeRequest> =
@@ -210,7 +210,11 @@ private fun JsonNode.only(what: String, vararg names: String) {
     if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
 }
 
-/** A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`. */
+/**
+ * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
+ * records are left to delete (#1226), so that an index with none is written as earlier builds wrote it and they still
+ * read it.
+ */
 internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
 
@@ -229,12 +233,15 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
             ).put("since", it.since.toString())
         }
         root.put("floor", value.floor)
+        if (value.reclaiming.isNotEmpty()) {
+            root.putArray("reclaiming").apply { value.reclaiming.forEach { add(it.toString()) } }
+        }
         return CoSecJson.mapper.writeValueAsBytes(root)
     }
 
     override fun decode(bytes: ByteArray): RevisionIndex {
         val root = read(bytes, WHAT)
-        root.only(WHAT, "entries", "pending", "floor")
+        root.only(WHAT, "entries", "pending", "floor", "reclaiming")
         return try {
             RevisionIndex(
                 entries = root.field("entries", WHAT).items(WHAT).map { entry ->
@@ -253,6 +260,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
                     )
                 },
                 floor = root.field("floor", WHAT).long(WHAT),
+                reclaiming = root.get("reclaiming")?.items(WHAT)?.map { it.digest(WHAT) }.orEmpty(),
             )
         } catch (error: IllegalArgumentException) {
             throw SnapshotFormatException("The $WHAT is malformed: ${error.message}", error)
@@ -274,35 +282,58 @@ internal object StageSlotCodec : Codec<StageSlot> {
     override fun decode(bytes: ByteArray): StageSlot = ChangeRequestCodec.decodeSlot(bytes)
 }
 
-/** A set of document keys as a sorted JSON array of their encodings, so equal sets have equal bytes and digests. */
-internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
+/**
+ * The referrers of one policy as a JSON object of their encodings, sorted, each with the revision of it that last
+ * indexed the reference (#1207): `{"tenant:acme": 3}`. Equal referrers have equal bytes and digests.
+ */
+internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
     private const val WHAT = "back-reference set"
 
-    override fun encode(value: Set<SnapshotKey>): ByteArray {
-        val array = factory.arrayNode()
-        value.map(SnapshotKeyEncoder::encode).sorted().forEach(array::add)
-        return CoSecJson.mapper.writeValueAsBytes(array)
+    override fun encode(value: Map<SnapshotKey, Long>): ByteArray {
+        val node = factory.objectNode()
+        value.entries.map { (key, revision) -> SnapshotKeyEncoder.encode(key) to revision }.sortedBy { it.first }
+            .forEach { (key, revision) -> node.put(key, revision) }
+        return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
     /**
+     * The JSON array of keys 8.0.0-alpha.3 wrote, without revisions, reads as each indexed at revision 0, before any
+     * revision this build publishes: a later drop by the referrer removes it, and a later reference raises it.
+     *
      * A member that is an app key earlier builds wrote and the app id rule now refuses is skipped, with a WARN (R3-1 of
      * #1194's review): such a document can no longer be read or published, and so can never drop its own reference,
      * while one such member would make every write and check of the set fail. Dropping it is safe: an extra referrer
-     * only ever blocks a deletion. Anything else that is not a document key is still malformed.
+     * only ever blocks a deletion. Anything else that is not a document key, or a revision that is not a non-negative
+     * integer, is still malformed.
      */
-    override fun decode(bytes: ByteArray): Set<SnapshotKey> =
-        read(bytes, WHAT).items(WHAT).mapNotNullTo(LinkedHashSet()) { item ->
-            val text = item.text(WHAT)
-            SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
+    override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
+        val root = read(bytes, WHAT)
+        val members: List<Pair<String, Long>> = when {
+            root.isArray -> root.items(WHAT).map { it.text(WHAT) to EARLIER_REVISION }
+            root.isObject -> root.properties().map { (key, revision) ->
+                val value = revision.long(WHAT)
+                if (value < 0) malformed(WHAT, "revision $value of [$key] is negative")
+                key to value
+            }
+
+            else -> malformed(WHAT, "$root is neither an object nor an array")
+        }
+        return members.mapNotNull { (text, revision) ->
+            val key = SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
                 log.warn {
                     "A back-reference set names [${SnapshotKeyText.printable(text)}], which no document key can name " +
                         "(SCP-7): that member is skipped."
                 }
-                null
+                return@mapNotNull null
             } else {
                 malformed(WHAT, "[$text] is not a document key")
             }
-        }
+            key to revision
+        }.toMap(LinkedHashMap())
+    }
+
+    /** The revision a member of the array 8.0.0-alpha.3 wrote is read as. */
+    const val EARLIER_REVISION: Long = 0
 
     private val log = KotlinLogging.logger {}
 }
