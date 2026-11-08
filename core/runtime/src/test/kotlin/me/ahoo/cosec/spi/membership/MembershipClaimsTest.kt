@@ -140,20 +140,20 @@ class MembershipClaimsTest {
     fun tenantOfATokenWithoutTenantIsTheDefaultTenant() {
         val tokenPrincipal = SimpleTokenPrincipal("jti", SimplePrincipal("alice"))
         MembershipClaims.tenantOf(tokenPrincipal).assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant("")))
-            .assert().isEqualTo(TenantId.DEFAULT)
         MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant("t")))
             .assert().isEqualTo(TenantId("t"))
     }
 
-    /** Mapping a blank tenant to the default one would move the principal into another tenant. */
+    /** Mapping an empty or blank tenant to the default one would move the principal into another tenant. */
     @Test
     fun tenantOfABlankTenantIsKeptAndRefusedByTheScope() {
         val tokenPrincipal = SimpleTokenPrincipal("jti", SimplePrincipal("alice"))
-        val tenant = MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant(" ")))
-        tenant.assert().isEqualTo(TenantId(" "))
-        assertThrows<IllegalArgumentException> {
-            ScopeSubject(tenant, true, MembershipClaims.parse(emptyList(), emptyList()))
+        for (claimed in listOf("", " ")) {
+            val tenant = MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant(claimed)))
+            tenant.assert().isEqualTo(TenantId(claimed))
+            assertThrows<IllegalArgumentException> {
+                ScopeSubject(tenant, true, MembershipClaims.parse(emptyList(), emptyList()))
+            }
         }
     }
 

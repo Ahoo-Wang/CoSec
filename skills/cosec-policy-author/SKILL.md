@@ -109,7 +109,7 @@ One object with exactly one operator. Literals keep their JSON type: `"true"` is
 | `in` | `{"in": [attr, [values]]}` or `{"in": ["literal", setAttr]}` | value is one of them; or the set contains the literal |
 | `prefix` | `{"prefix": [attr, "text"]}`, optional `ignoreCase` | strings; on `*.host.labels` a prefix of whole labels (`com.example`) |
 | `cidr` | `{"cidr": [ipAttr, ["10.0.0.0/8", ...]]}` | IPv4 and IPv6 blocks |
-| `time` | `{"time": {...}}` | at least one of `notBefore` (inclusive), `notAfter` (exclusive), `daysOfWeek` (`MON`..`SUN`), `from`/`to` (`HH:mm`, may cross midnight); `zone` default `UTC` |
+| `time` | `{"time": {...}}` | at least one of `notBefore` (inclusive), `notAfter` (exclusive), `daysOfWeek` (exactly `MON`..`SUN`), `from`/`to` (`HH:mm`, may cross midnight); `zone` default `UTC` |
 | `exists` | `{"exists": attr}` | the attribute has a value (the empty string counts) |
 | `and`, `or` | `{"and": [c, ...]}` | at least one; left to right, short-circuit |
 | `not` | `{"not": c}` | |
@@ -223,8 +223,8 @@ and `Retry-After`.
   "key": "environment.ip", "permitsPerSecond": 0.1, "windowSeconds": 60, "strictFailure": true }
 ```
 
-`id` is `[A-Za-z0-9_.-]+`, unique per document. Each document counts in its own buckets (a platform rule under its
-id, others under `app:<app>/<id>` and `tenant:<tenant>/<id>`), and rules add up: a tenant rule never replaces or
+`id` is `[A-Za-z0-9_.-]+`, unique per document. Each document counts in its own buckets (`platform/<id>`,
+`app:<app>/<id>` and `tenant:<tenant>/<id>`), and rules add up: a tenant rule never replaces or
 relaxes a platform or app rule, even with the same id. `action` is
 required; `resource`, `condition` as in a statement, matched as a DENY is (so a bare resource type does not compile).
 `key` names a string or IP attribute (one bucket per value; absent key = one shared bucket; absent value = the empty

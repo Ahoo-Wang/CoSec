@@ -160,10 +160,10 @@ class TimeTest {
     }
 
     @Test
-    fun `days of the week parse as in 7x`() {
-        listOf("MONDAY", "mon", " Fri ", "sunday", "SUN").map { DaysOfWeek.parse(it) }.assert()
-            .containsExactly(1, 1, 1 shl 4, 1 shl 6, 1 shl 6)
-        listOf("MO", "MONDAYS", "", "Montag").forEach { DaysOfWeek.parse(it).assert().describedAs(it).isNull() }
+    fun `days of the week are exactly MON to SUN`() {
+        DaysOfWeek.NAMES.map { DaysOfWeek.parse(it) }.assert().containsExactly(1, 2, 4, 8, 16, 32, 64)
+        listOf("MONDAY", "mon", "Mon", " FRI ", "sunday", "MO", "MONDAYS", "", "Montag")
+            .forEach { DaysOfWeek.parse(it).assert().describedAs(it).isNull() }
     }
 
     /** Random `time` conditions and instants decide as the 7.x matcher's logic does. */
@@ -255,7 +255,7 @@ class TimeTest {
 
     private fun randomDays(random: Random): List<String> = DayOfWeek.entries
         .filter { random.nextInt(3) == 0 }
-        .map { if (random.nextBoolean()) it.name else it.name.take(3).lowercase() }
+        .map { it.name.take(3) }
 
     private fun randomConfig(random: Random, zone: String): Condition.Time {
         fun maybe(): Boolean = random.nextInt(3) == 0
@@ -285,9 +285,7 @@ class TimeTest {
         val notBefore: Instant? = config.notBefore?.let { instant(it) }
         private val notAfter: Instant? = config.notAfter?.let { instant(it) }
         private val days: Set<DayOfWeek>? = config.daysOfWeek?.map { name ->
-            DayOfWeek.entries.first {
-                it.name == name.uppercase() || it.name.take(3) == name.uppercase()
-            }
+            DayOfWeek.entries.first { it.name.take(3) == name }
         }?.toSet()
         private val from: LocalTime? = config.from?.let(LocalTime::parse)
         private val to: LocalTime? = config.to?.let(LocalTime::parse)

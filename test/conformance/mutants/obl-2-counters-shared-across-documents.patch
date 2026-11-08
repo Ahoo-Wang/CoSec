@@ -7,13 +7,13 @@ index c8aecb7d..80bc4394 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
 @@ -65,8 +65,8 @@ class CompiledRateLimit internal constructor(
-         /** The id of [id] within the counters, for a rule of the [kind] document of [owner]. */
+         /** The id of [id] within the counters, for a rule of the [kind] document of [owner]: `<document>/<id>`. */
          fun counterId(kind: DocumentKind, owner: String, id: String): String = when (kind) {
-             DocumentKind.PLATFORM -> id
+             DocumentKind.PLATFORM -> "platform/$id"
 -            DocumentKind.APP -> "app:$owner/$id"
 -            DocumentKind.TENANT -> "tenant:$owner/$id"
-+            DocumentKind.APP -> id
-+            DocumentKind.TENANT -> id
++            DocumentKind.APP -> "platform/$id"
++            DocumentKind.TENANT -> "platform/$id"
          }
  
          internal fun isValidId(id: String): Boolean = ID.matches(id)

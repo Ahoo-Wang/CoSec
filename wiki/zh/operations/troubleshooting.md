@@ -69,8 +69,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 - **令牌：** 签发方和本服务必须使用相同的 [`cosec.jwt.secret` 和 `cosec.jwt.algorithm`](./configuration.md#jwt)。
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
-- **CoSec 拒绝的声明：** `tenantId` 声明不是字符串（数字、`null`、对象），`roles` 或 `policies` 声明不是字符串数组，`attributes`
-  声明不是对象，或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key 设置。以字符串签发租户，并给该属性改名（[认证](../integration/authentication.md#tokens)）。
+- **CoSec 拒绝的声明：** `tenantId` 声明为空或不是字符串（数字、`null`、对象），`roles` 或 `policies` 声明不是字符串数组，`attributes`
+  声明不是对象，或者 `attributes` 声明里有 `apiKeyId`，它只由 CoSec 为 API key 设置。以非空字符串签发租户（默认租户则不写该声明），并给该属性改名（[认证](../integration/authentication.md#tokens)）。
 - **带落单代理项的 id：** 令牌的 `sub`、`tenantId`、`jti`、`roles` 或 `policies` 中有落单的 UTF-16 代理项，JSON 把它写成
   `"beta\uD800"` 这样的转义（`IDN-10`）。Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的文档、成员关系与吊销，所以在读取其中任何一项之前就被拒绝。
   CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报 `Principal [alice\uD800] holds an unpaired UTF-16 surrogate ...`。
@@ -261,6 +261,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 - `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``：`http.header.` 之后的名称含有 ASCII
   字母、数字和 ``!#$%&'*+-.^_`|~`` 之外的字符，例如空格或形似字母。
 - 条件读取的 `ext.*` 属性既没有在平台文档中声明，也没有宿主的属性提供者提供。变更按控制面宿主的属性提供者编译。
+- `` is not a day of the week: `<value>` ``：`daysOfWeek` 只接受 `MON`、`TUE`、`WED`、`THU`、`FRI`、`SAT` 和 `SUN`，不接受 `MONDAY`、`mon` 或 ` Fri `（[策略语言](../policies/language.md)）。在数据面，用其他拼法写星期的已保存文档被安装为失败，读取它的请求回答 `503`。
 - 路径模式超出开销上界（`DOC-4`，[策略语言](../policies/language.md#path-pattern-bounds)）：`the pattern is <n> characters, more
   than 2048`；`segment [<s>] has <n> parts (*, ?, {name} and the text between them), more than 16`，其中连续的 `*` 算一个；
   或者在 `$` 处的 `The document's path pattern segments that mix *, ? or {name} with other text hold <n> tokens and literal

@@ -235,7 +235,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;
-  or a claim CoSec refuses: `tenantId` not a string, `roles` or `policies` not an array of strings, `attributes` not an
+  or a claim CoSec refuses: `tenantId` empty or not a string, `roles` or `policies` not an array of strings, `attributes` not an
   object).
 - `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the
   `MembershipProvider` does not know (answers `MembershipAnswer.Unknown`) or knows as deactivated (`active = false`),
@@ -248,7 +248,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified gets it (BRK-8), never a token
   of a custom `TokenVerifier`, even through `TokenAuthenticator`. An authenticator naming its method `jwt` makes every
   request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
-- `token-invalid` for a token whose `tenantId` claim is not a string, or whose `attributes` name `apiKeyId` (reserved
+- `token-invalid` for a token whose `tenantId` claim is empty or not a string, or whose `attributes` name `apiKeyId` (reserved
   for API keys).
 - `token-invalid` for a token whose `sub`, `tenantId`, `jti`, `roles` or `policies` hold an unpaired UTF-16 surrogate,
   which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
@@ -325,7 +325,7 @@ header: anonymous. Otherwise never anonymous:
   condition. Rules count per document: an app's or tenant's rule has its own buckets.
 - A limiter failure skips the rule unless `strictFailure: true` (then 503, not 429).
 - A `key` value with an unpaired UTF-16 surrogate counts in a bucket of its own, `e:` and the value escaped (`\uD800`,
-  `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values keep `g:<value>`.
+  `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values count in `k:<value>`.
 - On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
   counters have no hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure` every permit is
   503. Upgrade; counters are `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`. A `cosec.key-prefix` with

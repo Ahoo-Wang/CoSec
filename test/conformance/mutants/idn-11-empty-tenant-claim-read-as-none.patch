@@ -1,0 +1,20 @@
+# Rule: IDN-11
+# Mutant: an empty tenantId claim reads as no tenant, so the principal lands in the default tenant with the token's roles
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index 06dfc62d..03c67ddf 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -122,10 +122,7 @@ internal object Jwts {
+             return null
+         }
+         val tenantId = claim.asString() ?: throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is not a string.")
+-        if (tenantId.isEmpty()) {
+-            throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is empty.")
+-        }
+-        return tenantId
++        return tenantId.ifEmpty { null }
+     }
+ 
+     /**
