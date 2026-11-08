@@ -359,7 +359,9 @@ class Revisions(
     private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
         updateIndex(key) { index ->
             index.copy(
-                entries = index.entries.filter { it.revision < entry.revision } + entry,
+                // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
+                // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
+                entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
                 pending = index.pending.filter { it.digest != entry.digest },
             )
         } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
@@ -389,15 +391,20 @@ class Revisions(
     }
 
     /**
-     * The retained revisions of [key], oldest first. When the index is behind the head (a publish that failed after
-     * its head write, or a lost index), the missing entries are found along the head's `parent` chain and added.
+     * The retained revisions of [key], oldest first, none above its head. When the index is behind the head (a publish
+     * that failed after its head write, or a lost index), the missing entries are found along the head's `parent` chain
+     * and added.
      */
     suspend fun history(key: SnapshotKey): List<RevisionEntry> {
         val head = head(key) ?: return store.index(key)?.value?.entries.orEmpty()
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
-        val latest = indexed.latest?.revision ?: 0
+        // Nothing above the head: what a head that moved back (a partial loss of data) left in the index is not on the
+        // chain. A revision published after the head was read is left out of this read alone, and what reclamation
+        // removes comes from this list, so it is never taken for one to remove.
+        val entries = indexed.entries.filter { it.revision <= head.revision }
+        val latest = entries.lastOrNull()?.revision ?: 0
         if (head.revision <= latest) {
-            return indexed.entries
+            return entries
         }
         val missing = ArrayList<RevisionEntry>()
         var document: PolicyDocument? = head.document
@@ -416,7 +423,7 @@ class Revisions(
                 pending = index.pending.filter { pending -> repaired.none { it.digest == pending.digest } },
             )
         } || warn("[$key]: the rebuilt history could not be written back to the index")
-        return (indexed.entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
+        return (entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
     }
 
     /**
