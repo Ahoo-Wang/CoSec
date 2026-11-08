@@ -28,9 +28,8 @@ import java.time.Instant
 
 /**
  * A [ControlStore] in memory, for tests and single-instance development. Digests are the SHA-256 of a document's
- * bytes and, for the indexes, of their rendering, cut to the 20 bytes the document format's `parent.digest` holds
- * (CoCache's are SHA-1, RFC 0003 §4.1). They address content; they are not a security control. Every write is atomic
- * under one lock.
+ * bytes and, for the indexes, of their rendering, as CoCache's are (RFC 0003 §4.1). They address content; they are not a
+ * security control. Every write is atomic under one lock.
  */
 class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : ControlStore {
     private val lock = Any()
@@ -196,9 +195,5 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         digest(set.map { it.toString() }.sorted().joinToString("\n").encodeToByteArray())
 
     private fun digest(bytes: ByteArray): SnapshotDigest =
-        SnapshotDigest(MessageDigest.getInstance("SHA-256").digest(bytes).copyOf(DIGEST_BYTES))
-
-    private companion object {
-        const val DIGEST_BYTES = 20
-    }
+        SnapshotDigest(SnapshotDigest.SHA_256, MessageDigest.getInstance(SnapshotDigest.SHA_256).digest(bytes))
 }

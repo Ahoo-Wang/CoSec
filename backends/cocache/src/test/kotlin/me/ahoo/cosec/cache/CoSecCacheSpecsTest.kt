@@ -33,6 +33,31 @@ class CoSecCacheSpecsTest {
         CoSecCacheSpecs.jacksonCodec<Boolean>(CoSecJson.mapper).roundTrip(true).assert().isTrue()
     }
 
+    /**
+     * CoCache 8 (alpha.5) refuses to create a cache whose storage prefix `{keyPrefix}{namespace}:` equals or starts
+     * another's in the same runtime: their keys would overlap. CoSec's paths are split at their last `:`, so a path
+     * that is a segment-wise prefix of another (`token` and `token:refresh`) would fail startup; none is.
+     */
+    @Test
+    fun noStoragePrefixNestsAnother() {
+        val names = CoSecCacheSpecs.CACHE_NAMES
+        names.assert().isEqualTo(
+            CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES + CoSecCacheSpecs.SHADOW_CACHE_NAMES + setOf(
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
+                CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME,
+            )
+        )
+        names.size.assert().isEqualTo(16)
+        listOf("cosec", "a:b").forEach { keyPrefix ->
+            val prefixes = names.associateWith { CoSecCacheSpecs.layout(keyPrefix, it).storagePath + ":" }
+            prefixes.forEach { (name, prefix) ->
+                prefixes.filter { (other, it) -> other != name && it.startsWith(prefix) }.keys
+                    .assert().describedAs("$name ($prefix)").isEmpty()
+            }
+        }
+    }
+
     @Test
     fun storageKeys() {
         CoSecTestCaches(keyPrefix = "layout").use { caches ->

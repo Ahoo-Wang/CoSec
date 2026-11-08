@@ -221,7 +221,7 @@ object PolicyDocumentCodec {
                 val digest = parent.required("digest")
                 ParentRevision(
                     revision.long().takeIf { it > 0 } ?: revision.fail("must be positive"),
-                    digest.text().takeIf { ParentRevision.DIGEST.matches(it) } ?: digest.fail("is 40 lowercase hex digits"),
+                    digest.text().takeIf { ParentRevision.DIGEST.matches(it) } ?: digest.fail("is `SHA-256:` and 64 lowercase hex digits"),
                 )
             },
             change = node.required("change").nonEmpty(),

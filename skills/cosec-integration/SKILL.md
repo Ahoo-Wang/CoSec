@@ -80,9 +80,15 @@ Startup fails, on purpose, when:
 - **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
   different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
-  `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning). The policy is read again
-  while the service runs: the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict (with `warn`, a
-  policy it cannot read is `UP`, `eviction: unknown`). It is an alert: keep it out of the readiness group.
+  `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning) and
+  `cocache.redis.assume-maxmemory-policy=noeviction`: CoCache 8 checks its `Store`s too, and refuses `allkeys-*` and an
+  unreadable policy whatever CoSec's setting is. The policy is read again while the service runs: the
+  `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict (with `warn`, a policy it cannot read is
+  `UP`, `eviction: unknown`). It is an alert: keep it out of the readiness group.
+- **A `cocache.caches.[<CoSec cache>].*` entry or a `CacheSpecCustomizer` sets a field CoSec locks** (the snapshot
+  store's `ttl`, `unknown-read`, `local-max-age` or `key-prefix`, say): startup fails. Remove it, or exclude CoSec's
+  caches from the customizer. An entry for a CoSec cache a service does not create (a control-plane cache, in a
+  configuration every service shares) is fine.
 - **Redis read from replicas.** The Redis templates CoSec injects (the only or the `@Primary`
   `StringRedisTemplate` / `ReactiveStringRedisTemplate`) must read the primary: `spring.data.redis.lettuce.read-from`
   (or a client customizer's `ReadFrom`) other than `upstream` on their factory fails startup.

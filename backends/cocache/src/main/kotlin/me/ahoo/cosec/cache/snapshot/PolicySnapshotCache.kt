@@ -15,47 +15,46 @@
 
 package me.ahoo.cosec.cache.snapshot
 
-import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.InvalidationChannel
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.api.spi.Keyspace
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.StoreSpec
+import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 
 /**
- * The CoCache cache of snapshot documents (RFC 0003 §4.1): one Redis key per document,
+ * The CoCache store of snapshot documents (RFC 0003 §4.1): one Redis key per document,
  * `<keyPrefix>:snapshot:policies`, `<keyPrefix>:snapshot:platform`, `<keyPrefix>:snapshot:app:<appId>` and
  * `<keyPrefix>:snapshot:tenant:<tenantId>`.
  *
- * It is the engine [CacheRuntime.create] returns, not an interface proxy (RFC 0003 §10): native images need no proxy
- * hint for it. Besides the cache, it carries what [RedisSnapshotDocumentStore] needs to subscribe to the namespace's
+ * It is the `Store` [CoCacheFactory.create] returns, not an interface proxy (RFC 0003 §10): native images need no proxy
+ * hint for it. Besides the store, it carries what [RedisSnapshotDocumentStore] needs to subscribe to the keyspace's
  * invalidations and to bound the age of a local copy.
  */
 class PolicySnapshotCache internal constructor(
-    delegate: Cache<SnapshotKey, SnapshotDocument>,
-    /** The CoCache namespace, which also names the invalidation channel. */
-    val namespace: String,
-    /** The oldest a local (L2) copy can be: CoCache's `localMaxAge`, or its degraded counterpart if longer. */
+    delegate: Store<SnapshotKey, SnapshotDocument>,
+    /** The CoCache keyspace, which also names the invalidation channel (`{keyPrefix}inv:{namespace}`). */
+    val keyspace: Keyspace,
+    /** The oldest a local (L2) copy can be: CoCache's effective `localMaxAge`. */
     val localCopyMaxAge: Duration,
     internal val channel: InvalidationChannel,
-) : Cache<SnapshotKey, SnapshotDocument> by delegate {
-    /** The storage key of [key], as CoCache's invalidations name it. */
-    internal fun storageKey(key: SnapshotKey): String = "$namespace:${SnapshotKeyEncoder.encode(key)}"
+) : Store<SnapshotKey, SnapshotDocument> by delegate {
+    /** The storage key of [key]. */
+    internal fun storageKey(key: SnapshotKey): String = keyspace.storageKey(SnapshotKeyEncoder.encode(key))
 
-    /** The snapshot key a storage key of this namespace names, or null for any other key. */
-    internal fun snapshotKeyOf(storageKey: String): SnapshotKey? {
-        val prefix = "$namespace:"
-        if (!storageKey.startsWith(prefix)) {
-            return null
-        }
-        return SnapshotKeyEncoder.decode(storageKey.substring(prefix.length))
-    }
+    /**
+     * The snapshot key an invalidation names, or null for a key no document has. CoCache hands invalidation listeners the
+     * encoded key, the part of the storage key after `{keyPrefix}{namespace}:`, which [SnapshotKeyEncoder] wrote.
+     */
+    internal fun snapshotKeyOf(encodedKey: String): SnapshotKey? = SnapshotKeyEncoder.decode(encodedKey)
 
-    override fun toString(): String = "PolicySnapshotCache(namespace='$namespace')"
+    override fun toString(): String = "PolicySnapshotCache(keyspace=$keyspace)"
 }
 
 /**
@@ -90,30 +89,25 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
 }
 
 /**
- * Creates the cache declared by [spec], which [me.ahoo.cosec.cache.CoSecCacheSpecs.policySnapshot] builds, with the
- * pins of a store of record whoever built [spec] (`SNP-3`, RC1-45): [storeOfRecord] (no expiry, failed reads and deletes
- * throw), the snapshot's own key encoding and codec, no key filter, no per-entry TTL and no loader. Only the storage
- * layout and the local copies' ages are [spec]'s.
+ * Creates the store declared by [spec], which [CoSecCacheSpecs.policySnapshot] builds, with the pins of a store of record
+ * whoever built [spec] (`SNP-3`, RC1-45): the snapshot's own key encoding and codec, no key filter, no per-entry TTL, no
+ * expiry and a failed read that throws. Only the storage layout and the local copies' age are [spec]'s. CoSec's locks
+ * ([CoSecCacheSpecs.locks]) then keep them so: the application's `cocache.*` properties and customizers apply to it,
+ * except for its storage layout, codec, lifetime, failed reads and local max age.
  */
-fun CacheRuntime.createPolicySnapshotCache(spec: CacheSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
-    require(spec.keyPrefix.isEmpty()) { "The snapshot cache keeps its keys under its namespace only." }
-    require(
-        spec.loader == null && spec.asyncLoader == null && spec.versionedLoader == null && spec.versionedAsyncLoader == null
-    ) {
-        "The ${spec.name} cache takes no loader: Redis is the store of record, and only the snapshot source reads it."
-    }
+fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
+    require(spec.name == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) { "Not the snapshot store: ${spec.name}." }
     val pinned = spec.toBuilder()
         .keyEncoder(SnapshotKeyEncoder)
         .codec(SnapshotDocumentCodec)
-        .policy(spec.policy.storeOfRecord())
+        .unknownRead(UnknownReadMode.THROW)
+        .policy { ttl = forever() }
     pinned.keyFilter = null
     pinned.ttlOf = null
-    pinned.versioned = false
     val created = pinned.build()
-    return PolicySnapshotCache(
-        create(created),
-        created.namespace,
-        maxOf(created.policy.localMaxAge, created.policy.degradedLocalMaxAge),
-        backend.channel,
-    )
+    val store = create(created, CoSecCacheSpecs.locks(created.name))
+    val admin = checkNotNull(runtime.admin(created.name)) { "The snapshot store ${created.name} was not created." }
+    val localMaxAge = checkNotNull(runtime.policy(created.name)).localMaxAge
+    // The keyspace the store was created in, after every layer: the one its invalidations arrive on.
+    return PolicySnapshotCache(store, admin.keyspace, localMaxAge, runtime.backend.channel)
 }

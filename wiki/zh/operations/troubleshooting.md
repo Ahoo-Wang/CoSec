@@ -149,6 +149,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`，所有请求都是 | 没有发布平台文档：新的部署，或者 Redis 丢失了它。`cosec-migrate bootstrap` 只写平台租户的文档。在平台文档存在之前，每个请求都是 `503`，控制 API 也一样。新部署时，就绪状态在第一个平台文档安装前拒绝流量（[实例未就绪](#instance-is-not-ready)）。就绪状态一旦接受流量就不再变化：之后丢失的文档不会让它再次拒绝流量，每个请求都按失败关闭返回 `503`，只有 `cosecSnapshot` 健康指示器变为 DOWN。只有把 `cosecSnapshot` 加入就绪组，它才会让就绪状态变为 DOWN；在 Redis 故障期间，这会把 503 变成连接失败。 | 用 `cosec-migrate publish` 发布一个（[最初的文档](./storage.md#the-first-documents)）。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`，只有部分租户 | 该租户在 [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot) 中，而它的请求读取的最旧文档上次确认距今超过 `fail-closed.max-lag`（`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`）。 | 恢复 Redis；见[决策使用了旧的修订](#decisions-use-an-old-revision)。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码或编译，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
+| 从 8.0.0-alpha 升级之后的 `INDETERMINATE: SourceUnavailable` / `source_unavailable`，被吊销令牌的 `401` 变成 `503`，控制面 API 回答 `500` | 8.0.0-alpha 经 CoCache 6 写入、CoCache 8 读不了的数据：`Cache[<name>] - key[<key>] holds content this cache cannot read (format[1], this node writes format[2]: not written in this node's format)`。它失败即拒绝，没有任何读取会把它当作不存在。 | 停止所有实例，运行 `cosec-migrate cocache8`（[升级](./upgrading.md#data-written-through-cocache-6)）。不要像消息对可丢弃的值所建议的那样手工删除这些 key：删掉的吊销会让它的令牌重新被接受，删掉的文档会让它的租户失去其中的 DENY。 |
 | `INDETERMINATE: MissingPolicies`、`AmbiguousPolicy` / `missing_policies` | 绑定或附加策略指向文档中未定义的策略，或者租户和平台都定义了同一个策略 id。 | 通过控制面修正文档。 |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | `MembershipProvider` 失败，或耗时超过 [`cosec.authorization.membership.timeout`](./configuration.md#authorization)。使用 `CoCacheMembershipProvider` 时，在该时间内没有应答的 `MembershipLoader` 会让这次加载失败（`The membership loader did not answer within ...`），下一个请求会再试。 | 修复提供者或它的存储。 |
 | `INDETERMINATE: MembershipUnavailable` / `membership`，只有部分主体 | `MembershipProvider` 答出的空间、角色或策略 id 中有落单的 UTF-16 代理项（`The membership provider answered an id with an unpaired UTF-16 surrogate for principal [<id>].`，`IDN-10`）：这样的 id 会与另一个 id 共用一个 Redis key，所以不使用这个答复。 | 修正提供方的存储：id 是 Unicode 文本。 |
@@ -350,6 +351,58 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 和驱逐会造成的后果结尾。使用 `warn` 时这一行是预期的；如果 Redis 真的驱逐了数据，被驱逐之后才加载的应用文档或租户文档
 会被读成不存在，其中的 DENY 语句不再生效。
 
+CoCache 8 也检查它的 `Store`，而 `eviction-check=warn` 管不到这个检查：
+
+```text
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
+```
+
+第一条：允许 `INFO`，或者在你已自行设置 `noeviction` 之后设置 `cocache.redis.assume-maxmemory-policy: noeviction`。
+第二条：`allkeys-*` 策略，任何设置都不接受；设置 `noeviction`（[Redis 要求](./storage.md#redis-requirements)）。
+
+### 锁定的缓存设置导致启动失败 {#startup-fails-on-a-locked-cache-setting}
+
+```text
+Cache[PolicySnapshotCache] - ... locked by cosec ...
+```
+
+某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上锁定的字段，例如快照存储的
+`ttl`、`unknown-read` 或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
+能让该条目启动，但 CoSec 约束的字段保持原值（[优先级](./configuration.md#precedence)）。
+
+```text
+cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.
+```
+
+这是 CoCache 自己的检查：该条目设置了 CoCache 没有定义的键，或者不适用于该缓存的键。改正这个键；`cocache.caches-validation: warn`
+改为记录告警。设置了锁定字段的条目无论该项如何都会启动失败。
+
+```text
+cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches: [...]
+```
+
+该条目指向没有谁会创建的缓存，通常是拼错的名字。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的
+条目（没有运行控制面的服务上的控制面缓存）照常启动；请改正名字。
+
+### 缓存 key 重叠导致启动失败 {#startup-fails-on-overlapping-cache-keys}
+
+```text
+Cache[PolicySnapshotCache] - its storage keys (cosec:snapshot:…) overlap those of Cache[<other>] (cosec:…): one prefix starts the other, ...
+```
+
+同一个应用的两个缓存会写同样的 Redis key：一个存储前缀（`{key 前缀}{namespace}:`）等于另一个，或者是另一个的开头。CoSec
+自己的缓存彼此从不重叠，所以另一个缓存是应用的：位于 CoSec 的 [`cosec.key-prefix`](./configuration.md#key-prefix) 之下的
+CoCache 缓存，或者 `cocache` 这样把 CoSec 的缓存放到应用缓存之下的 `cosec.key-prefix`。给应用的那个缓存换一个前缀或
+namespace：`cosec.key-prefix` 是每个实例、控制面和 `cosec-migrate` 找到 CoSec 数据的地方，只能对它们同时修改
+（[Redis key](./storage.md#redis-keys)）。
+
+### 通道权限导致启动失败 {#startup-fails-on-a-channel-permission}
+
+拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出的 `IllegalStateException` 指出需要允许的模式，例如
+`[&cosec:control:inv:*]`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
+（[Redis 要求](./storage.md#redis-requirements)）。
+
 ### 从 Redis 副本读取导致启动失败 {#startup-fails-because-redis-is-read-from-replicas}
 
 ```text
@@ -368,7 +421,7 @@ cosec.authorization.snapshot.revalidate-interval (PT0S) must be positive: the pe
 ```
 
 失效消息丢失时，周期确认是文档变化唯一的界（`SNP-6`），因此它既不能关闭，也不能没有上限。消息写明该值违反了哪一条：至少 1 秒（每一轮都从 Redis 读取每个已安装的文档）、不超过
-5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。要为大文档节省
+5 分钟、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`（[配置](./configuration.md#snapshot)）。文档很多时要节省
 Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalidation-costs-redis)）。
 
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
@@ -435,7 +488,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | 消息 | 修复 |
 |---|---|
 | `Decision listener <name> is registered twice.` | 给每个 `DecisionListener` 一个独立的 `name`。 |
-| `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | 某个 `CacheSpecCustomizer` 给每个缓存都设置了 loader；把 `PolicySnapshotCache` 排除在外。 |
+| `CoSec's <CacheName> is the store of record: a Store.` | 有东西替换了某个 CoSec 缓存的定义；CoSec 自己创建这些缓存。 |
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
 | `Invalid change options.`、`Invalid shadow window options.` | 修正 [`cosec.control.*`](./configuration.md#control-plane)：`break-glass.max-duration` 超过 `24h`，或 `shadow.max-duration` 小于 `shadow.min-duration`。 |
 | `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |

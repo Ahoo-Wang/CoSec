@@ -189,7 +189,7 @@ class SimulatorTest {
             .decision.assert().isInstanceOf(Decision.Permit::class.java)
     }
 
-    private fun digest(seed: Int) = SnapshotDigest(ByteArray(20) { seed.toByte() })
+    private fun digest(seed: Int) = SnapshotDigest(ByteArray(32) { seed.toByte() })
 
     private companion object {
         const val DEBUG = ""","policies":[{"id":"debug","statements":[{"effect":"allow","action":"*",""" +

@@ -122,6 +122,21 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.authorization.snapshot.eviction-check=warn`; the instance then logs `!!! ... Starting anyway
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.
+- **`Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...]`** or **`Authoritative
+  caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
+  its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
+  `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+- **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
+  field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
+  any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
+  fields keep their values anyway. **`cocache.caches sets unknown keys [...]`**:
+  CoCache's own check of a misspelled or inapplicable per-cache key; fix the key (`cocache.caches-validation: warn`
+  only logs it). **`cocache.caches configures undeclared caches [...]`**: the name matches no cache, usually a typo;
+  CoSec publishes every name it may create, so an entry for a CoSec cache this instance does not create starts. **`Cache[<name>] - its
+  storage keys (...) overlap those of Cache[<other>]`**: an application cache and a CoSec cache would share Redis
+  keys; give the application's cache another prefix or namespace (`cosec.key-prefix` moves every instance's data).
+  **An `IllegalStateException` naming a channel pattern** such as
+  `[&cosec:control:inv:*]`: the Redis ACL denies the cache's invalidation channel; allow `&<prefix>:*`.
 - **`CoSec's Redis template [<bean>] reads from replicas (ReadFrom...)`**: the Lettuce client behind the template CoSec
   injects (the only `StringRedisTemplate` / `ReactiveStringRedisTemplate`, or the `@Primary` one), named in the message,
   reads from replicas (`spring.data.redis.lettuce.read-from`, or a `LettuceClientConfigurationBuilderCustomizer` that
@@ -201,6 +216,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   space, role or policy id with one (`The membership provider answered an id with an unpaired UTF-16 surrogate`). A
   Redis key would hold `?` in its place, sharing another id's key, so the request fails closed. Fix the source: an id
   is Unicode text. Logs write such a surrogate as `\uD800`, never `?`: `beta\uD800` is not the tenant `beta?`.
+- **Every request is 503 after upgrading from 8.0.0-alpha** (revoked tokens `503` instead of `401`, the control API
+  `500`) and the log says `holds content this cache cannot read (format[1], this node writes format[2]`: the data
+  alpha wrote through CoCache 6. Stop every instance and run `cosec-migrate cocache8` (dry run first). Never delete
+  those keys by hand: a deleted revocation accepts its token again.
 - **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
   the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
   it again without `--dry-run`).

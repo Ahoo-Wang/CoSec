@@ -1,0 +1,21 @@
+# Rule: SNP-3
+# Mutant: the startup eviction check reads the CoherenceBackend bean, not the backend of the runtime the snapshot store is created on, so an application's own CacheRuntime on another Redis is never checked
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.SnapshotEvictionHealthIndicatorTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+index b71e1db..4071f85 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+@@ -127,10 +127,11 @@ class CoSecSnapshotAutoConfiguration {
+         @Bean
+         fun cosecEvictionPolicyCheck(
+             factory: CoCacheFactory,
++            backend: CoherenceBackend,
+             properties: RuntimeAuthorizationProperties,
+         ): SmartInitializingSingleton = SmartInitializingSingleton {
+             EvictionPolicyCheck.check(
+-                EvictionPolicyCheck.read(factory.runtime.backend),
++                EvictionPolicyCheck.read(backend),
+                 properties.snapshot.evictionCheck
+             )
+         }

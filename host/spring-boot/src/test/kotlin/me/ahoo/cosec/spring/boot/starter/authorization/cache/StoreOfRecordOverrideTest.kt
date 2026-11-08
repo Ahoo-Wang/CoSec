@@ -16,19 +16,15 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.api.CacheReadException
+import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
-import me.ahoo.cocache.core.SetCacheSpec
-import me.ahoo.cocache.core.codec.StringCodec
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
-import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.core.policy.ForeignFormatMode
-import me.ahoo.cocache.core.policy.InvalidateFailureMode
-import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cocache.core.policy.PolicyField
+import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
-import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -37,6 +33,7 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
@@ -51,81 +48,36 @@ import java.time.Instant
 import java.util.concurrent.ExecutionException
 
 /**
- * Neither an application's [CacheSpecCustomizer] nor `cocache.caches.[name].*` can weaken the store-of-record policy
- * of the policy snapshot cache: it never expires, a failed read throws, and unreadable content fails instead of being
- * reclaimed (which, with no loader, would delete the only copy).
- * The revoked token cache keeps its expiry and degraded reads, but never reclaims a revocation either.
+ * Neither an application's [CacheSpecCustomizer] nor a `cocache.*` property can weaken the policy snapshot store, which
+ * is the store of record: it never expires, and a failed Redis read throws. CoSec creates it through CoCache's factory
+ * with locks ([CoSecCacheSpecs.locks]): a property that sets a locked field fails startup, a customizer that changes one
+ * throws, the global layers skip it, and even `unlock` (breaking the glass) leaves the constrained fields as they must be.
+ * The revocation tables read "not revoked" when Redis fails, but an operator may make them fail closed.
  */
+@OptIn(InternalCoSecApi::class)
 class StoreOfRecordOverrideTest {
-    /** Weakens every cache it is applied to. */
+    /** Weakens every store it is applied to. */
     private val weakening = object : CacheSpecCustomizer {
-        override fun customize(spec: CacheSpec.Builder<*, *>) {
-            spec.policy(weaken(spec.policy))
+        override fun customize(spec: StoreSpec.Builder<*, *>) {
+            spec.policy { ttl = Duration.ofMinutes(1) }
+            spec.unknownRead(UnknownReadMode.ABSENT)
         }
-
-        override fun customize(spec: SetCacheSpec.Builder<*, *>) {
-            spec.policy(weaken(spec.policy))
-        }
-
-        private fun weaken(policy: CachePolicy) = policy.toBuilder()
-            .ttl(Duration.ofMinutes(1))
-            .readFailure(ReadFailureMode.DEGRADE)
-            .invalidateFailure(InvalidateFailureMode.RETRY)
-            .foreignFormat(ForeignFormatMode.RECLAIM)
-            .build()
     }
 
-    /** The store-of-record cache of the data plane; `CacheTtlPolicyTest` covers the control plane's. */
-    private val wired = listOf(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME)
+    private val snapshot = CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
 
-    private val revocationCaches = listOf(
-        CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
-        CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
-    )
-
-    private val weakeningProperties = (wired + revocationCaches).flatMap { name ->
-        listOf(
-            "cocache.caches.$name.ttl=60s",
-            "cocache.caches.$name.read-failure=degrade",
-            "cocache.caches.$name.invalidate-failure=retry",
-            "cocache.caches.$name.foreign-format=reclaim",
-        )
-    }
-
-    private fun assertStoreOfRecord(policy: CachePolicy) {
-        policy.ttl.assert().isNull()
-        policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
-        policy.invalidateFailure.assert().isEqualTo(InvalidateFailureMode.THROW)
-        policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
-    }
-
-    /** The policy of the engine the runtime actually created, not of a separately assembled spec. */
-    private fun CacheRuntime.createdPolicy(cacheName: String): CachePolicy {
-        val engine = checkNotNull(admin(cacheName)) { "Cache [$cacheName] was not created." }
-        val field = generateSequence<Class<*>>(engine.javaClass) { it.superclass }
-            .flatMap { it.declaredFields.asSequence() }
-            .first { it.name == "policy" && it.type == CachePolicy::class.java }
-        field.isAccessible = true
-        return field.get(engine) as CachePolicy
-    }
+    private fun CacheRuntime.effective(cacheName: String, field: PolicyField<*>): String =
+        checkNotNull(admin(cacheName)?.policyReport).entries.single { it.field == field.key }.value
 
     private val backend = HookedBackend(InMemoryBackend())
     private val contextRunner = ApplicationContextRunner()
         .withPropertyValues(
-            *(
-                listOf(
-                    "cocache.backend=memory",
-                    // A hooked in-memory backend: the SNP-3 check cannot read it, and need not.
-                    "cosec.authorization.snapshot.eviction-check=warn",
-                    "cocache.defaults.foreign-format=reclaim",
-                    "cosec.jwt.enabled=true",
-                    "cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
-                    "cosec.authorization.routes.location=",
-                ) + weakeningProperties
-                ).toTypedArray()
+            "cocache.backend=memory",
+            "cosec.jwt.enabled=true",
+            "cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            "cosec.authorization.routes.location=",
         )
         .withBean(CoherenceBackend::class.java, { backend })
-        .withBean(CacheSpecCustomizer::class.java, { weakening })
         .withUserConfiguration(
             JacksonAutoConfiguration::class.java,
             CoCacheAutoConfiguration::class.java,
@@ -135,89 +87,175 @@ class StoreOfRecordOverrideTest {
         )
 
     @Test
-    fun createdCachesKeepThePinnedPolicy() {
-        contextRunner.run { context ->
-            assertThat(context).hasNotFailed()
-            val runtime = context.getBean(CacheRuntime::class.java)
-            runtime.cacheNames.assert().containsAll(wired)
-            wired.forEach { assertStoreOfRecord(runtime.createdPolicy(it)) }
-            // revoked tokens and subjects keep their expiry and degraded reads, but never reclaim a revocation
-            revocationCaches.forEach {
-                val revoked = runtime.createdPolicy(it)
-                revoked.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
-                revoked.ttl.assert().isEqualTo(Duration.ofMinutes(1))
-                revoked.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
-            }
+    fun aCustomizerCannotWeakenTheStoreOfRecord() {
+        contextRunner.withBean(CacheSpecCustomizer::class.java, { weakening }).run { context ->
+            assertThat(context).hasFailed()
+            generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                .any { snapshot in it && CoSecCacheSpecs.LOCKED_BY in it }.assert().isTrue()
         }
     }
 
+    private fun ApplicationContextRunner.refusedFor(vararg properties: String) =
+        withPropertyValues(*properties).run { context ->
+            assertThat(context).describedAs(properties.joinToString()).hasFailed()
+            generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                .any { snapshot in it && "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }
+                .assert().describedAs(properties.joinToString()).isTrue()
+        }
+
+    /**
+     * Fails for the lock, not for some other reason: since CoCache 8.0.0-alpha.4 an unknown or inapplicable key under
+     * `cocache.caches.[name]` fails startup too, which would pass a bare `hasFailed()`.
+     */
     @Test
-    fun customizersAndPerCachePropertiesCannotOverrideStoreOfRecord() {
+    fun aPerCachePropertyCannotSetALockedField() {
+        listOf("ttl=60s", "unknown-read=absent", "key-prefix=elsewhere:", "local-max-age=1h").forEach {
+            contextRunner.refusedFor("cocache.caches.[$snapshot].$it")
+        }
+    }
+
+    /** `unlock` is CoCache's break glass: CoSec's constraints still run after it. */
+    @Test
+    fun breakingTheGlassStillLeavesAStoreOfRecord() {
         contextRunner
+            .withPropertyValues(
+                "cocache.caches.[$snapshot].ttl=60s",
+                "cocache.caches.[$snapshot].unknown-read=absent",
+                "cocache.caches.[$snapshot].unlock=ttl,unknown-read",
+            )
             .run { context ->
                 assertThat(context).hasNotFailed()
-                // the properties and the customizer do weaken the policy they are given...
-                val properties = context.getBean(CoCacheProperties::class.java)
-                val weakened = properties.policyFor(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME, CachePolicy.DEFAULT)
-                weakened.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
-                weakened.foreignFormat.assert().isEqualTo(ForeignFormatMode.RECLAIM)
-
-                // ...but CoSec applies storeOfRecord() after both
-                val assembler = CoSecCacheAssembler(
-                    context.getBean(CacheRuntime::class.java),
-                    listOf(weakening),
-                    properties,
-                )
-                assertStoreOfRecord(assembler.assemble(CoSecCacheSpecs.policySnapshot()).policy)
-
-                // and the cache the starter created behaves that way
                 val runtime = context.getBean(CacheRuntime::class.java)
+                runtime.policy(snapshot)!!.ttl.assert().isNull()
+                runtime.effective(snapshot, PolicyField.UNKNOWN_READ).assert().isEqualTo("throw")
+
+                // and the store the starter created behaves that way
                 val cache = context.getBean(PolicySnapshotCache::class.java)
                 val store = context.getBean(RedisSnapshotDocumentStore::class.java)
                 cache.put(SnapshotKey.Platform, SnapshotDocument(2, 1, Instant.EPOCH, PLATFORM.encodeToByteArray()))
-                val admin = checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
+                val admin = checkNotNull(runtime.admin(snapshot))
                 admin.inspect(SnapshotKeyEncoder.PLATFORM).remote.ttl.assert().isNull()
 
                 admin.clearLocal()
                 backend.failAll = true
-                assertThrows<ExecutionException> { store.read(SnapshotKey.Platform).get() }
-                    .cause.assert().isInstanceOf(CacheReadException::class.java)
+                try {
+                    assertThrows<ExecutionException> { store.read(SnapshotKey.Platform).get() }
+                        .cause.assert().isInstanceOf(CacheReadException::class.java)
+                } finally {
+                    backend.failAll = false
+                }
             }
+    }
+
+    /**
+     * CoSec publishes the name of every cache it may create (CoCache 8.0.0-rc.1's `CacheNameContributor`): an entry for
+     * a control-plane cache, from a configuration every service shares, starts an instance that runs no control plane.
+     * Only CoSec's names are relaxed: a misspelled one still fails startup as an undeclared cache.
+     */
+    @Test
+    fun anEntryForACacheThisInstanceDoesNotCreateStarts() {
+        val changes = CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME
+        val runner = contextRunner.withUserConfiguration(CoSecAutoConfiguration::class.java)
+        runner.withPropertyValues("cocache.caches.[$changes].local-max-age=10s").run { context ->
+            assertThat(context).hasNotFailed()
+            context.getBean(CacheRuntime::class.java).cacheNames.assert().doesNotContain(changes)
+        }
+        runner.withPropertyValues("cocache.caches.[ChangeRequestCach].local-max-age=10s").run { context ->
+            assertThat(context).hasFailed()
+            generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                .any { "undeclared caches [ChangeRequestCach]" in it }.assert().isTrue()
+        }
+    }
+
+    /** The global layers skip what CoSec locks: one local max age, `cosec.authorization.snapshot.local-max-age`. */
+    @Test
+    fun globalLayersSkipLockedFields() {
+        contextRunner
+            .withPropertyValues(
+                "cosec.authorization.snapshot.local-max-age=7s",
+                "cocache.defaults.store.local-max-age=1h",
+                "cocache.overrides.store.local-max-age=1s",
+            )
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                val runtime = context.getBean(CacheRuntime::class.java)
+                runtime.policy(snapshot)!!.localMaxAge.assert().isEqualTo(Duration.ofSeconds(7))
+                context.getBean(
+                    PolicySnapshotCache::class.java
+                ).localCopyMaxAge.assert().isEqualTo(Duration.ofSeconds(7))
+                // A revocation table is not locked there: the override tightens it.
+                runtime.policy(
+                    CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
+                )!!.localMaxAge.assert().isEqualTo(Duration.ofSeconds(1))
+            }
+    }
+
+    @Test
+    fun revocationTablesReadAbsentUnlessToldToFailClosed() {
+        contextRunner.run { context ->
+            assertThat(context).hasNotFailed()
+            val runtime = context.getBean(CacheRuntime::class.java)
+            runtime.effective(
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                PolicyField.UNKNOWN_READ
+            ).assert().isEqualTo("absent")
+            runtime.effective(
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
+                PolicyField.UNKNOWN_READ
+            ).assert().isEqualTo("absent")
+        }
+        contextRunner
+            .withPropertyValues("cocache.caches.[${CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME}].unknown-read=throw")
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                context.getBean(CacheRuntime::class.java)
+                    .effective(
+                        CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                        PolicyField.UNKNOWN_READ
+                    ).assert().isEqualTo("throw")
+            }
+    }
+
+    /**
+     * RC1-45: a customizer may tune a CoSec cache's policy within what CoSec locks, but never what decides its content:
+     * a key filter on the revoked-token table would hide revocations, a TTL function would make a store of record
+     * expire, and another codec would read other bytes. CoCache refuses a customizer that changes a locked layout field,
+     * so the application fails to start rather than run with it.
+     */
+    @Test
+    fun customizersCannotReplaceWhatDecidesACachesContent() {
+        val changes = listOf<Pair<String, (StoreSpec.Builder<*, *>) -> Unit>>(
+            "key filter" to { it.keyFilter { true } },
+            "ttl function" to {
+                @Suppress("UNCHECKED_CAST")
+                (it as StoreSpec.Builder<Any, Any>).ttlOf { _, _ -> Duration.ofMillis(1) }
+            },
+            "codec" to {
+                @Suppress("UNCHECKED_CAST")
+                (it as StoreSpec.Builder<Any, Any>).codec(object : Codec<Any> {
+                    override fun encode(value: Any): ByteArray = error("not CoSec's codec")
+
+                    override fun decode(bytes: ByteArray): Any = error("not CoSec's codec")
+                })
+            },
+        )
+        changes.forEach { (what, change) ->
+            val customizer = object : CacheSpecCustomizer {
+                override fun supports(
+                    cacheName: String
+                ): Boolean = cacheName == CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
+
+                override fun customize(spec: StoreSpec.Builder<*, *>) = change(spec)
+            }
+            contextRunner.withBean(CacheSpecCustomizer::class.java, { customizer }).run { context ->
+                assertThat(context).describedAs(what).hasFailed()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME in it }.assert().describedAs(what).isTrue()
+            }
+        }
     }
 
     private companion object {
         const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z"}"""
-    }
-
-    /**
-     * RC1-45: a customizer may tune a CoSec cache's policy within what CoSec pins, but never what decides its content:
-     * a key filter on the revoked-token cache would hide revocations, a TTL function or a loader would turn a store of
-     * record into a cache, and another codec would read other bytes.
-     */
-    @Test
-    fun customizersCannotReplaceWhatDecidesACachesContent() {
-        val filtering = object : CacheSpecCustomizer {
-            override fun customize(spec: CacheSpec.Builder<*, *>) {
-                spec.keyFilter { true }
-                @Suppress("UNCHECKED_CAST")
-                (spec as CacheSpec.Builder<Any, Any>).ttlOf { _, _ -> Duration.ofMillis(1) }
-                spec.codec = null
-            }
-
-            override fun customize(spec: SetCacheSpec.Builder<*, *>) {
-                spec.elementCodec = null
-            }
-        }
-        CacheRuntime.builder().backend(InMemoryBackend()).build().use { runtime ->
-            val assembler = CoSecCacheAssembler(runtime, listOf(filtering), null)
-            val spec = CoSecCacheSpecs.revokedToken()
-            val assembled = assembler.assemble(spec)
-            assembled.keyFilter.assert().isNull()
-            assembled.ttlOf.assert().isNull()
-            assembled.loader.assert().isNull()
-            assembled.codec.assert().isSameAs(spec.codec)
-            val set = SetCacheSpec.builder<String, String>("Set").elementCodec(StringCodec).build()
-            assembler.assemble(set).elementCodec.assert().isSameAs(StringCodec)
-        }
     }
 }

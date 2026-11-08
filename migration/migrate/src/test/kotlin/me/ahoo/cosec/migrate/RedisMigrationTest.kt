@@ -17,25 +17,20 @@ package me.ahoo.cosec.migrate
 
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
+import io.lettuce.core.codec.ByteArrayCodec
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cocache.api.Cache
-import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
-import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.statement
-import me.ahoo.cosec.migrate.v7.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.migrate.v7.cache.V7CacheSpecs
-import me.ahoo.cosec.migrate.v7.cache.createGlobalPolicyIndex
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -80,33 +75,39 @@ class RedisMigrationTest {
     private val keyPrefix = "migrate-test:${UUID.randomUUID()}"
     private val backend = RedisBackend.standalone(RedisURI.create(REDIS))
     private val runtime = CacheRuntime.builder().backend(backend).build()
+    private val factory = CoCacheFactory(runtime)
+    private val client = RedisClient.create(REDIS)
+    private val redis = client.connect(ByteArrayCodec.INSTANCE)
 
     @AfterEach
     fun close() {
         runtime.close()
         backend.close()
+        redis.close()
+        client.shutdown()
     }
 
-    private object RawCodec : Codec<ByteArray> {
-        override fun encode(value: ByteArray): ByteArray = value
+    /** Writes and reads 7.x values as CoCache 6 stored them (format 1), in 7.0's layout. */
+    private inner class Raw6(private val cacheName: String) {
+        private fun key(key: String) = "${V7CacheSpecs.cacheNamespace(keyPrefix, cacheName)}:$key".encodeToByteArray()
 
-        override fun decode(bytes: ByteArray): ByteArray = bytes
+        fun put(key: String, value: ByteArray) {
+            redis.sync().set(key(key), CoCache6.value(value))
+        }
+
+        operator fun get(key: String): ByteArray? = redis.sync().get(key(key))?.let {
+            it.copyOfRange(CoCache6Format.HEADER_SIZE, it.size)
+        }
     }
 
-    /** Writes 7.x values as stored bytes, in 7.0's layout. */
-    private val raws = HashMap<String, Cache<String, ByteArray>>()
+    private fun raw(cacheName: String) = Raw6(cacheName)
 
-    private fun raw(cacheName: String): Cache<String, ByteArray> = raws.getOrPut(cacheName) { create(cacheName) }
-
-    private fun create(cacheName: String): Cache<String, ByteArray> = runtime.create(
-        CacheSpec.builder<String, ByteArray>("Write$cacheName")
-            .namespace(V7CacheSpecs.cacheNamespace(keyPrefix, cacheName))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(RawCodec)
-            .policy(CachePolicy.DEFAULT.storeOfRecord())
-            .build()
-    )
+    /** The global policy index as CoCache 6 stored a set: a hash with `!f` and one `+member` field per id. */
+    private fun globalIndex(vararg ids: String) {
+        val key = "${V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME)}:" +
+            V7CacheSpecs.GLOBAL_POLICY_INDEX_ENCODED_KEY
+        redis.sync().hset(key.encodeToByteArray(), CoCache6.set(*ids))
+    }
 
     private fun marker(value: String) {
         val client = RedisClient.create(REDIS)
@@ -146,9 +147,7 @@ class RedisMigrationTest {
         )
         // The policy history is not policy data.
         policies.put("history:c:1", "{}".encodeToByteArray())
-        runtime.createGlobalPolicyIndex(
-            V7CacheSpecs.globalPolicyIndex(keyPrefix)
-        ).add(GlobalPolicyIndexCache.CACHE_KEY, setOf("g"))
+        globalIndex("g")
         val audit = """{"bool":{"and":[{"path":{"part":"request.path","pattern":"/audit/**"}},{"inRole":{"value":"auditor"}}]}}"""
         val expired = """{"time":{"notAfter":"2020-01-01T00:00:00Z"}}"""
         raw(V7CacheSpecs.APP_PERMISSION_CACHE_NAME).put(
@@ -201,7 +200,7 @@ class RedisMigrationTest {
             out.toString()
         )
         published.assert().describedAs(publishOutput).isEqualTo(MigrateMain.OK)
-        val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
         val compiler = PolicyDocumentCompiler()
         listOf(SnapshotKey.Platform, SnapshotKey.App("order")).forEach { key ->
             val document = cache[key]
@@ -271,7 +270,7 @@ class RedisMigrationTest {
             "--in",
             out.toString()
         ).first.assert().isEqualTo(MigrateMain.OK)
-        val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
         DocumentSnapshots.source(
             RedisSnapshotDocumentStore(cache),
             PolicyDocumentCompiler(),
@@ -328,8 +327,8 @@ class RedisMigrationTest {
             out.toString()
         ).first.assert().isEqualTo(MigrateMain.OK)
         val documents = ConvertedDirectory.read(out)
-        val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-        val store = me.ahoo.cosec.cache.control.CoCacheControlStore.create(runtime, cache, keyPrefix)
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
         // A first run that stopped after the platform document.
         DocumentPublisher(store).publish(mapOf(SnapshotKey.Platform to documents.getValue(SnapshotKey.Platform)))
         val (refused, refusedOutput) = run(
@@ -430,7 +429,7 @@ class RedisMigrationTest {
             setOf("order"),
             setOf(CoSec7xReader.parseGrantKey("order:admin@team"))
         )
-        val source = CoSec7xReader(backend, keyPrefix).use { it.source(keys, null) }
+        val source = CoSec7xReader(redis.sync(), keyPrefix).source(keys, null)
         source.policies.map { it.id }.assert().containsExactly("c", "g")
         source.policies.first().location.assert().isEqualTo("$keyPrefix:policy:c")
         source.globalIndex.assert().containsExactly("g")

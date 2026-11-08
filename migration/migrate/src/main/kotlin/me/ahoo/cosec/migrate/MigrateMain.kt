@@ -20,7 +20,11 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.ScanArgs
 import io.lettuce.core.ScanCursor
 import io.lettuce.core.api.sync.RedisCommands
+import io.lettuce.core.cluster.RedisClusterClient
+import io.lettuce.core.codec.ByteArrayCodec
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
@@ -49,6 +53,7 @@ import kotlin.system.exitProcess
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--key-prefix cosec] --out ./api-keys
  *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
+ * cocache8 --redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --out ./documents [--discard-pending] [--dry-run]
  * ```
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
@@ -68,7 +73,7 @@ object MigrateMain {
     private const val SCAN_COUNT = 1000L
 
     /** The commands that accept `--cluster`: the others read or write Redis with plain clients that do not. */
-    private val CLUSTER_COMMANDS = listOf("publish", "bootstrap", "repair-references")
+    private val CLUSTER_COMMANDS = listOf("publish", "bootstrap", "repair-references", "cocache8")
     const val API_KEYS_REPORT_FILE = "api-keys-report.json"
 
     private val USAGE_TEXT = """
@@ -81,6 +86,7 @@ object MigrateMain {
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
+          cocache8 --redis <uri> [--cluster] [--key-prefix <p>] --out <dir> [--discard-pending] [--dry-run]
           api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--memberships <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
     """.trimIndent()
@@ -128,6 +134,7 @@ object MigrateMain {
         "repair-references" -> repairReferences(options, out)
         "partition plan" -> partitionPlan(options, out)
         "api-keys" -> apiKeys(options, out)
+        "cocache8" -> cocache8(options, out)
         else -> {
             out.println(USAGE_TEXT)
             USAGE
@@ -150,7 +157,7 @@ object MigrateMain {
                 "rate-limit-rules", "platform-admin", "redis", "role-prefix",
                 "memberships", "grant-to-principal",
             )
-            private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
+            private val FLAGS = setOf("resume", "force", "dry-run", "cluster", "discard-pending")
 
             /** The options that wrote break-glass, gone with it (RC1-27): what to do instead. */
             private val REMOVED = setOf("root-enabled", "root-id", "root-expires-at", "break-glass-max-duration")
@@ -237,8 +244,8 @@ object MigrateMain {
                 val markerKey = "${keyPrefix.trimEnd(':')}:meta:schema"
                 val marker = Source7x.Marker(markerKey, commands.get(markerKey))
                 val keys = CoSec7xReader.keys(keyPrefix) { pattern -> scan(commands, pattern) }
-                return RedisBackend.standalone(redisUri).use { backend ->
-                    CoSec7xReader(backend, keyPrefix).use { reader -> reader.source(keys, marker) }
+                return client.connect(ByteArrayCodec.INSTANCE).use { raw ->
+                    CoSec7xReader(raw.sync(), keyPrefix).source(keys, marker)
                 }
             }
         } finally {
@@ -258,15 +265,37 @@ object MigrateMain {
     }
 
     private fun publish(options: Options, out: PrintStream): Int {
-        options.required("to-redis")
+        val uri = options.required("to-redis")
+        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        val cluster = options.flag("cluster")
         val input = Path.of(options.required("in"))
         val documents = ConvertedDirectory.read(input)
-        controlStore(options) { store ->
-            val result = DocumentPublisher(store).publish(documents, resume = options.flag("resume"))
-            result.written.forEach { out.println("Published $it") }
-            result.skipped.forEach { out.println("Already published, identical: $it") }
+        val finished = try {
+            controlStore(options) { store ->
+                val result = DocumentPublisher(store).publish(documents, resume = options.flag("resume"))
+                result.written.forEach { out.println("Published $it") }
+                result.skipped.forEach { out.println("Already published, identical: $it") }
+                // A cocache8 run that stopped after its deletions is finished once every document it listed has a head.
+                rawRedis(uri, cluster) { redis ->
+                    CoCache8Upgrade(redis, keyPrefix).finish { key -> runBlocking { store.head(key) } != null }
+                }
+            }
+        } catch (error: PublishException) {
+            out.println("Failed: ${error.message}")
+            out.println(
+                "Finish with: ${CoCache8Upgrade.resumeCommand(
+                    uri,
+                    keyPrefix,
+                    cluster,
+                    input.toAbsolutePath().toString()
+                )}"
+            )
+            return FAILED
         }
         out.println("Published ${documents.size} document(s). The 7.x data is untouched.")
+        if (finished) {
+            out.println("The cocache8 run that stopped is finished: every document it deleted is published again.")
+        }
         return OK
     }
 
@@ -436,17 +465,107 @@ object MigrateMain {
         keyPrefix: String,
         cluster: Boolean = false,
         block: (CoCacheControlStore) -> T
-    ): T {
+    ): T = factory(uri, cluster) { factory ->
+        val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        block(CoCacheControlStore.create(factory, heads, keyPrefix))
+    }
+
+    /** CoCache 8 over the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
+    private fun <T> factory(uri: String, cluster: Boolean, block: (CoCacheFactory) -> T): T {
         val backend = if (cluster) {
             RedisBackend.cluster(uri.split(',').map { RedisURI.create(it.trim()) })
         } else {
             RedisBackend.standalone(RedisURI.create(uri))
         }
         return backend.use { backend ->
-            CacheRuntime.builder().backend(backend).build().use { runtime ->
-                val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                block(CoCacheControlStore.create(runtime, heads, keyPrefix))
+            CacheRuntime.builder().backend(backend).build().use { runtime -> block(CoCacheFactory(runtime)) }
+        }
+    }
+
+    /**
+     * `cocache8` (a CoSec 8.0.0-alpha deployment, every instance stopped): reads every CoCache 6 value of CoSec's
+     * families and refuses, writing nothing, what cannot be moved; else writes the documents to `--out` (the input of
+     * `publish`, to finish a run that stops after it deleted them), then the revocations, deletions and documents.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun cocache8(options: Options, out: PrintStream): Int {
+        val uri = options.required("redis")
+        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        val cluster = options.flag("cluster")
+        val output = Path.of(options.required("out"))
+        val (plan, problems) = rawRedis(uri, cluster) { redis ->
+            val upgrade = CoCache8Upgrade(redis, keyPrefix)
+            val plan = upgrade.plan()
+            plan to upgrade.check(plan, options.flag("discard-pending"))
+        }
+        out.println(
+            "CoCache 6 values under [$keyPrefix]: ${plan.documents.size} document(s), " +
+                "${plan.revocations.size} revocation(s), " +
+                plan.deletions.entries.joinToString(prefix = "to delete: ") { (cache, keys) -> "$cache ${keys.size}" } +
+                "; ${plan.skipped.size} key(s) not in CoCache 6's format, left as they are."
+        )
+        if (problems.isNotEmpty()) {
+            problems.forEach { out.println("REFUSED $it") }
+            plan.unfinished?.let {
+                out.println("Finish it with: ${CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, it.out)}")
             }
+            out.println("Nothing was written.")
+            return FAILED
+        }
+        if (options.flag("dry-run")) {
+            out.println("Dry run: nothing was written.")
+            return OK
+        }
+        val resume = CoCache8Upgrade.resumeCommand(uri, keyPrefix, cluster, output.toAbsolutePath().toString())
+        if (plan.documents.isNotEmpty()) {
+            out.println(
+                "Writing the documents to $output first. If this run stops after it deleted them, finish with: $resume"
+            )
+        }
+        val published = try {
+            rawRedis(uri, cluster) { redis ->
+                factory(uri, cluster) { factory ->
+                    val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                    CoCache8Upgrade(redis, keyPrefix)
+                        .apply(plan, factory, CoCacheControlStore.create(factory, heads, keyPrefix), output)
+                }
+            }
+        } catch (error: Exception) {
+            out.println("FAILED ${error.message}")
+            if (plan.documents.isNotEmpty()) {
+                out.println(
+                    "Do not run cocache8 again to finish: it cannot see the documents it deleted. Finish with: $resume"
+                )
+            }
+            return FAILED
+        }
+        out.println("Wrote ${plan.revocations.size} revocation(s) again, with what remains of their lifetimes.")
+        out.println("Deleted ${plan.deletions.values.sumOf { it.size }} CoCache 6 value(s).")
+        published?.written?.forEach { out.println("Published $it") }
+        return OK
+    }
+
+    /** Raw commands on the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
+    private fun <T> rawRedis(uri: String, cluster: Boolean, block: (RawRedis) -> T): T {
+        if (cluster) {
+            val client = RedisClusterClient.create(uri.split(',').map { RedisURI.create(it.trim()) })
+            try {
+                return client.connect(ByteArrayCodec.INSTANCE).use { connection ->
+                    val commands = connection.sync()
+                    block(LettuceRawRedis(commands, commands))
+                }
+            } finally {
+                client.shutdown()
+            }
+        }
+        val client = RedisClient.create(RedisURI.create(uri))
+        try {
+            return client.connect(ByteArrayCodec.INSTANCE).use { connection ->
+                val commands = connection.sync()
+                block(LettuceRawRedis(commands, commands))
+            }
+        } finally {
+            client.shutdown()
         }
     }
 }

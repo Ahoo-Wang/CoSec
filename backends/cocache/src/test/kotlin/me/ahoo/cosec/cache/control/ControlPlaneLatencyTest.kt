@@ -71,7 +71,7 @@ class ControlPlaneLatencyTest {
     private val backend: CoherenceBackend = RedisTarget.REDIS.backend()
     private val keyPrefix = newKeyPrefix()
     private val node = SnapshotNode(backend, keyPrefix)
-    private val store = CoCacheControlStore.create(node.runtime, node.cache, keyPrefix)
+    private val store = CoCacheControlStore.create(node.factory, node.cache, keyPrefix)
     private val revisions = Revisions(store)
     private val ids = AtomicInteger()
     private val author =

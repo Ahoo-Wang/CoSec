@@ -15,35 +15,30 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cocache.api.Cache
-import me.ahoo.cocache.api.Codec
-import me.ahoo.cocache.api.spi.CoherenceBackend
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
-import me.ahoo.cocache.core.policy.CachePolicy
+import io.lettuce.core.api.sync.RedisCommands
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.migrate.v7.api.context.request.AppId
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyId
 import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
-import me.ahoo.cosec.migrate.v7.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.migrate.v7.cache.V7CacheSpecs
-import me.ahoo.cosec.migrate.v7.cache.createGlobalPolicyIndex
 
 /**
  * Reads CoSec 7.x policy data in Redis (RFC 0003 §4.7, RFC 0004 §8.2) as it is stored: each policy, app permission and
  * role grant as its bytes, and the global policy index. It decodes nothing, so data 7.x cannot decode is still read
- * and then rejected with its key by the converter. Content that CoCache 6 cannot read at all (unmigrated 5.x data, a
- * newer format) fails the read.
+ * and then rejected with its key by the converter.
+ *
+ * 7.x stored its data through CoCache 6, whose values CoCache 8 does not read, so this reads CoCache 6's format 1
+ * itself ([CoCache6Format]) with plain Redis commands. Content that is not format 1 (unmigrated 5.x data, a newer
+ * format, a value of another type) fails the read.
  *
  * The keys come from [keys], which scans Redis; the reader reads through the same storage layout as 7.0's caches.
  */
 class CoSec7xReader(
-    backend: CoherenceBackend,
+    private val redis: RedisCommands<ByteArray, ByteArray>,
     keyPrefix: String,
-) : AutoCloseable {
+) {
     /** The keys to read; [keys] finds them in Redis. */
     data class Keys(
         val policyIds: Set<PolicyId>,
@@ -51,47 +46,35 @@ class CoSec7xReader(
         val grants: Set<AppSpacedRoleId>,
     )
 
-    private val runtime = CacheRuntime.builder().backend(backend).build()
-    private val globalPolicyIndexCache: GlobalPolicyIndexCache =
-        runtime.createGlobalPolicyIndex(V7CacheSpecs.globalPolicyIndex(keyPrefix))
-    private val rawPolicies = rawCache(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME)
-    private val rawAppPermissions = rawCache(keyPrefix, V7CacheSpecs.APP_PERMISSION_CACHE_NAME)
-    private val rawGrants = rawCache(keyPrefix, V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME)
     private val policyNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME)
     private val appNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.APP_PERMISSION_CACHE_NAME)
     private val grantNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME)
     private val globalIndexKey =
         "${V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME)}:" +
-            GlobalPolicyIndexCache.CACHE_KEY
+            V7CacheSpecs.GLOBAL_POLICY_INDEX_ENCODED_KEY
 
-    /** The same storage layout as 7.0's caches, with values as stored bytes. */
-    private fun rawCache(keyPrefix: String, cacheName: String): Cache<String, ByteArray> = runtime.create(
-        CacheSpec.builder<String, ByteArray>("Raw$cacheName")
-            .namespace(V7CacheSpecs.cacheNamespace(keyPrefix, cacheName))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(RawCodec)
-            .policy(CachePolicy.DEFAULT.storeOfRecord())
-            .build()
-    )
-
-    private object RawCodec : Codec<ByteArray> {
-        override fun encode(value: ByteArray): ByteArray = value
-
-        override fun decode(bytes: ByteArray): ByteArray = bytes
-    }
+    /** The stored bytes under [storageKey], or null when there is no value. */
+    private fun scalar(storageKey: String): ByteArray? =
+        CoCache6Format.scalar(storageKey, redis.type(storageKey.encodeToByteArray())) {
+            redis.get(storageKey.encodeToByteArray())
+        }
 
     /** The ids in the global policy index. */
-    fun globalIndex(): Set<PolicyId> = globalPolicyIndexCache[GlobalPolicyIndexCache.CACHE_KEY].orEmpty()
+    fun globalIndex(): Set<PolicyId> {
+        val key = globalIndexKey.encodeToByteArray()
+        return CoCache6Format.members(globalIndexKey, redis.type(key)) {
+            redis.hkeys(key) to redis.hget(key, CoCache6Format.SET_FORMAT_FIELD)
+        }.mapTo(LinkedHashSet()) { it.decodeToString() }
+    }
 
     /** The stored bytes of policy [id], or null when it has none. */
-    fun policy(id: PolicyId): ByteArray? = rawPolicies[id]
+    fun policy(id: PolicyId): ByteArray? = scalar("$policyNamespace:$id")
 
     /** The stored bytes of the app permission of [appId], or null when it has none. */
-    fun appPermission(appId: AppId): ByteArray? = rawAppPermissions[appId]
+    fun appPermission(appId: AppId): ByteArray? = scalar("$appNamespace:$appId")
 
     /** The stored bytes of the grants of [grantId], or null when it has none. */
-    fun grants(grantId: AppSpacedRoleId): ByteArray? = rawGrants[grantId.toString()]
+    fun grants(grantId: AppSpacedRoleId): ByteArray? = scalar("$grantNamespace:$grantId")
 
     /**
      * Everything under [keys], with [schemaMarker] as read from `{p}:meta:schema`. Grants of an app without an app
@@ -125,10 +108,6 @@ class CoSec7xReader(
             Source7x.App(appId, location, appPermission, grants)
         }
         return Source7x(policies, index, apps, schemaMarker, globalIndexKey, Source7x.sha256(input))
-    }
-
-    override fun close() {
-        runtime.close()
     }
 
     companion object {

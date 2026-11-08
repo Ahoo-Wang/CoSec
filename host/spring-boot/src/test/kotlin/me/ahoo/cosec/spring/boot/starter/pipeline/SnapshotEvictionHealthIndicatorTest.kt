@@ -17,7 +17,9 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import io.mockk.mockk
 import me.ahoo.cocache.api.spi.CoherenceBackend
+import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.cache.MembershipLoader
@@ -101,6 +103,49 @@ class SnapshotEvictionHealthIndicatorTest {
                 indicators.getValue(
                     "cosecSnapshotEvictionHealthIndicator"
                 ).health()!!.status.assert().isEqualTo(Status.UP)
+            }
+    }
+
+    /**
+     * The checks read the backend of the runtime the snapshot store is created on, as CoCache's own check does since
+     * 8.0.0-alpha.6 (#874): an application's `CacheRuntime` beside a `CoherenceBackend` bean of another Redis is
+     * checked on its own backend. Here the bean is one no check can read, and the runtime is in memory: startup passes
+     * under `fail`, which reading the bean would refuse.
+     */
+    @Test
+    fun `the checks read the snapshot runtime's backend, not another backend bean`() {
+        val unreadableBean = mockk<CoherenceBackend>(relaxed = true)
+        ApplicationContextRunner()
+            .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
+            .withConfiguration(
+                AutoConfigurations.of(
+                    JacksonAutoConfiguration::class.java,
+                    CoCacheAutoConfiguration::class.java,
+                    CoSecTokenRevocationCacheAutoConfiguration::class.java,
+                    CoSecJwtAutoConfiguration::class.java,
+                    CoSecPipelineIntegrationAutoConfiguration::class.java,
+                    CoSecMembershipAutoConfiguration::class.java,
+                    CoSecSnapshotAutoConfiguration::class.java,
+                    CoSecPipelineAutoConfiguration::class.java,
+                ),
+            )
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "cosec.authorization.routes.location=",
+            )
+            .withBean(CoherenceBackend::class.java, { unreadableBean })
+            .withBean(CacheRuntime::class.java, { CacheRuntime.builder().backend(InMemoryBackend()).build() })
+            .withBean(MembershipLoader::class.java, {
+                MembershipLoader { _, _ ->
+                    MembershipAnswer.Known(Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
+                }
+            })
+            .run { context ->
+                context.startupFailure.assert().isNull()
+                val monitor = context.getBean(EvictionPolicyMonitor::class.java)
+                monitor.refresh()
+                monitor.status().down.assert().isFalse()
+                monitor.status().detail.assert().isNull()
             }
     }
 

@@ -170,7 +170,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
 - **Policies are data.** Policies, bindings, catalogs and rate limits live in three kinds of snapshot documents
   (platform, app, tenant; `schema: 2`), compiled into indexes. Conditions are an AST checked at compile time; there
   are no matcher plugins. External attributes (`ext.*`) come from `AttributeProvider`s the platform document declares.
-- **Snapshots.** Redis is the store of record for the documents (`cosec-cocache`, CoCache 6). `SnapshotSource` keeps
+- **Snapshots.** Redis is the store of record for the documents (`cosec-cocache`, CoCache 8 `Store`s). `SnapshotSource` keeps
   compiled documents in memory: one load per key at a time, installs in load order, conditional revalidation, bounded
   lag, fail closed on what it cannot read. `peek` is the hot path and never does I/O.
 - **Control plane.** Only `cosec-control` writes documents: changes are validated, compiled, shadowed against live
@@ -187,7 +187,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | **One decision path**: outcomes and status codes come only from `StatusMapping`; adapters never see a `Decision` | Three adapters must answer identically | `OneDecisionPathTest`, `WebAdapterParityTest` |
 | **No blocking on the event loop**: the data plane's SPIs suspend, and implementations use non-blocking clients; `SnapshotSource.peek` does no I/O; a local cache hit answers on the caller's thread | Blocking a Netty thread stalls every request on it | `SnapshotStoreBlockHoundTest`, `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
 | **Authorization is a pure decision**: the engine does no I/O and keeps no state; obligations run only after a permit, so denied requests never spend a rate-limit permit | Keeps evaluation fast, predictable and explainable | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime, OBL-1) |
-| **Snapshot and control-plane caches never expire (`ttl = null`) and throw on failed reads and deletes (`ReadFailureMode.THROW`, `InvalidateFailureMode.THROW`)**, applied after any CoCache customizer or property; Redis must run with `maxmemory-policy noeviction` | Redis is the store of record; expiry, eviction or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest`, `CoSecPipelineAutoConfigurationTest` (SNP-3) |
+| **Snapshot and control-plane caches are CoCache `Store`s that never expire (`ttl` forever) and throw on failed reads (`unknown-read: throw`) and deletes**, locked and constrained by `CoSecCacheSpecs.locks` over any CoCache customizer or property; Redis must run with `maxmemory-policy noeviction` | Redis is the store of record; expiry, eviction or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest`, `CoSecPipelineAutoConfigurationTest` (SNP-3) |
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `FlatAuthorizationBenchmark`, `PipelineBenchmark` |
 | **Public signatures change only on purpose**: each published module's ABI is in its `api/<project>.api` dump | Applications compile against CoSec and implement its SPIs | `checkKotlinAbi` (in `check`), `SpiMarkerTest` |
 

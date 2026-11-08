@@ -15,7 +15,7 @@ observability. This page is the single home of migration steps. Release notes fo
 8.0.0-alpha.2 is a preview with no compatibility promise. These changes since then, from the
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), make the grant
 analysis read the author's rights as enforcement does, so some changes that published alone now wait for approval
-([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents. Those at the gateway and
+([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents' content, but 8.0.0 stores its data through CoCache 8, which does not read what alpha.2 wrote through CoCache 6: move it with `cosec-migrate cocache8`, every instance stopped ([Data written through CoCache 6](#data-written-through-cocache-6)). Those at the gateway and
 the edge of tenant isolation (RC1-5, RC1-6, RC1-15 to RC1-18, RC1-48, RC1-49), from **Identity forwarding** on, change
 what a gateway forwards and to which routes: read them before upgrading a gateway.
 
@@ -276,6 +276,49 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `cosec:approve` for the trust root, and accepts an API key's approval: approve and publish through upgraded
   instances only until the roll is done. An approval an older instance accepted names no credential, so an upgraded
   instance does not publish on it.
+
+### Data written through CoCache 6
+
+8.0.0-alpha.2 kept its data in Redis through CoCache 6; 8.0.0 keeps it through CoCache 8, under the same keys, and
+CoCache 8 does not read CoCache 6's format. What it finds in that format fails closed, as unreadable content: a request
+that needs such a document is `503` (`SourceUnavailable`), a token or principal revoked there is `503` instead of
+`401`, and the control API answers `500`. Nothing reads such a value as absent, so a revoked token is never accepted
+again, not even through the revocation tables' "Redis failed, not revoked" degradation.
+
+| Data | Keys | On 8.0.0, before the move | `cosec-migrate cocache8` |
+|---|---|---|---|
+| Snapshot documents | `<p>:snapshot:*` | `503` for every request that reads one | Published again as revision 1 of each document (provenance `MIGRATE`, no parent: the parent's SHA-1 digest is none CoCache 8 knows) |
+| Revocations | `<p>:token:revoked:*`, `<p>:token:subject:revoked:*` | `503` for the revoked token or principal | Written again, each with what remains of its lifetime |
+| Control-plane records | `<p>:control:*` | The control API answers `500` | Deleted: the history starts again with the published documents |
+| Candidates and shadow reports | `<p>:candidate:*`, `<p>:shadow:*` | The shadow window cannot report | Deleted; a change still in flight refuses the run (below) |
+| Memberships | `<p>:membership:*` | Loaded again from the `MembershipLoader` | Deleted; they fill again |
+| API keys, rate limit counters, OAuth states | `<p>:api-key:*`, `<p>:rate-limiter:*`, `<p>:oauth:state:*` | Unchanged: kept by Spring's Redis template, not CoCache | Nothing |
+
+1. Publish or abandon every change in flight, and end every break-glass grant: the run refuses an open change (a
+   draft included), a staging slot or a candidate unless told `--discard-pending`, and refuses a document that holds a
+   break-glass binding, as `publish` does.
+2. If alpha.2 set one of the key prefixes that `cosec.key-prefix` replaced, move those keys first ("One key prefix",
+   above): the command reads one prefix.
+3. Stop every CoSec instance, the control plane included. An alpha.2 instance and an 8.0.0 instance read neither each
+   other's values nor each other's invalidations, whose channels are named after the key prefix in CoCache 8.
+4. See what would move, writing nothing:
+   `cosec-migrate cocache8 --redis redis://localhost:6379 --key-prefix cosec --out ./cocache8 --dry-run`
+   (`--cluster` with the seed nodes of a Redis Cluster). It lists what it refuses and why: a change still open, a
+   draft included, a document `publish` would refuse, a value it cannot read, or neither a document to move nor a
+   platform document.
+5. Run it without `--dry-run`. It writes the documents to `--out` first, in the layout `publish` reads, and a marker,
+   `<p>:meta:cocache8`, then the revocations (a write over the CoCache 6 value, so none is ever missing), then deletes
+   the other CoCache 6 values, then publishes the documents, and removes the marker. If it stops after the deletions,
+   do not run `cocache8` again to finish: it cannot see the documents it deleted, and it refuses while the marker is
+   there. Finish with the command it prints,
+   `cosec-migrate publish --to-redis <uri> --key-prefix <p> [--cluster] --in ./cocache8 --resume`, which removes the
+   marker once every document is published again.
+6. Start the 8.0.0 instances. Each document's revision starts again at 1; the history before the move is not carried
+   over, so keep a copy of `<p>:control:revision:*` before step 5 if you need it.
+
+Digests are SHA-256 now, where alpha.2's were CoCache 6's SHA-1: the control API's revision history, a change's base
+and checks, and the events that name a digest write `SHA-256:<64 hex>`. A `SnapshotDocumentStore` of your own must
+produce 32-byte SHA-256 digests, or every read fails closed ([Extending](../architecture/extending.md#snapshot-document-stores)).
 
 ## From 8.0.0-alpha.1 {#from-8-0-0-alpha-1}
 
@@ -804,7 +847,9 @@ At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it
 platform document could silently drop its DENY statements. It reads it from `INFO memory`. When `INFO` fails or is
 not allowed, startup fails too, and also when the CoCache backend is a wrapper or a custom backend it
 cannot read. If you have set `noeviction` yourself, set `cosec.authorization.snapshot.eviction-check=warn`: startup
-goes on and logs a warning that starts with `!!!`.
+goes on and logs a warning that starts with `!!!`. CoCache 8, which keeps CoSec's documents as `Store`s, checks the
+policy too and is not told by that setting: also set `cocache.redis.assume-maxmemory-policy=noeviction`
+([Redis requirements](./storage.md#redis-requirements)).
 
 #### Each instance decides from a snapshot
 
