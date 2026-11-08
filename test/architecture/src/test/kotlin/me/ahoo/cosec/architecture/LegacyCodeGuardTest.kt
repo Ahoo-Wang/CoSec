@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.architecture
 
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.junit.jupiter.api.Test

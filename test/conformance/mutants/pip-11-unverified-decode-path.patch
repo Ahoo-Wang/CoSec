@@ -1,6 +1,6 @@
 # Rule: PIP-11
 # Mutant: an unverified decode path comes back: a principal from a token whose signature nobody checked
-# Tests: :architecture:test --tests me.ahoo.cosec.spring.boot.starter.UnverifiedTokenTest
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.UnverifiedTokenTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/UnverifiedPrincipals.kt
 new file mode 100644

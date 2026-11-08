@@ -233,10 +233,10 @@ registeredProperties
             outputs.upToDateWhen { false }
             maxHeapSize = "2g"
             // TRACE logging over a million cases would write gigabytes.
-            val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
+            val propertyStressLogback = "${rootProject.rootDir}/config/logback-property-stress.xml"
             doFirst {
                 jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
-                    "-Dlogback.configurationFile=$parityLogback"
+                    "-Dlogback.configurationFile=$propertyStressLogback"
             }
         }
         propertyStress.configure { dependsOn(stress) }

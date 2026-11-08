@@ -147,6 +147,14 @@ class TracingListenerTest {
         span.attributes.get(TracingListener.BINDING_ID).assert().isEqualTo("g:orders")
         span.attributes.get(TracingListener.RESULT).assert().isEqualTo("PERMIT")
         span.endEpochNanos.assert().isGreaterThanOrEqualTo(span.startEpochNanos)
+        // This module's tests load TracingListener from a directory, which has no manifest to read a version from.
+        span.instrumentationScopeInfo.version.assert().isEqualTo("unknown")
+    }
+
+    @Test
+    fun theInstrumentationVersionIsTheManifestsOrUnknown() {
+        TracingListener.instrumentationVersion("8.0.0").assert().isEqualTo("8.0.0")
+        TracingListener.instrumentationVersion(null).assert().isEqualTo("unknown")
     }
 
     @Test
