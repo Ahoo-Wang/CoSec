@@ -58,8 +58,8 @@ class CookieHeadersTest {
         // Only the whitespace at the head goes: a field value cannot start with it, and Netty refuses to send one.
         CookieHeaders.without(" \tAUTHORIZATION =t ; a=1", "authorization").assert().isEqualTo("a=1")
         CookieHeaders.without("authorization=t;\ta=1 ; b=2", "authorization").assert().isEqualTo("a=1 ; b=2")
-        // A kept `$Version` pair that would come to the head takes the header with it: Netty would read it as RFC 2965,
-        // and no rewrite that starts with neither whitespace nor an empty pair keeps its reading.
+        // A kept `$Version` pair that would come to the head takes the header with it: Netty would read it as RFC 2965.
+        // Whitespace first is refused, an empty pair stops Python's `SimpleCookie`, a leading `,` makes it throw.
         CookieHeaders.without("authorization=t;\$Version=1;a=b", "authorization").assert().isNull()
         CookieHeaders.without("authorization=t; \$version=1; a=b", "authorization").assert().isNull()
         CookieHeaders.without(" \$Version=1; authorization=t; \$Path=/; a=b", "authorization").assert().isNull()

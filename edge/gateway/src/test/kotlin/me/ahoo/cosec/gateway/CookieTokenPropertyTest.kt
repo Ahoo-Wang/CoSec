@@ -172,7 +172,7 @@ class CookieTokenPropertyTest {
         val version = "\$Version"
         (
             left.all { pair -> pair.all { it.isWhitespace() || it == ',' } } ||
-                head.startsWith(version, ignoreCase = true) ||
+                (!header.startsWith(version, ignoreCase = true) && head.startsWith(version, ignoreCase = true)) ||
                 (header.startsWith(version, ignoreCase = true) && token(pairs.first()))
             ).assert().describedAs(header).isTrue()
         return true
