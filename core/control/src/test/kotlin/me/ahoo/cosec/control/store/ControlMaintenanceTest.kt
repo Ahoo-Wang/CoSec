@@ -31,6 +31,7 @@ import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -78,50 +79,38 @@ class ControlMaintenanceTest {
     }
 
     /**
-     * R2-1 of #1194's review: a stored open change of an app no key can name (an earlier build wrote it) no longer
-     * reads. That record alone is skipped, however the store wraps the error: reclamation still keeps what the other
-     * open changes rest on and reclaims the rest, and shadow windows are still looked at.
+     * SCP-10: a stored open change of an app no key can name does not decode, so nothing knows what it rests on. The
+     * pass stops, however the store wraps the error: no revision is reclaimed until an operator removes the record.
      */
     @Test
-    fun `an open change of an app no key can name is skipped, not the pass`() = runBlocking<Unit> {
+    fun `an open change of an app no key can name stops the pass`() = runBlocking<Unit> {
         val odd = ChangeId("odd")
-        val skipping = object : ControlStore by store {
+        val failing = object : ControlStore by store {
             override suspend fun openChanges(): Set<ChangeId> = store.openChanges() + odd
 
             override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
                 if (id == odd) {
-                    throw IllegalStateException(
-                        "decoding",
-                        UnnamedDocumentException("app:a\\u0001b")
-                    )
+                    throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
                 } else {
                     store.change(id)
                 }
         }
-        val skippingChanges = Changes(
-            skipping,
+        val failingChanges = Changes(
+            failing,
             revisions,
             { ChangeId("s${ids.incrementAndGet()}") },
             PERMIT_ALL,
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
         )
-        val skippingMaintenance = ControlMaintenance(skipping, revisions, skippingChanges, Duration.ofMinutes(1))
+        val maintenance = ControlMaintenance(failing, revisions, failingChanges, Duration.ofMinutes(1))
         val first = published().digest
         val second = published().digest
-        skippingChanges.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
         val third = published().digest
         clock.now = clock.now.plus(Duration.ofDays(1))
 
-        skippingMaintenance.reclaim().getValue(ACME).records.assert().containsExactly(first)
-        store.recordDigests(ACME).assert().containsExactlyInAnyOrder(second, third)
-        skippingMaintenance.closeShadowWindows().assert().isEmpty()
-        // Anything else that cannot be read still stops the pass, as before: it might be a change that rests on a revision.
-        val broken = object : ControlStore by skipping {
-            override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
-                if (id == odd) error("unreadable") else store.change(id)
-        }
-        ControlMaintenance(broken, revisions, skippingChanges, Duration.ofMinutes(1)).reclaim().assert().isEmpty()
+        maintenance.reclaim().assert().isEmpty()
+        store.recordDigests(ACME).assert().containsExactlyInAnyOrder(first, second, third)
     }
 
     /**

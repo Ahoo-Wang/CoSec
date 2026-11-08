@@ -1,4 +1,4 @@
-# Rule: SCP-7
+# Rule: SCP-10
 # Mutant: the checks take a binding in an app no request can be in, as before R2-1: it passes propose and shadow, then publish fails
 # Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
 

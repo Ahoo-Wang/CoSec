@@ -68,7 +68,7 @@ class SnapshotKeyEncoderTest {
     }
 
     /**
-     * SCP-7, R1-6 of #1194's review: an app key takes only an app id a request could declare, so the control plane
+     * SCP-10, R1-6 of #1194's review: an app key takes only an app id a request could declare, so the control plane
      * takes none the data plane could never read; a refused id is not echoed raw.
      */
     @Test

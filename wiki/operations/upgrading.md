@@ -12,8 +12,8 @@ observability. This page is the single home of migration steps. Release notes fo
 
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
-8.0.0-alpha.3 is a preview with no compatibility promise. Nothing to migrate: what it stored still reads, except a
-document that spells a day of the week another way (below).
+8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
+sets, its approved changes and a document that spells a day of the week another way (below).
 
 - **Control-plane correctness** (audit batch E2a: #1205, #1206, #1207, #1210, #1226, #1227). A revision diff's
   `sections` compares the catalog, limits, attributes, boundary and rate limits by their content: a rule of the same id
@@ -25,12 +25,22 @@ document that spells a day of the week another way (below).
   `releaseLease` must check and remove in one step ([Extending](../architecture/extending.md#control-store)).
   `ShadowRecorder.record` takes the window's document first, `forget` takes the samples its last report counted, and
   `ShadowReporter` takes the `CandidateStore` it reads ended windows from.
-- **Upgrade the control-plane instances together.** The back-reference sets alpha.3 wrote
-  (`<p>:control:refs:*`, a JSON array of document keys) read as before, each referrer at revision 0, and are written
-  again with revisions as they change. An alpha.3 control-plane instance cannot read a set written that way, nor a
-  revision index that lists records left to delete, and fails closed on them: its publishes that touch one fail, and
-  its reclamation of that document stops. Stop the alpha.3 control-plane instances before starting this version's.
-  Data-plane instances need no order: an alpha.3 instance only keeps writing the reports of ended shadow windows.
+- **Upgrade the control-plane instances together, and rebuild the back-reference sets** (batch R4). A back-reference
+  set (`<p>:control:refs:*`) reads only as an object of each referrer and its revision. The JSON array of document
+  keys alpha.3 wrote is a format error: a publish that touches one fails, and `cosec-migrate repair-references` reads
+  a set before it writes it, so it cannot get past one either. Stop the alpha.3 control-plane instances, delete those
+  keys, run this version's `cosec-migrate repair-references`, which writes each set again from the heads with each
+  referrer's revision, and only then start this version's control-plane instances. An alpha.3 control-plane instance
+  cannot read a set written that way, nor a revision index that lists records left to delete, and fails closed on
+  them: its publishes that touch one fail, and its reclamation of that document stops. Data-plane instances need no
+  order: an alpha.3 instance only keeps writing the reports of ended shadow windows.
+- **Stored approvals and confirmations have one shape** (batch R4). A stored approval always has `memberships`,
+  `attributes`, `principalBindings`, `breakGlass`, `credentialId` and `issuedAt`, `null` where there is none, and one
+  without them is a format error. Publish or abandon every open change that has an approval before you upgrade, or
+  remove its record afterwards (`<p>:control:change:<id>`): while one is open, it answers `503` and every maintenance
+  pass stops and reclaims nothing. A `deny-nomatch` confirmation's digest is always over
+  `{statement, policyCondition}`, so one given before the upgrade for a policy without a condition no longer matches:
+  its change is refused until the statement is confirmed again (`428`). A published document keeps its confirmation.
 - **One spelling for a day of the week** (batch R5). `daysOfWeek` takes exactly `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`
   and `SUN`, the names the schema and the [policy language](../policies/language.md) have always listed. `MONDAY`,
   `mon` and ` Fri ` no longer compile: a change that writes one is refused, and a stored document that holds one is
@@ -209,7 +219,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `CoSec-Space-Id: s1` is now `400` `invalid-request`, where `s1` applied. Blank means ASCII whitespace only, so a value
   of Unicode spaces, such as `%E3%80%80`, is a value: alone, it is a space the principal must have a role in. Send each
   parameter once.
-- **App ids refuse control characters** (RC1-15, `SCP-7`), as tenant ids do: a declared app with one is
+- **App ids refuse control characters** (RC1-15, `SCP-10`), as tenant ids do: a declared app with one is
   `403` `scope-rejected` (`401` for an anonymous caller), and a host app with one fails startup.
 - **Ids refuse unpaired UTF-16 surrogates** (RC1-52, `IDN-10`). A JSON token or body can write one as an escape
   (`"beta\uD800"`), and a Redis key holds `?` in its place, so tenant `beta\uD800` read the documents of tenant
@@ -224,18 +234,18 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   ids when made, and `RevokedTokenCache.key`, `RevokedSubjectCache.key` and `MembershipCache.key` throw for them.
   Nothing to migrate; where a token issuer or a script could have sent such ids, what is stored under the id with
   `?` may have been written for the other.
-- **The control plane takes only app ids** (`SCP-7`). An app id is not blank, not `*`, has no `:` and no control
+- **The control plane takes only app ids** (`SCP-10`). An app id is not blank, not `*`, has no `:` and no control
   character, and has at most 128 characters; earlier builds took any app without `:`. A binding in any other app is
-  now a `V2` finding (`400`) at `$.bindings[i].app`, and since the whole candidate is checked, a document that still
-  holds one cannot publish any other change: its next change must remove it, and a change that only removes it is
-  valid. `analyze` answers `400` for such an app. **Before upgrading the control plane**, remove the tenant bindings in
-  such apps, abandon the open changes of such app documents, and empty the app documents published under such ids
-  (publish each with no policies and no bindings), which drops their back-references. What is left behind stops
-  nothing, but stays: a document that keeps such a binding still reads, and the binding grants nothing, since no
-  request is ever in that app; an open change of such an app no longer reads, so the control API answers it `409`
-  `change-unreadable`, it can be neither shown nor abandoned, and maintenance skips it with a WARN on every pass until
-  its record is removed; an instance's status entry, an app list entry or a back-reference naming such an app is
-  skipped, with a WARN for the status entry and the back-reference.
+  now a `V2` finding (`400`) at `$.bindings[i].app`, wherever it is in the candidate. `analyze` answers `400` for such
+  an app. **Before upgrading the control plane**, remove the tenant bindings in such apps, abandon the open changes of
+  such app documents, and empty the app documents published under such ids (publish each with no policies and no
+  bindings), which drops their back-references. Nothing can be done about them afterwards, and what is left behind is
+  a format error that fails closed, never skipped: a document that keeps such a binding still reads, and the binding
+  grants nothing, but neither a publish nor `repair-references` gets past it; an open change of such an app answers
+  `503` and stops every maintenance pass until its record is removed; an app list entry makes every app a grant reaches
+  unknown until you delete `<p>:control:apps:all` and run `cosec-migrate repair-references`; a back-reference naming
+  such an app fails whatever reads that set until you delete the set and run `repair-references`; and an instance's
+  status entry fails the read of the instance statuses until that instance writes its status again.
 - **Enforcing hosts drop a client's `CoSec-Identity`** (RC1-18, `IDN-9`). A WebFlux or Spring MVC host in `enforce`
   mode removes the header from the request its handler sees, so it never relays one a client wrote. Code that read it
   there read what any client could write; read the `SecurityContext`.

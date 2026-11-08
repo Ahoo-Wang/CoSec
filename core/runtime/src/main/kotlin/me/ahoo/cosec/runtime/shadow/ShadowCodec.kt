@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.shadow
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -86,11 +85,10 @@ object ShadowCodec {
             instance to InstanceStatus(
                 instance,
                 Instant.parse(node.need("at").text()),
-                node.need("documents").properties().filterNot { (key, _) -> unnamed(instance, key) }
-                    .associate { (key, document) ->
-                        document.only("revision", "lagMillis")
-                        documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
-                    },
+                node.need("documents").properties().associate { (key, document) ->
+                    document.only("revision", "lagMillis")
+                    documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
+                },
             )
         }
     }
@@ -153,26 +151,8 @@ object ShadowCodec {
         )
     }
 
-    /**
-     * Whether [key], a document [instance] reported installed, is an app an earlier build named (any id without `:`)
-     * that the app id rule now refuses (R2-1 of #1194's review). No change can be of it, so that entry alone is
-     * skipped, with a WARN; the rest of the instance's status is kept.
-     */
-    private fun unnamed(instance: String, key: String): Boolean {
-        val unnamed = SnapshotKeyText.isUnnamedApp(key)
-        if (unnamed) {
-            log.warn {
-                "Instance [${printable(instance)}] reports [${printable(key)}] installed, which no document key can " +
-                    "name (SCP-7): that entry is skipped."
-            }
-        }
-        return unnamed
-    }
-
     /** [text], stored content quoted in a message or a log line, with its control characters escaped (RC1-15). */
     private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
-
-    private val log = KotlinLogging.logger {}
 
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform

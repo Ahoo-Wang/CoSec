@@ -18,24 +18,10 @@ import me.ahoo.cosec.model.Identifiers
 
 /**
  * Document keys as stores and codecs write them (`platform`, `app:<id>`, `tenant:<id>`), for what reads them back: one
- * test of the app keys earlier builds wrote that no key can name now, and one way to put a stored key or id in a
- * message.
+ * way to put a stored key or id in a message.
  */
 @InternalCoSecApi
 object SnapshotKeyText {
-    private const val APP = "app:"
-
-    /**
-     * Whether [text] is an app key earlier builds wrote (any id without `:`) that the app id rule now refuses (blank,
-     * `*`, a control character, an unpaired surrogate, too long; SCP-7, RC1-52): no [SnapshotKey] names it, no request
-     * is ever in that app, and no such document can be read or published. A reader skips what names one; anything else
-     * it cannot read is still malformed.
-     */
-    fun isUnnamedApp(text: String): Boolean {
-        val app = text.removePrefix(APP)
-        return text.startsWith(APP) && app.isNotEmpty() && ':' !in app && !SnapshotKey.App.isValidAppId(app)
-    }
-
     /**
      * [text] for a message or a log line: a control character as its `\uXXXX` escape, so none can forge a line (RC1-15),
      * and an unpaired surrogate too, which a UTF-8 log would write as `?`, naming another id (RC1-52).

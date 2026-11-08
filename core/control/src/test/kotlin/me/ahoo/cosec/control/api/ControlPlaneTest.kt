@@ -36,7 +36,6 @@ import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
@@ -61,6 +60,7 @@ import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -74,7 +74,7 @@ class ControlPlaneTest {
     private val clock = MutableClock()
     private val memory = InMemoryControlStore(clock)
 
-    /** Changes whose stored record no longer reads, as one of an app an earlier build named (R3-4 of #1194's review). */
+    /** Changes whose stored record does not decode, as one of an app no document key can name (SCP-10). */
     val unreadable = HashSet<ChangeId>()
 
     /** Documents whose stored head does not decode, as one a newer version wrote during a rolling upgrade (RC1-39). */
@@ -82,7 +82,7 @@ class ControlPlaneTest {
     private val store: ControlStore = object : ControlStore by memory {
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
             // Wrapped, as a store's cache may wrap what its codec threw.
-            throw IllegalStateException("decoding", UnnamedDocumentException("app:a\\u0001b"))
+            throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
         } else {
             memory.change(id)
         }

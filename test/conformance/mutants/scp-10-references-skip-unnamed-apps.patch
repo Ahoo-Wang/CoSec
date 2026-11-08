@@ -1,0 +1,34 @@
+# Rule: SCP-10
+# Mutant: a binding in an app no key can name is skipped when the document's references are built, as before R4, so a head an alpha stored publishes and repairs
+# Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index a78faa0b..ecb5f921 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -16,6 +16,7 @@ package me.ahoo.cosec.control.store
+ import io.github.oshai.kotlinlogging.KotlinLogging
+ import kotlinx.coroutines.NonCancellable
+ import kotlinx.coroutines.withContext
++import me.ahoo.cosec.model.Identifiers
+ import me.ahoo.cosec.model.Match
+ import me.ahoo.cosec.model.PolicyId
+ import me.ahoo.cosec.model.decision.DocumentKind
+@@ -655,12 +656,13 @@ class Revisions(
+             own.forEach { references += SnapshotKey.Platform to it }
+         }
+         for (binding in document.bindings) {
++            val app = (binding.scope.app as? Match.Exactly)?.value?.value
++            if (app != null && !SnapshotKey.App.isValidAppId(app)) {
++                continue
++            }
+             if (binding.policy in own) continue
+             references += SnapshotKey.Platform to binding.policy
+-            val app = (binding.scope.app as? Match.Exactly)?.value?.value
+-            // An app no key can name has no document to refer to (R2-1 of #1194's review): earlier builds stored such
+-            // bindings, and the head that holds one must still publish the change that drops it.
+-            if (document.kind == DocumentKind.TENANT && app != null && SnapshotKey.App.isValidAppId(app)) {
++            if (document.kind == DocumentKind.TENANT && app != null) {
+                 references += SnapshotKey.App(app) to binding.policy
+             }
+         }
