@@ -81,12 +81,17 @@ class ReclamationRetryTest {
         val second = published()
         store.failing += 1
         nextPass()
-        // Taken out of the index, still stored.
+        // Taken out of the index, still stored, and listed to delete.
         revisions.history(ACME).map { it.digest }.assert().containsExactly(second)
         memory.recordDigests(ACME).assert().containsExactlyInAnyOrder(first, second)
+        memory.index(ACME)!!.value.reclaiming.assert().containsExactly(first)
 
-        nextPass()
+        clock.now = clock.now.plus(Duration.ofHours(1))
+        val retried = revisions.reclaim(ACME)
+        retried.records.assert().isEmpty()
+        retried.deleted.assert().containsExactly(first)
         memory.recordDigests(ACME).assert().containsExactly(second)
+        memory.index(ACME)!!.value.reclaiming.assert().isEmpty()
         store.deletions.assert().isEqualTo(2)
         // Nothing is left to delete, so later passes delete nothing again.
         nextPass()
@@ -100,9 +105,13 @@ class ReclamationRetryTest {
         runBlocking<Unit> {
             val digests = (1..4).map { published() }
             store.failing += 2
-            nextPass()
+            clock.now = clock.now.plus(Duration.ofHours(1))
+            val pass = revisions.reclaim(ACME)
+            pass.records.assert().containsExactly(digests[0], digests[1], digests[2])
+            pass.failed.assert().containsExactly(digests[1])
             // The first and the third are deleted; the second is left for the next pass, the head is kept.
             memory.recordDigests(ACME).assert().containsExactlyInAnyOrder(digests[1], digests[3])
+            memory.index(ACME)!!.value.reclaiming.assert().containsExactly(digests[1])
             nextPass()
             memory.recordDigests(ACME).assert().containsExactly(digests[3])
             revisions.history(ACME).map { it.digest }.assert().containsExactly(digests[3])
@@ -117,5 +126,18 @@ class ReclamationRetryTest {
         memory.recordDigests(ACME).assert().containsExactlyInAnyOrder(*digests.toTypedArray())
         nextPass()
         memory.recordDigests(ACME).assert().containsExactly(digests[2])
+    }
+
+    @Test
+    fun `a record left to delete that is the head again is never deleted`() = runBlocking<Unit> {
+        published()
+        val second = published()
+        // As a store restored from a copy would hold it: the head's own record listed to delete.
+        val index = memory.index(ACME)!!
+        memory.putIndex(ACME, index.digest, index.value.copy(reclaiming = listOf(second))).assert().isTrue()
+        nextPass()
+        memory.recordDigests(ACME).assert().contains(second)
+        memory.index(ACME)!!.value.reclaiming.assert().isEmpty()
+        revisions.verifyChain(ACME).assert().isInstanceOf(ChainCheck.Intact::class.java)
     }
 }

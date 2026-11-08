@@ -483,6 +483,11 @@ class CoCacheControlStoreTest {
             floor = 2,
         )
         RevisionIndexCodec.decode(RevisionIndexCodec.encode(index)).assert().isEqualTo(index)
+        // #1226: records left to delete are written only when there are some, so an index without is as before.
+        RevisionIndexCodec.encode(index).decodeToString().assert().doesNotContain("reclaiming")
+        val reclaiming = index.copy(reclaiming = listOf(digest))
+        RevisionIndexCodec.decode(RevisionIndexCodec.encode(reclaiming)).assert().isEqualTo(reclaiming)
+        RevisionIndexCodec.encode(reclaiming).decodeToString().assert().endsWith(""""floor":2,"reclaiming":["$digest"]}""")
         val referrers = mapOf(SnapshotKey.Tenant("b") to 1L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 12L)
         ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
         ReferrersCodec.encode(referrers).decodeToString().assert()
@@ -504,6 +509,8 @@ class CoCacheControlStoreTest {
                 64
             )}","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
             """{"entries":[],"pending":[],"floor":1,"x":1}""",
+            """{"entries":[],"pending":[],"floor":1,"reclaiming":"x"}""",
+            """{"entries":[],"pending":[],"floor":1,"reclaiming":["zz"]}""",
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
         }

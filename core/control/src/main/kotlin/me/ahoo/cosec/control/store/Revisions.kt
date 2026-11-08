@@ -74,8 +74,19 @@ sealed interface ChainCheck {
     class Broken(val missing: ParentRevision) : ChainCheck
 }
 
-/** What [Revisions.reclaim] removed. */
-class Reclaimed(val records: List<SnapshotDigest>, val orphans: List<SnapshotDigest>) {
+/**
+ * What [Revisions.reclaim] did: the [records] and [orphans] it took out of the index, the records it [deleted] (those
+ * and any an earlier pass could not delete), and the ones whose deletion [failed], which the next pass tries again.
+ */
+class Reclaimed(
+    val records: List<SnapshotDigest>,
+    val orphans: List<SnapshotDigest>,
+    val deleted: List<SnapshotDigest> = records + orphans,
+    val failed: List<SnapshotDigest> = emptyList(),
+) {
+    /** Whether it changed anything or has something left to do. */
+    val any: Boolean get() = records.isNotEmpty() || orphans.isNotEmpty() || deleted.isNotEmpty() || failed.isNotEmpty()
+
     companion object {
         val NOTHING: Reclaimed = Reclaimed(emptyList(), emptyList())
     }
@@ -493,7 +504,13 @@ class Revisions(
      * most recent revisions and older than [RetentionPolicy.minAge], unless [keep] names them (the bases and rollback
      * targets of changes still open), and the orphans older than [RetentionPolicy.orphanAge]. One instance at a time:
      * without the lease it removes nothing.
+     *
+     * The index is written first, so a listed revision never misses its record; what it takes out goes to
+     * [RevisionIndex.reclaiming] in that same write, and is dropped from there once deleted (#1226). A deletion that fails
+     * is tried again by the next pass; one of a record that became the head, a listed revision or a kept one since is
+     * not tried at all.
      */
+    @Suppress("TooGenericExceptionCaught")
     suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed {
         if (!store.acquireLease("reclaim:$key", holder, retention.leaseDuration)) {
             return Reclaimed.NOTHING
@@ -507,16 +524,23 @@ class Revisions(
                 entry.publishedAt.isBefore(now.minus(retention.minAge))
         }
         var orphans: List<SnapshotDigest> = emptyList()
+        var reclaiming: List<SnapshotDigest> = emptyList()
         val updated = updateIndex(key) { index ->
             val chain = index.entries.map { it.digest }.toSet()
             orphans = index.pending.filter { pending ->
                 pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
                     pending.since.isBefore(now.minus(retention.orphanAge))
             }.map { it.digest }
+            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
+            val pending = index.pending.filter { it.digest !in orphans }
+            val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head)
+            // What an earlier pass could not delete, unless it is live again; then what this pass takes out.
+            reclaiming = (index.reclaiming + removed.map { it.digest } + orphans).distinct().filter { it !in live }
             index.copy(
-                entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } },
-                pending = index.pending.filter { it.digest !in orphans },
+                entries = entries,
+                pending = pending,
                 floor = maxOf(index.floor, (removed.maxOfOrNull { it.revision } ?: 0) + 1),
+                reclaiming = reclaiming,
             )
         }
         if (!updated) {
@@ -524,8 +548,24 @@ class Revisions(
             return Reclaimed.NOTHING
         }
         // The index no longer lists them, so a failure here leaves unlisted records behind, never a listed one missing.
-        (removed.map { it.digest } + orphans).forEach { store.removeRecord(key, it) }
-        return Reclaimed(removed.map { it.digest }, orphans)
+        val deleted = ArrayList<SnapshotDigest>()
+        val failed = ArrayList<SnapshotDigest>()
+        for (digest in reclaiming) {
+            try {
+                store.removeRecord(key, digest)
+                deleted += digest
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn(e) { "[$key]: the record $digest could not be deleted; the next pass tries again." }
+                failed += digest
+            }
+        }
+        if (deleted.isNotEmpty()) {
+            updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
+                warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
+        }
+        return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
     }
 
     /** The documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */

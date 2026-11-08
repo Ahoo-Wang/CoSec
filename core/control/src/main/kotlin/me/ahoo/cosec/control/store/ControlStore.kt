@@ -203,12 +203,16 @@ data class PendingRecord(val digest: SnapshotDigest, val since: Instant)
  * - [pending] are records written before their head write; once the head moves they become entries, and those whose
  *   publish lost its race are orphans that reclamation removes;
  * - [floor] is the lowest revision whose record may still exist: below it, records were reclaimed on purpose, so a
- *   chain that ends there is complete, not broken.
+ *   chain that ends there is complete, not broken;
+ * - [reclaiming] are records reclamation has taken out of [entries] or [pending] and not yet seen deleted (#1226): it
+ *   writes them here in the same step, then deletes them, then drops the ones it deleted, so a deletion that fails is
+ *   tried again by the next pass, and no listed revision ever misses its record.
  */
 data class RevisionIndex(
     val entries: List<RevisionEntry> = emptyList(),
     val pending: List<PendingRecord> = emptyList(),
     val floor: Long = 1,
+    val reclaiming: List<SnapshotDigest> = emptyList(),
 ) {
     init {
         require(

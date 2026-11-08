@@ -210,7 +210,11 @@ private fun JsonNode.only(what: String, vararg names: String) {
     if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
 }
 
-/** A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`. */
+/**
+ * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
+ * records are left to delete (#1226), so that an index with none is written as earlier builds wrote it and they still
+ * read it.
+ */
 internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
 
@@ -229,12 +233,15 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
             ).put("since", it.since.toString())
         }
         root.put("floor", value.floor)
+        if (value.reclaiming.isNotEmpty()) {
+            root.putArray("reclaiming").apply { value.reclaiming.forEach { add(it.toString()) } }
+        }
         return CoSecJson.mapper.writeValueAsBytes(root)
     }
 
     override fun decode(bytes: ByteArray): RevisionIndex {
         val root = read(bytes, WHAT)
-        root.only(WHAT, "entries", "pending", "floor")
+        root.only(WHAT, "entries", "pending", "floor", "reclaiming")
         return try {
             RevisionIndex(
                 entries = root.field("entries", WHAT).items(WHAT).map { entry ->
@@ -253,6 +260,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
                     )
                 },
                 floor = root.field("floor", WHAT).long(WHAT),
+                reclaiming = root.get("reclaiming")?.items(WHAT)?.map { it.digest(WHAT) }.orEmpty(),
             )
         } catch (error: IllegalArgumentException) {
             throw SnapshotFormatException("The $WHAT is malformed: ${error.message}", error)

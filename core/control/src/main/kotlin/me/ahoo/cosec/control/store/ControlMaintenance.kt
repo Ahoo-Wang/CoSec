@@ -87,7 +87,7 @@ class ControlMaintenance(
         for (key in documents) {
             val keep = open.filter { it.key == key }.flatMapTo(HashSet()) { it.restsOn() }
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
-                ?.takeIf { it.records.isNotEmpty() || it.orphans.isNotEmpty() }
+                ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
         }
         return reclaimed
