@@ -294,6 +294,15 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | F2 文档，F1 之后 | 维护者要的模型类图与关系、按场景组织的用法；U13 "简单模式"；U5 修好快速开始的死胡同（其平台文档不放行控制 API）；U3 路由映射与 `http:` 语句、限流的关系；U14 网关拓扑只有 `http` 命名空间 |
 | 8.1 | U4 处理器方法上的注解，启动时生成路由映射，不再维护文件（降低路由映射维护成本的主路径）；其余按报告 |
 
+**角色与权限的写法**（[RFC 0012](rfc/0012-roles-and-spaces.md)，草案，等待维护者确认；未确认前不写代码）：
+
+| 批次 | 内容 |
+|---|---|
+| G1，F1 之后 | 文档格式（`roles`、目录条目的 `action`、`resource`）、展开函数、编译、schema、专属 Space（`<app>:<space>`，`SCP-10`）、JMH |
+| G2 | `putRole`、`removeRole`，授权、摘要、授出分析、差异、反向引用、检查 |
+| G3 | `appCatalog`：租户读目录和系统角色 |
+| G4，与 F2 合并 | 文档、skill、OpenAPI 生成器改为简写权限 |
+
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
 2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
@@ -399,6 +408,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **CoCache 8.0.0 适配完成后先发一版**：`8.0.0-alpha.3`，预览版，不承诺兼容性；发布后通知 Wow 的 V10 会话升级 | 2026-11-07 至 08 | 维护者："CoCache 8.0.0 适配完成后，先发一版"、"Yes, release it"、"v8.0.0-alpha.3 发布成功后，通知 @[V10 架构设计] 升级" |
 | **易用性审查的决定**：F1 全部做（U1、U2、U12、U7、U9、U3、U14 与下面三项）；U15 客户端声明的 app 默认拒绝；U10 `cosec:tenant-admin` 获得本租户文档上的 `skip-shadow`；U11 三组属性在 GA 前改名；F2 写模型类图与场景化用法；U4 注解生成路由映射放到 8.1 | 2026-11-07 | 维护者在问答中选了每一项的推荐 |
 | **E2 拆成 E2a（正确性）与 E2b（规模与性能）**；E2a 先重新生成 D2 之后不再能应用的 6 个变异体；需要条件删除的修复（#1227、租约释放）在 CoCache 6 没有该能力时不在 CoSec 里绕过，留给 #1203 | 2026-11-07 | 协调者按推荐 |
+| **模型关系（RFC 0012）**：Binding 留在文档里；User、Organization 不进模型；App 保持平台级，租户开通用 Boundary；Operation、Space 角色不拆成两种；Space 对 App 是可选的，不用 Space 的 App 零配置；用 Space 时专属（`wms:wh-01`）与共享（`store-1`）两种都支持 | 2026-11-08 | 维护者："按你推荐"、"两种都支持"、"空间概念不是每个App 必须的" |
 
 ## 10. 尚未派发的下一步
 
