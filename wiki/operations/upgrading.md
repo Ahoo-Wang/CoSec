@@ -245,7 +245,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   `503` and stops every maintenance pass until its record is removed; an app list entry makes every app a grant reaches
   unknown until you delete `<p>:control:apps:all` and run `cosec-migrate repair-references`; a back-reference naming
   such an app fails whatever reads that set until you delete the set and run `repair-references`; and an instance's
-  status entry fails the read of the instance statuses until that instance writes its status again.
+  status entry fails the read of the instance statuses until it expires, two minutes after that instance last wrote it.
 - **Enforcing hosts drop a client's `CoSec-Identity`** (RC1-18, `IDN-9`). A WebFlux or Spring MVC host in `enforce`
   mode removes the header from the request its handler sees, so it never relays one a client wrote. Code that read it
   there read what any client could write; read the `SecurityContext`.

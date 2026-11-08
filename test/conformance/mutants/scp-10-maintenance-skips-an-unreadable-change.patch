@@ -3,41 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.ControlMaintenanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt
-index 978e4f4a..abfc05ee 100644
+index d8466f44..abfc05ee 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt
-@@ -29,7 +29,6 @@ import me.ahoo.cosec.control.change.ChangeState
- import me.ahoo.cosec.control.change.Changes
- import me.ahoo.cosec.spi.snapshot.SnapshotDigest
- import me.ahoo.cosec.spi.snapshot.SnapshotKey
--import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
- import java.time.Duration
- import java.util.UUID
- import kotlin.coroutines.cancellation.CancellationException
-@@ -130,24 +129,12 @@ class ControlMaintenance(
-         store.openChanges().mapNotNull { current(it) }.filterNot { it.state.terminal }
- 
-     /**
--     * [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists, and when
--     * it is a change of an app no document key can name ([UnnamedDocumentException], R2-1 of #1194's review): that
--     * record alone is skipped, with a WARN. Skipping it costs reclamation nothing: the only revisions it rests on are
--     * of that app's document, which no key names and [ControlStore.documents] never lists.
-+     * [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists. One that
-+     * cannot be read stops the pass: it might be a change that rests on a revision.
-      */
--    @Suppress("TooGenericExceptionCaught")
+@@ -135,7 +135,6 @@ class ControlMaintenance(
      private suspend fun current(id: ChangeId): ChangeRequest? = try {
          changes.get(id)
      } catch (e: ChangeRejectedException) {
 -        if (e.status != NOT_FOUND) throw e
--        null
--    } catch (e: Exception) {
--        val unnamed = UnnamedDocumentException.of(e) ?: throw e
--        log.warn {
--            "Change [${SnapshotKeyText.printable(id.value)}] is skipped: it is of [${unnamed.key}], which no document key " +
--                "can name (SCP-7), so it can be neither read, shown nor abandoned. Remove its record from the control " +
--                "store (with cosec-cocache, the key <key-prefix>:control:change:<id>)."
--        }
          null
      }
  
