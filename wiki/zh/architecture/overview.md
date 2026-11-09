@@ -65,6 +65,7 @@ flowchart BT
 - `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程），当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端，或当 `cosec-cosid` 和 starter 以外的项目声明或解析出 CosId、或其他构建脚本提到 CosId（包括导入 CosId 的 BOM）时失败：CoSec 自己生成 id（`IdGenerator`），因此应用可以使用任意版本的 CosId。
 - `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge、extensions 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口和 `CoSecJson` 进入 `cosec-runtime` 与 `cosec-control`；只有 `cosec-cosid` 和 starter 的源码提到 CosId 的包；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
 - `JacksonSignatureTest`（`api/` 与 `core/` 的公共签名中没有 Jackson 类型；`cosec-cocache` 在内部以响应式方式读取 Redis，但其公共签名中没有 Reactor 类型），上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
+- `ApiVariantTest`：应用编译依赖某个库模块时拿到的 Gradle API 变体（usage `java-api`）必须带上公共类所继承或实现的类型所在的 CoSec 模块，以及公共签名中出现的 Jackson。模块自己的测试看到的是实现类路径，发现不了这一点。
 - `SpiMarkerTest`：`cosec-spi` 中应用能够实现的每个公共接口，以及[扩展 CoSec](./extending.md#extension-points) 列出的每个扩展点，都带有 `@CoSecSpi`，且这个标记不出现在其他地方。
 
 公共 API 本身由构建守住，而不是靠评审（RFC 0011 D4）：除命令行工具 `cosec-migrate` 外，每个发布的库模块把自己的 ABI 存在模块目录下的转储 `api/<project>.api` 里，它的 `check` 运行 Kotlin Gradle 插件的 `checkKotlinAbi`，公共签名变了而转储没变时失败。`@InternalCoSecApi` 声明不进转储。从 8.0 GA 起，删除或修改转储中的一行即破坏性变更。

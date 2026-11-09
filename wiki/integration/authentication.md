@@ -417,7 +417,10 @@ providers. Configure each provider under `cosec.authentication.login.social.regi
    **no roles, policies or tenant**. Attributes become signed claims that conditions read and a gateway may forward,
    so the user's profile (name, email, company, bio, the raw user info), which the user edits on the provider, is not
    among them. To look the user up in your own system and give them roles, declare your own
-   `SocialUserPrincipalConverter` bean.
+   `SocialUserPrincipalConverter` bean. The provider's user id is the only field a sign-in needs: a provider that
+   returns no username (StackOverflow), gender (Figma) or raw user info still signs in, with `SocialUser.username` set to
+   the user id, `gender` to `UNKNOWN` and `rawInfo` empty. A success response without a user id, or without a user, is
+   refused with a `SocialAuthenticationException`.
 
 Both steps block their thread. `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache,
 and the callback's `authenticateAsToken` calls the provider over JustAuth's blocking HTTP. Call them off the event

@@ -239,7 +239,7 @@ cosec:
 
 1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
-3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。
+3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
 这两步都会阻塞所在线程。`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调中的 `authenticateAsToken` 通过 JustAuth 的阻塞 HTTP 调用提供方。请在事件循环之外调用它们：在 WebFlux 中使用 `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` 和回调的 `Mono`，并分别加上 `.subscribeOn(Schedulers.boundedElastic())`。
 
