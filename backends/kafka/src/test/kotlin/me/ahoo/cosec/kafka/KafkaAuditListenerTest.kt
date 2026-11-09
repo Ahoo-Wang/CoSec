@@ -335,11 +335,34 @@ class KafkaAuditListenerTest {
         elapsed.assert().isLessThan(5.seconds)
     }
 
+    /** A send that fails during the wait was answered: shutdown goes on, it does not sit out its bound. */
     @Test
-    fun aFailedSendIsAnAnsweredOneAndDoesNotHoldShutdown() {
+    fun aSendThatFailsDuringShutdownIsAnsweredAndDoesNotHoldIt() {
+        val answer = CompletableFuture<SendResult<String, String>>()
         val kafka = mockk<KafkaOperations<String, String>> {
-            every { send(any<String>(), any<String>(), any<String>()) } returns
-                CompletableFuture.failedFuture(IllegalStateException("broker down"))
+            every { send(any<String>(), any<String>(), any<String>()) } returns answer
+        }
+        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds)
+        val listeners = DecisionListeners(listOf(listener))
+        opened += listeners
+        evaluate(listeners)
+        listeners.drain().assert().isTrue()
+        CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS).execute {
+            answer.completeExceptionally(IllegalStateException("broker down"))
+        }
+
+        val startedAt = System.nanoTime()
+        listener.destroy()
+
+        answer.isCompletedExceptionally.assert().isTrue()
+        (System.nanoTime() - startedAt).nanoseconds.assert().isLessThan(2.seconds)
+    }
+
+    /** An interrupted shutdown stops waiting at once and leaves the interrupt for whoever asked. */
+    @Test
+    fun anInterruptedShutdownStopsWaitingAndKeepsTheInterrupt() {
+        val kafka = mockk<KafkaOperations<String, String>> {
+            every { send(any<String>(), any<String>(), any<String>()) } returns CompletableFuture()
         }
         val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds)
         val listeners = DecisionListeners(listOf(listener))
@@ -348,8 +371,11 @@ class KafkaAuditListenerTest {
         listeners.drain().assert().isTrue()
 
         val startedAt = System.nanoTime()
+        Thread.currentThread().interrupt()
         listener.destroy()
 
+        // Reading the flag clears it, so the interrupt does not reach the next test.
+        Thread.interrupted().assert().isTrue()
         (System.nanoTime() - startedAt).nanoseconds.assert().isLessThan(2.seconds)
     }
 
