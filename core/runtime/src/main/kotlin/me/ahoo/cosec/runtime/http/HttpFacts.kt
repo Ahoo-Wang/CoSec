@@ -56,8 +56,14 @@ interface Headers {
 
         /** Headers backed by [values]; the map is copied and its keys folded as the documents fold them ([HttpNames]). */
         fun of(values: Map<String, List<String>>): Headers {
-            val folded = values.entries.groupBy({ HttpNames.fold(it.key) }, { it.value })
-                .mapValues { (_, lists) -> lists.flatten() }
+            // One pass: a value list is copied once, when its name is first seen, and merged only when a name repeats
+            // under another case. Sized so a typical request's headers never rehash.
+            val folded = HashMap<String, List<String>>(values.size + values.size / 3 + 1)
+            for ((name, incoming) in values) {
+                val key = HttpNames.fold(name)
+                val previous = folded[key]
+                folded[key] = if (previous == null) incoming.toList() else previous + incoming
+            }
             return object : Headers {
                 override fun values(name: String): List<String> = folded[HttpNames.fold(name)].orEmpty()
             }

@@ -35,10 +35,11 @@ class AttributePlan internal constructor(val attributes: List<Attribute>) {
 }
 
 /**
- * Plans an evaluation: walks the same candidates as [FlatEvaluator], in both passes, then the rate limit rules and the
- * boundary a permit is held to, and collects the external attributes of every statement that passes what
- * [FlatEvaluator.step] checks before calling host code. A superset of what the evaluation reads: it reads a statement's
- * condition only after those checks, a policy condition only for such a statement, and the boundary only on a permit.
+ * Plans an evaluation: walks the same candidates as [FlatEvaluator], in both passes, and in each the statements its
+ * index gives, then the rate limit rules and the boundary a permit is held to, and collects the external attributes of
+ * every statement that passes what [FlatEvaluator.step] checks before calling host code. A superset of what the
+ * evaluation reads: it reads a statement's condition only after those checks, a policy condition only for such a
+ * statement, and the boundary only on a permit.
  */
 internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvaluator(request, view) {
     private var found: LinkedHashSet<Attribute>? = null
@@ -67,18 +68,27 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
 
     override fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean {
         if (policy.readsExternal) {
-            collect(policy, policy.statements(pass))
+            val statements = policy.statements(pass)
+            // The statements the evaluation visits: those its index gives (I1), or all of them without one.
+            val index = policy.index(pass)
+            collect(policy, statements, if (index == null) null else candidates(index))
         }
         return false
     }
 
-    /** The attributes of [statements] that pass their action and index keys, and of [policy]'s condition if one does. */
-    private fun collect(policy: CompiledPolicy, statements: Array<CompiledStatement>) {
+    /**
+     * The attributes of [statements] that pass their action and index keys, and of [policy]'s condition if one does.
+     * With [positions], only those statements: the others cannot match the request, so evaluation never reaches them.
+     */
+    private fun collect(policy: CompiledPolicy, statements: Array<CompiledStatement>, positions: IntArray? = null) {
         var reached = false
-        for (statement in statements) {
-            if (statement.matchesAction(authz.action) && statement.admits(this)) {
-                reached = true
-                add(statement.externals)
+        if (positions == null) {
+            for (statement in statements) {
+                reached = reach(statement) || reached
+            }
+        } else {
+            for (position in positions) {
+                reached = reach(statements[position]) || reached
             }
         }
         if (reached) {
@@ -86,11 +96,23 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
         }
     }
 
+    /** Whether [statement] passes what [FlatEvaluator.step] checks before calling host code; then its attributes are planned. */
+    private fun reach(statement: CompiledStatement): Boolean {
+        if (!statement.matchesAction(authz.action) || !statement.admits(this)) {
+            return false
+        }
+        add(statement.externals)
+        return true
+    }
+
     private fun add(attributes: Array<Attribute>) {
         if (attributes.isEmpty()) {
             return
         }
         val found = found ?: LinkedHashSet<Attribute>().also { found = it }
-        found.addAll(attributes)
+        // One by one: addAll(Array) wraps the array in a list on every call.
+        for (attribute in attributes) {
+            found.add(attribute)
+        }
     }
 }
