@@ -1,0 +1,17 @@
+# Rule: PIP-13
+# Mutant: the authorization cookie is read unless a host turns it off, so a cross-site request carries a credential
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineOptions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineOptions.kt
+index ad7d89a6..b07cc7f2 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineOptions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineOptions.kt
+@@ -42,7 +42,7 @@ class PipelineOptions(
+      * Whether the token may come from the `authorization` cookie (`cosec.pipeline.allow-cookie-token`); off, as a browser
+      * sends a cookie on its own, on a cross-site request too: a host that turns this on defends against CSRF itself.
+      */
+-    val allowCookieToken: Boolean = false,
++    val allowCookieToken: Boolean = true,
+     /** The header an API key comes in. */
+     val apiKeyHeader: String = "X-API-Key",
+     /** How much of the engine's trace decision events carry (`DecisionEvent.evaluationTrace`); `OFF` costs nothing. */

@@ -115,12 +115,12 @@ class CoSecPipelineAutoConfigurationTest {
         .withBean(TokenStore::class.java, { TokenStore.NoOp })
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
 
-    private fun facts(token: String? = null) = HttpFacts(
+    private fun facts(token: String? = null, cookie: String? = null) = HttpFacts(
         method = "GET",
         rawPath = "/orders/1",
         rawQuery = null,
         headers = Headers.of(token?.let { mapOf("Authorization" to listOf(it)) }.orEmpty()),
-        cookies = Cookies.of(emptyMap()),
+        cookies = Cookies.of(cookie?.let { mapOf("authorization" to listOf(it)) }.orEmpty()),
         remoteAddress = "10.0.0.1",
         host = HostScope(null),
     )
@@ -196,6 +196,26 @@ class CoSecPipelineAutoConfigurationTest {
                 authenticator.authenticate(Credentials("t", null))
             }.assert().isInstanceOf(AuthnResult.Rejected::class.java)
         }
+    }
+
+    /** `PIP-13`: a cookie reaches a host on a cross-site request too, so it is a credential only on request. */
+    @Test
+    fun `the authorization cookie is a credential only with allow-cookie-token`() {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        val recording = runner.withBean(
+            Authenticator::class.java,
+            {
+                Authenticator {
+                    seen += it.token
+                    AuthnResult.Anonymous
+                }
+            },
+        )
+        recording.run { context -> runBlocking { context.getBean(Pipeline::class.java).evaluate(facts(cookie = "c")) } }
+        recording.withPropertyValues("cosec.pipeline.allow-cookie-token=true").run { context ->
+            runBlocking { context.getBean(Pipeline::class.java).evaluate(facts(cookie = "c")) }
+        }
+        seen.assert().containsExactly(null, "c")
     }
 
     @Test

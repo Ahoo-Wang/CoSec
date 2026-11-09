@@ -146,6 +146,17 @@
         "engine:CompiledDocumentTest#a document knows the headers it reads"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-13",
+      "source": "RFC 0006 §5.3.2; batch R6 (B-01 of the 7.x residue audit)",
+      "statement": "The authorization cookie is read as a token only when cosec.pipeline.allow-cookie-token is on, and it is off by default: a browser sends a cookie on its own, on a cross-site request too, so a host that turns it on defends against CSRF itself. With it off, a request whose only credential is that cookie is anonymous. A gateway keeps the cookie from a route whether or not it reads it (IDN-8).",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PipelineTest#theAuthorizationCookieIsReadOnlyWhenAllowed",
+        "spring-boot:CoSecPipelineAutoConfigurationTest#the authorization cookie is a credential only with allow-cookie-token"
+      ],
+      "pending": null
     }
   ]
 }

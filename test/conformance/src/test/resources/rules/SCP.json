@@ -39,10 +39,11 @@
     {
       "id": "SCP-4",
       "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1 (RC1-16)",
-      "statement": "When the values of one CoSec-* parameter differ, between the header and the query parameter or within either, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
+      "statement": "CoSec-App-Id, CoSec-Space-Id and CoSec-Device-Id are read from headers only, never from the query string. When the values of one of them differ, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
       "level": "pipeline",
       "guards": [
-        "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
+        "runtime:CoSecParametersTest#differentHeaderValuesAreAmbiguous",
+        "runtime:CoSecParametersTest#theQueryIsNotRead",
         "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
         "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
         "runtime:CoSecParametersTest#aBlankValueBesideAValueIsAmbiguous",

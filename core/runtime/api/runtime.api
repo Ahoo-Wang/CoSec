@@ -69,8 +69,9 @@ public final class me/ahoo/cosec/runtime/PipelineComponents {
 
 public final class me/ahoo/cosec/runtime/PipelineOptions {
 	public fun <init> ()V
-	public synthetic fun <init> (JJJJJZLjava/lang/String;Lme/ahoo/cosec/engine/TraceLevel;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (JJJJJZLjava/lang/String;Lme/ahoo/cosec/engine/TraceLevel;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJZZLjava/lang/String;Lme/ahoo/cosec/engine/TraceLevel;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JJJJJZZLjava/lang/String;Lme/ahoo/cosec/engine/TraceLevel;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAllowCookieToken ()Z
 	public final fun getAllowQueryToken ()Z
 	public final fun getApiKeyHeader ()Ljava/lang/String;
 	public final fun getAttributeTimeout-UwyO8pc ()J

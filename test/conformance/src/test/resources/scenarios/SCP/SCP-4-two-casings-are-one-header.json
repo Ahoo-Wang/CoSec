@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "CoSec-Space-Id appears twice in the query with different values: 400.",
+  "description": "Header names ignore case, so cosec-app-id and CoSec-App-Id are one parameter with two values: 400.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,7 +33,10 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-Space-Id=a&CoSec-Space-Id=b"
+    "headers": {
+      "cosec-app-id": "shop",
+      "CoSec-App-Id": "other"
+    }
   },
   "expect": {
     "status": 400,

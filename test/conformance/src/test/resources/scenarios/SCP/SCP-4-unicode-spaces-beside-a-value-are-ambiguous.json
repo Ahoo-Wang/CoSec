@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "RC1-16: the query's CoSec-Space-Id is an ideographic space (%E3%80%80), which String.trim() keeps: it is a value, not blank, and it differs from the header's s1: 400.",
+  "description": "RC1-16: one CoSec-Space-Id is a no-break space, which String.trim() keeps: it is a value, not blank, and it differs from s1: 400.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,9 +33,11 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-Space-Id=%E3%80%80",
     "headers": {
-      "CoSec-Space-Id": "s1"
+      "CoSec-Space-Id": [
+        "\u00a0",
+        "s1"
+      ]
     }
   },
   "expect": {

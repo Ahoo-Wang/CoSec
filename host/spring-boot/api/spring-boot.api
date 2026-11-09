@@ -63,15 +63,13 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration
 
 public final class me/ahoo/cosec/spring/boot/starter/CoSecProperties : me/ahoo/cosec/spring/boot/starter/EnabledCapable {
 	public fun <init> ()V
-	public fun <init> (ZLme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;Ljava/lang/String;)V
-	public synthetic fun <init> (ZLme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZLjava/lang/String;)V
+	public synthetic fun <init> (ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getEnabled ()Z
 	public final fun getKeyPrefix ()Ljava/lang/String;
-	public final fun getUnknownProperties ()Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
 	public final fun keysOf (Ljava/lang/String;)Ljava/lang/String;
 	public fun setEnabled (Z)V
 	public final fun setKeyPrefix (Ljava/lang/String;)V
-	public final fun setUnknownProperties (Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;)V
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/CoSecPropertiesKt {
@@ -98,25 +96,15 @@ public abstract interface class me/ahoo/cosec/spring/boot/starter/EnabledCapable
 
 public final class me/ahoo/cosec/spring/boot/starter/UnknownProperties {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/UnknownProperties$Companion;
-	public static final field MODE_KEY Ljava/lang/String;
+	public static final field DOCUMENTATION Ljava/lang/String;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> (Ljava/util/Set;Ljava/util/Set;)V
-	public final fun check (Lorg/springframework/core/env/ConfigurableEnvironment;Z)V
+	public final fun check (Lorg/springframework/core/env/ConfigurableEnvironment;)V
 	public final fun of (Lorg/springframework/core/env/ConfigurableEnvironment;)Ljava/util/List;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/UnknownProperties$Companion {
-	public final fun getRENAMED ()Ljava/util/Map;
-	public final fun hint (Ljava/lang/String;)Ljava/lang/String;
 	public final fun load (Ljava/lang/ClassLoader;)Lme/ahoo/cosec/spring/boot/starter/UnknownProperties;
-}
-
-public final class me/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode : java/lang/Enum {
-	public static final field FAIL Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
-	public static final field WARN Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
-	public static fun values ()[Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/actuate/CoSecServiceGeneratorEndpoint {
@@ -989,6 +977,7 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties
 	public static final field MODE_KEY Ljava/lang/String;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V
+	public final fun getAllowCookieToken ()Z
 	public final fun getAllowQueryToken ()Z
 	public final fun getApiKeyHeader ()Ljava/lang/String;
 	public final fun getAuthenticationTimeout ()Ljava/time/Duration;
@@ -996,6 +985,7 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties
 	public final fun getMode ()Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Mode;
 	public final fun getTimeout ()Ljava/time/Duration;
 	public final fun getTraceLevel ()Lme/ahoo/cosec/engine/TraceLevel;
+	public final fun setAllowCookieToken (Z)V
 	public final fun setAllowQueryToken (Z)V
 	public final fun setApiKeyHeader (Ljava/lang/String;)V
 	public final fun setAuthenticationTimeout (Ljava/time/Duration;)V

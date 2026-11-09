@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "CoSec-Space-Id is sent twice in the query, a space and empty: every value is ASCII whitespace, so the parameter reads as not sent, and the anonymous request is in the default space.",
+  "description": "CoSec-Space-Id is sent twice, a space and empty: every value is ASCII whitespace, so the parameter reads as not sent, and the anonymous request is in the default space.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,7 +33,12 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-Space-Id=%20&CoSec-Space-Id="
+    "headers": {
+      "CoSec-Space-Id": [
+        " ",
+        ""
+      ]
+    }
   },
   "expect": {
     "status": 200,

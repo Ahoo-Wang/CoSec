@@ -45,7 +45,10 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 1. `Authorization` 请求头（`Bearer ` 前缀可选）；
 2. `authorization` 查询参数，仅在 `cosec.pipeline.allow-query-token=true` 时读取，因为 URL 会泄漏到访问日志和 `Referer` 请求头中；
-3. `authorization` Cookie。
+3. `authorization` Cookie，仅在 `cosec.pipeline.allow-cookie-token=true` 时读取。
+
+Cookie 默认关闭，因为浏览器会自动带上 cookie，跨站请求也不例外：其他站点的页面可以借用户的令牌发起操作，而请求头只有页面自己的代码才能设置。
+CoSec 不提供 CSRF 防护，打开这个选项的部署要自己防御 CSRF：给 cookie 设置 `SameSite`，并对每个会改变状态的请求使用防伪令牌或检查 `Origin`。
 
 空值会被跳过。API key 只从请求头 `cosec.pipeline.api-key-header`（默认 `X-API-Key`）读取。
 
@@ -218,7 +221,7 @@ cosec:
 | `save(hash, apiKey)` | 替换具有该哈希的 key，例如设置 `enabled = false` 或修改其角色。 |
 | `revoke(hash)` | 删除该 key。它在下一个请求时即失效。 |
 
-此后每个带 key 的请求都会读取 Redis。Redis 无法读取时，请求返回 `503`：与令牌吊销不同，API key 查找失败即拒绝。key 存储为 `{"format":2,"id":…,"principalId":…,"tenantId":…,"roles":[…]|null,"expiresAt":…|null,"enabled":…}`，每个字段都总是写入。以 8.0 之前的格式存储的 key 自带角色和策略的授予，读取时被拒绝，绝不会被当作没有上限的 key：请求返回 `503`，日志会提到 `cosec-migrate api-keys`，用它转换这类 key（[升级](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)）。
+此后每个带 key 的请求都会读取 Redis。Redis 无法读取时，请求返回 `503`：与令牌吊销不同，API key 查找失败即拒绝。key 存储为 `{"format":2,"id":…,"principalId":…,"tenantId":…,"roles":[…]|null,"expiresAt":…|null,"enabled":…}`，每个字段都总是写入。以 8.0 之前的格式存储的 key 自带角色和策略的授予，读取时被拒绝，绝不会被当作没有上限的 key：请求返回 `503`。`cosec-migrate api-keys` 可以转换这类 key（[升级](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)）。
 
 **其他存储**：声明你自己的 `ApiKeyReader` Bean，它按哈希做非阻塞查找，无法读取时抛出异常。开启了 API key，却既没有内存存储也没有 `ApiKeyReader` 时，启动失败。
 

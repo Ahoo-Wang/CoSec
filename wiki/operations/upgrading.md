@@ -15,6 +15,20 @@ observability. This page is the single home of migration steps. Release notes fo
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
 sets, its approved changes and a document that spells a day of the week another way (below).
 
+- **The `authorization` cookie is read only on request** (batch R6, `PIP-13`). A request whose only credential is that
+  cookie is now anonymous. A browser sends a cookie on its own, on a cross-site request too, so reading it by default
+  made every deployment answer for CSRF. Send the token in the `Authorization` header, or set
+  `cosec.pipeline.allow-cookie-token=true` and defend against CSRF yourself
+  ([Authentication](../integration/authentication.md)). A gateway removes the cookie from what it forwards either way.
+- **`CoSec-App-Id`, `CoSec-Space-Id` and `CoSec-Device-Id` are headers only** (batch R6, `SCP-4`). A query parameter of
+  one of these names is no longer read: it sets nothing, and it no longer makes a request ambiguous. Clients that send
+  them in the URL send headers instead ([App and space](../integration/web.md#app-and-space)).
+- **An unknown `cosec.*` key always fails startup** (batch R6, `SNP-9`). `cosec.unknown-properties` and
+  `UnknownPropertiesMode` are gone, and setting the property is now itself an unknown key: remove it. The message lists
+  the keys and links [the table of removed and renamed keys](#removed-and-renamed-properties) rather than naming a
+  replacement for each.
+- **A stored API key without `format` fails like any other wrong format** (batch R6): the message is
+  `API key format [null] is not 2.`. Such a key was already refused; `cosec-migrate api-keys` still converts it.
 - **Roles and short-form permissions** (RFC 0012). A catalog entry can define its permission with `action` and
   `resource`, and app and tenant documents can hold `roles` ([Role permissions](../policies/role-permissions.md#roles)).
   `schema` stays 2, and nothing already published changes meaning. A document with either is not readable by an older
@@ -266,13 +280,19 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   compare a tenant candidate that makes a request read an app document, and reports `CANDIDATE_ERROR` without them.
 - **One key prefix** (RC1-46, `SNP-9`). [`cosec.key-prefix`](./configuration.md#key-prefix) replaces
   `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix`.
-  An environment that still sets one of them fails startup whatever `cosec.unknown-properties` says, and the message
-  lists the families that move under the current `cosec.key-prefix`, from where to where. Every key lives under it: API keys under `<p>:api-key`, rate
+  An environment that still sets one of them fails startup, as any key CoSec does not read does. Every key lives under it: API keys under `<p>:api-key`, rate
   limit counters under `<p>:rate-limiter` and the social login's OAuth states under `<p>:oauth:state`, which were fixed
   ([Redis keys](./storage.md#redis-keys)). With the defaults every key stays where it was. A deployment that set one
   of the three sets `cosec.key-prefix` to its snapshot prefix instead; **revocations and API keys kept under another
   prefix are no longer read**, so a token revoked there would be accepted again: before switching, copy each such key
-  under the new prefix (`COPY`, or `RENAME`, which keeps its expiry). Memberships fill again on their own.
+  under the new prefix (`COPY`, or `RENAME`, which keeps its expiry). Memberships fill again on their own. With `<p>`
+  the value of `cosec.key-prefix`, the families move:
+  - snapshot documents, control-plane records, candidates and shadow reports: from the old
+    `cosec.authorization.snapshot.key-prefix` (default `cosec`) to `<p>`;
+  - token revocations and memberships: from the old `cosec.authorization.cache.key-prefix` (default `cosec`) to `<p>`,
+    except the memberships of a membership cache the application made itself, which stay under its own prefix;
+  - API keys: from the old `cosec.api-key.key-prefix` (default `cosec:api-key`) to `<p>:api-key`;
+  - rate limit counters and the social login's OAuth states: from `cosec` to `<p>`.
   `cosec-migrate api-keys` no longer takes `--api-key-prefix`: it converts the keys under `<--key-prefix>:api-key`.
 - **`revalidate-interval` cannot turn the periodic pass off** (RC1-50, `SNP-6`). The pass is the only bound on a
   change whose invalidation message was lost, so `cosec.authorization.snapshot.revalidate-interval` must be at least
@@ -699,7 +719,7 @@ In 8.0 these are the rules; each has an id in the conformance suite. Without err
 
 #### Anonymous requests that declare a space are 401
 
-Rule `SCP-3`: an anonymous request with a non-empty `CoSec-Space-Id` (header or query) is answered `401`
+Rule `SCP-3`: an anonymous request with a non-empty `CoSec-Space-Id` header is answered `401`
 `unauthorized`, even on a path everyone may call. An anonymous principal has no roles, so it is a member of no space
 (C3). A request whose token was rejected is anonymous too, and gets `401` with the token's problem type. Clients that
 send `CoSec-Space-Id` on public endpoints must stop sending it there.
@@ -785,8 +805,8 @@ On Spring MVC, 7.x read a query parameter with `HttpServletRequest.getParameter`
 CoSec's filter, and a body field counted as a query parameter. 8.0 reads the URL query string only, on every adapter,
 and never touches the body.
 A form field no longer sets `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id`, nor the `authorization` token
-read with `cosec.pipeline.allow-query-token=true`. Clients that send these as form fields must send them as headers
-or in the query string.
+read with `cosec.pipeline.allow-query-token=true`. Clients that send these as form fields must send them as headers;
+the token may also go in the query string with that property.
 
 ### Authentication
 
@@ -922,6 +942,15 @@ A service behind a CoSec gateway that verifies tokens itself no longer receives 
 `cosec.gateway.identity.forward-authorization=true` on the gateway and route to the service by `lb://` or with
 `cosec-identity: true`, or switch the service to `cosec.pipeline.mode=gateway`. A token in the `authorization` cookie
 is removed too, under the same switch.
+
+#### Clients send tokens and scope differently {#clients-send-tokens-and-scope-differently}
+
+- The `authorization` cookie, which 7.x read on every request, is read only with
+  `cosec.pipeline.allow-cookie-token=true`: a browser sends a cookie on its own, on a cross-site request too, and CoSec
+  has no CSRF protection. Send the token in the `Authorization` header, or turn the property on and defend against CSRF
+  yourself ([Authentication](../integration/authentication.md)).
+- `CoSec-App-Id`, `CoSec-Space-Id` and `CoSec-Device-Id`, which 7.x also read from the query string, are read from
+  headers only ([App and space](../integration/web.md#app-and-space)).
 
 ### Storage and Redis
 
@@ -1136,9 +1165,9 @@ Only the fields `expect` names are compared.
 Every 7.x `cosec.*` property not listed here keeps its name and meaning. Every 8.0 property and its default:
 [Configuration](./configuration.md).
 
-Every key below fails startup in 8.0, and the message names what replaced it (`UnknownProperties.RENAMED` in the
-starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-properties=warn` only logs them
-([Unknown properties](./configuration.md#unknown-properties)). A key ending in `.` stands for every key under it.
+Every key below fails startup in 8.0, and the message links this table. So does any other `cosec.*` key 8.0 does not
+read; no property turns the check off ([Unknown properties](./configuration.md#unknown-properties)). A key ending in
+`.` stands for every key under it.
 
 | 7.x | 8.0 |
 |---|---|
@@ -1164,12 +1193,15 @@ starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-prop
 | `cosec.inject.enabled` | Removed ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). |
 | `cosec.api-key.store-blocking` | Removed. |
 | `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
+| `cosec.authorization.cache.key-prefix` | `cosec.key-prefix`, the prefix of every key: copy the token revocations first ([which families move](#from-8-0-0-alpha-2)). |
+| `cosec.api-key.key-prefix` | `cosec.key-prefix`: copy the API keys first ([which families move](#from-8-0-0-alpha-2)). |
+| `cosec.authorization.snapshot.key-prefix` (8.0 previews) | `cosec.key-prefix`: set it to this prefix ([which families move](#from-8-0-0-alpha-2)). |
+| `cosec.unknown-properties` (8.0 previews) | Removed: an unknown key always fails startup. |
 
-`cosec.authorization.cache.token.*` is now `cosec.authentication.revocation.cache.*`. `cosec.authorization.cache.key-prefix` and `cosec.api-key.key-prefix` are
-replaced by [`cosec.key-prefix`](./configuration.md#key-prefix), the prefix of every key a deployment writes.
+`cosec.authorization.cache.token.*` is now `cosec.authentication.revocation.cache.*`.
 
-New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level, mode),
-`cosec.gateway.identity.*`, `cosec.unknown-properties`, `cosec.authorization.scope.app-id`,
+New groups: `cosec.pipeline.*` (timeouts, query and cookie tokens, API key header, trace level, mode),
+`cosec.gateway.identity.*`, `cosec.authorization.scope.app-id`,
 `cosec.authorization.{membership,attributes,rate-limit}.timeout`, `cosec.authorization.routes.location`,
 `cosec.authorization.snapshot.*`, `cosec.authorization.shadow.*`, `cosec.authentication.revocation.*`,
 `cosec.audit.kafka.delivery`, `cosec.observability.listener.*` and `cosec.control.*`.

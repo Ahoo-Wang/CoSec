@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "CoSec-App-Id is shop in the header and other in the query: the request cannot be read unambiguously, 400 before authentication.",
+  "description": "CoSec-App-Id is sent twice with different values: the request cannot be read unambiguously, 400 before authentication.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,9 +33,11 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-App-Id=other",
     "headers": {
-      "CoSec-App-Id": "shop"
+      "CoSec-App-Id": [
+        "shop",
+        "other"
+      ]
     }
   },
   "expect": {
