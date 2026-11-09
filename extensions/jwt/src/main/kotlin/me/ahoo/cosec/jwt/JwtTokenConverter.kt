@@ -15,14 +15,11 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.PolicyCapable
-import me.ahoo.cosec.api.principal.RoleCapable
-import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
-import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.id.IdGenerator
@@ -34,8 +31,7 @@ import java.util.*
 /**
  * JWT-based token converter.
  *
- * This converter generates JWT tokens containing principal information
- * including policies, roles, and tenant context.
+ * This converter generates JWT tokens containing what a [TokenSubject] says: its policies, roles, tenant and app.
  *
  * @param idGenerator the token ids (`jti`), such as [me.ahoo.cosec.spi.id.RandomIdGenerator]; they need not be
  * unpredictable, since every token is signed
@@ -70,17 +66,18 @@ class JwtTokenConverter(
         }
     }
 
-    override fun toToken(principal: CoSecPrincipal): CompositeToken = toToken(
-        principal,
+    override fun toToken(subject: TokenSubject): CompositeToken = toToken(
+        subject,
         accessTokenValidity,
         refreshTokenValidity
     )
 
     override fun toToken(
-        principal: CoSecPrincipal,
+        subject: TokenSubject,
         accessTokenValidity: Duration,
         refreshTokenValidity: Duration
     ): CompositeToken {
+        checkIssuable(subject)
         val accessTokenId = idGenerator.generate()
         val now = Date()
         val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())
@@ -88,36 +85,15 @@ class JwtTokenConverter(
             JWT
                 .create()
                 .withJWTId(accessTokenId)
-                .withSubject(principal.id)
+                .withSubject(subject.id)
                 .withIssuedAt(now)
                 .withExpiresAt(accessTokenExp)
-        writeMemberships(accessTokenBuilder, principal)
-        // A token with one would be refused when it is presented (RC1-25): fail where it is issued instead.
-        val reserved = principal.attributes.keys.filter { it in TokenAuthenticator.RESERVED_ATTRIBUTES }
-        require(reserved.isEmpty()) {
-            "Principal [${principal.id}] has attributes $reserved, which CoSec sets for other credentials: a token " +
-                "cannot carry them."
+        subject.app?.let { accessTokenBuilder.withAudience(it) }
+        writeMemberships(accessTokenBuilder, subject)
+        if (subject.attributes.isNotEmpty()) {
+            accessTokenBuilder.withClaim(MembershipClaims.ATTRIBUTES_KEY, subject.attributes)
         }
-        if (principal.attributes.isNotEmpty()) {
-            accessTokenBuilder.withClaim(CoSecPrincipal::attributes.name, principal.attributes)
-        }
-
-        if (principal is TenantCapable) {
-            val tenantCapable = principal as TenantCapable
-            // A token with an empty tenant would be refused when it is presented (`IDN-11`): fail where it is issued.
-            require(tenantCapable.tenant.tenantId.isNotEmpty()) {
-                "Principal [${Identifiers.printable(principal.id)}] has an empty tenant id: a token cannot carry it."
-            }
-            accessTokenBuilder
-                .withClaim(TENANT_ID_KEY, tenantCapable.tenant.tenantId)
-        }
-        // RC1-52 (`IDN-10`): java-jwt writes an unpaired surrogate as `?`, so the token would be another principal's,
-        // another tenant's, or carry another value; and a token with one would be refused when it is presented. Fail
-        // where it is issued instead.
-        require(wellFormed(principal)) {
-            "Principal [${Identifiers.printable(principal.id)}] holds an unpaired UTF-16 surrogate in its id, tenant, " +
-                "roles, policies or attributes: a token cannot carry it."
-        }
+        subject.tenant?.let { accessTokenBuilder.withClaim(MembershipClaims.TENANT_KEY, it) }
         val accessToken = accessTokenBuilder.sign(algorithm)
         val refreshTokenId = idGenerator.generate()
         val refreshTokenExp = Date(System.currentTimeMillis() + refreshTokenValidity.toMillis())
@@ -133,33 +109,61 @@ class JwtTokenConverter(
     }
 
     /**
-     * A principal parsed from a token with the membership marker keeps it, along with whatever `roles` and `policies`
-     * that token had, so that refreshing never turns "ask the provider" (or an invalid marker) into "no memberships".
+     * What a verified token would refuse (`VerifiedToken`), and what [TokenAuthenticator] would, refused where the token
+     * is issued instead of when it is presented. In particular java-jwt writes an unpaired surrogate as `?`, so the
+     * token would be another principal's, another tenant's, or carry another value (RC1-52, `IDN-10`).
      */
-    private fun writeMemberships(accessTokenBuilder: JWTCreator.Builder, principal: CoSecPrincipal) {
-        val marker = MembershipClaims.markerOf(principal)
-        if (marker == null && exceedsMembershipClaimLimit(principal)) {
+    private fun checkIssuable(subject: TokenSubject) {
+        val printableId = Identifiers.printable(subject.id)
+        require(subject.id.isNotEmpty()) { "A token has a subject." }
+        require(!Identifiers.isReserved(subject.id)) {
+            "Principal [$printableId] begins with `${Identifiers.RESERVED_PREFIX}`, which is CoSec's: a token cannot carry it."
+        }
+        require(subject.tenant?.isEmpty() != true) {
+            "Principal [$printableId] has an empty tenant id: a token cannot carry it."
+        }
+        require(subject.app?.let(ScopeResolver::isValidAppId) != false) {
+            "Principal [$printableId] names an app that cannot be an app id: a token cannot carry it."
+        }
+        val reserved = subject.attributes.keys.filter { it in TokenAuthenticator.RESERVED_ATTRIBUTES }
+        require(reserved.isEmpty()) {
+            "Principal [$printableId] has attributes $reserved, which CoSec sets for other credentials: a token " +
+                "cannot carry them."
+        }
+        require(wellFormed(subject)) {
+            "Principal [$printableId] holds an unpaired UTF-16 surrogate in its id, tenant, roles, policies or " +
+                "attributes: a token cannot carry it."
+        }
+    }
+
+    /**
+     * A subject read from a token with the membership marker keeps it, along with whatever `roles` and `policies` that
+     * token had, so that refreshing never turns "ask the provider" (or an invalid marker) into "no memberships".
+     */
+    private fun writeMemberships(accessTokenBuilder: JWTCreator.Builder, subject: TokenSubject) {
+        val marker = subject.membershipMarker
+        if (marker == null && exceedsMembershipClaimLimit(subject)) {
             accessTokenBuilder.withClaim(MembershipClaims.MARKER_KEY, MembershipClaims.PROVIDER)
             return
         }
         if (marker != null) {
             accessTokenBuilder.withClaim(MembershipClaims.MARKER_KEY, marker)
         }
-        if (principal.policies.isNotEmpty()) {
-            accessTokenBuilder.withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
+        if (subject.policies.isNotEmpty()) {
+            accessTokenBuilder.withClaim(MembershipClaims.POLICIES_KEY, subject.policies.toList())
         }
-        if (principal.roles.isNotEmpty()) {
-            accessTokenBuilder.withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
+        if (subject.roles.isNotEmpty()) {
+            accessTokenBuilder.withClaim(MembershipClaims.ROLES_KEY, subject.roles.toList())
         }
     }
 
-    /** Whether every string the token would carry of [principal] holds no unpaired surrogate. */
-    private fun wellFormed(principal: CoSecPrincipal): Boolean =
-        Identifiers.isWellFormed(principal.id) &&
-            Identifiers.isWellFormed(MembershipClaims.tenantOf(principal).value) &&
-            Identifiers.areWellFormed(principal.roles) &&
-            Identifiers.areWellFormed(principal.policies) &&
-            wellFormedClaim(principal.attributes)
+    /** Whether every string the token would carry of [subject] holds no unpaired surrogate. */
+    private fun wellFormed(subject: TokenSubject): Boolean =
+        Identifiers.isWellFormed(subject.id) &&
+            subject.tenant?.let(Identifiers::isWellFormed) != false &&
+            Identifiers.areWellFormed(subject.roles) &&
+            Identifiers.areWellFormed(subject.policies) &&
+            wellFormedClaim(subject.attributes)
 
     private fun wellFormedClaim(value: Any?): Boolean = when (value) {
         is String -> Identifiers.isWellFormed(value)
@@ -169,9 +173,9 @@ class JwtTokenConverter(
         else -> true
     }
 
-    private fun exceedsMembershipClaimLimit(principal: CoSecPrincipal): Boolean {
+    private fun exceedsMembershipClaimLimit(subject: TokenSubject): Boolean {
         val limit = membershipClaimLimit ?: return false
-        return claimSize(principal.policies) + claimSize(principal.roles) > limit
+        return claimSize(subject.policies) + claimSize(subject.roles) > limit
     }
 
     private fun claimSize(values: Set<String>): Int =

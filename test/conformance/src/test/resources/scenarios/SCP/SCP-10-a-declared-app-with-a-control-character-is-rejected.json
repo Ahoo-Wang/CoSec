@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "RC1-15: the client declares a line feed in its app, which would forge a plain-text log line: an app id follows the tenant id rule, so it is rejected.",
+  "description": "RC1-15: the credential declares a line feed in its app, which would forge a plain-text log line: an app id follows the tenant id rule, so it is rejected.",
   "documents": {
     "platform": {
       "policies": [
@@ -29,11 +29,12 @@
       ]
     }
   },
-  "request": {
-    "app": "a\nforged"
-  },
+  "request": {},
   "expect": {
     "decision": "Rejected",
     "reason": "APP_MISMATCH"
+  },
+  "credential": {
+    "app": "a\nforged"
   }
 }

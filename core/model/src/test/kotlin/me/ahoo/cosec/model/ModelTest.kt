@@ -21,7 +21,6 @@ class ModelTest {
     fun `a request keeps what it is given`() {
         val subject = Subject(
             "user",
-            "tenant",
             true,
             mapOf("k" to 1),
             principalBindings = true,
@@ -36,8 +35,8 @@ class ModelTest {
         request.action.assert().isSameAs(action)
         request.resource.assert().isSameAs(resource)
         request.environment.assert().isSameAs(environment)
-        listOf(subject.id, subject.tenantId, subject.authenticated, subject.attributes)
-            .assert().containsExactly("user", "tenant", true, mapOf("k" to 1))
+        listOf(subject.id, subject.authenticated, subject.attributes)
+            .assert().containsExactly("user", true, mapOf("k" to 1))
         listOf(action.namespace, action.verb, resource.type, resource.id, resource.attributes)
             .assert().containsExactly("http", "GET", "http", "/orders/1", mapOf("resource.owner" to "user"))
         listOf(environment.remoteIp, environment.requestId, environment.deviceId, environment.blocked)

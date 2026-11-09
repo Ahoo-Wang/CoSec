@@ -54,10 +54,10 @@
   "credential": {
     "roles": [
       "clerk@wh-01"
-    ]
+    ],
+    "app": "wms"
   },
   "request": {
-    "app": "wms",
     "action": "wms:read",
     "space": "wh-01"
   },

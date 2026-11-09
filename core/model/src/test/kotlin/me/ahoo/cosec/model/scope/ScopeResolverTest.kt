@@ -32,7 +32,9 @@ class ScopeResolverTest {
         ),
         emptyList(),
     )
-    private val user = ScopeSubject(acme, authenticated = true, memberships)
+    private fun credential(app: String?) = ScopeSubject(acme, authenticated = true, memberships, app)
+
+    private val user = credential("order")
     private val noHost = HostScope(null)
 
     private fun resolved(resolution: ScopeResolution): Scope {
@@ -47,26 +49,25 @@ class ScopeResolverTest {
 
     @Test
     fun `without a declared space the default space and its roles apply`() {
-        val scope = resolved(ScopeResolver.resolve(user, DeclaredScope("order", ""), noHost))
+        val scope = resolved(ScopeResolver.resolve(user, "", noHost))
         scope.tenant.assert().isEqualTo(acme)
         scope.app.assert().isEqualTo(AppId("order"))
-        scope.appSource.assert().isEqualTo(Scope.AppSource.DECLARED)
         scope.space.assert().isEqualTo(SpaceId.DEFAULT)
         scope.roles.assert().containsExactly(RoleId("viewer"), RoleId("admin"))
     }
 
     @Test
     fun `a declared space the principal has a role in applies with those roles only`() {
-        val scope = resolved(ScopeResolver.resolve(user, DeclaredScope("order", "team-a"), noHost))
+        val scope = resolved(ScopeResolver.resolve(user, "team-a", noHost))
         scope.space.assert().isEqualTo(SpaceId("team-a"))
         scope.roles.assert().containsExactly(RoleId("editor"))
     }
 
     @Test
     fun `a declared space the principal has no role in is rejected`() {
-        rejectedFor(ScopeResolver.resolve(user, DeclaredScope("order", "team-c"), noHost))
+        rejectedFor(ScopeResolver.resolve(user, "team-c", noHost))
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
-        rejectedFor(ScopeResolver.resolve(user, DeclaredScope("order", "team-b"), noHost))
+        rejectedFor(ScopeResolver.resolve(user, "team-b", noHost))
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
     }
 
@@ -79,7 +80,7 @@ class ScopeResolverTest {
             Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId("(default)") to setOf(RoleId("admin"))), emptyList()),
         )
         for (space in listOf("(default)", "(x", "(")) {
-            rejectedFor(ScopeResolver.resolve(claiming, DeclaredScope("order", space), noHost))
+            rejectedFor(ScopeResolver.resolve(claiming, space, noHost))
                 .assert().describedAs(space).isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
         }
         ScopeResolver.isReservedSpaceId("x(").assert().isFalse()
@@ -89,7 +90,7 @@ class ScopeResolverTest {
     @Test
     fun `without any role the default space still applies`() {
         val nobody = ScopeSubject(acme, true, Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
-        val scope = resolved(ScopeResolver.resolve(nobody, DeclaredScope("", ""), noHost))
+        val scope = resolved(ScopeResolver.resolve(nobody, "", noHost))
         scope.app.assert().isEqualTo(AppId(""))
         scope.space.assert().isEqualTo(SpaceId.DEFAULT)
         scope.roles.assert().isEmpty()
@@ -99,7 +100,7 @@ class ScopeResolverTest {
     @Test
     fun `a near miss of a member space is rejected`() {
         for (space in listOf(" team-a", "team-a ", "TEAM-A", "*", "a@b", "team-a@team-a")) {
-            rejectedFor(ScopeResolver.resolve(user, DeclaredScope("order", space), noHost))
+            rejectedFor(ScopeResolver.resolve(user, space, noHost))
                 .assert().describedAs(space).isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
         }
     }
@@ -116,7 +117,7 @@ class ScopeResolverTest {
             authenticated = true,
             Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(nfc) to setOf(RoleId("editor"))), emptyList()),
         )
-        resolved(ScopeResolver.resolve(subject, DeclaredScope("order", nfc), noHost)).space.value.assert()
+        resolved(ScopeResolver.resolve(subject, nfc, noHost)).space.value.assert()
             .isEqualTo(nfc)
         val spaces = listOf(
             "café", // NFD of the member space
@@ -126,7 +127,7 @@ class ScopeResolverTest {
             "CAFÉ",
         )
         for (space in spaces) {
-            rejectedFor(ScopeResolver.resolve(subject, DeclaredScope("order", space), noHost))
+            rejectedFor(ScopeResolver.resolve(subject, space, noHost))
                 .assert().describedAs(space).isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
         }
         val apps = listOf(
@@ -137,7 +138,7 @@ class ScopeResolverTest {
             " order",
         )
         for (app in apps) {
-            rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), HostScope(AppId("order"))))
+            rejectedFor(ScopeResolver.resolve(credential(app), "", HostScope(AppId("order"))))
                 .assert().describedAs(app).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
         }
     }
@@ -151,22 +152,22 @@ class ScopeResolverTest {
         val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1)) + controls + unpaired
         for (host in listOf(noHost, HostScope(AppId("order")))) {
             for (app in invalid) {
-                rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), host))
+                rejectedFor(ScopeResolver.resolve(credential(app), "", host))
                     .assert().describedAs(app).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
             }
         }
         val longest = "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH)
-        resolved(ScopeResolver.resolve(user, DeclaredScope(longest, ""), noHost)).app.assert()
+        resolved(ScopeResolver.resolve(credential(longest), "", noHost)).app.assert()
             .isEqualTo(AppId(longest))
         // A surrogate pair is one character: an app id may hold it.
-        resolved(ScopeResolver.resolve(user, DeclaredScope("shop\uD83D\uDE00", ""), noHost)).app.assert()
+        resolved(ScopeResolver.resolve(credential("shop\uD83D\uDE00"), "", noHost)).app.assert()
             .isEqualTo(AppId("shop\uD83D\uDE00"))
     }
 
     @Test
     fun `a near miss of the host app is rejected`() {
         for (app in listOf(" order", "order ", "ORDER", "a@b")) {
-            rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), HostScope(AppId("order"))))
+            rejectedFor(ScopeResolver.resolve(credential(app), "", HostScope(AppId("order"))))
                 .assert().describedAs(app).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
         }
     }
@@ -181,25 +182,34 @@ class ScopeResolverTest {
         }
     }
 
+    /** RFC 0012 §3.5 (`SCP-11`): the table of the host's app against the credential's. */
     @Test
-    fun `the host app applies when nothing or the same app is declared`() {
-        val host = HostScope(AppId("order"))
-        for (declared in listOf("", "order")) {
-            val scope = resolved(ScopeResolver.resolve(user, DeclaredScope(declared, ""), host))
-            scope.app.assert().isEqualTo(AppId("order"))
-            scope.appSource.assert().isEqualTo(Scope.AppSource.HOST)
-        }
+    fun `a credential is served only by a host of its app`() {
+        val order = HostScope(AppId("order"))
+        resolved(ScopeResolver.resolve(credential("order"), "", order)).app.assert().isEqualTo(AppId("order"))
+        rejectedFor(ScopeResolver.resolve(credential("billing"), "", order))
+            .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        rejectedFor(ScopeResolver.resolve(credential(null), "", order))
+            .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        resolved(ScopeResolver.resolve(credential("order"), "", noHost)).app.assert().isEqualTo(AppId("order"))
+        resolved(ScopeResolver.resolve(credential(null), "", noHost)).app.assert().isEqualTo(AppId(""))
     }
 
     @Test
-    fun `a declared app other than the host app is rejected`() {
-        rejectedFor(ScopeResolver.resolve(user, DeclaredScope("billing", ""), HostScope(AppId("order"))))
+    fun `an empty credential app is not one that was left out`() {
+        rejectedFor(ScopeResolver.resolve(credential(""), "", noHost))
+            .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+    }
+
+    @Test
+    fun `a credential app other than the host app is rejected`() {
+        rejectedFor(ScopeResolver.resolve(credential("billing"), "", HostScope(AppId("order"))))
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
     }
 
     @Test
     fun `the app is checked before the space`() {
-        rejectedFor(ScopeResolver.resolve(user, DeclaredScope("billing", "team-c"), HostScope(AppId("order"))))
+        rejectedFor(ScopeResolver.resolve(credential("billing"), "team-c", HostScope(AppId("order"))))
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
     }
 
@@ -207,17 +217,25 @@ class ScopeResolverTest {
     @Test
     fun `an anonymous subject is in the default tenant and has no roles`() {
         val anonymous = ScopeSubject(acme, authenticated = false, memberships)
-        val scope = resolved(ScopeResolver.resolve(anonymous, DeclaredScope("order", ""), noHost))
+        val scope = resolved(ScopeResolver.resolve(anonymous, "", noHost))
         scope.tenant.assert().isEqualTo(TenantId.DEFAULT)
         scope.roles.assert().isEmpty()
-        rejectedFor(ScopeResolver.resolve(anonymous, DeclaredScope("order", "team-a"), noHost))
+        rejectedFor(ScopeResolver.resolve(anonymous, "team-a", noHost))
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
+    }
+
+    /** RFC 0012 §3.5: an anonymous request has no credential to declare an app, so its app is the host's. */
+    @Test
+    fun `an anonymous subject is in the host's app and no other`() {
+        val anonymous = ScopeSubject(acme, authenticated = false, memberships, app = "billing")
+        resolved(ScopeResolver.resolve(anonymous, "", HostScope(AppId("order")))).app.assert().isEqualTo(AppId("order"))
+        resolved(ScopeResolver.resolve(anonymous, "", noHost)).app.assert().isEqualTo(AppId(""))
     }
 
     @Test
     fun `rejections are shared and carry their reason`() {
-        val first = ScopeResolver.resolve(user, DeclaredScope("order", "team-c"), noHost)
-        first.assert().isSameAs(ScopeResolver.resolve(user, DeclaredScope("order", "team-d"), noHost))
+        val first = ScopeResolver.resolve(user, "team-c", noHost)
+        first.assert().isSameAs(ScopeResolver.resolve(user, "team-d", noHost))
         ScopeResolution.Rejected.Reason.entries.assert()
             .containsExactly(
                 ScopeResolution.Rejected.Reason.APP_MISMATCH,

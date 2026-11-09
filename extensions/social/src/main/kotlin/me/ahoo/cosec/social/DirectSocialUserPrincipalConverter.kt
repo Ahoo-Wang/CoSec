@@ -12,13 +12,13 @@
  */
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 /**
- * The principal of a social login as it is: the id `<provider user id>@<provider>`, no roles, policies or tenant.
+ * The principal of a social login as it is: the id `<provider user id>@<provider>`, no roles, policies or tenant. Its
+ * token is for [app], the app of the host it signs in to (RFC 0012 §3.5), or none.
  *
  * Its attributes become signed token claims, which conditions read as `subject.attributes.*` and a gateway may
  * forward, so they are only what the provider owns and the user cannot edit (RC1-25): the registration name
@@ -28,13 +28,12 @@ import reactor.kotlin.core.publisher.toMono
  *
  * @author ahoo wang
  */
-object DirectSocialUserPrincipalConverter : SocialUserPrincipalConverter {
+class DirectSocialUserPrincipalConverter(private val app: String?) : SocialUserPrincipalConverter {
 
-    override fun convert(provider: String, authUser: SocialUser): Mono<CoSecPrincipal> {
-        return SimplePrincipal(
+    override fun convert(provider: String, authUser: SocialUser): Mono<TokenSubject> {
+        return TokenSubject(
             id = asProviderUserId(provider, authUser),
-            policies = emptySet(),
-            roles = emptySet(),
+            app = app,
             attributes = mapOf(
                 SocialUserPrincipalConverter.OAUTH_PROVIDER to provider,
                 SocialUserPrincipalConverter.OAUTH_USER_ID to authUser.id,

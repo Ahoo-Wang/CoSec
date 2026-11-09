@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.authn
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.apikey.ApiKey
@@ -74,6 +75,7 @@ class ApiKeyAuthenticator(
             breakGlass = false,
             issuedAt = null,
             apiKeyCredential = true,
+            app = apiKey.app?.let(::AppId),
         )
         return AuthnResult.Authenticated(principal, method)
     }

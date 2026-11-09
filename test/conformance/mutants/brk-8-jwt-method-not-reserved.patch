@@ -3,11 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
-index c7b651ec..106680d2 100644
+index 538634c0..74e6a978 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
-@@ -114,7 +114,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
-     private val apiKeyCredential: Boolean,
+@@ -124,7 +124,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
+     val app: AppId?,
  ) {
      init {
 -        require(breakGlass == (credential?.method == Identity.Method.JWT)) {

@@ -289,7 +289,7 @@ A grant is only as trustworthy as the inputs it depends on.
 |---|---|---|
 | Principal id, attributes, roles and attached policies | The verified token's claims, or your `MembershipProvider`. An API key gives only its principal and tenant, and the attribute `apiKeyId`; its roles always come from the provider, narrowed to the key's cap | Whoever issues credentials, and whoever runs the membership source |
 | Tenant | The credential (`tenantId` claim, the API key's required tenant); `(0)` for a token without one. An anonymous request is always in `(0)` | Whoever issues credentials |
-| App | The host's app when there is one (a different `CoSec-App-Id` is rejected): on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`; otherwise `CoSec-App-Id` | Your configuration, or the client |
+| App | The credential's (a token's `aud`, an API key's `app`), which must be the host's app when it has one: on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`. An anonymous request's is the host's | Whoever issues credentials, and your configuration |
 | Space | `CoSec-Space-Id`, accepted only when the principal has a role in that space | The client, among the credential's spaces |
 | Device | `CoSec-Device-Id` | The client |
 | Method, path, query | The HTTP request; the route map turns method and path into an action and a resource | The client, within your route map |
@@ -306,10 +306,10 @@ How `ScopeResolver` checks the scope:
   request is rejected (`SPACE_NOT_MEMBER`), never moved to the default space. `*` is never a space. Without
   `CoSec-Space-Id`, the request is in the default space. An anonymous principal has no roles, so it can only be in
   the default space.
-- **App.** With a host app, the host's app applies, and a request that declares another one is rejected
+- **App.** A host with an app serves only credentials declaring that app; another one, or none, is rejected
   (`APP_MISMATCH`). The host app is, on a gateway, the route's metadata `cosec-app-id`, ahead of
-  `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the declared app applies as
-  sent. A declared app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
+  `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the credential's app applies, and
+  a credential declaring none reads no app document. A client never declares an app. A credential's app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
   characters: the rule of a tenant id) is rejected either way. The app is checked before the space.
 - Matching is exact: no trimming, no case folding.
 

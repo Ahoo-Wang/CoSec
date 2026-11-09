@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication.social
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialCredentials
@@ -64,7 +63,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                     .hasSingleBean(SocialAuthentication::class.java)
                     .getBean(AuthenticationProvider::class.java)
                     .extracting {
-                        it!!.getRequired<SocialCredentials, CoSecPrincipal, SocialAuthentication>(
+                        it!!.getRequired<SocialCredentials, SocialAuthentication>(
                             SocialCredentials::class.java,
                         )
                     }

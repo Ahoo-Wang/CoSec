@@ -79,8 +79,7 @@ class LegacyCodeTest {
 
     /**
      * G5 for `cosec-api`, the thin contract module: each of its types is used by some other module's `main` code, through
-     * the type, one of its nested classes, or an api type that extends it (callers see `CoSecPrincipal`, not
-     * `RoleCapable`). Holders of constants only are left out: the compiler inlines their values at each use.
+     * the type, one of its nested classes, or an api type that extends it. Holders of constants only are left out: the compiler inlines their values at each use.
      */
     @ArchTest
     val everyApiTypeIsUsedOutsideApi: ArchRule = classes()

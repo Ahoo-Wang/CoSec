@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.login.Authentication
+import me.ahoo.cosec.login.token.TokenSubject
 import reactor.core.publisher.Mono
 
 /**
@@ -25,8 +25,8 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 class SocialAuthentication(
-    private val principalConverter: SocialUserPrincipalConverter = DirectSocialUserPrincipalConverter
-) : Authentication<SocialCredentials, CoSecPrincipal> {
+    private val principalConverter: SocialUserPrincipalConverter
+) : Authentication<SocialCredentials> {
     override val supportCredentials: Class<SocialCredentials>
         get() {
             return SocialCredentials::class.java
@@ -42,7 +42,7 @@ class SocialAuthentication(
         return SocialProviderManager.getRequired(provider).authorizeUrl()
     }
 
-    override fun authenticate(credentials: SocialCredentials): Mono<CoSecPrincipal> {
+    override fun authenticate(credentials: SocialCredentials): Mono<TokenSubject> {
         return SocialProviderManager.getRequired(credentials.provider)
             .authenticate(credentials)
             .flatMap {

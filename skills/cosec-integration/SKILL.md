@@ -63,7 +63,7 @@ cosec:
     secret: ${COSEC_JWT_SECRET} # blank fails startup while JWT is enabled
   authorization:
     scope:
-      app-id: order-service     # the app this host serves; omit when requests declare it (CoSec-App-Id)
+      app-id: order-service     # the app this host serves: only credentials declaring it are served
     remote-ip:
       max-trusted-index: 1      # trusted X-Forwarded-For hops; 0 ignores the header
     routes:
@@ -226,8 +226,9 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   starter wires `CoCacheMembershipProvider`. A key whose principal the provider does not know or knows as deactivated is
   `token-invalid`. A user's key is a personal access token; a workload principal's key is a service account's.
   Keys stored before 8.0 are converted with `cosec-migrate api-keys`.
-- Clients send the headers `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
-  `CoSec-Space-Id` for a non-default space, each once (the query string is not read); a space needs a role there, or the request is denied (403
+- A token or an API key declares its app (the token's `aud`, set from `TokenSubject.app`; the key's `app`): a host with
+  `scope.app-id` (or a gateway route's `cosec-app-id`) refuses a credential declaring another or none. Clients never send an
+  app. They send `CoSec-Space-Id` for a non-default space, once (the query string is not read); a space needs a role there, or the request is denied (403
   `scope-rejected`; 401 for an anonymous caller). Details:
   https://cosec.ahoo.me/integration/authentication.
 

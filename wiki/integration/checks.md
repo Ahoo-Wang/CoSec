@@ -178,7 +178,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 | `tenant` | Required. The principal's tenant. |
 | `principal` | The principal id; leave it out for the anonymous principal. |
 | `roles`, `policies` | The membership claims, written as a token carries them (`role`, `role@space`; [Roles and spaces](./authentication.md#roles-and-spaces)). |
-| `app`, `space` | The declared app and space, as `CoSec-App-Id` and `CoSec-Space-Id`; no host app applies. |
+| `app`, `space` | The app the simulated credential declares, on a host of that app, and the space it selects (`CoSec-Space-Id`). |
 | `action` | Required. `service:verb`. |
 | `resource` | Required. `type/id`, or a path starting with `/`. |
 | `remoteIp` | The client IP. |

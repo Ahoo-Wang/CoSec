@@ -82,10 +82,10 @@
   "credential": {
     "roles": [
       "keeper@wh-01"
-    ]
+    ],
+    "app": "wms"
   },
   "request": {
-    "app": "wms",
     "action": "wms:ship",
     "space": "wh-01"
   },

@@ -18,12 +18,10 @@ package me.ahoo.cosec.spring.boot.starter.control
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -122,7 +120,7 @@ class ControlRateLimitStarterTest {
 
     private fun token(context: ApplicationContext, tenant: String, id: String): String =
         context.getBean(TokenConverter::class.java)
-            .toToken(SimpleTenantPrincipal(SimplePrincipal(id, roles = setOf("admin")), SimpleTenant(tenant)))
+            .toToken(TokenSubject(id, "cosec-control", tenant = tenant, roles = setOf("admin")))
             .accessToken
 
     private fun WebTestClient.simulate(token: String, tenant: String, suffix: String = ""): Pair<Int, String> {

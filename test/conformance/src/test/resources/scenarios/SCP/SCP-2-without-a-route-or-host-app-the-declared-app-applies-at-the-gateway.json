@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "Neither the route nor the gateway names an app: alice's declared app, shop, applies, and billing's document is never read.",
+  "description": "Neither the route nor the gateway names an app: the app alice's token declares, shop, applies, and billing's document is never read.",
   "documents": {
     "platform": {
       "policies": [
@@ -59,8 +59,7 @@
     "method": "GET",
     "path": "/invoices",
     "headers": {
-      "Authorization": "token",
-      "CoSec-App-Id": "shop"
+      "Authorization": "token"
     }
   },
   "authentication": {
@@ -71,7 +70,8 @@
       "id": "alice",
       "roles": [
         "clerk"
-      ]
+      ],
+      "app": "shop"
     }
   },
   "expect": {

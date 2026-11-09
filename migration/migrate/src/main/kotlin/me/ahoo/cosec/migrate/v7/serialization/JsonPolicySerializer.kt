@@ -13,11 +13,11 @@
 
 package me.ahoo.cosec.migrate.v7.serialization
 
-import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
 import me.ahoo.cosec.migrate.v7.api.policy.Policy
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyType
 import me.ahoo.cosec.migrate.v7.api.policy.Statement
+import me.ahoo.cosec.migrate.v7.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.migrate.v7.policy.PolicyData
 import me.ahoo.cosec.migrate.v7.policy.condition.AllConditionMatcher
 import tools.jackson.core.JsonGenerator

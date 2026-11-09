@@ -155,7 +155,7 @@ project(":e2e") {
 subprojects {
     pluginManager.withPlugin("java") {
         val declared = provider {
-            listOf("api", "implementation", "compileOnly", "runtimeOnly").flatMap { name ->
+            listOf("api", "implementation", "compileOnly", "compileOnlyApi", "runtimeOnly").flatMap { name ->
                 configurations.findByName(name)?.dependencies.orEmpty().map { dependency ->
                     when (dependency) {
                         is ProjectDependency -> "declared $name project ${dependency.path.removePrefix(":")}"

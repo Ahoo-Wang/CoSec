@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "The client declares * to a host configured for order-service.",
+  "description": "The credential declares * to a host configured for order-service.",
   "documents": {
     "platform": {
       "policies": [
@@ -30,11 +30,13 @@
     }
   },
   "request": {
-    "app": "*",
     "hostApp": "order-service"
   },
   "expect": {
     "decision": "Rejected",
     "reason": "APP_MISMATCH"
+  },
+  "credential": {
+    "app": "*"
   }
 }

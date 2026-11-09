@@ -119,7 +119,9 @@ class SliceBlockHoundTest {
     @Test
     fun `a warm API key request neither blocks nor suspends`() {
         val key = ApiKeys.generate()
-        val keys = InMemoryApiKeyStore(mapOf(ApiKeys.hash(key) to ApiKey("k1", "svc", "acme", setOf("reader")))).reader
+        val keys = InMemoryApiKeyStore(
+            mapOf(ApiKeys.hash(key) to ApiKey("k1", "svc", "acme", null, setOf("reader")))
+        ).reader
         val loader = MembershipLoader { _, _ ->
             MembershipAnswer.Known(
                 Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))), emptyList())

@@ -283,7 +283,7 @@ new app ids at a high rate keeps up to that rate × 30 seconds of loads, and the
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
 **Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
-family (`SNP-7`), are shared by every tenant. A client that declares many random `CoSec-App-Id`s pushes out the real apps
+family (`SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps
 that have no app document, so a request in one of them reads Redis again, without compiling anything, until it is
 remembered again. That fails closed, but for a tenant in `fail-closed.tenants` such an app's entry loaded from the
 local copy counts as `local-max-age` old: with `fail-closed.max-lag` below `local-max-age`, its requests answer `503`

@@ -30,7 +30,6 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -89,12 +88,12 @@ class PolicyDocumentCompilerTest {
             emptyList(),
         )
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(TenantId("acme"), true, memberships),
-            DeclaredScope("order", ""),
+            ScopeSubject(TenantId("acme"), true, memberships, "order"),
+            "",
             HostScope(null)
         )
         val authz = AuthzRequest(
-            Subject("alice", "acme", true, emptyMap(), true, true),
+            Subject("alice", true, emptyMap(), true, true),
             action,
             resource,
             Environment("10.0.0.1", "r", "d", blocked = false),
@@ -163,12 +162,12 @@ class PolicyDocumentCompilerTest {
             val scope = (
                 ScopeResolver.resolve(
                     ScopeSubject(TenantId("acme"), true, memberships),
-                    DeclaredScope("", ""),
+                    "",
                     HostScope(null)
                 ) as ScopeResolution.Resolved
                 ).scope
             val authz = AuthzRequest(
-                Subject("alice", "acme", true, emptyMap(), true, true),
+                Subject("alice", true, emptyMap(), true, true),
                 action,
                 Resource("order", "1", emptyMap()),
                 Environment("10.0.0.1", "r", "d", blocked = false),

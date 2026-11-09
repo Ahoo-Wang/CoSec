@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "engine",
-  "description": "The host has no app: the declared app applies.",
+  "description": "The host has no app: the credential's app applies.",
   "documents": {
     "apps": {
       "order-service": {
@@ -60,11 +60,10 @@
   "credential": {
     "roles": [
       "editor"
-    ]
-  },
-  "request": {
+    ],
     "app": "billing"
   },
+  "request": {},
   "expect": {
     "decision": "Permit",
     "by": {

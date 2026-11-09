@@ -34,7 +34,6 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -142,12 +141,11 @@ open class FlatEngineBenchmark {
             mapOf(SpaceId.DEFAULT to roles.mapTo(LinkedHashSet(), ::RoleId)),
             emptyList(),
         )
-        val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("app", ""), HostScope(null))
+        val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships, "app")
+        val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
         val authz = AuthzRequest(
             subject = Subject(
                 "user",
-                "acme",
                 true,
                 emptyMap(),
                 principalBindings = true,

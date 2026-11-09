@@ -210,10 +210,12 @@ would reach access logs and `Referer` headers.
 
 | Parameter | Meaning | Conditions read it as |
 |---|---|---|
-| `CoSec-App-Id` | The app the request is for. Ignored in favour of the host's app when there is one: on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`; a different value is then rejected. | `scope.app` |
 | `CoSec-Space-Id` | The space within the app. Accepted only when the principal has a role in it; empty means the default space. | `scope.space` (and `scope.roles`, the roles there) |
 | `CoSec-Device-Id` | The caller's device. Informational unless a policy or the blacklist reads it. | `environment.device` |
 | `CoSec-Request-Id` | Header only: the request id ([Response headers](#response-headers)). | |
+
+The client does not say which app a request is for: `scope.app` comes from the credential and the host
+([Apps](./authentication.md#apps)).
 
 Rules for reading them:
 
@@ -241,11 +243,13 @@ pipeline's outcome. A refused request never reaches your handler.
 | Member | Content |
 |---|---|
 | `principal.id` | The principal; `(0)` for an anonymous caller. |
-| `tenant.tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
-| `principal.roles` | The principal's roles in the request's space. |
-| `principal.policies` | The principal's attached policies. |
+| `principal.authenticated` | Whether a credential proved the principal. |
+| `tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
 | `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
-| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the roles there. |
+| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there. |
+| `forwardedIdentity` | Behind a gateway, the gateway's request id and the id of the caller's credential; otherwise null. |
+
+The context is read-only: nothing an application could set reaches a decision.
 
 **WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. The exchange
 principal is also set, so `exchange.getPrincipal()` returns the CoSec principal.
@@ -341,10 +345,9 @@ from the WebFlux filter in three ways:
   whether in a header, the query or a cookie, unless `cosec.gateway.identity.forward-authorization=true`.
 
 **The app of a route.** A route's metadata `cosec-app-id` names the app of its requests, ahead of
-`cosec.authorization.scope.app-id`: on that route, a request that declares another app with `CoSec-App-Id` is
-rejected (`403` `scope-rejected`), and one that declares none is in the route's app, whose role bindings, and DENYs,
-apply. A client's declared app applies only on a route without `cosec-app-id`, on a gateway without
-`cosec.authorization.scope.app-id`. When one gateway fronts several apps, give each route its app; why is in
+`cosec.authorization.scope.app-id`: on that route, a credential that declares another app, or none, is
+rejected (`403` `scope-rejected`), and one of the route's app gets its role bindings and DENYs
+([Apps](./authentication.md#apps)). When one gateway fronts several apps, give each route its app; why is in
 [Trust boundaries](../guide/security-model.md#trust-boundaries). The value must be a string: a number, a boolean, a
 list or a map is not read as its text, so write `cosec-app-id: "2024"` for an app named `2024`. A `cosec-app-id` that
 is not a string, or cannot be an app id, fails every request of its route (`500`).
@@ -516,12 +519,14 @@ The [security context](#accessing-the-security-context) of a request that procee
 
 | Member | Content |
 |---|---|
-| `principal.id`, `tenant.tenantId` | `sub` and `tenant`; `(0)` for both without an identity. |
-| `principal.roles`, `scope.roles` | `roles`. |
-| `principal.policies` | Empty. |
+| `principal.id`, `tenantId` | `sub` and `tenant`; `(0)` for both without an identity. |
+| `scope.roles` | `roles`. |
 | `principal.attributes` | `claims`. |
 | `scope.appId`, `scope.spaceId` | `scope.app` and `scope.space`. |
-| `attributes["cosec.identity.rid"]`, `attributes["cosec.identity.jti"]` | The gateway's request id and the credential's id (`auth.jti`). |
+| `forwardedIdentity.gatewayRequestId`, `forwardedIdentity.credentialId` | The gateway's request id and the credential's id (`auth.jti`). |
+
+The forwarded identity is the credential here, and its app is what it declares: on a service with an app, an identity
+that names another app, or none, is refused (`400` `invalid-request`).
 
 ## Control-plane routes
 

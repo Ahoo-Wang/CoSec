@@ -13,17 +13,17 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.principal.TenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
+import me.ahoo.cosec.migrate.v7.api.context.SecurityContext
 import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable
 import me.ahoo.cosec.migrate.v7.api.context.request.DeviceIdCapable
 import me.ahoo.cosec.migrate.v7.api.context.request.SPACE_ID_KEY
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
+import me.ahoo.cosec.migrate.v7.api.principal.SimplePrincipal
+import me.ahoo.cosec.migrate.v7.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.migrate.v7.api.principal.TenantPrincipal
+import me.ahoo.cosec.migrate.v7.api.tenant.SimpleTenant
+import me.ahoo.cosec.migrate.v7.api.tenant.Tenant
 import me.ahoo.cosec.migrate.v7.policy.action.setPathVariables
 import me.ahoo.cosec.migrate.v7.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.migrate.v7.policy.condition.ConditionMatcherFactoryProvider

@@ -15,8 +15,7 @@ package me.ahoo.cosec.login
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
@@ -33,16 +32,16 @@ class CompositeAuthenticationTest {
     @Test
     fun authenticate() {
         val credentials = mockk<Credentials>()
-        val authentication = mockk<Authentication<Credentials, CoSecPrincipal>> {
+        val authentication = mockk<Authentication<Credentials>> {
             every { supportCredentials } returns credentials.javaClass
-            every { authenticate(any()) } returns SimplePrincipal.ANONYMOUS.toMono()
+            every { authenticate(any()) } returns TokenSubject("alice", null).toMono()
         }
         DefaultAuthenticationProvider.register(credentials.javaClass, authentication)
 
         compositeAuthentication.authenticate(credentials)
             .test()
             .consumeNextWith {
-                it.assert().isEqualTo(SimplePrincipal.ANONYMOUS)
+                it.assert().isEqualTo(TokenSubject("alice", null))
             }
             .verifyComplete()
     }

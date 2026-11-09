@@ -13,22 +13,22 @@
 
 package me.ahoo.cosec.login
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import reactor.core.publisher.Mono
 
 class CompositeAuthentication(
     private val authenticationProvider: AuthenticationProvider
-) : Authentication<Credentials, CoSecPrincipal> {
+) : Authentication<Credentials> {
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java
 
-    override fun authenticate(credentials: Credentials): Mono<out CoSecPrincipal> {
+    override fun authenticate(credentials: Credentials): Mono<TokenSubject> {
         val credentialsType = credentials.javaClass
         return authenticate(credentialsType, credentials)
     }
 
-    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<out CoSecPrincipal> {
-        return authenticationProvider.getRequired<Credentials, CoSecPrincipal, Authentication<Credentials, CoSecPrincipal>>(
+    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<TokenSubject> {
+        return authenticationProvider.getRequired<Credentials, Authentication<Credentials>>(
             credentialsType,
         ).authenticate(credentials)
     }

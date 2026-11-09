@@ -176,8 +176,8 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         action: Action,
         resource: Resource,
     ): Decision {
-        val recorded = security.asPrincipal(principal, memberships) ?: return Decision.Deny(null)
-        return decide(recorded, app, action, resource)
+        val recorded = security.asPrincipal(principal, memberships, app) ?: return Decision.Deny(null)
+        return decide(recorded, action, resource)
     }
 
     private companion object {

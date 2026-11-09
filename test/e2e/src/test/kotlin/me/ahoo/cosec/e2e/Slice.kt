@@ -18,6 +18,7 @@ import me.ahoo.cosec.cache.MembershipLoader
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -25,6 +26,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -151,10 +153,11 @@ class Slice(
 object TokenAuthenticator : Authenticator {
     override suspend fun authenticate(credentials: me.ahoo.cosec.spi.authn.Credentials): AuthnResult {
         val token = credentials.token?.removePrefix("Bearer ") ?: return AuthnResult.Anonymous
-        if (token == "invalid") {
+        val (signed, app) = token.split('#', limit = 2).let { it[0] to it.getOrNull(1) }
+        if (signed == "invalid") {
             return AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)
         }
-        val (claims, attached) = token.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+        val (claims, attached) = signed.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
         val (who, roles) = claims.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
         val (principal, tenant) = who.split('@', limit = 2).let { it[0] to it[1] }
         val memberships = Memberships(
@@ -163,13 +166,13 @@ object TokenAuthenticator : Authenticator {
             attached.split(',').filter { it.isNotEmpty() }.map(::PolicyId),
         )
         return AuthnResult.Authenticated(
-            AuthenticatedPrincipal(PrincipalId(principal), TenantId(tenant), memberships),
+            AuthenticatedPrincipal(PrincipalId(principal), TenantId(tenant), memberships, app = app?.let(::AppId)),
             "test"
         )
     }
 }
 
-/** A request as the bridge will hand it to the pipeline. */
+/** A request as the bridge will hand it to the pipeline; [app] is what its token declares, `#app` after the token. */
 fun request(
     method: String,
     path: String,
@@ -179,18 +182,19 @@ fun request(
     query: String? = null,
 ): HttpFacts {
     val headers = buildMap<String, List<String>> {
-        token?.let { put("Authorization", listOf("Bearer $it")) }
-        app?.let { put(CoSecParameters.APP_ID, listOf(it)) }
+        token?.let { put("Authorization", listOf("Bearer $it" + app?.let { name -> "#$name" }.orEmpty())) }
         space?.let { put(CoSecParameters.SPACE_ID, listOf(it)) }
     }
-    return HttpFacts(method, path, query, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", HostScope(null))
+    return HttpFacts(method, path, query, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", hostOf(app))
 }
 
 /** A request carrying API [key] in `X-API-Key`, the starter's default header. */
 fun apiKeyRequest(method: String, path: String, key: String, app: String? = null): HttpFacts {
     val headers = buildMap<String, List<String>> {
         put("X-API-Key", listOf(key))
-        app?.let { put(CoSecParameters.APP_ID, listOf(it)) }
     }
-    return HttpFacts(method, path, null, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", HostScope(null))
+    return HttpFacts(method, path, null, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", hostOf(app))
 }
+
+/** A request for [app] reaches a host of [app]; one that cannot be an app id reaches a host of none. */
+private fun hostOf(app: String?) = HostScope(app?.takeIf(ScopeResolver::isValidAppId)?.let(::AppId))

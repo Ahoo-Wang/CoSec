@@ -30,7 +30,6 @@ import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -72,14 +71,13 @@ class RequestAttributesTest {
         )
         val tenant = if (authenticated) TenantId("acme") else TenantId.DEFAULT
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(tenant, authenticated, memberships),
-            DeclaredScope(app, ""),
+            ScopeSubject(tenant, authenticated, memberships, app.ifEmpty { null }),
+            "",
             HostScope(null)
         )
         val authz = AuthzRequest(
             Subject(
                 "alice",
-                tenant.value,
                 authenticated,
                 mapOf("level" to 3),
                 principalBindings = true,

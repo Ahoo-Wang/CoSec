@@ -168,11 +168,11 @@ class DemoController(private val tokenConverter: TokenConverter) {
     // 仅用于演示：为任意用户 id 签发令牌，不校验密码。
     @GetMapping("/token")
     fun token(@RequestParam user: String): CompositeToken =
-        tokenConverter.toToken(SimplePrincipal(id = user))
+        tokenConverter.toToken(TokenSubject(id = user, app = null))
 }
 ```
 
-starter 根据 `cosec.jwt` 配置 `TokenConverter`（`me.ahoo.cosec.login.token`）。`SimplePrincipal` 位于 `me.ahoo.cosec.api.principal`，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真实的登录端点会先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
+starter 根据 `cosec.jwt` 配置 `TokenConverter`（`me.ahoo.cosec.login.token`）。`TokenSubject` 位于同一个包，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真实的登录端点会先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
 
 ## 发送请求 {#send-requests}
 

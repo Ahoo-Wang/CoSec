@@ -29,7 +29,6 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -180,13 +179,13 @@ class IndexGenerator(private val random: Random) {
             emptyList(),
         )
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(TenantId(tenant), authenticated = true, memberships),
-            DeclaredScope(apps.pick(), space),
+            ScopeSubject(TenantId(tenant), authenticated = true, memberships, apps.pick().ifEmpty { null }),
+            space,
             HostScope(null),
         )
         val scope = (resolution as ScopeResolution.Resolved).scope
         val authz = AuthzRequest(
-            Subject("alice", tenant, true, emptyMap(), true, true),
+            Subject("alice", true, emptyMap(), true, true),
             action,
             resource,
             Environment("127.0.0.1", "request", "device", blocked = false),

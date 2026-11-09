@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "Header names ignore case, so cosec-app-id and CoSec-App-Id are one parameter with two values: 400.",
+  "description": "Header names ignore case, so cosec-device-id and CoSec-Device-Id are one parameter with two values: 400.",
   "documents": {
     "platform": {
       "policies": [
@@ -34,8 +34,8 @@
   },
   "http": {
     "headers": {
-      "cosec-app-id": "shop",
-      "CoSec-App-Id": "other"
+      "cosec-device-id": "shop",
+      "CoSec-Device-Id": "other"
     }
   },
   "expect": {

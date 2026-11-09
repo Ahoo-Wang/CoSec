@@ -18,7 +18,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -120,7 +119,7 @@ class PlatformCompilerInFlightTest {
         return (
             ScopeResolver.resolve(
                 subject,
-                DeclaredScope("order", ""),
+                "",
                 HostScope(null)
             ) as ScopeResolution.Resolved
             ).scope

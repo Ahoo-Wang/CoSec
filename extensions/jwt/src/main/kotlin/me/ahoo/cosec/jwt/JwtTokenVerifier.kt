@@ -21,20 +21,19 @@ import com.auth0.jwt.exceptions.TokenExpiredException
 import com.auth0.jwt.interfaces.DecodedJWT
 import com.auth0.jwt.interfaces.JWTVerifier
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 
 /**
  * JWT-based token verifier.
  *
  * This implementation uses the Auth0 JWT library to verify JWT tokens
- * and extract principal information from them. It is CoSec's own verifier ([CoSecTokenVerifier]): only the tokens it
+ * and read what they say. It is CoSec's own verifier ([CoSecTokenVerifier]): only the tokens it
  * verifies may use break-glass (RC1-26).
  *
  * @param algorithm The algorithm used to verify JWT signatures
@@ -49,9 +48,9 @@ class JwtTokenVerifier(
         .build()
 
     @Suppress("TooGenericExceptionCaught")
-    private fun verify(accessToken: String): DecodedJWT {
+    private fun decodeVerified(token: String): DecodedJWT {
         try {
-            return jwtVerifier.verify(accessToken)
+            return jwtVerifier.verify(token)
         } catch (expired: TokenExpiredException) {
             throw me.ahoo.cosec.spi.token
                 .TokenExpiredException(expired.message ?: "The token has expired.", expired)
@@ -60,15 +59,12 @@ class JwtTokenVerifier(
         }
     }
 
-    override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
-        val removedBearerAccessToken = accessToken.accessToken.removeBearerPrefix()
-        val decodedAccessToken = verify(removedBearerAccessToken)
-        return Jwts.toPrincipal(decodedAccessToken)
-    }
+    override fun verify(accessToken: String): VerifiedToken =
+        Jwts.toVerifiedToken(decodeVerified(accessToken.removeBearerPrefix()))
 
     @Suppress("TooGenericExceptionCaught")
-    override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
-        val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
+    override fun refresh(token: CompositeToken): VerifiedToken {
+        val decodedRefreshToken: DecodedJWT = decodeVerified(token.refreshToken)
         // The access token may have expired, so it is decoded here and only its signature checked. Decoding stays in
         // this method: only the verifying methods may decode (PIP-11).
         val decodedAccessToken = try {
@@ -80,7 +76,7 @@ class JwtTokenVerifier(
         if (decodedRefreshToken.subject != decodedAccessToken.id) {
             throw RefreshTokenMismatchException()
         }
-        return Jwts.toPrincipal(decodedAccessToken)
+        return Jwts.toVerifiedToken(decodedAccessToken)
     }
 
     @Suppress("TooGenericExceptionCaught")

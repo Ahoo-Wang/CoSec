@@ -158,10 +158,11 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 | 参数 | 含义 | 条件中的读取方式 |
 |---|---|---|
-| `CoSec-App-Id` | 请求所属的应用。有宿主应用时以宿主应用为准：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`；此时不同的值会被拒绝。 | `scope.app` |
 | `CoSec-Space-Id` | 应用中的空间。仅当主体在该空间有角色时接受；为空表示默认空间。 | `scope.space`（以及该空间中的角色 `scope.roles`） |
 | `CoSec-Device-Id` | 调用方的设备。除非策略或黑名单读取它，否则仅供参考。 | `environment.device` |
 | `CoSec-Request-Id` | 仅限请求头：请求 id（[响应头](#response-headers)）。 | |
+
+客户端不声明请求属于哪个应用：`scope.app` 来自凭证和宿主（[应用](./authentication.md#apps)）。
 
 读取规则：
 
@@ -179,11 +180,13 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | 成员 | 内容 |
 |---|---|
 | `principal.id` | 主体；匿名调用方为 `(0)`。 |
-| `tenant.tenantId` | 作用域的租户：主体的租户，匿名调用方为 `(0)`。 |
-| `principal.roles` | 主体在请求空间中的角色。 |
-| `principal.policies` | 主体的附加策略。 |
+| `principal.authenticated` | 主体是否由凭证证明。 |
+| `tenantId` | 作用域的租户：主体的租户，匿名调用方为 `(0)`。 |
 | `principal.attributes` | 凭证的属性（令牌的 `attributes` 声明；API key 则有 `apiKeyId`）。在网关之后：转发来的 `claims`。 |
 | `scope.appId`、`scope.spaceId`、`scope.roles` | `ScopeResolver` 校验后的作用域：应用、空间（默认空间为空）以及该空间中的角色。 |
+| `forwardedIdentity` | 在网关后面时为网关的请求 id 和调用方凭证的 id；否则为 null。 |
+
+上下文是只读的：应用设置的任何内容都不会影响决策。
 
 **WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
 
@@ -253,7 +256,7 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 - 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`；
 - 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还把校验过的身份转发给接收身份的路由（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的凭证，无论它在请求头、查询参数还是 cookie 中。
 
-**路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`），没有声明的请求属于路由的应用，该应用的角色绑定（包括其中的 DENY）随之生效。只有在没有 `cosec-app-id` 的路由上、且网关没有设置 `cosec.authorization.scope.app-id` 时，客户端声明的应用才生效。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。它的值必须是字符串：数字、布尔值、列表或映射不会按其文本读取，因此名为 `2024` 的应用要写成 `cosec-app-id: "2024"`。`cosec-app-id` 不是字符串、或不是合法应用 id 时，该路由的每个请求都会失败（`500`）。
+**路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`），属于路由应用的凭证获得该应用的角色绑定和 DENY（[应用](./authentication.md#apps)）。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。它的值必须是字符串：数字、布尔值、列表或映射不会按其文本读取，因此名为 `2024` 的应用要写成 `cosec-app-id: "2024"`。`cosec-app-id` 不是字符串、或不是合法应用 id 时，该路由的每个请求都会失败（`500`）。
 
 ```yaml
 spring:
@@ -362,12 +365,13 @@ cosec:
 
 | 成员 | 内容 |
 |---|---|
-| `principal.id`、`tenant.tenantId` | `sub` 和 `tenant`；没有身份时两者都是 `(0)`。 |
-| `principal.roles`、`scope.roles` | `roles`。 |
-| `principal.policies` | 空。 |
+| `principal.id`、`tenantId` | `sub` 和 `tenant`；没有身份时两者都是 `(0)`。 |
+| `scope.roles` | `roles`。 |
 | `principal.attributes` | `claims`。 |
 | `scope.appId`、`scope.spaceId` | `scope.app` 和 `scope.space`。 |
-| `attributes["cosec.identity.rid"]`、`attributes["cosec.identity.jti"]` | 网关的请求 id 和凭证的 id（`auth.jti`）。 |
+| `forwardedIdentity.gatewayRequestId`、`forwardedIdentity.credentialId` | 网关的请求 id 和凭证的 id（`auth.jti`）。 |
+
+转发的身份在这里就是凭证，它的应用就是它声明的应用：配置了应用的服务会拒绝声明其他应用或未声明应用的身份（`400` `invalid-request`）。
 
 ## 控制面路由 {#control-plane-routes}
 

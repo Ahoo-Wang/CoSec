@@ -18,9 +18,6 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.change.ShadowOptions
@@ -30,6 +27,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -111,9 +109,9 @@ class PipelineStarterRedisTest {
             context
         ).configureClient().responseTimeout(Duration.ofSeconds(10)).build()
 
-    private fun token(context: ApplicationContext, tenant: String, id: String): String =
+    private fun token(context: ApplicationContext, tenant: String, id: String, app: String = "order"): String =
         context.getBean(TokenConverter::class.java)
-            .toToken(SimpleTenantPrincipal(SimplePrincipal(id), SimpleTenant(tenant)))
+            .toToken(TokenSubject(id, app, tenant = tenant))
             .accessToken
 
     private fun publish(context: ApplicationContext, key: SnapshotKey, kind: DocumentKind, owner: String, body: String) {
@@ -169,7 +167,7 @@ class PipelineStarterRedisTest {
             val alice = token(context, "acme", "alice")
             client.status("/orders/1", alice).assert().isEqualTo(200)
             context.getBean(TokenRevoker::class.java).revoke(
-                me.ahoo.cosec.runtime.token.SimpleAccessToken(alice)
+                alice
             )
             val revoked = client.get().uri("/orders/1").header(HttpHeaders.AUTHORIZATION, alice)
                 .exchange().expectStatus().isEqualTo(401).expectBody(String::class.java).returnResult().responseBody!!
@@ -181,11 +179,16 @@ class PipelineStarterRedisTest {
             client.status("/orders/1", bob).assert().isEqualTo(401)
 
             // The control API behind the pipeline: a permitted request, authorized again as its principal.
-            val plato = token(context, TenantId.PLATFORM.value, "plato")
+            val plato = token(context, TenantId.PLATFORM.value, "plato", app = "cosec-control")
             val simulate = """{"request":{"tenant":"acme","principal":"carol","action":"http:GET","resource":"/orders/1"}}"""
             client.status("/cosec/control/v1/simulate", plato, "POST", simulate).assert().isEqualTo(200)
             client.status("/cosec/control/v1/simulate", null, "POST", simulate).assert().isEqualTo(401)
-            client.status("/cosec/control/v1/simulate", token(context, "acme", "carol"), "POST", simulate)
+            client.status(
+                "/cosec/control/v1/simulate",
+                token(context, "acme", "carol", app = "cosec-control"),
+                "POST",
+                simulate
+            )
                 .assert().isEqualTo(403)
         }
     }
@@ -278,7 +281,7 @@ class PipelineStarterRedisTest {
             val alice = token(context, "acme", "alice")
             eventually {
                 // The enforced decision never notices the candidate: the installed tenant grants nothing.
-                client.get().uri("/orders/1").header(HttpHeaders.AUTHORIZATION, alice).header("CoSec-App-Id", "order")
+                client.get().uri("/orders/1").header(HttpHeaders.AUTHORIZATION, alice)
                     .exchange().expectStatus().isEqualTo(403)
                 val summary = runBlocking { windows.close(ShadowState(window, startedAt), Instant.now()) }
                 summary.assert().isNotNull()

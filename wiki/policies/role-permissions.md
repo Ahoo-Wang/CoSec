@@ -70,9 +70,8 @@ The app document of app `order` has the key `app:order`. It holds a [catalog](#p
 
 A request reads the app document of its app when the principal holds at least one role in the request's space, or
 when its tenant's document binds one of the app's permission policies to `Anyone` or to a principal
-([Tenant role bindings](#tenant-role-bindings)). The app is the host's: on a gateway, the route's metadata
-`cosec-app-id`, else `cosec.authorization.scope.app-id`; without one, the app the request declares in
-`CoSec-App-Id`. Who controls these inputs is in the
+([Tenant role bindings](#tenant-role-bindings)). The app is the credential's, which must be the host's when it has one: on a gateway, the route's metadata
+`cosec-app-id`, else `cosec.authorization.scope.app-id` ([Apps](../integration/authentication.md#apps)). Who controls these inputs is in the
 [security model](../guide/security-model.md#trust-boundaries). A request without an app reads no app document, so no
 app role binding applies to it.
 

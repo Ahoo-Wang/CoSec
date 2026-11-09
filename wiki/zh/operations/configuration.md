@@ -101,7 +101,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`，匿名调用方为 `401`）。不设置时由请求声明它的应用（[信任边界](../guide/security-model.md#trust-boundaries)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
+| `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`）。不设置时取凭证的应用（[应用](../integration/authentication.md#apps)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。 |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
@@ -208,6 +208,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。 |
 | `principal-id` | string | 无 | **必填。** key 认证成的主体。 |
 | `tenant-id` | string | 无 | **必填。** 主体所在的租户。 |
+| `app` | string | 无 | key 所属的应用（[应用](../integration/authentication.md#apps)）。省略时不声明应用，配置了应用的宿主会拒绝它。 |
 | `roles` | set | 无 | 上限：key 只拥有其主体角色中的这些（`role`、`role@space`），没有附加的策略或主体绑定；`[]` 只留下 `Anyone` 绑定给予的。设置它或 `uncapped`。 |
 | `uncapped` | boolean | `false` | `true` 表示 key 拥有其主体拥有的一切。`roles` 与 `uncapped: true` 必须恰好设置其一，否则应用无法启动。 |
 | `expires-at` | instant | 无 | 过了这个时刻 key 被拒绝。 |

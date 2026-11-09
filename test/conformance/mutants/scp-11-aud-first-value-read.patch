@@ -1,0 +1,17 @@
+# Rule: SCP-11
+# Mutant: a token with several audiences reads as its first, so one token is accepted for an app that was only one of several
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index 81bd0e40..8b5226f1 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -130,7 +130,7 @@ internal object Jwts {
+         claim.asString()?.let { return it }
+         val values = claim.asList(Any::class.java)
+             ?: throw TokenVerificationException("The token's [aud] claim is neither a string nor an array.")
+-        return values.singleOrNull() as? String
++        return values.firstOrNull() as? String
+             ?: throw TokenVerificationException("The token's [aud] claim is not one string.")
+     }
+ 

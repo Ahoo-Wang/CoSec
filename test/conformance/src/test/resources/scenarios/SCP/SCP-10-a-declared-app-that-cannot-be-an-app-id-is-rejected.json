@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "The client declares a:b without a host app; ':' separates document keys.",
+  "description": "The credential declares a:b without a host app; ':' separates document keys.",
   "documents": {
     "platform": {
       "policies": [
@@ -29,11 +29,12 @@
       ]
     }
   },
-  "request": {
-    "app": "a:b"
-  },
+  "request": {},
   "expect": {
     "decision": "Rejected",
     "reason": "APP_MISMATCH"
+  },
+  "credential": {
+    "app": "a:b"
   }
 }

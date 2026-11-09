@@ -37,7 +37,6 @@ fun request(blocked: Boolean = false): AuthzRequest =
     AuthzRequest(
         subject = Subject(
             id = "user",
-            tenantId = "tenant",
             authenticated = true,
             attributes = emptyMap(),
             principalBindings = true,

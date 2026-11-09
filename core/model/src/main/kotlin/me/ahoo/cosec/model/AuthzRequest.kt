@@ -27,11 +27,6 @@ class AuthzRequest(
 
 class Subject(
     val id: String,
-    /**
-     * The principal's tenant, for what is handed a subject before there is a scope: a stage-A `AttributeProvider` runs
-     * before the scope is resolved. The engine does not read it: its tenant is the resolved scope's.
-     */
-    val tenantId: String,
     val authenticated: Boolean,
     val attributes: Map<String, Any>,
     /**

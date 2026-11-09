@@ -29,20 +29,6 @@ class ApiVariantTest {
         val JACKSON = Regex("""tools\.jackson\.""")
 
         /**
-         * Modules that still hide a CoSec module their public classes extend or implement: (module, module it
-         * hides) with the reason. Found by the rule below when it was added (#1261); each is the same one-line fix
-         * (`implementation` to `api`) and each entry leaves with its fix: `every gap is still open` fails otherwise.
-         */
-        val GAPS: Map<Pair<String, String>, String> = listOf(
-            "cocache" to "runtime",
-            "cocache" to "control",
-            "kafka" to "control",
-            "ip2region" to "spi",
-            "micrometer" to "runtime",
-            "opentelemetry" to "runtime",
-        ).associateWith { "implements a port of that module without exporting it" }
-
-        /**
          * The library modules, but the starter (its optional technologies are `compileOnly`, so its classes do not load
          * here) and `migrate` (a command line, whose contract is not an API).
          */
@@ -75,21 +61,10 @@ class ApiVariantTest {
             val exported = facts(project, "project")
             supertypes(javaClass)
                 .mapNotNull { supertype -> SourceRulesTest.projectOf(supertype)?.let { it to supertype.name } }
-                .filter { (other, _) -> other != project && other !in exported && (project to other) !in GAPS }
+                .filter { (other, _) -> other != project && other !in exported }
                 .map { (other, supertype) -> "$project: ${javaClass.name} extends $supertype of $other" }
         }
         violations.assert().isEmpty()
-    }
-
-    @Test
-    fun `every gap is still open`() {
-        val closed = GAPS.keys.filter { (project, other) ->
-            other in facts(project, "project") ||
-                PublicSignatures.classes { it == project }.none { javaClass ->
-                    supertypes(javaClass).any { SourceRulesTest.projectOf(it) == other }
-                }
-        }
-        closed.assert().isEmpty()
     }
 
     /** The core and the contracts carry no Jackson (`JacksonSignatureTest`); a module that does must export it. */

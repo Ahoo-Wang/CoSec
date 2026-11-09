@@ -20,7 +20,7 @@ package me.ahoo.cosec.model
 @JvmInline
 value class TenantId(val value: String) {
     companion object {
-        /** Same as `Tenant.PLATFORM_TENANT_ID`. */
+        /** The platform tenant. */
         val PLATFORM = TenantId("(platform)")
 
         /** Same as `CoSec.DEFAULT`: the tenant of anonymous principals. */
@@ -70,6 +70,15 @@ value class BindingId(val value: String)
  * answer, a control request), so no two ids ever share a stored key.
  */
 object Identifiers {
+    /**
+     * Ids beginning with it are CoSec's: the tenants `(0)` and `(platform)`, the anonymous principal `(0)`, the space
+     * `(default)`. A principal id with it is refused in a token (`IDN-12`), a space id in a request (`SCP-9`).
+     */
+    const val RESERVED_PREFIX = "("
+
+    /** Whether [id] is reserved for CoSec ([RESERVED_PREFIX]). */
+    fun isReserved(id: String): Boolean = id.startsWith(RESERVED_PREFIX)
+
     /** Whether [text] holds no unpaired UTF-16 surrogate: every high surrogate is followed by a low one, and only so. */
     fun isWellFormed(text: CharSequence): Boolean {
         var index = 0

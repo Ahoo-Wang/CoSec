@@ -13,25 +13,17 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
+import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.interfaces.DecodedJWT
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.PolicyCapable
-import me.ahoo.cosec.api.principal.RoleCapable
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
-import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.VerifiedToken
 
 /**
- * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its
- * signature, and reading the claims of a token. Internal: only the verifier, after it verified the signature, may turn
- * a token into a principal (`PIP-11`, `UnverifiedTokenTest`).
+ * What [JwtTokenVerifier] needs to read a token: decoding, which reads a token without checking its signature, and
+ * reading the claims of a token. Internal: only the verifier, after it verified the signature, may read what a token
+ * says (`PIP-11`, `UnverifiedTokenTest`).
  */
 internal object Jwts {
     const val TOKEN_PREFIX = "Bearer "
@@ -53,36 +45,32 @@ internal object Jwts {
     }
 
     /**
-     * [decodedAccessToken] as a principal; the caller has verified its signature. A delegation token (an `act` claim)
-     * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+     * What [decodedAccessToken] says; the caller has verified its signature. A delegation token (an `act` claim) never
+     * says anything: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+     * A token with no `sub` or `jti` is invalid.
      */
-    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
+    fun toVerifiedToken(decodedAccessToken: DecodedJWT): VerifiedToken {
         if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
             throw DelegationUnsupportedException(
                 "The token delegates (it carries an `act` claim), which CoSec does not support."
             )
         }
-        val accessTokenId = decodedAccessToken.id
-        val principalId = decodedAccessToken.subject
-        val policies = strings(decodedAccessToken, PolicyCapable.POLICY_KEY)
-        val roles = strings(decodedAccessToken, RoleCapable.ROLE_KEY)
-        val attributes = attributesOf(decodedAccessToken)
-        val principal =
-            withMembershipMarker(SimplePrincipal(principalId, policies, roles, attributes), decodedAccessToken)
-        val tenantId = tenantOf(decodedAccessToken)
-        val tokenPrincipal = SimpleTokenPrincipal(
-            accessTokenId,
-            principal,
-            decodedAccessToken.issuedAtAsInstant,
-            decodedAccessToken.expiresAtAsInstant,
+        return VerifiedToken(
+            id = required(decodedAccessToken.id, "id"),
+            principal = required(decodedAccessToken.subject, "subject"),
+            tenant = tenantOf(decodedAccessToken),
+            app = appOf(decodedAccessToken),
+            roles = strings(decodedAccessToken, MembershipClaims.ROLES_KEY),
+            policies = strings(decodedAccessToken, MembershipClaims.POLICIES_KEY),
+            attributes = attributesOf(decodedAccessToken),
+            issuedAt = decodedAccessToken.issuedAtAsInstant,
+            expiresAt = decodedAccessToken.expiresAtAsInstant,
+            membershipMarker = membershipMarkerOf(decodedAccessToken),
         )
-        if (tenantId == null) {
-            @Suppress("UNCHECKED_CAST")
-            return tokenPrincipal as T
-        }
-        @Suppress("UNCHECKED_CAST")
-        return SimpleTokenTenantPrincipal(delegate = tokenPrincipal, tenant = SimpleTenant(tenantId)) as T
     }
+
+    private fun required(claim: String?, name: String): String =
+        claim ?: throw TokenVerificationException("The token has no $name.")
 
     /**
      * The strings of the array claim [name], empty when the token has none. A claim that is there but is not an array of
@@ -103,7 +91,7 @@ internal object Jwts {
 
     /** The token's `attributes` claim, empty when it has none; one that is not an object makes the token invalid (401). */
     private fun attributesOf(decodedAccessToken: DecodedJWT): Map<String, Any> {
-        val name = CoSecPrincipal::attributes.name
+        val name = MembershipClaims.ATTRIBUTES_KEY
         val claim = decodedAccessToken.getClaim(name)
         if (claim.isMissing) {
             return emptyMap()
@@ -117,31 +105,45 @@ internal object Jwts {
      * default tenant `(0)` with the token's roles, and out of reach of a revocation of its real tenant.
      */
     private fun tenantOf(decodedAccessToken: DecodedJWT): String? {
-        val claim = decodedAccessToken.getClaim(TENANT_ID_KEY)
+        val claim = decodedAccessToken.getClaim(MembershipClaims.TENANT_KEY)
         if (claim.isMissing) {
             return null
         }
-        val tenantId = claim.asString() ?: throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is not a string.")
+        val tenantId = claim.asString() ?: throw TokenVerificationException("The token's [${MembershipClaims.TENANT_KEY}] claim is not a string.")
         if (tenantId.isEmpty()) {
-            throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is empty.")
+            throw TokenVerificationException("The token's [${MembershipClaims.TENANT_KEY}] claim is empty.")
         }
         return tenantId
     }
 
     /**
-     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so a token
-     * without it yields the principal itself. Any value is kept, including one that is not a string, for
-     * the pipeline to refuse (`MembershipSource.Unusable` in `cosec-runtime`).
+     * The app the token declares (RFC 0012 §3.5), null when it has no `aud` claim. One value, as a string or as an array
+     * of one string, the two forms RFC 7519 gives it. Anything else (several values, none, `null`, a value that is not a
+     * string) makes the token invalid: read as no app, it would pass where an app is not required, and
+     * [DecodedJWT.getAudience] does read a number as none.
      */
-    private fun withMembershipMarker(principal: CoSecPrincipal, decodedAccessToken: DecodedJWT): CoSecPrincipal {
-        val markerClaim = decodedAccessToken.getClaim(MembershipClaims.MARKER_KEY)
-        if (markerClaim.isMissing) {
-            return principal
+    private fun appOf(decodedAccessToken: DecodedJWT): String? {
+        val claim = decodedAccessToken.getClaim(RegisteredClaims.AUDIENCE)
+        if (claim.isMissing) {
+            return null
         }
-        val marker = when {
-            markerClaim.isNull -> "null"
-            else -> markerClaim.asString() ?: markerClaim.toString()
+        claim.asString()?.let { return it }
+        val values = claim.asList(Any::class.java)
+            ?: throw TokenVerificationException("The token's [aud] claim is neither a string nor an array.")
+        return values.singleOrNull() as? String
+            ?: throw TokenVerificationException("The token's [aud] claim is not one string.")
+    }
+
+    /**
+     * The value of [MembershipClaims.MARKER_KEY], null when the token has none. Any value is kept, including one that is
+     * not a string, for the pipeline to refuse (`MembershipSource.Unusable` in `cosec-spi`).
+     */
+    private fun membershipMarkerOf(decodedAccessToken: DecodedJWT): String? {
+        val claim = decodedAccessToken.getClaim(MembershipClaims.MARKER_KEY)
+        return when {
+            claim.isMissing -> null
+            claim.isNull -> "null"
+            else -> claim.asString() ?: claim.toString()
         }
-        return MembershipMarkedPrincipal(principal, marker)
     }
 }

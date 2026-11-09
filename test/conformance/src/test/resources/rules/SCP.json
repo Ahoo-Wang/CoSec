@@ -13,7 +13,7 @@
     {
       "id": "SCP-2",
       "source": "RFC 0004 §4.6 (RC1-6)",
-      "statement": "When the host has an app, a different declared app is Rejected(APP_MISMATCH), and without a declaration the host's app applies (C4); only without a host app does the declared app apply. On a gateway the host app of a route's requests is the route's metadata cosec-app-id, ahead of cosec.authorization.scope.app-id; a cosec-app-id that is not a string (a number, a boolean, a list or a map is not read as its text) or cannot be an app id (SCP-7) fails the request as an unmodelled error (500), never leaves it without a host app.",
+      "statement": "A host with an app serves only credentials that declare that app: another one, or none, is Rejected(APP_MISMATCH) (SCP-11); without a host app the credential's app applies. On a gateway the host app of a route's requests is the route's metadata cosec-app-id, ahead of cosec.authorization.scope.app-id; a cosec-app-id that is not a string (a number, a boolean, a list or a map is not read as its text) or cannot be an app id (SCP-10) fails the request as an unmodelled error (500), never leaves it without a host app.",
       "level": "engine",
       "properties": [
         "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential"
@@ -39,7 +39,7 @@
     {
       "id": "SCP-4",
       "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1 (RC1-16)",
-      "statement": "CoSec-App-Id, CoSec-Space-Id and CoSec-Device-Id are read from headers only, never from the query string. When the values of one of them differ, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
+      "statement": "CoSec-Space-Id and CoSec-Device-Id are read from headers only, never from the query string. When the values of one of them differ, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
       "level": "pipeline",
       "guards": [
         "runtime:CoSecParametersTest#differentHeaderValuesAreAmbiguous",
@@ -107,7 +107,7 @@
     {
       "id": "SCP-10",
       "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26; RC1-15), split from SCP-7 by batch R4 (2026-11-08)",
-      "statement": "A declared app that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app. An app document's key (SnapshotKey.App) takes only such an id, so the control plane takes no app the data plane could never read: analyze refuses one with 400, and a candidate document with a binding in such an app, wherever it is, is a V2 finding (400) at the binding's app. A stored record that names such an app (a change of one, or a head it was checked with; an instance status entry; a back-reference set's member; an app list entry; a head holding a binding in one) is a format error, and whatever reads it fails closed: nothing skips the record. Reading such a change is 503, a publish or a repair over such a head or set fails without moving the head, a maintenance pass stops without reclaiming, and the grant analysis takes every app as unknown.",
+      "statement": "An app a credential declares that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app. An app document's key (SnapshotKey.App) takes only such an id, so the control plane takes no app the data plane could never read: analyze refuses one with 400, and a candidate document with a binding in such an app, wherever it is, is a V2 finding (400) at the binding's app. A stored record that names such an app (a change of one, or a head it was checked with; an instance status entry; a back-reference set's member; an app list entry; a head holding a binding in one) is a format error, and whatever reads it fails closed: nothing skips the record. Reading such a change is 503, a publish or a repair over such a head or set fails without moving the head, a maintenance pass stops without reclaiming, and the grant analysis takes every app as unknown.",
       "level": "engine",
       "guards": [
         "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
@@ -125,6 +125,26 @@
         "runtime:ShadowSupportTest#candidates, reports and statuses read back as they were written"
       ],
       "pending": null
+    },
+    {
+      "id": "SCP-11",
+      "source": "RFC 0012 §3.5",
+      "statement": "Tokens and API keys declare the app they belong to (aud, one value). A host with an app serves only credentials declaring that app: another one, or none, is Rejected(APP_MISMATCH). Without a host app the credential's app applies, and a credential declaring none is in no app and reads no app document. An anonymous request has no credential, so its app is the host's. A forwarded gateway identity is the credential behind a gateway and is checked the same way. A request cannot declare an app: CoSec-App-Id is not read. A token whose aud is not one string that can be an app id is invalid, on every path that verifies one.",
+      "level": "engine",
+      "pending": null,
+      "guards": [
+        "model:ScopeResolverTest#a credential is served only by a host of its app",
+        "model:ScopeResolverTest#an anonymous subject is in the host's app and no other",
+        "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential",
+        "jwt:JwtTokenVerifierTest#audIsOneAppOrTheTokenIsInvalid",
+        "jwt:JwtTokenConverterTest#theAppIsIssuedAsTheAudience",
+        "runtime:IdentityGateTest#an identity that names no app is refused by a host with one",
+        "runtime:AuthorizationCheckerTest#decidesInTheDefaultSpaceOfAnotherApp",
+        "cocache:StoredFormatTest#a stored api key has exactly its fields",
+        "login:AbstractSwitchTenantAuthenticationTest#the new token keeps the app of the previous one",
+        "spi:VerifiedTokenTest#anAppThatCannotBeAnAppIdIsRefused",
+        "runtime:ApiKeyAuthenticatorTest#theAppOfAKeyIsTheAppOfItsPrincipal"
+      ]
     }
   ]
 }

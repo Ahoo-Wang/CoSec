@@ -21,6 +21,8 @@ import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.shadow.Candidate
@@ -86,12 +88,12 @@ class ShadowAppDocumentTest {
     private fun evaluate(shadow: ShadowListener, viewsOf: SnapshotViews = views): Int {
         val registered = DecisionListeners(listOf(shadow)).also { opened += it }
         val pipeline = PipelineFixtures.pipeline(
-            authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated()),
+            authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated(app = "order")),
             engine = CoSecFlatEngine,
             views = viewsOf,
         ) { it.copy(listeners = registered) }
         return runBlocking {
-            pipeline.evaluate(PipelineFixtures.facts(headers = mapOf("CoSec-App-Id" to listOf("order")))).status
+            pipeline.evaluate(PipelineFixtures.facts(host = HostScope(AppId("order")))).status
         }
     }
 

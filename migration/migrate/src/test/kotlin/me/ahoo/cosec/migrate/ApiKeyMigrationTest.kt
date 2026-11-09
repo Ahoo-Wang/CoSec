@@ -31,7 +31,6 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -188,12 +187,12 @@ class ApiKeyMigrationTest {
     ): String {
         val resolution = ScopeResolver.resolve(
             ScopeSubject(tenant, true, memberships),
-            DeclaredScope("", space),
+            space,
             HostScope(null)
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return "scope-rejected"
         val subject =
-            Subject(principal, tenant.value, true, emptyMap(), principalBindings, false)
+            Subject(principal, true, emptyMap(), principalBindings, false)
         val request = AuthzRequest(
             subject,
             action,
@@ -327,6 +326,7 @@ class ApiKeyMigrationTest {
                             it.key.id,
                             it.key.principalId,
                             it.key.tenantId,
+                            null,
                             null,
                             null,
                             true

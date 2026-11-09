@@ -106,6 +106,7 @@ class EngineAuthority(
             attributes,
             // A credential with an id, as an approval records it (review item 4).
             Identity.Credential(Identity.Method("test"), "token-$id", null),
+            app = PipelineControlAuthorizer.CONTROL_APP,
         )
     )
 

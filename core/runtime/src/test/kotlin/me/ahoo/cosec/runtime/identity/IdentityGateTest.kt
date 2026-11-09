@@ -14,9 +14,9 @@
 package me.ahoo.cosec.runtime.identity
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
-import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -45,7 +45,9 @@ class IdentityGateTest {
         claims = mapOf("name" to "Alice", "level" to 3L),
     )
 
-    private fun evaluate(vararg headers: String): Outcome = runBlocking {
+    private fun evaluate(vararg headers: String): Outcome = evaluateOn(HostScope(null), *headers)
+
+    private fun evaluateOn(host: HostScope, vararg headers: String): Outcome = runBlocking {
         gate.evaluate(
             HttpFacts(
                 method = "GET",
@@ -56,9 +58,19 @@ class IdentityGateTest {
                 ),
                 cookies = Cookies.EMPTY,
                 remoteAddress = "10.0.0.1",
-                host = HostScope(null),
+                host = host,
             )
         )
+    }
+
+    /** `SCP-11`: the forwarded identity is the credential here, and a host with an app serves only its own. */
+    @Test
+    fun `an identity that names no app is refused by a host with one`() {
+        val order = HostScope(AppId("order"))
+        val forwarded = identity.copy(app = "order")
+        evaluateOn(order, IdentityCodec.encode(forwarded)).proceed.assert().isTrue()
+        evaluateOn(order, IdentityCodec.encode(identity.copy(app = "billing"))).problem().assert().startsWith("400")
+        evaluateOn(order, IdentityCodec.encode(identity.copy(app = ""))).problem().assert().startsWith("400")
     }
 
     private fun Outcome.problem(): String = "$status ${problem?.type?.slug}"
@@ -69,14 +81,13 @@ class IdentityGateTest {
         outcome.proceed.assert().isTrue()
         val context = outcome.security!!.securityContext
         context.principal.id.assert().isEqualTo("alice")
-        context.tenant.tenantId.assert().isEqualTo("acme")
-        context.scope!!.appId.assert().isEqualTo("order")
-        context.scope!!.spaceId.assert().isEqualTo("team-a")
-        context.scope!!.roles.assert().containsExactly("clerk")
+        context.tenantId.assert().isEqualTo("acme")
+        context.scope.appId.assert().isEqualTo("order")
+        context.scope.spaceId.assert().isEqualTo("team-a")
+        context.scope.roles.assert().containsExactly("clerk")
         context.principal.attributes.assert().isEqualTo(identity.claims)
-        context.principal.policies.assert().isEmpty()
-        context.attributes[RequestSecurity.GATEWAY_REQUEST_ID].assert().isEqualTo("r1")
-        context.attributes[RequestSecurity.CREDENTIAL_ID].assert().isEqualTo("t1")
+        context.forwardedIdentity!!.gatewayRequestId.assert().isEqualTo("r1")
+        context.forwardedIdentity!!.credentialId.assert().isEqualTo("t1")
         outcome.security!!.identity.assert().isEqualTo(identity)
     }
 
@@ -118,7 +129,7 @@ class IdentityGateTest {
         val outcome = evaluate()
         outcome.proceed.assert().isTrue()
         outcome.security!!.principal.assert().isNull()
-        outcome.security!!.securityContext.principal.anonymous.assert().isTrue()
+        outcome.security!!.securityContext.principal.authenticated.assert().isFalse()
     }
 
     @Test

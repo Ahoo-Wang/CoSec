@@ -21,6 +21,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 | `policies` | 附加到主体的策略 id。为空时省略。 |
 | `attributes` | 任意的主体属性；条件通过 `subject.attributes.<name>` 读取。`apiKeyId` 由 CoSec 为 [API key](#api-keys) 设置，是保留名：带它的令牌按 `token-invalid` 拒绝，`JwtTokenConverter` 也不会签发这样的令牌。 |
 | `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。值为空或不是字符串时令牌无效。 |
+| `aud` | 令牌所属的应用（[应用](#apps)）。只能有一个值，否则令牌无效。签发时不属于任何应用则省略。 |
 | `cosec.membership` | 成员关系来自 `MembershipProvider` 时，以 `"provider"` 代替 `roles` 和 `policies`（[成员关系](#memberships)）。其他情况省略。 |
 | `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。`iat` 决定[吊销主体](#revoking-every-token-of-a-principal)时拒绝哪些令牌。 |
 
@@ -29,6 +30,8 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 **被拒绝的令牌不是错误。** 过期、签名错误或已吊销的令牌会让调用方成为匿名主体，由策略决定匿名调用方能做什么：公开路径照常可用。如果请求被拒绝，响应为 `401`，problem 类型为 `token-expired`、`token-revoked` 或 `token-invalid`，而不是 `unauthorized`（[响应与状态码](./web.md#responses-and-status-codes)）。
 
 **id 是文本。** `sub`、`tenantId`、`jti`、`roles` 或 `policies` 中带落单 UTF-16 代理项（JSON 把它写成 `"beta\uD800"` 这样的转义）的令牌为 `token-invalid`，在读取任何吊销之前就被拒绝（`IDN-10`）：Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的成员关系、吊销与文档。`JwtTokenConverter` 拒绝为 id、租户、角色、策略或属性中带这种代理项的主体签发令牌，因为 JWT 库会写成 `?`，签出另一个主体的令牌。代理对（例如 emoji）是普通文本。
+
+**以 `(` 开头的 id 属于 CoSec。** `sub` 以 `(` 开头的令牌（租户 `(0)`、`(platform)` 和匿名主体 `(0)` 都是这种写法）为 `token-invalid`（`IDN-12`），`JwtTokenConverter` 也拒绝签发。没有 `sub` 或 `jti` 的令牌同样无效。
 
 **委托令牌会被拒绝。** 带 `act` 声明的令牌（[RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) 委托令牌：`sub` 是被代理方，`act` 是执行方）即使签名和有效期都有效，也按 `token-invalid` 拒绝（`IDN-4`）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时（例如匿名调用方可以访问的路径），审计记录 `ALLOW`，原因只出现在决策事件的 `subject.rejected` 中。如果按 `sub` 读取，这种令牌会让执行方获得主体能做的一切，而 8.0 不评估委托。CoSec 自己从不签发这种令牌。`may_act` 声明只说明谁可以代理主体，因此被忽略。
 
@@ -96,7 +99,7 @@ CoSec 把 `roles` 和 `policies` 声明读作主体的**成员关系**：它在�
 
 CoSec 不提供登录端点。由你校验凭证，CoSec 把主体转换成令牌：
 
-1. 为你的凭证类型 `C` 实现 `Authentication<C, CoSecPrincipal>`，并声明为 Bean。starter 会按支持的凭证类型注册每个 `Authentication` Bean。
+1. 为你的凭证类型 `C` 实现 `Authentication<C>`，并声明为 Bean。它返回 `TokenSubject`（`me.ahoo.cosec.login.token`），即令牌要写入的内容。starter 会按支持的凭证类型注册每个 `Authentication` Bean。
 2. 在你的端点中调用 `TokenCompositeAuthentication.authenticateAsToken(credentials)`。它根据凭证类型（或其父类型）选择 `Authentication`，返回包含 `accessToken` 和 `refreshToken` 的 `Mono<CompositeToken>`。
 
 ```kotlin
@@ -104,12 +107,12 @@ data class PasswordCredentials(val username: String, val password: String) : Cre
 
 @Component
 class PasswordAuthentication(private val users: UserService) :
-    Authentication<PasswordCredentials, CoSecPrincipal> {
+    Authentication<PasswordCredentials> {
     override val supportCredentials = PasswordCredentials::class.java
 
-    override fun authenticate(credentials: PasswordCredentials): Mono<CoSecPrincipal> =
+    override fun authenticate(credentials: PasswordCredentials): Mono<TokenSubject> =
         users.verify(credentials.username, credentials.password)
-            .map { user -> SimplePrincipal(id = user.id, roles = user.roles) }
+            .map { user -> TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order")) }
 }
 
 @RestController
@@ -227,9 +230,25 @@ cosec:
 
 ## 租户 {#tenants}
 
-主体可以在某个租户内行事。由你的 `Authentication` 返回的主体决定：`TenantPrincipal`（例如 `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`）会把它的租户写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空或不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为租户 id 为空的主体签发令牌。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
+主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空或不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为租户 id 为空的主体签发令牌。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
-要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previousPrincipal)`：检查用户是否属于目标租户，并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。
+要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户，并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。
+
+## 应用 {#apps}
+
+令牌和 API key 属于一个应用：令牌的 `aud`，key 的 `app`（`SCP-11`，RFC 0012 §3.5）。**客户端不声明请求属于哪个应用。** `ScopeResolver` 比较凭证声明的应用和宿主服务的应用（`cosec.authorization.scope.app-id`，网关上是路由的 `cosec-app-id`）：
+
+| 宿主的应用 | 凭证的应用 | 结果 |
+|---|---|---|
+| `order` | `order` | 请求属于 `order` |
+| `order` | `billing` | 拒绝（`403` `scope-rejected`） |
+| `order` | 未声明 | 拒绝（`403` `scope-rejected`） |
+| 未配置 | `order` | 请求属于 `order` |
+| 未配置 | 未声明 | 没有应用，不读取应用文档 |
+
+匿名请求没有凭证，它的应用取宿主的应用。所以发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名；一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
+
+由签发令牌的一方说明它属于哪个应用：`TokenSubject.app` 没有默认值。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
 
 **平台租户 `(platform)` 享有特权**：只有它的主体能通过 break-glass 获得 `cosec:root`，也只有它的主体能在控制面中操作平台文档和应用文档（[break-glass](../guide/security-model.md#break-glass)）。请只从用户无法影响的来源签发 `(platform)` 的令牌。
 
@@ -239,7 +258,7 @@ cosec:
 
 1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
-3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
+3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 令牌属于 `cosec.authorization.scope.app-id`（用户登录的宿主的应用，未配置则不属于任何应用），并创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
 这两步都会阻塞所在线程。`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调中的 `authenticateAsToken` 通过 JustAuth 的阻塞 HTTP 调用提供方。请在事件循环之外调用它们：在 WebFlux 中使用 `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` 和回调的 `Mono`，并分别加上 `.subscribeOn(Schedulers.boundedElastic())`。
 

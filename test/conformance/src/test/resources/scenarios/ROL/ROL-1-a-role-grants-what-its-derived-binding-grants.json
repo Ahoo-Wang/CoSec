@@ -66,10 +66,10 @@
   "credential": {
     "roles": [
       "clerk"
-    ]
+    ],
+    "app": "wms"
   },
   "request": {
-    "app": "wms",
     "action": "wms:read"
   },
   "expect": {

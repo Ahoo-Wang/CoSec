@@ -90,7 +90,7 @@ open class PipelineBenchmark {
         val listeners = if (scenario == "listener") DecisionListeners(listOf(NoOpListener)) else DecisionListeners.NONE
         val key = ApiKeys.generate()
         slice = if (scenario == "apikey") {
-            val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", setOf("viewer", "admin")))
+            val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", "app", setOf("viewer", "admin")))
             // The token's memberships, now the principal's: the cap keeps both roles and drops the attachments.
             val loader = MembershipLoader { _, _ ->
                 MembershipAnswer.Known(Memberships(

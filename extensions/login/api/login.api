@@ -43,7 +43,7 @@ public abstract class me/ahoo/cosec/login/token/AbstractSwitchTenantAuthenticati
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
 	public final fun authenticate (Lme/ahoo/cosec/login/token/SwitchTenantCredentials;)Lreactor/core/publisher/Mono;
 	public fun getSupportCredentials ()Ljava/lang/Class;
-	protected abstract fun switchTenant (Ljava/lang/String;Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lreactor/core/publisher/Mono;
+	protected abstract fun switchTenant (Ljava/lang/String;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
 }
 
 public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredentials : me/ahoo/cosec/api/token/CompositeToken, me/ahoo/cosec/login/Credentials {
@@ -60,7 +60,7 @@ public final class me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication : 
 }
 
 public abstract interface class me/ahoo/cosec/login/token/SwitchTenantCredentials : me/ahoo/cosec/login/Credentials {
-	public abstract fun getPrincipal ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
+	public abstract fun getContext ()Lme/ahoo/cosec/api/context/SecurityContext;
 	public abstract fun getTargetTenantId ()Ljava/lang/String;
 }
 
@@ -89,7 +89,36 @@ public final class me/ahoo/cosec/login/token/TokenCompositeAuthentication : me/a
 }
 
 public abstract interface class me/ahoo/cosec/login/token/TokenConverter {
-	public abstract fun toToken (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Lme/ahoo/cosec/api/token/CompositeToken;
-	public abstract fun toToken (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Ljava/time/Duration;Ljava/time/Duration;)Lme/ahoo/cosec/api/token/CompositeToken;
+	public abstract fun toToken (Lme/ahoo/cosec/login/token/TokenSubject;)Lme/ahoo/cosec/api/token/CompositeToken;
+	public abstract fun toToken (Lme/ahoo/cosec/login/token/TokenSubject;Ljava/time/Duration;Ljava/time/Duration;)Lme/ahoo/cosec/api/token/CompositeToken;
+}
+
+public final class me/ahoo/cosec/login/token/TokenSubject {
+	public static final field Companion Lme/ahoo/cosec/login/token/TokenSubject$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/Set;
+	public final fun component5 ()Ljava/util/Set;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;)Lme/ahoo/cosec/login/token/TokenSubject;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/login/token/TokenSubject;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/TokenSubject;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getApp ()Ljava/lang/String;
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMembershipMarker ()Ljava/lang/String;
+	public final fun getPolicies ()Ljava/util/Set;
+	public final fun getRoles ()Ljava/util/Set;
+	public final fun getTenant ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/login/token/TokenSubject$Companion {
+	public final fun of (Lme/ahoo/cosec/spi/token/VerifiedToken;)Lme/ahoo/cosec/login/token/TokenSubject;
 }
 

@@ -1,0 +1,100 @@
+{
+  "rules": [
+    "SCP-11"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "RFC 0012 §3.5: the host is order and the key belongs to order: it is served, and its role decides.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          },
+          {
+            "id": "no-export",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET",
+                "resource": "http:path:/orders/export"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "billing",
+            "subject": {
+              "role": "billing"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "p:svc",
+            "subject": {
+              "principal": "svc"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "no-export"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "X-API-Key": "k-svc"
+    },
+    "hostApp": "order"
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-svc",
+        "id": "svc-key",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "roles": [
+          "billing"
+        ],
+        "app": "order"
+      }
+    ]
+  },
+  "membershipProvider": {
+    "principals": [
+      {
+        "tenant": "acme",
+        "id": "svc",
+        "roles": {
+          "": [
+            "billing"
+          ]
+        },
+        "attachments": [
+          "no-export"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

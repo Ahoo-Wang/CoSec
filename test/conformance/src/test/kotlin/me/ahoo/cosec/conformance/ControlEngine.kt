@@ -133,6 +133,7 @@ class ControlEngine(
             issuedAt = issuedAt,
             // A credential named api-key is the runner's API key: so the API key authenticator would say.
             apiKeyCredential = credential?.method == Identity.Method.API_KEY,
+            app = PipelineControlAuthorizer.CONTROL_APP,
         )
         val host = Pipeline(
             PipelineComponents(

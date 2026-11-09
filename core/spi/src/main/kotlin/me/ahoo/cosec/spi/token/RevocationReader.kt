@@ -14,8 +14,6 @@
 package me.ahoo.cosec.spi.token
 
 import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.api.findInDelegationChain
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Duration
@@ -61,10 +59,6 @@ object SubjectRevocation {
      * while a principal who signs in again just after a revocation waits at most five seconds.
      */
     val DEFAULT_SKEW: Duration = Duration.ofSeconds(5)
-
-    /** Whether [token] is revoked by a revocation of its principal's tokens issued before [revokedBefore]. */
-    fun revokes(revokedBefore: Instant?, token: TokenPrincipal, skew: Duration): Boolean =
-        revokes(revokedBefore, token.findInDelegationChain<IssuedAtCapable>()?.issuedAt, skew)
 
     /**
      * Whether a token issued at [issuedAt] is revoked by a revocation of its principal's tokens issued before

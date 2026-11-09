@@ -10,17 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.api.token
 
-/**
- * Token that contains both access and refresh tokens.
- *
- * This is a convenience interface that combines [AccessToken] and [RefreshToken]
- * for cases where both are needed together.
- *
- * @see AccessToken
- * @see RefreshToken
- */
-interface CompositeToken :
-    AccessToken,
-    RefreshToken
+/** The tokens of a login: the [accessToken] a request presents and the [refreshToken] that renews it. */
+interface CompositeToken {
+    val accessToken: String
+    val refreshToken: String
+}

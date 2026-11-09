@@ -51,10 +51,10 @@
   "credential": {
     "roles": [
       "admin"
-    ]
+    ],
+    "app": "wms"
   },
   "request": {
-    "app": "wms",
     "action": "wms:edit"
   },
   "expect": {

@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -96,13 +95,13 @@ class SnapshotConsistencyPropertyTest {
 
     private val scope: Scope = run {
         val subject = ScopeSubject(TENANT, true, MEMBERSHIPS)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), HostScope(null))
+        val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
         (resolution as ScopeResolution.Resolved).scope
     }
 
     private val request = FlatRequest(
         AuthzRequest(
-            subject = Subject("user", TENANT.value, true, emptyMap(), true, true),
+            subject = Subject("user", true, emptyMap(), true, true),
             action = Action("http", "GET"),
             resource = Resource("http", "/x", emptyMap()),
             environment = Environment("127.0.0.1", "request", "", false),

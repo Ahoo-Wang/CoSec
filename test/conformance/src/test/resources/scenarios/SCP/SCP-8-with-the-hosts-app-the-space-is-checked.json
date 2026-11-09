@@ -4,15 +4,15 @@
   ],
   "polarity": "negative",
   "level": "engine",
-  "description": "The declared app is the host's, so the space decides.",
+  "description": "The credential's app is the host's, so the space decides.",
   "credential": {
     "roles": [
       "editor@team-a"
-    ]
+    ],
+    "app": "order-service"
   },
   "request": {
     "hostApp": "order-service",
-    "app": "order-service",
     "space": "team-z"
   },
   "expect": {

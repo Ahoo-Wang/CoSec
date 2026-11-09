@@ -21,7 +21,6 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
-import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -56,6 +55,7 @@ class IdentityForwardingTest {
             breakGlass = true,
             issuedAt = null,
             apiKeyCredential = false,
+            app = null,
         ),
         "token",
     )
@@ -122,14 +122,13 @@ class IdentityForwardingTest {
             )
         }.security!!.securityContext
         behind.principal.id.assert().isEqualTo(atGateway.principal.id)
-        behind.tenant.tenantId.assert().isEqualTo(atGateway.tenant.tenantId)
-        behind.scope!!.appId.assert().isEqualTo(atGateway.scope!!.appId)
-        behind.scope!!.spaceId.assert().isEqualTo(atGateway.scope!!.spaceId)
-        behind.scope!!.roles.assert().isEqualTo(atGateway.scope!!.roles)
+        behind.tenantId.assert().isEqualTo(atGateway.tenantId)
+        behind.scope.appId.assert().isEqualTo(atGateway.scope.appId)
+        behind.scope.spaceId.assert().isEqualTo(atGateway.scope.spaceId)
+        behind.scope.roles.assert().isEqualTo(atGateway.scope.roles)
         behind.principal.attributes.assert().isEqualTo(mapOf("name" to "Alice"))
-        behind.principal.policies.assert().isEmpty()
-        behind.attributes[RequestSecurity.GATEWAY_REQUEST_ID].assert().isEqualTo(outcome.requestId)
-        behind.attributes[RequestSecurity.CREDENTIAL_ID].assert().isEqualTo("t1")
+        behind.forwardedIdentity!!.gatewayRequestId.assert().isEqualTo(outcome.requestId)
+        behind.forwardedIdentity!!.credentialId.assert().isEqualTo("t1")
     }
 
     @Test
@@ -173,6 +172,7 @@ class IdentityForwardingTest {
                 breakGlass = true,
                 issuedAt = null,
                 apiKeyCredential = false,
+                app = null,
             ),
             "custom",
         )
@@ -201,6 +201,7 @@ class IdentityForwardingTest {
                 breakGlass = true,
                 issuedAt = null,
                 apiKeyCredential = false,
+                app = null,
             ),
             "apikey",
         )

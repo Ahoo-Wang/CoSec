@@ -14,12 +14,7 @@
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.test.runTest
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -34,7 +29,6 @@ import me.ahoo.cosec.runtime.PipelineFixtures.viewFor
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -43,6 +37,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
@@ -56,11 +51,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class UnpairedSurrogatePipelineTest {
     /** Verifies every token as [principal]. */
-    private class Verifier(private val principal: TokenPrincipal) : TokenVerifier {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T = principal as T
+    private class Verifier(private val token: () -> VerifiedToken) : TokenVerifier {
+        override fun verify(accessToken: String): VerifiedToken = token()
 
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+        override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }
 
     /** Every document installed and empty; records the views asked for. */
@@ -75,14 +69,14 @@ class UnpairedSurrogatePipelineTest {
     private val withToken = facts(headers = mapOf("Authorization" to listOf("Bearer token")))
 
     private fun token(tenant: String, principal: String = "alice") =
-        SimpleTokenPrincipal("jti", SimpleTenantPrincipal(SimplePrincipal(principal), SimpleTenant(tenant)))
+        VerifiedToken("jti", principal, tenant, null)
 
     @Test
     fun `a token of tenant beta with an unpaired surrogate is token-invalid and reads no tenant's documents`() = runTest {
         for (tenant in listOf("beta\uD800", "\uDC00beta")) {
             val views = RecordingViews()
             val engine = StubEngine(IMPLICIT_DENY)
-            val outcome = pipeline(TokenAuthenticator(Verifier(token(tenant))), engine, views).evaluate(withToken)
+            val outcome = pipeline(TokenAuthenticator(Verifier { token(tenant) }), engine, views).evaluate(withToken)
 
             outcome.status.assert().isEqualTo(ProblemType.TOKEN_INVALID.status)
             outcome.problem!!.type.assert().isEqualTo(ProblemType.TOKEN_INVALID)
@@ -96,7 +90,7 @@ class UnpairedSurrogatePipelineTest {
     fun `a token of tenant beta with a surrogate pair is the tenant it names`() = runTest {
         val views = RecordingViews()
         val engine = StubEngine(IMPLICIT_DENY)
-        pipeline(TokenAuthenticator(Verifier(token("beta\uD83D\uDE00"))), engine, views).evaluate(withToken)
+        pipeline(TokenAuthenticator(Verifier { token("beta\uD83D\uDE00") }), engine, views).evaluate(withToken)
         views.keys.map { it.tenant }.assert().containsOnly(TenantId("beta\uD83D\uDE00"))
     }
 

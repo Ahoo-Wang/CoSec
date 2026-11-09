@@ -23,6 +23,7 @@ import me.ahoo.cosec.social.justauth.RedisAuthStateCache
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
+import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.zhyd.oauth.cache.AuthStateCache
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.request.AuthDefaultRequest
@@ -48,6 +49,7 @@ import java.lang.reflect.Constructor
 @ConditionalOnClass(SocialUser::class)
 @EnableConfigurationProperties(
     SocialAuthenticationProperties::class,
+    RuntimeAuthorizationProperties::class,
     CoSecProperties::class,
 )
 class CoSecSocialAuthenticationAutoConfiguration(
@@ -83,8 +85,8 @@ class CoSecSocialAuthenticationAutoConfiguration(
 
     @Bean
     @ConditionalOnMissingBean
-    fun socialUserPrincipalConverter(): SocialUserPrincipalConverter {
-        return DirectSocialUserPrincipalConverter
+    fun socialUserPrincipalConverter(authorization: RuntimeAuthorizationProperties): SocialUserPrincipalConverter {
+        return DirectSocialUserPrincipalConverter(authorization.scope.appId?.takeIf { it.isNotBlank() })
     }
 
     @Bean

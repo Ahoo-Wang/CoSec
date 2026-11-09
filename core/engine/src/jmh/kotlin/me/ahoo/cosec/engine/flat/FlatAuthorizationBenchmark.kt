@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -82,7 +81,6 @@ open class FlatAuthorizationBenchmark {
     private lateinit var subject: ScopeSubject
     private lateinit var memberships: Memberships
     private lateinit var authz: AuthzRequest
-    private val declared = DeclaredScope("app", "")
     private val host = HostScope(null)
     private val compiler = PolicyCompiler()
 
@@ -152,7 +150,7 @@ open class FlatAuthorizationBenchmark {
             mapOf(SpaceId.DEFAULT to roles.mapTo(LinkedHashSet(), ::RoleId)),
             listOf(PolicyId("principal-a"), PolicyId("principal-b")),
         )
-        subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
+        subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships, "app")
         val path = when (scenario) {
             "global" -> "/public/resource3/page"
             "role", "short-form" -> "/orders/op49/detail"
@@ -162,7 +160,6 @@ open class FlatAuthorizationBenchmark {
         authz = AuthzRequest(
             subject = Subject(
                 "user",
-                "acme",
                 true,
                 emptyMap(),
                 principalBindings = true,
@@ -179,7 +176,7 @@ open class FlatAuthorizationBenchmark {
             else -> decision == Decision.Deny(null)
         }
         check(expected) { "Scenario $scenario decided $decision" }
-        val resolved = (ScopeResolver.resolve(subject, declared, host) as ScopeResolution.Resolved).scope
+        val resolved = (ScopeResolver.resolve(subject, "", host) as ScopeResolution.Resolved).scope
         val traced = CoSecFlatEngine.evaluate(
             FlatRequest(authz, resolved, memberships, 0),
             SnapshotView(platform, app, tenant),
@@ -190,7 +187,7 @@ open class FlatAuthorizationBenchmark {
 
     @Benchmark
     fun authorize(): Decision {
-        val scope = (ScopeResolver.resolve(subject, declared, host) as ScopeResolution.Resolved).scope
+        val scope = (ScopeResolver.resolve(subject, "", host) as ScopeResolution.Resolved).scope
         val request = FlatRequest(authz, scope, memberships, 0)
         return CoSecFlatEngine.evaluate(request, SnapshotView(platform, app, tenant)).decision
     }

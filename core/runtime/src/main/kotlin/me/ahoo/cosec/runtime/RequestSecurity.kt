@@ -13,20 +13,16 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.api.context.ForwardedIdentity
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.engine.flat.AbsentAttributes
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.condition.ConditionInput
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -34,7 +30,6 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.identity.Identity
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Who a permitted request is, and in what scope (RFC 0006 §7.6): the principal as authenticated (null when anonymous),
@@ -54,36 +49,40 @@ class RequestSecurity internal constructor(
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
 ) {
-    /** The application-facing view; the pipeline reads nothing back from its attribute map. */
+    /** The application-facing view. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
 
     /**
-     * The same principal in the default space of [app] of its tenant, resolved as [ScopeResolver] resolves a host app;
-     * null for an anonymous request.
+     * The same principal in the default space of [app] of its tenant, resolved as [ScopeResolver] resolves a host of
+     * [app]: its credential must declare [app] (RFC 0012 §3.5). Null otherwise, and for an anonymous request.
      */
     internal fun inApp(app: AppId): RequestSecurity? {
         val authenticated = principal ?: return null
-        val member = ScopeSubject(scope.tenant, true, memberships)
-        val resolved = ScopeResolver.resolve(member, DeclaredScope("", ""), HostScope(app))
+        val member = ScopeSubject(scope.tenant, true, memberships, authenticated.app?.value)
+        val resolved = ScopeResolver.resolve(member, "", HostScope(app))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
         return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes)
     }
 
     /**
-     * This request as [principal] with [memberships], in the default scope of [principal]'s tenant; null when that
-     * scope does not resolve. For checking again what a principal recorded earlier may do, such as the approver of a
+     * This request as [principal] with [memberships], in the default space of [app] of [principal]'s tenant; null when
+     * that scope does not resolve. [principal] was recorded when it was permitted in [app], so what its credential
+     * declared is not asked again. For checking again what a principal recorded earlier may do, such as the approver of a
      * control-plane change when it publishes (RFC 0007 §7.5): it reads the current documents, and the environment of
      * this request, not the one the principal had. Internal (round-2 review R3): a [RequestSecurity] is a permitted
      * request, which a route trusts, so nothing outside the pipeline mints one; [AuthorizationChecker.decideAs] is the
      * way in, and it hands back a decision only.
      */
-    internal fun asPrincipal(principal: AuthenticatedPrincipal, memberships: Memberships): RequestSecurity? {
-        val member = ScopeSubject(principal.tenant, true, memberships)
-        val resolved = ScopeResolver.resolve(member, DeclaredScope("", ""), HostScope(null))
+    internal fun asPrincipal(
+        principal: AuthenticatedPrincipal,
+        memberships: Memberships,
+        app: AppId
+    ): RequestSecurity? {
+        val member = ScopeSubject(principal.tenant, true, memberships, app.value)
+        val resolved = ScopeResolver.resolve(member, "", HostScope(app))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
         val subject = Subject(
             id = principal.id.value,
-            tenantId = principal.tenant.value,
             authenticated = true,
             attributes = principal.attributes,
             principalBindings = principal.principalBindings,
@@ -97,12 +96,6 @@ class RequestSecurity internal constructor(
         "RequestSecurity(request=$requestId, principal=${principal?.id?.value}, tenant=${scope.tenant.value})"
 
     companion object {
-        /** The context attribute a service behind a gateway reads the gateway's request id from (`rid`). */
-        const val GATEWAY_REQUEST_ID = "cosec.identity.rid"
-
-        /** The context attribute a service behind a gateway reads the id of the caller's token or API key from (`jti`). */
-        const val CREDENTIAL_ID = "cosec.identity.jti"
-
         /**
          * The security of the request [context] is the [securityContext] of, as an adapter exposes it; null for a
          * context the pipeline did not build, which no route that needs a permitted request may trust.
@@ -113,22 +106,15 @@ class RequestSecurity internal constructor(
 
 /** [RequestSecurity] as the `SecurityContext` of `cosec-api`, with [scope] (RFC 0004 X6). */
 internal class PipelineSecurityContext(val security: RequestSecurity) : SecurityContext {
-    override val tenant: Tenant = SimpleTenant(security.scope.tenant.value)
+    override val tenantId: String = security.scope.tenant.value
 
-    override val principal: CoSecPrincipal = SimpleTenantPrincipal(
-        SimplePrincipal(
-            id = security.request.subject.id,
-            // A capped credential's attachments only restrict it (RC1-1): it does not hold them.
-            policies = if (security.request.subject.principalBindings) {
-                security.memberships.attachments.mapTo(LinkedHashSet()) { it.value }
-            } else {
-                emptySet()
-            },
-            roles = security.scope.roles.mapTo(LinkedHashSet()) { it.value },
-            attributes = security.principal?.attributes.orEmpty(),
-        ),
-        tenant,
-    )
+    override val principal: CoSecPrincipal = object : CoSecPrincipal {
+        override val id: String = security.request.subject.id
+        override val authenticated: Boolean = security.request.subject.authenticated
+        override val attributes: Map<String, Any> = security.principal?.attributes.orEmpty()
+
+        override fun toString(): String = "CoSecPrincipal(id=$id, authenticated=$authenticated)"
+    }
 
     override val scope: SecurityScope = object : SecurityScope {
         override val appId: String = security.scope.app.value
@@ -138,12 +124,8 @@ internal class PipelineSecurityContext(val security: RequestSecurity) : Security
         override fun toString(): String = "SecurityScope(app=$appId, space=$spaceId, roles=$roles)"
     }
 
-    override val attributes: MutableMap<String, Any> = ConcurrentHashMap<String, Any>().apply {
-        security.identity?.let {
-            put(RequestSecurity.GATEWAY_REQUEST_ID, it.requestId)
-            put(RequestSecurity.CREDENTIAL_ID, it.credential.id)
-        }
-    }
+    override val forwardedIdentity: ForwardedIdentity? =
+        security.identity?.let { ForwardedIdentity(it.requestId, it.credential.id) }
 
-    override fun toString(): String = "PipelineSecurityContext(${security.requestId}, ${principal.id}@${tenant.tenantId})"
+    override fun toString(): String = "PipelineSecurityContext(${security.requestId}, ${principal.id}@$tenantId)"
 }

@@ -14,7 +14,7 @@ Gather evidence before proposing a document or code change.
 
 Capture: method and path, status, the problem+json body (`type`, `title`, `status`, `requestId`, optional `traceId`)
 and the `CoSec-Request-Id` header; the principal's tenant, id, roles and attached policies (token claims, never the
-token itself); `CoSec-App-Id` / `CoSec-Space-Id` and the host's `cosec.authorization.scope.app-id`; the route map entry
+token itself); the token's `aud` or the API key's `app`, `CoSec-Space-Id` and the host's `cosec.authorization.scope.app-id`; the route map entry
 (which action and resource the request gets); the revisions of the platform, app and tenant documents; startup and
 request logs. Redact tokens, API keys and secrets.
 
@@ -42,7 +42,7 @@ Indeterminate in an explanation.
 | 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
 | 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
 | 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
-| 403 | `scope-rejected` | `CoSec-App-Id` differs from the host's app (on a gateway the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`), or is not a valid app id (blank, `*`, `:` or a control character, over 128 characters), or `CoSec-Space-Id` names a space where the principal has no role. |
+| 403 | `scope-rejected` | The credential declares an app other than the host's, or none (on a gateway the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`): issue the token for this app. Or the credential's app is not a valid app id (blank, `*`, `:` or a control character, over 128 characters), or `CoSec-Space-Id` names a space where the principal has no role. |
 | 429 | `too-many-requests` | Permitted, but a rate limit rule's bucket is exhausted; `Retry-After` and `RateLimit-*` headers. |
 | 503 | `unavailable` | No decision could be made (Indeterminate), the authenticator's dependency failed, or `cosec.pipeline.timeout` passed. Never retried by a `Retry-After`. |
 | 500 | `internal-error` | An exception nothing modelled: a CoSec defect. Read the server log. |
@@ -271,7 +271,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `set-cookie`, `x-api-key`, `cosec-identity`) does not compile:
   `` `<path>` is a credential header, which no attribute reference may read ``. A header name that is not an ASCII
   token (RFC 9110) does not compile either: `` `<path>` is not a header name ``.
-- `scope-rejected`: the client's `CoSec-App-Id` or `CoSec-Space-Id` (see the table).
+- `scope-rejected`: the credential's app, or the client's `CoSec-Space-Id` (see the table).
 
 ### Request allowed unexpectedly
 

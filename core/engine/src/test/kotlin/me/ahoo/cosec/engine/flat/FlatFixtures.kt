@@ -43,7 +43,6 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -271,14 +270,14 @@ fun flatRequest(
         attachments.map(::PolicyId),
     )
     val resolution = ScopeResolver.resolve(
-        ScopeSubject(TenantId(tenant), authenticated, memberships),
-        DeclaredScope(app, space),
+        ScopeSubject(TenantId(tenant), authenticated, memberships, app.ifEmpty { null }),
+        space,
         HostScope(null),
     )
     val scope = (resolution as ScopeResolution.Resolved).scope
     val base = request(blocked = blocked)
     val subject =
-        Subject(principal, tenant, authenticated, emptyMap(), principalBindings, breakGlass)
+        Subject(principal, authenticated, emptyMap(), principalBindings, breakGlass)
     val resource = Resource("http", path, emptyMap())
     val authz = AuthzRequest(subject, base.action, resource, base.environment)
     return FlatRequest(authz, scope, memberships, time, Probes)

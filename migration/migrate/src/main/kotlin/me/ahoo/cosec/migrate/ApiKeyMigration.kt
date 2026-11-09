@@ -146,6 +146,8 @@ class ApiKeyMigration(
     /** Principals whose keys' roles go to them; [ALL] for every principal. */
     private val grantTo: Set<String> = emptySet(),
     private val rolePrefix: String = DEFAULT_ROLE_PREFIX,
+    /** The app the converted keys are for (`--app`, RFC 0012 §3.5); null leaves them declaring none, as 7.x keys did. */
+    private val app: String? = null,
     private val now: Instant = Instant.now(),
 ) {
     init {
@@ -232,7 +234,15 @@ class ApiKeyMigration(
     private fun inPlace(key: LegacyApiKey): Conversion = Conversion(
         ConvertedApiKey(
             key,
-            ApiKey(key.id, key.principalId, key.tenant.value, LinkedHashSet(key.roles), key.expiresAt, key.enabled),
+            ApiKey(
+                key.id,
+                key.principalId,
+                key.tenant.value,
+                app,
+                LinkedHashSet(key.roles),
+                key.expiresAt,
+                key.enabled
+            ),
             ConvertedApiKey.Mode.IN_PLACE,
             lost(key),
         ),
@@ -251,7 +261,7 @@ class ApiKeyMigration(
             ConvertedApiKey(
                 key,
                 // Even with no roles, the principal must be made known to the provider, or the key is refused.
-                ApiKey(key.id, principal, key.tenant.value, null, key.expiresAt, key.enabled),
+                ApiKey(key.id, principal, key.tenant.value, app, null, key.expiresAt, key.enabled),
                 ConvertedApiKey.Mode.OWN_PRINCIPAL,
                 lost(key),
                 PRINCIPAL_ID_CHANGES,
@@ -277,7 +287,7 @@ class ApiKeyMigration(
         return Conversion(
             ConvertedApiKey(
                 key,
-                ApiKey(key.id, key.principalId, key.tenant.value, cap, key.expiresAt, key.enabled),
+                ApiKey(key.id, key.principalId, key.tenant.value, app, cap, key.expiresAt, key.enabled),
                 ConvertedApiKey.Mode.GRANTED,
                 lost(key),
             ),

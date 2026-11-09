@@ -28,7 +28,6 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -74,8 +73,8 @@ class DocumentSnapshotViewsTest {
             )
         return (
             ScopeResolver.resolve(
-                ScopeSubject(TenantId(tenant), true, memberships),
-                DeclaredScope(app, ""),
+                ScopeSubject(TenantId(tenant), true, memberships, app.ifEmpty { null }),
+                "",
                 HostScope(null)
             ) as ScopeResolution.Resolved
             ).scope
@@ -83,7 +82,7 @@ class DocumentSnapshotViewsTest {
 
     private fun decide(view: SnapshotView, scope: Scope, action: String = "order:read"): Decision {
         val authz = AuthzRequest(
-            Subject("alice", scope.tenant.value, true, emptyMap(), true, true),
+            Subject("alice", true, emptyMap(), true, true),
             Action(action.substringBefore(':'), action.substringAfter(':')),
             Resource("order", "1", emptyMap()),
             Environment("10.0.0.1", "r", "d", blocked = false),

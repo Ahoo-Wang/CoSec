@@ -50,7 +50,7 @@ flowchart BT
 箭头指向模块所依赖的模块；虚线指向应用添加后由 starter 装配的模块。图背后的规则：
 
 - **`cosec-model` 和 `cosec-engine`**（目录 `core/model/` 与 `core/engine/`）是纯粹的内核：模型中有各类 id、绑定、成员关系、条件 AST、作用域和决策；引擎中有动作与资源模式、策略编译器和扁平引擎。它们只依赖 Kotlin 标准库。`EnginePurityTest`（ArchUnit）在出现对 Reactor、Spring、日志、I/O、线程或时钟的任何引用时失败；`DependencyRulesTest` 在解析出任何其他依赖时失败。`ScopeConstructionTest` 检查只有 `ScopeResolver` 能构造已解析的 `Scope`。
-- **`cosec-api`**（目录 `api/api/`）容纳应用编译时依赖的契约：`CoSecPrincipal`、`Tenant`、令牌、`SecurityContext`、`AuditEvent`，以及它们的简单实现（`SimplePrincipal`、`SimpleTenant`）。它只依赖 Kotlin 标准库。修改它就是破坏性变更。
+- **`cosec-api`**（目录 `api/api/`）容纳应用编译时依赖的契约：`CoSecPrincipal`、`CompositeToken`、`SecurityContext` 和 `AuditEvent`。它只依赖 Kotlin 标准库。修改它就是破坏性变更。
 - **`cosec-annotations`**（目录 `api/annotations/`）容纳稳定性标记（[稳定性等级](./extending.md#stability-levels)）。`@InternalCoSecApi` 是一个错误级别的 opt-in 标记：带有它的声明之所以公开，只是为了让 CoSec 自己的模块能访问，不作兼容性承诺。应用不 opt in；opt-in 出现在 CoSec 自己的 Kotlin 源码之外时，`SourceRulesTest` 失败。`@ExperimentalCoSecApi`（警告级别的 opt-in）标记次版本仍可能改变的公共 API，`@CoSecSpi` 标记应用要实现的接口。
 - **`cosec-spi`**（目录 `core/spi/`）在 `me.ahoo.cosec.spi.*` 下容纳请求或存储会调用的端口，以及它们的值类型和内存实现：快照存储（`SnapshotDocumentStore`）、成员关系、令牌校验与吊销（`TokenVerifier`、`RevocationReader`、`TokenStore`、`TokenRevoker`）、API key、限流器、属性提供者、认证器、转发的身份、审计 sink 和 id 生成器（`IdGenerator`，及其默认实现 `RandomIdGenerator`）。它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，第三方只需依赖它就能实现一个端口。签名需要某一层类型的端口留在那一层：`DecisionListener`、`RequestGate` 和影子窗口端口在 `cosec-runtime`；`ControlStore` 和 `ChangeListener` 在 `cosec-control`（[扩展 CoSec](./extending.md)）。
 - **`cosec-runtime`**（目录 `core/runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，快照文档及其编解码器、编译器和格式描述符（由它们生成 `schema/*.schema.json`），`SnapshotSource`，路由映射，令牌校验，内置认证器，以及写日志的审计 sink。它唯一的 Jackson mapper `CoSecJson` 是内部 API（`@InternalCoSecApi`），`api/` 与 `core/` 的公共签名中不出现 Jackson 类型（`JacksonSignatureTest`）。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
@@ -110,7 +110,7 @@ sequenceDiagram
 - **路由。** 无法规范化的路径或有歧义的 `CoSec-*` 参数得到 `400`（第 2 步）。[路由映射](./extending.md#route-maps)把匹配到的请求变成作用于类型化资源的 `service:verb` 动作；其他请求则是作用于 `http:path:<path>` 的 `http:<METHOD>`。
 - **认证。** `Authenticator` 把令牌或 API key 变成主体（第 3 步）。被拒绝的凭证按匿名主体求值；认证器失败或超时得到 `503`。
 - **成员关系与 A 阶段。** A 阶段属性（决定要加载什么的属性，例如黑名单）与成员关系一起获取（第 4、5 步）。成员关系来自令牌的声明；对 API key，以及带有 provider 标记的令牌，来自 `MembershipProvider`，并按 key 的上限收窄。提供者不认识或认为已停用的主体，其凭证被拒绝，请求按匿名决策。成员关系来源失败、超时或返回错误类型的成员关系时得到 `503`，绝不当作“没有角色”。
-- **作用域。** `ScopeResolver` 把声明的应用和空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；绑定了应用（`cosec.authorization.scope.app-id`，或在网关上路由的 `cosec-app-id`）的服务使用该应用，并拒绝声明了其他应用的请求；默认空间以外的空间要求主体在其中有角色。作用域被拒绝即为拒绝（见[信任边界](../guide/security-model.md#trust-boundaries)）。
+- **作用域。** `ScopeResolver` 把凭证的应用和选择的空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；应用是凭证声明的应用，绑定了应用的服务（`cosec.authorization.scope.app-id`，网关上是路由的 `cosec-app-id`）拒绝声明其他应用或未声明应用的凭证；默认空间之外的空间需要在其中有角色。作用域被拒绝即拒绝请求（[信任边界](../guide/security-model.md#trust-boundaries)）。
 - **快照视图。** 快照源从内存中给出视图（平台文档、应用文档、租户文档），缺什么就加载什么（第 7 步）。被黑名单拦截的请求只加载平台文档。
 - **B 阶段。** 有属性提供者声明 B 阶段属性时，引擎的 `plan` 列出本请求可能读取的外部属性，只获取这些属性，每个提供者并行、各有超时（第 8、9 步）。计划包含候选语句及其策略条件的、限流规则的、以及约束请求所在租户的边界的属性（`ATR-8`）。一个提供者失败，只会让它自己的属性不可用。检查（`AuthorizationChecker`）为它自己的动作与资源做计划，并获取计划中的每个属性，A 阶段与 B 阶段的提供者都一样。
 - **决策。** 引擎给出 `Permit`（附带义务）、`Deny` 或 `Indeterminate`（第 10 步）。

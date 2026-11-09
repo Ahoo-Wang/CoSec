@@ -16,12 +16,12 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
 import me.ahoo.cosec.migrate.v7.api.policy.Policy
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyType
+import me.ahoo.cosec.migrate.v7.api.principal.SpacedRoleId
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding

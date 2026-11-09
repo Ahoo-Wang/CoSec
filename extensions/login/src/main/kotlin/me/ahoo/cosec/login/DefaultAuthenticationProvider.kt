@@ -13,7 +13,6 @@
 package me.ahoo.cosec.login
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -24,9 +23,9 @@ import java.util.concurrent.ConcurrentHashMap
 object DefaultAuthenticationProvider : AuthenticationProvider {
     private val log = KotlinLogging.logger {}
     private val authenticationMaps:
-        MutableMap<Class<out Credentials>, Authentication<out Credentials, CoSecPrincipal>> = ConcurrentHashMap()
+        MutableMap<Class<out Credentials>, Authentication<out Credentials>> = ConcurrentHashMap()
 
-    override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(
+    override fun <C : Credentials, A : Authentication<C>> register(
         credentialsType: Class<C>,
         authentication: A
     ) {
@@ -37,7 +36,7 @@ object DefaultAuthenticationProvider : AuthenticationProvider {
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> get(
+    override fun <C : Credentials, A : Authentication<C>> get(
         credentialsType: Class<out Credentials>
     ): A? {
         val authentication = authenticationMaps[credentialsType] as A?

@@ -40,7 +40,6 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -378,12 +377,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         val principal = (authn as? AuthnResult.Authenticated)?.principal
 
         val tenant = principal?.tenant ?: TenantId.DEFAULT
-        val authzSubject = subject(principal, tenant)
+        val authzSubject = subject(principal)
 
+        val deviceId = parameters.deviceId
         val stageA = if (fetched == null || attributes.stageA.isEmpty()) {
             null
         } else {
-            AttributeRequest(authzSubject, null, action, resource, facts.remoteAddress, requestId, parameters.deviceId)
+            AttributeRequest(tenant, authzSubject, null, action, resource, facts.remoteAddress, requestId, deviceId)
         }
         val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
             ?: return authorize(
@@ -393,9 +393,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             return unavailable(requestId, traceId, Cause.MembershipUnavailable(it))
         }
 
-        val subject = ScopeSubject(tenant, principal != null, memberships)
-        val declared = DeclaredScope(parameters.appId, parameters.spaceId)
-        val scope = when (val resolution = ScopeResolver.resolve(subject, declared, facts.host)) {
+        val subject = ScopeSubject(tenant, principal != null, memberships, principal?.app?.value)
+        val scope = when (val resolution = ScopeResolver.resolve(subject, parameters.spaceId, facts.host)) {
             is ScopeResolution.Resolved -> resolution.scope
             is ScopeResolution.Rejected -> {
                 val denied = Decision.Deny(StatementRef.ScopeRejected(resolution.reason))
@@ -423,7 +422,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             environment = Environment(
                 remoteIp = facts.remoteAddress,
                 requestId = requestId,
-                deviceId = parameters.deviceId,
+                deviceId = deviceId,
                 blocked = blacklist.blocked,
             ),
         )
@@ -594,9 +593,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      * The request's subject in the engine's request (`AuthzRequest`): the engine takes the tenant from the scope and
      * reads the subject's id, whether it is authenticated, and whether its principal and break-glass bindings apply.
      */
-    private fun subject(principal: AuthenticatedPrincipal?, tenant: TenantId): Subject = Subject(
+    private fun subject(principal: AuthenticatedPrincipal?): Subject = Subject(
         id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
-        tenantId = tenant.value,
         authenticated = principal != null,
         attributes = principal?.attributes.orEmpty(),
         principalBindings = principal?.principalBindings ?: true,
@@ -721,6 +719,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     private fun attributeRequest(request: FlatRequest, scope: Scope?) = AttributeRequest(
+        request.scope.tenant,
         request.request.subject,
         scope,
         request.request.action,

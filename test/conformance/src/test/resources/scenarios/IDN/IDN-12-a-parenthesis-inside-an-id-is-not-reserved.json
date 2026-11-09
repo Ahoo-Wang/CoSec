@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "IDN-12"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A ( inside an id is not reserved, only a first one: the token is valid, so nothing grants al(ice this request and it is refused as forbidden, not as token-invalid.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "al(ice",
+      "tenantId": "acme"
+    }
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

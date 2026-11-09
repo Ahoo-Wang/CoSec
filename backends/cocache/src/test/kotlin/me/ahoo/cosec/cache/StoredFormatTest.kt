@@ -91,7 +91,7 @@ class StoredFormatTest {
     /** RFC 0009 §4.1: written by this format's [ApiKeyCodec], not by `main` before it. */
     @Test
     fun `api keys`() {
-        val capped = ApiKey("k1", "alice", "acme", linkedSetOf("admin", "viewer@sales"), at, true)
+        val capped = ApiKey("k1", "alice", "acme", "order", linkedSetOf("admin", "viewer@sales"), at, true)
         pinned(
             "apiKey",
             capped,
@@ -99,7 +99,7 @@ class StoredFormatTest {
             { ApiKeyCodec.decode(it.decodeToString()) },
             fixture("apiKey")
         )
-        val uncapped = ApiKey("k2", "svc", "acme", null, null, false)
+        val uncapped = ApiKey("k2", "svc", "acme", null, null, null, false)
         pinned(
             "apiKey-uncapped",
             uncapped,
@@ -111,7 +111,7 @@ class StoredFormatTest {
         // IDN-2: an empty cap is written and read as empty, never as absent.
         pinned(
             "apiKey-empty-cap",
-            ApiKey("k3", "svc", "acme", emptySet(), null, true),
+            ApiKey("k3", "svc", "acme", null, emptySet(), null, true),
             { ApiKeyCodec.encode(it).encodeToByteArray() },
             { ApiKeyCodec.decode(it.decodeToString()) },
             fixture("apiKey-empty-cap"),
@@ -131,9 +131,16 @@ class StoredFormatTest {
 
     @Test
     fun `a stored api key has exactly its fields`() {
-        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null))
-        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":2", "\"format\":3")) }
+        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null, null))
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":3", "\"format\":2")) }
         assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
+        // RFC 0012 §3.5: a record without `app` is another format, never read as a key declaring none.
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"app\":null,", "")) }
+        assertThrows<IllegalArgumentException> {
+            ApiKeyCodec.decode(
+                written.replace("\"app\":null,", "\"app\":\"*\",")
+            )
+        }
         assertThrows<IllegalArgumentException> {
             ApiKeyCodec.decode(written.replace("\"enabled\":true", "\"enabled\":true,\"policies\":[\"p1\"]"))
         }

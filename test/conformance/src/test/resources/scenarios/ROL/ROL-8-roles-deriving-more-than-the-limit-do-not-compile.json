@@ -1818,10 +1818,10 @@
   "credential": {
     "roles": [
       "r0"
-    ]
+    ],
+    "app": "wms"
   },
   "request": {
-    "app": "wms",
     "action": "wms:read"
   },
   "expect": {

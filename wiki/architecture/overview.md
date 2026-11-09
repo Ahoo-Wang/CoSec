@@ -69,8 +69,8 @@ The rules behind the picture:
   and the flat engine in the engine. They depend on the Kotlin standard library only. `EnginePurityTest` (ArchUnit)
   fails on any reference to Reactor, Spring, logging, I/O, threads or clocks, and `DependencyRulesTest` fails on any
   other resolved dependency. `ScopeConstructionTest` checks that only `ScopeResolver` constructs a resolved `Scope`.
-- **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`,
-  tokens, `SecurityContext`, `AuditEvent`, and their simple implementations (`SimplePrincipal`, `SimpleTenant`). It
+- **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `CompositeToken`,
+  `SecurityContext` and `AuditEvent`. It
   depends on the Kotlin standard library alone. Changing it is a breaking change.
 - **`cosec-annotations`** (directory `api/annotations/`) holds the stability markers
   ([Stability levels](./extending.md#stability-levels)). `@InternalCoSecApi` is an opt-in marker at error level: a
@@ -210,10 +210,10 @@ sequenceDiagram
   principal the provider does not know or knows as deactivated refuses the credential, and the request is decided as
   anonymous. A membership source that fails, times out or answers the wrong kind of memberships is a `503`, never "no
   roles".
-- **Scope.** `ScopeResolver` turns the declared app and space into a checked scope (step 6): the tenant is the
-  principal's (the default tenant when anonymous); a service bound to an app (`cosec.authorization.scope.app-id`, or
-  on a gateway a route's `cosec-app-id`) uses that app and rejects a request that declares another; a space other than
-  the default needs a role in it. A rejected
+- **Scope.** `ScopeResolver` turns the credential's app and the selected space into a checked scope (step 6): the
+  tenant is the principal's (the default tenant when anonymous); the app is the one the credential declares, and a
+  service bound to an app (`cosec.authorization.scope.app-id`, or on a gateway a route's `cosec-app-id`) rejects a
+  credential declaring another or none; a space other than the default needs a role in it. A rejected
   scope is a deny ([trust boundaries](../guide/security-model.md#trust-boundaries)).
 - **Snapshot view.** The snapshot source answers the view (platform, app and tenant documents) from memory, or loads
   what is missing (step 7). A blocked request loads only the platform document.

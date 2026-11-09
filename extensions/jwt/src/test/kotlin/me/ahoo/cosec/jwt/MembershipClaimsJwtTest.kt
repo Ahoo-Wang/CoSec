@@ -15,26 +15,19 @@ package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.MembershipResolver
-import me.ahoo.cosec.runtime.token.SimpleAccessToken
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
-import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -61,7 +54,7 @@ class MembershipClaimsJwtTest {
     )
 
     private fun principal(roles: Set<String> = this.roles) =
-        SimpleTenantPrincipal(SimplePrincipal("alice", policies, roles, attributes), SimpleTenant(tenant.value))
+        TokenSubject("alice", null, tenant = tenant.value, roles = roles, policies = policies, attributes = attributes)
 
     /** A token as CoSec 7.x writes it. */
     private fun sevenXToken(
@@ -82,46 +75,41 @@ class MembershipClaimsJwtTest {
 
     private fun claimSize(values: Set<String>) = JsonMapper.builder().build().writeValueAsBytes(values.toList()).size
 
-    private fun TokenPrincipal.innermost(): CoSecPrincipal {
-        val tokenPrincipal = (this as? SimpleTokenTenantPrincipal)?.delegate ?: this
-        return (tokenPrincipal as SimpleTokenPrincipal).delegate
-    }
-
     @Test
     fun currentTokensParseAsBefore() {
         val issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS)
-        val parsed = verifier.verify<TokenPrincipal>(SimpleAccessToken(sevenXToken("tenant", issuedAt)))
+        val parsed = verifier.verify(sevenXToken("tenant", issuedAt))
 
-        parsed.assert().isInstanceOf(SimpleTokenTenantPrincipal::class.java)
-        (parsed as SimpleTokenTenantPrincipal).tenant.assert().isEqualTo(SimpleTenant("tenant"))
-        parsed.tokenId.assert().isEqualTo("jti")
-        // exactly the principal 7.x built: no wrapper, so equality and type checks behave as before
-        parsed.innermost().assert().isEqualTo(SimplePrincipal("alice", policies, roles, attributes))
-        parsed.innermost().javaClass.assert().isEqualTo(SimplePrincipal::class.java)
-        (parsed.delegate as SimpleTokenPrincipal).issuedAt.assert().isEqualTo(issuedAt)
-        MembershipClaims.markerOf(parsed).assert().isNull()
+        parsed.tenant.assert().isEqualTo("tenant")
+        parsed.id.assert().isEqualTo("jti")
+        parsed.principal.assert().isEqualTo("alice")
+        parsed.roles.assert().isEqualTo(roles)
+        parsed.policies.assert().isEqualTo(policies)
+        parsed.attributes.assert().isEqualTo(attributes)
+        parsed.issuedAt.assert().isEqualTo(issuedAt)
+        parsed.membershipMarker.assert().isNull()
     }
 
     @Test
     fun currentTokensWithoutTenantParseAsBefore() {
-        val parsed = Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken(tenantId = null)))
+        val parsed = Jwts.toVerifiedToken(Jwts.decode(sevenXToken(tenantId = null)))
 
-        parsed.javaClass.assert().isEqualTo(SimpleTokenPrincipal::class.java)
-        MembershipClaims.tenantOf(parsed).assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(
-            Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))
-        ).assert().isEqualTo(tenant)
-        parsed.innermost().assert().isEqualTo(SimplePrincipal("alice", policies, roles, attributes))
+        parsed.tenant.assert().isNull()
+        Jwts.toVerifiedToken(Jwts.decode(sevenXToken("tenant"))).tenant.assert().isEqualTo(tenant.value)
+        parsed.principal.assert().isEqualTo("alice")
+        parsed.roles.assert().isEqualTo(roles)
     }
 
     /** Resolves [parsed] the way the pipeline does: its membership source, then the resolver; every principal is known. */
-    private fun resolve(provider: MembershipProvider?, parsed: TokenPrincipal): Memberships = runBlocking {
-        checkNotNull(MembershipResolver(provider).resolve(tenant, PrincipalId(parsed.id), MembershipSource.of(parsed)))
+    private fun resolve(provider: MembershipProvider?, parsed: VerifiedToken): Memberships = runBlocking {
+        checkNotNull(
+            MembershipResolver(provider).resolve(tenant, PrincipalId(parsed.principal), MembershipSource.of(parsed))
+        )
     }
 
     @Test
     fun currentTokensResolveToTheirClaims() {
-        val parsed = Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))
+        val parsed = Jwts.toVerifiedToken(Jwts.decode(sevenXToken("tenant")))
 
         val memberships = resolve(null, parsed)
 
@@ -161,11 +149,10 @@ class MembershipClaimsJwtTest {
         decoded.getClaim(MembershipClaims.MARKER_KEY).asString().assert().isEqualTo(MembershipClaims.PROVIDER)
         decoded.getClaim("attributes").asMap().assert().isEqualTo(attributes)
 
-        val parsed = verifier.verify<TokenPrincipal>(token)
+        val parsed = verifier.verify(token.accessToken)
         parsed.roles.assert().isEmpty()
         parsed.policies.assert().isEmpty()
-        parsed.id.assert().isEqualTo("alice")
-        parsed.innermost().assert().isInstanceOf(MembershipMarkedPrincipal::class.java)
+        parsed.principal.assert().isEqualTo("alice")
 
         val provider = InMemoryMembershipProvider()
         val fromProvider =
@@ -178,7 +165,7 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun onlyRolesCountWhenThereAreNoPolicies() {
-        val principal = SimplePrincipal("alice", roles = roles)
+        val principal = TokenSubject("alice", null, roles = roles)
         val decoded = Jwts.decode(converter(claimSize(roles)).toToken(principal).accessToken)
 
         decoded.getClaim("roles").asList(String::class.java).assert().containsExactly("admin", "editor@team-a")
@@ -196,10 +183,10 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun refreshingKeepsTheMarker() {
-        val parsed = verifier.verify<TokenPrincipal>(converter(0).toToken(principal()))
+        val parsed = verifier.verify(converter(0).toToken(principal()).accessToken)
 
         // no limit on the second converter: the marker carries over by itself, not by size
-        val decoded = Jwts.decode(converter().toToken(parsed).accessToken)
+        val decoded = Jwts.decode(converter().toToken(TokenSubject.of(parsed)).accessToken)
 
         decoded.getClaim(MembershipClaims.MARKER_KEY).asString().assert().isEqualTo(MembershipClaims.PROVIDER)
         decoded.claims.keys.assert().doesNotContain("policies", "roles")
@@ -207,7 +194,7 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun refreshingKeepsAnInvalidMarkerAndItsClaims() {
-        val marked = MembershipMarkedPrincipal(SimplePrincipal("alice", policies, roles), "claims")
+        val marked = TokenSubject("alice", null, roles = roles, policies = policies, membershipMarker = "claims")
 
         val decoded = Jwts.decode(converter(0).toToken(marked).accessToken)
 
@@ -227,9 +214,9 @@ class MembershipClaimsJwtTest {
                 is Int -> builder.withClaim(MembershipClaims.MARKER_KEY, value)
                 is Boolean -> builder.withClaim(MembershipClaims.MARKER_KEY, value)
             }
-            val parsed = Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(builder.sign(JwtFixture.ALGORITHM)))
+            val parsed = Jwts.toVerifiedToken(Jwts.decode(builder.sign(JwtFixture.ALGORITHM)))
 
-            MembershipClaims.markerOf(parsed).assert().isEqualTo(text)
+            parsed.membershipMarker.assert().isEqualTo(text)
             assertThrows<MembershipUnavailableException> { resolve(InMemoryMembershipProvider(), parsed) }
         }
     }

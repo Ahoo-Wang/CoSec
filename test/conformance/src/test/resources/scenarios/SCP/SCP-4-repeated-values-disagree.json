@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "CoSec-App-Id is sent twice with different values: the request cannot be read unambiguously, 400 before authentication.",
+  "description": "CoSec-Device-Id is sent twice with different values: the request cannot be read unambiguously, 400 before authentication.",
   "documents": {
     "platform": {
       "policies": [
@@ -34,7 +34,7 @@
   },
   "http": {
     "headers": {
-      "CoSec-App-Id": [
+      "CoSec-Device-Id": [
         "shop",
         "other"
       ]

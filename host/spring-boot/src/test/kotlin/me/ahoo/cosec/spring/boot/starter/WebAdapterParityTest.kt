@@ -25,6 +25,7 @@ import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -249,7 +250,7 @@ class WebAdapterParityTest {
                     )
                 }
                 AuthnResult.Authenticated(
-                    AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships),
+                    AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships, app = AppId("order")),
                     "token"
                 )
             }
@@ -340,7 +341,7 @@ class WebAdapterParityTest {
             headers = headers,
             bytes = bytes.toList(),
             proceeded = called,
-            principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
+            principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
         )
@@ -369,7 +370,7 @@ class WebAdapterParityTest {
             ) { it.lowercase() to response.getHeaders(it).toList() },
             bytes = response.contentAsByteArray.toList(),
             proceeded = chain.request != null,
-            principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
+            principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
         )
@@ -380,8 +381,7 @@ class WebAdapterParityTest {
     /** One scenario per problem type of §6.1 and per cause of a 503, and the permits. */
     @Suppress("LongMethod")
     fun scenarios(): List<Scenario> {
-        val app = mapOf("CoSec-App-Id" to "order")
-        fun token(value: String) = app + ("Authorization" to "Bearer $value")
+        fun token(value: String) = mapOf("Authorization" to "Bearer $value")
         return listOf(
             Scenario("a global ALLOW permits an anonymous request", path = "/public/page", status = 200, type = null),
             Scenario(
@@ -402,14 +402,14 @@ class WebAdapterParityTest {
             Scenario(
                 "an ambiguous CoSec parameter is 400",
                 path = "/public/page",
-                headers = app + ("cosec-app-id" to "other"),
+                headers = mapOf("CoSec-Space-Id" to "a", "cosec-space-id" to "b"),
                 status = 400,
                 type = "invalid-request"
             ),
             Scenario(
                 "an anonymous deny is 401",
                 path = "/orders/1",
-                headers = app,
+                headers = emptyMap(),
                 status = 401,
                 type = "unauthorized"
             ),
