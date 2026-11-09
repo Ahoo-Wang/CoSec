@@ -1,0 +1,22 @@
+{
+  "description": "A role the source deleted is gone from the document, and the token's claim grants nothing.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "role-01HQ7Y"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

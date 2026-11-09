@@ -55,7 +55,7 @@ flowchart LR
 }
 ```
 
-规则按 DENY 语句的方式匹配被允许的请求：某个动作模式、某个资源模式，以及它的条件。一个窗口允许 `permitsPerSecond × windowSeconds` 个请求，且至少一个。
+规则按 DENY 语句的方式匹配被允许的请求：某个动作模式、某个资源模式，以及它的条件。一个窗口允许 `permitsPerSecond × windowSeconds` 个请求，且至少一个。服务[路由映射](../integration/web.md#route-maps)里的路由不是 `http` 请求，所以写在 `http:` 和路径上的规则不会限制它：也要为该路由的动作写一条规则（[按业务动作授权](../scenarios/route-maps.md#a-request-has-one-action)）。
 
 请求受哪些规则约束：
 

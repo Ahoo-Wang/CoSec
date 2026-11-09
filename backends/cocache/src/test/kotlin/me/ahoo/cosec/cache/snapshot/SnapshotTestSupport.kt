@@ -46,6 +46,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The real Redis deployments the snapshot tests run against (AGENTS.md: real Redis, never mocks).
@@ -183,6 +184,13 @@ class ReversingChannelBackend(private val delegate: CoherenceBackend) : Coherenc
     private val listeners = ConcurrentHashMap<Keyspace, CopyOnWriteArrayList<InvalidationListener>>()
     private val subscriptions = ConcurrentHashMap<Keyspace, Subscription>()
 
+    /**
+     * How many invalidations that name a key have been passed to all the listeners, the last of which, the engine of
+     * the cache, has then dropped its copy: a test that fills a local copy waits for the invalidations of its own
+     * writes first, or one that arrives late drops the copy it just filled.
+     */
+    val dispatched = AtomicInteger()
+
     override val channel: InvalidationChannel = object : InvalidationChannel by delegate.channel {
         override fun subscribe(keyspace: Keyspace, listener: InvalidationListener): Subscription {
             val namespaceListeners = listeners.computeIfAbsent(keyspace) { CopyOnWriteArrayList() }
@@ -193,6 +201,10 @@ class ReversingChannelBackend(private val delegate: CoherenceBackend) : Coherenc
                     object : InvalidationListener {
                         override fun onInvalidated(keys: List<String>, origin: NodeId) {
                             namespaceListeners.reversed().forEach { it.onInvalidated(keys, origin) }
+                            // An empty frame is the channel probe of a store being created.
+                            if (keys.isNotEmpty()) {
+                                dispatched.incrementAndGet()
+                            }
                         }
 
                         override fun onReset() {

@@ -111,7 +111,8 @@ class ExternalAttributesPipelineTest {
         membershipProvider: MembershipProvider? = null,
         memberships: Memberships? = PipelineFixtures.claims(),
         headers: Map<String, List<String>> = emptyMap(),
-    ) = evaluate(providers, Policies(listOf(policy)), membershipProvider, memberships, headers)
+        path: String = "/orders",
+    ) = evaluate(providers, Policies(listOf(policy)), membershipProvider, memberships, headers, path)
 
     private fun evaluate(
         providers: List<AttributeProvider>,
@@ -119,6 +120,7 @@ class ExternalAttributesPipelineTest {
         membershipProvider: MembershipProvider? = null,
         memberships: Memberships? = PipelineFixtures.claims(),
         headers: Map<String, List<String>> = emptyMap(),
+        path: String = "/orders",
     ): Pair<Outcome, Views> {
         val attributes = AttributeProviders(providers)
         val views = Views(PolicyDocumentCompiler(attributes.catalog), policies.body)
@@ -133,7 +135,7 @@ class ExternalAttributesPipelineTest {
                 attributes = attributes,
             )
         }
-        return runBlocking { pipeline.evaluate(PipelineFixtures.facts(headers = headers)) } to views
+        return runBlocking { pipeline.evaluate(PipelineFixtures.facts(path = path, headers = headers)) } to views
     }
 
     private val Outcome.decision: Decision get() = (basis as Basis.Decided).decision
@@ -266,6 +268,18 @@ class ExternalAttributesPipelineTest {
         geo.calls.get().assert().isZero()
     }
 
+    /** #1211: the plan follows the statement index, so a path no statement can match fetches nothing. */
+    @Test
+    fun anAttributeOfAStatementThePathRulesOutIsNotFetched() {
+        val geo = Geo { mapOf(IN_FENCE to true) }
+        val policy = allow(condition = inFence(), paths = 10)
+        evaluate(listOf(geo), policy).first.status.assert().isEqualTo(403)
+        geo.calls.get().assert().isZero()
+        val (outcome, _) = evaluate(listOf(geo), policy, path = "/private3/page")
+        outcome.status.assert().isEqualTo(200)
+        geo.asked.assert().containsExactly(setOf(IN_FENCE))
+    }
+
     @Test
     fun anAbsentValueIsNoMatchNotUnavailable() {
         val (outcome, _) = evaluate(listOf(Geo { emptyMap() }), allow(condition = inFence()))
@@ -371,19 +385,39 @@ class ExternalAttributesPipelineTest {
 
         fun inFence() = """{"eq":["$IN_FENCE",true]}"""
 
-        fun allow(id: String = "p", action: String = "*", condition: String? = null, onMissing: String? = null) =
-            Policy(id, "allow", action, condition, onMissing)
+        fun allow(
+            id: String = "p",
+            action: String = "*",
+            condition: String? = null,
+            onMissing: String? = null,
+            paths: Int = 0,
+        ) = Policy(id, "allow", action, condition, onMissing, paths)
 
         fun deny(condition: String? = null, onMissing: String? = null) = Policy("d", "deny", "*", condition, onMissing)
     }
 
-    /** One policy of one statement, bound to anyone in the platform document. */
-    private class Policy(val id: String, effect: String, action: String, condition: String?, onMissing: String?) {
-        val json = """{"id":"$id","statements":[{"effect":"$effect","action":"$action"""" +
+    /**
+     * One policy bound to anyone in the platform document, of one statement, or of [paths] statements each on the paths
+     * below `/private<n>`: enough to be looked up in an index.
+     */
+    private class Policy(
+        val id: String,
+        private val effect: String,
+        private val action: String,
+        private val condition: String?,
+        private val onMissing: String?,
+        paths: Int = 0,
+    ) {
+        val json = """{"id":"$id","statements":[""" +
+            (if (paths == 0) statement(null) else (0 until paths).joinToString(",") { statement("/private$it/**") }) +
+            "]}"
+
+        private fun statement(path: String?) = """{"effect":"$effect","action":"$action"""" +
+            (path?.let { ""","resource":"http:path:$it"""" } ?: "") +
             (condition?.let { ""","condition":$it""" } ?: "") +
             (onMissing?.let { ""","onMissing":"$it"""" } ?: "") +
             // RFC 0007 §9.5: a lapsing DENY carries the control plane's confirmation, or it does not compile.
-            (if (effect == "deny" && onMissing == "nomatch") CONFIRMED else "") + "}]}"
+            (if (effect == "deny" && onMissing == "nomatch") CONFIRMED else "") + "}"
 
         operator fun plus(other: Policy): Policies = Policies(listOf(this, other))
 

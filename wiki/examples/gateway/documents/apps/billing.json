@@ -1,0 +1,35 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Invoices",
+        "permissions": [
+          {
+            "id": "invoice.read",
+            "name": "Read invoices",
+            "action": [
+              "http:GET",
+              "billing:invoice.read"
+            ],
+            "resource": [
+              "http:path:/billing/invoices/**",
+              "invoice/**"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "accountant",
+      "name": "Accountant",
+      "permissions": [
+        "invoice.read"
+      ]
+    }
+  ]
+}

@@ -28,7 +28,8 @@ Organized by the task the reader is doing, not by module.
 
 | Area | Reader | Pages |
 |---|---|---|
-| `guide/` | Evaluating CoSec, or starting with it | `introduction`, `quick-start`, `concepts`, `security-model`, `roadmap` |
+| `guide/` | Evaluating CoSec, or starting with it | `introduction`, `quick-start`, `concepts`, `model`, `security-model`, `roadmap` |
+| `scenarios/` | Building a whole use case end to end | `simple-mode`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
 | `integration/` | Developer wiring CoSec into an application | `web`, `authentication`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
 | `operations/` | Running CoSec in production | `configuration`, `storage`, `upgrading`, `observability`, `troubleshooting` |
@@ -46,9 +47,9 @@ option, is harder to use for both jobs.
 
 | Type | Answers | Shape | Pages |
 |---|---|---|---|
-| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `upgrading`, `observability`, `troubleshooting`, `extending` |
+| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `upgrading`, `observability`, `troubleshooting`, `extending` |
 | **Reference** | "What exactly does X mean?" | Complete, terse, ordered for lookup (tables); no narrative | `policies/language`, `operations/configuration` |
-| **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `security-model`, `architecture/overview` |
+| **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `model`, `security-model`, `architecture/overview` |
 
 ## One fact, one home
 
@@ -60,6 +61,8 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 | Decision algorithm and candidate order; deny-first, default-deny and fail-closed guarantees and their exceptions; boundary, blacklist and break-glass | `guide/security-model.md` |
 | Which inputs the client controls (tenant, app, space, remote IP) | `guide/security-model.md#trust-boundaries` |
 | Terms (principal, tenant, document, policy, statement, binding, membership, decision) | `guide/concepts.md` |
+| How the entities relate, which document holds what, what stays outside CoSec | `guide/model.md` |
+| Which action a mapped and an unmapped request is decided as, and what that changes | `scenarios/route-maps.md` |
 | Module list, what each module needs, and the starter's module check (STA-1) | `guide/introduction.md#modules` |
 | Reader paths (which page follows which) | `guide/introduction.md#where-to-go-next` |
 | Outcome to HTTP status mapping; problem+json bodies; `CoSec-*` parameters | `integration/web.md` |
@@ -90,6 +93,11 @@ Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent
   what problem it solves.
 - **Verify every claim against the code**, not against other docs. A wrong doc is worse than a
   missing one. CoSec makes security decisions: say exactly when a request is allowed.
+- **Samples of a scenario page are files.** A document, a change body or a route map shown in a `scenarios/` page
+  lives in `wiki/examples/<scenario>/` and is included with `<<< @/examples/...`, in English and Chinese alike.
+  `DocumentationExamplesTest` (`./gradlew :conformance:test`) compiles the documents, runs the scenarios in
+  `scenarios*/`, decodes the change bodies and loads the route maps, so a sample cannot drift from what CoSec accepts.
+  A claim a page makes about a decision is a scenario file next to the documents. Examples name no real project.
 - **Link to files, never to line numbers.** Line anchors rot with every commit. Use relative links between
   pages (`../policies/language.md#actions`) so `check:docs` and the build can verify them.
 - Write any text containing `<…>`, such as `Mono<T>`, in backticks; otherwise Vue parses it as HTML.
@@ -101,8 +109,8 @@ Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent
   (for example "7.x matchers have no 8.0 equivalent") is a file-and-term entry with a reason in the script's
   `ALLOWED` list; there is no inline escape, and an entry that matches nothing fails, so delete it with the text.
 
-- **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines five reading paths
-  (evaluator, developer, policy author, operator, contributor). Every page on a path ends with one
+- **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines six reading paths
+  (evaluator, developer, policy author, worked example, operator, contributor). Every page on a path ends with one
   `**Next:**` line (`**下一步：**` in `zh/`) linking to the following page. Adding, removing or reordering a page
   on a path means updating that table and the `**Next:**` lines around it, in both languages.
 

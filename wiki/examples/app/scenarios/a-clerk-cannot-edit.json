@@ -1,0 +1,22 @@
+{
+  "description": "The clerk role does not hold warehouse.edit.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "clerk"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.edit",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

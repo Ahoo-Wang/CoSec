@@ -1,0 +1,17 @@
+# Rule: ATR-8
+# Mutant: the attribute plan walks every statement of a policy instead of those its index gives, so a path no statement can match still plans, and fetches, their attributes
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.ExternalAttributesTest :runtime:test --tests me.ahoo.cosec.runtime.attribute.ExternalAttributesPipelineTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
+@@ -70,8 +70,7 @@
+         if (policy.readsExternal) {
+             val statements = policy.statements(pass)
+             // The statements the evaluation visits: those its index gives (I1), or all of them without one.
+-            val index = policy.index(pass)
+-            collect(policy, statements, if (index == null) null else candidates(index))
++            collect(policy, statements, null)
+         }
+         return false
+     }

@@ -1,0 +1,19 @@
+{
+  "description": "Another member of acme, with no role and no attachment.",
+  "credential": {
+    "tenant": "acme",
+    "id": "carol",
+    "app": "wms"
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.edit",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "A DENY on the action closes the mapped route as well.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.purge",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "description": "The same role held in wh-02 grants nothing: it belongs to wh-01.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "wh-01-keeper@wh-02"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    },
+    "space": "wh-02"
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

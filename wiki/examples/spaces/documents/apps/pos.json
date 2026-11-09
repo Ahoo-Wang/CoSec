@@ -1,0 +1,29 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Sales",
+        "spaced": true,
+        "permissions": [
+          {
+            "id": "sale.create",
+            "name": "Ring up a sale",
+            "action": "pos:sale.create"
+          }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "pos.cashier",
+      "name": "Cashier",
+      "permissions": [
+        "sale.create"
+      ]
+    }
+  ]
+}

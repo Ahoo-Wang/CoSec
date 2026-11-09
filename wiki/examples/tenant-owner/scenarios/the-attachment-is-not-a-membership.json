@@ -1,0 +1,24 @@
+{
+  "description": "A named space still needs a role there: the attachment alone is refused.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "wms",
+    "policies": [
+      "tenant-owner"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.edit",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    },
+    "space": "wh-01"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "SPACE_NOT_MEMBER"
+  }
+}

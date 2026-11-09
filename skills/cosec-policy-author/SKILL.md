@@ -192,28 +192,41 @@ such an id is ambiguous and requests that need it fail closed.
 
 ## App documents and catalogs
 
+Write a permission as a catalog entry with `action` (and optional `resource`), and grant it through `roles`: no policy and
+no binding per permission.
+
 ```json
 {
   "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
-  "catalog": { "groups": [ { "name": "order", "description": "Orders", "permissions": [
-    { "id": "read", "name": "Read" }, { "id": "ship", "name": "Ship" } ] } ] },
-  "policies": [
-    { "id": "perm:order-service/read", "statements": [ { "effect": "allow", "action": "order:read", "resource": "order/**" } ] }
-  ],
-  "bindings": [
-    { "id": "viewer-read", "subject": { "role": "viewer" }, "app": "order-service", "space": "*", "policy": "perm:order-service/read" }
-  ]
+  "catalog": { "groups": [
+    { "name": "Orders", "permissions": [
+      { "id": "order.read", "name": "Read orders", "action": "order:read" } ] },
+    { "name": "Shipping", "spaced": true, "permissions": [
+      { "id": "order.ship", "name": "Ship orders", "action": "order:ship", "resource": "order/{orderId}" } ] } ] },
+  "roles": [
+    { "id": "viewer", "name": "Viewer", "permissions": ["order.read"] },
+    { "id": "clerk", "name": "Clerk", "permissions": ["order.read", "order.ship"] },
+    { "id": "admin", "name": "Administrator", "permissions": "*" } ]
 }
 ```
 
-Policies of an app document are named `perm:<appId>/<permission>` and cannot be attachable. A catalog entry with `action`
-(and optional `resource`) also defines that permission in one line, and may not coexist with a hand-written policy of
-its id; in a group that is not `spaced` it applies only in the default space. Any other entry is only for UIs and
-generators. App documents (`"roles": [{ "id": "clerk", "permissions": ["read"] }]`, or `"permissions": "*"`) and tenant
-documents (each role also names its `app` and optionally one `space`) define roles, expanded into bindings before
-anything reads them; see https://cosec.ahoo.me/policies/role-permissions#roles. The OpenAPI feature generates a route map and
-an app document (`GET /actuator/cosecServiceGenerator/routes` and `/app`). Role grant semantics:
-https://cosec.ahoo.me/policies/role-permissions.
+An entry with `action` is the policy `perm:<appId>/<id>` (one ALLOW statement, never attachable); in a group that is not
+`spaced` it applies only in the default space, in a `spaced` one in any space a role holding it applies in. An entry
+with `action` may not coexist with a hand-written policy of its id: write a policy (`perm:<appId>/<id>`, no `catalog`
+action) only for a condition, a DENY or several statements. An entry with neither is for UIs only and no role can list
+it. A system role (app document) names no `app` or `space`, applies to every tenant, and may list `"*"`; a custom role
+(tenant document) names its `app` (required), optionally one `space`, lists permissions only, and applies to that
+tenant. Roles are expanded into bindings (`role:<roleId>@<app>:<permission>`) before anything reads them; hand-written
+`bindings` still work, with `{"role": …}` subjects, and the two may both grant a role. Without spaces write nothing about
+them: no `spaced`, no `space`, no `@` in the token's roles, no `CoSec-Space-Id`.
+
+The OpenAPI feature generates a route map and an app document of short-form permissions
+(`GET /actuator/cosecServiceGenerator/routes` and `/app`); its groups are not `spaced`, so set `"spaced": true` on the
+groups of an app that uses spaces. Reference: https://cosec.ahoo.me/policies/role-permissions. Worked examples with
+documents that run (an app with and without spaces, system and custom roles, a service account in one space, a tenant
+owner by attachment, an external source of truth, route maps, a gateway):
+https://cosec.ahoo.me/scenarios/simple-mode and the pages that follow it; the model and what each document may hold:
+https://cosec.ahoo.me/guide/model.
 
 ## Rate limit rules
 
@@ -270,7 +283,8 @@ https://cosec.ahoo.me/guide/security-model.
 Check the final document for:
 
 - broad `subject: "*"` ALLOWs that grant more than intended (`*` includes anonymous callers);
-- `http:*` DENYs on a service that uses a route map (they never apply to mapped requests);
+- `http:*` DENYs and `http:` rate limit rules on a path that a route map also maps (they never apply to mapped requests):
+  write the statement for the mapped action too (https://cosec.ahoo.me/scenarios/route-maps);
 - ALLOWs built on `not`, or on attributes that can be absent (headers, `request.attributes.*`);
 - missing method constraints (`http:*` where only `http:GET` was meant) on state-changing endpoints;
 - `space: "*"` where one space was meant (`""` is the default space only);

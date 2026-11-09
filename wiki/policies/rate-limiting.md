@@ -61,7 +61,10 @@ Every document can hold rules in `rateLimits` ([fields](./language.md#rate-limit
 ```
 
 A rule matches a permitted request the way a DENY statement would: one of its action patterns, one of its resource
-patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one.
+patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one. A route in a
+service's [route map](../integration/web.md#route-maps) is not an `http` request, so a rule on `http:` and a path does
+not limit it: write the rule for the route's action too
+([Authorizing business actions](../scenarios/route-maps.md#a-request-has-one-action)).
 
 Which rules a request is held to:
 

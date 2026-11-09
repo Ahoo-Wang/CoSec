@@ -35,7 +35,9 @@ import kotlin.random.Random
  *   with `onMissing: nomatch` lapses by design (RFC 0006 Q13, platform document only), so the generator writes `nomatch`
  *   on ALLOW statements only;
  * - P14 (`ATR-8`): the plan holds every external attribute the evaluation reads, the boundary's included (#1208): the
- *   platform may name a default boundary and the tenant its own, each reading the attributes too.
+ *   platform may name a default boundary and the tenant its own, each reading the attributes too. The planner walks
+ *   the statements the policy's index gives (#1211), so half the policies are indexed from their first statement, and
+ *   statements have resource patterns the request's path may or may not match.
  */
 class ExternalAttributesPropertyTest {
     private val seed = System.getProperty("cosec.external.seed")?.toLong() ?: SEED
@@ -44,7 +46,13 @@ class ExternalAttributesPropertyTest {
         Attribute.external("ext.t.b", AttributeType.STRING),
         Attribute.external("ext.t.c", AttributeType.BOOL),
     )
-    private val compiler = PolicyCompiler(ConditionChecker(catalog = AttributeCatalog.of(attributes)))
+    private val checker = ConditionChecker(catalog = AttributeCatalog.of(attributes))
+    private val compiler = PolicyCompiler(checker)
+
+    /** Indexes every policy, whatever its number of statements. */
+    private val indexingCompiler = PolicyCompiler(checker, IndexOptions(minStatements = 1))
+    private val resources = listOf("http:path:/orders/**", "http:path:/a/**", "http:path:/a/b", "http:path:/b/**")
+    private val paths = listOf("/orders/1", "/a/b", "/a/x", "/b/y", "/c")
 
     private fun condition(random: Random, depth: Int = 0): Condition = when (random.nextInt(if (depth > 1) 4 else 7)) {
         0 -> Condition.Eq("ext.t.a", Literal.Bool(random.nextBoolean()))
@@ -77,12 +85,13 @@ class ExternalAttributesPropertyTest {
                 "s$it",
                 effect,
                 listOf(if (random.nextInt(5) == 0) "svc:verb" else "*"),
+                if (random.nextInt(3) == 0) emptyList() else listOf(ResourceSource(resources.random(random))),
                 condition = condition,
                 onMissing = onMissing,
             )
         }
         val guard = if (random.nextInt(4) == 0) condition(random) else null
-        return compiler.compile(PolicyId(id), guard, statements)
+        return (if (random.nextBoolean()) indexingCompiler else compiler).compile(PolicyId(id), guard, statements)
     }
 
     /** An ALLOW-only boundary policy, with an optional policy condition: what a boundary may hold. */
@@ -103,8 +112,13 @@ class ExternalAttributesPropertyTest {
         if (random.nextInt(4) != 0) put("ext.t.c", random.nextBoolean())
     }
 
-    private fun evaluate(view: SnapshotView, external: ExternalValues, level: TraceLevel = TraceLevel.OFF): Decision {
-        val base = flatRequest()
+    private fun evaluate(
+        view: SnapshotView,
+        path: String,
+        external: ExternalValues,
+        level: TraceLevel = TraceLevel.OFF,
+    ): Decision {
+        val base = flatRequest(path = path)
         val request = FlatRequest(base.request, base.scope, base.memberships, base.time, base.attributes, external)
         return CoSecFlatEngine.evaluate(request, view, level).decision
     }
@@ -129,22 +143,23 @@ class ExternalAttributesPropertyTest {
                 CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), emptyList(), own),
             )
             val values = values(random)
+            val path = paths.random(random)
             val all = attributes.mapTo(HashSet()) { it.path }
             val context = "seed $seed, iteration $iteration"
 
             // P14: what the evaluation reads, at any level, is planned.
-            val plan = CoSecFlatEngine.plan(flatRequest(), view).attributes.mapTo(HashSet()) { it.path }
+            val plan = CoSecFlatEngine.plan(flatRequest(path = path), view).attributes.mapTo(HashSet()) { it.path }
             for (level in TraceLevel.entries) {
                 val reads = HashSet<String>()
-                evaluate(view, ExternalValues(values, all, reads), level)
+                evaluate(view, path, ExternalValues(values, all, reads), level)
                 plan.assert().describedAs("$context, $level").containsAll(reads)
             }
 
             // P9′: from the decision with everything available, removing any attributes never makes a Permit.
-            val full = evaluate(view, ExternalValues(values, all))
+            val full = evaluate(view, path, ExternalValues(values, all))
             if (full !is Decision.Permit) {
                 val available = all.filterTo(HashSet()) { random.nextBoolean() }
-                val degraded = evaluate(view, ExternalValues(values, available))
+                val degraded = evaluate(view, path, ExternalValues(values, available))
                 (degraded is Decision.Permit).assert()
                     .describedAs("$context: $full became $degraded with only $available available").isFalse()
             }

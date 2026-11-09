@@ -86,6 +86,7 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#aPassHeldOnlyByACompilationDoesNotHoldBackTheNext",
             "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
             "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned",
+            "runtime:SnapshotRevalidationTest#aPassDoesNotWaitForACompilationThatOutlivedTheStoreReadTimeout",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
             "spring-boot:UnknownPropertiesTest#a key prefix cosec key-prefix replaced fails startup",
             "spring-boot:UnknownPropertiesTest#a replaced key prefix in the environment fails startup",

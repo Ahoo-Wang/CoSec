@@ -1,0 +1,98 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "policies": [
+    {
+      "id": "login",
+      "statements": [
+        {
+          "name": "login",
+          "effect": "allow",
+          "action": "http:POST",
+          "resource": "http:path:/auth/login"
+        }
+      ]
+    },
+    {
+      "id": "control-api",
+      "statements": [
+        {
+          "name": "reach-the-control-api",
+          "effect": "allow",
+          "action": [
+            "http:GET",
+            "http:POST",
+            "http:DELETE"
+          ],
+          "resource": "http:path:/cosec/control/v1/**",
+          "condition": {
+            "eq": [
+              "subject.authenticated",
+              true
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "public",
+      "statements": [
+        {
+          "name": "hello",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": "http:path:/hello"
+        }
+      ]
+    },
+    {
+      "id": "editors",
+      "statements": [
+        {
+          "name": "edit-articles",
+          "effect": "allow",
+          "action": [
+            "http:POST",
+            "http:PUT"
+          ],
+          "resource": "http:path:/articles/**"
+        }
+      ]
+    },
+    {
+      "id": "admins",
+      "statements": [
+        {
+          "name": "admin-area",
+          "effect": "allow",
+          "action": "http:*",
+          "resource": "http:path:/admin/**"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "login",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "login"
+    },
+    {
+      "id": "control-api",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "control-api"
+    },
+    {
+      "id": "public",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "public"
+    }
+  ]
+}

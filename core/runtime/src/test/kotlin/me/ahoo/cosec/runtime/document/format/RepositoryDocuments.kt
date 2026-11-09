@@ -34,6 +34,7 @@ object RepositoryDocuments {
     /** Resource files whose format has no schema: replay settings. */
     private val NOT_A_DOCUMENT_FORMAT = listOf(Regex("replay\\.json"))
     private val SKIPPED_DIRECTORIES = setOf("node_modules", "build", ".git", ".gradle", ".vitepress", ".idea", "docs")
+    private val EXAMPLE_DOCUMENT = Regex("^wiki/examples/[^/]+/documents[^/]*/")
     private val JSON_BLOCK = Regex("```json\\s*\\n(.*?)```", RegexOption.DOT_MATCHES_ALL)
 
     fun find(root: File): List<RepositoryDocument> {
@@ -43,7 +44,18 @@ object RepositoryDocuments {
         }
             .flatMap { resource(root, it) }
         val blocks = files.filter { it.extension == "md" && isDocumentation(root, it) }.flatMap { markdown(root, it) }
-        return resources + blocks
+        return resources + blocks + examples(root, files)
+    }
+
+    /** The documents of the scenario pages' samples (`documents` and `documents-<variant>` under `wiki/examples/<scenario>`). */
+    private fun examples(root: File, files: List<File>): List<RepositoryDocument> = files.filter {
+        it.extension == "json" && EXAMPLE_DOCUMENT.containsMatchIn(it.relativeTo(root).invariantSeparatorsPath)
+    }.map {
+        RepositoryDocument(
+            it.relativeTo(root).invariantSeparatorsPath,
+            DocumentFormats.snapshotDocumentSchema,
+            CoSecJson.mapper.readTree(it)
+        )
     }
 
     private fun isDocumentation(root: File, file: File): Boolean {

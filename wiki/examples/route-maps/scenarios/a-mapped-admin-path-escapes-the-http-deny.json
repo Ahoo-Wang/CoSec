@@ -1,0 +1,22 @@
+{
+  "description": "With a route, the same call is wms:warehouse.purge: the http DENY no longer applies, and the role permits it.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.purge",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}
