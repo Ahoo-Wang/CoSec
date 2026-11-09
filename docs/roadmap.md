@@ -314,8 +314,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R5 格式与令牌收紧（✅ #1284） | 星期拼法只接受 `MON`…`SUN`；空字符串租户声明无效；限流规则 id 与桶名统一 | G1 之前 |
 | R6 凭证读取与启动检查（✅ #1295） | `authorization` Cookie 默认关闭加开关；`CoSec-*` 只读头；删 7.x 键表、`warn` 模式、`RemovedKeyPrefixes` | #1273、F1 之后 |
 | R7a 审计记录（✅ #1297） | `authorization.source` 改用绑定词汇，删死字段和 `PolicyType`；`KafkaAuditListener.destroy()` 要等队列写完（R3 发现） | 与 G1 对齐 |
-| R7b 主体与令牌契约 | 验证结果与签发输入改成不可变值，删 `Delegated` 链；`SecurityContext` 只读；删 `RoleCapable` 等；`authenticated` 显式；token 绑定 App（RFC 0012 §3.5）；`AttributeRequest` 带上租户后删除 `Subject.tenantId`（R3 发现） | ABI 冻结前 |
-| R7c 登录协程化 | `cosec-login`、`cosec-social` 转 `suspend`，注册表改实例 | R7b 之后 |
+| R7b 主体与令牌契约（✅ #1302） | 验证结果与签发输入改成不可变值，删 `Delegated` 链；`SecurityContext` 只读；删 `RoleCapable` 等；`authenticated` 显式；token 绑定 App（RFC 0012 §3.5）；`AttributeRequest` 带上租户后删除 `Subject.tenantId`（R3 发现） | ABI 冻结前 |
+| R7c 登录协程化（✅ #1303） | `cosec-login`、`cosec-social` 转 `suspend`，注册表改实例 | R7b 之后 |
 | R8 包名对齐 | `cocache`、`webmvc`、`spring-boot` | 其余批次之后，ABI 冻结前 |
 | R9 GA 收尾 | 最后一次 v7/v8 门禁后删除工作流；文档守卫词表；alpha 升级章节；路线图页；`guava` | GA tag 前 |
 
@@ -330,7 +330,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270。
 
-整体顺序（已完成到 R7a、H4、E3；`8.0.0-alpha.4` 已发布）：R7b（含 `ApiVariantTest.GAPS`）、E2b 并行 → R7c → F2（含 G3）→ E1b → 第二轮审查 → R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
+整体顺序（已完成到 R7c、E2b；`8.0.0-alpha.4` 已发布）：E1b（#1304）→ F2（含 G3）、testkit 的 Pipeline 夹具与公开声明归类 → 第二轮审查 → R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
