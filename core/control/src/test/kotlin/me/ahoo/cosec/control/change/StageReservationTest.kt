@@ -44,6 +44,10 @@ class StageReservationTest {
     private val memory = InMemoryControlStore(clock)
 
     private class Racing(private val memory: InMemoryControlStore) : ControlStore by memory {
+        /** What runs once right before the next candidate write: another call meanwhile. */
+        @Volatile
+        var beforeCandidate: (suspend () -> Unit)? = null
+
         /** Whether the next candidate write waits for [resume], having told [paused]. */
         @Volatile
         var holdCandidate = false
@@ -66,18 +70,27 @@ class StageReservationTest {
         @Volatile
         var afterSlot: (suspend () -> Unit)? = null
 
-        override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate) {
+        override suspend fun putCandidate(
+            key: SnapshotKey,
+            expected: SnapshotDigest?,
+            candidate: StoredCandidate
+        ): Boolean {
+            beforeCandidate?.let { race ->
+                beforeCandidate = null
+                race()
+            }
             if (holdCandidate) {
                 holdCandidate = false
                 paused.complete(Unit)
                 resume.await()
             }
             failCandidate?.let { throw it }
-            memory.putCandidate(key, candidate)
-            if (loseCandidateReply) {
+            val written = memory.putCandidate(key, expected, candidate)
+            if (written && loseCandidateReply) {
                 loseCandidateReply = false
                 error("the reply was lost")
             }
+            return written
         }
 
         override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean {
@@ -307,10 +320,12 @@ class StageReservationTest {
 
     /**
      * A change that may preempt takes the slot from a stage still writing its candidate, as it would from one that
-     * finished. The stage answers 409 and does not leave its own candidate.
+     * finished. The stage answers 409, and its late write replaces nothing: the candidate is the preempting change's
+     * (the window #1290 left open: the write landed, and the stage's own withdrawal then took the other's candidate
+     * with it).
      */
     @Test
-    fun `a stage preempted while writing its candidate answers 409 and leaves no candidate of its own - #1235`() =
+    fun `a stage preempted while writing its candidate answers 409 and leaves the preempting change's candidate - #1235`() =
         runBlocking<Unit> {
             harness.revisions.publish(
                 ACME,
@@ -337,14 +352,52 @@ class StageReservationTest {
             store.paused.await()
             val window = changes.get(first.id).shadow!!.window
 
-            changes.stage(ALICE_OP, narrowing.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+            val preempting = changes.stage(ALICE_OP, narrowing.id)
+            preempting.state.assert().isEqualTo(ChangeState.SHADOWING)
             store.resume.complete(Unit)
 
             (staging.await() as ChangeRejectedException).status.assert().isEqualTo(409)
             changes.get(first.id).state.assert().isEqualTo(ChangeState.CONFLICTED)
             holder().assert().isEqualTo(narrowing.id)
             candidate().assert().isNotEqualTo(window)
+            candidate().assert().isEqualTo(preempting.shadow!!.window)
         }
+
+    /**
+     * The same race with the stalled write landing before the preempting change has written its own: the preempting
+     * change writes over it, and the candidate is its own whichever write came first.
+     */
+    @Test
+    fun `a preempting change replaces the candidate a preempted stage wrote late - #1235`() = runBlocking<Unit> {
+        harness.revisions.publish(
+            ACME,
+            null,
+            StoreFixtures.candidate(ACME, listOf(allow("reads")), listOf(bind("readers", "reads"))),
+            StoreFixtures.publication(),
+        )
+        val first = proposed("first")
+        val narrowing = changes.propose(ALICE_OP, ACME, 1, listOf(Operation.RemoveBinding(BindingId("readers"))), "ban")
+        store.holdCandidate = true
+        val staging = async(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                changes.stage(ALICE_OP, first.id)
+            } catch (e: ChangeRejectedException) {
+                e
+            }
+        }
+        store.paused.await()
+        // The preempting change has read the candidate (none) and holds the slot; before it writes, the stalled write lands.
+        store.beforeCandidate = {
+            store.resume.complete(Unit)
+            staging.await()
+        }
+
+        val preempting = changes.stage(ALICE_OP, narrowing.id)
+
+        (staging.await() as ChangeRejectedException).status.assert().isEqualTo(409)
+        holder().assert().isEqualTo(narrowing.id)
+        candidate().assert().isEqualTo(preempting.shadow!!.window)
+    }
 
     private companion object {
         const val RACES = 200

@@ -219,6 +219,9 @@ class Changes(
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
     suspend fun get(id: ChangeId): ChangeRequest = expired(read(id).value)
 
+    /** [change], as [get] answers for it, when the caller has just read it from the store and need not read it again. */
+    internal suspend fun current(change: ChangeRequest): ChangeRequest = expired(change)
+
     /**
      * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
      * keeps them from, or that they neither wrote nor may `cosec:read`, is the same 404, before its state is looked at

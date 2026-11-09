@@ -61,7 +61,8 @@ key 都在它之下（`SNP-9`）。
 | `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
 | `<s>:shadow:report:<window>:<instance>` | 仅数据面实例 `<instance>` | 该实例对一个影子窗口的累计报告；每次写入替换上一次的；窗口的候选撤回后实例不再写它；最后一次写入 8 天后过期 |
 | `<s>:shadow:reporters:<window>` | 每个数据面实例 | 对 `<window>` 报告过的实例 id；过期时间同上 |
-| `<s>:shadow:status:instances` | 每个数据面实例 | 每个实例已装入的修订及其滞后；最后一次写入 2 分钟后过期，超过一分钟的条目被忽略 |
+| `<s>:shadow:status:<instance>` | 仅数据面实例 `<instance>` | 该实例已装入的修订及其滞后；一次心跳只写这一个值，与集群规模无关；最后一次写入 2 分钟后过期，超过一分钟的状态被忽略 |
+| `<s>:shadow:instances:all` | 每个数据面实例 | 有状态可读的实例，每个带上它登记自己的时间；实例启动时登记，之后每小时再登记一次，写这个列表的实例顺带删掉超过 3 小时的条目；过期时间同报告 |
 | `<s>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id 对应 `true`；在刷新令牌有效期之后一秒过期 |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
@@ -126,8 +127,9 @@ key 都在它之下（`SNP-9`）。
 - 控制面凭证：`<s>:` 下的所有 key。
 - 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许它写自己的报告 key
   （`<s>:shadow:report:*:<instance>`），并设置它的
-  [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows)。每个实例仍要写
-  `<s>:shadow:reporters:*` 和 `<s>:shadow:status:*`，CoCache 通过 Lua 脚本写它们，所以 ACL 无法把它们限制为只能添加。
+  [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows)，以及它自己的状态 key
+  （`<s>:shadow:status:<instance>`）。每个实例仍要写 `<s>:shadow:reporters:*` 和 `<s>:shadow:instances:*`，CoCache
+  通过 Lua 脚本写它们，所以 ACL 无法把它们限制为只能添加。
 
 一个窗口的数字是每个实例一份报告之和，每份都是该实例最新的报告。控制面宁可让窗口保持打开（该步骤得到 `503`），也不
 计入任何可疑的内容：某个实例 key 下的报告写的是另一个实例或另一个窗口、计数为负、或者列出的实例没有报告。只要有一个
@@ -139,7 +141,7 @@ key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一�
 需要的命令和通道：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
 ACL SETUSER cosec-pod-a <CoCache 列出的命令和通道> +info
 ```
 

@@ -102,11 +102,17 @@ interface ControlStore : CandidateStore {
     /** Replaces the staging slot of [key] if it is still at [expected]; `false` when it changed in between. */
     suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean
 
+    /** The candidate of [key] with the digest a [putCandidate] must name, or `null` when there is none. */
+    suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>?
+
     /**
-     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4).
-     * Unconditional: the staging slot already makes its holder the only writer.
+     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4)
+     * if it is still at [expected] (`null`: only if there is none); `false` when it changed in between. The staging slot
+     * does not make its holder the only writer: a change that held it when it read the candidate may be preempted
+     * before its write lands, and its late write must not replace the candidate of the change that took the slot (#1235).
+     * A write whose outcome is unknown is resolved by reading back, never by writing again.
      */
-    suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate)
+    suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean
 
     /**
      * Removes the candidate of [key] if it is still the one of [window], in one atomic step (#1227): a change withdraws
@@ -132,14 +138,15 @@ interface ControlStore : CandidateStore {
     suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean
 
     /**
-     * The change requests that may still be open, so shadow windows can be closed (RFC 0007 §6.4) and the revisions
-     * open changes rest on kept (§5.7). It may name more, never fewer: an id is added before its change is first written
-     * and removed once a write makes the change terminal. A removal that failed is made up here: ids whose change is
-     * terminal are dropped when this is read, and so are ids whose change has been missing for longer than a write can
-     * take (a first write that failed). Callers still read each change and go by its state. A listed change whose
-     * record does not decode fails this, as [change] does: it cannot be known to be terminal.
+     * The change requests that are not terminal, as the store holds them now, so that shadow windows can be closed
+     * (RFC 0007 §6.4) and the revisions open changes rest on kept (§5.7) from one read of each. Every change that is
+     * written and not terminal is among them. A change is listed before it is first written and unlisted once a write
+     * makes it terminal: one listed and not written yet (a first write in flight) is not among them, and a removal that
+     * failed is made up here: ids whose change is terminal are dropped when this is read, and so are ids whose change has
+     * been missing for longer than a write can take (a first write that failed). A listed change whose record does not
+     * decode fails this, as [change] does: it cannot be known to be terminal.
      */
-    suspend fun openChanges(): Set<ChangeId>
+    suspend fun openChanges(): List<ChangeRequest>
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a

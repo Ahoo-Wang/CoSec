@@ -56,13 +56,14 @@ internal class StagingSlots(
 
     /**
      * Writes [candidate] for the change [shadowing] reserved. A write that fails or is cancelled gives the reservation
-     * back ([giveBack], [undo]). A reservation lost during the write (the change was abandoned, expired or preempted)
-     * takes its candidate with it: 409. A change is `SHADOWING` only while it holds the slot, with its candidate staged.
+     * back ([giveBack], [undo]). A reservation lost before or during the write (the change was abandoned, expired or
+     * preempted) takes its candidate with it: 409. A change is `SHADOWING` only while it holds the slot, with its
+     * candidate staged.
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun write(shadowing: ChangeRequest, candidate: StoredCandidate, undo: suspend () -> Unit) {
-        try {
-            store.putCandidate(shadowing.key, candidate)
+        val placed = try {
+            place(shadowing, candidate)
         } catch (e: CancellationException) {
             giveBack(shadowing, undo)
             throw e
@@ -70,16 +71,41 @@ internal class StagingSlots(
             giveBack(shadowing, undo)
             throw ChangeRejectedException(UNAVAILABLE, "the candidate of [${shadowing.key}] could not be staged", e)
         }
-        confirm(shadowing)
+        if (!placed || !stillHolds(shadowing)) {
+            lost(shadowing)
+        }
     }
 
-    /** That [shadowing] still holds its slot in its window; otherwise its candidate goes (409). */
-    private suspend fun confirm(shadowing: ChangeRequest) {
-        val current = store.change(shadowing.id)?.value
-        if (current?.state != ChangeState.SHADOWING || current.shadow != shadowing.shadow || !holds(shadowing)) {
-            withdraw(shadowing)
-            throw ChangeRejectedException(CONFLICT, "change ${shadowing.id.value} lost its slot while it was staged")
+    /**
+     * Writes [candidate] over the candidate read just before, and only if [shadowing] held its slot after that read: a
+     * change that takes the slot meanwhile writes its own candidate, which changes the digest this write names, so
+     * the late write of a change that lost the slot fails instead of replacing it (the window #1235 left open). A
+     * write over a candidate that changed is made again from the read. `false` when the slot is no longer
+     * [shadowing]'s; nothing was written then.
+     */
+    private suspend fun place(shadowing: ChangeRequest, candidate: StoredCandidate): Boolean {
+        repeat(MAX_ATTEMPTS) {
+            val staged = store.stagedCandidate(shadowing.key)
+            if (!stillHolds(shadowing)) {
+                return false
+            }
+            if (store.putCandidate(shadowing.key, staged?.digest, candidate)) {
+                return true
+            }
         }
+        error("the candidate of [${shadowing.key}] kept changing")
+    }
+
+    /** That [shadowing] is `SHADOWING` in its window and holds its slot. */
+    private suspend fun stillHolds(shadowing: ChangeRequest): Boolean {
+        val current = store.change(shadowing.id)?.value
+        return current?.state == ChangeState.SHADOWING && current.shadow == shadowing.shadow && holds(shadowing)
+    }
+
+    /** [shadowing] lost its slot: its candidate, if it wrote one and nobody replaced it, goes (409). */
+    private suspend fun lost(shadowing: ChangeRequest): Nothing {
+        withdraw(shadowing)
+        throw ChangeRejectedException(CONFLICT, "change ${shadowing.id.value} lost its slot while it was staged")
     }
 
     /**

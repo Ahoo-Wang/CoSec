@@ -73,14 +73,17 @@
     {
       "id": "CTL-6",
       "source": "RFC 0007 §5.5",
-      "statement": "A document has at most one staged change; another stages only once it is published, abandoned or expired. A change is staged before it holds the slot, so a call still writing its candidate is never taken for a free slot, and what returns SHADOWING holds the slot and owns the candidate.",
+      "statement": "A document has at most one staged change; another stages only once it is published, abandoned or expired. A change is staged before it holds the slot, so a call still writing its candidate is never taken for a free slot, and what returns SHADOWING holds the slot and owns the candidate. A stage writes its candidate only over the candidate it read, after checking it still holds the slot, so a stage preempted while it writes never replaces the candidate of the change that took the slot.",
       "level": "control",
       "guards": [
         "control:ControlFailClosedTest#one staged change per document",
         "cocache:RevisionChainTest#changes stage one at a time across instances and publish once",
         "control:StageReservationTest#a stage writing its candidate keeps the slot from another change - #1235",
         "control:StageReservationTest#a change is staged by the time it holds the slot - #1235",
-        "control:StageReservationTest#of two stages at once, the one that returns is the holder and owns the candidate - #1235"
+        "control:StageReservationTest#of two stages at once, the one that returns is the holder and owns the candidate - #1235",
+        "control:StageReservationTest#a stage preempted while writing its candidate answers 409 and leaves the preempting change's candidate - #1235",
+        "control:StageReservationTest#a preempting change replaces the candidate a preempted stage wrote late - #1235",
+        "cocache:CoCacheControlStoreTest#a candidate is written over the candidate read - #1235"
       ],
       "pending": null
     },
@@ -97,11 +100,15 @@
     {
       "id": "CTL-8",
       "source": "RFC 0007 §7.1, §7.2",
-      "statement": "Every control-plane write is checked target by target with the control plane's own policies, through the same engine, before anything is recorded: cosec:write on each entry, cosec:grant on each scope a binding grants in, and the step's own action on the document. Anything but a permit refuses it: 403, or 503 when it cannot be decided.",
+      "statement": "Every control-plane write is checked target by target with the control plane's own policies, through the same engine, before anything is recorded: cosec:write on each entry, cosec:grant on each scope a binding grants in, and the step's own action on the document. Anything but a permit refuses it: 403, or 503 when it cannot be decided. The targets of one change are decided on one confirmation of the control documents, confirmed again once they are decided: a document that moved meanwhile has them decided again, so an operator revoked during a change is refused as by a confirmation before each target, and documents that cannot be confirmed again, or keep moving, refuse it (503).",
       "level": "control",
       "guards": [
         "control:ControlAuthorizationTest#nobody writes without the right, and nothing is recorded",
-        "control:ControlAuthorizationTest#an undecidable check, a failed confirmation and a failing analysis all refuse"
+        "control:ControlAuthorizationTest#an undecidable check, a failed confirmation and a failing analysis all refuse",
+        "control:ChangeBatchAuthorizationTest#an operator revoked during the decisions of a change is refused - #1218",
+        "control:ChangeBatchAuthorizationTest#a document that moved during the decisions has them taken again - #1218",
+        "control:ChangeBatchAuthorizationTest#documents that cannot be confirmed at the end refuse the change - #1218",
+        "control:ChangeBatchAuthorizationTest#documents that keep moving refuse the change - #1218"
       ],
       "pending": null
     },
