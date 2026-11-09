@@ -39,7 +39,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
-错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息。路径、查询或请求体中任何位置的字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就是 `400`（`IDN-10`）：Redis key 会把它写成 `?`，指向另一个 id。存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 或含空段的路径是 `404`。记录解码失败的变更（包括属于不能作为应用 id 的应用的变更），对每个调用方都是不带详情的 `503`（`SCP-10`）。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
+错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息。路径、查询或请求体中任何位置的字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就是 `400`（`IDN-10`）：Redis key 会把它写成 `?`，指向另一个 id。存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 的路径是 `404`，含空段的路径在到达之前就被管道以 `400` 拒绝。记录解码失败的变更（包括属于不能作为应用 id 的应用的变更），对每个调用方都是不带详情的 `503`（`SCP-10`）。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
 
 ## 校验策略 {#validating-policies}
 
@@ -179,6 +179,8 @@ flowchart LR
 |---|---|
 | `SAME` | 相同的决策，由相同的语句做出。 |
 | `BY_CHANGED` | 相同的决策，由另一条语句做出。 |
+| `OBLIGATIONS_CHANGED` | 相同的放行，由相同的语句做出，但适用的限流规则不同。 |
+| `BECAME_DENIED` | 执行时无法决定，候选拒绝。 |
 | `WIDENED` | 执行时没有允许，候选允许。 |
 | `NARROWED` | 执行时允许，候选不允许。 |
 | `BECAME_INDETERMINATE` | 执行时不是 Indeterminate，候选是，原因不是属性不可用。 |
@@ -254,7 +256,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 
 ## 发布与回滚 {#publishing-and-rolling-back}
 
-`POST /changes/{id}:publish` 发布一个 `READY` 的变更。如果它的窗口出现了 `WIDENED`、`NARROWED` 或 `BECAME_INDETERMINATE` 的请求，或以证据不足关闭，发布者必须确认这些数字，否则返回 `428`：
+`POST /changes/{id}:publish` 发布一个 `READY` 的变更。如果它的窗口出现了 `WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`、`BECAME_DENIED` 或 `OBLIGATIONS_CHANGED` 的请求，或以证据不足关闭，发布者必须确认这些数字，否则返回 `428`：
 
 ```json
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }

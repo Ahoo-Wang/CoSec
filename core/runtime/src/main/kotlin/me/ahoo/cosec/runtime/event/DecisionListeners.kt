@@ -241,7 +241,8 @@ class DecisionListeners(
                 }
                 queued.stats.failureCount.incrementAndGet()
                 warn(queued.stats, e) { "Decision listener [${queued.listener.name}] failed." }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // An Error too: nothing restarts this consumer, and every later event of the listener would be dropped.
                 queued.stats.failureCount.incrementAndGet()
                 warn(queued.stats, e) { "Decision listener [${queued.listener.name}] failed." }
             }

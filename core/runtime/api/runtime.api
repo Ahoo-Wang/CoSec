@@ -690,11 +690,13 @@ public final class me/ahoo/cosec/runtime/shadow/RecordedWindow {
 
 public final class me/ahoo/cosec/runtime/shadow/ShadowOutcome : java/lang/Enum {
 	public static final field BASE_MISMATCH Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
+	public static final field BECAME_DENIED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field BECAME_INDETERMINATE Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field BY_CHANGED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field CANDIDATE_ERROR Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field CANDIDATE_INDETERMINATE Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field NARROWED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
+	public static final field OBLIGATIONS_CHANGED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field SAME Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field WIDENED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public final fun getEffective ()Z

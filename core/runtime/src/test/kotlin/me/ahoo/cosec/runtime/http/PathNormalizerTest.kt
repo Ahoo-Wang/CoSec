@@ -64,6 +64,58 @@ class PathNormalizerTest {
         PathNormalizer.normalize(path).assert().isNull()
     }
 
+    /**
+     * PIP-14: what a backend may read as another path, which a pattern reads as segments of its own. A DENY on the
+     * segments under `/admin` does not match `//admin/x` or `/admin%2Fx`, and a broad ALLOW then lets through what a
+     * backend that merges slashes or decodes separators serves as `/admin/x`.
+     */
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "//",
+            "//admin/x",
+            "/admin//x",
+            "/a///b",
+            "/a//",
+            "a//b",
+            // Removing path parameters leaves an empty segment.
+            "/;x/admin/x",
+            "/admin/;x/x",
+            "/a;x//b",
+            // A backslash separates segments for this check, as it does for a dot segment.
+            "/\\admin/x",
+            "/a\\\\b",
+            "/a\\/b",
+            "/a%5C/b",
+            "/a%5c%5cb",
+            // An encoded separator, in either case, wherever it is.
+            "/admin%2Fx",
+            "/admin%2fx",
+            "/%2Fadmin/x",
+            "/a/%2F",
+            "/a/b%2F",
+        ]
+    )
+    fun emptySegmentsAndEncodedSeparatorsAreRejected(path: String) {
+        PathNormalizer.normalize(path).assert().isNull()
+    }
+
+    /** PIP-14: a trailing separator is not an empty segment before the end, and a double-encoded one decodes to text. */
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            "/admin/|/admin/",
+            "/a/b/|/a/b/",
+            "/a/;x|/a/",
+            "/a;x/|/a/",
+            "/a%252Fb|/a%252Fb",
+        ]
+    )
+    fun aTrailingSeparatorIsKept(path: String, normalized: String) {
+        PathNormalizer.normalize(path).assert().isEqualTo(normalized)
+    }
+
     @ParameterizedTest
     @CsvSource(
         delimiter = '|',

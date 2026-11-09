@@ -117,14 +117,11 @@ class ShadowListener(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.debug(e) { "The candidate of window ${candidate.window} failed to evaluate." }
-            recorder.record(
-                key,
-                candidate.window,
-                ShadowOutcome.CANDIDATE_ERROR,
-                installed,
-                sample(replay.request, enforced, null)
-            )
+            failedToEvaluate(replay, enforced, key, installed, candidate, e)
+            return
+        } catch (e: StackOverflowError) {
+            // As a compilation that overflows (RC1-43): an instance that cannot evaluate the candidate blocks its window.
+            failedToEvaluate(replay, enforced, key, installed, candidate, e)
             return
         }
         val outcome = outcome(enforced, decided)
@@ -136,6 +133,24 @@ class ShadowListener(
             sample(replay.request, enforced, decided).takeIf {
                 outcome != ShadowOutcome.SAME
             }
+        )
+    }
+
+    private fun failedToEvaluate(
+        replay: ReplayHandle,
+        enforced: Decision,
+        key: SnapshotKey,
+        installed: Long?,
+        candidate: Candidate.Ready,
+        error: Throwable,
+    ) {
+        log.debug(error) { "The candidate of window ${candidate.window} failed to evaluate." }
+        recorder.record(
+            key,
+            candidate.window,
+            ShadowOutcome.CANDIDATE_ERROR,
+            installed,
+            sample(replay.request, enforced, null)
         )
     }
 
@@ -212,7 +227,15 @@ class ShadowListener(
 
         candidate is Decision.Permit && enforced !is Decision.Permit -> ShadowOutcome.WIDENED
         enforced is Decision.Permit && candidate !is Decision.Permit -> ShadowOutcome.NARROWED
+        enforced is Decision.Indeterminate && candidate is Decision.Deny -> ShadowOutcome.BECAME_DENIED
+        else -> sameResult(enforced, candidate)
+    }
+
+    /** What differs, if anything, between two decisions that come to the same result but are not equal. */
+    private fun sameResult(enforced: Decision, candidate: Decision): ShadowOutcome = when {
         enforced::class == candidate::class && by(enforced) != by(candidate) -> ShadowOutcome.BY_CHANGED
+        enforced is Decision.Permit && candidate is Decision.Permit && enforced.obligations != candidate.obligations ->
+            ShadowOutcome.OBLIGATIONS_CHANGED
         else -> ShadowOutcome.SAME
     }
 

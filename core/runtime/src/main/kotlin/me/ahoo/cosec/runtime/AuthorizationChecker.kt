@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
@@ -58,9 +59,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         decide(security, action, resource) is Decision.Permit
 
     /**
-     * The decision that [check] answers for the same arguments. A context the pipeline did not make, or an action
-     * without `:`, is an implicit deny (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check
-     * writes no audit. The obligations of a permit, rate limits, did not run.
+     * The decision that [check] answers for the same arguments. A context the pipeline did not make, an action
+     * without `:`, or a resource enforcement would not decide ([enforceable], `PIP-15`) is an implicit deny
+     * (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
+     * of a permit, rate limits, did not run.
      *
      * An error thrown by the check is `Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, error))`. That cause
      * stands for any failure of the check, not only a platform document that could not be read: [Cause] has no case for
@@ -89,8 +91,33 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         decide(security, action, resource) is Decision.Permit
 
     /** As [decide], with the action and resource given as the engine reads them. */
+    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
+        val decidable = enforceable(resource) ?: return Decision.Deny(null)
+        return decided(security, action, decidable)
+    }
+
+    /**
+     * [resource] as enforcement reads it (`PIP-15`), or null when enforcement would refuse it, so that a check never
+     * permits what no request could be permitted for: an `http` path goes through what every request's path does
+     * ([PathNormalizer.normalize]), since the engine does not resolve a dot segment and a wildcard under `/public` would
+     * match `/public/../admin`; a typed id, which no request carries as written, is held to the same length bounds.
+     */
+    @OptIn(InternalCoSecApi::class)
+    private fun enforceable(resource: Resource): Resource? {
+        val id = if (resource.type == HTTP) {
+            PathNormalizer.normalize(resource.id)
+        } else {
+            resource.id.takeIf(PathNormalizer::withinBounds)
+        }
+        return when (id) {
+            null -> null
+            resource.id -> resource
+            else -> Resource(resource.type, id, resource.attributes)
+        }
+    }
+
     @Suppress("TooGenericExceptionCaught")
-    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
+    private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
         pipeline.check(security, action, resource)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
@@ -112,7 +139,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
-        return decide(scoped, action, resource)
+        return decided(scoped, action, resource)
     }
 
     /**
@@ -177,7 +204,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         resource: Resource,
     ): Decision {
         val recorded = security.asPrincipal(principal, memberships, app) ?: return Decision.Deny(null)
-        return decide(recorded, action, resource)
+        return decided(recorded, action, resource)
     }
 
     private companion object {

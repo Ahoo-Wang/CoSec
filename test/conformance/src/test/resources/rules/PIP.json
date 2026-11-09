@@ -157,6 +157,30 @@
         "spring-boot:CoSecPipelineAutoConfigurationTest#the authorization cookie is a credential only with allow-cookie-token"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-14",
+      "source": "RFC 0006 §5.3.1; round-2 review M1",
+      "statement": "A path with an empty segment before its end (`//`, also as removing a path parameter leaves it, and with `\\` as a separator) or with an encoded separator (`%2F`, in either case) is answered 400 before authentication: a pattern reads them as segments of their own, so a DENY would not match what a backend that merges slashes or decodes separators serves. A trailing `/` is read as written.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PathNormalizerTest#emptySegmentsAndEncodedSeparatorsAreRejected",
+        "runtime:PathNormalizerTest#aTrailingSeparatorIsKept",
+        "runtime:PipelineTest#ambiguousPathIsInvalidRequestBeforeAuthentication"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-15",
+      "source": "RFC 0006 §7.6; round-2 review M2",
+      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:AuthorizationCheckerTest#a path enforcement refuses is never permitted",
+        "runtime:AuthorizationCheckerTest#a path is decided as enforcement normalizes it",
+        "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied"
+      ],
+      "pending": null
     }
   ]
 }

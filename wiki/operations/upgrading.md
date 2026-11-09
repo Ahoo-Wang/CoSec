@@ -16,6 +16,16 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A path with an empty segment or an encoded separator is a `400`** (`PIP-14`). `//admin`, `/admin//x`, `/;x/admin`
+  and `/admin%2Fx` were decided as paths of their own, so a `DENY` under `/admin` did not match them, while a backend
+  that merges slashes or decodes separators served them as `/admin/...`. Clients that join URL parts with a `/` each
+  must stop sending `//`. A trailing `/` is unchanged: `/admin/` stays its own path.
+- **A check refuses what enforcement refuses** (`PIP-15`). `AuthorizationChecker.check` and `decide` now read a path as
+  the pipeline reads a request: one the pipeline answers `400` for is a deny, as is any resource over a request path's
+  length bounds. Before, `/public/../admin` could be permitted by an `ALLOW` under `/public`.
+- **Shadow windows count two more outcomes**: `BECAME_DENIED` and `OBLIGATIONS_CHANGED` were counted as `SAME`, and a
+  publish must now acknowledge them. Finish or abandon open windows before a rolling upgrade: an instance of the
+  previous version cannot read a report that holds them.
 - **Tokens and API keys declare their app** (batch R7b, RFC 0012 §3.5, `SCP-11`). A token's `aud` and an API key's `app`
   name the app the credential belongs to, and `ScopeResolver` compares them with the host's: a host with an app
   (`cosec.authorization.scope.app-id`, or a route's `cosec-app-id`) refuses a credential declaring another app, or none,

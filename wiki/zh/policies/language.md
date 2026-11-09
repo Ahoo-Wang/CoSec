@@ -168,7 +168,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ### HTTP 路径 {#http-paths}
 
-`http:path:<pattern>` 匹配类型为 `http`、id 为请求路径（经管道规范化，见 [Web 集成](../integration/web.md)）的资源。在以下子集上，它与 Spring 的 `PathPattern` 匹配结果一致：
+`http:path:<pattern>` 匹配类型为 `http`、id 为请求路径（经管道规范化，见 [Web 集成](../integration/web.md)）的资源。模式不会遇到路径结尾之前的空段或编码后的 `/`，管道会以 `400` 拒绝它们。末尾的 `/` 是路径的一部分：`/admin` 不匹配 `/admin/`，`/admin/**` 匹配。在以下子集上，它与 Spring 的 `PathPattern` 匹配结果一致：
 
 | 元素 | 匹配 |
 |---|---|

@@ -299,7 +299,7 @@ data class ShadowSummary(
     val needsAck: Boolean get() = insufficient || ACKNOWLEDGED.any { (counts[it] ?: 0) > 0 }
 
     private companion object {
-        val ACKNOWLEDGED = listOf("WIDENED", "NARROWED", "BECAME_INDETERMINATE")
+        val ACKNOWLEDGED = listOf("WIDENED", "NARROWED", "BECAME_INDETERMINATE", "BECAME_DENIED", "OBLIGATIONS_CHANGED")
     }
 }
 
