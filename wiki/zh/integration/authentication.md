@@ -99,8 +99,8 @@ CoSec 把 `roles` 和 `policies` 声明读作主体的**成员关系**：它在�
 
 CoSec 不提供登录端点。由你校验凭证，CoSec 把主体转换成令牌：
 
-1. 为你的凭证类型 `C` 实现 `Authentication<C>`，并声明为 Bean。它返回 `TokenSubject`（`me.ahoo.cosec.login.token`），即令牌要写入的内容。starter 会按支持的凭证类型注册每个 `Authentication` Bean。
-2. 在你的端点中调用 `TokenCompositeAuthentication.authenticateAsToken(credentials)`。它根据凭证类型（或其父类型）选择 `Authentication`，返回包含 `accessToken` 和 `refreshToken` 的 `Mono<CompositeToken>`。
+1. 为你的凭证类型 `C` 实现 `Authentication<C>`，并声明为 Bean。它返回 `TokenSubject`（`me.ahoo.cosec.login.token`），即令牌要写入的内容。starter 会按支持的凭证类型把每个 `Authentication` Bean 注册到该应用上下文自己的注册表中。
+2. 在你的端点中调用挂起函数 `TokenCompositeAuthentication.authenticateAsToken(credentials)`。它根据凭证类型（或其父类型）选择 `Authentication`，返回包含 `accessToken` 和 `refreshToken` 的 `CompositeToken`。
 
 ```kotlin
 data class PasswordCredentials(val username: String, val password: String) : Credentials
@@ -110,18 +110,21 @@ class PasswordAuthentication(private val users: UserService) :
     Authentication<PasswordCredentials> {
     override val supportCredentials = PasswordCredentials::class.java
 
-    override fun authenticate(credentials: PasswordCredentials): Mono<TokenSubject> =
-        users.verify(credentials.username, credentials.password)
-            .map { user -> TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order")) }
+    override suspend fun authenticate(credentials: PasswordCredentials): TokenSubject {
+        val user = users.verify(credentials.username, credentials.password)
+        return TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order"))
+    }
 }
 
 @RestController
 class LoginController(private val authentication: TokenCompositeAuthentication) {
     @PostMapping("/auth/login")
-    fun login(@RequestBody credentials: PasswordCredentials): Mono<out CompositeToken> =
+    suspend fun login(@RequestBody credentials: PasswordCredentials): CompositeToken =
         authentication.authenticateAsToken(credentials)
 }
 ```
+
+`authenticate` 通过抛出异常来拒绝登录：它没有“空”的回答，登录失败或调用方已离开时都不会签发令牌。它运行在调用方的线程上，在 WebFlux 中就是事件循环，因此基于阻塞客户端（例如 JDBC 用户表）的实现要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界调度器上。Spring 在 WebFlux 和 Spring MVC 中都能运行 `suspend` 控制器函数。MVC 需要类路径上有 `kotlinx-coroutines-reactor`；没有时，请在请求线程上调用 `runBlocking { ... }`。
 
 这里的 `Credentials` 和 `Authentication` 是 `me.ahoo.cosec.login` 中的登录类型（`TokenCompositeAuthentication` 和 `TokenConverter` 在 `me.ahoo.cosec.login.token` 中），来自 starter 自带的 `cosec-login`；它们不是管道的 `Credentials` 和 `Authenticator`（`me.ahoo.cosec.spi.authn`）。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication` 和社交登录；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。要自己签发令牌（例如使用自定义有效期），调用 `TokenConverter.toToken(principal)` 或 `toToken(principal, accessValidity, refreshValidity)`。
 
@@ -144,7 +147,7 @@ data class RefreshCredentials(override val accessToken: String, override val ref
     RefreshTokenCredentials
 
 @PostMapping("/auth/refresh")
-fun refresh(@RequestBody credentials: RefreshCredentials): Mono<out CompositeToken> =
+suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToken =
     authentication.authenticateAsToken(credentials)
 ```
 
@@ -232,7 +235,7 @@ cosec:
 
 主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空或不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为租户 id 为空的主体签发令牌。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
-要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户，并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。
+要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户（不属于时抛出异常以拒绝），并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。
 
 ## 应用 {#apps}
 
@@ -256,11 +259,11 @@ cosec:
 
 启用 `cosec-social` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
 
-1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
+1. 把用户引导到挂起函数 `socialAuthentication.authorizeUrl("<name>")` 返回的地址。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 令牌属于 `cosec.authorization.scope.app-id`（用户登录的宿主的应用，未配置则不属于任何应用），并创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
-这两步都会阻塞所在线程。`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调中的 `authenticateAsToken` 通过 JustAuth 的阻塞 HTTP 调用提供方。请在事件循环之外调用它们：在 WebFlux 中使用 `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` 和回调的 `Mono`，并分别加上 `.subscribeOn(Schedulers.boundedElastic())`。
+JustAuth 是阻塞的：`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
 
 ## 网关之后 {#behind-a-gateway}
 

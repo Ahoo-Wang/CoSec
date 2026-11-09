@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.login.token
 
+import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.api.context.ForwardedIdentity
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
@@ -20,21 +21,17 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import reactor.core.publisher.Mono
-import reactor.kotlin.test.test
+import org.junit.jupiter.api.assertThrows
 
 /** The documented extension point for switching tenants (`wiki/integration/authentication.md`). */
 class AbstractSwitchTenantAuthenticationTest {
     /** Lets a principal into the tenants it is a member of, with what it holds there, and nowhere else. */
     private class Switching(private val members: Map<String, TenantMembership>) : AbstractSwitchTenantAuthentication() {
-        override fun switchTenant(
+        override suspend fun switchTenant(
             targetTenantId: String,
             previous: SecurityContext
-        ): Mono<TenantMembership> {
-            val membership = members[targetTenantId] ?: return Mono.error(
-                IllegalArgumentException("[${previous.principal.id}] may not enter [$targetTenantId].")
-            )
-            return Mono.just(membership)
+        ): TenantMembership = requireNotNull(members[targetTenantId]) {
+            "[${previous.principal.id}] may not enter [$targetTenantId]."
         }
     }
 
@@ -68,58 +65,48 @@ class AbstractSwitchTenantAuthenticationTest {
 
     /** RC1-23: the new token holds the target tenant's memberships only, never the previous tenant's. */
     @Test
-    fun `the principal is switched into the target tenant with that tenant's memberships only`() {
+    fun `the principal is switched into the target tenant with that tenant's memberships only`() = runTest {
         val viewer = TenantMembership(roles = setOf("viewer"), attributes = mapOf("department" to "globex-sales"))
-        Switching(mapOf("globex" to viewer)).authenticate(Credentials("globex", alice))
-            .test()
-            .consumeNextWith {
-                it.tenant.assert().isEqualTo("globex")
-                it.id.assert().isEqualTo("alice")
-                it.roles.assert().containsExactly("viewer")
-                it.policies.assert().isEmpty()
-                it.attributes.assert().isEqualTo(mapOf("department" to "globex-sales"))
-                it.membershipMarker.assert().isNull()
-            }
-            .verifyComplete()
+        val subject = Switching(mapOf("globex" to viewer)).authenticate(Credentials("globex", alice))
+        subject.tenant.assert().isEqualTo("globex")
+        subject.id.assert().isEqualTo("alice")
+        subject.roles.assert().containsExactly("viewer")
+        subject.policies.assert().isEmpty()
+        subject.attributes.assert().isEqualTo(mapOf("department" to "globex-sales"))
+        subject.membershipMarker.assert().isNull()
     }
 
     @Test
-    fun `a switch to the provider's memberships claims none`() {
-        Switching(mapOf("globex" to TenantMembership.fromProvider())).authenticate(Credentials("globex", alice))
-            .test()
-            .consumeNextWith {
-                it.tenant.assert().isEqualTo("globex")
-                it.roles.assert().isEmpty()
-                it.policies.assert().isEmpty()
-                it.attributes.assert().isEmpty()
-                it.membershipMarker.assert().isEqualTo(MembershipClaims.PROVIDER)
-            }
-            .verifyComplete()
+    fun `a switch to the provider's memberships claims none`() = runTest {
+        val subject = Switching(mapOf("globex" to TenantMembership.fromProvider()))
+            .authenticate(Credentials("globex", alice))
+        subject.tenant.assert().isEqualTo("globex")
+        subject.roles.assert().isEmpty()
+        subject.policies.assert().isEmpty()
+        subject.attributes.assert().isEmpty()
+        subject.membershipMarker.assert().isEqualTo(MembershipClaims.PROVIDER)
     }
 
     /** `SCP-11`: a user cannot change the app of a token by switching tenant, and a token for no app stays so. */
     @Test
-    fun `the new token keeps the app of the previous one`() {
+    fun `the new token keeps the app of the previous one`() = runTest {
         val member = Switching(mapOf("globex" to TenantMembership()))
-        member.authenticate(Credentials("globex", context(app = "order")))
-            .test().consumeNextWith { it.app.assert().isEqualTo("order") }.verifyComplete()
-        member.authenticate(Credentials("globex", context()))
-            .test().consumeNextWith { it.app.assert().isNull() }.verifyComplete()
+        member.authenticate(Credentials("globex", context(app = "order"))).app.assert().isEqualTo("order")
+        member.authenticate(Credentials("globex", context())).app.assert().isNull()
     }
 
     @Test
-    fun `an anonymous request cannot switch tenant`() {
-        Switching(
-            mapOf("globex" to TenantMembership())
-        ).authenticate(Credentials("globex", context(authenticated = false)))
-            .test().verifyError(IllegalStateException::class.java)
+    fun `an anonymous request cannot switch tenant`() = runTest {
+        assertThrows<IllegalStateException> {
+            Switching(mapOf("globex" to TenantMembership()))
+                .authenticate(Credentials("globex", context(authenticated = false)))
+        }
     }
 
     @Test
-    fun `a switch the implementation refuses is an error`() {
-        Switching(mapOf("acme" to TenantMembership())).authenticate(Credentials("globex", alice))
-            .test()
-            .expectError(IllegalArgumentException::class.java)
-            .verify()
+    fun `a switch the implementation refuses is an error`() = runTest {
+        assertThrows<IllegalArgumentException> {
+            Switching(mapOf("acme" to TenantMembership())).authenticate(Credentials("globex", alice))
+        }
     }
 }

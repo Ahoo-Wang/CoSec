@@ -104,8 +104,7 @@ The rules behind the picture:
   `Dispatchers.IO` or `GlobalScope`.
 - **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
   `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
-  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, whose `Authentication`
-  contracts return `Mono`), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
+  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
   decisions (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
   and `cosec-jwt`; every other module is `compileOnly` in
@@ -132,7 +131,7 @@ The rules behind the picture:
   a Redis client, or when a project other than `cosec-cosid` and the starter declares or resolves CosId, or another
   build script names it (a BOM importing CosId included): CoSec makes its own ids (`IdGenerator`), so that an application
   can use any CosId version.
-- `SourceRulesTest` scans the compiled classes: Reactor only in the edge, the extensions and the host (and
+- `SourceRulesTest` scans the compiled classes: Reactor only in the edge and the host (and
   `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
   `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
   `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; only `cosec-cosid`'s and the starter's

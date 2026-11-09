@@ -14,7 +14,6 @@ package me.ahoo.cosec.social
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.login.token.TokenSubject
-import reactor.core.publisher.Mono
 
 /**
  * Social User Principal Converter .
@@ -24,7 +23,7 @@ import reactor.core.publisher.Mono
 
 @CoSecSpi
 fun interface SocialUserPrincipalConverter {
-    fun convert(provider: String, authUser: SocialUser): Mono<TokenSubject>
+    suspend fun convert(provider: String, authUser: SocialUser): TokenSubject
 
     companion object {
         /** The attribute naming the provider registration the user signed in with. */

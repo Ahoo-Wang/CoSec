@@ -14,7 +14,6 @@ package me.ahoo.cosec.login
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.login.token.TokenSubject
-import reactor.core.publisher.Mono
 
 /**
  * Authentication interface for credential verification.
@@ -22,6 +21,9 @@ import reactor.core.publisher.Mono
  * Authentication is the process of verifying the identity of a user
  * by validating their credentials. If successful, it returns the
  * [TokenSubject] a token is issued for.
+ *
+ * It runs on the caller's thread, which may be an event loop: an implementation over a blocking client moves the call to
+ * its own bounded dispatcher, with `runInterruptible(myDispatcher)`.
  *
  * @param C The type of credentials this authentication supports
  *
@@ -40,7 +42,9 @@ interface Authentication<C : Credentials> {
      * Authenticates the provided credentials.
      *
      * @param credentials The credentials to validate
-     * @return [Mono] emitting what the token will say, or empty if authentication fails
+     * @return What the token will say
+     * @throws Exception when authentication fails: there is no value that means "refused", so a failure cannot be
+     *   mistaken for a subject. Never catch a `CancellationException` here.
      */
-    fun authenticate(credentials: C): Mono<TokenSubject>
+    suspend fun authenticate(credentials: C): TokenSubject
 }

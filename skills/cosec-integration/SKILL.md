@@ -208,7 +208,8 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 - Tokens are read from the `Authorization` header; the query parameter only with
   `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with `cosec.pipeline.allow-cookie-token=true`
   (a browser sends a cookie on a cross-site request too, so that application defends against CSRF itself). Issue them
-  with the `TokenConverter` bean.
+  with the `TokenConverter` bean, or from a login endpoint with `TokenCompositeAuthentication.authenticateAsToken`
+  (suspend), which runs your `Authentication` bean for the credentials: `authenticate` is `suspend` and throws to refuse.
 - A token's `roles` claim (`role` in the default space, `role@space` elsewhere) and `policies` claim (attached policy
   ids, which must be `attachable`) are the principal's memberships. A token with the claim `cosec.membership:
   "provider"` and no roles or policies takes them from a `MembershipProvider` bean instead; a `JwtTokenConverter` bean

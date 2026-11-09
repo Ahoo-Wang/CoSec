@@ -140,9 +140,19 @@ class DependencyRulesTest {
     }
 
     @Test
-    fun `the backends declare no Reactor`() {
-        val violations = listOf("cocache", "kafka").flatMap { project ->
-            modules(project, "declared").filter { it.startsWith("io.projectreactor:") }.map { "$project: $it" }
+    fun `the backends and the extensions declare no Reactor`() {
+        val projects = ProjectListTest.PROJECTS.filter { Projects.groupOf(it) in setOf("backends", "extensions") }
+        val violations = projects.flatMap { project ->
+            modules(project, "declared").filter { it.startsWith("io.projectreactor") }.map { "$project: $it" }
+        }
+        violations.assert().isEmpty()
+    }
+
+    /** Login's contracts are suspending, so nothing about it may bring Reactor to an application. */
+    @Test
+    fun `login and jwt resolve no Reactor`() {
+        val violations = listOf("login", "jwt").flatMap { project ->
+            modules(project, "resolved").filter { it.startsWith("io.projectreactor") }.map { "$project: $it" }
         }
         violations.assert().isEmpty()
     }
