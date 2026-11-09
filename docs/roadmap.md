@@ -330,7 +330,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270。
 
-整体顺序（已完成到 F2、E1b，testkit 夹具与公开声明归类 ✅ #1307）：第二轮审查 → R8 → R9。第二轮审查按模块分 6 组，每次 2 组：runtime、control（已审，修复中）；model、spi、engine；后端与 jwt、login、social；edge 与其余扩展；spring-boot、migrate、testkit、api。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
+**2026-11-09 暂停（额度不足）**：第二轮审查的 runtime（1 高 2 中 2 低）、control（2 中 8 低）已审，修复在两个 `wip:` 分支上，未开 PR；control 的 M2（删除 DENY 需要审批）未开始。恢复顺序：完成并合入这两批修复 → 第二轮审查其余 4 组（model、spi、engine；后端与 jwt、login、social；edge 与其余扩展；spring-boot、migrate、testkit、api）→ R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
@@ -363,7 +363,6 @@ E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；
 | 事项 | 背景 | 协调者的建议 |
 |---|---|---|
 | 何时发 8.0 RC / GA | RFC 0001 §6：由维护者决定 | 等 RC 前提全部满足后再议 |
-| 平台或 App 层删除 DENY 是否需要审批（第二轮审查 control M2） | RFC 0007 §7.4.4 认为删除不授出权限，理由是租户层的 DENY 删掉后仍受平台层约束；这在平台层和 App 层不成立：持有 `cosec:write`、`publish`、`skip-shadow` 的平台主体可以单人删除影响所有租户的 DENY | 需要审批：`untenanted` 判定被删的策略含 DENY 时走 `NOT_ANALYZED`，租户文档不变 |
 
 ## 9. 维护者决定（2026-10-26 起）
 
@@ -440,6 +439,7 @@ E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；
 | **E2 拆成 E2a（正确性）与 E2b（规模与性能）**；E2a 先重新生成 D2 之后不再能应用的 6 个变异体；需要条件删除的修复（#1227、租约释放）在 CoCache 6 没有该能力时不在 CoSec 里绕过，留给 #1203 | 2026-11-07 | 协调者按推荐 |
 | **模型关系（RFC 0012）**：Binding 留在文档里；User、Organization 不进模型；App 保持平台级，租户开通状态不进文档；Operation、Space 角色不拆成两种；角色属于一个 App，可指定 Space；Space 对 App 是可选的，App 与 Space 的两种关系都支持，由角色的 `(app, space)` 决定，不加前缀校验；外部事实源经控制面同步；租户读目录和系统角色放 8.1；文档格式增加 `roles`、`action`、`resource`；非 `spaced` 权限用策略条件限制在默认空间；未指定 Space 的角色授出 `spaced` 权限需要 `(*, *)` 的持有，否则走审批；在 F1 之后、F2 之前实现 | 2026-11-08 | 维护者："按你推荐"、"两种都支持"、"空间概念不是每个App 必须的"、对照实际场景审查后"按结论修订"、"按建议定稿" |
 | **v6/v7 残留清理（R1–R9）**：Cookie 令牌默认关闭加开关；alpha 数据容错全删并拆分 `SCP-7`；主体与令牌契约重切；审计记录重切，Kafka 下游字段会变；登录模块转 `suspend`，取消 Reactor 例外；删 7.x 键表和 `warn` 模式；星期拼法、空租户声明、限流命名、`CoSec-*` 查询参数都收紧；包名与模块名对齐；v7/v8 门禁在 GA tag 前跑最后一次后删除；`ognl` 约束挪到 migrate，去掉 guava；alpha 升级章节 GA 时删；token 绑定 App 并入 R7b，U15 取消 | 2026-11-08 | 维护者："必须在GA前达到理想目标架构状态。不要为了向前兼容妥协"、"按建议定" |
+| **平台或 App 层删除含 DENY 的策略或绑定需要审批**（修订 RFC 0007 §7.4.4；角色删除或 `putRole` 去掉含 DENY 的权限同样处理，租户文档不变） | 2026-11-09 | 维护者："要审批" |
 
 ## 10. 尚未派发的下一步
 
