@@ -24,6 +24,7 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration
 public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$CoCacheRedis {
 	public fun <init> ()V
 	public fun cosecCoCacheRedisCheck (Lorg/springframework/context/ApplicationContext;)Lorg/springframework/beans/factory/InitializingBean;
+	public fun cosecCoCacheStarterCheck (Lorg/springframework/context/ApplicationContext;)Lorg/springframework/beans/factory/InitializingBean;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration$Companion {
@@ -62,15 +63,13 @@ public class me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration
 
 public final class me/ahoo/cosec/spring/boot/starter/CoSecProperties : me/ahoo/cosec/spring/boot/starter/EnabledCapable {
 	public fun <init> ()V
-	public fun <init> (ZLme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;Ljava/lang/String;)V
-	public synthetic fun <init> (ZLme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZLjava/lang/String;)V
+	public synthetic fun <init> (ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getEnabled ()Z
 	public final fun getKeyPrefix ()Ljava/lang/String;
-	public final fun getUnknownProperties ()Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
 	public final fun keysOf (Ljava/lang/String;)Ljava/lang/String;
 	public fun setEnabled (Z)V
 	public final fun setKeyPrefix (Ljava/lang/String;)V
-	public final fun setUnknownProperties (Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;)V
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/CoSecPropertiesKt {
@@ -97,25 +96,15 @@ public abstract interface class me/ahoo/cosec/spring/boot/starter/EnabledCapable
 
 public final class me/ahoo/cosec/spring/boot/starter/UnknownProperties {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/UnknownProperties$Companion;
-	public static final field MODE_KEY Ljava/lang/String;
+	public static final field DOCUMENTATION Ljava/lang/String;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> (Ljava/util/Set;Ljava/util/Set;)V
-	public final fun check (Lorg/springframework/core/env/ConfigurableEnvironment;Z)V
+	public final fun check (Lorg/springframework/core/env/ConfigurableEnvironment;)V
 	public final fun of (Lorg/springframework/core/env/ConfigurableEnvironment;)Ljava/util/List;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/UnknownProperties$Companion {
-	public final fun getRENAMED ()Ljava/util/Map;
-	public final fun hint (Ljava/lang/String;)Ljava/lang/String;
 	public final fun load (Ljava/lang/ClassLoader;)Lme/ahoo/cosec/spring/boot/starter/UnknownProperties;
-}
-
-public final class me/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode : java/lang/Enum {
-	public static final field FAIL Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
-	public static final field WARN Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
-	public static fun values ()[Lme/ahoo/cosec/spring/boot/starter/UnknownPropertiesMode;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/actuate/CoSecServiceGeneratorEndpoint {
@@ -449,19 +438,6 @@ public final class me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheCo
 	public final fun getDEFAULT_LOCAL_MAX_AGE ()Ljava/time/Duration;
 }
 
-public final class me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties {
-	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties$Companion;
-	public static final field PREFIX Ljava/lang/String;
-	public fun <init> ()V
-	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheConfiguration;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheConfiguration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getToken ()Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheConfiguration;
-	public final fun setToken (Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheConfiguration;)V
-}
-
-public final class me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties$Companion {
-}
-
 public class me/ahoo/cosec/spring/boot/starter/control/CoSecControlAutoConfiguration {
 	public fun <init> ()V
 	public fun cosecChangeAuthority (Lme/ahoo/cosec/control/authz/ControlAuthorizer;Lme/ahoo/cosec/control/change/ChangeOptions;Lme/ahoo/cosec/spring/boot/starter/control/ControlProperties;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperties;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/control/change/ChangeAuthority;
@@ -666,7 +642,7 @@ public class me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAuto
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration$Companion;
 	public static final field REVOKED_SUBJECT_CACHE_BEAN_NAME Ljava/lang/String;
 	public static final field REVOKED_TOKEN_CACHE_BEAN_NAME Ljava/lang/String;
-	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)V
+	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperties;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)V
 	public fun coCacheTokenStore (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;)Lme/ahoo/cosec/spi/token/TokenStore;
 	public fun revokedSubjectCache (Lme/ahoo/cocache/core/CoCacheFactory;)Lme/ahoo/cosec/cache/RevokedSubjectCache;
 	public fun revokedTokenCache (Lme/ahoo/cocache/core/CoCacheFactory;)Lme/ahoo/cosec/cache/RevokedTokenCache;
@@ -805,7 +781,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfigu
 	public fun cosecAttributeProviders (Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/runtime/attribute/AttributeProviders;
 	public fun cosecAuthenticator (Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperties;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/spi/authn/Authenticator;
 	public fun cosecAuthorizationChecker (Lme/ahoo/cosec/runtime/Pipeline;)Lme/ahoo/cosec/runtime/AuthorizationChecker;
-	public fun cosecDecisionListeners (Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ListableBeanFactory;Lme/ahoo/cosec/spring/boot/starter/pipeline/RequiredListenerProperties;Lme/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/runtime/event/DecisionListeners;
+	public fun cosecDecisionListeners (Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ListableBeanFactory;Lme/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/runtime/event/DecisionListeners;
 	public fun cosecPipeline (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lorg/springframework/beans/factory/ObjectProvider;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/route/RouteMap;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/Pipeline;
 	public fun cosecRouteMap (Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lorg/springframework/core/io/ResourceLoader;)Lme/ahoo/cosec/runtime/route/RouteMap;
 }
@@ -832,7 +808,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegration
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration$Kafka {
 	public fun <init> ()V
-	public fun cosecKafkaAuditListener (Lorg/springframework/kafka/core/KafkaOperations;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/kafka/KafkaAuditListener;
+	public fun cosecKafkaAuditListener (Lorg/springframework/kafka/core/KafkaOperations;Lorg/springframework/core/env/Environment;Lme/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties;)Lme/ahoo/cosec/kafka/KafkaAuditListener;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration$Metrics {
@@ -921,7 +897,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfigu
 	public fun cosecCandidateSource (Lme/ahoo/cocache/core/CoCacheFactory;Lorg/springframework/beans/factory/ObjectProvider;Lme/ahoo/cosec/runtime/snapshot/PlatformCompiler;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/ahoo/cosec/runtime/shadow/CandidateSource;
 	public fun cosecShadowListener (Lme/ahoo/cosec/runtime/shadow/CandidateSource;Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;)Lme/ahoo/cosec/runtime/event/ShadowListener;
 	public fun cosecShadowRecorder (Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;
-	public fun cosecShadowReporting (Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting;
+	public fun cosecShadowReporting (Lme/ahoo/cosec/runtime/shadow/ShadowRecorder;Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;Lme/ahoo/cosec/runtime/shadow/CandidateSource;Lorg/springframework/beans/factory/ObjectProvider;)Lme/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting;
 	public fun cosecShadowReports (Lme/ahoo/cocache/core/CoCacheFactory;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports;
 }
 
@@ -985,8 +961,10 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties
 	public fun <init> ()V
 	public final fun getDrainTimeout ()Ljava/time/Duration;
 	public final fun getQueueCapacity ()I
+	public final fun getRequiredTimeout ()Ljava/time/Duration;
 	public final fun setDrainTimeout (Ljava/time/Duration;)V
 	public final fun setQueueCapacity (I)V
+	public final fun setRequiredTimeout (Ljava/time/Duration;)V
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties$Companion {
@@ -999,13 +977,15 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties
 	public static final field MODE_KEY Ljava/lang/String;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V
+	public final fun getAllowCookieToken ()Z
 	public final fun getAllowQueryToken ()Z
 	public final fun getApiKeyHeader ()Ljava/lang/String;
 	public final fun getAuthenticationTimeout ()Ljava/time/Duration;
-	public final fun getGateway ()Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Gateway;
+	public final fun getIdentity ()Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Identity;
 	public final fun getMode ()Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Mode;
 	public final fun getTimeout ()Ljava/time/Duration;
 	public final fun getTraceLevel ()Lme/ahoo/cosec/engine/TraceLevel;
+	public final fun setAllowCookieToken (Z)V
 	public final fun setAllowQueryToken (Z)V
 	public final fun setApiKeyHeader (Ljava/lang/String;)V
 	public final fun setAuthenticationTimeout (Ljava/time/Duration;)V
@@ -1017,7 +997,7 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Companion {
 }
 
-public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Gateway {
+public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Identity {
 	public fun <init> ()V
 	public final fun getMaxAge ()Ljava/time/Duration;
 	public final fun getMaxSize ()Lorg/springframework/util/unit/DataSize;
@@ -1033,22 +1013,13 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties
 	public static fun values ()[Lme/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties$Mode;
 }
 
-public final class me/ahoo/cosec/spring/boot/starter/pipeline/RequiredListenerProperties {
-	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/RequiredListenerProperties$Companion;
-	public static final field PREFIX Ljava/lang/String;
-	public fun <init> ()V
-	public final fun getTimeout ()Ljava/time/Duration;
-	public final fun setTimeout (Ljava/time/Duration;)V
-}
-
-public final class me/ahoo/cosec/spring/boot/starter/pipeline/RequiredListenerProperties$Companion {
-}
-
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperties {
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperties$Companion;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V
+	public final fun getCache ()Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheConfiguration;
 	public final fun getSkew ()Ljava/time/Duration;
+	public final fun setCache (Lme/ahoo/cosec/spring/boot/starter/authorization/cache/CacheConfiguration;)V
 	public final fun setSkew (Ljava/time/Duration;)V
 }
 
@@ -1159,6 +1130,7 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizati
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/ShadowReporting : java/lang/AutoCloseable {
 	public fun <init> (Lme/ahoo/cosec/runtime/shadow/ShadowReporter;)V
 	public fun close ()V
+	public final fun getReporter ()Lme/ahoo/cosec/runtime/shadow/ShadowReporter;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/pipeline/SnapshotEvictionHealthIndicator : org/springframework/boot/health/contributor/HealthIndicator {

@@ -125,7 +125,7 @@ class Slice(
         context.close()
     }
 
-    /** The starter's 8.0 auto-configuration, and no other: not the 7.x path the starter still registers until S1b. */
+    /** The starter's auto-configurations the slice assembles, and no others. */
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration(
         JacksonAutoConfiguration::class,

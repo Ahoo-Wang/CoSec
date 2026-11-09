@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "ROL-6"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The role is held in wh-01, but read is not spaced: it applies only in the default space.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "read",
+              "ship"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk@wh-01"
+    ]
+  },
+  "request": {
+    "app": "wms",
+    "action": "wms:read",
+    "space": "wh-01"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

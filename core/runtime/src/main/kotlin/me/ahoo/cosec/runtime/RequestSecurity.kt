@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.identity.Identity
 import java.util.concurrent.ConcurrentHashMap
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * Who a permitted request is, and in what scope (RFC 0006 §7.6): the principal as authenticated (null when anonymous),
@@ -55,7 +54,7 @@ class RequestSecurity internal constructor(
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
 ) {
-    /** The application-facing view, read-only but for the 7.x attribute map, which nothing in the pipeline reads. */
+    /** The application-facing view; the pipeline reads nothing back from its attribute map. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
 
     /**
@@ -67,8 +66,6 @@ class RequestSecurity internal constructor(
         val member = ScopeSubject(scope.tenant, true, memberships)
         val resolved = ScopeResolver.resolve(member, DeclaredScope("", ""), HostScope(app))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
-        val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
-        val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
         return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes)
     }
 
@@ -88,15 +85,11 @@ class RequestSecurity internal constructor(
             id = principal.id.value,
             tenantId = principal.tenant.value,
             authenticated = true,
-            roles = emptySet(),
-            policies = emptySet(),
             attributes = principal.attributes,
-            root = false,
             principalBindings = principal.principalBindings,
             breakGlass = principal.breakGlass,
         )
-        val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
-        val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
+        val request = with(request) { AuthzRequest(subject, action, resource, environment) }
         return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
     }
 

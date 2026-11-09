@@ -19,8 +19,8 @@ fails closed: `503` unless a DENY matches ([fail closed](../guide/security-model
 | Document | Key | One per | Holds |
 |---|---|---|---|
 | Platform | `platform` | deployment | Policies shared by every tenant, bindings for anyone (`*`) and for named principals, break-glass bindings, rate limit rules, and what only the platform sets: `limits`, `attributes`, `boundaries`. |
-| App | `app:<appId>` | app | The app's [catalog](#catalogs), its permission policies `perm:<appId>/<permission>`, role bindings, rate limit rules. |
-| Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), its `boundary`, rate limit rules. |
+| App | `app:<appId>` | app | The app's [catalog](#catalogs), its permission policies `perm:<appId>/<permission>`, system [roles](#roles), role bindings, rate limit rules. |
+| Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), custom [roles](#roles), its `boundary`, rate limit rules. |
 
 The key is how the [control plane](./testing.md) names a document. Every request reads the platform document and the
 document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the principal
@@ -79,6 +79,7 @@ control plane writes its own `revision`, `publishedAt` and `provenance` when it 
 |---|---|---|---|
 | `policies`, `bindings`, `rateLimits` | yes | yes | yes |
 | `catalog` | | yes | |
+| `roles` | | yes | yes |
 | `limits`, `attributes` | yes | | |
 | `boundaries` | yes | | |
 | `boundary` | | | yes |
@@ -163,8 +164,8 @@ A route map (`cosec-routes.json`, loaded from `cosec.authorization.routes.locati
 ```
 
 `path` is an [HTTP path pattern](#http-paths). `resource` is a typed resource whose segments are literals or variables
-of `path`. A route map loads whole or not at all: a malformed route, or two routes of one method that the same request
-could match, fails startup. A captured value that holds `/` (a decoded `%2F`) would change the resource id's segments,
+of `path`. A route map loads whole or not at all: a map with no routes, a malformed route, or two routes of one method that the
+same request could match, fails startup. A captured value that holds `/` (a decoded `%2F`) would change the resource id's segments,
 so such a request is refused with `400`. A gateway loads no route map: its requests stay in the `http` namespace.
 `cosecServiceGenerator/routes` generates a route map from the service's OpenAPI document
 ([Role permissions](./role-permissions.md#generating-a-catalog-from-openapi)).
@@ -322,7 +323,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `scope.roles` | Set | The principal's roles in the request's space. |
 | `action.service`, `action.verb` | String | The two parts of the action. |
 | `resource.type`, `resource.id` | String | The two parts of the resource. |
-| `resource.attributes.<name>` | String | Attributes of a resource that code passes to a check. The request pipeline sets none. |
+| `resource.attributes.<name>` | String | Attributes of the resource. Neither the request pipeline nor the documented checks set any: an object-level rule puts its facts in the resource id ([Object-level rules](../integration/checks.md#object-level-rules)). |
 | `resource.var.<name>` | String | A [path variable](#path-variables). |
 | `environment.ip` | Ip | The client address ([Web integration](../integration/web.md)). |
 | `environment.time` | Instant | The request time; only `time` reads it. |
@@ -391,7 +392,7 @@ An attribute is absent when the request has no value for it, such as `subject.id
 | `notBefore` | ISO date-time; the condition is false before it. Without an offset, read in `zone`. |
 | `notAfter` | ISO date-time; false from it on. Must be after `notBefore`. |
 | `zone` | Time zone id: `UTC` (the default), an offset such as `+08:00` or `UTC+8`, or a region such as `Asia/Shanghai`. |
-| `daysOfWeek` | Non-empty array of `MON` … `SUN`. |
+| `daysOfWeek` | Non-empty array of `MON` … `SUN`, spelled exactly so: any other case or name does not compile. |
 | `from`, `to` | Time of day `HH:mm`, `HH:mm:ss` or `HH:mm:ss.fff`; both or neither, and not equal. The window is `[from, to)`. When `from` is after `to` it crosses midnight, and its early-morning part belongs to the day it started on. |
 
 At least one of `notBefore`, `notAfter`, `daysOfWeek` or `from`/`to` is required.
@@ -484,20 +485,42 @@ matches. Anonymous principals have no attachments.
 
 ## Catalogs
 
-An app document's `catalog` lists the permissions the app offers, for consoles and generators. It takes no part in
-evaluation.
+An app document's `catalog` lists the permissions the app offers, for consoles and generators. An entry that writes
+`action` also defines its permission: the policy `perm:<appId>/<id>`, one ALLOW statement. No other entry takes part
+in evaluation.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `groups` | array, required | Groups of permissions. |
 | `groups[].name` | string, required | |
 | `groups[].description` | string | |
-| `groups[].spaced` | boolean, default `false` | Whether the group's permissions are meant to be granted per space; informational. |
+| `groups[].spaced` | boolean, default `false` | Where a permission written with `action` applies: in any space a role holding it applies in; without it, only in the default space, by the condition `{ "eq": ["scope.space", ""] }`. |
 | `groups[].permissions` | array, required | |
 | `groups[].permissions[].id` | string, required | The permission id; its policy is `perm:<appId>/<id>`. |
 | `groups[].permissions[].name`, `.description` | string | |
+| `groups[].permissions[].action` | action pattern or non-empty array | Defines the permission. An entry with `action` and a policy of its id do not compile; the id must not be repeated. |
+| `groups[].permissions[].resource` | as a statement's `resource`; needs `action` | Absent: any resource. |
 
-Nothing checks that a catalog entry has a policy, or the reverse. See [Role permissions](./role-permissions.md).
+Nothing checks that an entry without `action` has a policy, or the reverse; such an entry is only for display and no
+role can list it. See [Role permissions](./role-permissions.md#short-form-permissions).
+
+## Roles
+
+An app document (system roles) and a tenant document (custom roles) may hold `roles`: who gets which permissions,
+written once. [Role permissions](./role-permissions.md#roles) has the concept and its examples.
+
+| Field | Documents | Type | Meaning |
+|---|---|---|---|
+| `id` | both | string, required | Unique in the document; not `*`, without `@`. |
+| `app` | tenant | string, required | The app the role belongs to; a valid app id. |
+| `space` | tenant | string | Absent: any space. Otherwise only that space, `""` being the default space; not reserved. |
+| `name`, `description` | both | string | For display. |
+| `permissions` | both | array of ids, or `"*"` in an app document | The permissions of the role; possibly none. |
+
+A role derives one binding per permission, `role:<roleId>@<app>:<permission>`, of policy `perm:<app>/<permission>`,
+subject the role (of any tenant in an app document, of its tenant in a tenant document), `app` the role's app and
+`space` the role's space or `*`, after the hand-written bindings. A collision with a hand-written binding does not
+compile, and `role:` is reserved to these bindings: a change may not put one. A document derives at most 50,000.
 
 ## Rate limit rules
 

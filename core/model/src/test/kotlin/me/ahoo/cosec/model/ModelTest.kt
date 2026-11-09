@@ -23,45 +23,24 @@ class ModelTest {
             "user",
             "tenant",
             true,
-            setOf("admin@space"),
-            setOf("p"),
             mapOf("k" to 1),
-            root = false,
             principalBindings = true,
             breakGlass = true,
         )
-        val scope = Scope.declared("tenant", "app", "space")
         val action = Action("http", "GET")
         val resource = Resource("http", "/orders/1", mapOf("resource.owner" to "user"))
         val environment = Environment("127.0.0.1", "request", "device", blocked = false)
-        val request = AuthzRequest(subject, scope, action, resource, environment)
+        val request = AuthzRequest(subject, action, resource, environment)
 
         request.subject.assert().isSameAs(subject)
-        request.scope.assert().isSameAs(scope)
         request.action.assert().isSameAs(action)
         request.resource.assert().isSameAs(resource)
         request.environment.assert().isSameAs(environment)
-        listOf(
-            subject.id,
-            subject.tenantId,
-            subject.authenticated,
-            subject.roles,
-            subject.policies,
-            subject.attributes,
-            subject.root
-        )
-            .assert().containsExactly("user", "tenant", true, setOf("admin@space"), setOf("p"), mapOf("k" to 1), false)
+        listOf(subject.id, subject.tenantId, subject.authenticated, subject.attributes)
+            .assert().containsExactly("user", "tenant", true, mapOf("k" to 1))
         listOf(action.namespace, action.verb, resource.type, resource.id, resource.attributes)
             .assert().containsExactly("http", "GET", "http", "/orders/1", mapOf("resource.owner" to "user"))
         listOf(environment.remoteIp, environment.requestId, environment.deviceId, environment.blocked)
             .assert().containsExactly("127.0.0.1", "request", "device", false)
-    }
-
-    /** Until a ScopeResolver exists, every scope comes from the client and says so. */
-    @Test
-    fun `a declared scope is marked as declared`() {
-        val scope = Scope.declared("tenant", "app", "space")
-        listOf(scope.tenantId, scope.appId, scope.spaceId).assert().containsExactly("tenant", "app", "space")
-        scope.source.assert().isEqualTo(Scope.Source.DECLARED)
     }
 }

@@ -115,9 +115,9 @@ class FlatCase(
     fun capped(): FlatCase {
         val authz = request.request
         val subject = with(authz.subject) {
-            Subject(id, tenantId, authenticated, roles, policies, attributes, root, false, breakGlass)
+            Subject(id, tenantId, authenticated, attributes, false, breakGlass)
         }
-        val capped = AuthzRequest(subject, authz.scope, authz.action, authz.resource, authz.environment)
+        val capped = AuthzRequest(subject, authz.action, authz.resource, authz.environment)
         return copy(
             request = with(request) { FlatRequest(capped, scope, memberships, time, attributes, external) }
         )

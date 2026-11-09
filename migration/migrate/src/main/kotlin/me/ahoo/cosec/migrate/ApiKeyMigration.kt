@@ -351,6 +351,17 @@ class ApiKeyMigrationPlan(
 ) {
     val accepted: Boolean get() = rejections.isEmpty()
 
+    companion object {
+        /** A plan with a rejection: no key was written. */
+        const val STATUS_REJECTED = "rejected"
+
+        /** A dry run: no key was written. */
+        const val STATUS_DRY_RUN = "dry-run"
+
+        /** A run whose keys were rewritten. */
+        const val STATUS_CONVERTED = "converted"
+    }
+
     /** This plan, also refusing what [more] says. */
     fun withRejections(more: List<String>): ApiKeyMigrationPlan =
         if (more.isEmpty()) {
@@ -366,10 +377,21 @@ class ApiKeyMigrationPlan(
         }
 
     /** The change report, `api-keys-report.json`. */
-    fun report(dryRun: Boolean, alreadyConverted: List<String>, changed: List<String> = emptyList()): JsonNode {
+    fun report(
+        dryRun: Boolean,
+        alreadyConverted: List<String>,
+        changed: List<String> = emptyList(),
+        status: String? = null,
+    ): JsonNode {
         val node = CoSecJson.mapper.createObjectNode()
         node.put("accepted", accepted)
         node.put("dryRun", dryRun)
+        // What the run did to the keys: `planned` is a plan whose keys were about to be rewritten (a report that stays so
+        // after a crash still holds everything needed to finish); `converted` is one whose keys were.
+        node.put(
+            "status",
+            status ?: if (!accepted) STATUS_REJECTED else if (dryRun) STATUS_DRY_RUN else STATUS_CONVERTED
+        )
         node.putArray("rejections").apply { rejections.forEach { add(it) } }
         node.putArray("keys").apply { keys.forEach { keyReport(addObject(), it) } }
         node.putArray("alreadyConverted").apply { alreadyConverted.forEach { add(it) } }
@@ -477,7 +499,8 @@ class StoredApiKeys(val legacy: List<LegacyApiKey>, val converted: List<String>,
             val legacy = ArrayList<LegacyApiKey>()
             val converted = ArrayList<String>()
             val unreadable = ArrayList<String>()
-            scan("$prefix:*").sorted().forEach { redisKey ->
+            // SCAN may return a key more than once (Redis documents it): one key is read and planned once (#1244).
+            scan("$prefix:*").distinct().sorted().forEach { redisKey ->
                 val json = commands.get(redisKey) ?: return@forEach
                 val hash = redisKey.removePrefix("$prefix:")
                 try {

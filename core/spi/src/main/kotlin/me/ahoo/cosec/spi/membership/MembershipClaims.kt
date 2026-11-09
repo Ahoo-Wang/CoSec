@@ -92,14 +92,12 @@ object MembershipClaims {
 
     /**
      * The tenant of [principal], looking through [me.ahoo.cosec.api.Delegated] wrappers: [TenantId.DEFAULT] when its
-     * token has no tenant claim, or an empty one, as in 7.x. A blank claim such as `" "` is kept as it is, not mapped
-     * to [TenantId.DEFAULT], which would move the principal into another tenant; `ScopeSubject` refuses it, so such a
-     * request fails closed.
+     * token has no tenant claim. A claim that is there is kept as it is, even an empty or blank one, because mapping
+     * it to [TenantId.DEFAULT] would move the principal into another tenant: an empty claim makes the token invalid
+     * (`IDN-11`), and `ScopeSubject` refuses either, so such a request fails closed.
      */
-    fun tenantOf(principal: Any): TenantId {
-        val tenantId = principal.findInDelegationChain<TenantCapable>()?.tenant?.tenantId
-        return if (tenantId.isNullOrEmpty()) TenantId.DEFAULT else TenantId(tenantId)
-    }
+    fun tenantOf(principal: Any): TenantId =
+        principal.findInDelegationChain<TenantCapable>()?.tenant?.tenantId?.let(::TenantId) ?: TenantId.DEFAULT
 
     /**
      * The value of [MARKER_KEY] the principal's token carried, looking through [me.ahoo.cosec.api.Delegated] wrappers

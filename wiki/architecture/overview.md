@@ -104,8 +104,8 @@ The rules behind the picture:
   `Dispatchers.IO` or `GlobalScope`.
 - **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
   `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
-  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, which keeps the 7.x Reactor login
-  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
+  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, whose `Authentication`
+  contracts return `Mono`), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
   decisions (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
   and `cosec-jwt`; every other module is `compileOnly` in
@@ -140,6 +140,9 @@ The rules behind the picture:
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
+- `ApiVariantTest`: a library module's Gradle API variant (usage `java-api`, what an application compiles against)
+  carries the CoSec module whose type a public class extends or implements, and Jackson where a public signature names
+  it. The module's own tests see its implementation classpath and cannot tell.
 - `SpiMarkerTest`: every public interface of `cosec-spi` that an application can implement, and every extension point
   [Extending](./extending.md#extension-points) lists, carries `@CoSecSpi`, and the marker is on nothing else.
 
@@ -301,6 +304,11 @@ Policies reach the engine as **snapshot documents**, one per key: the platform d
 tenant. They are stored as JSON (schema 2), compiled once per revision, and held in memory as immutable compiled
 documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
+
+A document may write roles and permissions in short form ([Role permissions](../policies/role-permissions.md#roles)).
+It is stored that way, and [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt)
+writes it out as plain policies and bindings: the compiler, the grant analysis, the reference index and the diff all read
+that, so nothing about a decision depends on the short form (`ROL-1`, `ROL-2`).
 
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt)
 holds them:

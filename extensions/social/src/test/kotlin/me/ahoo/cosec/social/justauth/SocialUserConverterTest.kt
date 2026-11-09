@@ -14,10 +14,12 @@
 package me.ahoo.cosec.social.justauth
 
 import com.alibaba.fastjson.JSONObject
+import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUserGender
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import me.zhyd.oauth.enums.AuthUserGender
 import me.zhyd.oauth.model.AuthToken
 import me.zhyd.oauth.model.AuthUser
@@ -44,5 +46,44 @@ class SocialUserConverterTest {
         coSecUser.username.assert().isEqualTo(authUser.username)
         coSecUser.gender.name.assert().isEqualTo(authUser.gender.name)
         coSecUser.rawInfo.assert().isEqualTo(authUser.rawUserInfo)
+    }
+
+    /** JustAuth's Figma provider builds its user without a gender (#1249): the login still succeeds. */
+    @Test
+    fun `a user without a gender reads as UNKNOWN`() {
+        val authUser = AuthUser.builder().uuid("u1").username("demo").rawUserInfo(JSONObject()).build()
+        authUser.gender.assert().isNull()
+        val socialUser = authUser.toSocialUser("figma")
+        socialUser.id.assert().isEqualTo("u1")
+        socialUser.username.assert().isEqualTo("demo")
+        socialUser.gender.assert().isEqualTo(SocialUser.Gender.UNKNOWN)
+    }
+
+    /** JustAuth's StackOverflow provider sets a nickname but no username (#1249): the provider's id stands in. */
+    @Test
+    fun `a user without a username is named by the provider's id`() {
+        val authUser = AuthUser.builder().uuid("u2").nickname("Demo").gender(AuthUserGender.UNKNOWN)
+            .rawUserInfo(JSONObject()).build()
+        authUser.username.assert().isNull()
+        val socialUser = authUser.toSocialUser("stackoverflow")
+        socialUser.id.assert().isEqualTo("u2")
+        socialUser.username.assert().isEqualTo("u2")
+        socialUser.nickname.assert().isEqualTo("Demo")
+    }
+
+    @Test
+    fun `a user without raw info has an empty one`() {
+        val socialUser = AuthUser.builder().uuid("u3").username("demo").gender(AuthUserGender.FEMALE).build()
+            .toSocialUser("provider")
+        socialUser.rawInfo.assert().isEmpty()
+        socialUser.gender.assert().isEqualTo(SocialUser.Gender.FEMALE)
+    }
+
+    /** The identity is the provider's id; a profile field never stands in for it. */
+    @Test
+    fun `a user without an id is refused`() {
+        assertThrownBy<SocialAuthenticationException> {
+            AuthUser.builder().username("demo").nickname("Demo").build().toSocialUser("provider")
+        }
     }
 }

@@ -1,0 +1,17 @@
+# Rule: ROL-4
+# Mutant: star does not grow with the catalog
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..7284580e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -188,7 +188,7 @@ object RoleExpansion {
+ 
+     private fun permissionsOf(role: RoleDefinition, catalog: Set<String>): Collection<String> =
+         when (val permissions = role.permissions) {
+-            RolePermissions.All -> catalog
++            RolePermissions.All -> catalog.take(1)
+             is RolePermissions.Listed -> permissions.ids
+         }
+ 

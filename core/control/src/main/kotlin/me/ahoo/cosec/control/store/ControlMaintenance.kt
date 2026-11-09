@@ -29,7 +29,6 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Duration
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -87,7 +86,7 @@ class ControlMaintenance(
         for (key in documents) {
             val keep = open.filter { it.key == key }.flatMapTo(HashSet()) { it.restsOn() }
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
-                ?.takeIf { it.records.isNotEmpty() || it.orphans.isNotEmpty() }
+                ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
         }
         return reclaimed
@@ -130,24 +129,13 @@ class ControlMaintenance(
         store.openChanges().mapNotNull { current(it) }.filterNot { it.state.terminal }
 
     /**
-     * [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists, and when
-     * it is a change of an app no document key can name ([UnnamedDocumentException], R2-1 of #1194's review): that
-     * record alone is skipped, with a WARN. Skipping it costs reclamation nothing: the only revisions it rests on are
-     * of that app's document, which no key names and [ControlStore.documents] never lists.
+     * [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists. One that
+     * cannot be read stops the pass: it might be a change that rests on a revision.
      */
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun current(id: ChangeId): ChangeRequest? = try {
         changes.get(id)
     } catch (e: ChangeRejectedException) {
         if (e.status != NOT_FOUND) throw e
-        null
-    } catch (e: Exception) {
-        val unnamed = UnnamedDocumentException.of(e) ?: throw e
-        log.warn {
-            "Change [${SnapshotKeyText.printable(id.value)}] is skipped: it is of [${unnamed.key}], which no document key " +
-                "can name (SCP-7), so it can be neither read, shown nor abandoned. Remove its record from the control " +
-                "store (with cosec-cocache, the key <key-prefix>:control:change:<id>)."
-        }
         null
     }
 

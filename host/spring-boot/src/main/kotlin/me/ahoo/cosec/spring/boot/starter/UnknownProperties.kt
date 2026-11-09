@@ -15,22 +15,24 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
+import org.springframework.boot.context.properties.source.ConfigurationPropertyName
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import tools.jackson.core.StreamReadFeature
 
-private val log = KotlinLogging.logger {}
-
 /**
- * `cosec.*` properties CoSec does not read. Spring ignores an unknown key, so a key 8.0 renamed or removed would silently
- * stop doing what it says (`cosec.authentication.enabled: false` turning nothing off, say). Every `cosec.*` key in the
- * environment must be one of CoSec's configuration metadata (`META-INF/spring-configuration-metadata.json`), or lie
- * under a map- or list-valued one; the 7.x keys 8.0 renamed or removed are named with what replaces them ([RENAMED]).
+ * `cosec.*` properties CoSec does not read. Spring ignores an unknown key, so a key a release renamed or removed would
+ * silently stop doing what it says (`cosec.authentication.enabled: false` turning nothing off, say). Every `cosec.*` key
+ * in the environment must be one of CoSec's configuration metadata (`META-INF/spring-configuration-metadata.json`), or
+ * lie under a map- or list-valued one; there is no switch that lets startup continue, since a key prefix ignored that way
+ * would leave token revocations where nothing reads them, and the tokens they revoked accepted again (`SNP-9`).
+ * Keys are compared as Spring's binder compares them ([ConfigurationPropertyName]: case and dashes do not count), so
+ * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A typo, or a spelling
+ * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`), is still unknown.
  * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
  * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
@@ -39,73 +41,48 @@ class UnknownProperties(
     /** Map- and list-valued properties: any key under them is theirs. */
     private val containers: Set<String>,
 ) {
+    // ConfigurationPropertyName's equality and hash code ignore case and dashes: the names Spring's binder treats as one.
+    private val knownNames: Set<ConfigurationPropertyName> = known.mapNotNullTo(
+        HashSet(),
+        ConfigurationPropertyName::ofIfValid
+    )
+    private val containerNames: List<ConfigurationPropertyName> = containers.mapNotNull(
+        ConfigurationPropertyName::ofIfValid
+    )
+
     /** The `cosec.*` keys of [environment] that CoSec does not read, sorted. */
     fun of(environment: ConfigurableEnvironment): List<String> =
         ConfigurationPropertySources.from(environment.propertySources.map(KubernetesServiceLinks::withoutServiceLinks))
             .filterIsInstance<IterableConfigurationPropertySource>()
-            .flatMap { source -> source.map { it.toString() } }
-            .filter { it.startsWith(PREFIX) }
+            .flatMap { source -> source.toList() }
+            .filter { it.toString().startsWith(PREFIX) }
             .filterNot(::isKnown)
+            .map { it.toString() }
             .distinct()
             .sorted()
 
-    private fun isKnown(name: String): Boolean {
-        val plain = name.replace(INDEX, "")
-        return plain in known || containers.any { plain.startsWith("$it.") || name.startsWith("$it[") }
+    private fun isKnown(name: ConfigurationPropertyName): Boolean {
+        val plain = ConfigurationPropertyName.ofIfValid(name.toString().replace(INDEX, ""))
+        return plain in knownNames || containerNames.any { it.isAncestorOf(name) }
     }
 
-    /** Fails startup, or with [warn] only logs, when [environment] has keys CoSec does not read. */
-    fun check(environment: ConfigurableEnvironment, warn: Boolean) {
+    /** Fails startup when [environment] has keys CoSec does not read. */
+    fun check(environment: ConfigurableEnvironment) {
         val unknown = of(environment)
         if (unknown.isEmpty()) {
             return
         }
-        val message = "CoSec does not read ${unknown.size} cosec.* propert${if (unknown.size == 1) "y" else "ies"}, " +
-            "which would do nothing:\n" + unknown.joinToString("\n") { name ->
-                "  $name" + (hint(name)?.let { " -> $it" } ?: "")
-            } + "\nRemove or rename them; $MODE_KEY=warn only logs this."
-        if (warn) log.warn { message } else error(message)
+        error(
+            "CoSec does not read ${unknown.size} cosec.* propert${if (unknown.size == 1) "y" else "ies"}, " +
+                "which would do nothing:\n" + unknown.joinToString("\n") { "  $it" } +
+                "\nRemove or rename them: $DOCUMENTATION"
+        )
     }
 
     companion object {
         const val PREFIX = "cosec."
-        const val MODE_KEY = "cosec.unknown-properties"
-        private const val PREFIX_MOVED =
-            "cosec.key-prefix, the prefix of every key; copy the token revocations and API keys first"
+        const val DOCUMENTATION = "https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties"
         private val INDEX = Regex("\\[[^]]*]")
-
-        /** What 8.0 did with a 7.x key, by key or by prefix (ending in `.`). */
-        val RENAMED: Map<String, String> = linkedMapOf(
-            "cosec.authentication.enabled" to "cosec.authentication.login.enabled",
-            "cosec.authentication.social." to "cosec.authentication.login.social.",
-            "cosec.authorization.allow-query-token" to "cosec.pipeline.allow-query-token",
-            "cosec.api-key.header" to "cosec.pipeline.api-key-header",
-            "cosec.authorization.enabled" to "removed: cosec.enabled=false switches CoSec off",
-            "cosec.authorization.local-policy." to "removed: convert and publish the files with cosec-migrate",
-            "cosec.authorization.root-enabled" to "removed: root becomes break-glass",
-            "cosec.authorization.cache.enabled" to "removed: snapshot caching is cosec.authorization.snapshot.*",
-            "cosec.authorization.cache.policy." to "removed: snapshot caching is cosec.authorization.snapshot.*",
-            "cosec.authorization.cache.role." to "removed: snapshot caching is cosec.authorization.snapshot.*",
-            "cosec.authorization.cache.history." to "removed",
-            "cosec.authorization.cache.migration." to "removed",
-            "cosec.authorization.cache.token.concurrency-level" to "removed: ignored since CoCache 5",
-            "cosec.authorization.cache.token.expire-after-write" to
-                "cosec.authorization.cache.token.local-max-age, a duration (30s)",
-            "cosec.authorization.cache.token.expire-unit" to "removed: the durations carry their unit",
-            "cosec.authorization.gateway.enabled" to "removed: the gateway filter comes with cosec-gateway",
-            "cosec.limiter." to "removed: rate limit rules are in the platform document",
-            "cosec.shadow." to "removed: shadow windows are control-plane operations; see cosec.authorization.shadow.*",
-            "cosec.explain.enabled" to "removed: use the control plane's explain",
-            "cosec.inject.enabled" to "removed: see the upgrade guide",
-            "cosec.api-key.store-blocking" to "removed",
-            "cosec.jwt.token-revocation.enabled" to "removed: revocation is always on",
-            RemovedKeyPrefixes.SNAPSHOT to PREFIX_MOVED,
-            RemovedKeyPrefixes.CACHE to PREFIX_MOVED,
-            RemovedKeyPrefixes.API_KEY to PREFIX_MOVED,
-        )
-
-        fun hint(name: String): String? =
-            RENAMED[name] ?: RENAMED.entries.firstOrNull { (old, _) -> old.endsWith('.') && name.startsWith(old) }?.value
 
         /** From every `spring-configuration-metadata.json` on [classLoader]'s classpath. */
         fun load(classLoader: ClassLoader?): UnknownProperties {

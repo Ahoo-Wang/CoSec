@@ -76,7 +76,7 @@ internal object Jwts {
             decodedAccessToken.issuedAtAsInstant,
             decodedAccessToken.expiresAtAsInstant,
         )
-        if (tenantId.isNullOrEmpty()) {
+        if (tenantId == null) {
             @Suppress("UNCHECKED_CAST")
             return tokenPrincipal as T
         }
@@ -113,20 +113,24 @@ internal object Jwts {
 
     /**
      * The token's `tenantId` claim, null when it has none. A claim that is there but not a string (a number, `null`,
-     * an object) is an invalid token (RC1-22): read as no tenant, it would put the principal in the default tenant `(0)`
-     * with the token's roles, and out of reach of a revocation of its real tenant.
+     * an object, RC1-22) or empty (`IDN-11`) is an invalid token: read as no tenant, it would put the principal in the
+     * default tenant `(0)` with the token's roles, and out of reach of a revocation of its real tenant.
      */
     private fun tenantOf(decodedAccessToken: DecodedJWT): String? {
         val claim = decodedAccessToken.getClaim(TENANT_ID_KEY)
         if (claim.isMissing) {
             return null
         }
-        return claim.asString() ?: throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is not a string.")
+        val tenantId = claim.asString() ?: throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is not a string.")
+        if (tenantId.isEmpty()) {
+            throw TokenVerificationException("The token's [$TENANT_ID_KEY] claim is empty.")
+        }
+        return tenantId
     }
 
     /**
-     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so tokens
-     * without it parse exactly as before. Any value is kept, including one that is not a string, for
+     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so a token
+     * without it yields the principal itself. Any value is kept, including one that is not a string, for
      * the pipeline to refuse (`MembershipSource.Unusable` in `cosec-runtime`).
      */
     private fun withMembershipMarker(principal: CoSecPrincipal, decodedAccessToken: DecodedJWT): CoSecPrincipal {

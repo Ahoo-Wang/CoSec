@@ -19,11 +19,10 @@ public final class me/ahoo/cosec/model/AppId {
 }
 
 public final class me/ahoo/cosec/model/AuthzRequest {
-	public fun <init> (Lme/ahoo/cosec/model/Subject;Lme/ahoo/cosec/model/Scope;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/model/Environment;)V
+	public fun <init> (Lme/ahoo/cosec/model/Subject;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/model/Environment;)V
 	public final fun getAction ()Lme/ahoo/cosec/model/Action;
 	public final fun getEnvironment ()Lme/ahoo/cosec/model/Environment;
 	public final fun getResource ()Lme/ahoo/cosec/model/Resource;
-	public final fun getScope ()Lme/ahoo/cosec/model/Scope;
 	public final fun getSubject ()Lme/ahoo/cosec/model/Subject;
 }
 
@@ -53,6 +52,7 @@ public final class me/ahoo/cosec/model/BindingId {
 }
 
 public final class me/ahoo/cosec/model/BindingKt {
+	public static final fun appliesIn-Gw0kPas (Lme/ahoo/cosec/model/SubjectRef;Ljava/lang/String;)Z
 	public static final fun matches (Lme/ahoo/cosec/model/Match;Ljava/lang/Object;)Z
 	public static final fun matches-Fw6vjn8 (Lme/ahoo/cosec/model/Match;Ljava/lang/String;)Z
 	public static final fun matches-IJvzZDY (Lme/ahoo/cosec/model/Match;Ljava/lang/String;)Z
@@ -190,26 +190,6 @@ public final class me/ahoo/cosec/model/RoleId {
 	public final synthetic fun unbox-impl ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/model/Scope {
-	public static final field Companion Lme/ahoo/cosec/model/Scope$Companion;
-	public final fun getAppId ()Ljava/lang/String;
-	public final fun getSource ()Lme/ahoo/cosec/model/Scope$Source;
-	public final fun getSpaceId ()Ljava/lang/String;
-	public final fun getTenantId ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/model/Scope$Companion {
-	public final fun declared (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/model/Scope;
-}
-
-public final class me/ahoo/cosec/model/Scope$Source : java/lang/Enum {
-	public static final field DECLARED Lme/ahoo/cosec/model/Scope$Source;
-	public static final field RESOLVED Lme/ahoo/cosec/model/Scope$Source;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/model/Scope$Source;
-	public static fun values ()[Lme/ahoo/cosec/model/Scope$Source;
-}
-
 public final class me/ahoo/cosec/model/SpaceId {
 	public static final field Companion Lme/ahoo/cosec/model/SpaceId$Companion;
 	public static final synthetic fun box-impl (Ljava/lang/String;)Lme/ahoo/cosec/model/SpaceId;
@@ -230,15 +210,12 @@ public final class me/ahoo/cosec/model/SpaceId$Companion {
 }
 
 public final class me/ahoo/cosec/model/Subject {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZLjava/util/Set;Ljava/util/Set;Ljava/util/Map;ZZZ)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZLjava/util/Map;ZZ)V
 	public final fun getAttributes ()Ljava/util/Map;
 	public final fun getAuthenticated ()Z
 	public final fun getBreakGlass ()Z
 	public final fun getId ()Ljava/lang/String;
-	public final fun getPolicies ()Ljava/util/Set;
 	public final fun getPrincipalBindings ()Z
-	public final fun getRoles ()Ljava/util/Set;
-	public final fun getRoot ()Z
 	public final fun getTenantId ()Ljava/lang/String;
 }
 

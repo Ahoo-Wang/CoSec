@@ -72,7 +72,7 @@
     {
       "id": "IDN-8",
       "source": "RFC 0006 §7.3 (RC1-5)",
-      "statement": "A gateway forwards none of the caller's credentials downstream unless cosec.gateway.identity.forward-authorization is on, and then only to a route that receives the identity (IDN-7): not the Authorization header, not the API key header under the name cosec.pipeline.api-key-header gives it, not the authorization query parameter, however its name is encoded or cased, and not the authorization cookie, however its name is cased or spaced, in any Cookie header: each is rewritten without it, the token's pair going with one ';' and the other pairs byte for byte, so no empty pair is made (a header whose leading $Version pair hides it behind a ',' goes whole), and one left with only empty pairs, of whitespace and ',', is not sent; the cookies the request handed on reports (to a later filter, or a forward: route's handler) agree, a header that went whole taking its cookies with it.",
+      "statement": "A gateway forwards none of the caller's credentials downstream unless cosec.gateway.identity.forward-authorization is on, and then only to a route that receives the identity (IDN-7): not the Authorization header, not the API key header under the name cosec.pipeline.api-key-header gives it, not the authorization query parameter, however its name is encoded or cased, and not the authorization cookie, however its name is cased or spaced, in any Cookie header: each is rewritten without it, the token's pair going with one ';' and the other pairs byte for byte, so no empty pair is made and only the whitespace at the head of the result goes, since a field value cannot start with it (a header whose leading $Version pair hides it behind a ',', or in which a kept $Version pair would come to the head, goes whole), and one left with only empty pairs, of whitespace and ',', is not sent; the cookies the request handed on reports (to a later filter, or a forward: route's handler) agree, a header that went whole taking its cookies with it.",
       "level": "pipeline",
       "pending": null,
       "properties": [
@@ -128,6 +128,22 @@
         "cocache:UnpairedSurrogateKeyTest#aPrincipalWithAnUnpairedSurrogateIsNeitherRevokedNorReadAsAnotherPrincipal",
         "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
         "migrate:ConverterTest#an id with an unpaired surrogate is rejected, and nothing is converted"
+      ]
+    },
+    {
+      "id": "IDN-11",
+      "source": "RFC 0004 §4.5.1 (RC1-22, R5)",
+      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. CoSec's issuer refuses to sign a token with an empty tenant.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenVerifierTest#anEmptyTenantIdIsInvalid",
+        "jwt:JwtTokenConverterTest#anEmptyTenantIsNotIssued",
+        "jwt:MembershipClaimsJwtTest#currentTokensWithoutTenantParseAsBefore",
+        "runtime:TokenAuthenticatorTest#aTokenClaimingAnEmptyTenantIsInvalid",
+        "runtime:RevocableTokenVerifierTest#verifyAndRefreshRefuseAnEmptyTenant",
+        "runtime:MembershipClaimsTest#tenantOfATokenWithoutTenantIsTheDefaultTenant",
+        "runtime:MembershipClaimsTest#tenantOfABlankTenantIsKeptAndRefusedByTheScope"
       ]
     }
   ]

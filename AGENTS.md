@@ -100,7 +100,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
-  extension point `wiki/architecture/extending.md` lists, and on nothing else), `EnginePurityTest`,
+  extension point `wiki/architecture/extending.md` lists, and on nothing else), `ApiVariantTest` (a library's Gradle API
+  variant, usage `java-api`, carries the CoSec module whose type a public class extends or implements, and Jackson
+  where a public signature names it: a consumer cannot compile against the class otherwise), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler and the bug report template; CI picks it up from `settings.gradle.kts`
@@ -168,7 +170,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
   platform boundary (`FlatEvaluator`). The order never changes the decision, only which statement is reported.
   Rate limits are obligations: they run only after a permit, and an exhausted rule makes the outcome 429.
 - **Policies are data.** Policies, bindings, catalogs and rate limits live in three kinds of snapshot documents
-  (platform, app, tenant; `schema: 2`), compiled into indexes. Conditions are an AST checked at compile time; there
+  (platform, app, tenant; `schema: 2`), compiled into indexes. Roles and short-form permissions (`action` on a catalog
+  entry, RFC 0012) stay in short form in the stored document: `RoleExpansion.effective` alone writes them out, as a
+  document with bindings and policies, and everything that reads what a document grants reads that. Conditions are an AST checked at compile time; there
   are no matcher plugins. External attributes (`ext.*`) come from `AttributeProvider`s the platform document declares.
 - **Snapshots.** Redis is the store of record for the documents (`cosec-cocache`, CoCache 8 `Store`s). `SnapshotSource` keeps
   compiled documents in memory: one load per key at a time, installs in load order, conditional revalidation, bounded
@@ -215,6 +219,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Tokens, login, revocation | `wiki/integration/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | A new place a document reads an attribute (a condition operand, a rate limit `key`, anything later) | resolve it through `ConditionChecker.attribute`, which refuses credential headers (CND-5) for every reference; never `Attribute.parse` directly |
+| A new reader of what a document grants (its policies or bindings, the data plane or the control plane) | read it through `RoleExpansion.effective`, or a role grants through a path nothing analyzed (RFC 0012 §6) |
 | Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `@CoSecSpi` on the interface, `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |

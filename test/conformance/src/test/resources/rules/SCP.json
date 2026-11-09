@@ -39,10 +39,11 @@
     {
       "id": "SCP-4",
       "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1 (RC1-16)",
-      "statement": "When the values of one CoSec-* parameter differ, between the header and the query parameter or within either, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
+      "statement": "CoSec-App-Id, CoSec-Space-Id and CoSec-Device-Id are read from headers only, never from the query string. When the values of one of them differ, the request cannot be read unambiguously and is answered 400. A blank value beside a non-blank one differs too; only values that are all blank read as not sent, and blank is ASCII whitespace only, so a value of Unicode spaces is a value.",
       "level": "pipeline",
       "guards": [
-        "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
+        "runtime:CoSecParametersTest#differentHeaderValuesAreAmbiguous",
+        "runtime:CoSecParametersTest#theQueryIsNotRead",
         "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
         "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
         "runtime:CoSecParametersTest#aBlankValueBesideAValueIsAmbiguous",
@@ -77,21 +78,9 @@
       "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26; RC1-15)",
       "statement": "A declared app that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app. An app document's key (SnapshotKey.App) takes only such an id, so the control plane takes no app the data plane could never read: analyze refuses one with 400, and a candidate document with a binding in such an app, wherever it is, is a V2 finding (400) at the binding's app, so a document that holds one must remove it in its next change, and a change that only removes it is valid. The control plane skips such an app wherever it would build a key from a document (back-references, their repair, the checks, the grant analysis), and a stored record that names one (an open change of such an app, an instance status entry, an app list entry, a back-reference set's member) is skipped alone, never stopping maintenance or a write; the control API answers such a change 409.",
       "level": "engine",
-      "guards": [
-        "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
-        "cocache:SnapshotKeyEncoderTest#anAppIdIsTheIdARequestCouldDeclare",
-        "control:ControlPlaneTest#analyze refuses an app that cannot be an app id",
-        "control:UnnamedAppIdsTest#a binding in an app no request can be in is refused with 400, naming it",
-        "control:UnnamedAppIdsTest#a head that holds one publishes the change that drops it, and no other",
-        "control:UnnamedAppIdsTest#a stored change of such an app is a format error of that record alone",
-        "control:ControlMaintenanceTest#an open change of an app no key can name is skipped, not the pass",
-        "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
-        "cocache:CoCacheControlStoreTest#an open change of an app no key can name stays listed and does not fail the listing",
-        "runtime:ShadowSupportTest#candidates, reports and statuses read back as they were written",
-        "cocache:CoCacheControlStoreTest#a back-reference set naming an app no key can name still takes a new referrer",
-        "control:ControlHttpTest#a change that no longer reads is a 409 to the platform and a 404 to anyone else"
-      ],
-      "pending": null
+      "guards": [],
+      "pending": null,
+      "superseded": "SCP-10"
     },
     {
       "id": "SCP-8",
@@ -114,6 +103,28 @@
         "runtime:PolicyDocumentCompilerTest#the platform admin is bound only by the platform, and no binding names a reserved space",
         "control:ControlAuthorizationTest#resources name one document each"
       ]
+    },
+    {
+      "id": "SCP-10",
+      "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26; RC1-15), split from SCP-7 by batch R4 (2026-11-08)",
+      "statement": "A declared app that cannot be an app id (blank, *, containing ':' or a control character, or longer than 128 characters: the rule of a tenant id) is Rejected(APP_MISMATCH), with or without a host app. An app document's key (SnapshotKey.App) takes only such an id, so the control plane takes no app the data plane could never read: analyze refuses one with 400, and a candidate document with a binding in such an app, wherever it is, is a V2 finding (400) at the binding's app. A stored record that names such an app (a change of one, or a head it was checked with; an instance status entry; a back-reference set's member; an app list entry; a head holding a binding in one) is a format error, and whatever reads it fails closed: nothing skips the record. Reading such a change is 503, a publish or a repair over such a head or set fails without moving the head, a maintenance pass stops without reclaiming, and the grant analysis takes every app as unknown.",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
+        "cocache:SnapshotKeyEncoderTest#anAppIdIsTheIdARequestCouldDeclare",
+        "control:ControlPlaneTest#analyze refuses an app that cannot be an app id",
+        "control:UnnamedAppIdsTest#a binding in an app no request can be in is refused with 400, naming it",
+        "control:UnnamedAppIdsTest#a head that holds one is a format error, so neither a publish nor a repair gets past it",
+        "control:UnnamedAppIdsTest#a stored change of such an app is a format error",
+        "control:ControlMaintenanceTest#an open change of an app no key can name stops the pass",
+        "control:ControlHttpTest#a change that no longer reads is a 503 to every caller, without detail",
+        "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
+        "cocache:CoCacheControlStoreTest#an open change of an app no key can name fails the listing",
+        "cocache:CoCacheControlStoreTest#a back-reference set naming an app no key can name is a format error",
+        "cocache:CoCacheControlStoreTest#the referrers codec reads back what it writes and rejects anything else",
+        "runtime:ShadowSupportTest#candidates, reports and statuses read back as they were written"
+      ],
+      "pending": null
     }
   ]
 }

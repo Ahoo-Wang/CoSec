@@ -16,8 +16,11 @@ package me.ahoo.cosec.spring.boot.starter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.env.YamlPropertySourceLoader
 import org.springframework.boot.support.SystemEnvironmentPropertySourceEnvironmentPostProcessor
@@ -28,10 +31,11 @@ import org.springframework.core.env.SystemEnvironmentPropertySource
 import org.springframework.core.io.ByteArrayResource
 import java.net.URLClassLoader
 import java.nio.file.Path
+import java.time.Duration
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
-/** A `cosec.*` key CoSec does not read fails startup, with what 8.0 replaced it with when it was a 7.x key. */
+/** A `cosec.*` key CoSec does not read fails startup, and the message links the upgrade page. */
 class UnknownPropertiesTest {
     private val runner = ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(CoSecPropertyCheckAutoConfiguration::class.java))
@@ -61,39 +65,172 @@ class UnknownPropertiesTest {
             "cosec.authentication.login.enabled=false",
             "cosec.authorization.snapshot.fail-closed.tenants[0]=acme",
             "cosec.authentication.login.social.registration.github.client-id=id",
-            "cosec.unknown-properties=fail",
+            "cosec.key-prefix=b",
             // Read from the environment by the Kafka audit listener: declared in KafkaAuditProperties for the metadata.
             "cosec.audit.kafka.delivery=required",
         ).run { context -> context.startupFailure.assert().isNull() }
     }
 
     @Test
-    fun `a 7_x key names what replaced it`() {
+    fun `a 7_x key fails startup and the message links the upgrade page`() {
         runner.withPropertyValues(
             "cosec.authentication.enabled=false",
             "cosec.authentication.social.registration.github.client-id=id",
             "cosec.limiter.enabled=true",
-            "cosec.authorization.cache.token.expire-after-write=30",
-            "cosec.authorization.cache.token.expire-unit=SECONDS",
         ).run { context ->
             val message = context.startupFailure!!.messages()
-            message.assert().contains("cosec.authentication.enabled -> cosec.authentication.login.enabled")
-            message.assert().contains(
-                "cosec.authentication.social.registration.github.client-id -> cosec.authentication.login.social."
-            )
-            message.assert().contains("cosec.limiter.enabled -> removed")
-            message.assert().contains(
-                "cosec.authorization.cache.token.expire-after-write -> cosec.authorization.cache.token.local-max-age"
-            )
-            message.assert().contains("cosec.authorization.cache.token.expire-unit -> removed")
+            message.assert().contains("CoSec does not read 3 cosec.* properties,")
+            message.assert().contains("cosec.authentication.enabled")
+            message.assert().contains("cosec.authentication.social.registration.github.client-id")
+            message.assert().contains("cosec.limiter.enabled")
+            message.assert().contains(UnknownProperties.DOCUMENTATION)
+        }
+    }
+
+    /**
+     * `SNP-9`: an environment written for the three prefixes `cosec.key-prefix` replaced must not start. Its token
+     * revocations may lie under a prefix nothing reads now, and the tokens they revoked would be accepted again.
+     */
+    @Test
+    fun `a key prefix cosec key-prefix replaced fails startup`() {
+        for (
+        key in listOf(
+            "cosec.authorization.snapshot.key-prefix=b",
+            "cosec.authorization.cache.key-prefix=c",
+            "cosec.api-key.key-prefix=x:keys",
+            "cosec.api-key.keyPrefix=x:keys",
+        )
+        ) {
+            runner.withPropertyValues(key, "cosec.key-prefix=b").run { context ->
+                val message = context.startupFailure!!.messages()
+                message.assert().contains("CoSec does not read 1 cosec.* property,")
+                message.assert().containsIgnoringCase(key.substringBefore('='))
+                message.assert().contains(UnknownProperties.DOCUMENTATION)
+            }
+        }
+    }
+
+    /** `SNP-9`: in any spelling Spring would have bound, the variable a deployment set for the old prefix fails too. */
+    @Test
+    fun `a replaced key prefix in the environment fails startup`() {
+        for (
+        variable in listOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_KEYPREFIX",
+            "COSEC_AUTHORIZATION_SNAPSHOT_KEY_PREFIX",
+            "COSEC_AUTHORIZATION_CACHE_KEYPREFIX",
+            "COSEC_APIKEY_KEYPREFIX",
+            "COSEC_API_KEY_KEY_PREFIX",
+        )
+        ) {
+            runner.withEnvironment(mapOf(variable to "b")).run { context ->
+                context.startupFailure!!.messages().assert().contains("CoSec does not read 1 cosec.* property,")
+            }
+        }
+    }
+
+    /** `SNP-9`: with a switch, a moved prefix could be ignored and the revocations under it left unread. */
+    @Test
+    fun `no property turns the check off`() {
+        runner.withPropertyValues("cosec.unknown-properties=warn", "cosec.authorization.cache.key-prefix=c")
+            .run { context ->
+                val message = context.startupFailure!!.messages()
+                message.assert().contains("cosec.unknown-properties")
+                message.assert().contains("cosec.authorization.cache.key-prefix")
+            }
+        runner.withPropertyValues("cosec.enabled=false", "cosec.nothing=1").run { context ->
+            context.startupFailure!!.messages().assert().contains("cosec.nothing")
+        }
+    }
+
+    /** U11: a key the rename left behind would silently stop doing what it says. */
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "cosec.pipeline.gateway.max-age=30s",
+            "cosec.pipeline.gateway.max-size=4KB",
+            "cosec.audit.required.timeout=2s",
+            "cosec.authorization.cache.token.local-max-age=10s",
+            "cosec.authorization.cache.token.maximum-size=10",
+        ],
+    )
+    fun `a renamed key fails startup`(key: String) {
+        runner.withPropertyValues(key).run { context ->
+            context.startupFailure!!.messages().assert().contains(key.substringBefore('='))
         }
     }
 
     @Test
-    fun `warn only logs`() {
-        runner.withPropertyValues("cosec.unknown-properties=warn", "cosec.nothing=1").run { context ->
+    fun `the new names of the renamed keys are known`() {
+        runner.withPropertyValues(
+            "cosec.pipeline.identity.max-age=30s",
+            "cosec.pipeline.identity.max-size=4KB",
+            "cosec.observability.listener.required-timeout=2s",
+            "cosec.authentication.revocation.cache.local-max-age=10s",
+            "cosec.authentication.revocation.cache.maximum-size=10",
+        ).run { context -> context.startupFailure.assert().isNull() }
+    }
+
+    /**
+     * #1234: Spring binds `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE` to `cosec.authorization.snapshot.local-max-age` (dots
+     * become underscores, dashes are dropped, upper case), so a deployment that sets its keys that way made no mistake.
+     */
+    @Test
+    fun `an environment variable Spring binds to a key CoSec reads passes`() {
+        val variables = mapOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE" to "30s",
+            "COSEC_PIPELINE_ALLOWQUERYTOKEN" to "true",
+            "COSEC_PIPELINE_TIMEOUT" to "3s",
+            // A list element: the container's name is dashed in the metadata, the variable's is not.
+            "COSEC_AUTHORIZATION_SNAPSHOT_FAILCLOSED_TENANTS_0" to "acme",
+        )
+        runner.withEnvironment(variables).run { context ->
             context.startupFailure.assert().isNull()
+            Binder.get(context.environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+                .get().assert().isEqualTo(Duration.ofSeconds(30))
+            Binder.get(context.environment).bind("cosec.pipeline.allow-query-token", Boolean::class.javaObjectType)
+                .get().assert().isTrue()
         }
+    }
+
+    @Test
+    fun `the spellings Spring binds in application properties pass`() {
+        runner.withPropertyValues(
+            "cosec.authorization.snapshot.localMaxAge=30s",
+            "cosec.pipeline.allow_query_token=true",
+            "cosec.authorization.snapshot.failClosed.tenants[0]=acme",
+        ).run { context ->
+            context.startupFailure.assert().isNull()
+            Binder.get(context.environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+                .get().assert().isEqualTo(Duration.ofSeconds(30))
+        }
+    }
+
+    /**
+     * The relaxed spelling is no way in for a misspelling: only what Spring's documented conversion makes of a key CoSec
+     * reads is known. Spring's binder also tolerates `COSEC_..._LOCAL_MAX_AGE` for `local-max-age`, a legacy spelling its
+     * documentation does not offer; the check refuses it and names the key it read (`local.max.age`).
+     */
+    @Test
+    fun `a variable that is not the documented spelling of a key CoSec reads still fails`() {
+        val typos = mapOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAG" to "30s",
+            "COSEC_PIPELINE_TIMEUOT" to "3s",
+            "COSEC_PIPELINE_ALLOWQUERYTOKENS" to "true",
+            // A known key is no container: nothing is below it.
+            "COSEC_PIPELINE_TIMEOUT_EXTRA" to "1",
+        )
+        runner.withEnvironment(typos + ("COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE" to "30s")).run { context ->
+            val message = context.startupFailure!!.messages()
+            message.assert().contains("CoSec does not read 5 cosec.* properties,")
+            message.assert().contains("cosec.authorization.snapshot.local.max.age")
+        }
+        // Spring agrees about the typos: none of them reaches the key it was meant for.
+        val environment = StandardEnvironment()
+        environment.propertySources.addFirst(
+            SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, typos)
+        )
+        Binder.get(environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+            .isBound.assert().isFalse()
     }
 
     // What `kubectl exec <pod> -- env` shows in a namespace with this Service (ClusterIP, port 80/TCP named http):

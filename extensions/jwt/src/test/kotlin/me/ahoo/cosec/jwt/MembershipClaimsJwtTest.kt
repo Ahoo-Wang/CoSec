@@ -108,8 +108,6 @@ class MembershipClaimsJwtTest {
 
         parsed.javaClass.assert().isEqualTo(SimpleTokenPrincipal::class.java)
         MembershipClaims.tenantOf(parsed).assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken(tenantId = ""))))
-            .assert().isEqualTo(TenantId.DEFAULT)
         MembershipClaims.tenantOf(
             Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))
         ).assert().isEqualTo(tenant)

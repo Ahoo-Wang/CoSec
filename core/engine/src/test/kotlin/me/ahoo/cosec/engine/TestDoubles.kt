@@ -17,7 +17,6 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.Subject
 
 /** The matchers each evaluation called, in order: `guard:<group id>` and `rule:<rule name>`. */
@@ -34,20 +33,16 @@ enum class RuleBehavior { MATCH, ACTION_MISS, CONDITION_MISS, THROW }
 /** Thrown by test matchers; one instance per matcher, so decisions compare equal across evaluations. */
 class MatcherException(message: String) : RuntimeException(message)
 
-fun request(blocked: Boolean = false, root: Boolean = false): AuthzRequest =
+fun request(blocked: Boolean = false): AuthzRequest =
     AuthzRequest(
         subject = Subject(
             id = "user",
             tenantId = "tenant",
             authenticated = true,
-            roles = setOf("admin"),
-            policies = setOf("p"),
             attributes = emptyMap(),
-            root = root,
             principalBindings = true,
             breakGlass = true,
         ),
-        scope = Scope.declared("tenant", "app", "default"),
         action = Action("http", "GET"),
         resource = Resource("http", "/orders/1", emptyMap()),
         environment = Environment(remoteIp = "127.0.0.1", requestId = "req", deviceId = "dev", blocked = blocked),

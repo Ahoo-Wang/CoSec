@@ -67,7 +67,7 @@ cosec:
     remote-ip:
       max-trusted-index: 1      # trusted X-Forwarded-For hops; 0 ignores the header
     routes:
-      location: classpath:cosec-routes.json   # the default; set it empty to run without a route map
+      location: classpath:cosec-routes.json   # names the route map; unset, the host loads none
 ```
 
 Startup fails, on purpose, when:
@@ -75,8 +75,9 @@ Startup fails, on purpose, when:
 - **JWT is on without revocation storage.** Revocation is always on. With `cosec-cocache` the Redis token store
   supplies it; without it, register a `TokenStore` and a `RevocationReader` bean yourself, or set
   `cosec.jwt.enabled=false`.
-- **The route map location does not exist.** The default `classpath:cosec-routes.json` must exist on WebFlux and
-  WebMvc hosts unless `cosec.authorization.routes.location` is set empty. A gateway host loads no route map.
+- **A route map is left out or empty.** `classpath:cosec-routes.json` exists while
+  `cosec.authorization.routes.location` is unset (name it, or set the property empty to run without one); a location
+  that does not exist; a map with no routes. A gateway host loads no route map.
 - **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
   different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
@@ -100,7 +101,8 @@ auto-configurations listed in `META-INF/spring/org.springframework.boot.autoconf
 
 ## Route maps
 
-On WebFlux and WebMvc hosts, `cosec-routes.json` gives requests their `service:verb` action and typed resource:
+On WebFlux and WebMvc hosts, a route map named by `cosec.authorization.routes.location` gives requests their
+`service:verb` action and typed resource:
 
 ```json
 { "service": "order",
@@ -109,8 +111,8 @@ On WebFlux and WebMvc hosts, `cosec-routes.json` gives requests their `service:v
     { "method": "POST", "path": "/orders/{orderId}/cancel", "action": "order:cancel", "resource": "order/{orderId}" } ] }
 ```
 
-It loads all or nothing: overlapping routes for one method, a malformed route, or a resource variable the path does not
-capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `cosec-openapi`,
+It loads all or nothing: overlapping routes for one method, a malformed route, a map with no routes, or a resource
+variable the path does not capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `cosec-openapi` and springdoc,
 `GET /actuator/cosecServiceGenerator/routes` generates the route map and `/app` the app document. Policies on `http:*`
 never cover mapped requests: tell the policy author which namespace each endpoint is in.
 
@@ -192,8 +194,8 @@ cosec:
   is wired in this mode.
 - **Only the gateway may reach it** (NetworkPolicy, private network or mTLS): it believes any `CoSec-Identity`, and
   logs a WARN at startup saying so. Never expose such a service directly.
-- Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.gateway.max-size`, 8KB) is 400;
-  older than `cosec.pipeline.gateway.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
+- Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.identity.max-size`, 8KB) is 400;
+  older than `cosec.pipeline.identity.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
   credential's expiry, is 401 `token-expired`; unknown version, no expiry or an identity from the future is 401
   `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
@@ -203,8 +205,10 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 
 ## Tokens, memberships and API keys
 
-- Tokens are read from the `Authorization` header, then the `authorization` cookie; the query parameter only with
-  `cosec.pipeline.allow-query-token=true`. Issue them with the `TokenConverter` bean.
+- Tokens are read from the `Authorization` header; the query parameter only with
+  `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with `cosec.pipeline.allow-cookie-token=true`
+  (a browser sends a cookie on a cross-site request too, so that application defends against CSRF itself). Issue them
+  with the `TokenConverter` bean.
 - A token's `roles` claim (`role` in the default space, `role@space` elsewhere) and `policies` claim (attached policy
   ids, which must be `attachable`) are the principal's memberships. A token with the claim `cosec.membership:
   "provider"` and no roles or policies takes them from a `MembershipProvider` bean instead; a `JwtTokenConverter` bean
@@ -222,8 +226,8 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   starter wires `CoCacheMembershipProvider`. A key whose principal the provider does not know or knows as deactivated is
   `token-invalid`. A user's key is a personal access token; a workload principal's key is a service account's.
   Keys stored before 8.0 are converted with `cosec-migrate api-keys`.
-- Clients send `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
-  `CoSec-Space-Id` for a non-default space, each once; a space needs a role there, or the request is denied (403
+- Clients send the headers `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
+  `CoSec-Space-Id` for a non-default space, each once (the query string is not read); a space needs a role there, or the request is denied (403
   `scope-rejected`; 401 for an anonymous caller). Details:
   https://cosec.ahoo.me/integration/authentication.
 

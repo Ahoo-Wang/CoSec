@@ -1,0 +1,104 @@
+{
+  "rules": [
+    "ROL-11"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "keeper, held in wh-01, in wh-01.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "pos": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "g",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "ship"
+            ]
+          },
+          {
+            "id": "keeper",
+            "app": "wms",
+            "space": "wh-01",
+            "permissions": [
+              "ship"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "keeper@wh-01"
+    ]
+  },
+  "request": {
+    "app": "wms",
+    "action": "wms:ship",
+    "space": "wh-01"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/ship",
+      "statement": 0,
+      "name": "ship",
+      "via": {
+        "binding": "role:keeper@wms:ship",
+        "document": "tenant"
+      }
+    }
+  }
+}

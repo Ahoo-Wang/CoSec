@@ -56,6 +56,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-actuator")
     compileOnly("org.springdoc:springdoc-openapi-starter-common")
     testImplementation("org.springdoc:springdoc-openapi-starter-common")
+    testImplementation("org.springdoc:springdoc-openapi-starter-webflux-api")
     compileOnly(project(":control"))
     testImplementation(project(":control"))
     compileOnly(project(":kafka"))

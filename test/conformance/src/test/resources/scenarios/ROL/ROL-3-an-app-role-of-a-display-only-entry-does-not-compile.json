@@ -1,0 +1,66 @@
+{
+  "rules": [
+    "ROL-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An entry with neither an action nor a policy is only for display, and no role can list it.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "label"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ]
+  },
+  "request": {
+    "app": "wms",
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "[label] is not a permission app wms defines"
+  }
+}

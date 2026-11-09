@@ -24,9 +24,11 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.scope.Scope
 import java.net.URI
+import java.net.URISyntaxException
 
 /**
  * What the statements of a scenario read about its request: the attribute catalog of RFC 0005 §3.2, filled from the
@@ -115,7 +117,12 @@ private class FactsInput(private val facts: RequestFacts, private val captures: 
     override fun time(attribute: Attribute): Long =
         if (attribute.kind == Kind.ENVIRONMENT_TIME) facts.time else ConditionInput.NO_TIME
 
-    private fun host(url: String): String? = runCatching { URI(url).host }.getOrNull()
+    // As the runtime's HttpAttributes reads it: the URL's host folded to ASCII lower case, null when there is none.
+    private fun host(url: String): String? = try {
+        URI(url).host?.let(HttpNames::fold)
+    } catch (_: URISyntaxException) {
+        null
+    }
 
     private companion object {
         const val ORIGIN = "origin"

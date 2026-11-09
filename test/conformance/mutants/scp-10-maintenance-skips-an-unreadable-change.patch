@@ -1,0 +1,17 @@
+# Rule: SCP-10
+# Mutant: a change maintenance cannot read is taken as gone, so a pass reclaims revisions an unreadable open change may rest on
+# Tests: :control:test --tests me.ahoo.cosec.control.store.ControlMaintenanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt
+index d8466f44..5ed9942c 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlMaintenance.kt
+@@ -137,6 +137,8 @@ class ControlMaintenance(
+     } catch (e: ChangeRejectedException) {
+         if (e.status != NOT_FOUND) throw e
+         null
++    } catch (e: Exception) {
++        null
+     }
+ 
+     /** The revisions [this] change rests on: its base, and what its last check read of its own document. */

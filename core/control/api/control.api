@@ -125,18 +125,20 @@ public final class me/ahoo/cosec/control/api/DecisionView {
 }
 
 public final class me/ahoo/cosec/control/api/DocumentDiff {
-	public fun <init> (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)V
+	public fun <init> (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)V
 	public final fun component1 ()J
 	public final fun component2 ()J
 	public final fun component3 ()Lme/ahoo/cosec/control/api/EntryChanges;
 	public final fun component4 ()Lme/ahoo/cosec/control/api/EntryChanges;
-	public final fun component5 ()Z
-	public final fun copy (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)Lme/ahoo/cosec/control/api/DocumentDiff;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/api/DocumentDiff;JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;ZILjava/lang/Object;)Lme/ahoo/cosec/control/api/DocumentDiff;
+	public final fun component5 ()Lme/ahoo/cosec/control/api/EntryChanges;
+	public final fun component6 ()Z
+	public final fun copy (JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Z)Lme/ahoo/cosec/control/api/DocumentDiff;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/api/DocumentDiff;JJLme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;Lme/ahoo/cosec/control/api/EntryChanges;ZILjava/lang/Object;)Lme/ahoo/cosec/control/api/DocumentDiff;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBindings ()Lme/ahoo/cosec/control/api/EntryChanges;
 	public final fun getFrom ()J
 	public final fun getPolicies ()Lme/ahoo/cosec/control/api/EntryChanges;
+	public final fun getRoles ()Lme/ahoo/cosec/control/api/EntryChanges;
 	public final fun getSections ()Z
 	public final fun getTo ()J
 	public fun hashCode ()I
@@ -755,6 +757,7 @@ public final class me/ahoo/cosec/control/change/EntryDigest {
 	public final fun of (Lme/ahoo/cosec/engine/flat/RateLimitSource;)Ljava/lang/String;
 	public final fun of (Lme/ahoo/cosec/model/Binding;Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;)Ljava/lang/String;
 	public final fun of (Lme/ahoo/cosec/runtime/document/PolicyDefinition;)Ljava/lang/String;
+	public final fun of (Lme/ahoo/cosec/runtime/document/RoleDefinition;)Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/control/change/Escalation {
@@ -834,6 +837,13 @@ public final class me/ahoo/cosec/control/change/Operation$PutRateLimit : me/ahoo
 	public final fun getRule ()Lme/ahoo/cosec/engine/flat/RateLimitSource;
 }
 
+public final class me/ahoo/cosec/control/change/Operation$PutRole : me/ahoo/cosec/control/change/Operation {
+	public fun <init> (Lme/ahoo/cosec/runtime/document/RoleDefinition;Ljava/lang/String;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/runtime/document/RoleDefinition;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getIfMatch ()Ljava/lang/String;
+	public final fun getRole ()Lme/ahoo/cosec/runtime/document/RoleDefinition;
+}
+
 public final class me/ahoo/cosec/control/change/Operation$RemoveBinding : me/ahoo/cosec/control/change/Operation {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -852,6 +862,13 @@ public final class me/ahoo/cosec/control/change/Operation$RemoveRateLimit : me/a
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getId ()Ljava/lang/String;
+	public final fun getIfMatch ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/control/change/Operation$RemoveRole : me/ahoo/cosec/control/change/Operation {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getId-l1CcKjo ()Ljava/lang/String;
 	public final fun getIfMatch ()Ljava/lang/String;
 }
 
@@ -1324,13 +1341,14 @@ public abstract interface class me/ahoo/cosec/control/store/ControlStore : me/ah
 	public abstract fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun putStage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/StageSlot;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun record (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun releaseLease (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/store/Head {
@@ -1376,7 +1394,7 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putReferrers-JLzybDo (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putStage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/StageSlot;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun record (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun recordDigests (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/util/Set;
@@ -1384,6 +1402,7 @@ public final class me/ahoo/cosec/control/store/InMemoryControlStore : me/ahoo/co
 	public fun releaseLease (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/control/store/PendingRecord {
@@ -1430,7 +1449,11 @@ public final class me/ahoo/cosec/control/store/PublishOutcome$Referenced : me/ah
 
 public final class me/ahoo/cosec/control/store/Reclaimed {
 	public static final field Companion Lme/ahoo/cosec/control/store/Reclaimed$Companion;
-	public fun <init> (Ljava/util/List;Ljava/util/List;)V
+	public fun <init> (Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAny ()Z
+	public final fun getDeleted ()Ljava/util/List;
+	public final fun getFailed ()Ljava/util/List;
 	public final fun getOrphans ()Ljava/util/List;
 	public final fun getRecords ()Ljava/util/List;
 }
@@ -1467,18 +1490,20 @@ public final class me/ahoo/cosec/control/store/RevisionEntry {
 public final class me/ahoo/cosec/control/store/RevisionIndex {
 	public static final field Companion Lme/ahoo/cosec/control/store/RevisionIndex$Companion;
 	public fun <init> ()V
-	public fun <init> (Ljava/util/List;Ljava/util/List;J)V
-	public synthetic fun <init> (Ljava/util/List;Ljava/util/List;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/List;Ljava/util/List;JLjava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/util/List;JLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/util/List;
 	public final fun component2 ()Ljava/util/List;
 	public final fun component3 ()J
-	public final fun copy (Ljava/util/List;Ljava/util/List;J)Lme/ahoo/cosec/control/store/RevisionIndex;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/store/RevisionIndex;Ljava/util/List;Ljava/util/List;JILjava/lang/Object;)Lme/ahoo/cosec/control/store/RevisionIndex;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;JLjava/util/List;)Lme/ahoo/cosec/control/store/RevisionIndex;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/store/RevisionIndex;Ljava/util/List;Ljava/util/List;JLjava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/control/store/RevisionIndex;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEntries ()Ljava/util/List;
 	public final fun getFloor ()J
 	public final fun getLatest ()Lme/ahoo/cosec/control/store/RevisionEntry;
 	public final fun getPending ()Ljava/util/List;
+	public final fun getReclaiming ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -1517,14 +1542,6 @@ public final class me/ahoo/cosec/control/store/StoredDocument {
 	public final fun getDigest ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public final fun getDocument ()Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/control/store/UnnamedDocumentException : me/ahoo/cosec/model/CoSecException {
-	public static final field Companion Lme/ahoo/cosec/control/store/UnnamedDocumentException$Companion;
-	public final fun getKey ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/control/store/UnnamedDocumentException$Companion {
 }
 
 public final class me/ahoo/cosec/control/store/Versioned {

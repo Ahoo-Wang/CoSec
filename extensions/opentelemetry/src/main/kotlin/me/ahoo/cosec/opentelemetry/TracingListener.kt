@@ -43,7 +43,8 @@ import kotlin.coroutines.CoroutineContext
  * so tracing can neither fail nor hold up a decision. The I/O of the evaluation is a sibling of this span, under the same
  * parent (X3).
  *
- * The attribute keys are those of 7.x's tracing decorator, plus `cosec.snapshot.version` and `cosec.binding.id`.
+ * The attributes say who asked (`user.id`, tenant, app, space, device), what happened (the result and the deciding
+ * policy, statement and binding) and what it was decided on (`cosec.snapshot.version`).
  */
 class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) : DecisionListener {
     private val tracer: Tracer = openTelemetry.getTracer(
@@ -100,7 +101,8 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         const val NAME = "tracing"
         const val SPAN_NAME = "cosec.authorize"
         private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-        private val INSTRUMENTATION_VERSION = TracingListener::class.java.`package`.implementationVersion ?: "2.15.0"
+        private val INSTRUMENTATION_VERSION =
+            instrumentationVersion(TracingListener::class.java.`package`.implementationVersion)
         private const val AUTHORIZE = CoSec.COSEC_PREFIX + "authorize."
         val TENANT_ID = stringKey(CoSec.COSEC_PREFIX + "tenant_id")
         val APP_ID = stringKey(CoSec.COSEC_PREFIX + "app_id")
@@ -114,14 +116,17 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         val STATEMENT_NAME = stringKey(AUTHORIZE + "statement.name")
         val BINDING_ID = stringKey(CoSec.COSEC_PREFIX + "binding.id")
         val SNAPSHOT_VERSION = stringKey(CoSec.COSEC_PREFIX + "snapshot.version")
+
+        /** The jar's `Implementation-Version`; classes that run from a directory have none. */
+        internal fun instrumentationVersion(manifestVersion: String?): String = manifestVersion ?: "unknown"
     }
 }
 
 /**
- * Captures the OpenTelemetry context where the adapter bridges a request (RFC 0006 §7.5): at the same point the 7.x
- * `TracingAuthorization` read `Context.current()`. Its context element makes it current whenever the pipeline resumes,
- * so instrumented clients in providers make child spans as before; the [TraceContext] puts the parent span into decision
- * events and audit records.
+ * Captures the OpenTelemetry context where the adapter bridges a request (RFC 0006 §7.5), the one place
+ * `Context.current()` is still the request's: once the pipeline suspends, another thread may resume it. Its context
+ * element makes it current whenever the pipeline resumes, so instrumented clients in providers make child spans of
+ * the request's span; the [TraceContext] puts the parent span into decision events and audit records.
  */
 object OpenTelemetryContextContributor : BridgeContextContributor {
     override fun capture(): CoroutineContext {

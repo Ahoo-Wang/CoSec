@@ -27,7 +27,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.SubjectRef
@@ -150,14 +149,10 @@ open class FlatEngineBenchmark {
                 "user",
                 "acme",
                 true,
-                emptySet(),
-                emptySet(),
                 emptyMap(),
-                root = false,
                 principalBindings = true,
                 breakGlass = true,
             ),
-            scope = Scope.declared("acme", "app", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),

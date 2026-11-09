@@ -31,7 +31,7 @@ To see why without reproducing traffic, use the control plane (needs `cosec-cont
 `POST /cosec/control/v1/explain` with
 `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "policies": [], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42", "remoteIp": "10.0.0.1"}}`
 returns the decision and its trace; `POST /analyze` with a `query` (`tenant`, `app`, `space`, `action`, `resource`)
-lists the bindings that could permit or deny. External attributes are not fetched there, so a statement reading one is
+lists the bindings that could permit or deny in that tenant (another tenant's principals and roles are left out). External attributes are not fetched there, so a statement reading one is
 Indeterminate in an explanation.
 
 ## Interpret the status
@@ -67,9 +67,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, less than
   `lag-warn`, and, with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
   suggest turning revalidation off.
-- **`CoSec no longer reads cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
-  `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and startup fails whatever
-  `cosec.unknown-properties` says. The message lists the families that move from where to where. Have the token
+- **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
+  `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
+  families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading#from-8-0-0-alpha-2. Have the token
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
@@ -78,11 +78,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   characters of its text, twice after a leading `**`). The control plane answers a
   `COMPILE` finding; on the data plane the stored document is installed as failed and its requests are 503.
 
-- **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by `<key> -> <replacement>` lines:
-  a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
-  `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
-  at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
-  logs the list; do not suggest it to hide a real typo. On Kubernetes, keys such as `cosec.gateway.service.host` or
+- **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by the keys: a typo or a key a
+  release renamed or removed (for example `cosec.authentication.enabled`, now `cosec.authentication.login.enabled`).
+  Rename or remove the key; the table is at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties.
+  No property turns the check off. On Kubernetes, keys such as `cosec.gateway.service.host` or
   `cosec.gateway.port` (`does not read 8 cosec.* properties`, a crash loop) are service links
   (`COSEC_GATEWAY_SERVICE_HOST`, `COSEC_GATEWAY_PORT_80_TCP_ADDR`, ... for a Service named `cosec` or `cosec-*` in the
   namespace). 8.0.0-alpha.2 and later skip exactly those variables, only from the process environment; a mistyped
@@ -92,9 +91,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
   `cosec.enabled=false`: its filter strips a client's `CoSec-Identity`), `cosec.api-key.store=redis` `cosec-cocache`,
-  `cosec.audit.kafka.delivery=required` `cosec-kafka`, `cosec.cosid.generator` `cosec-cosid`. Add the named artifact next to `cosec-spring-boot`; 8.0 has no
-  starter capabilities (`requireCapability("me.ahoo.cosec:...-support")` from 7.x no longer resolves). Do not suggest
-  turning the feature off unless the user does not want it.
+  `cosec.audit.kafka.delivery=required` `cosec-kafka`, `cosec.cosid.generator` `cosec-cosid`. Add the named artifact next to `cosec-spring-boot`. Do not
+  suggest turning the feature off unless the user does not want it.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
   but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
   `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
@@ -150,9 +148,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
   **`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32`**: the secret must be at least 32, 48 or
   64 UTF-8 bytes for `hmac256`, `hmac384`, `hmac512` (RFC 7518 §3.2); set a longer one on the issuer and every verifier.
-- **`The route map [classpath:cosec-routes.json] (cosec.authorization.routes.location) does not exist`**: add the route
-  map, or set the property empty to run without one. A `RouteMapException` names the location and route: malformed
-  route, a resource variable the path does not capture, or two routes for one method that may match the same request.
+- **`classpath:cosec-routes.json exists but cosec.authorization.routes.location is not set`**: set the property to it,
+  or to empty to run without a route map.
+- **`The route map [<location>] (cosec.authorization.routes.location) does not exist`**: add the route map, or correct
+  the property. A `RouteMapException` names the location and route: malformed route, a map with no routes, a resource
+  variable the path does not capture, or two routes for one method that may match the same request.
+- **`cosec-cocache needs a CacheRuntime bean`**: add `me.ahoo.cocache:cocache-spring-boot-starter`.
 - **`API keys are enabled, but no ApiKeyReader is available`**: `cosec.api-key.store=redis` needs a
   `ReactiveStringRedisTemplate`.
 - **`cosec.api-key.enabled=true needs a MembershipProvider bean`** (IDN-6): a key's memberships are its principal's.
@@ -207,7 +208,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   values`); an ALLOW on it then does not match. One value repeated reads as that value.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
   the log: see Rate limiting).
-- **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
+- **A REQUIRED decision listener failed or timed out** (`cosec.observability.listener.required-timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
   fails answers "not revoked" instead (the documented exception to fail closed).
 - **An id with an unpaired UTF-16 surrogate** (IDN-10, RC1-52): an authenticator gave a principal whose id, tenant,
@@ -220,19 +221,21 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `500`) and the log says `holds content this cache cannot read (format[1], this node writes format[2]`: the data
   alpha wrote through CoCache 6. Stop every instance and run `cosec-migrate cocache8` (dry run first). Never delete
   those keys by hand: a deleted revocation accepts its token again.
-- **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
+- **Every request with one API key is 503** and the log says `API key format [null] is not 2.` (`null`: the record has
+  no `format`, as a key written by 7.x): convert
   the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
   it again without `--dry-run`).
 
 ### Unexpected 401
 
-- Did the request carry credentials? Tokens come from `Authorization`, then the `authorization` cookie; the query
-  parameter only with `cosec.pipeline.allow-query-token=true`. API keys from `X-API-Key`
+- Did the request carry credentials? Tokens come from `Authorization`; the query parameter only with
+  `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with
+  `cosec.pipeline.allow-cookie-token=true`. API keys from `X-API-Key`
   (`cosec.pipeline.api-key-header`).
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;
-  or a claim CoSec refuses: `tenantId` not a string, `roles` or `policies` not an array of strings, `attributes` not an
+  or a claim CoSec refuses: `tenantId` empty or not a string, `roles` or `policies` not an array of strings, `attributes` not an
   object).
 - `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the
   `MembershipProvider` does not know (answers `MembershipAnswer.Unknown`) or knows as deactivated (`active = false`),
@@ -245,7 +248,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - Break-glass that does not apply: only a token CoSec's own `JwtTokenVerifier` verified gets it (BRK-8), never a token
   of a custom `TokenVerifier`, even through `TokenAuthenticator`. An authenticator naming its method `jwt` makes every
   request `503` (`The authentication method [jwt] is CoSec's own token's`): that name is reserved.
-- `token-invalid` for a token whose `tenantId` claim is not a string, or whose `attributes` name `apiKeyId` (reserved
+- `token-invalid` for a token whose `tenantId` claim is empty or not a string, or whose `attributes` name `apiKeyId` (reserved
   for API keys).
 - `token-invalid` for a token whose `sub`, `tenantId`, `jti`, `roles` or `policies` hold an unpaired UTF-16 surrogate,
   which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
@@ -286,10 +289,10 @@ header: anonymous. Otherwise never anonymous:
 
 - 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, an id with an unpaired
   surrogate (IDN-10), over
-  `cosec.pipeline.gateway.max-size` (8KB), sent more than once, or a scope that does not resolve here.
+  `cosec.pipeline.identity.max-size` (8KB), sent more than once, or a scope that does not resolve here.
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
-- 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.gateway.max-age` (60s)
+- 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)
   plus the skew. Check clocks.
 - On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
   key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
@@ -299,8 +302,8 @@ header: anonymous. Otherwise never anonymous:
   Mark the route `cosec-identity: true` if it leads to your own service.
 - A backend that verifies tokens itself gets no credentials (`Authorization`, the API key header, the `authorization`
   query parameter, the `authorization` cookie) unless `cosec.gateway.identity.forward-authorization=true`, and then
-  only on a route that would receive the identity. A gateway-mode service that issues no tokens should set
-  `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
+  only on a route that would receive the identity. JWT is off by default on a gateway-mode service; one that issues
+  tokens sets `cosec.jwt.enabled=true`.
 - On the gateway, a 500 on every request of one route: its metadata `cosec-app-id` is not a valid app id, or not a
   string (a number, list or map: quote it, one app).
 
@@ -322,7 +325,7 @@ header: anonymous. Otherwise never anonymous:
   condition. Rules count per document: an app's or tenant's rule has its own buckets.
 - A limiter failure skips the rule unless `strictFailure: true` (then 503, not 429).
 - A `key` value with an unpaired UTF-16 surrogate counts in a bucket of its own, `e:` and the value escaped (`\uD800`,
-  `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values keep `g:<value>`.
+  `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values count in `k:<value>`.
 - On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
   counters have no hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure` every permit is
   503. Upgrade; counters are `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`. A `cosec.key-prefix` with
@@ -333,8 +336,7 @@ header: anonymous. Otherwise never anonymous:
 Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
 document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);
 404 no such document, change or route; 409 the change's `base` revision is stale, the document is staged by another
-change, or the change is in another state (409 `change-unreadable`: an earlier build wrote that change for an app that
-cannot be an app id; remove its record); 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
+change, or the change is in another state; 410 the revision is no longer kept; 412 an operation's `ifMatch` digest
 does not match; 422 the candidate does not compile, refers to a missing policy, or uses a reserved id prefix
 (`cosec:`, `g:`, `r:`); 428 a DENY with `onMissing: nomatch` needs a confirmation; 503 the decision or store could not
 be read; 500 a stored document or record does not decode (a newer version wrote it during a rolling upgrade: `a stored
@@ -355,7 +357,11 @@ host's log, `Control API <method> <path> by <tenant>/<principal> is <status> (re
 `INFO` from `me.ahoo.cosec.control.api`, matching the problem's `requestId`.
 
 A platform change with the `V2` finding `[<id>] is a policy id [tenant:...] already use` adds an id a tenant document
-defines or binds; rename the platform policy, or have the tenant remove its own first. A `REVIEW_NEEDED` change event
+defines or binds; rename the platform policy, or have the tenant remove its own first. A tenant change with the `V2`
+finding `[<id>] is a platform policy's id, and this policy is not an exact copy of it` has the id of a platform policy
+and different content: a tenant may hold only an exact copy of it (the partition flow), so rename it or make it
+identical. While a copy exists the platform's policy cannot be changed (`[<id>] is copied by [tenant:...]`). A
+`REVIEW_NEEDED` change event
 after a publish means another document the change was checked with moved before the write and the analysis now finds
 an escalation nobody approved; the change stays published and needs a person's review.
 

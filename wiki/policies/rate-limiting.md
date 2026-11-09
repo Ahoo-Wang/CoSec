@@ -88,13 +88,13 @@ pattern of the rule.
 | absent | One bucket shared by every request the rule matches. |
 | present | One bucket per value. Requests where the value is absent share one bucket of their own. |
 
-A value is its bucket as it is, `g:<value>`, which every limiter writes as UTF-8. A value with an unpaired UTF-16
+A value is its bucket as it is, `k:<value>`, which every limiter writes as UTF-8. A value with an unpaired UTF-16
 surrogate (a JSON escape such as `"\uD800"` in a token attribute) has no UTF-8 encoding: its bucket is `e:<value>`
 with each unpaired surrogate as its `\uXXXX` escape and each `\` doubled, so it never counts in the bucket of the
 value with `?` in its place (`IDN-10`). A limiter of your own gets only buckets that are well-formed text.
 
-Rules of different documents never share buckets: a platform rule counts under its own id, an app rule under
-`app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`
+Rules of different documents never share buckets: a rule counts under its document and its id, `platform/<id>`,
+`app:<appId>/<id>` or `tenant:<tenantId>/<id>`
 ([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
 A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
 the platform's quotas.
@@ -128,7 +128,7 @@ rule with the fewest permits left; a `429` carries those of the exhausted rule:
 | Header | Value |
 |---|---|
 | `RateLimit-Limit` | Permits per window of that rule, rounded up. |
-| `RateLimit-Remaining` | Permits left in its current window. |
+| `RateLimit-Remaining` | How many more requests its current window would allow right now, rounded up: a part of a permit left still admits one. |
 | `RateLimit-Reset` | Seconds until its current window ends, at least `1`. |
 | `Retry-After` | Only on `429`: the same as `RateLimit-Reset`. |
 

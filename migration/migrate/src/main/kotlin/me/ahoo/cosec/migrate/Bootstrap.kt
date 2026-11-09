@@ -47,7 +47,6 @@ class BootstrapRefusedException(message: String) : IllegalStateException(message
 class Bootstrap(
     private val store: ControlStore,
     private val clock: Clock = Clock.systemUTC(),
-    private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler(),
 ) {
     private val revisions = Revisions(store, clock)
 
@@ -77,8 +76,11 @@ class Bootstrap(
             current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding,
             rateLimits = current?.rateLimits.orEmpty(),
         )
-        // A break-glass binding is the platform document's alone (BRK-2): the compile refuses one here.
-        compiler.compile(candidate)
+        // The document compiles as the data plane compiles it: against the platform's limits and the attributes it
+        // declares, so a policy that was legal when it was published does not make the recovery fail (#1264). A
+        // platform document that cannot be read fails the run. A break-glass binding is the platform document's alone
+        // (BRK-2): the compile refuses one here.
+        PolicyDocumentCompiler.forPlatform(revisions.head(SnapshotKey.Platform)?.document).compile(candidate)
         if (current != null && CandidateDigest.of(current) == CandidateDigest.of(candidate)) {
             return@runBlocking current.revision
         }

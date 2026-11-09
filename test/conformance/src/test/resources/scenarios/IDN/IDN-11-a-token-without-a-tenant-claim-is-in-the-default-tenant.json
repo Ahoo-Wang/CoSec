@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "IDN-11"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same token with no tenantId claim at all is alice's in the default tenant: alice reads her orders.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "(0)"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

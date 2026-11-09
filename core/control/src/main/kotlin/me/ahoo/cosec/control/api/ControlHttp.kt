@@ -29,7 +29,6 @@ import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Identifiers
@@ -141,13 +140,6 @@ class ControlHttp(private val plane: ControlPlane) {
             }
             problem(Problem.INVALID_REQUEST, requestId, null)
         } catch (e: Exception) {
-            val unnamed = UnnamedDocumentException.of(e)
-            if (unnamed != null) {
-                // R3-4 of #1194's review: the record no longer reads under the app id rule; no retry helps, and the answer
-                // never echoes the stored id. The log line names it, escaped.
-                log.warn { "Control API ${request.method} ${request.path} (request $requestId): ${unnamed.message}" }
-                return problem(Problem.CHANGE_UNREADABLE, requestId, CHANGE_UNREADABLE_DETAIL)
-            }
             log.error(e) { "Control API ${request.method} ${request.path} failed (request $requestId)." }
             problem(Problem.INTERNAL_ERROR, requestId, null)
         }
@@ -159,10 +151,6 @@ class ControlHttp(private val plane: ControlPlane) {
      * with what it names (a document's key).
      */
     private fun stored(request: ControlHttpRequest, requestId: String, e: Exception): ControlHttpResponse {
-        UnnamedDocumentException.of(e)?.let { unnamed ->
-            log.warn { "Control API ${request.method} ${request.path} (request $requestId): ${unnamed.message}" }
-            return problem(Problem.CHANGE_UNREADABLE, requestId, CHANGE_UNREADABLE_DETAIL)
-        }
         log.error(
             e
         ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
@@ -416,27 +404,8 @@ class ControlHttp(private val plane: ControlPlane) {
     private inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
         if (request.method == GET) block() else methodNotAllowed()
 
-    /**
-     * [change] as the API shows it: the approval names its approver, when and what for, never what the approver held,
-     * its token's attributes, which token it was or what that credential could reach (reviews D5, N2). Only the change's
-     * record in the store keeps them; a change event carries none of them.
-     */
-    private fun changeResponse(change: ChangeRequest, status: Int) = ControlHttpResponse(
-        status,
-        JSON,
-        ChangeRequestCodec.encode(
-            change.copy(
-                approval = change.approval?.copy(
-                    memberships = null,
-                    attributes = emptyMap(),
-                    credentialId = null,
-                    issuedAt = null,
-                    principalBindings = true,
-                    breakGlass = true,
-                )
-            )
-        )
-    )
+    private fun changeResponse(change: ChangeRequest, status: Int) =
+        ControlHttpResponse(status, JSON, ChangeRequestCodec.encodeShown(change))
 
     private fun document(document: me.ahoo.cosec.runtime.document.PolicyDocument) = ControlHttpResponse(
         OK,
@@ -663,6 +632,7 @@ class ControlHttp(private val plane: ControlPlane) {
         put("to", diff.to)
         set("policies", entries(diff.policies))
         set("bindings", entries(diff.bindings))
+        set("roles", entries(diff.roles))
         put("sections", diff.sections)
     }
 
@@ -699,9 +669,6 @@ class ControlHttp(private val plane: ControlPlane) {
         FORBIDDEN(ProblemType.FORBIDDEN, detailed = false),
         NOT_FOUND("not-found", "Not Found", 404, detailed = false),
         CONFLICT("conflict", "Conflict", 409, detailed = true),
-
-        /** A stored change of an app no document key can name (SCP-7): after [CONFLICT], so [of] never picks it. */
-        CHANGE_UNREADABLE("change-unreadable", "Change Unreadable", 409, detailed = true),
         GONE("gone", "Gone", 410, detailed = true),
         PRECONDITION_FAILED("precondition-failed", "Precondition Failed", 412, detailed = true),
         UNPROCESSABLE("unprocessable", "Unprocessable Content", 422, detailed = true),
@@ -784,10 +751,6 @@ class ControlHttp(private val plane: ControlPlane) {
     companion object {
         private const val UNPAIRED_SURROGATE = "The request holds a string with an unpaired UTF-16 surrogate, which " +
             "no id may hold (IDN-10)."
-
-        private const val CHANGE_UNREADABLE_DETAIL = "This change can no longer be read: it is of an app that cannot be " +
-            "an app id under the current rule (SCP-7), so it can be neither shown nor abandoned. An operator removes its " +
-            "record from the control store."
 
         const val JSON: String = "application/json"
         const val PROBLEM_JSON: String = "application/problem+json"

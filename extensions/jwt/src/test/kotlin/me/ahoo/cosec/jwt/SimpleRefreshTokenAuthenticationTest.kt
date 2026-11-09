@@ -14,10 +14,10 @@
 package me.ahoo.cosec.jwt
 
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
-import me.ahoo.cosec.runtime.context.tenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
@@ -40,7 +40,9 @@ class SimpleRefreshTokenAuthenticationTest {
         }).test()
             .consumeNextWith {
                 it.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
-                it.tenant.tenantId.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
+                (it as TenantCapable).tenant.tenantId.assert().isEqualTo(
+                    SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId
+                )
             }.verifyComplete()
     }
 }

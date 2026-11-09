@@ -1,0 +1,35 @@
+{
+  "rules": [
+    "ROL-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A tenant's role lists its permissions: an app's catalog must not widen it unseen.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "all",
+            "app": "wms",
+            "permissions": "*"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "all"
+    ]
+  },
+  "request": {
+    "app": "wms",
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "only for a system role"
+  }
+}

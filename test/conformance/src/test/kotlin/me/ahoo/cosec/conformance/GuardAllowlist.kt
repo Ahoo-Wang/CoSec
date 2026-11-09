@@ -54,6 +54,9 @@ object GuardAllowlist {
         "startup" to setOf(
             "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a CacheRuntime fails startup naming the CoCache starter",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache is still needed where it is used",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#a service in gateway mode does not need Redis for an unused cosec-cocache",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring MVC host without cosec-webmvc fails startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a WebFlux host without cosec-webflux fails startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring Cloud Gateway host without cosec-gateway fails startup, even with CoSec off",
@@ -84,9 +87,9 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
             "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
-            "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
-            "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
-            "spring-boot:RemovedKeyPrefixesTest#every removed prefix counts, by any of its names",
+            "spring-boot:UnknownPropertiesTest#a key prefix cosec key-prefix replaced fails startup",
+            "spring-boot:UnknownPropertiesTest#a replaced key prefix in the environment fails startup",
+            "spring-boot:UnknownPropertiesTest#no property turns the check off",
         ),
         "timing" to setOf(
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",

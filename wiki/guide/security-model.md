@@ -364,7 +364,7 @@ hold only if the gateway is the only one that can reach the service:
   whose metadata says `cosec-identity: true` ([Forwarding the identity](../integration/web.md#forwarding-the-identity)).
 - The header is not signed, and names no audience: **the trust boundary is the network between the gateway and the
   services**, not the header. Whoever can send a service a request can write one, and a service that receives one
-  could replay it to another. The service refuses one issued longer ago than `cosec.pipeline.gateway.max-age`
+  could replay it to another. The service refuses one issued longer ago than `cosec.pipeline.identity.max-age`
   (60 seconds) plus `cosec.authentication.revocation.skew`, or whose credential has expired, with `401`
   `token-expired`, so a header captured inside the network replays only for that long. One that cannot be read or
   arrives twice is `400`, never anonymous. A request without the header is anonymous. A signature or an audience would

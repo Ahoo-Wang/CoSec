@@ -7,7 +7,7 @@ index abb60a5f..21e8dfa3 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
 @@ -74,7 +74,7 @@ class CompiledRateLimit internal constructor(
-          * `\uXXXX` escape: well formed, its own, and every other value keeps the bucket it had.
+          * escape: well formed, and its own.
           */
          fun keyedBucket(value: String): String {
 -            if (Identifiers.isWellFormed(value)) {

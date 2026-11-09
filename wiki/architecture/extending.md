@@ -24,7 +24,7 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
 | `MembershipLoader` | `cosec-cocache`, `cache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
-| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
+| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive the flat audit record of each decision. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
@@ -148,7 +148,8 @@ it, and one without an id does not count. A principal you construct has no `issu
 tokens (`subjectRevokedBefore`) takes its approvals back.
 
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
-parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
+parameter when `cosec.pipeline.allow-query-token` is on, else the cookie when `cosec.pipeline.allow-cookie-token` is on)
+and the API key header
 (`cosec.pipeline.api-key-header`).
 
 The starter's default is a `CompositeAuthenticator`: a request with an API key is judged by the API key authenticator
@@ -308,7 +309,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | Delivered | A failure |
 |---|---|---|
 | `BEST_EFFORT` (default) | Queued without suspending into the listener's own bounded queue, handled off the request path. A full queue drops the event. | Logged and counted; the response is unchanged. |
-| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.audit.required.timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
+| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.observability.listener.required-timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
 
 - A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
 - A REQUIRED listener should be idempotent by `event.id`: a write that timed out may still have succeeded.
@@ -431,12 +432,18 @@ store answers what the maintenance passes visit:
 
 - `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
 - `openChanges()`: the change requests that may still be open. It may name more, never fewer; callers read each
-  change and go by its state. A change whose record no longer reads because it is of an app the app id rule refuses
-  (an earlier build wrote it) makes `change(id)` throw `UnnamedDocumentException`, as `ChangeRequestCodec` does when
-  it decodes one: it cannot be known to be terminal, so it stays listed, and `openChanges()` must not fail for it.
-  Maintenance skips it; an operator removes its record.
+  change and go by its state. A listed change whose record does not decode fails `openChanges()` as it fails
+  `change(id)`: it cannot be known to be terminal, so maintenance stops until an operator removes its record.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
-  removes the lease only while `holder` still has it.
+  removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
+  `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
+- `withdrawCandidate(key, window)`: removes a document's candidate only while it is still the one of `window`, in one
+  atomic step (`CTL-26`). A change withdraws its candidate once it is terminal, when another may already have staged
+  its own. `putCandidate` only writes.
+- `referrers` and `putReferrers`: each referring document with the revision of it that last indexed the reference, so
+  that a revision's late removal never takes back what a later revision indexed again (`CTL-25`).
+- `RevisionIndex.reclaiming`: the records reclamation took out of the index and has not yet seen deleted; a store
+  keeps it with the index, as it keeps the rest of it.
 
 Like the data plane's stores, a read that fails throws: it never answers "absent".
 
@@ -456,12 +463,12 @@ service's terms. Mapped requests get the route's action; every other request kee
 }
 ```
 
-- The starter loads the route maps listed in `cosec.authorization.routes.location` (default
-  `classpath:cosec-routes.json`, comma-separated) at startup. A missing or invalid map, or two routes one request could
-  match, fails startup. That includes the default location: a WebFlux or WebMvc service without a route map sets the
-  property empty. A gateway host loads none.
-- With `cosec-openapi` and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both documents from
-  the service's OpenAPI description: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
+- The starter loads the route maps listed in `cosec.authorization.routes.location` (comma-separated) at startup. A
+  missing or invalid map, a map with no routes, or two routes one request could match, fails startup. Unset, the
+  service loads none, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is
+  set empty. A gateway host loads none.
+- With `cosec-openapi`, springdoc and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both
+  documents from the OpenAPI document springdoc scans: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
   (catalog and permission policies) to publish through the control plane.
 
 The file is read strictly: an unknown or missing field fails it

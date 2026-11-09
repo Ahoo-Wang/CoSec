@@ -1,0 +1,95 @@
+{
+  "rules": [
+    "ROL-11"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "night belongs to wms: a request in pos reads none of it, even with an action the same permission would allow.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "pos": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "g",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "ship"
+            ]
+          },
+          {
+            "id": "keeper",
+            "app": "wms",
+            "space": "wh-01",
+            "permissions": [
+              "ship"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "night"
+    ]
+  },
+  "request": {
+    "app": "pos",
+    "action": "wms:ship"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

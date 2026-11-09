@@ -53,7 +53,6 @@ import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * A request to decide without making it (RFC 0007 §10.3): who asks, with which memberships, in which scope, for which
@@ -160,17 +159,13 @@ class Simulator(
             id = request.principal ?: ANONYMOUS,
             tenantId = scope.tenant.value,
             authenticated = request.principal != null,
-            roles = emptySet(),
-            policies = emptySet(),
             attributes = emptyMap(),
-            root = false,
             // As the credential would be (RFC 0009 §4.2): a key's cap drops principal bindings, a key gets no break-glass.
             principalBindings = request.principalBindings,
             breakGlass = request.breakGlass,
         )
         val authz = AuthzRequest(
             subject = subject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = request.action,
             resource = request.resource,
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),
@@ -230,7 +225,7 @@ class Simulator(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's, as before.
+        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's.
         val tenantCauses = ArrayList<Cause>(0)
         val tenant = documentOf(documents.tenant, compiler, tenantCauses) {
             CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
@@ -312,6 +307,26 @@ class Simulator(
             "values: enforcement refuses such a request (PIP-12)."
     }
 }
+
+/**
+ * Whether [candidate] decides differently from [enforced]. Everything a decision says counts, but a failure counts by
+ * what it is, its type and message: each side compiles on its own, so the same failure is two exceptions (#1253).
+ */
+internal fun differs(enforced: Decision, candidate: Decision): Boolean = comparable(enforced) != comparable(candidate)
+
+private fun comparable(decision: Decision): Any = when (decision) {
+    is Decision.Indeterminate -> when (val cause = decision.cause) {
+        is Cause.MatcherFailed -> listOf(cause::class, cause.at, cause.guard, failure(cause.error))
+        is Cause.SourceUnavailable -> listOf(cause::class, cause.document, failure(cause.error))
+        is Cause.BoundaryUnavailable -> listOf(cause::class, cause.boundary, failure(cause.error))
+        is Cause.MembershipUnavailable -> listOf(cause::class, failure(cause.error))
+        else -> cause
+    }
+
+    else -> decision
+}
+
+private fun failure(error: Throwable): Pair<Class<*>, String?> = error.javaClass to error.message
 
 /** A statement as a decision reports it to a caller: by policy, index and the binding it applied through. */
 data class StatementView(

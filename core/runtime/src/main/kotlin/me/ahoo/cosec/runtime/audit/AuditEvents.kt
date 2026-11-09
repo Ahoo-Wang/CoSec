@@ -14,11 +14,10 @@
 package me.ahoo.cosec.runtime.audit
 
 import me.ahoo.cosec.api.audit.AuditDecision
+import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditReasonCode
-import me.ahoo.cosec.api.audit.AuditSourceType
-import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.api.audit.AuditVia
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -35,15 +34,14 @@ import java.time.Instant
  * Maps a [DecisionEvent] to the audit record of `cosec-api` (RFC 0006 §9.5.3). The audit keeps the detailed reason the
  * response body does not: explicit and implicit denies apart, token rejections by kind, the cause of a 503.
  *
- * The audit record keeps its source types, so consumers of the audit stream read the same fields: a binding of the
- * platform or a tenant document is a global policy, an attachment a principal policy, a role binding of an app document
- * a role permission, the builtin rule the blacklist.
+ * The record names what decided in its own terms, so a consumer needs none of the engine's types: how the deciding
+ * statement applied ([AuditVia]), the document that holds its binding or boundary ([AuditDocument]), the policy and the
+ * statement.
  */
 object AuditEvents {
     fun from(event: DecisionEvent): AuditEvent {
         val (decision, reasonCode) = decision(event)
         val scope = event.scope
-        val by = event.by as? StatementRef.Policy
         return AuditEventData(
             eventId = event.id,
             timestamp = Instant.ofEpochMilli(event.time),
@@ -52,7 +50,6 @@ object AuditEvents {
                 id = event.subject.id,
                 authenticated = event.subject.authenticated,
                 roles = scope?.roles.orEmpty().mapTo(LinkedHashSet()) { it.value },
-                policies = emptySet(),
             ),
             request = AuditRequestData(
                 id = event.requestId,
@@ -62,25 +59,19 @@ object AuditEvents {
                 method = event.request.method,
                 path = event.request.path,
                 routeId = event.request.routeId,
-                device = AuditDeviceData(event.request.deviceId.ifEmpty { null }, null),
+                device = AuditDeviceData(event.request.deviceId.ifEmpty { null }),
             ),
             authorization = AuditAuthorizationData(
                 decision = decision,
                 reasonCode = reasonCode,
                 reason = reason(event),
                 elapsedNanos = event.elapsedNanos,
-                source = source(by),
+                source = source(event.by),
             ),
             // The parent span: the cosec.authorize span is made afterwards, from the event (RFC 0006 X3).
             trace = event.trace?.let { AuditTraceData(it.traceId, it.spanId) },
             snapshotVersion = event.snapshotVersion?.let { AuditSnapshotVersionData(it.platform, it.app, it.tenant) },
-            binding = when (val via = by?.via) {
-                is BindingRef.Bound -> via.id.value
-                is BindingRef.Attached -> "attached:${via.policy.value}"
-                BindingRef.Builtin -> "builtin"
-                is BindingRef.Boundary -> "boundary:${via.tenant.value}"
-                null -> null
-            },
+            binding = binding(event.by),
             breakGlass = event.breakGlass,
             kind = event.kind.name,
         )
@@ -131,29 +122,51 @@ object AuditEvents {
         return "${event.outcome.reason.name}: ${cause::class.simpleName}"
     }
 
-    private fun source(by: StatementRef.Policy?): AuditSourceData {
-        by ?: return AuditSourceData(AuditSourceType.NONE)
-        val (type, policyType) = when (val via = by.via) {
-            BindingRef.Builtin -> AuditSourceType.BLACKLIST to PolicyType.SYSTEM
-            // A boundary is a platform policy.
-            is BindingRef.Boundary -> AuditSourceType.GLOBAL_POLICY to PolicyType.GLOBAL
-            is BindingRef.Attached -> AuditSourceType.PRINCIPAL_POLICY to PolicyType.CUSTOM
-            is BindingRef.Bound -> when {
-                by.policy == BuiltinPolicies.ROOT -> AuditSourceType.ROOT to PolicyType.SYSTEM
-                via.document == DocumentKind.APP -> AuditSourceType.ROLE_PERMISSION to PolicyType.CUSTOM
-                else -> AuditSourceType.GLOBAL_POLICY to PolicyType.GLOBAL
-            }
-        }
-        return AuditSourceData(
-            type,
-            AuditPolicyData(by.policy.value, policyType, AuditStatementData(by.index, by.name))
+    private fun source(by: StatementRef?): AuditSourceData = when (by) {
+        is StatementRef.Policy -> AuditSourceData(
+            via = via(by.via),
+            document = when (val via = by.via) {
+                is BindingRef.Bound -> document(via.document)
+                is BindingRef.Boundary -> AuditDocument.PLATFORM
+                is BindingRef.Attached, BindingRef.Builtin -> null
+            },
+            policy = by.policy.value,
+            statement = AuditStatementData(by.index, by.name),
         )
+        // The boundary refused because none of its statements matched, so there is no statement to name.
+        is StatementRef.Boundary -> AuditSourceData(AuditVia.BOUNDARY, AuditDocument.PLATFORM, by.boundary.value)
+        // No statement decided: a rejected scope is in reasonCode.
+        is StatementRef.ScopeRejected, null -> AuditSourceData(AuditVia.NONE)
+    }
+
+    private fun via(via: BindingRef): AuditVia = when (via) {
+        is BindingRef.Bound -> AuditVia.BINDING
+        is BindingRef.Attached -> AuditVia.ATTACHMENT
+        BindingRef.Builtin -> AuditVia.BUILTIN
+        is BindingRef.Boundary -> AuditVia.BOUNDARY
+    }
+
+    private fun document(kind: DocumentKind): AuditDocument = when (kind) {
+        DocumentKind.PLATFORM -> AuditDocument.PLATFORM
+        DocumentKind.APP -> AuditDocument.APP
+        DocumentKind.TENANT -> AuditDocument.TENANT
+    }
+
+    private fun binding(by: StatementRef?): String? = when (by) {
+        is StatementRef.Policy -> when (val via = by.via) {
+            is BindingRef.Bound -> via.id.value
+            is BindingRef.Attached -> "attached:${via.policy.value}"
+            BindingRef.Builtin -> "builtin"
+            is BindingRef.Boundary -> "boundary:${via.tenant.value}"
+        }
+        is StatementRef.Boundary -> "boundary:${by.tenant.value}"
+        is StatementRef.ScopeRejected, null -> null
     }
 }
 
 /**
  * A [DecisionListener] over an [AuditEventSink] (RFC 0006 §9.5.3): maps each event with [AuditEvents.from], so a sink
- * written for 7.x needs no mapping of its own.
+ * receives the stable audit record and needs no knowledge of the engine's types.
  *
  * Always BEST_EFFORT: `AuditEventSink.publish` returns before anything is written and reports no failure, so it can
  * never acknowledge a write. As a REQUIRED listener it would always "succeed", and a break-glass permit would proceed

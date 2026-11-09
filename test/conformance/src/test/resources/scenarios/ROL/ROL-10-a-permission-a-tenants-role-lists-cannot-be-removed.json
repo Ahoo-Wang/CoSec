@@ -1,0 +1,117 @@
+{
+  "rules": [
+    "ROL-10"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Removing edit would leave the tenant's role failing closed: the publish stops it.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "edit"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:wms",
+        "operations": [
+          {
+            "putCatalog": {
+              "groups": [
+                {
+                  "name": "ops",
+                  "permissions": [
+                    {
+                      "id": "read",
+                      "action": "wms:read"
+                    },
+                    {
+                      "id": "label"
+                    }
+                  ]
+                },
+                {
+                  "name": "inbound",
+                  "spaced": true,
+                  "permissions": [
+                    {
+                      "id": "ship",
+                      "action": "wms:ship"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [
+        "REFERENCES"
+      ]
+    },
+    "heads": {
+      "app:wms": 1
+    }
+  }
+}

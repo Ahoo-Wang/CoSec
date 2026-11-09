@@ -83,8 +83,7 @@ class DocumentSnapshotViewsTest {
 
     private fun decide(view: SnapshotView, scope: Scope, action: String = "order:read"): Decision {
         val authz = AuthzRequest(
-            Subject("alice", scope.tenant.value, true, emptySet(), emptySet(), emptyMap(), false, true, true),
-            me.ahoo.cosec.model.Scope.declared(scope.tenant.value, scope.app.value, ""),
+            Subject("alice", scope.tenant.value, true, emptyMap(), true, true),
             Action(action.substringBefore(':'), action.substringAfter(':')),
             Resource("order", "1", emptyMap()),
             Environment("10.0.0.1", "r", "d", blocked = false),

@@ -25,7 +25,6 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
@@ -125,14 +124,10 @@ open class GlobBoundBenchmark {
                 "user",
                 "acme",
                 true,
-                emptySet(),
-                emptySet(),
                 emptyMap(),
-                root = false,
                 principalBindings = true,
                 breakGlass = true,
             ),
-            scope = Scope.declared("acme", "", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),

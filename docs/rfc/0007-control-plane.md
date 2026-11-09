@@ -129,6 +129,14 @@
 >   - `UnnamedDocumentException` 的类型公开，构造器是 `@InternalCoSecApi`；`ControlStore.openChanges` 的实现必须继续列出这种变更。
 > - **规则：** 修订 `CTL-3`、`SCP-7`、`TNT-4`；见 [RFC 0008](0008-conformance-and-direct-build.md) §3.2 的说明。
 
+> **2026-11-08 修订（#1283，`CTL-27`）**：内置的 `cosec:tenant-admin` 增加本租户文档 `doc/tenant/{t}` 上的 `cosec:skip-shadow`。
+
+> **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。 公开的 `409 change-unreadable` 和 `UnnamedDocumentException` 已删除；确认摘要只有一种形状，没有策略条件时也带 `policyCondition: null`。
+
+> **2026-11-08 修订（#1290）**：头写入是发布的提交点，之后的维护失败只记日志，不把已写入的修订报告为失败（`CTL-2`）。暂存时变更先离开 `CHECKED` 再占槽，一次条件写决定两个调用的胜负（`CTL-6`）。章节操作的字段按文档格式的读取器校验（`CTL-28`）。
+
+> **2026-11-08 修订**：传播查询只统计实例能评估的修订（#1293）。租户策略只有作为平台策略的精确副本才能用同一 id，副本存在期间平台策略冻结（#1298，#1224 选项 A）。
+
 ## 0. 结论先行
 
 第 5 阶段结束时，数据面已经是"读快照 → 纯函数决策 → 义务与监听器"，但写入一侧还停在第 3 阶段：任何拿到 `SnapshotPublisher` 的代码都能改策略，
@@ -373,7 +381,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
        Conflict    → c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
        结果未知     → getIfChanged(key, digest(d))：Unchanged 即已写入，否则按 Conflict 处理（与 RedisSnapshotPublisher 相同）
   5. revisions:<key> 追加 (修订号, digest(d))                 CAS 循环；失败只记告警，索引可以重建
-  6. 从反向索引中删除 b 有而 d 没有的引用
+  6. 从反向索引中删除 b 有而 d 没有的引用，除非更晚的修订又索引了它
   7. c → PUBLISHED（CAS）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）
 ```
 
@@ -429,7 +437,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 
 - 体积不作为删除条件：按体积删除会让最近几天的修订突然不可解释。每份文档的记录总字节数作为指标 `cosec.control.revisions.bytes` 暴露，超过
   `cosec.control.revisions.warn-bytes`（默认 256 MB）告警。M13 的问题由数量和时间约束，大文档的部署调小 `max-count`。
-- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除经 CoCache 的 `evict`。
+- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除用 CoCache 的 `delete`、`deleteIfMatch`。
 - 数据面的 `explain` 需要的是决策时的修订：审计保留期比 7 天长的部署要么调大 `min-age`，要么接受较早的决策只能在当前快照上解释（`explain` 返回 410，§10.2）。
 
 ### 5.8 跨文档引用：反向引用索引
@@ -463,6 +471,8 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 ---
 
 > **实现说明（2026-10-27，#1087）**：`bootstrap` 写入的绑定 id 是 `platform-admin-<principal>`；`publish` 经 `ControlStore` 写修订（`kind = MIGRATE`），拒绝期限超过 `--break-glass-max-duration` 的 break-glass 绑定。
+
+> **实现说明（2026-11-08，#1268）**：反向索引的每个引用方带上最后索引它的修订，发布后只删除不高于自身修订的条目（`CTL-25`，#1207），所以并发发布同一引用方时“超集”仍然成立。索引条目写在更晚的修订旁边，`history` 不读头之上的条目。回收把从索引取出的内容记入 `RevisionIndex.reclaiming`，失败的删除会重试（#1226），租约用 `deleteIfMatch` 释放。候选只有在仍是该变更的窗口时才撤回，在一次原子操作里完成（`CTL-26`，#1227，§5.5、§6.4）；实例在候选撤回且最后一份报告写入后停止上报（#1210）。
 
 ## 6. 发布流程
 

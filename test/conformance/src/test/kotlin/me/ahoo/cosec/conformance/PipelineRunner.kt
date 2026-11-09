@@ -147,7 +147,7 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
 /**
  * The `pipeline` runner (RFC 0008 §3.3): an HTTP request → [Pipeline] → its outcome, with the scenario's documents
  * compiled as the `engine` runner compiles them and test doubles for every SPI the pipeline calls. The adapters
- * (RFC 0006 PR-7) and listeners (PR-6) are not part of it yet.
+ * and listeners are not part of it: the adapter and listener tests cover them.
  *
  * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and the request's host
  * attributes (`http.*` from the headers, `request.attributes.*` from `requestAttributes`), through the pipeline's own
@@ -187,7 +187,9 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
  *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000,
  *                         // the API key header, which the documents are compiled against too (CND-5)
- *                         "apiKeyHeader": "X-API-Key" },
+ *                         "apiKeyHeader": "X-API-Key",
+ *                         // PIP-13: whether the authorization cookie is read as a token (default false)
+ *                         "allowCookieToken": true },
  * // External attributes (RFC 0006 §5.4): providers that declare them, which the documents are compiled against
  * "attributeProviders": [{ "stage": "B", "declares": { "ext.geo.inFence": "bool" | "string" | "stringSet" | "ip" },
  *                          "values": { "ext.geo.inFence": true } | "fails": "message" | "hangs": true }],
@@ -804,6 +806,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "attributeTimeoutMillis",
             "requiredTimeoutMillis",
             "apiKeyHeader",
+            "allowCookieToken",
         )
         val defaults = PipelineOptions()
         fun millis(field: String) = node.get(field)?.let { it.asLong().milliseconds }
@@ -813,6 +816,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             membershipTimeout = millis("membershipTimeoutMillis") ?: defaults.membershipTimeout,
             attributeTimeout = millis("attributeTimeoutMillis") ?: defaults.attributeTimeout,
             apiKeyHeader = node.get("apiKeyHeader")?.text() ?: defaults.apiKeyHeader,
+            allowCookieToken = node.get("allowCookieToken")?.bool() ?: defaults.allowCookieToken,
         )
     }
 

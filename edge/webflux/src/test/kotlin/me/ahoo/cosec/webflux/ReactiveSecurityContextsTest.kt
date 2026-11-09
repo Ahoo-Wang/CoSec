@@ -13,9 +13,10 @@
 
 package me.ahoo.cosec.webflux
 
+import io.mockk.every
+import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.runtime.context.SimpleSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
@@ -31,7 +32,9 @@ class ReactiveSecurityContextsTest {
     @Test
     fun writeSecurityContext() {
         Mono.empty<Void>()
-            .writeSecurityContext(SimpleSecurityContext.anonymous())
+            .writeSecurityContext(
+                mockk<SecurityContext> { every { principal } returns SimpleTenantPrincipal.ANONYMOUS }
+            )
             .test()
             .expectAccessibleContext()
             .assertThat {

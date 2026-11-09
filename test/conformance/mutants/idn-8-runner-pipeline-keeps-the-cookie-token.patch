@@ -7,7 +7,7 @@ index 8695757e..f838acb6 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 @@ -132,7 +132,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-      * reads a token from that cookie, so a backend could replay it at the gateway.
+      * this pipeline reads a token there (`cosec.pipeline.allow-cookie-token`), a backend might.
       */
      @InternalCoSecApi
 -    fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)

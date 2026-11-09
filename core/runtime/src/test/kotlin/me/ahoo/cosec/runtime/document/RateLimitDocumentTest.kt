@@ -62,7 +62,7 @@ class RateLimitDocumentTest {
             SnapshotKey.Tenant("acme"),
             stored(rule)
         ).rateLimits.single().id.assert().isEqualTo("tenant:acme/login")
-        compiler.compile(SnapshotKey.Platform, stored(rule)).rateLimits.single().id.assert().isEqualTo("login")
+        compiler.compile(SnapshotKey.Platform, stored(rule)).rateLimits.single().id.assert().isEqualTo("platform/login")
     }
 
     @Test

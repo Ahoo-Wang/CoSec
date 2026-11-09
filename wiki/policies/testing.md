@@ -38,15 +38,16 @@ app or any space, and `(default)` for the default space, so a policy that limits
 `scope/acme/order/(default)`. Space ids beginning with `(` are CoSec's, so `(default)` is never a space of yours.
 
 Three built-in policies can be bound to operators: `cosec:platform-admin` (every action on every document),
-`cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` on its own
-tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` and `publish`).
+`cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` and
+`skip-shadow` on its own tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant`, `publish` and
+`skip-shadow`).
 
 | Method and path | Does |
 |---|---|
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
-| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions. |
+| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, of the [expanded](./role-permissions.md#roles) documents, the `roles` as written, and `sections`: whether anything else differs (the catalog, limits, attributes, boundary or rate limits), compared by their content. |
 | `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
@@ -62,9 +63,8 @@ unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`), anywhere, is a `40
 a Redis key would write it as `?`, naming another id. A stored document or record that does not decode, such as
 one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
 of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
-trailing `/` or an empty segment is a `404`. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
-abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
-an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
+trailing `/` or an empty segment is a `404`. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
+every caller (`SCP-10`). The control
 host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
 
@@ -77,7 +77,7 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
 | `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to (a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
@@ -123,6 +123,8 @@ change's candidate too:
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
 full trace of candidates. Statements from documents you may not read are left out and counted as `redacted`.
+`differs` compares what the two decisions say, a failure by its kind and message, so the same compile failure on both
+sides does not differ.
 
 A simulation reads the documents enforcement reads: the platform's, the tenant's, and the app's when the request has
 roles in its app or the tenant document binds one of that app's permission policies to `Anyone` or to a principal
@@ -195,9 +197,11 @@ A change is a set of entry operations on one document, made on the revision you 
 | `removeBinding` | `id`, optional `ifMatch` | Removes a binding. |
 | `putRateLimit` | `rateLimit`, optional `ifMatch` | Adds the rate limit rule, or replaces the one with its id where it stands. |
 | `removeRateLimit` | `id`, optional `ifMatch` | Removes a rate limit rule. |
+| `putRole` | `role`, optional `ifMatch` | Adds the role, or replaces the one with its id as a whole. App and tenant documents. |
+| `removeRole` | `id`, optional `ifMatch` | Removes a role. |
 | `putCatalog` | `catalog` | Sets an app document's catalog; without `catalog`, removes it. |
-| `setLimits` | `limits` with all six limits | Sets the platform's limits; without `limits`, back to the defaults. |
-| `setAttributes` | `attributes` | Sets the platform's declared attributes; without `attributes`, removes them. |
+| `setLimits` | `limits` with all six limits, each a positive integer as in a document | Sets the platform's limits; without `limits`, back to the defaults. A value of another type is a `400`. |
+| `setAttributes` | `attributes`, an array as in a document | Sets the platform's declared attributes; without `attributes`, removes them. Anything but an array of attributes is a `400`. |
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
@@ -227,7 +231,9 @@ flowchart LR
 ```
 
 A document has at most one staged change (`SHADOWING`, `AWAITING_APPROVAL` or `READY`); staging another is a `409`
-until that one is published, abandoned, rejected or expired. A change that is not finished expires
+until that one is published, abandoned, rejected or expired. A change is staged before it takes the slot, so a call
+still writing its candidate holds the slot too; one that cannot write it, or is cancelled, gives the slot back and the
+change is `CHECKED` again. A change that is not finished expires
 `cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
 read after that, and the control plane's maintenance pass reads every open change each
 `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
@@ -279,9 +285,16 @@ fails closed on it.
 A window compares decisions, so a change that touches only [rate limit rules](./rate-limiting.md#publishing-rules)
 shows no difference there.
 
+An instance writes its report of a window every `cosec.authorization.shadow.report-interval` (10 seconds) while the
+window's candidate is staged. Once the candidate is withdrawn (the window closed, or the change was abandoned,
+rejected, published or preempted), it writes the report once more and forgets the window; the report expires 8 days
+after that last write. A change withdraws only its own candidate: when another change has taken the slot and staged
+its own meanwhile, that one stays (`CTL-26`).
+
 `POST /changes/{id}:skip-shadow` with a `reason` stages a `CHECKED` change without a window; it needs
-`cosec:skip-shadow`, and the revision records that the window was skipped. A change that only creates or revokes
-break-glass bindings has no window.
+`cosec:skip-shadow`, and the revision records that the window was skipped. `cosec:tenant-admin` holds it on its own
+tenant's document only (`CTL-27`). Skipping a window changes nothing about approval: what the analysis cannot prove the
+operator holds still waits for it. A change that only creates or revokes break-glass bindings has no window.
 
 ### Taking a busy slot
 
@@ -446,7 +459,9 @@ goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved
 document's staging slot meanwhile, the change is `CONFLICTED`; if the candidate no longer compiles against the current
 documents, it is `DRAFT` with the findings. A publish whose revision was written but whose answer was lost is
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
-finishes what followed the write, and records the events as the publisher the revision names.
+finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
+the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
+publishing the change again settles it without adding a revision.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane
@@ -467,11 +482,15 @@ publish as any change. Which revisions are kept, and how long, is in [Storage](.
 ```
 
 The answer lists `allows` and `denies`: every binding (in the platform, tenant and, when `app` is given, app document)
-whose scope fits the query and whose policy has a statement matching the action and resource, with its document,
+that can apply in the tenant asked about, whose scope fits the query and whose policy has a statement matching the
+action and resource, with its document,
 subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
 not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
-`hidden`, and bindings to policies in them in `opaque`. Attachments are not listed: they depend on each principal's
-memberships.
+`hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
+app's permission policies, as enforcement does, when you may read the app's document. Attachments are not listed: they depend on each principal's
+memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
+that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
+tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.
 
 ## Policies in CI
 
@@ -574,6 +593,11 @@ documents as JSON text.
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
 | `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `app`, `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
 | `expect` | `decision`: `Permit`, `Deny`, `Indeterminate` or `Rejected`, with `by` (the deciding statement; `null` for the implicit deny), `cause` or `reason`. |
+
+`http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
+`Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API
+names (the engine, JUnit's `DynamicTest` and Jackson's `JsonNode` in `evaluate(JsonNode)`): the dependency above is all
+an application declares.
 
 Only the fields `expect` names are compared: `{"decision": "Permit"}` passes whichever statement permits, and `by`
 pins one, compared whole. A misspelt field is an error, not ignored.

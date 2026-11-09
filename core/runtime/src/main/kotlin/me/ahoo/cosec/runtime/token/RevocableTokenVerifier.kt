@@ -81,7 +81,9 @@ class RevocableTokenVerifier(
     private fun checkNotRevoked(tokenPrincipal: TokenPrincipal) {
         // Before the store is asked: an id with an unpaired surrogate would read another's key (RC1-52, `IDN-10`).
         if (!TokenClaims.areWellFormed(tokenPrincipal)) {
-            throw TokenVerificationException("The token claims an id with an unpaired UTF-16 surrogate.")
+            throw TokenVerificationException(
+                "The token claims an empty tenant or an id with an unpaired UTF-16 surrogate."
+            )
         }
         if (tokenStore.isRevoked(tokenPrincipal.tokenId)) {
             throw TokenRevokedException("Token [${tokenPrincipal.tokenId}] has been revoked.")

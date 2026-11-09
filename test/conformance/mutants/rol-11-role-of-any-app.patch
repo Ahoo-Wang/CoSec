@@ -1,0 +1,17 @@
+# Rule: ROL-11
+# Mutant: a tenant role applies in every app
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..87be0680 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -199,7 +199,7 @@ object RoleExpansion {
+         return Binding(
+             id = BindingId("$BINDING_PREFIX${role.id.value}@$app:$permission"),
+             subject = SubjectRef.Role(tenant, role.id),
+-            scope = BindingScope(Match.Exactly(AppId(app)), space),
++            scope = BindingScope(Match.Any, space),
+             policy = PolicyId(PolicyDocumentCompiler.permissionPrefix(app) + permission),
+         )
+     }

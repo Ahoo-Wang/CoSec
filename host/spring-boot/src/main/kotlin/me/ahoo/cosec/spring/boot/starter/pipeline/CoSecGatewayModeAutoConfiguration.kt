@@ -55,8 +55,8 @@ class CoSecGatewayModeAutoConfiguration {
                 "gateway, which strips the clients' own, may be able to reach it: anyone else who can is whoever they claim."
         }
         return IdentityGate(
-            maxBytes = pipeline.gateway.maxSize.toBytes().toInt(),
-            maxAge = pipeline.gateway.maxAge,
+            maxBytes = pipeline.identity.maxSize.toBytes().toInt(),
+            maxAge = pipeline.identity.maxAge,
             skew = revocation.skew,
             idGenerator = idGenerator.getIfAvailable { RandomIdGenerator },
         )

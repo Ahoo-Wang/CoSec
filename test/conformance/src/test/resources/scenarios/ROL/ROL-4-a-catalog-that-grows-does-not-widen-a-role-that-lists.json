@@ -1,0 +1,126 @@
+{
+  "rules": [
+    "ROL-4"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same growth gives a role with a list nothing.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:wms",
+        "operations": [
+          {
+            "putCatalog": {
+              "groups": [
+                {
+                  "name": "ops",
+                  "permissions": [
+                    {
+                      "id": "read",
+                      "action": "wms:read"
+                    },
+                    {
+                      "id": "edit",
+                      "action": "wms:edit"
+                    },
+                    {
+                      "id": "label"
+                    },
+                    {
+                      "id": "count",
+                      "action": "wms:count"
+                    }
+                  ]
+                },
+                {
+                  "name": "inbound",
+                  "spaced": true,
+                  "permissions": [
+                    {
+                      "id": "ship",
+                      "action": "wms:ship"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "diff": {
+        "document": "app:wms",
+        "from": 1,
+        "to": 2
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "diff policies=[+perm:wms/count] bindings=[] roles=[] sections=true"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "app:wms": 2
+    }
+  }
+}

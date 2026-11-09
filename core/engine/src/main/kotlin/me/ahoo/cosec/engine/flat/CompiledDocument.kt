@@ -33,7 +33,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * Compiling checks only what the index relies on: unique ids, which subjects each kind of document binds, the shape of
  * break-glass bindings, that every binding can apply to some request, and references a platform document cannot leave
  * open. The checks between documents (tenant isolation, the principal binding limit) belong to the snapshot compiler
- * (`PolicyDocumentCompiler` in `cosec-core`). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
+ * (`PolicyDocumentCompiler` in `cosec-runtime`). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
  * platform update never recompiles them (§3 I5), and a policy the platform no longer has makes the request
  * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2). For the same reason a tenant policy whose id the
  * platform also defines is found per request, and makes it [me.ahoo.cosec.model.decision.Cause.AmbiguousPolicy]
@@ -86,7 +86,7 @@ class CompiledDocument private constructor(
     /** Tenant id → principal id → the other principal bindings, by binding id. */
     private val principals: Map<String, Map<String, Array<BoundEntry>>>
 
-    /** Role id → role bindings, in document order (the 7.x grant order). */
+    /** Role id → role bindings, in document (grant) order. */
     private val roles: Map<String, Array<BoundEntry>>
 
     /** The ids of the break-glass bindings. */
@@ -344,7 +344,7 @@ class CompiledDocument private constructor(
         const val MAX_GLOB_UNITS: Int = 2048
 
         /**
-         * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.
+         * The platform document: `Anyone` bindings (policies of every principal, anonymous ones included), break-glass bindings and the shared policies.
          * The blacklist rule and the root policy are added, and so are the control-plane policies (RFC 0007 §7.3), which
          * the platform's and the tenants' bindings may name; every binding must name a policy defined here.
          * [boundaries] are its boundary policies and [defaultBoundary] the one a tenant gets unless it names another.
@@ -383,7 +383,7 @@ class CompiledDocument private constructor(
             )
         }
 
-        /** The document of [app]: its permission policies and role bindings (7.x app permissions and grants). */
+        /** The document of [app]: its permission policies and the role bindings that grant them. */
         fun app(
             app: AppId,
             policies: List<CompiledPolicy>,

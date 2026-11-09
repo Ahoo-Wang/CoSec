@@ -65,7 +65,7 @@ class PipelineGatewayFilter(
     /**
      * `cosec.gateway.identity.forward-authorization`: whether the client's credentials go downstream, to a route that
      * receives the identity only. Off by default: a service behind needs none, and a compromised one then never sees
-     * one. They are the headers, the query parameter and the cookie the pipeline reads them from
+     * one. They are the headers, the query parameter and the cookie the pipeline can read them from
      * ([Pipeline.credentialHeaders], [Pipeline.withoutQueryToken], [Pipeline.withoutCookieToken]): `Authorization`, the
      * API key header, `authorization` in the query and the `authorization` cookie (RC1-5, R1-4 of #1194's review).
      */

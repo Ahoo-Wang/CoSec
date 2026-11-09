@@ -98,15 +98,16 @@ class ShadowSupportTest {
     fun `the recorder keeps counts per window and at most twenty samples`() {
         val recorder = ShadowRecorder("i1", clock)
         val sample = ShadowSample("acme", "bob", "order", "", "http:GET", "http//orders", "a[0]", null)
-        repeat(25) { recorder.record("w", ShadowOutcome.NARROWED, 4, sample) }
-        recorder.record("w", ShadowOutcome.SAME, 4, null)
-        recorder.record("v", ShadowOutcome.BASE_MISMATCH, 3, null)
+        repeat(25) { recorder.record(acme, "w", ShadowOutcome.NARROWED, 4, sample) }
+        recorder.record(acme, "w", ShadowOutcome.SAME, 4, null)
+        recorder.record(acme, "v", ShadowOutcome.BASE_MISMATCH, 3, null)
         val w = recorder.reports().single { it.window == "w" }
         w.counts.assert().isEqualTo(mapOf(ShadowOutcome.NARROWED to 25L, ShadowOutcome.SAME to 1L))
         w.samples.getValue(ShadowOutcome.NARROWED).size.assert().isEqualTo(ShadowReport.MAX_SAMPLES)
         w.baseRevisions.assert().isEqualTo(setOf(4L))
         w.first.assert().isEqualTo(clock.now)
-        recorder.forget("w")
+        recorder.forget("w", recorded = 25).assert().isFalse()
+        recorder.forget("w", recorded = 26).assert().isTrue()
         recorder.reports().single().window.assert().isEqualTo("v")
         assertThrownBy<IllegalArgumentException> { ShadowRecorder("") }
         // An instance id ends its report's key: a ':' would let it match another instance's key or ACL pattern.
@@ -119,7 +120,7 @@ class ShadowSupportTest {
     @Test
     fun `the reporter writes reports and the status, and a failing sink costs only the cycle`() = runBlocking<Unit> {
         val recorder = ShadowRecorder("i1", clock)
-        recorder.record("w", ShadowOutcome.WIDENED, 4, null)
+        recorder.record(acme, "w", ShadowOutcome.WIDENED, 4, null)
         val reports = InMemoryShadowReports(clock)
         val installed = mapOf(acme to InstalledDocument(4, Duration.ofSeconds(1)))
         ShadowReporter(recorder, reports, { installed }, clock).flush()
@@ -194,15 +195,14 @@ class ShadowSupportTest {
                 """{"i1":{"at":"x","documents":{}}}""".encodeToByteArray()
             )
         }
-        // R2-1 of #1194's review: an instance of an earlier build reports an app no key can name now. That entry alone
-        // is skipped; a key no build ever wrote is still malformed.
+        // SCP-10: an app no key can name is a format error, as a key no build ever wrote is.
         val encoded = String(ShadowCodec.encodeStatuses(mapOf("i1" to status)))
         val odd = encoded.replace(
             "\"documents\":{",
             "\"documents\":{\"app:a\\u0001b\":{\"revision\":1,\"lagMillis\":0},"
         )
         odd.assert().isNotEqualTo(encoded)
-        ShadowCodec.decodeStatuses(odd.encodeToByteArray()).assert().isEqualTo(mapOf("i1" to status))
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(odd.encodeToByteArray()) }
         assertThrownBy<SnapshotFormatException> {
             ShadowCodec.decodeStatuses(odd.replace("app:a\\u0001b", "app:a:b").encodeToByteArray())
         }

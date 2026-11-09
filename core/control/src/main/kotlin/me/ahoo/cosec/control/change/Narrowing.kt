@@ -28,6 +28,7 @@ import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 
@@ -99,7 +100,7 @@ internal object Narrowing {
         val statements = when (policy) {
             BuiltinPolicies.BLACKLIST -> return false
             BuiltinPolicies.ROOT -> return true
-            else -> base.policies.firstOrNull { it.id == policy }?.statements
+            else -> RoleExpansion.effective(base).policies.firstOrNull { it.id == policy }?.statements
                 ?: BuiltinPolicies.CONTROL[policy]
                 ?: policyOf(policy)?.statements
         }
@@ -190,6 +191,7 @@ internal class Preemption(
         if (!policy.value.startsWith(prefix) || !SnapshotKey.App.isValidAppId(app)) {
             return null
         }
-        return revisions.head(SnapshotKey.App(app))?.document?.policies?.firstOrNull { it.id == policy }
+        return revisions.head(SnapshotKey.App(app))?.document?.let(RoleExpansion::effective)
+            ?.policies?.firstOrNull { it.id == policy }
     }
 }

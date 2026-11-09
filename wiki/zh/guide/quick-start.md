@@ -54,7 +54,7 @@ cosec:
 其余配置都有可用的默认值，完整列表见[配置](../operations/configuration.md)。其中两个默认值与本指南有关：
 
 - 策略文档从 Redis 中键前缀 `cosec` 下读取，`cosec-migrate` 也写到这里；
-- 路由映射从 `classpath:cosec-routes.json` 读取，文件不存在会导致启动失败。下一步就添加它。
+- 只有配置项指明时才加载路由映射，否则请求就是其路径上的 `http:<METHOD>`。下一步添加一份。
 
 ## 把路由映射为动作 {#map-routes-to-actions}
 
@@ -70,7 +70,16 @@ cosec:
 }
 ```
 
-现在 `GET /orders/42` 是资源 `order/42` 上的动作 `order:read`。没有路由匹配的请求保留动作 `http:<METHOD>` 和它的路径：`GET /hello` 是 `http:path:/hello` 上的 `http:GET`。要在没有路由映射的情况下运行，把 `cosec.authorization.routes.location` 设为空值，所有请求都位于 `http` 命名空间。格式及其规则见[路由映射](../integration/web.md#route-maps)。
+在 `application.yaml` 中指明它：
+
+```yaml
+cosec:
+  authorization:
+    routes:
+      location: classpath:cosec-routes.json
+```
+
+现在 `GET /orders/42` 是资源 `order/42` 上的动作 `order:read`。没有路由匹配的请求保留动作 `http:<METHOD>` 和它的路径：`GET /hello` 是 `http:path:/hello` 上的 `http:GET`。不用路由映射的服务不放这个文件，也不设置该配置项，所有请求都位于 `http` 命名空间。格式及其规则见[路由映射](../integration/web.md#route-maps)。
 
 ## 编写第一条策略 {#write-a-first-policy}
 

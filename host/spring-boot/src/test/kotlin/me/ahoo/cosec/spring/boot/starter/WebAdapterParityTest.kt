@@ -102,7 +102,7 @@ import kotlin.time.Duration.Companion.seconds
  * problem body, every problem type of §6.1 included. Their decision events agree on the request id, the trace, the
  * subject and the scope, and the response body names the same trace.
  *
- * Only the 8.0 pipeline runs here (RFC 0008 §4.1). `too-many-requests` joins with RFC 0006 PR-5.
+ * Only the 8.0 pipeline runs here (RFC 0008 §4.1).
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class WebAdapterParityTest {
@@ -200,7 +200,7 @@ class WebAdapterParityTest {
 
     /** Has permits for every rule but `limited`, whose bucket is exhausted: the 429 path (RFC 0006 §8.3). */
     private val rateLimiter = RateLimiter { ruleId, _, _ ->
-        val allowed = ruleId != "limited"
+        val allowed = ruleId != "platform/limited"
         RateLimitResult(allowed, 10, if (allowed) 9 else 0, java.time.Duration.ofSeconds(3))
     }
     private val app = compile(
@@ -401,8 +401,8 @@ class WebAdapterParityTest {
             Scenario("an ambiguous path is 400", path = "/public/%2e%2e/admin", status = 400, type = "invalid-request"),
             Scenario(
                 "an ambiguous CoSec parameter is 400",
-                path = "/public/page?CoSec-App-Id=other",
-                headers = app,
+                path = "/public/page",
+                headers = app + ("cosec-app-id" to "other"),
                 status = 400,
                 type = "invalid-request"
             ),

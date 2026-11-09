@@ -11,12 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
+import io.mockk.mockk
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -38,7 +43,6 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
-import me.ahoo.cosec.runtime.context.SimpleSecurityContext
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -273,13 +277,10 @@ class AuthorizationCheckerTest {
     fun failsClosed() = runBlocking<Unit> {
         val security = permitted()
         // A context the pipeline did not make, and an action without a namespace.
-        checker.check(SimpleSecurityContext.anonymous(), "http:GET", "/orders/2").assert().isFalse()
+        val foreign = mockk<SecurityContext>()
+        checker.check(foreign, "http:GET", "/orders/2").assert().isFalse()
         checker.check(security.securityContext, "GET", "/orders/2").assert().isFalse()
-        checker.decide(
-            SimpleSecurityContext.anonymous(),
-            "http:GET",
-            "/orders/2"
-        ).assert().isEqualTo(Decision.Deny(null))
+        checker.decide(foreign, "http:GET", "/orders/2").assert().isEqualTo(Decision.Deny(null))
         checker.decide(security.securityContext, "GET", "/orders/2").assert().isEqualTo(Decision.Deny(null))
         // An unreadable snapshot is not a permit.
         views.fail = true

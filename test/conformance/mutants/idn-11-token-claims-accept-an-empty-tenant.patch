@@ -1,0 +1,18 @@
+# Rule: IDN-11
+# Mutant: a custom verifier's principal with an empty tenant is accepted, and refresh renews it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest --tests me.ahoo.cosec.runtime.token.RevocableTokenVerifierTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt
+index 61c4f4b2..da46bb62 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt
+@@ -28,8 +28,7 @@ import me.ahoo.cosec.spi.membership.MembershipClaims
+ internal object TokenClaims {
+     fun areWellFormed(principal: TokenPrincipal): Boolean {
+         val tenant = MembershipClaims.tenantOf(principal).value
+-        return tenant.isNotEmpty() &&
+-            Identifiers.isWellFormed(tenant) &&
++        return Identifiers.isWellFormed(tenant) &&
+             Identifiers.isWellFormed(principal.id) &&
+             Identifiers.isWellFormed(principal.tokenId) &&
+             Identifiers.areWellFormed(principal.roles) &&

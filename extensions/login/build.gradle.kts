@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-// RFC 0011 §3: login and token issuing, the one module that keeps Reactor in its API (7.x login contracts).
+// RFC 0011 §3: login and token issuing, the one module that keeps Reactor in its API (its `Authentication` contracts return `Mono`).
 dependencies {
     api(project(":runtime"))
     api("io.projectreactor:reactor-core")

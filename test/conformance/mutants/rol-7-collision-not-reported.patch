@@ -1,0 +1,17 @@
+# Rule: ROL-7
+# Mutant: a derived binding id may equal a hand-written one
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..01d34633 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -298,7 +298,7 @@ object RoleExpansion {
+         errors: MutableList<CompileError>,
+     ) {
+         for (binding in bindings(document.kind, document.owner, role, catalog)) {
+-            if (binding.id.value in written) {
++            if (false && binding.id.value in written) {
+                 errors += CompileError("$path.permissions", "binding [${binding.id.value}] is also written by hand")
+             }
+         }

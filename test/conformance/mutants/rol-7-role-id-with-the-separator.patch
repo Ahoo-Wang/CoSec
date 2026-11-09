@@ -1,0 +1,17 @@
+# Rule: ROL-7
+# Mutant: a role id may hold @
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..3bb72849 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -318,7 +318,7 @@ object RoleExpansion {
+     private fun idProblem(id: String): String? = when {
+         id.isEmpty() -> "a role id must not be empty"
+         id == Match.WILDCARD -> "a role id must not be [${Match.WILDCARD}]"
+-        '@' in id -> "[$id]: a role id has no [@], which separates a membership's role and space"
++        false -> "[$id]: a role id has no [@], which separates a membership's role and space"
+         else -> null
+     }
+ }

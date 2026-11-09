@@ -27,9 +27,11 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.node.JsonNodeFactory
 
 /**
  * RFC 0007 §9.5 (N6): a DENY that lapses while its attributes cannot be fetched is published only with a confirmation
@@ -135,6 +137,21 @@ class NomatchConfirmationTest {
         newDigest.assert().isNotEqualTo(digest)
         publish(ACME, listOf(Operation.PutPolicy(guarded)), listOf(Confirmation(PolicyId("fence"), 0, newDigest)))
             .state.assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    /** One shape, `{statement, policyCondition}`, whether or not the policy has a condition. */
+    @Test
+    fun `the digest has one shape, and a changed condition is another digest`() {
+        val statement = lapsing().statements.single()
+        val bare = PolicyDefinition(PolicyId("statement"), false, null, listOf(StatementDigest.unconfirmed(statement)))
+        val content = JsonNodeFactory.instance.objectNode()
+        content.set("statement", PolicyDocumentCodec.policyTree(bare).get("statements").get(0))
+        content.putNull("policyCondition")
+        StatementDigest.of(statement).assert().isEqualTo(EntryDigest.sha256(content))
+        val guarded = Condition.Eq("subject.authenticated", Literal.Bool(true))
+        val otherwise = Condition.Eq("subject.authenticated", Literal.Bool(false))
+        StatementDigest.of(statement, guarded).assert().isNotEqualTo(StatementDigest.of(statement))
+        StatementDigest.of(statement, guarded).assert().isNotEqualTo(StatementDigest.of(statement, otherwise))
     }
 
     @Test

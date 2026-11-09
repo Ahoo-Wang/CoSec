@@ -127,7 +127,7 @@ class RateLimitObligationTest {
         third.problem!!.type.slug.assert().isEqualTo("too-many-requests")
         third.headers["Retry-After"].assert().isEqualTo("1")
         third.headers["RateLimit-Remaining"].assert().isEqualTo("0")
-        (third.basis as Basis.RateLimited).ruleId.assert().isEqualTo("two")
+        (third.basis as Basis.RateLimited).ruleId.assert().isEqualTo("platform/two")
     }
 
     /** P15: a denied request never reaches a rate limiter. */
@@ -148,11 +148,11 @@ class RateLimitObligationTest {
         // The tightest: two has 1 then 0 left, many 99 then 98.
         outcomes[0].headers["RateLimit-Limit"].assert().isEqualTo("2")
         recording.asked.assert().containsExactly(
-            "two/global",
-            "many/g:alice",
-            "two/global",
-            "many/g:alice",
-            "two/global"
+            "platform/two/global",
+            "platform/many/k:alice",
+            "platform/two/global",
+            "platform/many/k:alice",
+            "platform/two/global"
         )
     }
 
@@ -162,7 +162,7 @@ class RateLimitObligationTest {
         val strict = """{"id":"strict","action":"*","permitsPerSecond":2,"strictFailure":true}"""
         val outcome = evaluate(strict, failing).single()
         outcome.status.assert().isEqualTo(503)
-        outcome.cause.assert().isEqualTo(Cause.RateLimiterUnavailable("strict"))
+        outcome.cause.assert().isEqualTo(Cause.RateLimiterUnavailable("platform/strict"))
         val lenient = evaluate(twoPerSecond, failing).single()
         lenient.status.assert().isEqualTo(200)
         lenient.headers["RateLimit-Limit"].assert().isNull()

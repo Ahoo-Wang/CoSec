@@ -29,7 +29,6 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
@@ -181,9 +180,11 @@ class UnpairedSurrogateKeyTest {
     fun aBucketValueWithAnUnpairedSurrogateSharesNoBucket() = runBlocking<Unit> {
         val factory = ReactiveRedisRateLimiterTest.connectionFactory("localhost", 6379)
         try {
-            val limiter =
-                ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), "cosec:test:rate:${UUID.randomUUID()}")
-            val limit = RateLimitSpec(1.0)
+            val limiter = ReactiveRedisRateLimiter(
+                ReactiveStringRedisTemplate(factory),
+                "cosec:test:rate:${UUID.randomUUID()}",
+            ) { ReactiveRedisRateLimiterTest.FIXED_NOW }
+            val limit = ReactiveRedisRateLimiterTest.quotaOf(1)
             limiter.tryAcquire("rule", CompiledRateLimit.keyedBucket("x?"), limit).allowed.assert().isTrue()
             limiter.tryAcquire("rule", CompiledRateLimit.keyedBucket("x\uD800"), limit).allowed
                 .assert().describedAs("x\\uD800 counts in the bucket of x?").isTrue()

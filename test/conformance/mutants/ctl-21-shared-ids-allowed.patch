@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index c4893f4b..1d7ae2d7 100644
+index f8886489..e538da3b 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -269,7 +269,7 @@ class ChangeChecks(
-             if (policy.id in existing) continue
+@@ -392,7 +392,7 @@ class ChangeChecks(
+             }
              val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
              val uses = tenants.associateWith { uses(context, it, policy.id) }
 -            val using = uses.filterValues { it != false }.keys

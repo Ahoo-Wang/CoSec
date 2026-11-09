@@ -1,0 +1,17 @@
+# Rule: ROL-10
+# Mutant: removing a catalog entry a tenant role lists publishes
+# Tests: :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index ec773baf..70b18e37 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -617,7 +617,7 @@ class Revisions(
+         }
+         // What a short form derives is a policy like any other: tenants' roles may refer to it (RFC 0012 §7.5).
+         val kept = RoleExpansion.effective(candidate).policies.map { it.id }.toSet()
+-        val blocked = RoleExpansion.effective(base.document).policies.map { it.id }.filter { it !in kept }
++        val blocked = base.document.policies.map { it.id }.filter { it !in kept }
+             .associateWith { policy ->
+                 val referrers = referrers(key, policy) - key
+                 referrers.filterNotTo(HashSet()) { definesItself(it, policy) }

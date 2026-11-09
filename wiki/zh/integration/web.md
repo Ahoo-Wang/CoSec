@@ -85,7 +85,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 ## 路由映射 {#route-maps}
 
-路由映射为服务的每条路由指定一个动作和一个类型化资源，策略因此可以说 `order/42` 上的 `order:read`，而不是 `GET /orders/42`。WebFlux 和 WebMvc 宿主加载 `cosec.authorization.routes.location` 中列出的路由映射（默认 `classpath:cosec-routes.json`；可用逗号分隔多个）：
+路由映射为服务的每条路由指定一个动作和一个类型化资源，策略因此可以说 `order/42` 上的 `order:read`，而不是 `GET /orders/42`。WebFlux 和 WebMvc 宿主加载 `cosec.authorization.routes.location` 中列出的路由映射（可用逗号分隔多个；未设置时不加载）：
 
 ```json
 {
@@ -99,12 +99,13 @@ CoSec 授权的路径是应用内的请求路径：
 
 - 路由匹配方法与其 `method` 完全相同、路径匹配其 `path` 模式的请求。资源模板中的 `{变量}` 取自路径的捕获值。
 - 没有路由匹配的请求保留动作 `http:<METHOD>` 和资源 `http:path:<path>`。针对 `service:verb` 动作的语句永远覆盖不到它：没有任何路由会退回通配符。
-- 路由映射要么整体加载，要么完全不加载。位置不存在、文件格式错误（字段未知或缺失、键重复、值类型错误）、某条路由格式错误，或两条路由可能匹配同一个请求（方法相同、路径无法证明互不相交），都会导致启动失败并给出位置。若有意不使用路由映射，把该属性设为空值。
+- 路由映射要么整体加载，要么不加载。位置不存在、文件格式错误（未知或缺失的字段、重复的 key、类型错误的值）、文件没有路由、路由格式错误，或者两条路由可能匹配同一个请求（方法相同且路径不能证明互斥），都会使启动失败并指出位置。
+- 该配置项未设置时宿主不加载路由映射，除非 `classpath:cosec-routes.json` 存在：这时启动失败，直到配置项指明该文件，或设为空值以明确不使用路由映射。启动日志会写明加载的每份映射、它的服务和路由条数，或者没有映射。
 - 为空或含有 `/`（解码后的 `%2F`）的捕获值不能作为类型化资源 id 的一段：请求以 `400` `invalid-request` 拒绝，绝不会被当作另一个资源求值。
 
 Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `http` 命名空间。
 
-使用 `cosec-openapi` 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据服务的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
+使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据 springdoc 扫描到的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
 
 ## 响应与状态码 {#responses-and-status-codes}
 
@@ -153,7 +154,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 ## 应用与空间 {#app-and-space}
 
-客户端通过请求头或同名查询参数发送 `CoSec-*` 参数：
+客户端通过请求头发送 `CoSec-*` 参数。同名查询参数不会被读取：URL 中的作用域会进入访问日志和 `Referer` 头。
 
 | 参数 | 含义 | 条件中的读取方式 |
 |---|---|---|
@@ -164,9 +165,9 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 读取规则：
 
-- 请求头名称匹配时忽略大小写；查询参数名称精确匹配。
-- 同一参数可以发送多次，放在请求头、查询串或两者中都可以，只要所有值都相同。所有值都为空白（空字符串，或只有 ASCII 空白字符）时，视为没有发送该参数。
-- 任何位置出现两个不同的值，请求就有歧义：管道和你的处理器可能读到不同的作用域。这样的请求以 `400` `invalid-request` 拒绝。空白值与非空白值同时出现也算不同：读到空白值的处理器会处在默认空间。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如 `%E3%80%80`，`trim()` 会保留它）是一个值。`CoSec-*` 查询值含格式错误的百分号转义时同样拒绝。
+- 请求头名称匹配时忽略大小写。
+- 同一参数可以发送多次，只要所有值都相同。所有值都为空白（空字符串，或只有 ASCII 空白字符）时，视为没有发送该参数。
+- 两个不同的值会让请求有歧义：管道和你的处理器可能读到不同的作用域。这样的请求以 `400` `invalid-request` 拒绝。空白值与非空白值同时出现也算不同：读到空白值的处理器会处在默认空间。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如不换行空格，`trim()` 会保留它）是一个值。
 - 永远不读取请求体：授权过滤器不读取请求体。
 
 `ScopeResolver` 如何检查应用和空间，以及客户端因此能控制什么，见[信任边界](../guide/security-model.md#trust-boundaries)。令牌如何携带 `role@space` 见[角色与空间](./authentication.md#roles-and-spaces)，角色绑定如何限定到应用和空间见[角色权限](../policies/role-permissions.md)。请从[安全上下文](#accessing-the-security-context)读取已校验的作用域，而不是读请求头：请求头只是客户端的声明。
@@ -333,29 +334,27 @@ spring:
 
 **失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、布尔值或上述数字（头不能精确表示的数字、`NaN` 和无穷大都算），或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
-**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。开头的 `$Version` 键值对用 `,` 藏了令牌的头整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
+**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及（无论网关自己是否读取它，见 `cosec.pipeline.allow-cookie-token`）每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。结果开头的空白会去掉，因为字段值不能以空白开头。开头的 `$Version` 键值对用 `,` 藏了令牌的头，或保留下来的 `$Version` 键值对会被挪到开头的头，整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 
-网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`），并且除非它也签发令牌，应设置 `cosec.jwt.enabled=false`：
+网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`）。这个模式下 JWT 默认关闭；也签发令牌的服务设置 `cosec.jwt.enabled=true`：
 
 ```yaml
 cosec:
   pipeline:
     mode: gateway
-  jwt:
-    enabled: false
 ```
 
-在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
+在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。仍留在 classpath 上的 `cosec-cocache` 不会被使用，因此不需要 Redis template 和 CoCache starter；设置 `cosec.jwt.enabled=true` 后，它用于保存本服务所签发令牌的吊销记录，此时启动要求两者都具备（[模块](../guide/introduction.md#modules)）。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
 
 | 请求 | 回应 |
 |---|---|
 | 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
 | 有效的身份 | 以该主体、在该作用域中继续。 |
-| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.gateway.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
+| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
 | 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
-| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.gateway.max-age`（60 秒） | `401` `token-expired` |
+| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.identity.max-age`（60 秒） | `401` `token-expired` |
 
 这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。
 

@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.BreakGlass
+import me.ahoo.cosec.control.change.CandidateDigest
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
@@ -42,10 +43,12 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.appliesIn
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -53,13 +56,21 @@ import java.time.Instant
 /** A revision as `history` lists it. */
 data class RevisionSummary(val revision: Long, val digest: String, val publishedAt: Instant)
 
-/** What changed between two revisions, entry by entry (RFC 0007 §10.1): the history of one policy is a view of it. */
+/**
+ * What changed between two revisions, entry by entry (RFC 0007 §10.1): the history of one policy is a view of it.
+ * [policies] and [bindings] are of the expanded documents (RFC 0012 §7.4), so a role's change, and what a catalog that
+ * grows gives a `"*"` role, shows as the bindings it derives; [roles] are the roles as written.
+ */
 data class DocumentDiff(
     val from: Long,
     val to: Long,
     val policies: EntryChanges,
     val bindings: EntryChanges,
-    /** Whether the sections (catalog, limits, attributes, rate limits) differ. */
+    val roles: EntryChanges,
+    /**
+     * Whether anything besides the policies, bindings and roles differs: the catalog, the limits, the attributes, the boundary
+     * or the rate limits, compared by their whole content (#1205).
+     */
     val sections: Boolean,
 )
 
@@ -205,16 +216,22 @@ class DefaultControlPlane(
         val before = retained(key, from)
         val after = retained(key, to)
         val (kind, owner) = Revisions.ownerOf(key)
+        val expandedBefore = RoleExpansion.effective(before)
+        val expandedAfter = RoleExpansion.effective(after)
         return DocumentDiff(
             from,
             to,
             changes(
-                before.policies.associate { it.id.value to EntryDigest.of(it) },
-                after.policies.associate { it.id.value to EntryDigest.of(it) }
+                expandedBefore.policies.associate { it.id.value to EntryDigest.of(it) },
+                expandedAfter.policies.associate { it.id.value to EntryDigest.of(it) }
             ),
             changes(
-                before.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
-                after.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
+                expandedBefore.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
+                expandedAfter.bindings.associate { it.id.value to EntryDigest.of(it, kind, owner) },
+            ),
+            changes(
+                before.roles.associate { it.id.value to EntryDigest.of(it) },
+                after.roles.associate { it.id.value to EntryDigest.of(it) },
             ),
             sections(before) != sections(after),
         )
@@ -299,7 +316,7 @@ class DefaultControlPlane(
             redaction.trace(enforced.evaluation),
             proposed?.let { redaction.decision(it.evaluation.decision) },
             proposed?.let { redaction.trace(it.evaluation) },
-            proposed != null && proposed.evaluation.decision != enforced.evaluation.decision,
+            proposed != null && differs(enforced.evaluation.decision, proposed.evaluation.decision),
         )
     }
 
@@ -408,36 +425,46 @@ class DefaultControlPlane(
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
         val resource = enforceable(query.resource)
-        val app = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
-            // The data plane never reads such an app (SCP-7): refused, and not echoed, since it may hold control characters.
-            if (!SnapshotKey.App.isValidAppId(app)) {
-                throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-7).")
-            }
-            SnapshotKey.App(app)
-        }
+        val app = queriedApp(query)
         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { entry(it) }
+        val application = app?.takeIf { it in readable }?.let { entry(it) }
         val found = AccessFindings(query, ResourceTarget(resource))
         for (key in readable) {
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
-            val entry = (if (key == SnapshotKey.Platform) platform else entry(key)) ?: continue
-            for (binding in entry.document.bindings) {
-                if (!inScope(
-                        binding.scope.app.exact {
-                            it.value
-                        },
-                        query.app
-                    ) || !inScope(binding.scope.space.exact { it.value }, query.space)
-                ) {
+            val entry = when (key) {
+                SnapshotKey.Platform -> platform
+                app -> application
+                else -> entry(key)
+            } ?: continue
+            for (binding in entry.effective.bindings) {
+                if (!applies(binding, query)) {
                     continue
                 }
-                val policy = entry.analyzed[binding.policy.value] ?: platform?.analyzed?.get(binding.policy.value)
-                found.add(key, binding, policy)
+                found.add(key, binding, analyzed(binding, entry, platform, application))
             }
         }
         return AccessReport(found.allows, found.denies, keys.size - readable.size, found.opaque)
     }
+
+    /** The app document [query] names, if any; one no key can name is refused (SCP-10), not echoed: it may hold control characters. */
+    private fun queriedApp(query: AccessQuery): SnapshotKey.App? = query.app?.takeIf { it.isNotEmpty() }?.let { app ->
+        if (!SnapshotKey.App.isValidAppId(app)) {
+            throw ChangeRejectedException(BAD_REQUEST, "The query's app cannot name an app document (SCP-10).")
+        }
+        SnapshotKey.App(app)
+    }
+
+    /** The policy [binding] of [entry] names, as the engine resolves it: its own document, the platform, the app it is scoped to. */
+    private fun analyzed(
+        binding: Binding,
+        entry: DocumentCache.Entry,
+        platform: DocumentCache.Entry?,
+        app: DocumentCache.Entry?,
+    ): DocumentCache.AnalyzedPolicy? = entry.analyzed[binding.policy.value]
+        ?: platform?.analyzed?.get(binding.policy.value)
+        ?: app?.takeIf { binding.scope.app.exact { id -> id.value } == it.document.owner }?.analyzed?.get(binding.policy.value)
 
     /** What [analyze] finds, binding by binding: a policy that is not readable counts as opaque. */
     private inner class AccessFindings(private val query: AccessQuery, private val target: ResourceTarget) {
@@ -505,13 +532,31 @@ class DefaultControlPlane(
         after.keys.filter { it in before && before[it] != after[it] }.sorted(),
     )
 
-    private fun sections(document: PolicyDocument): List<Any?> =
-        listOf(
-            document.catalog?.let { it.groups.size },
-            document.limits?.maxCost,
-            document.attributes?.map { it.path },
-            document.rateLimits.map { it.id }
+    /** The digest of [document]'s sections: the document encoded with its header fixed and no policies, bindings or roles. */
+    private fun sections(document: PolicyDocument): String = CandidateDigest.of(
+        PolicyDocument(
+            kind = document.kind,
+            owner = document.owner,
+            revision = 1,
+            publishedAt = Instant.EPOCH,
+            policies = emptyList(),
+            bindings = emptyList(),
+            catalog = document.catalog,
+            boundary = document.boundary,
+            limits = document.limits,
+            attributes = document.attributes,
+            rateLimits = document.rateLimits,
         )
+    )
+
+    /**
+     * Whether [binding] can apply to what [query] asks about: in its tenant, as the engine looks a subject up (#1206), and
+     * in its app and space.
+     */
+    private fun applies(binding: Binding, query: AccessQuery): Boolean =
+        binding.subject.appliesIn(query.tenant) &&
+            inScope(binding.scope.app.exact { it.value }, query.app) &&
+            inScope(binding.scope.space.exact { it.value }, query.space)
 
     /** A binding of [exact] (null: every value) applies to a query of [value] (null: any). */
     private fun inScope(exact: String?, value: String?): Boolean = exact == null || value == null || exact == value

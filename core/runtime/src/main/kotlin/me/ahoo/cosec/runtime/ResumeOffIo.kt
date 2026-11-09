@@ -49,11 +49,9 @@ internal suspend fun <T> resumeOffIo(block: suspend () -> T): T = suspendCorouti
         override val context: CoroutineContext get() = caller.context
 
         override fun resumeWith(result: Result<T>) {
-            if (resume == null) {
-                caller.intercepted().resumeWith(result)
-            } else {
-                resume.dispatch(caller.context) { caller.resumeWith(result) }
-            }
+            // The dispatcher's own continuation, not a bare Runnable: only it installs the context's thread context
+            // elements (the trace, the MDC) on the thread that resumes, and gives that thread its own back after (#1274).
+            (resume?.interceptContinuation(caller) ?: caller.intercepted()).resumeWith(result)
         }
     }
     block.startCoroutineUninterceptedOrReturn(completion)

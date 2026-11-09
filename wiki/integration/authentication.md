@@ -27,7 +27,7 @@ The access token carries the principal, so authenticating a request needs no loo
 | `roles` | Role ids, written `role` or `role@space` ([Roles and spaces](#roles-and-spaces)). Left out when empty. |
 | `policies` | Ids of the policies attached to the principal. Left out when empty. |
 | `attributes` | Free-form principal attributes; conditions read them as `subject.attributes.<name>`. `apiKeyId`, which CoSec sets for an [API key](#api-keys), is reserved: a token that carries it is refused as `token-invalid`, and `JwtTokenConverter` does not issue one. |
-| `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). A value that is not a string makes the token invalid. |
+| `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). A value that is empty or not a string makes the token invalid. |
 | `cosec.membership` | `"provider"` in place of `roles` and `policies`, when they come from a `MembershipProvider` ([Memberships](#memberships)). Left out otherwise. |
 | `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
 
@@ -77,7 +77,12 @@ no credential at all is anonymous.
 1. the `Authorization` header (the `Bearer ` prefix is optional);
 2. the `authorization` query parameter, only with `cosec.pipeline.allow-query-token=true`, because URLs leak into
    access logs and `Referer` headers;
-3. the `authorization` cookie.
+3. the `authorization` cookie, only with `cosec.pipeline.allow-cookie-token=true`.
+
+The cookie is off by default because a browser sends a cookie on its own, on a cross-site request too: a page on
+another site could then act with the user's token, where only the page's own code can set a header. CoSec has no CSRF
+protection, so a deployment that turns this on defends against CSRF itself: `SameSite` on the cookie, and an
+anti-forgery token or an `Origin` check on every request that changes state.
 
 Blank values are skipped. The API key comes from the header `cosec.pipeline.api-key-header` (default `X-API-Key`)
 only.
@@ -250,7 +255,7 @@ revoke. `TokenRevoker` is synchronous: call it off the event loop.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 
-- **"Not revoked" is cached locally for 30 seconds** (`cosec.authorization.cache.token.*`). A revocation through
+- **"Not revoked" is cached locally for 30 seconds** (`cosec.authentication.revocation.cache.*`). A revocation through
   `TokenRevoker` invalidates that answer on every instance at once. If the invalidation message is lost, or the
   revocation is written to Redis some other way, an instance may accept the token for up to 30 seconds more.
 - **A degraded read counts as "not revoked".** When Redis cannot be read, the revocation caches answer as for a
@@ -365,8 +370,8 @@ the non-blocking `RedisApiKeyReader`. Manage keys through the `RedisApiKeyStore`
 Every request with a key then reads Redis. If Redis cannot be read, the request is `503`: unlike token revocation, an
 API key lookup fails closed. A key is stored as `{"format":2,"id":…,"principalId":…,"tenantId":…,"roles":[…]|null,
 "expiresAt":…|null,"enabled":…}`, every field always written. A key stored in the format before 8.0, which granted
-roles and policies of its own, is refused when it is read, never taken as a key without a cap: the request is `503`
-and the log names `cosec-migrate api-keys`, which converts such keys
+roles and policies of its own, is refused when it is read, never taken as a key without a cap: the request is `503`.
+`cosec-migrate api-keys` converts such keys
 ([Upgrading](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)).
 
 **Elsewhere**: declare your own `ApiKeyReader` bean, a non-blocking lookup by hash that throws when it cannot read.
@@ -376,8 +381,9 @@ With API keys enabled and neither the in-memory store nor an `ApiKeyReader`, sta
 
 A principal may act within a tenant. The principal your `Authentication` returns decides it: a `TenantPrincipal`
 (such as `SimpleTenantPrincipal(principal, SimpleTenant(tenantId))`) puts its tenant in the token's `tenantId` claim;
-a token without the claim, or with an empty one, belongs to the default tenant `(0)`, and one whose claim is not a
-string (a number, `null`, an object) is invalid (`token-invalid`). The tenant decides which tenant
+a token without the claim belongs to the default tenant `(0)`, and one whose claim is empty or not a string (a number,
+`null`, an object) is invalid (`token-invalid`, `IDN-11`), so `JwtTokenConverter` refuses a principal whose tenant id is
+empty. The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
@@ -411,7 +417,10 @@ providers. Configure each provider under `cosec.authentication.login.social.regi
    **no roles, policies or tenant**. Attributes become signed claims that conditions read and a gateway may forward,
    so the user's profile (name, email, company, bio, the raw user info), which the user edits on the provider, is not
    among them. To look the user up in your own system and give them roles, declare your own
-   `SocialUserPrincipalConverter` bean.
+   `SocialUserPrincipalConverter` bean. The provider's user id is the only field a sign-in needs: a provider that
+   returns no username (StackOverflow), gender (Figma) or raw user info still signs in, with `SocialUser.username` set to
+   the user id, `gender` to `UNKNOWN` and `rawInfo` empty. A success response without a user id, or without a user, is
+   refused with a `SocialAuthenticationException`.
 
 Both steps block their thread. `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache,
 and the callback's `authenticateAsToken` calls the provider over JustAuth's blocking HTTP. Call them off the event

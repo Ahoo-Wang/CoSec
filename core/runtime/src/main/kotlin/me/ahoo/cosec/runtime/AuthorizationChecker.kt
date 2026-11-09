@@ -16,6 +16,7 @@ package me.ahoo.cosec.runtime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -108,6 +109,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * Three-valued, so that the caller can tell a deny from an outage; it fails closed like [check]. An anonymous
      * request is denied.
      */
+    @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
         return decide(scoped, action, resource)
@@ -135,6 +137,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * gained since, a `suspended` role say, still applies. A principal of claimed memberships stands until its token
      * expires.
      */
+    @InternalCoSecApi
     suspend fun decideAs(
         security: RequestSecurity,
         principal: AuthenticatedPrincipal,
@@ -164,6 +167,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         return decideOn(security, principal, now, app, action, resource)
     }
 
+    @OptIn(InternalCoSecApi::class)
     private suspend fun decideOn(
         security: RequestSecurity,
         principal: AuthenticatedPrincipal,

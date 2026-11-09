@@ -75,7 +75,6 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
 
@@ -131,8 +130,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;
-     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). This pipeline
-     * reads a token from that cookie, so a backend could replay it at the gateway.
+     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). Whether or not
+     * this pipeline reads a token there (`cosec.pipeline.allow-cookie-token`), a backend might.
      */
     @InternalCoSecApi
     fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
@@ -262,7 +261,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                 Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
-        val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
+        val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
         // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
         // fetched now, from stage A as from stage B (#1209).
@@ -419,7 +418,6 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
         val authz = AuthzRequest(
             subject = authzSubject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = action,
             resource = resource,
             environment = Environment(
@@ -450,8 +448,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     /**
-     * Runs a permit's obligations in order (RFC 0006 §8.3), as 7.x `RateLimitingAuthorization` does: the first exhausted
-     * rule is a 429 and the later rules spend nothing; earlier rules keep what they spent; the response reports the rule
+     * Runs a permit's obligations in order (RFC 0006 §8.3): the first exhausted rule is a 429 and the later rules
+     * spend nothing, since the request is refused already; earlier rules keep what they spent; the response reports the rule
      * with the fewest permits left. A rule that cannot be counted (its limiter failed, timed out or is missing, or its
      * bucket could not be read) refuses the request (503) when it is strict, and is skipped otherwise.
      */
@@ -600,10 +598,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
         tenantId = tenant.value,
         authenticated = principal != null,
-        roles = emptySet(),
-        policies = emptySet(),
         attributes = principal?.attributes.orEmpty(),
-        root = false,
         principalBindings = principal?.principalBindings ?: true,
         breakGlass = principal?.breakGlass ?: true,
     )
@@ -859,11 +854,15 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return given ?: idGenerator.generate()
     }
 
-    /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */
+    /**
+     * The token is the first non-blank one of the `Authorization` header, the query parameter when allowed, and the
+     * cookie when allowed: the header is the channel a client sets on purpose, the others are fallbacks for clients that
+     * cannot set it.
+     */
     private fun credentials(facts: HttpFacts): Credentials {
         val token = facts.headers.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
             ?: queryToken(facts)
-            ?: facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
+            ?: cookieToken(facts)
         val apiKey = facts.headers.values(options.apiKeyHeader).firstOrNull { it.isNotBlank() }
         return if (token == null && apiKey == null) NO_CREDENTIALS else Credentials(token, apiKey)
     }
@@ -877,6 +876,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             AUTHORIZATION_NAMES
         )?.get(AUTHORIZATION)?.firstOrNull { it.isNotBlank() }
     }
+
+    private fun cookieToken(facts: HttpFacts): String? =
+        if (options.allowCookieToken) facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() } else null
 
     private inline fun <T : Any> Fetched<T>.valueOr(failed: (Throwable) -> T): T = when (this) {
         is Fetched.Value -> value

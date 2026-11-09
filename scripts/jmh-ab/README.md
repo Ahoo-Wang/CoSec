@@ -53,10 +53,14 @@ The job summary has one row per benchmark and param combination:
   column: a change here is real even when timing is noisy.
 
 For `thrpt` benchmarks a ratio below 100 % means head is slower; for `avgt`, `sample` and `ss` a ratio above 100 %
-does. Two identical refs should land near 100 %. The raw JMH JSON (`base-N.json`, `head-N.json`) is uploaded as the
+does. Two identical refs should land near 100 %. A ref that changes a benchmark's `@OutputTimeUnit` still compares:
+`ns/op` and `us/op` (or `ops/ms` and `ops/s`) are converted to one unit first. Two scores of different modes, or in units
+that do not convert, get no ratio: the row says `not comparable`, a "Not comparable" section names the round and the
+mismatch, and `compare.py` exits with status 1. The raw JMH JSON (`base-N.json`, `head-N.json`) is uploaded as the
 `jmh-ab-<run id>` artifact.
 
 ## Script
 
 `compare.py <dir>` reads `<dir>/base-N.json` and `<dir>/head-N.json` and prints the table; run it locally on the
-artifact with `python3 -I scripts/jmh-ab/compare.py <dir>`.
+artifact with `python3 -I scripts/jmh-ab/compare.py <dir>`. `python3 -I -m unittest discover -s scripts/jmh-ab` runs its
+tests, and CI runs them in the `Plan` job.

@@ -104,6 +104,10 @@ class JwtTokenConverter(
 
         if (principal is TenantCapable) {
             val tenantCapable = principal as TenantCapable
+            // A token with an empty tenant would be refused when it is presented (`IDN-11`): fail where it is issued.
+            require(tenantCapable.tenant.tenantId.isNotEmpty()) {
+                "Principal [${Identifiers.printable(principal.id)}] has an empty tenant id: a token cannot carry it."
+            }
             accessTokenBuilder
                 .withClaim(TENANT_ID_KEY, tenantCapable.tenant.tenantId)
         }

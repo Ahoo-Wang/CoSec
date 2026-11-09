@@ -110,7 +110,9 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         val before = snapshot.tenant(change.tenant)
         val after = change.candidate
         val fragments = ArrayList<GrantFragment>()
-        val changed = after.bindings.filter { binding -> before.bindings.none { same(it, binding) } }
+        // By id: a few roles can derive as many bindings as a whole document can hold written out.
+        val previous = before.bindings.groupBy { it.id }
+        val changed = after.bindings.filter { binding -> previous[binding.id].orEmpty().none { same(it, binding) } }
         for (binding in changed) {
             val policy = resolve(snapshot, after, binding)
             if (policy == null) {

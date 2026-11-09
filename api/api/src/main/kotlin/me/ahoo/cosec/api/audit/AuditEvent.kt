@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.api.audit
 
-import me.ahoo.cosec.api.policy.PolicyType
 import java.time.Instant
 
 enum class AuditDecision {
@@ -34,7 +33,6 @@ enum class AuditReasonCode {
     TOKEN_EXPIRED,
     TOKEN_INVALID,
     TOO_MANY_REQUESTS,
-    REGEX_TIMEOUT,
     ERROR,
 
     /** RFC 0006 §9.5.3. */
@@ -50,26 +48,39 @@ enum class AuditReasonCode {
     DELEGATION_UNSUPPORTED,
 }
 
-enum class AuditSourceType {
-    ROOT,
-    BLACKLIST,
-    GLOBAL_POLICY,
-    PRINCIPAL_POLICY,
-    ROLE_PERMISSION,
+/** How the statement that decided came to apply to the request. */
+enum class AuditVia {
+    /** A binding of a document, a role binding included: [AuditEvent.binding] is its id. */
+    BINDING,
+
+    /** A policy attached through the principal's memberships. */
+    ATTACHMENT,
+
+    /** The rule every snapshot holds: the blacklist. */
+    BUILTIN,
+
+    /** The tenant's platform boundary (RFC 0007 §7.6). */
+    BOUNDARY,
+
+    /** No statement decided. */
     NONE,
-    UNKNOWN,
+}
+
+/** The snapshot document that holds a binding or a boundary. */
+enum class AuditDocument {
+    PLATFORM,
+    APP,
+    TENANT,
 }
 
 interface AuditPrincipal {
     val id: String
     val authenticated: Boolean
     val roles: Set<String>
-    val policies: Set<String>
 }
 
 interface AuditDevice {
     val id: String?
-    val userAgent: String?
 }
 
 interface AuditRequest {
@@ -92,26 +103,16 @@ interface AuditStatement {
     val name: String
 }
 
-interface AuditPolicy {
-    val id: String
-    val type: PolicyType
-    val statement: AuditStatement
-}
-
-interface AuditPermission {
-    val id: String
-    val name: String
-}
-
-interface AuditRole {
-    val id: String
-    val permission: AuditPermission
-}
-
+/**
+ * What decided: how it applied ([via]), the [document] that holds the binding or boundary, and the [policy] and
+ * [statement]. A boundary refusal has a [policy] and no [statement], since none of the boundary's matched; with [via]
+ * [AuditVia.NONE] all three are null.
+ */
 interface AuditSource {
-    val type: AuditSourceType
-    val policy: AuditPolicy?
-    val role: AuditRole?
+    val via: AuditVia
+    val document: AuditDocument?
+    val policy: String?
+    val statement: AuditStatement?
 }
 
 interface AuditAuthorization {
@@ -125,11 +126,6 @@ interface AuditAuthorization {
 interface AuditTrace {
     val traceId: String
     val spanId: String
-
-    companion object {
-        const val TRACE_ID_ATTRIBUTE_KEY = "cosec.audit.traceId"
-        const val SPAN_ID_ATTRIBUTE_KEY = "cosec.audit.spanId"
-    }
 }
 
 /** The revisions of the snapshot documents a decision read (RFC 0004 §7.2): app and tenant are null when not read. */
@@ -151,7 +147,7 @@ interface AuditEvent {
     /** The documents the decision read; null when it read none (RFC 0006 §9.5.3). */
     val snapshotVersion: AuditSnapshotVersion? get() = null
 
-    /** The binding the deciding statement applied through, or `attached:<policy>`; null when none. */
+    /** The binding the deciding statement applied through, `attached:<policy>`, `builtin` or `boundary:<tenant>`; null when none. */
     val binding: String? get() = null
 
     /** Whether the request was permitted through a break-glass binding. */

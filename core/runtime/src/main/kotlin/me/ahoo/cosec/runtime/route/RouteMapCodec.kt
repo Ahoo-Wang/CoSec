@@ -26,9 +26,9 @@ import tools.jackson.databind.node.ObjectNode
 class RouteMapDocument(val service: String, val routes: List<Route>)
 
 /**
- * Reads and writes route map files, strictly: a repeated key, an unknown field, a missing one or a value of the wrong
- * JSON type fails the whole file with [RouteMapException], naming the location and JSON path. A route map never
- * means less than it says.
+ * Reads and writes route map files, strictly: a repeated key, an unknown field, a missing one, a value of the wrong
+ * JSON type or a map with no routes fails the whole file with [RouteMapException], naming the location and JSON path.
+ * A route map never means less than it says.
  *
  * ```jsonc
  * { "service": "order",
@@ -54,6 +54,8 @@ object RouteMapCodec {
         only(root, DOCUMENT_FIELDS, "$", ::fail)
         val service = text(root, "service", "$", ::fail)
         val routes = root.get("routes")?.takeIf { it.isArray } ?: fail("$.routes", "is required, an array")
+        // It would load as if the host had no map, the failure RTE-3 exists to stop: a generator that saw nothing, a cut file.
+        if (routes.isEmpty) fail("$.routes", "has no routes; a host without a route map sets no location for one")
         return RouteMapDocument(
             service,
             routes.values().mapIndexed { i, node ->

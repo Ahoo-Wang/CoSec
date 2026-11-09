@@ -19,13 +19,24 @@ sealed interface SubjectRef {
     data class Principal(val tenant: TenantId, val id: PrincipalId) : SubjectRef
 
     /**
-     * [tenant] is null for a platform-layer binding: it applies to a role of this name in any tenant (7.x semantics,
-     * RFC 0004 §5.2). In a tenant document it is the document's tenant.
+     * [tenant] is null for a platform-layer binding: it applies to a role of this name in any tenant
+     * (RFC 0004 §5.2). In a tenant document it is the document's tenant.
      */
     data class Role(val tenant: TenantId?, val id: RoleId) : SubjectRef
 
-    /** Any principal, anonymous ones included: the 7.x global policies. */
+    /** Any principal, anonymous ones included. */
     data object Anyone : SubjectRef
+}
+
+/**
+ * Whether a binding of this subject can apply to a request decided in [tenant], as the engine looks it up: a principal
+ * binding only in its principal's tenant, a role binding that names a tenant only there, a role binding without one and
+ * [SubjectRef.Anyone] in every tenant.
+ */
+fun SubjectRef.appliesIn(tenant: TenantId): Boolean = when (this) {
+    SubjectRef.Anyone -> true
+    is SubjectRef.Principal -> this.tenant == tenant
+    is SubjectRef.Role -> this.tenant == null || this.tenant == tenant
 }
 
 /** Where a binding applies. Every dimension is explicit; there is no implied default (RFC 0004 §3 I3). */

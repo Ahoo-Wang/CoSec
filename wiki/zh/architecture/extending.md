@@ -19,7 +19,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `MembershipProvider` | `cosec-spi`，`spi.membership` | 为凭证不携带角色和附加策略的主体提供它们：带 provider 标记的令牌，以及每个 API key。说明主体是否已知且处于启用状态。 | 一个 bean；启用 API key 时必需 |
 | `MembershipLoader` | `cosec-cocache`，`cache` | 加载 `CoCacheMembershipProvider` 在 Redis 中为所有实例缓存的成员关系。 | 一个 bean，没有 `MembershipProvider` 时包装进 `CoCacheMembershipProvider` |
 | `AttributeProvider` | `cosec-spi`，`spi.attribute` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
-| `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
+| `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收每次决策的扁平审计记录。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
 | `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cosec-cocache` 时 |
 | `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
@@ -95,7 +95,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 控制面在审批时还会读取主体的两项事实（[测试策略](../policies/testing.md#approval)）。`apiKey`：CoSec 的 API key 认证器设置它，方式为 `API_KEY` 的凭证无论由谁构造都算作 API key；API key 从不审批，也从不是信任根。你的主体在 CoSec 看来是人的，所以不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。凭证的 id：审批会记下它，没有 id 的审批不算数。你构造的主体没有 `issuedAt`，所以其令牌的任何一次吊销（`subjectRevokedBefore`）都会让它的审批作废。
 
-认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
+认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
 starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切。** 要接受另一种令牌格式并保留内置认证，自己构建内置认证器并委托给它们：
 
@@ -203,7 +203,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | 投递方式 | 失败时 |
 |---|---|---|
 | `BEST_EFFORT`（默认） | 不挂起地放入监听器自己的有界队列，在请求路径之外处理。队列满时丢弃事件。 | 记录日志并计数；响应不变。 |
-| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.audit.required.timeout` 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
+| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.observability.listener.required-timeout` 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
 
 - 经由 break-glass 绑定得到的 Permit 至少需要一个 REQUIRED 监听器，否则得到 `503`。
 - REQUIRED 监听器应按 `event.id` 保持幂等：超时的写入可能其实已经成功。
@@ -285,8 +285,11 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 使用 `cosec-control` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
 
 - `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
-- `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。如果某个变更属于应用 id 规则拒绝的应用（之前的构建写入的），它的记录不再可读，`change(id)` 会抛出 `UnnamedDocumentException`，`ChangeRequestCodec` 解码这种记录时也是如此：无法知道它是否已经结束，所以它继续列出，`openChanges()` 也不能因它而失败。维护任务跳过它；由运维人员移除它的记录。
-- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它。
+- `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。列出的变更记录解码失败时，`openChanges()` 与 `change(id)` 一样失败：无法知道它是否已经结束，所以维护任务会停下，直到运维人员移除它的记录。
+- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它，检查与删除是一步原子操作（CoCache 的 `deleteIfMatch`）：期间过期并被另一个实例取得的租约仍归对方。
+- `withdrawCandidate(key, window)`：只在文档的候选仍是 `window` 的候选时删除它，一步原子操作（`CTL-26`）。变更在结束之后撤回候选，此时另一个变更可能已暂存了自己的候选。`putCandidate` 只负责写入。
+- `referrers` 和 `putReferrers`：每个引用方文档带上它最后一次登记该引用的修订，所以一个修订迟到的删除不会撤销更晚的修订重新登记的引用（`CTL-25`）。
+- `RevisionIndex.reclaiming`：回收已从索引中移出、尚未确认删除的记录；存储与索引的其余部分一起保存它。
 
 与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。
 
@@ -304,8 +307,8 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 }
 ```
 
-- starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（默认 `classpath:cosec-routes.json`，逗号分隔）。映射缺失或无效，或者有两个路由可能匹配同一个请求，都会让启动失败。默认位置也是如此：没有路由映射的 WebFlux 或 WebMvc 服务要把该属性设为空。网关宿主不加载路由映射。
-- 使用 `cosec-openapi` 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从服务的 OpenAPI 描述生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
+- starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（逗号分隔）。映射缺失或无效、映射没有路由，或者有两个路由可能匹配同一个请求，都会让启动失败。未设置时服务不加载路由映射，但 `classpath:cosec-routes.json` 存在时启动失败，直到该属性指明它或设为空。网关宿主不加载路由映射。
+- 使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从 springdoc 扫描到的 OpenAPI 文档生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
 
 文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMapCodec.kt)）。应用文档和目录见[角色权限](../policies/role-permissions.md)。
 

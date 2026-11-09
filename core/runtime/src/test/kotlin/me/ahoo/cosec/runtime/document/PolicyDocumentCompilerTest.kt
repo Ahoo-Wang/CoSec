@@ -23,7 +23,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
@@ -95,8 +94,7 @@ class PolicyDocumentCompilerTest {
             HostScope(null)
         )
         val authz = AuthzRequest(
-            Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false, true, true),
-            Scope.declared("acme", "order", ""),
+            Subject("alice", "acme", true, emptyMap(), true, true),
             action,
             resource,
             Environment("10.0.0.1", "r", "d", blocked = false),
@@ -170,8 +168,7 @@ class PolicyDocumentCompilerTest {
                 ) as ScopeResolution.Resolved
                 ).scope
             val authz = AuthzRequest(
-                Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false, true, true),
-                Scope.declared("acme", "", ""),
+                Subject("alice", "acme", true, emptyMap(), true, true),
                 action,
                 Resource("order", "1", emptyMap()),
                 Environment("10.0.0.1", "r", "d", blocked = false),
