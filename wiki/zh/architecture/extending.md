@@ -117,6 +117,8 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 }
 ```
 
+自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
+
 交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier` 或其他包装：吊销通过挂起式的 `RevocationReader` 检查，而且只有普通校验器的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
 ## 凭证与吊销 {#credentials-and-revocation}
@@ -163,7 +165,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
         if (!request.subject.authenticated) {
             return emptyMap() // 缺省：与它的比较结果为 false
         }
-        val department = directory.departmentOf(request.subject.tenantId, request.subject.id) // 挂起；失败时抛出异常
+        val department = directory.departmentOf(request.tenant.value, request.subject.id) // 挂起；失败时抛出异常
         return if (department == null) emptyMap() else mapOf("ext.directory.department" to department)
     }
 }
@@ -177,7 +179,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 - **在每个主机上注册相同的提供者。** 控制面按平台的声明和它自己主机的提供者检查变更，每个实例按自己的提供者编译。某个实例缺少提供者时，读取它的变更在该实例上会失败：该实例报告 `CANDIDATE_ERROR` 并阻塞影子窗口（[部署网关服务](../operations/deployment.md#before-the-first-request)）。
 - **取值。** 按路径返回值，类型与声明一致。没有返回的路径是*缺省*。类型错误的值、抛出的异常或超时，会让被请求的属性*不可用*，读取它们的每个语句按其 `onMissing` 设置处理（[策略语言](../policies/language.md)）。
 - **阶段。** B 阶段属性（默认）只在引擎的计划表明本请求可能读取它时才获取，发生在作用域解析之后。A 阶段属性在每个请求上都获取，发生在作用域之前，与成员关系一起获取。只有决定要加载什么的属性才用 A 阶段，例如黑名单。`AuthorizationChecker` 的检查在两个阶段都询问它自己的动作与资源可能读取的属性：那时 A 阶段提供者会再被询问一次，仍不带作用域。
-- **提供者能看到什么。** `AttributeRequest` 包含主体、已解析的作用域（A 阶段为 null）、动作、资源、客户端地址、请求 id 和设备 id，绝不包含其他属性的值。
+- **提供者能看到什么。** `AttributeRequest` 包含租户、主体、已解析的作用域（A 阶段为 null）、动作、资源、客户端地址、请求 id 和设备 id，绝不包含其他属性的值。
 
 **黑名单**是一个 A 阶段提供者：`BlacklistAttributeProvider(source)` 声明 `ext.blacklist.principal`、`ext.blacklist.ip` 和 `ext.blacklist.device`，被其中任何一个拦截的请求会遇到内置的 DENY `cosec:blacklist`。基于你的存储实现 `BlacklistSource.contains(kind, value)`（主体的值为 `<tenant>:<principal id>`），或使用 `InMemoryBlacklistSource`，并把来源声明为 bean：starter 会把它包装进 `BlacklistAttributeProvider`。没有时，启动以 `INFO` 记录 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`。来源失败绝不意味着“未被拦截”：除非有 DENY 匹配，否则请求得到 `503`。
 

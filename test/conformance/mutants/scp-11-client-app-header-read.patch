@@ -1,0 +1,17 @@
+# Rule: SCP-11
+# Mutant: the client's CoSec-App-Id overrides the credential's app, so a request can choose the app it is decided in
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 58e9ebe5..6fd28bde 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -393,7 +393,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+             return unavailable(requestId, traceId, Cause.MembershipUnavailable(it))
+         }
+ 
+-        val subject = ScopeSubject(tenant, principal != null, memberships, principal?.app?.value)
++        val subject = ScopeSubject(tenant, principal != null, memberships, facts.headers.values("CoSec-App-Id").firstOrNull() ?: principal?.app?.value)
+         val scope = when (val resolution = ScopeResolver.resolve(subject, parameters.spaceId, facts.host)) {
+             is ScopeResolution.Resolved -> resolution.scope
+             is ScopeResolution.Rejected -> {

@@ -125,7 +125,7 @@ contract:
 | `Rejected(reason)` | The credential is invalid, expired or revoked. | The request is evaluated as anonymous; a deny answers `401` with that reason. |
 | `Unavailable(cause)` | A dependency failed. | `503`. A thrown exception is treated the same way. |
 
-An `AuthenticatedPrincipal` names its id, tenant, membership source (the token's claims, or the
+An `AuthenticatedPrincipal` names its id, tenant, app (the app its credential declares, [Apps](../integration/authentication.md#apps); left out, none), membership source (the token's claims, or the
 [membership provider](#memberships)), attributes and `credential`. Conditions read the attributes as
 `subject.attributes.<name>`. `credential` (`Identity.Credential`: method `JWT` or `API_KEY`, the credential's id and
 its expiry, never its value) is what a gateway forwards with the identity: on a gateway, a principal without one is
@@ -173,6 +173,12 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
     }
 }
 ```
+
+A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
+claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `roles`, `policies`, `attributes`, its times and
+membership marker. Its constructor throws `TokenVerificationException` for claims that no token may carry (an id
+beginning with `(`, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
+verifier read them.
 
 Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier` or another wrapper:
 revocation is checked through the suspending `RevocationReader`, and only the plain verifier's tokens may use
@@ -247,7 +253,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
         if (!request.subject.authenticated) {
             return emptyMap() // absent: a comparison with it is false
         }
-        val department = directory.departmentOf(request.subject.tenantId, request.subject.id) // suspends, throws on failure
+        val department = directory.departmentOf(request.tenant.value, request.subject.id) // suspends, throws on failure
         return if (department == null) emptyMap() else mapOf("ext.directory.department" to department)
     }
 }
@@ -273,7 +279,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
   memberships. Use stage A only for attributes that decide what is loaded, as the blacklist does. An
   `AuthorizationChecker` check asks for what its own action and resource can read, in both stages: a stage-A provider
   is asked again then, still without the scope.
-- **What a provider sees.** `AttributeRequest` holds the subject, the resolved scope (null in stage A), the action,
+- **What a provider sees.** `AttributeRequest` holds the tenant, the subject, the resolved scope (null in stage A), the action,
   the resource, the client address, the request id and the device id, never another attribute's value.
 
 **The blacklist** is a stage-A provider: `BlacklistAttributeProvider(source)` declares `ext.blacklist.principal`,

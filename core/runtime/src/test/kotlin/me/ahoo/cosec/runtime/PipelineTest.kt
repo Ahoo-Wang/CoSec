@@ -156,9 +156,8 @@ class PipelineTest {
 
     @Test
     fun hostAppMismatchIsScopeRejected() = runTest {
-        pipeline(authenticator(authenticated())).evaluate(
-            facts(headers = mapOf("CoSec-App-Id" to listOf("other")), host = HostScope(AppId("orders")))
-        ).assertProblem(ProblemType.SCOPE_REJECTED)
+        pipeline(authenticator(authenticated())).evaluate(facts(host = HostScope(AppId("orders"))))
+            .assertProblem(ProblemType.SCOPE_REJECTED)
     }
 
     @ParameterizedTest
@@ -183,13 +182,13 @@ class PipelineTest {
     fun conflictingCoSecParameterIsInvalidRequest() = runTest {
         val engine = StubEngine(PERMIT)
         pipeline(engine = engine).evaluate(
-            facts(headers = mapOf("CoSec-App-Id" to listOf("a", "b")))
+            facts(headers = mapOf("CoSec-Device-Id" to listOf("a", "b")))
         ).assertProblem(ProblemType.INVALID_REQUEST)
         engine.requests.assert().isEmpty()
 
-        pipeline(engine = engine).evaluate(facts(headers = mapOf("CoSec-App-Id" to listOf("a", "a"))))
+        pipeline(engine = engine).evaluate(facts(headers = mapOf("CoSec-Device-Id" to listOf("a", "a"))))
             .proceed.assert().isTrue()
-        engine.requests.single().scope.app.value.assert().isEqualTo("a")
+        engine.requests.single().request.environment.deviceId.assert().isEqualTo("a")
     }
 
     @Test
@@ -198,7 +197,7 @@ class PipelineTest {
         pipeline(authenticator(authenticated(claims("" to "admin"))), engine).evaluate(
             facts(
                 path = "/orders;jsessionid=1/1",
-                headers = mapOf("CoSec-Device-Id" to listOf("phone"), "CoSec-App-Id" to listOf("shop"))
+                headers = mapOf("CoSec-Device-Id" to listOf("phone"))
             )
         )
         val request = engine.requests.single()
@@ -210,7 +209,6 @@ class PipelineTest {
         request.request.environment.requestId.assert().isEqualTo(GENERATED_ID)
         request.request.subject.id.assert().isEqualTo(PRINCIPAL.value)
         request.scope.tenant.assert().isEqualTo(TENANT)
-        request.scope.app.value.assert().isEqualTo("shop")
         request.scope.roles.map { it.value }.assert().containsExactly("admin")
     }
 
@@ -222,7 +220,6 @@ class PipelineTest {
         pipeline(authenticator(authenticated()), engine, LoadingViews(views::load)).evaluate(facts())
         val request = engine.requests.single()
         request.scope.tenant.assert().isEqualTo(TENANT)
-        request.request.subject.tenantId.assert().isEqualTo(TENANT.value)
         views.loads.single().tenant.assert().isEqualTo(TENANT)
     }
 
@@ -405,8 +402,6 @@ class PipelineTest {
             it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Known(provided) })
         }.evaluate(facts())
         outcome.proceed.assert().isTrue()
-        // The key holds none of the attachments, so the security context lists none.
-        outcome.security!!.securityContext.principal.policies.assert().isEmpty()
         val request = engine.requests.single()
         request.memberships.roles.assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"))))
         // The attachments reach the engine for their DENYs only (RC1-1): the subject has no principal bindings.

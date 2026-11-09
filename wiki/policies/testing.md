@@ -591,7 +591,7 @@ documents as JSON text.
 | `description` | Free text. |
 | `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
-| `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `app`, `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
+| `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
 | `expect` | `decision`: `Permit`, `Deny`, `Indeterminate` or `Rejected`, with `by` (the deciding statement; `null` for the implicit deny), `cause` or `reason`. |
 
 `http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or

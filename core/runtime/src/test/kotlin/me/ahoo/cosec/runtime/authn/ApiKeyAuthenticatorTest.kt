@@ -40,7 +40,8 @@ class ApiKeyAuthenticatorTest {
         roles: Set<String>? = setOf("billing", "auditor@team-a"),
         expiresAt: Instant? = now.plusSeconds(60),
         enabled: Boolean = true,
-    ) = ApiKey(id, "svc-billing", "acme", roles, expiresAt, enabled)
+        app: String? = null,
+    ) = ApiKey(id, "svc-billing", "acme", app, roles, expiresAt, enabled)
 
     private val keys = mapOf(
         "valid" to key("billing"),
@@ -132,16 +133,16 @@ class ApiKeyAuthenticatorTest {
     @Test
     fun aKeyRecordWithAnIdHoldingAnUnpairedSurrogateCannotBeMade() {
         val records = listOf<() -> ApiKey>(
-            { ApiKey("key\uD800", "svc", "acme", null) },
-            { ApiKey("key", "svc\uDC00", "acme", null) },
-            { ApiKey("key", "svc", "beta\uD800", null) },
-            { ApiKey("key", "svc", "acme", setOf("billing@team\uD800")) },
+            { ApiKey("key\uD800", "svc", "acme", null, null) },
+            { ApiKey("key", "svc\uDC00", "acme", null, null) },
+            { ApiKey("key", "svc", "beta\uD800", null, null) },
+            { ApiKey("key", "svc", "acme", null, setOf("billing@team\uD800")) },
         )
         for (record in records) {
             val error = runCatching(record).exceptionOrNull()
             error.assert().isInstanceOf(IllegalArgumentException::class.java)
             error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
         }
-        ApiKey("key\uD83D\uDE00", "svc", "acme", setOf("billing")).id.assert().isEqualTo("key\uD83D\uDE00")
+        ApiKey("key\uD83D\uDE00", "svc", "acme", null, setOf("billing")).id.assert().isEqualTo("key\uD83D\uDE00")
     }
 }

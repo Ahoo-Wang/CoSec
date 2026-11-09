@@ -13,25 +13,20 @@
 
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.spi.token.TokenVerifier
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
 
-abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials, out P : CoSecPrincipal>(
+abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials>(
     override val supportCredentials: Class<C>
-) : Authentication<C, P>
+) : Authentication<C>
 
 class SimpleRefreshTokenAuthentication(private val tokenVerifier: TokenVerifier) :
-    AbstractRefreshTokenAuthentication<RefreshTokenCredentials, CoSecPrincipal>(RefreshTokenCredentials::class.java) {
-    override fun authenticate(credentials: RefreshTokenCredentials): Mono<CoSecPrincipal> {
-        return Mono.defer {
-            tokenVerifier.refresh<TokenPrincipal>(credentials).toMono()
-        }
+    AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
+    override fun authenticate(credentials: RefreshTokenCredentials): Mono<TokenSubject> {
+        return Mono.fromSupplier { TokenSubject.of(tokenVerifier.refresh(credentials)) }
     }
 }
 

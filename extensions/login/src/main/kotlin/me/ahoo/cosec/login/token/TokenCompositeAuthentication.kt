@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
@@ -23,15 +22,15 @@ import reactor.core.publisher.Mono
 class TokenCompositeAuthentication(
     private val compositeAuthentication: CompositeAuthentication,
     private val tokenConverter: TokenConverter
-) : Authentication<Credentials, CoSecPrincipal> {
+) : Authentication<Credentials> {
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java
 
-    override fun authenticate(credentials: Credentials): Mono<out CoSecPrincipal> {
+    override fun authenticate(credentials: Credentials): Mono<TokenSubject> {
         return authenticate(credentials.javaClass, credentials)
     }
 
-    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<out CoSecPrincipal> {
+    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<TokenSubject> {
         return compositeAuthentication.authenticate(credentialsType, credentials)
     }
 

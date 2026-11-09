@@ -123,7 +123,7 @@
         "control:ControlHttpTest#a request holding an unpaired surrogate is a 400, wherever it holds it",
         "engine:RateLimitObligationTest#a key value with an unpaired surrogate counts in a well formed bucket of its own",
         "runtime:ApiKeyAuthenticatorTest#aKeyRecordWithAnIdHoldingAnUnpairedSurrogateCannotBeMade",
-        "runtime:RevocableTokenVerifierTest#verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate",
+        "spi:VerifiedTokenTest#verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate",
         "cocache:UnpairedSurrogateKeyTest#anAppIdWithAnUnpairedSurrogateNeverReadsAnotherAppsDocument",
         "cocache:UnpairedSurrogateKeyTest#aPrincipalWithAnUnpairedSurrogateIsNeitherRevokedNorReadAsAnotherPrincipal",
         "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
@@ -141,9 +141,21 @@
         "jwt:JwtTokenConverterTest#anEmptyTenantIsNotIssued",
         "jwt:MembershipClaimsJwtTest#currentTokensWithoutTenantParseAsBefore",
         "runtime:TokenAuthenticatorTest#aTokenClaimingAnEmptyTenantIsInvalid",
-        "runtime:RevocableTokenVerifierTest#verifyAndRefreshRefuseAnEmptyTenant",
-        "runtime:MembershipClaimsTest#tenantOfATokenWithoutTenantIsTheDefaultTenant",
-        "runtime:MembershipClaimsTest#tenantOfABlankTenantIsKeptAndRefusedByTheScope"
+        "spi:VerifiedTokenTest#verifyAndRefreshRefuseAnEmptyTenant",
+        "runtime:TokenAuthenticatorTest#aTokenWithoutTenantIsInTheDefaultTenant",
+        "runtime:MembershipClaimsTest#aBlankTenantIsRefusedByTheScope"
+      ]
+    },
+    {
+      "id": "IDN-12",
+      "source": "RFC 0001 D5; batch R7b (2026-11-08)",
+      "statement": "An id beginning with ( is CoSec's, as the tenants (0) and (platform) and the space (default): a token whose subject begins with ( is invalid, on every path that verifies one, and none is issued. Whether a principal is authenticated is stated by the pipeline, never read off its id.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "spi:VerifiedTokenTest#aSubjectBeginningWithAParenthesisIsRefused",
+        "jwt:JwtTokenVerifierTest#aReservedSubjectIsInvalid",
+        "jwt:JwtTokenConverterTest#aReservedSubjectIsNotIssued"
       ]
     }
   ]

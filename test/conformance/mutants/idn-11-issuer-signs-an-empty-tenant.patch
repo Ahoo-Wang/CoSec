@@ -3,17 +3,16 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
-index a442fc5d..a7b95686 100644
+index 71987459..276c0a34 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
-@@ -104,10 +104,6 @@ class JwtTokenConverter(
- 
-         if (principal is TenantCapable) {
-             val tenantCapable = principal as TenantCapable
--            // A token with an empty tenant would be refused when it is presented (`IDN-11`): fail where it is issued.
--            require(tenantCapable.tenant.tenantId.isNotEmpty()) {
--                "Principal [${Identifiers.printable(principal.id)}] has an empty tenant id: a token cannot carry it."
--            }
-             accessTokenBuilder
-                 .withClaim(TENANT_ID_KEY, tenantCapable.tenant.tenantId)
+@@ -119,9 +119,6 @@ class JwtTokenConverter(
+         require(!Identifiers.isReserved(subject.id)) {
+             "Principal [$printableId] begins with `${Identifiers.RESERVED_PREFIX}`, which is CoSec's: a token cannot carry it."
+         }
+-        require(subject.tenant?.isEmpty() != true) {
+-            "Principal [$printableId] has an empty tenant id: a token cannot carry it."
+-        }
+         require(subject.app?.let(ScopeResolver::isValidAppId) != false) {
+             "Principal [$printableId] names an app that cannot be an app id: a token cannot carry it."
          }

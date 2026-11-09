@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate.v7.api.permission
 
-import me.ahoo.cosec.api.principal.RoleId
+import me.ahoo.cosec.migrate.v7.api.principal.RoleId
 
 /**
  * Role-based permissions.

@@ -20,16 +20,12 @@ import me.ahoo.cosec.model.TenantId
 
 /**
  * A checked scope (RFC 0004 §4.1). Only [ScopeResolver] constructs one (RFC 0001 P4): the constructor is internal to
- * this module, and `ScopeConstructionTest` checks that nothing else in it calls the constructor. The scope a client
- * asks for is a [DeclaredScope].
+ * this module, and `ScopeConstructionTest` checks that nothing else in it calls the constructor.
  */
 class Scope internal constructor(
     val tenant: TenantId,
     val app: AppId,
-    val appSource: AppSource,
     val space: SpaceId,
     /** The roles the principal has in [space], in claim order. */
     val roles: List<RoleId>,
-) {
-    enum class AppSource { HOST, DECLARED }
-}
+)

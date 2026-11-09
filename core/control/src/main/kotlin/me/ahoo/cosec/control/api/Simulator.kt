@@ -38,7 +38,6 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -122,21 +121,32 @@ class Simulator(
     /** Every compilation this simulator made, cached or not; for tests. */
     internal val compilations = AtomicLong()
 
-    /** The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a host request. */
-    fun scope(request: SimulatedRequest): ScopeResolution =
-        ScopeResolver.resolve(subject(request), DeclaredScope(request.app, request.space), HostScope(null))
+    /**
+     * The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a request. [request]'s
+     * app is the one its credential declares (RFC 0012 §3.5) on a host of that app, which is also where an anonymous
+     * request gets its app.
+     */
+    fun scope(request: SimulatedRequest): ScopeResolution {
+        val app = request.app.ifEmpty { null }
+        val host = HostScope(app?.takeIf(ScopeResolver::isValidAppId)?.let(::AppId))
+        return ScopeResolver.resolve(subject(request, app), request.space, host)
+    }
 
     /**
      * The tenant [request] is decided in, as [ScopeResolver] decides it, whatever its scope (RC1-40): the principal's,
-     * or [TenantId.DEFAULT] for a request without one. An empty declared scope always resolves, so this is the resolver's
-     * own answer, not a copy of its rule.
+     * or [TenantId.DEFAULT] for a request without one. With no app and no space it always resolves, so this is the
+     * resolver's own answer, not a copy of its rule.
      */
     internal fun tenantOf(request: SimulatedRequest): TenantId =
-        (ScopeResolver.resolve(subject(request), DeclaredScope("", ""), HostScope(null)) as ScopeResolution.Resolved)
-            .scope.tenant
+        (ScopeResolver.resolve(subject(request, null), "", HostScope(null)) as ScopeResolution.Resolved).scope.tenant
 
-    private fun subject(request: SimulatedRequest): ScopeSubject =
-        ScopeSubject(request.tenant, request.principal != null, MembershipClaims.parse(request.roles, request.policies))
+    private fun subject(request: SimulatedRequest, app: String?): ScopeSubject =
+        ScopeSubject(
+            request.tenant,
+            request.principal != null,
+            MembershipClaims.parse(request.roles, request.policies),
+            app
+        )
 
     fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation =
         decide(
@@ -157,7 +167,6 @@ class Simulator(
         val memberships = MembershipClaims.parse(request.roles, request.policies)
         val subject = Subject(
             id = request.principal ?: ANONYMOUS,
-            tenantId = scope.tenant.value,
             authenticated = request.principal != null,
             attributes = emptyMap(),
             // As the credential would be (RFC 0009 §4.2): a key's cap drops principal bindings, a key gets no break-glass.

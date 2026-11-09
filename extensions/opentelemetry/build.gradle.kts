@@ -15,7 +15,7 @@ dependencies {
     implementation("io.opentelemetry.instrumentation:opentelemetry-instrumentation-api")
     // TracingListener and OpenTelemetryContextContributor (RFC 0006 §7.5, §9.5.1) serve the coroutine pipeline;
     // opentelemetry-extension-kotlin carries the OTel context across its suspensions (approved in RFC 0006 Q7).
-    implementation(project(":runtime"))
+    api(project(":runtime"))
     implementation("io.opentelemetry:opentelemetry-extension-kotlin")
     testImplementation("io.projectreactor:reactor-test")
     testImplementation("io.opentelemetry:opentelemetry-sdk")

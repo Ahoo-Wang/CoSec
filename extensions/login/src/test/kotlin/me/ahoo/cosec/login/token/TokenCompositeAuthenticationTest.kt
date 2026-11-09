@@ -15,8 +15,6 @@ package me.ahoo.cosec.login.token
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.Credentials
@@ -40,8 +38,8 @@ class TokenCompositeAuthenticationTest {
         tokenCompositeAuthentication.supportCredentials.assert().isEqualTo(Credentials::class.java)
 
         val credentials = mockk<Credentials>()
-        val authentication = mockk<Authentication<Credentials, CoSecPrincipal>> {
-            every { authenticate(any()) } returns SimplePrincipal.ANONYMOUS.toMono()
+        val authentication = mockk<Authentication<Credentials>> {
+            every { authenticate(any()) } returns TokenSubject("alice", null).toMono()
         }
         DefaultAuthenticationProvider.register(credentials.javaClass, authentication)
 

@@ -9,6 +9,21 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 存储、API、属性和可观测性。本页是迁移步骤的唯一出处。每个版本的发布说明见
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 从 8.0.0-alpha.4 升级 {#from-8-0-0-alpha-4}
+
+8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
+
+- **令牌和 API key 声明它们的应用**（批次 R7b、RFC 0012 §3.5、`SCP-11`）。令牌的 `aud` 和 API key 的 `app` 指明凭证属于哪个应用，`ScopeResolver` 把它们与宿主的应用比较：配置了应用的宿主（`cosec.authorization.scope.app-id` 或路由的 `cosec-app-id`）拒绝声明其他应用或未声明应用的凭证，返回 `403 scope-rejected`。没有宿主应用时取凭证的应用，两者都没有时不读取应用文档。迁移方法：签发令牌时设置 `TokenSubject.app`，每个应用一个令牌；为 API key 设置 `app`（`ApiKey`、`cosec.api-key.keys[].app`）。存储的 key 升级为带必填 `app` 字段的 format 3：format 2 会失败（`API key format [2] is not 3.`），请重新发放（`cosec-migrate api-keys --app <id>` 会为它从 7.x 转换的 key 设置应用）。操作控制面的令牌发给 `cosec.control.app-id`（默认 `cosec-control`）；宿主应用与之不同的宿主上的控制面路由返回 `403`，请把它们放在没有应用或就是该应用的宿主上。
+- **`CoSec-App-Id` 已删除。** 客户端不再声明应用；该请求头不被读取，发送它的请求取凭证的应用。网关转发的身份仍然携带它的应用：配置了应用的服务拒绝声明其他应用或未声明应用的身份，返回 `400 invalid-request`。请读取 `SecurityContext.scope.appId` 获取请求的应用。
+- **`SecurityContext` 是只读的**：`tenantId`、`principal`、非空的 `scope` 和 `forwardedIdentity`（`gatewayRequestId`、`credentialId`，取代属性 `cosec.identity.rid` 和 `cosec.identity.jti`）。属性表及其访问方法已删除；`tenant.tenantId` 变为 `tenantId`。
+- **`CoSecPrincipal` 是应用读取到的请求信息**：`id`、显式的 `authenticated`、`attributes`。请求生效的角色在 `SecurityContext.scope.roles` 中；`principal.roles` 和 `principal.policies` 已删除。
+- **令牌契约都是值。** `TokenVerifier.verify(accessToken: String)` 和 `refresh` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），没有类型参数；`TokenRevoker.revoke` 接收令牌字符串。`TokenConverter` 接收 `TokenSubject`（`me.ahoo.cosec.login.token`），`Authentication<C>` 返回它。已删除：包装类 `SimplePrincipal`、`SimpleTenantPrincipal`、`TenantPrincipal`、`TokenPrincipal`、`TokenTenantPrincipal`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`、`MembershipMarkedPrincipal`、`Delegated`、`findInDelegationChain`、`IssuedAtCapable`、`ExpiresAtCapable`、`MembershipMarkerCapable`、`AccessToken`、`RefreshToken`、`Token` 和 `TokenIdCapable`。自定义的 `TokenVerifier` 改为构造 `VerifiedToken`；它的构造函数拒绝无效声明，抛出的正是 `verify` 本来就会抛出的 `TokenVerificationException`。
+- **`RoleCapable`、`PolicyCapable`、`SpacedRoleId`、`RoleIdCapable`、`SpaceIdCapable`、`Tenant`、`TenantCapable`、`SimpleTenant` 和 `Named` 已删除。** 声明名是 `MembershipClaims` 的常量，租户 id 是 `TenantId.DEFAULT` 和 `TenantId.PLATFORM`；`role@space` 语法不变。`SocialAuthenticationProvider` 保留 `name`。
+- **`sub` 以 `(` 开头的令牌无效**（`IDN-12`），没有 `sub` 或 `jti` 的令牌也无效：令牌不能使用 CoSec 自己的 id，尤其是匿名主体 `(0)`。
+- **`AttributeRequest` 携带 `tenant`**，`Subject.tenantId` 已删除：A 阶段提供者读取 `request.tenant`。
+- **`SwitchTenantCredentials` 携带请求的 `context`（`SecurityContext`）**，不再是 `principal`，`switchTenant` 接收它。新令牌保留原令牌的应用。
+- **库模块导出其公共类实现的类型**（`cocache`、`kafka`、`ip2region`、`micrometer`、`opentelemetry`）：只为编译它们而添加的依赖可以去掉。
+
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
@@ -456,7 +471,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 #### 有歧义的 CoSec 参数返回 400 {#ambiguous-cosec-parameters-are-400}
 
-规则 `SCP-4`：当 `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 以两个不同的非空值出现（请求头与查询字符串之间，或其中任一之内），
+规则 `SCP-4`：当 `CoSec-Space-Id` 或 `CoSec-Device-Id` 以两个不同的非空值出现（请求头与查询字符串之间，或其中任一之内），
 请求返回 `400`。7.x 不会拒绝这样的请求。
 
 #### Spring MVC 只从查询字符串读取查询参数 {#spring-mvc-reads-query-parameters-from-the-query-string-only}
@@ -464,7 +479,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 在 Spring MVC 上，7.x 用 `HttpServletRequest.getParameter` 读取查询参数，而它也会返回 `application/x-www-form-urlencoded` 请求体中的字段。
 所以对表单 POST，容器会在 CoSec 的过滤器中解析并消费请求体，请求体字段也被当作查询参数。8.0 在每个适配器上都只读取 URL 查询字符串，
 并且永远不碰请求体。
-表单字段不再设置 `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id`，也不再设置在 `cosec.pipeline.allow-query-token=true` 时读取的
+表单字段不再设置 `CoSec-Space-Id` 或 `CoSec-Device-Id`，也不再设置在 `cosec.pipeline.allow-query-token=true` 时读取的
 `authorization` 令牌。把这些作为表单字段发送的客户端，必须改为通过请求头发送；令牌在开启该配置项时也可以放在查询字符串中。
 
 ### 认证 {#authentication}
@@ -510,7 +525,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 - **配置中的 key**（`cosec.api-key.keys[]`）：`tenant-id` 必填，每个 key 恰好设置 `roles`（它的上限；`[]` 表示没有角色）与 `uncapped: true` 之一。`policies` 和 `attributes` 已删除；仍设置它们的 key 会导致启动失败，`roles` 与 `uncapped` 都不设或都设的 key 也一样。7.x 的 key 只拥有它列出的角色和策略；要保留一个什么都没有的 key，给它设置 `roles: []`。
 - **`ApiKey`** 是普通类 `ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)`：`policies`、`attributes` 和 `toPrincipal()` 已删除，`tenantId` 必填，`roles: Set<String>?` 是上限，且没有默认值。
 
-**转换已存储的 key。** `cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
+**转换已存储的 key。** `--app <id>` 指明转换后的 key 属于哪个应用（[应用](../integration/authentication.md#apps)）；7.x 的 key 没有声明应用，不指定时配置了应用的服务会拒绝它们。`cosec-migrate api-keys` 读取部署读取 API key 的 `<--key-prefix>:api-key`（默认 `cosec:api-key`）下的每个 key，并把 `api-keys-report.json` 写入 `--out`。导出每个主体当前拥有的角色，格式为 JSON 数组 `{"tenant", "principal", "roles": ["role", "role@space", ...]}`，作为 `--memberships` 传入：
 
 ```bash
 cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./memberships.json --out ./api-keys --dry-run
@@ -557,7 +572,7 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 #### 客户端发送令牌和作用域的方式变了 {#clients-send-tokens-and-scope-differently}
 
 - 7.x 在每个请求上都读取的 `authorization` cookie，现在只在 `cosec.pipeline.allow-cookie-token=true` 时读取：浏览器会自动带上 cookie，跨站请求也不例外，而 CoSec 不提供 CSRF 防护。把令牌放在 `Authorization` 请求头中，或者打开这个配置项并自行防御 CSRF（[认证](../integration/authentication.md)）。
-- 7.x 也从查询字符串读取的 `CoSec-App-Id`、`CoSec-Space-Id` 和 `CoSec-Device-Id`，现在只从请求头读取（[应用与空间](../integration/web.md#app-and-space)）。
+- 7.x 也从查询字符串读取的 `CoSec-Space-Id` 和 `CoSec-Device-Id`，现在只从请求头读取（[应用与空间](../integration/web.md#app-and-space)）。
 
 ### 存储与 Redis {#storage-and-redis}
 
@@ -635,9 +650,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `AbstractRefreshTokenAuthentication`、`AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `TokenConverter`、`TokenCompositeAuthentication`、`RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token`（`cosec-spi`） | `TokenVerifier`、`TokenStore`、`TokenRevoker`、`RevocationReader`、`TokenVerificationException`、`TokenExpiredException`、`TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token`（`cosec-runtime`） | `SimpleAccessToken`、`SimpleCompositeToken`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`、`RevocableTokenVerifier` |
-| `me.ahoo.cosec.principal` | `me.ahoo.cosec.api.principal`（`cosec-api`） | `SimplePrincipal`、`SimpleTenantPrincipal` |
-| `me.ahoo.cosec.tenant` | `me.ahoo.cosec.api.tenant`（`cosec-api`） | `SimpleTenant` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token`（`cosec-runtime`） | `SimpleCompositeToken`、`RevocableTokenVerifier` |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet`（`cosec-webmvc`） | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http`（`cosec-runtime`） | `RemoteIpResolver`、`XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit`（`cosec-spi`） | `AuditEventSink` |
@@ -645,7 +658,6 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey`（`cosec-spi`） | `ApiKey`、`ApiKeyReader`、`ApiKeyStore`、`InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit`（`cosec-spi`） | `RateLimit`、`RateLimitResult`、`RateLimiter`（[见下文](#removed-and-replaced-apis)） |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model`（`cosec-model`） | `CoSecException` |
-| `me.ahoo.cosec` | `me.ahoo.cosec.api`（`cosec-api`） | `Delegated` |
 
 8.0 的 SPI 也在这些地方：`MembershipProvider` 和 `MembershipClaims` 在 `me.ahoo.cosec.spi.membership`，`SnapshotDocumentStore` 和 `InMemorySnapshotDocumentStore` 在 `me.ahoo.cosec.spi.snapshot`，`AttributeProvider` 在 `me.ahoo.cosec.spi.attribute`，`Authenticator` 在 `me.ahoo.cosec.spi.authn`；`SnapshotSource` 在 `me.ahoo.cosec.runtime.snapshot`，文档编解码器和编译器在 `me.ahoo.cosec.runtime.document`，路由映射在 `me.ahoo.cosec.runtime.route`（[扩展 CoSec](../architecture/extending.md#extension-points)）。
 
@@ -679,7 +691,7 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |
 | `BlacklistChecker` | 放在 `AttributeProvider` bean（`BlacklistAttributeProvider`）后面的 `BlacklistSource`。 |
 | `RequestAttributesAppender`、`GatewayRouteRequestAttributesAppender` | `AttributeProvider`。 |
-| `SimpleSecurityContext`、扩展属性 `CoSecPrincipal.tenant` | 无：请求的 `SecurityContext` 由管道创建。测试中请 mock 或自行实现该接口；主体的租户在 `TenantCapable` 上。 |
+| `SimpleSecurityContext`、扩展属性 `CoSecPrincipal.tenant` | 无：请求的 `SecurityContext` 由管道创建。测试中请 mock 或自行实现该接口；租户是 `SecurityContext.tenantId`。 |
 | `KafkaAuditEventSink` | `KafkaAuditListener`，一个 `DecisionListener`，classpath 上有 `cosec-kafka` 时由 starter 注册（[可观测性](./observability.md)）。记录的 key 不变，value 是审计事件（[可观测性的变化](#observability-changes)）。 |
 | `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面（库或 HTTP API）；第一次写入用 `cosec-migrate publish`。 |
 | `LocalPolicyInitializer` 以及 `init-repository`/`force-refresh` | `cosec-migrate convert` 与 `publish`，或控制面的声明式 `apply`。 |

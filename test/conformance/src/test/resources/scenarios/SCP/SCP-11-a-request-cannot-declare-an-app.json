@@ -1,0 +1,87 @@
+{
+  "rules": [
+    "SCP-11"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "RFC 0012 §3.5: a client cannot declare an app. alice's token names none and she sends CoSec-App-Id: billing: the header is not read, so billing's DENY for clerks never applies.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    },
+    "apps": {
+      "billing": {
+        "policies": [
+          {
+            "id": "perm:billing/no-reads",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:clerk",
+            "subject": {
+              "role": "clerk"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm:billing/no-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/invoices",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-App-Id": "billing"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": null
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://billing"
+    }
+  }
+}

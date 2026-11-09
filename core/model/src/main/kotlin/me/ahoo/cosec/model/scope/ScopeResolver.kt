@@ -22,21 +22,24 @@ import me.ahoo.cosec.model.TenantId
 
 /**
  * What the credential says about the principal. [tenant] is never blank: the adapter maps a credential without a tenant
- * to [TenantId.DEFAULT].
+ * to [TenantId.DEFAULT]. [app] is the app the credential declares (a token's `aud`, an API key's app, RFC 0012 §3.5),
+ * null when it declares none.
  */
-class ScopeSubject(val tenant: TenantId, val authenticated: Boolean, val memberships: Memberships) {
+class ScopeSubject(
+    val tenant: TenantId,
+    val authenticated: Boolean,
+    val memberships: Memberships,
+    val app: String? = null,
+) {
     init {
         require(tenant.value.isNotBlank()) { "Tenant id must not be blank; use TenantId.DEFAULT." }
     }
 }
 
-/** The scope the client asks for, from `CoSec-App-Id` and `CoSec-Space-Id`. Empty means not declared. */
-class DeclaredScope(val app: String, val space: String)
-
 /**
  * The app the host serves (RFC 0004 §4.6): on a gateway, the route's metadata `cosec-app-id`, else
- * `cosec.authorization.scope.app-id`; on any other host, that property (RC1-6). Null when neither names one: only then
- * does the client's declared app apply.
+ * `cosec.authorization.scope.app-id`; on any other host, that property (RC1-6). Null when neither names one: then the
+ * credential's app applies (RFC 0012 §3.5).
  */
 class HostScope(val app: AppId?) {
     init {
@@ -55,14 +58,18 @@ sealed interface ScopeResolution {
 }
 
 /**
- * Checks a declared scope against the credential and the host (RFC 0004 §4.6). A pure function, so it lives in
- * `model/` next to the internal constructor of [Scope].
+ * Resolves a request's scope from the credential, the host and the space the client selects (RFC 0004 §4.6). A pure
+ * function, so it lives in `model/` next to the internal constructor of [Scope].
  *
  * - Tenant: the subject's. An anonymous subject is always in [TenantId.DEFAULT] and has no roles, whatever it is given.
- * - App: the host's ([HostScope]: a gateway route's, else the configured one), when it has one; a declared app that
- *   differs is [ScopeResolution.Rejected.Reason.APP_MISMATCH]. Otherwise the declared one. A declared app that cannot be an app id (see [isValidAppId]) is
- *   [ScopeResolution.Rejected.Reason.APP_MISMATCH] too, whether or not the host has an app.
- * - Space: an empty declaration is [SpaceId.DEFAULT]. Any other space needs at least one role there, or it is
+ * - App (RFC 0012 §3.5): an authenticated subject's is its credential's. A host with an app ([HostScope]: a gateway
+ *   route's, else the configured one) serves only credentials declaring that app; any other, or none, is
+ *   [ScopeResolution.Rejected.Reason.APP_MISMATCH]. Without a host app the credential's app applies, and a credential
+ *   declaring none is in no app, so no app document is read. An anonymous subject has no credential, so its app is the
+ *   host's. A credential's app that cannot be an app id (see [isValidAppId]) is
+ *   [ScopeResolution.Rejected.Reason.APP_MISMATCH] too, whether or not the host has an app. The client never declares
+ *   an app.
+ * - Space: an empty selection is [SpaceId.DEFAULT]. Any other space needs at least one role there, or it is
  *   [ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER]: falling back to the default space would let the backend act in a
  *   space the principal is not a member of. A declared [Match.WILDCARD] is never a member.
  *
@@ -74,14 +81,17 @@ object ScopeResolver {
     private val APP_MISMATCH = ScopeResolution.Rejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)
     private val SPACE_NOT_MEMBER = ScopeResolution.Rejected(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
 
-    /** Longer declared app ids are rejected rather than carried into document keys. */
+    /** The app of a request in none: no app document is read. */
+    private val NO_APP = AppId("")
+
+    /** Longer app ids are rejected rather than carried into document keys. */
     const val MAX_APP_ID_LENGTH = 128
 
     /**
      * Space ids beginning with it are CoSec's, as the tenants `(0)` and `(platform)`: the control plane writes the
      * default space as `(default)` (RC1-37), so no request selects one and no document binds in one.
      */
-    const val RESERVED_SPACE_PREFIX = "("
+    const val RESERVED_SPACE_PREFIX = Identifiers.RESERVED_PREFIX
 
     /** Whether [space] is reserved for CoSec ([RESERVED_SPACE_PREFIX]). */
     fun isReservedSpaceId(space: String): Boolean = space.startsWith(RESERVED_SPACE_PREFIX)
@@ -108,26 +118,27 @@ object ScopeResolver {
         return !blank
     }
 
-    fun resolve(subject: ScopeSubject, declared: DeclaredScope, host: HostScope): ScopeResolution {
-        val hostApp = host.app
-        if (declared.app.isNotEmpty() && !isValidAppId(declared.app)) {
+    /** [space] is what the client selects (`CoSec-Space-Id`), empty for none. */
+    fun resolve(subject: ScopeSubject, space: String, host: HostScope): ScopeResolution {
+        val credentialApp = subject.app
+        if (credentialApp != null && !isValidAppId(credentialApp)) {
             return APP_MISMATCH
         }
-        if (hostApp != null && declared.app.isNotEmpty() && declared.app != hostApp.value) {
+        val hostApp = host.app
+        if (subject.authenticated && hostApp != null && credentialApp != hostApp.value) {
             return APP_MISMATCH
         }
         // Neither the wildcard nor a reserved space is a space a principal can be a member of, whatever it claims.
-        if (declared.space == Match.WILDCARD || isReservedSpaceId(declared.space)) {
+        if (space == Match.WILDCARD || isReservedSpaceId(space)) {
             return SPACE_NOT_MEMBER
         }
-        val app = hostApp ?: AppId(declared.app)
-        val appSource = if (hostApp != null) Scope.AppSource.HOST else Scope.AppSource.DECLARED
-        val space = SpaceId(declared.space)
-        val roles = if (subject.authenticated) subject.memberships.roles[space].orEmpty() else emptySet()
-        if (space != SpaceId.DEFAULT && roles.isEmpty()) {
+        val app = hostApp ?: credentialApp?.takeIf { subject.authenticated }?.let(::AppId) ?: NO_APP
+        val selected = SpaceId(space)
+        val roles = if (subject.authenticated) subject.memberships.roles[selected].orEmpty() else emptySet()
+        if (selected != SpaceId.DEFAULT && roles.isEmpty()) {
             return SPACE_NOT_MEMBER
         }
         val tenant = if (subject.authenticated) subject.tenant else TenantId.DEFAULT
-        return ScopeResolution.Resolved(Scope(tenant, app, appSource, space, roles.toList()))
+        return ScopeResolution.Resolved(Scope(tenant, app, selected, roles.toList()))
     }
 }

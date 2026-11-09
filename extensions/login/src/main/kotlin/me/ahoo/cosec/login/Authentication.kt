@@ -13,25 +13,24 @@
 package me.ahoo.cosec.login
 
 import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import reactor.core.publisher.Mono
 
 /**
  * Authentication interface for credential verification.
  *
  * Authentication is the process of verifying the identity of a user
- * by validating their credentials. If successful, it returns a
- * [CoSecPrincipal] representing the authenticated user.
+ * by validating their credentials. If successful, it returns the
+ * [TokenSubject] a token is issued for.
  *
  * @param C The type of credentials this authentication supports
- * @param P The type of principal returned on successful authentication
  *
  * @see Credentials
  * @see AuthenticationProvider
- * @see CoSecPrincipal
+ * @see TokenSubject
  */
 @CoSecSpi
-interface Authentication<C : Credentials, out P : CoSecPrincipal> {
+interface Authentication<C : Credentials> {
     /**
      * The type of credentials this authentication supports.
      */
@@ -41,7 +40,7 @@ interface Authentication<C : Credentials, out P : CoSecPrincipal> {
      * Authenticates the provided credentials.
      *
      * @param credentials The credentials to validate
-     * @return [Mono] emitting the authenticated principal, or empty if authentication fails
+     * @return [Mono] emitting what the token will say, or empty if authentication fails
      */
-    fun authenticate(credentials: C): Mono<out P>
+    fun authenticate(credentials: C): Mono<TokenSubject>
 }

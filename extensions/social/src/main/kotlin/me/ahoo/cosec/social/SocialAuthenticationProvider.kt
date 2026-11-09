@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.api.Named
 import reactor.core.publisher.Mono
 
 /**
@@ -24,7 +23,10 @@ import reactor.core.publisher.Mono
  *
  * @author ahoo wang
  */
-interface SocialAuthenticationProvider : Named {
+interface SocialAuthenticationProvider {
+    /** The provider's registration name: the `provider` of a [SocialCredentials]. */
+    val name: String
+
     /**
      * Generate authorize Url.
      *

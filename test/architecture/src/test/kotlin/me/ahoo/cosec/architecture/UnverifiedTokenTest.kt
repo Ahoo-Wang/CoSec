@@ -75,7 +75,7 @@ class UnverifiedTokenTest {
         val decoding: DescribedPredicate<JavaMethodCall> =
             target(owner(name(JWT))).and(target(nameMatching("decode.*")))
                 .or(target(owner(name(PARSER))))
-                .or(target(owner(name(JWTS))).and(target(nameMatching("(decode|toPrincipal).*"))))
+                .or(target(owner(name(JWTS))).and(target(nameMatching("(decode|toVerifiedToken).*"))))
                 .forSubtype()
     }
 }

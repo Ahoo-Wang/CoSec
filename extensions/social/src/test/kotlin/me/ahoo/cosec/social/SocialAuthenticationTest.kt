@@ -31,7 +31,7 @@ internal class SocialAuthenticationTest {
                 every { authorizeUrl() } returns "authorizeUrl"
             }
         )
-        val authentication = SocialAuthentication()
+        val authentication = SocialAuthentication(DirectSocialUserPrincipalConverter(null))
         authentication.supportCredentials.assert().isEqualTo(SocialCredentials::class.java)
         authentication.authorizeUrl("authorizeUrl").assert().isEqualTo("authorizeUrl")
     }
@@ -49,7 +49,7 @@ internal class SocialAuthenticationTest {
                 ).toMono()
             }
         )
-        val authentication = SocialAuthentication()
+        val authentication = SocialAuthentication(DirectSocialUserPrincipalConverter(null))
 
         authentication.authenticate(JustAuthCredentials("authenticate"))
             .test()

@@ -274,7 +274,7 @@ Check the final document for:
 - ALLOWs built on `not`, or on attributes that can be absent (headers, `request.attributes.*`);
 - missing method constraints (`http:*` where only `http:GET` was meant) on state-changing endpoints;
 - `space: "*"` where one space was meant (`""` is the default space only);
-- tenant-supplied facts trusted as identity: `CoSec-App-Id`/`CoSec-Space-Id` are client input (a space needs a role
+- tenant-supplied facts trusted as identity: `CoSec-Space-Id` is client input (a space needs a role
   there, and a host with `cosec.authorization.scope.app-id` rejects another app);
 - `environment.ip` behind proxies (it depends on `cosec.authorization.remote-ip.max-trusted-index`);
 - a DENY with `onMissing: nomatch` (it lapses during a provider outage);

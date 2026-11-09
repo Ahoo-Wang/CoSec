@@ -32,7 +32,6 @@ import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -155,12 +154,12 @@ class RoleExpansionPropertyTest {
 
     private fun decide(documents: Pair<Map<String, CompiledDocument>, CompiledDocument>, asked: Asked): Decision {
         val resolved = ScopeResolver.resolve(
-            ScopeSubject(TENANT, true, asked.memberships),
-            DeclaredScope(asked.app, asked.space),
+            ScopeSubject(TENANT, true, asked.memberships, asked.app.ifEmpty { null }),
+            asked.space,
             HostScope(null),
         )
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return Decision.Deny(null)
-        val subject = Subject("alice", TENANT.value, true, emptyMap(), principalBindings = true, breakGlass = true)
+        val subject = Subject("alice", true, emptyMap(), principalBindings = true, breakGlass = true)
         val request = AuthzRequest(
             subject,
             asked.action,

@@ -41,11 +41,10 @@
   "credential": {
     "roles": [
       "editor"
-    ]
-  },
-  "request": {
+    ],
     "app": "order-service"
   },
+  "request": {},
   "expect": {
     "decision": "Permit",
     "by": {

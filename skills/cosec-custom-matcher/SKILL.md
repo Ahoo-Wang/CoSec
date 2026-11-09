@@ -85,7 +85,7 @@ fun riskAttributeProvider(risk: RiskClient): AttributeProvider = RiskAttributePr
 - A value left out is **absent** (comparisons with it are false). A thrown exception, a timeout, or a value of the
   wrong type makes every attribute asked for **unavailable**: each statement reading one follows its `onMissing`
   (`indeterminate`, the default, answers 503 unless a DENY matches; `nomatch` treats the statement as not matching).
-- `AttributeRequest` carries only settled facts: subject, resolved scope (null in stage A), action, resource, remote IP,
+- `AttributeRequest` carries only settled facts: tenant, subject, resolved scope (null in stage A), action, resource, remote IP,
   request id, device id. It never carries another attribute's value.
 - `AttributeDeclaration(..., stage = Stage.A)` fetches on every request before the scope is resolved; keep it for
   what decides what to load (the blacklist). The default, stage B, fetches only what the request's statements read.

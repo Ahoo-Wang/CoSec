@@ -24,19 +24,38 @@ class ApiKeyReaderTest {
 
     @Test
     fun usableWhileEnabledAndBeforeExpiry() {
-        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null, expiresAt = expiresAt)
+        val key =
+            ApiKey(id = "k", principalId = "svc", tenantId = "acme", app = null, roles = null, expiresAt = expiresAt)
         key.usableAt(expiresAt.minusMillis(1)).assert().isTrue()
         key.usableAt(expiresAt).assert().isFalse()
-        ApiKey("k", "svc", "acme", null, expiresAt = expiresAt, enabled = false).usableAt(expiresAt.minusSeconds(60))
+        ApiKey(
+            "k",
+            "svc",
+            "acme",
+            null,
+            null,
+            expiresAt = expiresAt,
+            enabled = false
+        ).usableAt(expiresAt.minusSeconds(60))
             .assert().isFalse()
-        ApiKey("k", "svc", "acme", emptySet()).usableAt(Instant.MAX).assert().isTrue()
+        ApiKey("k", "svc", "acme", null, emptySet()).usableAt(Instant.MAX).assert().isTrue()
+    }
+
+    /** RFC 0012 §3.5: a key declares its app, one that can be an app id, or none. */
+    @Test
+    fun aKeyDeclaresAnAppThatCanBeOne() {
+        ApiKey("k", "svc", "acme", "order", null).app.assert().isEqualTo("order")
+        ApiKey("k", "svc", "acme", null, null).app.assert().isNull()
+        for (app in listOf("", " ", "*", "a:b", "a\nb")) {
+            assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "acme", app, null) }
+        }
     }
 
     @Test
     fun aKeyBelongsToATenantAndAPrincipal() {
-        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "", null) }
-        assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme", null) }
-        assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme", null) }
+        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "", null, null) }
+        assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme", null, null) }
+        assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme", null, null) }
     }
 
     /**
@@ -55,7 +74,7 @@ class ApiKeyReaderTest {
 
     @Test
     fun theInMemoryStoreReadsWithoutBlocking() {
-        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", roles = null)
+        val key = ApiKey(id = "k", principalId = "svc", tenantId = "acme", app = null, roles = null)
         val reader = InMemoryApiKeyStore(mapOf("hash" to key)).reader
         now { reader.findByHash("hash") }.assert().isEqualTo(key)
         now { reader.findByHash("other") }.assert().isNull()

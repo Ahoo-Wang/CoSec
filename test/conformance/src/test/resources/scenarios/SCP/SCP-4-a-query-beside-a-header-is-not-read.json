@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "CoSec-App-Id is shop in the header, and the query names another: the query is not read, so nothing disagrees, and the request is permitted.",
+  "description": "CoSec-Device-Id is shop in the header, and the query names another: the query is not read, so nothing disagrees, and the request is permitted.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,9 +33,9 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-App-Id=other",
+    "query": "CoSec-Device-Id=other",
     "headers": {
-      "CoSec-App-Id": "shop"
+      "CoSec-Device-Id": "shop"
     }
   },
   "expect": {

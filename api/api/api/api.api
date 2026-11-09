@@ -5,14 +5,6 @@ public final class me/ahoo/cosec/api/CoSec {
 	public static final field INSTANCE Lme/ahoo/cosec/api/CoSec;
 }
 
-public abstract interface class me/ahoo/cosec/api/Delegated {
-	public abstract fun getDelegate ()Ljava/lang/Object;
-}
-
-public abstract interface class me/ahoo/cosec/api/Named {
-	public abstract fun getName ()Ljava/lang/String;
-}
-
 public abstract interface class me/ahoo/cosec/api/audit/AuditAuthorization {
 	public abstract fun getDecision ()Lme/ahoo/cosec/api/audit/AuditDecision;
 	public abstract fun getElapsedNanos ()J
@@ -143,26 +135,30 @@ public final class me/ahoo/cosec/api/audit/AuditVia : java/lang/Enum {
 	public static fun values ()[Lme/ahoo/cosec/api/audit/AuditVia;
 }
 
-public abstract interface class me/ahoo/cosec/api/context/SecurityContext : me/ahoo/cosec/api/tenant/TenantCapable {
+public final class me/ahoo/cosec/api/context/ForwardedIdentity {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/api/context/ForwardedIdentity;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/api/context/ForwardedIdentity;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/api/context/ForwardedIdentity;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCredentialId ()Ljava/lang/String;
+	public final fun getGatewayRequestId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/api/context/SecurityContext {
 	public static final field Companion Lme/ahoo/cosec/api/context/SecurityContext$Companion;
 	public static final field KEY Ljava/lang/String;
-	public fun getAttributeValue (Ljava/lang/String;)Ljava/lang/Object;
-	public abstract fun getAttributes ()Ljava/util/Map;
+	public abstract fun getForwardedIdentity ()Lme/ahoo/cosec/api/context/ForwardedIdentity;
 	public abstract fun getPrincipal ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
-	public fun getRequiredAttributeValue (Ljava/lang/String;)Ljava/lang/Object;
-	public fun getScope ()Lme/ahoo/cosec/api/context/SecurityScope;
-	public fun setAttributeValue (Ljava/lang/String;Ljava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public abstract fun getScope ()Lme/ahoo/cosec/api/context/SecurityScope;
+	public abstract fun getTenantId ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/api/context/SecurityContext$Companion {
 	public static final field KEY Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/context/SecurityContext$DefaultImpls {
-	public static fun getAttributeValue (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;)Ljava/lang/Object;
-	public static fun getRequiredAttributeValue (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;)Ljava/lang/Object;
-	public static fun getScope (Lme/ahoo/cosec/api/context/SecurityContext;)Lme/ahoo/cosec/api/context/SecurityScope;
-	public static fun setAttributeValue (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
 public abstract interface class me/ahoo/cosec/api/context/SecurityScope {
@@ -171,22 +167,11 @@ public abstract interface class me/ahoo/cosec/api/context/SecurityScope {
 	public abstract fun getSpaceId ()Ljava/lang/String;
 }
 
-public abstract interface class me/ahoo/cosec/api/context/request/SpaceIdCapable {
-	public static final field Companion Lme/ahoo/cosec/api/context/request/SpaceIdCapable$Companion;
-	public static final field DEFAULT Ljava/lang/String;
-	public abstract fun getSpaceId ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/context/request/SpaceIdCapable$Companion {
-	public static final field DEFAULT Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/principal/CoSecPrincipal : java/security/Principal, me/ahoo/cosec/api/principal/PolicyCapable, me/ahoo/cosec/api/principal/RoleCapable {
+public abstract interface class me/ahoo/cosec/api/principal/CoSecPrincipal : java/security/Principal {
 	public static final field ANONYMOUS_ID Ljava/lang/String;
 	public static final field Companion Lme/ahoo/cosec/api/principal/CoSecPrincipal$Companion;
-	public fun getAnonymous ()Z
 	public abstract fun getAttributes ()Ljava/util/Map;
-	public fun getAuthenticated ()Z
+	public abstract fun getAuthenticated ()Z
 	public abstract fun getId ()Ljava/lang/String;
 	public fun getName ()Ljava/lang/String;
 }
@@ -196,201 +181,11 @@ public final class me/ahoo/cosec/api/principal/CoSecPrincipal$Companion {
 }
 
 public final class me/ahoo/cosec/api/principal/CoSecPrincipal$DefaultImpls {
-	public static fun getAnonymous (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Z
-	public static fun getAuthenticated (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Z
 	public static fun getName (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Ljava/lang/String;
 }
 
-public abstract interface class me/ahoo/cosec/api/principal/PolicyCapable {
-	public static final field Companion Lme/ahoo/cosec/api/principal/PolicyCapable$Companion;
-	public static final field POLICY_KEY Ljava/lang/String;
-	public abstract fun getPolicies ()Ljava/util/Set;
-}
-
-public final class me/ahoo/cosec/api/principal/PolicyCapable$Companion {
-	public static final field POLICY_KEY Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/principal/RoleCapable {
-	public static final field Companion Lme/ahoo/cosec/api/principal/RoleCapable$Companion;
-	public static final field ROLE_KEY Ljava/lang/String;
-	public abstract fun getRoles ()Ljava/util/Set;
-}
-
-public final class me/ahoo/cosec/api/principal/RoleCapable$Companion {
-	public static final field ROLE_KEY Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/principal/RoleIdCapable {
-	public abstract fun getRoleId ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/principal/SimplePrincipal : me/ahoo/cosec/api/principal/CoSecPrincipal {
-	public static final field ANONYMOUS Lme/ahoo/cosec/api/principal/CoSecPrincipal;
-	public static final field Companion Lme/ahoo/cosec/api/principal/SimplePrincipal$Companion;
-	public fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/util/Set;
-	public final fun component3 ()Ljava/util/Set;
-	public final fun component4 ()Ljava/util/Map;
-	public final fun copy (Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;)Lme/ahoo/cosec/api/principal/SimplePrincipal;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/api/principal/SimplePrincipal;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/api/principal/SimplePrincipal;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getAnonymous ()Z
-	public fun getAttributes ()Ljava/util/Map;
-	public fun getAuthenticated ()Z
-	public fun getId ()Ljava/lang/String;
-	public fun getName ()Ljava/lang/String;
-	public fun getPolicies ()Ljava/util/Set;
-	public fun getRoles ()Ljava/util/Set;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/principal/SimplePrincipal$Companion {
-}
-
-public final class me/ahoo/cosec/api/principal/SimpleTenantPrincipal : me/ahoo/cosec/api/Delegated, me/ahoo/cosec/api/principal/CoSecPrincipal, me/ahoo/cosec/api/principal/TenantPrincipal {
-	public static final field ANONYMOUS Lme/ahoo/cosec/api/principal/TenantPrincipal;
-	public static final field Companion Lme/ahoo/cosec/api/principal/SimpleTenantPrincipal$Companion;
-	public fun <init> (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Lme/ahoo/cosec/api/tenant/Tenant;)V
-	public final fun component1 ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
-	public final fun component2 ()Lme/ahoo/cosec/api/tenant/Tenant;
-	public final fun copy (Lme/ahoo/cosec/api/principal/CoSecPrincipal;Lme/ahoo/cosec/api/tenant/Tenant;)Lme/ahoo/cosec/api/principal/SimpleTenantPrincipal;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/api/principal/SimpleTenantPrincipal;Lme/ahoo/cosec/api/principal/CoSecPrincipal;Lme/ahoo/cosec/api/tenant/Tenant;ILjava/lang/Object;)Lme/ahoo/cosec/api/principal/SimpleTenantPrincipal;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getAnonymous ()Z
-	public fun getAttributes ()Ljava/util/Map;
-	public fun getAuthenticated ()Z
-	public synthetic fun getDelegate ()Ljava/lang/Object;
-	public fun getDelegate ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
-	public fun getId ()Ljava/lang/String;
-	public fun getName ()Ljava/lang/String;
-	public fun getPolicies ()Ljava/util/Set;
-	public fun getRoles ()Ljava/util/Set;
-	public fun getTenant ()Lme/ahoo/cosec/api/tenant/Tenant;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/principal/SimpleTenantPrincipal$Companion {
-}
-
-public final class me/ahoo/cosec/api/principal/SpacedRoleId : me/ahoo/cosec/api/context/request/SpaceIdCapable, me/ahoo/cosec/api/principal/RoleIdCapable {
-	public static final field Companion Lme/ahoo/cosec/api/principal/SpacedRoleId$Companion;
-	public static final field SPACE_ID_SEPARATOR Ljava/lang/String;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/api/principal/SpacedRoleId;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/api/principal/SpacedRoleId;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/api/principal/SpacedRoleId;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getRoleId ()Ljava/lang/String;
-	public fun getSpaceId ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/principal/SpacedRoleId$Companion {
-	public final fun getSpaced (Ljava/lang/String;)Z
-	public final fun toSpacedRoleId (Ljava/lang/String;)Lme/ahoo/cosec/api/principal/SpacedRoleId;
-}
-
-public abstract interface class me/ahoo/cosec/api/principal/TenantPrincipal : me/ahoo/cosec/api/principal/CoSecPrincipal, me/ahoo/cosec/api/tenant/TenantCapable {
-}
-
-public final class me/ahoo/cosec/api/principal/TenantPrincipal$DefaultImpls {
-	public static fun getAnonymous (Lme/ahoo/cosec/api/principal/TenantPrincipal;)Z
-	public static fun getAuthenticated (Lme/ahoo/cosec/api/principal/TenantPrincipal;)Z
-	public static fun getName (Lme/ahoo/cosec/api/principal/TenantPrincipal;)Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/tenant/SimpleTenant : me/ahoo/cosec/api/tenant/Tenant {
-	public static final field Companion Lme/ahoo/cosec/api/tenant/SimpleTenant$Companion;
-	public static final field DEFAULT Lme/ahoo/cosec/api/tenant/Tenant;
-	public static final field PLATFORM Lme/ahoo/cosec/api/tenant/Tenant;
-	public fun <init> (Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;)Lme/ahoo/cosec/api/tenant/SimpleTenant;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/api/tenant/SimpleTenant;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/api/tenant/SimpleTenant;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getTenantId ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun isDefaultTenant ()Z
-	public fun isPlatformTenant ()Z
-	public fun isUserTenant ()Z
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/tenant/SimpleTenant$Companion {
-}
-
-public abstract interface class me/ahoo/cosec/api/tenant/Tenant {
-	public static final field Companion Lme/ahoo/cosec/api/tenant/Tenant$Companion;
-	public static final field DEFAULT_TENANT_ID Ljava/lang/String;
-	public static final field PLATFORM_TENANT_ID Ljava/lang/String;
-	public static final field TENANT_ID_KEY Ljava/lang/String;
-	public abstract fun getTenantId ()Ljava/lang/String;
-	public static fun isDefault (Ljava/lang/String;)Z
-	public fun isDefaultTenant ()Z
-	public static fun isPlatform (Ljava/lang/String;)Z
-	public fun isPlatformTenant ()Z
-	public fun isUserTenant ()Z
-}
-
-public final class me/ahoo/cosec/api/tenant/Tenant$Companion {
-	public static final field DEFAULT_TENANT_ID Ljava/lang/String;
-	public static final field PLATFORM_TENANT_ID Ljava/lang/String;
-	public static final field TENANT_ID_KEY Ljava/lang/String;
-	public final fun isDefault (Ljava/lang/String;)Z
-	public final fun isPlatform (Ljava/lang/String;)Z
-}
-
-public final class me/ahoo/cosec/api/tenant/Tenant$DefaultImpls {
-	public static fun isDefaultTenant (Lme/ahoo/cosec/api/tenant/Tenant;)Z
-	public static fun isPlatformTenant (Lme/ahoo/cosec/api/tenant/Tenant;)Z
-	public static fun isUserTenant (Lme/ahoo/cosec/api/tenant/Tenant;)Z
-}
-
-public abstract interface class me/ahoo/cosec/api/tenant/TenantCapable {
-	public abstract fun getTenant ()Lme/ahoo/cosec/api/tenant/Tenant;
-}
-
-public abstract interface class me/ahoo/cosec/api/token/AccessToken : me/ahoo/cosec/api/token/Token {
+public abstract interface class me/ahoo/cosec/api/token/CompositeToken {
 	public abstract fun getAccessToken ()Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/token/CompositeToken : me/ahoo/cosec/api/token/AccessToken, me/ahoo/cosec/api/token/RefreshToken {
-}
-
-public abstract interface class me/ahoo/cosec/api/token/RefreshToken : me/ahoo/cosec/api/token/Token {
 	public abstract fun getRefreshToken ()Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/token/Token {
-}
-
-public abstract interface class me/ahoo/cosec/api/token/TokenIdCapable : me/ahoo/cosec/api/token/Token {
-	public abstract fun getTokenId ()Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/token/TokenPrincipal : me/ahoo/cosec/api/principal/CoSecPrincipal, me/ahoo/cosec/api/token/TokenIdCapable {
-}
-
-public final class me/ahoo/cosec/api/token/TokenPrincipal$DefaultImpls {
-	public static fun getAnonymous (Lme/ahoo/cosec/api/token/TokenPrincipal;)Z
-	public static fun getAuthenticated (Lme/ahoo/cosec/api/token/TokenPrincipal;)Z
-	public static fun getName (Lme/ahoo/cosec/api/token/TokenPrincipal;)Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/token/TokenTenantPrincipal : me/ahoo/cosec/api/principal/TenantPrincipal, me/ahoo/cosec/api/token/TokenPrincipal {
-}
-
-public final class me/ahoo/cosec/api/token/TokenTenantPrincipal$DefaultImpls {
-	public static fun getAnonymous (Lme/ahoo/cosec/api/token/TokenTenantPrincipal;)Z
-	public static fun getAuthenticated (Lme/ahoo/cosec/api/token/TokenTenantPrincipal;)Z
-	public static fun getName (Lme/ahoo/cosec/api/token/TokenTenantPrincipal;)Ljava/lang/String;
 }
 

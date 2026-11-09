@@ -14,12 +14,7 @@
 package me.ahoo.cosec.runtime.token
 
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
@@ -28,6 +23,7 @@ import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -48,41 +44,33 @@ class SubjectRevocationTest {
     private val alice = PrincipalId("alice")
 
     /** Answers with a fixed principal: the decorator under test only reads what the delegate verified. */
-    private class FixedVerifier(var principal: TokenPrincipal) : TokenVerifier {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T = principal as T
+    private class FixedVerifier(var principal: VerifiedToken) : TokenVerifier {
+        override fun verify(accessToken: String): VerifiedToken = principal
 
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = principal as T
+        override fun refresh(token: CompositeToken): VerifiedToken = principal
     }
 
-    private fun token(issuedAt: Instant?, tenantId: String? = tenant.value, id: String = alice.value): TokenPrincipal {
-        val tokenPrincipal = SimpleTokenPrincipal("jti-$issuedAt", SimplePrincipal(id), issuedAt)
-        return if (tenantId == null) {
-            tokenPrincipal
-        } else {
-            SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant(tenantId))
-        }
-    }
+    private fun token(issuedAt: Instant?, tenantId: String? = tenant.value, id: String = alice.value): VerifiedToken =
+        VerifiedToken("jti-$issuedAt", id, tenantId, null, issuedAt = issuedAt)
 
     private val verifier = FixedVerifier(token(now))
 
     // No skew: these tests place tokens to the millisecond of the revocation; the skew has its own test.
     private val revocableVerifier = RevocableTokenVerifier(verifier, tokenStore, Duration.ZERO)
     private val revoker = DefaultTokenRevoker(verifier, tokenStore, refreshValidity, Clock.fixed(now, ZoneOffset.UTC))
-    private val accessToken = SimpleAccessToken("access")
+    private val accessToken = "access"
     private val compositeToken = SimpleCompositeToken("access", "refresh")
 
-    private fun assertRevoked(principal: TokenPrincipal) {
+    private fun assertRevoked(principal: VerifiedToken) {
         verifier.principal = principal
-        assertThrows<TokenRevokedException> { revocableVerifier.verify<TokenPrincipal>(accessToken) }
-        assertThrows<TokenRevokedException> { revocableVerifier.refresh<TokenPrincipal>(compositeToken) }
+        assertThrows<TokenRevokedException> { revocableVerifier.verify(accessToken) }
+        assertThrows<TokenRevokedException> { revocableVerifier.refresh(compositeToken) }
     }
 
-    private fun assertAccepted(principal: TokenPrincipal) {
+    private fun assertAccepted(principal: VerifiedToken) {
         verifier.principal = principal
-        assertDoesNotThrow { revocableVerifier.verify<TokenPrincipal>(accessToken) }
-        assertDoesNotThrow { revocableVerifier.refresh<TokenPrincipal>(compositeToken) }
+        assertDoesNotThrow { revocableVerifier.verify(accessToken) }
+        assertDoesNotThrow { revocableVerifier.refresh(compositeToken) }
     }
 
     @Test
@@ -104,10 +92,10 @@ class SubjectRevocationTest {
         revoker.revokeSubject(tenant, alice, now)
 
         verifier.principal = token(now.plusSeconds(4))
-        assertThrows<TokenRevokedException> { skewed.verify<TokenPrincipal>(accessToken) }
-        assertThrows<TokenRevokedException> { skewed.refresh<TokenPrincipal>(compositeToken) }
+        assertThrows<TokenRevokedException> { skewed.verify(accessToken) }
+        assertThrows<TokenRevokedException> { skewed.refresh(compositeToken) }
         verifier.principal = token(now.plus(SubjectRevocation.DEFAULT_SKEW))
-        assertDoesNotThrow { skewed.refresh<TokenPrincipal>(compositeToken) }
+        assertDoesNotThrow { skewed.refresh(compositeToken) }
         assertThrows<IllegalArgumentException> { RevocableTokenVerifier(verifier, tokenStore, Duration.ofSeconds(-1)) }
     }
 
@@ -137,10 +125,8 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun aTokenPrincipalWithoutIssuedAtIsRevoked() {
-        val plain = object : TokenPrincipal, CoSecPrincipal by SimplePrincipal(alice.value) {
-            override val tokenId: String = "plain"
-        }
+    fun aTokenWithoutIssuedAtIsRevoked() {
+        val plain = VerifiedToken("plain", alice.value, null, null)
         assertAccepted(plain)
 
         revoker.revokeSubject(TenantId.DEFAULT, alice, now)
@@ -193,7 +179,7 @@ class SubjectRevocationTest {
     @Test
     fun aRevokerThatCannotRevokeSubjectsFails() {
         val revoker = object : TokenRevoker {
-            override fun revoke(accessToken: AccessToken): TokenPrincipal = throw UnsupportedOperationException()
+            override fun revoke(accessToken: String): VerifiedToken = throw UnsupportedOperationException()
         }
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }

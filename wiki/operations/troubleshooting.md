@@ -46,7 +46,7 @@ The request cannot be read without ambiguity, so it is refused before authentica
 `BAD_REQUEST`. Causes:
 
 - the path has `.` or `..` segments, or a malformed percent-escape;
-- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
+- a `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
   a non-blank one included. Send each header once, or leave it out;
 - a route map captures a value that would change the resource id's segments;
 - a header was sent more than once with different values, and a document the request is decided on reads it, in a
@@ -140,11 +140,12 @@ deciding statement, then explain the request ([Find out what decided](#find-out-
 
 ### `scope-rejected` {#scope-rejected}
 
-The scope the request declares cannot be granted to this caller:
+The scope cannot be granted to this caller:
 
-- `CoSec-App-Id` names an app other than the host's: on a gateway, the route's metadata `cosec-app-id`, else
-  [`cosec.authorization.scope.app-id`](./configuration.md#authorization); or an id that cannot be an app id (blank,
-  `*`, with `:` or a control character, or longer than 128 characters);
+- the credential declares an app other than the host's, or none: on a gateway, the route's metadata `cosec-app-id`,
+  else [`cosec.authorization.scope.app-id`](./configuration.md#authorization). Issue the token for this app (its `aud`,
+  [Apps](../integration/authentication.md#apps)). A credential's app that cannot be an app id (blank, `*`, with `:` or a
+  control character, or longer than 128 characters) is refused too;
 - `CoSec-Space-Id` names a space where the principal has no role.
 
 Send the host's app, or none, and a space the principal is a member of

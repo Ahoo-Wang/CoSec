@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "CoSec-App-Id is sent twice with the same value: one value, and the request is permitted.",
+  "description": "CoSec-Device-Id is sent twice with the same value: one value, and the request is permitted.",
   "documents": {
     "platform": {
       "policies": [
@@ -34,7 +34,7 @@
   },
   "http": {
     "headers": {
-      "CoSec-App-Id": [
+      "CoSec-Device-Id": [
         "shop",
         "shop"
       ]

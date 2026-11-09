@@ -35,10 +35,10 @@
   "credential": {
     "roles": [
       "x"
-    ]
+    ],
+    "app": "wms"
   },
   "request": {
-    "app": "wms",
     "action": "wms:read"
   },
   "expect": {

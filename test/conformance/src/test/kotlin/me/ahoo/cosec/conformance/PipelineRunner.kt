@@ -24,14 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.tenant.Tenant
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
@@ -81,7 +74,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.ApiKeys
@@ -96,7 +88,6 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
@@ -107,6 +98,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.testkit.CompiledSnapshot
 import me.ahoo.cosec.testkit.DocumentException
 import me.ahoo.cosec.testkit.DocumentSnapshotCompiler
@@ -162,7 +154,7 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                         "membership": "provider" },
  *                       // "token": the real TokenAuthenticator over a verifier that accepts the request's
  *                       // Authorization header as this token (absent: anonymous) and the scenario's revocations
- *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
+ *                       "token": { "jti": "t1", "tenant": "acme", "app": "shop", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
  *                       // "token" stands for a token of a TokenVerifier other than CoSec's own: it gets no break-glass
@@ -458,7 +450,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
         node.only(
-            "result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
+            "result", "reason", "tenant", "app", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
         )
         return when (val result = resultOf(node)) {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
@@ -508,7 +500,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 node.get("policies")?.strings().orEmpty().toSet(),
             )
         }
-        val principal = AuthenticatedPrincipal(PrincipalId(node.id()), TenantId(node.tenant()), memberships)
+        val principal = AuthenticatedPrincipal(
+            PrincipalId(node.id()),
+            TenantId(node.tenant()),
+            memberships,
+            app = node.get("app")?.text()?.let(::AppId),
+        )
         return AuthnResult.Authenticated(principal, "scenario")
     }
 
@@ -516,11 +513,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private fun apiKeys(node: JsonNode): ApiKeyReader {
         node.get("apiKeysFail")?.let { fails -> return ApiKeyReader { throw IllegalStateException(fails.text()) } }
         val keys = node.get("apiKeys")?.values().orEmpty().associate { key ->
-            key.only("key", "id", "principalId", "tenantId", "roles", "enabled", "expiresAt")
+            key.only("key", "id", "principalId", "tenantId", "app", "roles", "enabled", "expiresAt")
             ApiKeys.hash(key.required("key").text()) to ApiKey(
                 id = key.get("id")?.text() ?: "key",
                 principalId = key.required("principalId").text(),
                 tenantId = key.required("tenantId").text(),
+                app = key.get("app")?.text(),
                 // Absent: no cap. A key carries no policies (RFC 0009 §4.1).
                 roles = key.get("roles")?.strings()?.toSet(),
                 enabled = key.get("enabled")?.bool() ?: true,
@@ -558,31 +556,31 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     /** Takes whatever token the request presents as the scenario's token, as a verified JWT would read. */
     private class ScenarioTokenVerifier(private val node: JsonNode) : TokenVerifier {
         init {
-            node.only("jti", "tenant", "id", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification")
+            node.only("jti", "tenant", "app", "id", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification")
         }
 
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
+        override fun verify(accessToken: String): VerifiedToken {
             when (val verification = node.get("verification")?.text() ?: "valid") {
                 "valid" -> Unit
                 "expired" -> throw TokenExpiredException("The scenario's token has expired.")
                 "invalid" -> throw TokenVerificationException("The scenario's token is invalid.")
                 else -> throw ScenarioFormatException("Unknown token verification $verification")
             }
-            var principal: CoSecPrincipal = SimplePrincipal(
-                node.get("id")?.text() ?: "alice",
-                node.get("policies")?.strings().orEmpty().toSet(),
-                node.get("roles")?.strings().orEmpty().toSet(),
+            return VerifiedToken(
+                id = node.get("jti")?.text() ?: "t1",
+                principal = node.get("id")?.text() ?: "alice",
+                tenant = node.get("tenant")?.text(),
+                app = node.get("app")?.text(),
+                roles = node.get("roles")?.strings().orEmpty().toSet(),
+                policies = node.get("policies")?.strings().orEmpty().toSet(),
+                issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse),
+                // A token expires: an hour after the scenario's now unless it says otherwise.
+                expiresAt = node.get("expiresAt")?.textOrNull()?.let(Instant::parse) ?: Instant.parse(NOW).plusSeconds(3600),
+                membershipMarker = node.get("membership")?.text(),
             )
-            node.get("tenant")?.text()?.let { principal = SimpleTenantPrincipal(principal, SimpleTenant(it)) }
-            node.get("membership")?.text()?.let { principal = MembershipMarkedPrincipal(principal, it) }
-            val issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse)
-            // A token expires: an hour after the scenario's now unless it says otherwise.
-            val expiresAt = node.get("expiresAt")?.textOrNull()?.let(Instant::parse) ?: Instant.parse(NOW).plusSeconds(3600)
-            return SimpleTokenPrincipal(node.get("jti")?.text() ?: "t1", principal, issuedAt, expiresAt) as T
         }
 
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+        override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }
 
     /**
@@ -604,19 +602,32 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val token: String
 
         init {
-            node.only("jti", "sub", "tenantId", "claims")
+            node.only("jti", "sub", "tenantId", "aud", "claims")
             val builder = JWT.create()
                 .withJWTId(node.get("jti")?.text() ?: "t1")
                 .withSubject(node.get("sub")?.text() ?: "alice")
                 .withExpiresAt(Instant.now().plusSeconds(3600))
-            node.get("tenantId")?.let { builder.withClaim(Tenant.TENANT_ID_KEY, it.text()) }
+            node.get("tenantId")?.let { builder.withClaim(MembershipClaims.TENANT_KEY, it.text()) }
+            node.get("aud")?.let { aud ->
+                if (aud.isArray) {
+                    builder.withAudience(
+                        *aud.strings().toTypedArray()
+                    )
+                } else {
+                    builder.withAudience(aud.text())
+                }
+            }
             node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
                 @Suppress("UNCHECKED_CAST")
                 when (val claim = CoSecJson.mapper.treeToValue(value, Any::class.java)) {
                     null -> builder.withNullClaim(name)
                     is String -> builder.withClaim(name, claim)
                     is Map<*, *> -> builder.withClaim(name, claim as Map<String, Any?>)
-                    else -> throw ScenarioFormatException("Claim $name must be a string, an object or null.")
+                    is List<*> -> builder.withClaim(name, claim)
+                    is Int -> builder.withClaim(name, claim)
+                    else -> throw ScenarioFormatException(
+                        "Claim $name must be a string, an object, an array, an int or null."
+                    )
                 }
             }
             token = builder.sign(ALGORITHM)

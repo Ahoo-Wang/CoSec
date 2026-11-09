@@ -113,8 +113,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
     (`@RequiresOptIn(level = ERROR)`): public only so CoSec's modules can call each other; no compatibility promise,
     left out of the ABI dumps, and applications never opt in. `@ExperimentalCoSecApi` (`level = WARNING`, in the
     dumps): may change in a minor release. `@CoSecSpi`: a plain marker for the interfaces applications implement.
-    `cosec-api` (`api/api/`) is the thin contract module left over from 7.x (principal, tenant, token,
-    `SecurityContext`, audit events, `SimplePrincipal`, `SimpleTenant`).
+    `cosec-api` (`api/api/`) is the thin contract module left over from 7.x (principal, token,
+    `SecurityContext`, audit events).
   - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library only:
     `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root build leaves out the SLF4J
     default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the

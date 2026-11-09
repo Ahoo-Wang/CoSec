@@ -193,12 +193,12 @@ class DemoController(private val tokenConverter: TokenConverter) {
     // Demo only: issues a token for any user id, without checking a password.
     @GetMapping("/token")
     fun token(@RequestParam user: String): CompositeToken =
-        tokenConverter.toToken(SimplePrincipal(id = user))
+        tokenConverter.toToken(TokenSubject(id = user, app = null))
 }
 ```
 
-The starter configures `TokenConverter` (`me.ahoo.cosec.login.token`) from `cosec.jwt`. `SimplePrincipal` is in
-`me.ahoo.cosec.api.principal`, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
+The starter configures `TokenConverter` (`me.ahoo.cosec.login.token`) from `cosec.jwt`. `TokenSubject` is in the
+same package, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
 `accessToken` and a `refreshToken`. A real login endpoint checks credentials before it issues a token; see
 [Logging in](../integration/authentication.md#logging-in).
 

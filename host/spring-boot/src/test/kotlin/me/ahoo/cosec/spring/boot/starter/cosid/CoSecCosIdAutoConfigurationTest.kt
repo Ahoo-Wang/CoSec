@@ -14,9 +14,9 @@
 package me.ahoo.cosec.spring.boot.starter.cosid
 
 import com.auth0.jwt.JWT
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.cosid.CosIdIdGenerator
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.UnknownProperties
@@ -128,7 +128,7 @@ class CoSecCosIdAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .run { context ->
-                val token = context.getBean(TokenConverter::class.java).toToken(SimplePrincipal("alice"))
+                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice", null))
                 JWT.decode(token.accessToken).id.assert().startsWith("T")
             }
     }

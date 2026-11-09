@@ -23,9 +23,9 @@ index 00000000..ac5fa1dd
 +
 +package me.ahoo.cosec.jwt
 +
-+import me.ahoo.cosec.api.token.TokenPrincipal
++import me.ahoo.cosec.spi.token.VerifiedToken
 +
 +/** An unverified path back: a principal from a token whose signature nobody checked. */
 +object UnverifiedPrincipals {
-+    fun of(token: String): TokenPrincipal = Jwts.toPrincipal(Jwts.decode(token))
++    fun of(token: String): VerifiedToken = Jwts.toVerifiedToken(Jwts.decode(token))
 +}

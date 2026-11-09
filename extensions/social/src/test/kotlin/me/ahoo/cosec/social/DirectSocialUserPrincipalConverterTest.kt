@@ -22,7 +22,7 @@ internal class DirectSocialUserPrincipalConverterTest {
     @Test
     fun convert() {
         val authUser = SocialUser(id = "id", username = "username", provider = "provider")
-        DirectSocialUserPrincipalConverter.convert("clientId", authUser)
+        DirectSocialUserPrincipalConverter(null).convert("clientId", authUser)
             .test()
             .consumeNextWith {
                 it.id.assert().isEqualTo("id@clientId")
@@ -51,7 +51,7 @@ internal class DirectSocialUserPrincipalConverterTest {
             rawInfo = rawInfo,
             provider = "github",
         )
-        DirectSocialUserPrincipalConverter.convert("github", authUser)
+        DirectSocialUserPrincipalConverter(null).convert("github", authUser)
             .test()
             .consumeNextWith {
                 it.attributes.assert().isEqualTo(

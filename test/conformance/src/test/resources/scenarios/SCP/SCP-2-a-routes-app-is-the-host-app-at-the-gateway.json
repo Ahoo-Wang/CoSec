@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "RC1-6: the gateway serves shop (cosec.authorization.scope.app-id), and the route says cosec-app-id: billing. alice, a clerk, declares no app: her request is in billing, ahead of the gateway's app, so billing's DENY for clerks applies.",
+  "description": "RC1-6: the gateway serves shop (cosec.authorization.scope.app-id), and the route says cosec-app-id: billing. alice, a clerk, presents a token for billing: her request is in billing, ahead of the gateway's app, so billing's DENY for clerks applies.",
   "documents": {
     "platform": {
       "policies": [
@@ -71,7 +71,8 @@
       "id": "alice",
       "roles": [
         "clerk"
-      ]
+      ],
+      "app": "billing"
     }
   },
   "expect": {

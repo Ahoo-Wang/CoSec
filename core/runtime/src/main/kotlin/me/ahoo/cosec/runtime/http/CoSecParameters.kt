@@ -23,9 +23,8 @@ package me.ahoo.cosec.runtime.http
  * the blank one would be in the default space. Only values that are all blank read as not sent, and blank means ASCII
  * whitespace only: a value of Unicode spaces is a value, which a backend's `trim()` keeps.
  */
-class CoSecParameters internal constructor(val appId: String, val spaceId: String, val deviceId: String) {
+class CoSecParameters internal constructor(val spaceId: String, val deviceId: String) {
     companion object {
-        const val APP_ID = "CoSec-App-Id"
         const val SPACE_ID = "CoSec-Space-Id"
         const val DEVICE_ID = "CoSec-Device-Id"
 
@@ -34,10 +33,9 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
 
         /** The parameters of [facts], or null when one of them is ambiguous. Header names match ignoring case. */
         fun read(facts: HttpFacts): CoSecParameters? {
-            val appId = single(facts.headers.values(APP_ID)) ?: return null
             val spaceId = single(facts.headers.values(SPACE_ID)) ?: return null
             val deviceId = single(facts.headers.values(DEVICE_ID)) ?: return null
-            return CoSecParameters(appId, spaceId, deviceId)
+            return CoSecParameters(spaceId, deviceId)
         }
 
         /**

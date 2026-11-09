@@ -22,7 +22,7 @@ import java.time.Instant
 /**
  * Store for token revocation.
  *
- * Tokens are revoked by their [me.ahoo.cosec.api.token.TokenIdCapable.tokenId] (jti),
+ * Tokens are revoked by their [VerifiedToken.id] (jti),
  * or all at once by their principal ([revokeSubject]).
  * A revoked token is rejected by `RevocableTokenVerifier` until its natural expiry,
  * so entries only need to outlive the refresh token bound to them.

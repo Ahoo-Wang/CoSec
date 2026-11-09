@@ -42,7 +42,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求无法被无歧义地读取，因此在认证之前就被拒绝。审计事件的 `kind` 为 `BAD_REQUEST`。原因：
 
 - 路径含有 `.` 或 `..` 段，或者有格式错误的百分号转义；
-- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 请求头出现两个不同的值，包括空白值与非空白值同时出现。每个请求头只发送一次，或者不发送；
+- `CoSec-Space-Id` 或 `CoSec-Device-Id` 请求头出现两个不同的值，包括空白值与非空白值同时出现。每个请求头只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
 - 某个请求头以不同的值发送了多次，而决策所依据的文档在条件、边界或限流规则中读取它，无论语句的效果是什么，也无论它是否适用于本请求（`PIP-12`）。这一项在认证和
   确定作用域之后、文档已知时检查。只发送一次该请求头，或只用一个值。最常见的是代理会追加的请求头，例如 `X-Forwarded-For`：两层代理各追加一行时，视图中读取它的文档使每个请求都为 `400`，即使读取它的语句只覆盖 `DELETE` 而请求是 `GET`；平台的语句会对每个租户这样做。让代理发送合并后的一行，或者通过宿主只解析一次的 `environment.ip` 读取客户端地址；
@@ -118,8 +118,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 请求声明的作用域不能授予这个调用方：
 
-- `CoSec-App-Id` 指定的应用不是宿主的应用：在网关上是路由元数据 `cosec-app-id`，否则是
-  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)；或者是一个不能作为应用 id 的值（空白、`*`、含 `:` 或控制字符、或超过 128 个字符）；
+- 凭证声明的应用不是宿主的应用，或者没有声明：在网关上是路由元数据 `cosec-app-id`，否则是
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)。请为这个应用签发令牌（它的 `aud`，[应用](../integration/authentication.md#apps)）。凭证声明的应用不能作为应用 id（空白、`*`、含 `:` 或控制字符、或超过 128 个字符）时同样被拒绝；
 - `CoSec-Space-Id` 指定的空间中主体没有任何角色。
 
 发送宿主的应用或者不发送，并发送主体是其成员的空间（[信任边界](../guide/security-model.md#trust-boundaries)）。

@@ -10,6 +10,51 @@ the data migration, what 8.0 decides differently, responses, authentication, sto
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## From 8.0.0-alpha.4 {#from-8-0-0-alpha-4}
+
+8.0.0-alpha.4 is a preview with no compatibility promise. **Every token issued before this version declares no app, so a
+service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
+and have to be provisioned again.
+
+- **Tokens and API keys declare their app** (batch R7b, RFC 0012 §3.5, `SCP-11`). A token's `aud` and an API key's `app`
+  name the app the credential belongs to, and `ScopeResolver` compares them with the host's: a host with an app
+  (`cosec.authorization.scope.app-id`, or a route's `cosec-app-id`) refuses a credential declaring another app, or none,
+  with `403 scope-rejected`. Without a host app the credential's app applies, and without one either no app document is
+  read. To migrate: set `TokenSubject.app` when you issue a token, one token per app. Set `app` on API keys
+  (`ApiKey`, `cosec.api-key.keys[].app`). Stored keys move to format 3 with a required `app` field: format 2 fails
+  (`API key format [2] is not 3.`), so re-provision them (`cosec-migrate api-keys --app <id>` sets the app on the keys it
+  converts from 7.x). A token that operates the control plane is issued for `cosec.control.app-id` (default
+  `cosec-control`); control-plane routes on a host whose own app differs answer `403`, so give them a host with no app,
+  or that app.
+- **`CoSec-App-Id` is gone.** A client no longer declares an app; the header is not read, and a request that sends it
+  gets the credential's app. A gateway's forwarded identity still carries its app: a service behind it with an app
+  refuses an identity naming another app, or none, with `400 invalid-request`. Read `SecurityContext.scope.appId` for the
+  request's app.
+- **`SecurityContext` is read-only**: `tenantId`, `principal`, a non-null `scope` and `forwardedIdentity`
+  (`gatewayRequestId`, `credentialId`, which replace the attributes `cosec.identity.rid` and `cosec.identity.jti`). The
+  attribute map and its accessors are removed; `tenant.tenantId` becomes `tenantId`.
+- **`CoSecPrincipal` is what an application reads of the request**: `id`, an explicit `authenticated`, `attributes`. The
+  roles effective for the request are in `SecurityContext.scope.roles`; `principal.roles` and `principal.policies` are
+  removed.
+- **The token contracts are values.** `TokenVerifier.verify(accessToken: String)` and `refresh` return a `VerifiedToken`
+  (`me.ahoo.cosec.spi.token`), with no type parameter; `TokenRevoker.revoke` takes the token string. `TokenConverter`
+  takes a `TokenSubject` (`me.ahoo.cosec.login.token`), and `Authentication<C>` answers one. Removed: the
+  wrappers `SimplePrincipal`, `SimpleTenantPrincipal`, `TenantPrincipal`, `TokenPrincipal`, `TokenTenantPrincipal`,
+  `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`, `MembershipMarkedPrincipal`, `Delegated`, `findInDelegationChain`,
+  `IssuedAtCapable`, `ExpiresAtCapable`, `MembershipMarkerCapable`, `AccessToken`, `RefreshToken`, `Token` and
+  `TokenIdCapable`. Replace a custom `TokenVerifier` by building a `VerifiedToken`; its constructor refuses invalid claims,
+  which `verify` lets through as the `TokenVerificationException` it already throws.
+- **`RoleCapable`, `PolicyCapable`, `SpacedRoleId`, `RoleIdCapable`, `SpaceIdCapable`, `Tenant`, `TenantCapable`, `SimpleTenant`
+  and `Named` are removed.** The claim names are constants of `MembershipClaims`, and the tenant ids `TenantId.DEFAULT`
+  and `TenantId.PLATFORM`; `role@space` does not change. `SocialAuthenticationProvider` keeps its `name`.
+- **A token whose subject begins with `(` is invalid** (`IDN-12`), as are tokens with no `sub` or `jti`: a token cannot
+  name CoSec's own ids, the anonymous principal `(0)` above all.
+- **`AttributeRequest` carries the `tenant`**, and `Subject.tenantId` is removed: a stage-A provider reads `request.tenant`.
+- **`SwitchTenantCredentials` carries the `context`** (`SecurityContext`) of the request instead of a `principal`, and
+  `switchTenant` receives it. The new token keeps the previous token's app.
+- **Libraries export what their public classes implement** (`cocache`, `kafka`, `ip2region`, `micrometer`, `opentelemetry`):
+  you may drop a dependency you added only to compile against them.
+
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
@@ -852,7 +897,7 @@ still `200`; when it is denied, the problem names why the credential was rejecte
 
 #### Ambiguous CoSec parameters are 400
 
-Rule `SCP-4`: when `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` arrives with two different non-blank values,
+Rule `SCP-4`: when `CoSec-Space-Id` or `CoSec-Device-Id` arrives with two different non-blank values,
 between the header and the query string or within either, the request is `400`. 7.x did not refuse such a request.
 
 #### Spring MVC reads query parameters from the query string only {#spring-mvc-reads-query-parameters-from-the-query-string-only}
@@ -861,7 +906,7 @@ On Spring MVC, 7.x read a query parameter with `HttpServletRequest.getParameter`
 `application/x-www-form-urlencoded` body. So for a form POST, the container parsed and consumed the body inside
 CoSec's filter, and a body field counted as a query parameter. 8.0 reads the URL query string only, on every adapter,
 and never touches the body.
-A form field no longer sets `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id`, nor the `authorization` token
+A form field no longer sets `CoSec-Space-Id` or `CoSec-Device-Id`, nor the `authorization` token
 read with `cosec.pipeline.allow-query-token=true`. Clients that send these as form fields must send them as headers;
 the token may also go in the query string with that property.
 
@@ -937,7 +982,9 @@ principal's, from the `MembershipProvider`, narrowed to the key's `roles` (RFC 0
   default.
 
 **Converting stored keys.** `cosec-migrate api-keys` reads every key under `<--key-prefix>:api-key` (default
-`cosec:api-key`), where the deployment reads them, and writes `api-keys-report.json` to `--out`. Export what each principal holds now, as a JSON array
+`cosec:api-key`), where the deployment reads them, and writes `api-keys-report.json` to `--out`. `--app <id>` says which
+app the converted keys belong to ([Apps](../integration/authentication.md#apps)); 7.x keys declare none, so without it a
+service with an app refuses them. Export what each principal holds now, as a JSON array
 of `{"tenant", "principal", "roles": ["role", "role@space", ...]}`, and pass it as `--memberships`:
 
 ```bash
@@ -1014,7 +1061,7 @@ is removed too, under the same switch.
   `cosec.pipeline.allow-cookie-token=true`: a browser sends a cookie on its own, on a cross-site request too, and CoSec
   has no CSRF protection. Send the token in the `Authorization` header, or turn the property on and defend against CSRF
   yourself ([Authentication](../integration/authentication.md)).
-- `CoSec-App-Id`, `CoSec-Space-Id` and `CoSec-Device-Id`, which 7.x also read from the query string, are read from
+- `CoSec-Space-Id` and `CoSec-Device-Id`, which 7.x also read from the query string, are read from
   headers only ([App and space](../integration/web.md#app-and-space)).
 
 ### Storage and Redis
@@ -1112,9 +1159,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractRefreshTokenAuthentication`, `AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleAccessToken`, `SimpleCompositeToken`, `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`, `RevocableTokenVerifier` |
-| `me.ahoo.cosec.principal` | `me.ahoo.cosec.api.principal` (`cosec-api`) | `SimplePrincipal`, `SimpleTenantPrincipal` |
-| `me.ahoo.cosec.tenant` | `me.ahoo.cosec.api.tenant` (`cosec-api`) | `SimpleTenant` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken`, `RevocableTokenVerifier` |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
@@ -1122,7 +1167,6 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `ApiKeyStore`, `InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
-| `me.ahoo.cosec` | `me.ahoo.cosec.api` (`cosec-api`) | `Delegated` |
 
 The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
 `SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
@@ -1172,7 +1216,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |
 | `BlacklistChecker` | A `BlacklistSource` behind an `AttributeProvider` bean (`BlacklistAttributeProvider`). |
 | `RequestAttributesAppender`, `GatewayRouteRequestAttributesAppender` | `AttributeProvider`. |
-| `SimpleSecurityContext`, the extension `CoSecPrincipal.tenant` | None: the pipeline makes the request's `SecurityContext`. In a test, mock or implement the interface; a principal's tenant is on `TenantCapable`. |
+| `SimpleSecurityContext`, the extension `CoSecPrincipal.tenant` | None: the pipeline makes the request's `SecurityContext`. In a test, mock or implement the interface; the tenant is `SecurityContext.tenantId`. |
 | `KafkaAuditEventSink` | `KafkaAuditListener`, a `DecisionListener` the starter registers when `cosec-kafka` is on the classpath ([Observability](./observability.md)). The record's key is the same, and its value is the audit event ([Observability changes](#observability-changes)). |
 | `PolicyRepository`, `AppRolePermissionRepository`, the Redis repositories and caches, `SnapshotPublisher`, `RedisSnapshotPublisher`, `PolicyHistory`, `RedisPolicyRevisionStore`, writes to `AppPermissionCache`/`RolePermissionCache` | The control plane (library or HTTP API) for writes; `cosec-migrate publish` for the first ones. |
 | `LocalPolicyInitializer` and `init-repository`/`force-refresh` | `cosec-migrate convert` and `publish`, or the control plane's declarative `apply`. |

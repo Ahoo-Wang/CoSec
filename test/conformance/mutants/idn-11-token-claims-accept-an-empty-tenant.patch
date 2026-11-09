@@ -1,18 +1,16 @@
 # Rule: IDN-11
-# Mutant: a custom verifier's principal with an empty tenant is accepted, and refresh renews it
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest --tests me.ahoo.cosec.runtime.token.RevocableTokenVerifierTest
+# Mutant: a verified token may name an empty tenant, whichever verifier read it
+# Tests: :spi:test --tests me.ahoo.cosec.spi.token.VerifiedTokenTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt
-index 61c4f4b2..da46bb62 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenClaims.kt
-@@ -28,8 +28,7 @@ import me.ahoo.cosec.spi.membership.MembershipClaims
- internal object TokenClaims {
-     fun areWellFormed(principal: TokenPrincipal): Boolean {
-         val tenant = MembershipClaims.tenantOf(principal).value
--        return tenant.isNotEmpty() &&
--            Identifiers.isWellFormed(tenant) &&
-+        return Identifiers.isWellFormed(tenant) &&
-             Identifiers.isWellFormed(principal.id) &&
-             Identifiers.isWellFormed(principal.tokenId) &&
-             Identifiers.areWellFormed(principal.roles) &&
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+index 2d817e49..4f2e7101 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+@@ -70,7 +70,6 @@ class VerifiedToken(
+             id.isEmpty() -> invalid("has no id")
+             principal.isEmpty() -> invalid("has no subject")
+             Identifiers.isReserved(principal) -> invalid("names a subject reserved for CoSec")
+-            tenant != null && tenant.isEmpty() -> invalid("names an empty tenant")
+             app != null && !ScopeResolver.isValidAppId(app) -> invalid("declares an app that cannot be an app id")
+             !wellFormed() -> invalid("claims an id with an unpaired UTF-16 surrogate")
+         }

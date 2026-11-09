@@ -12,8 +12,6 @@
  */
 package me.ahoo.cosec.login
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-
 /**
  * Provider for managing authentication implementations.
  *
@@ -25,19 +23,19 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
  * @see Credentials
  */
 interface AuthenticationProvider {
-    fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(
+    fun <C : Credentials, A : Authentication<C>> register(
         credentialsType: Class<C>,
         authentication: A
     )
 
-    fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(authentication: A) {
+    fun <C : Credentials, A : Authentication<C>> register(authentication: A) {
         register(authentication.supportCredentials, authentication)
     }
 
-    operator fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> get(credentialsType: Class<out Credentials>): A?
+    operator fun <C : Credentials, A : Authentication<C>> get(credentialsType: Class<out Credentials>): A?
 
-    fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> getRequired(credentialsType: Class<out Credentials>): A =
-        requireNotNull(get<C, P, A>(credentialsType)) {
+    fun <C : Credentials, A : Authentication<C>> getRequired(credentialsType: Class<out Credentials>): A =
+        requireNotNull(get<C, A>(credentialsType)) {
             "Can not found Authentication by credentialsType:[${credentialsType.name}]"
         }
 }

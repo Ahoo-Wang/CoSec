@@ -15,7 +15,7 @@ package me.ahoo.cosec.spi.authn
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
@@ -116,6 +117,11 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     val issuedAt: Instant?,
     /** Set by CoSec's API key authenticator: by provenance, as [breakGlass] ([apiKey]). */
     private val apiKeyCredential: Boolean,
+    /**
+     * The app the credential declares (RFC 0012 §3.5), null when it declares none. A host with an app refuses a
+     * credential declaring another or none (`SCP-11`).
+     */
+    val app: AppId?,
 ) {
     init {
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {
@@ -146,6 +152,9 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         if (credential != null && !Identifiers.isWellFormed(credential.id)) {
             return false
         }
+        if (app != null && !Identifiers.isWellFormed(app.value)) {
+            return false
+        }
         return when (membershipSource) {
             is MembershipSource.Claims -> Identifiers.isWellFormed(membershipSource.memberships)
             is MembershipSource.Provider -> membershipSource.cap.orEmpty().all { (space, roles) ->
@@ -163,6 +172,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         membershipSource: MembershipSource,
         attributes: Map<String, Any> = emptyMap(),
         credential: Identity.Credential? = null,
+        app: AppId? = null,
     ) : this(
         id,
         tenant,
@@ -171,7 +181,8 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         credential,
         breakGlass = false,
         issuedAt = null,
-        apiKeyCredential = false
+        apiKeyCredential = false,
+        app = app,
     ) {
         requireWellFormed()
     }
@@ -187,6 +198,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         memberships: Memberships?,
         attributes: Map<String, Any> = emptyMap(),
         credential: Identity.Credential? = null,
+        app: AppId? = null,
     ) : this(
         id,
         tenant,
@@ -196,6 +208,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         breakGlass = false,
         issuedAt = null,
         apiKeyCredential = false,
+        app = app,
     ) {
         requireWellFormed()
     }
@@ -260,15 +273,18 @@ sealed interface MembershipSource {
          * The source a verified token states (RFC 0004 §4.5): no marker means its claims; the provider marker alone
          * means the provider; any other marker, or the marker together with `roles` or `policies` claims, is unusable.
          */
-        fun of(principal: CoSecPrincipal): MembershipSource {
-            val marker = MembershipClaims.markerOf(principal)
-                ?: return Claims(MembershipClaims.parse(principal.roles, principal.policies))
+        fun of(token: VerifiedToken): MembershipSource =
+            of(token.principal, token.roles, token.policies, token.membershipMarker)
+
+        /** The source of a token of [principal] with those claims, as [of] a verified token. */
+        fun of(principal: String, roles: Set<String>, policies: Set<String>, marker: String?): MembershipSource {
+            marker ?: return Claims(MembershipClaims.parse(roles, policies))
             return when {
                 marker != MembershipClaims.PROVIDER ->
-                    Unusable("The token of principal [${principal.id}] has an unknown membership marker [$marker].")
+                    Unusable("The token of principal [$principal] has an unknown membership marker [$marker].")
 
-                principal.roles.isNotEmpty() || principal.policies.isNotEmpty() -> Unusable(
-                    "The token of principal [${principal.id}] asks for a membership provider but also claims roles or policies."
+                roles.isNotEmpty() || policies.isNotEmpty() -> Unusable(
+                    "The token of principal [$principal] asks for a membership provider but also claims roles or policies."
                 )
 
                 else -> Provider.UNCAPPED

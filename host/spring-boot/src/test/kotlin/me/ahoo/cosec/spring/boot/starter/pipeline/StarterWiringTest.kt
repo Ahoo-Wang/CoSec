@@ -27,10 +27,6 @@ import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
@@ -46,6 +42,7 @@ import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -71,7 +68,6 @@ import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -136,10 +132,9 @@ class StarterWiringTest {
 
     /** [principal]'s token; with [provider], one that asks the membership provider (RFC 0004 §4.5.2). */
     private fun token(context: ApplicationContext, principal: String, provider: Boolean = false): String {
-        val plain: CoSecPrincipal = SimplePrincipal(principal)
-        val marked = if (provider) MembershipMarkedPrincipal(plain, MembershipClaims.PROVIDER) else plain
+        val marker = if (provider) MembershipClaims.PROVIDER else null
         return context.getBean(TokenConverter::class.java)
-            .toToken(SimpleTenantPrincipal(marked, SimpleTenant(TENANT)))
+            .toToken(TokenSubject(principal, "cosec-control", TENANT, membershipMarker = marker))
             .accessToken
     }
 

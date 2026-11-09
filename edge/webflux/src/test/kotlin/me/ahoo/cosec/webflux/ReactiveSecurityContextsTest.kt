@@ -16,7 +16,7 @@ package me.ahoo.cosec.webflux
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
@@ -28,17 +28,18 @@ import reactor.kotlin.test.test
 import reactor.util.context.Context
 
 class ReactiveSecurityContextsTest {
+    private val anonymous = mockk<CoSecPrincipal>()
 
     @Test
     fun writeSecurityContext() {
         Mono.empty<Void>()
             .writeSecurityContext(
-                mockk<SecurityContext> { every { principal } returns SimpleTenantPrincipal.ANONYMOUS }
+                mockk<SecurityContext> { every { principal } returns anonymous }
             )
             .test()
             .expectAccessibleContext()
             .assertThat {
-                it.getSecurityContext().principal.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS)
+                it.getSecurityContext().principal.assert().isEqualTo(anonymous)
             }
             .hasKey(SecurityContext.KEY)
             .then()

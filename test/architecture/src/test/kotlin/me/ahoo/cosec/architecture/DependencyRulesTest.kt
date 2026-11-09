@@ -31,7 +31,7 @@ class DependencyRulesTest {
         val COSID_REFERENCES = listOf("me.ahoo.cosid", "libs.cosid", "libs.versions.cosid")
     }
 
-    private val libraryConfigurations = setOf("api", "implementation", "compileOnly", "runtimeOnly")
+    private val libraryConfigurations = setOf("api", "implementation", "compileOnly", "compileOnlyApi", "runtimeOnly")
 
     private fun declaredProjects(project: String): List<String> = Projects.facts[project].orEmpty()
         .map { it.split(' ') }

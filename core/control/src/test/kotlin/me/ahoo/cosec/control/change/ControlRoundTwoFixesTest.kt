@@ -391,6 +391,7 @@ class ControlRoundTwoFixesTest {
             pia.actor.principal,
             pia.actor.tenant,
             me.ahoo.cosec.spi.authn.MembershipSource.Provider.UNCAPPED,
+            app = PipelineControlAuthorizer.CONTROL_APP,
         )
         val approve = me.ahoo.cosec.control.authz.ControlActions.APPROVE
         val document = me.ahoo.cosec.control.authz.ControlResources.document(SnapshotKey.Platform)

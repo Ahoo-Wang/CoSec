@@ -125,6 +125,9 @@ class PipelineGatewayFilterTest {
             )
     }
 
+    /** What alice's token declares: the app of the request, in the tests about apps. */
+    private var credentialApp: String? = null
+
     private val alice = Authenticator {
         AuthnResult.Authenticated(
             AuthenticatedPrincipal(
@@ -136,6 +139,7 @@ class PipelineGatewayFilterTest {
                 breakGlass = true,
                 issuedAt = null,
                 apiKeyCredential = false,
+                app = credentialApp?.let(::AppId),
             ),
             "token",
         )
@@ -331,26 +335,27 @@ class PipelineGatewayFilterTest {
         val orders = route("lb://orders", app = "order")
         val billing = route("lb://billing", app = "billing")
         val plain = route("lb://plain")
-        fun status(route: Route, declared: String? = null): Int? {
-            val exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/x").apply { declared?.let { header("CoSec-App-Id", it) } }
-            )
+        fun status(route: Route, credential: String?): Int? {
+            credentialApp = credential
+            val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x"))
             exchange.attributes[GATEWAY_ROUTE_ATTR] = route
             filter.filter(exchange) { Mono.empty() }.block(Duration.ofSeconds(5))
             return exchange.response.statusCode?.value()
         }
-        status(orders).assert().isNull()
-        status(billing).assert().isNull()
-        status(plain).assert().isNull()
+        status(orders, "order").assert().isNull()
+        status(billing, "billing").assert().isNull()
+        status(plain, "shop").assert().isNull()
         scopes.assert().containsExactly("order", "billing", "shop")
-        // The route's app is the host's: another declared app is rejected, as against a configured one.
+        // The route's app is the host's: a credential of another app, or of none, is rejected, as against a configured one.
         status(orders, "billing").assert().isEqualTo(403)
+        status(orders, null).assert().isEqualTo(403)
         status(billing, "billing").assert().isNull()
         status(plain, "order").assert().isEqualTo(403)
-        // Without a route app or a host app, the client's declared app applies.
+        // Without a route app or a host app, the credential's app applies.
         val open = PipelineGatewayFilter(pipeline(alice, IdentityIssuer(), engine = recording))
         scopes.clear()
-        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x").header("CoSec-App-Id", "order"))
+        credentialApp = "order"
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/x"))
         exchange.attributes[GATEWAY_ROUTE_ATTR] = plain
         open.filter(exchange) { Mono.empty() }.block(Duration.ofSeconds(5))
         scopes.assert().containsExactly("order")

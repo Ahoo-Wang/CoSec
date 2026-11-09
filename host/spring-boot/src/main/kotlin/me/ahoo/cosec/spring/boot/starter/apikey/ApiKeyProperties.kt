@@ -59,6 +59,8 @@ data class ApiKeyProperties(
         var principalId: String = "",
         /** The principal's tenant: required. */
         var tenantId: String = "",
+        /** The app the key belongs to (RFC 0012 §3.5); left out, it declares none, which a host with an app refuses. */
+        var app: String? = null,
         /**
          * The cap, as `role` or `role@space`: the key's memberships are its principal's, narrowed to these; empty, it
          * has no roles. Set it, or [uncapped]: never both, never neither.
@@ -81,7 +83,7 @@ data class ApiKeyProperties(
                 "API key [$id] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, " +
                     "not ${if (uncapped) "both" else "neither"}."
             }
-            return ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)
+            return ApiKey(id, principalId, tenantId, app?.takeIf { it.isNotBlank() }, roles, expiresAt, enabled)
         }
 
         private companion object {

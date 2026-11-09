@@ -13,18 +13,12 @@
 
 package me.ahoo.cosec.spi.membership
 
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
-import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -76,7 +70,7 @@ class MembershipClaimsTest {
                 List(random.nextInt(0, 5)) { alphabet[random.nextInt(alphabet.size)] }.joinToString("")
             }.toSet()
             val memberships = MembershipClaims.parse(roles, emptyList())
-            val spaces = roles.map { it.substringAfter('@', "") }.toSet() + SpaceIdCapable.DEFAULT + "unclaimed"
+            val spaces = roles.map { it.substringAfter('@', "") }.toSet() + DEFAULT_SPACE + "unclaimed"
             spaces.forEach { space ->
                 // `*` is no space (RFC 0004 §4.2), so no SpaceId holds it: the one place the claims deliberately give
                 // less than 7.x
@@ -136,44 +130,14 @@ class MembershipClaimsTest {
         assertThrows<UnsupportedOperationException> { (memberships.malformed as MutableList<String>).clear() }
     }
 
-    @Test
-    fun tenantOfATokenWithoutTenantIsTheDefaultTenant() {
-        val tokenPrincipal = SimpleTokenPrincipal("jti", SimplePrincipal("alice"))
-        MembershipClaims.tenantOf(tokenPrincipal).assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant("t")))
-            .assert().isEqualTo(TenantId("t"))
-    }
-
     /** Mapping an empty or blank tenant to the default one would move the principal into another tenant. */
     @Test
-    fun tenantOfABlankTenantIsKeptAndRefusedByTheScope() {
-        val tokenPrincipal = SimpleTokenPrincipal("jti", SimplePrincipal("alice"))
+    fun aBlankTenantIsRefusedByTheScope() {
         for (claimed in listOf("", " ")) {
-            val tenant = MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant(claimed)))
-            tenant.assert().isEqualTo(TenantId(claimed))
             assertThrows<IllegalArgumentException> {
-                ScopeSubject(tenant, true, MembershipClaims.parse(emptyList(), emptyList()))
+                ScopeSubject(TenantId(claimed), true, MembershipClaims.parse(emptyList(), emptyList()))
             }
         }
-    }
-
-    @Test
-    fun markerOfLooksThroughTokenPrincipals() {
-        val marked = MembershipMarkedPrincipal(SimplePrincipal("alice"), MembershipClaims.PROVIDER)
-        val tokenPrincipal = SimpleTokenTenantPrincipal(SimpleTokenPrincipal("jti", marked), SimpleTenant("t"))
-
-        MembershipClaims.markerOf(tokenPrincipal).assert().isEqualTo(MembershipClaims.PROVIDER)
-        MembershipClaims.markerOf(marked).assert().isEqualTo(MembershipClaims.PROVIDER)
-        tokenPrincipal.id.assert().isEqualTo("alice")
-    }
-
-    @Test
-    fun markerOfUnmarkedPrincipal() {
-        val tokenPrincipal =
-            SimpleTokenTenantPrincipal(SimpleTokenPrincipal("jti", SimplePrincipal("alice")), SimpleTenant("t"))
-
-        MembershipClaims.markerOf(tokenPrincipal).assert().isNull()
-        MembershipClaims.markerOf(SimplePrincipal.ANONYMOUS).assert().isNull()
     }
 
     companion object {
@@ -191,8 +155,12 @@ class MembershipClaimsTest {
  * the principal's credential states: changing the header never picks up another space's grants. A malformed role
  * (empty role or space, more than one `@`) applies nowhere.
  */
+private const val DEFAULT_SPACE = ""
+
+private class Spaced(val roleId: String, val spaceId: String)
+
 private object RoleScope {
-    private const val SEPARATOR = SpacedRoleId.SPACE_ID_SEPARATOR[0]
+    private const val SEPARATOR = '@'
 
     /**
      * The bare role ids (without the `@space` suffix) of [roles] that apply in [spaceId].
@@ -202,7 +170,7 @@ private object RoleScope {
             return roles
         }
         // The common case (default space, no spaced roles) keeps the principal's set without allocating.
-        if (spaceId == SpaceIdCapable.DEFAULT && roles.none { it.indexOf(SEPARATOR) >= 0 || it.isEmpty() }) {
+        if (spaceId == DEFAULT_SPACE && roles.none { it.indexOf(SEPARATOR) >= 0 || it.isEmpty() }) {
             return roles
         }
         val scoped = LinkedHashSet<String>(roles.size)
@@ -218,7 +186,7 @@ private object RoleScope {
     fun roleIdIn(spaceId: String, role: String): String? {
         val separator = role.indexOf(SEPARATOR)
         if (separator < 0) {
-            return role.takeIf { spaceId == SpaceIdCapable.DEFAULT && it.isNotEmpty() }
+            return role.takeIf { spaceId == DEFAULT_SPACE && it.isNotEmpty() }
         }
         if (separator == 0 || role.indexOf(SEPARATOR, separator + 1) >= 0) {
             return null
@@ -235,12 +203,12 @@ private object RoleScope {
      * nowhere. Tools that take role grants as text use the same syntax, so a grant keyed `role@space` matches exactly
      * the principals [rolesIn] gives that role in that space.
      */
-    fun parse(role: String): SpacedRoleId? {
+    fun parse(role: String): Spaced? {
         val separator = role.indexOf(SEPARATOR)
         if (separator < 0) {
-            return role.takeIf { it.isNotEmpty() }?.let { SpacedRoleId(it) }
+            return role.takeIf { it.isNotEmpty() }?.let { Spaced(it, DEFAULT_SPACE) }
         }
         val spaceId = role.substring(separator + 1)
-        return roleIdIn(spaceId, role)?.let { SpacedRoleId(it, spaceId) }
+        return roleIdIn(spaceId, role)?.let { Spaced(it, spaceId) }
     }
 }

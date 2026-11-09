@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
@@ -45,7 +44,7 @@ class CoSecAuthenticationAutoConfiguration {
     ): AuthenticationProvider {
         applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
             @Suppress("UNCHECKED_CAST")
-            it as Authentication<Credentials, CoSecPrincipal>
+            it as Authentication<Credentials>
             DefaultAuthenticationProvider.register(it)
         }
         return DefaultAuthenticationProvider

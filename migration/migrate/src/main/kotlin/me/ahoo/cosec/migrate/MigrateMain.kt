@@ -111,7 +111,7 @@ object MigrateMain {
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           cocache8 --redis <uri> [--cluster] [--key-prefix <p>] --out <dir> [--discard-pending] [--dry-run]
-          api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--memberships <file>]
+          api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>]
                    [--grant-to-principal <ids>|all] [--role-prefix <p>] [--dry-run]
     """.trimIndent()
 
@@ -186,7 +186,7 @@ object MigrateMain {
         companion object {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
-                "rate-limit-rules", "platform-admin", "redis", "role-prefix",
+                "rate-limit-rules", "platform-admin", "redis", "role-prefix", "app",
                 "memberships", "grant-to-principal",
             )
             private val FLAGS = setOf("resume", "force", "dry-run", "cluster", "discard-pending")
@@ -412,6 +412,7 @@ object MigrateMain {
                         memberships,
                         grantTo,
                         options.value("role-prefix") ?: ApiKeyMigration.DEFAULT_ROLE_PREFIX,
+                        options.value("app"),
                     ).plan(stored.legacy)
                 }.withRejections(stored.unreadable)
                 val report = outDirectory.resolve(API_KEYS_REPORT_FILE)

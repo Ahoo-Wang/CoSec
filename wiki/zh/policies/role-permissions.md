@@ -60,7 +60,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 }
 ```
 
-当主体在请求空间中至少拥有一个角色，或者其租户的文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（[租户角色绑定](#tenant-role-bindings)），请求读取其应用的应用文档。应用是宿主的应用：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`；都没有时，是请求在 `CoSec-App-Id` 中声明的应用。谁能控制这些输入，见[安全模型](../guide/security-model.md#trust-boundaries)。没有应用的请求不读取任何应用文档，因此不会有应用的角色绑定适用于它。
+当主体在请求空间中至少拥有一个角色，或者其租户的文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（[租户角色绑定](#tenant-role-bindings)），请求读取其应用的应用文档。应用是凭证的应用，宿主有应用时必须是它：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`（[应用](../integration/authentication.md#apps)）。谁能控制这些输入，见[安全模型](../guide/security-model.md#trust-boundaries)。没有应用的请求不读取任何应用文档，因此不会有应用的角色绑定适用于它。
 
 ## 权限目录 {#permission-catalogs}
 

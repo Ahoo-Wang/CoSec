@@ -1,0 +1,18 @@
+# Rule: IDN-12
+# Mutant: the issuer signs a token with a subject beginning with (, which every later request then refuses
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+index 71987459..f271b229 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+@@ -116,9 +116,6 @@ class JwtTokenConverter(
+     private fun checkIssuable(subject: TokenSubject) {
+         val printableId = Identifiers.printable(subject.id)
+         require(subject.id.isNotEmpty()) { "A token has a subject." }
+-        require(!Identifiers.isReserved(subject.id)) {
+-            "Principal [$printableId] begins with `${Identifiers.RESERVED_PREFIX}`, which is CoSec's: a token cannot carry it."
+-        }
+         require(subject.tenant?.isEmpty() != true) {
+             "Principal [$printableId] has an empty tenant id: a token cannot carry it."
+         }

@@ -112,7 +112,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A request that declares another app with `CoSec-App-Id` is rejected (`403` `scope-rejected`, `401` for an anonymous caller). Unset, requests declare their app ([Trust boundaries](../guide/security-model.md#trust-boundaries)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
+| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A credential that declares another app, or none, is rejected (`403` `scope-rejected`). Unset, the credential's app applies ([Apps](../integration/authentication.md#apps)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
@@ -224,6 +224,7 @@ application does not start (`IDN-6`, [API keys](../integration/authentication.md
 | `hash` | string | none | **Required.** SHA-256 of the key, 64 lowercase hex characters. Never configure the key itself. |
 | `principal-id` | string | none | **Required.** The principal the key authenticates as. |
 | `tenant-id` | string | none | **Required.** Tenant of the principal. |
+| `app` | string | none | The app the key belongs to ([Apps](../integration/authentication.md#apps)). Left out, it declares none, and a host with an app refuses it. |
 | `roles` | set | none | The cap: the key holds only these of its principal's roles (`role`, `role@space`), and no attached policy or principal binding; `[]` leaves only what `Anyone` bindings give. Set this or `uncapped`. |
 | `uncapped` | boolean | `false` | `true` for a key that holds everything its principal holds. Exactly one of `roles` and `uncapped: true` is set, or the application does not start. |
 | `expires-at` | instant | none | After this instant the key is rejected. |

@@ -13,39 +13,38 @@
 package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.spi.token.TokenVerifier
 import java.time.Duration
 
 /**
- * Converter from principal to token.
+ * Issues tokens.
  *
  * This interface is used to generate tokens (access and refresh)
- * for authenticated principals.
+ * for what a [TokenSubject] says.
  *
  * @see TokenVerifier
  */
 @CoSecSpi
 interface TokenConverter {
     /**
-     * Converts a principal to a token with default validity periods.
+     * Issues a token with default validity periods.
      *
-     * @param principal The principal to convert
+     * @param subject What the token says
      * @return The generated composite token
      */
-    fun toToken(principal: CoSecPrincipal): CompositeToken
+    fun toToken(subject: TokenSubject): CompositeToken
 
     /**
-     * Converts a principal to a token with custom validity periods.
+     * Issues a token with custom validity periods.
      *
-     * @param principal The principal to convert
+     * @param subject What the token says
      * @param accessTokenValidity Duration for which access token is valid
      * @param refreshTokenValidity Duration for which refresh token is valid
      * @return The generated composite token
      */
     fun toToken(
-        principal: CoSecPrincipal,
+        subject: TokenSubject,
         accessTokenValidity: Duration,
         refreshTokenValidity: Duration
     ): CompositeToken

@@ -18,6 +18,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Memberships
@@ -27,7 +28,6 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
@@ -145,7 +145,7 @@ class IdentityGate(
     private fun anonymous(requestId: String, facts: HttpFacts): RequestSecurity {
         val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val subject = ScopeSubject(TenantId.DEFAULT, false, memberships)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), facts.host)
+        val resolution = ScopeResolver.resolve(subject, "", facts.host)
         val scope = (resolution as ScopeResolution.Resolved).scope
         return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, requestId, facts))
     }
@@ -165,17 +165,18 @@ class IdentityGate(
             breakGlass = identity.credential.method == Identity.Method.JWT,
             issuedAt = null,
             apiKeyCredential = false,
+            app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),
         )
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(tenant, true, memberships),
-            DeclaredScope(identity.app, identity.space),
+            // The forwarded identity is the credential here, and its app the one the credential declared (`SCP-11`).
+            ScopeSubject(tenant, true, memberships, identity.app.ifEmpty { null }),
+            identity.space,
             facts.host,
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return null
         // The gateway's credential decides here too: a capped one is granted nothing by name, an API key no break-glass.
         val subject = Subject(
             identity.subject,
-            identity.tenant,
             true,
             identity.claims,
             principal.principalBindings,
@@ -199,7 +200,6 @@ class IdentityGate(
 
         private val ANONYMOUS = Subject(
             CoSecPrincipal.ANONYMOUS_ID,
-            TenantId.DEFAULT.value,
             false,
             emptyMap(),
             false,

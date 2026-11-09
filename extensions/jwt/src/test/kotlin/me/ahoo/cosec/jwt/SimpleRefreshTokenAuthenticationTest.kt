@@ -13,11 +13,10 @@
 
 package me.ahoo.cosec.jwt
 
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
@@ -30,7 +29,7 @@ class SimpleRefreshTokenAuthenticationTest {
     fun authenticate() {
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier)
         refreshTokenAuthentication.supportCredentials.assert().isEqualTo(RefreshTokenCredentials::class.java)
-        val oldToken: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", null))
 
         refreshTokenAuthentication.authenticate(object : RefreshTokenCredentials {
             override val accessToken: String
@@ -39,9 +38,9 @@ class SimpleRefreshTokenAuthenticationTest {
                 get() = oldToken.refreshToken
         }).test()
             .consumeNextWith {
-                it.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
-                (it as TenantCapable).tenant.tenantId.assert().isEqualTo(
-                    SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId
+                it.id.assert().isEqualTo(TokenSubject("alice", null).id)
+                it.tenant.assert().isEqualTo(
+                    TokenSubject("alice", null).tenant
                 )
             }.verifyComplete()
     }

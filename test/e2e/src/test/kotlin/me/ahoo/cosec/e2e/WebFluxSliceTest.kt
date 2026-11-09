@@ -70,7 +70,7 @@ class WebFluxSliceTest {
 
     @Test
     fun `a permitted request reaches the handler with its validated scope`() {
-        client.get().uri("/orders/1").header("Authorization", "Bearer alice@acme:clerk").exchange()
+        client.get().uri("/orders/1").header("Authorization", "Bearer alice@acme:clerk#order").exchange()
             .expectStatus().isOk
             .expectHeader().exists("CoSec-Request-Id")
             .expectBody(String::class.java).isEqualTo("order//[clerk]")
@@ -78,7 +78,7 @@ class WebFluxSliceTest {
 
     @Test
     fun `a refused request is a problem, and the handler never runs`() {
-        client.delete().uri("/orders/1").header("Authorization", "Bearer alice@acme:clerk")
+        client.delete().uri("/orders/1").header("Authorization", "Bearer alice@acme:clerk#order")
             .header("CoSec-Request-Id", "e2e-1").exchange()
             .expectStatus().isForbidden
             .expectHeader().contentType(MediaType.parseMediaType("application/problem+json"))

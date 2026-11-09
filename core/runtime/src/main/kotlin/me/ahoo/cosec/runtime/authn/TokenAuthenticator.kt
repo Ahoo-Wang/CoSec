@@ -16,13 +16,11 @@
 package me.ahoo.cosec.runtime.authn
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.Delegated
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
-import me.ahoo.cosec.runtime.token.SimpleAccessToken
-import me.ahoo.cosec.runtime.token.TokenClaims
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
@@ -30,10 +28,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
-import me.ahoo.cosec.spi.token.ExpiresAtCapable
-import me.ahoo.cosec.spi.token.IssuedAtCapable
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenExpiredException
@@ -41,7 +36,6 @@ import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import java.time.Duration
-import java.time.Instant
 
 /**
  * Authenticates the request's token (RFC 0006 §5.3.2): [verifier] checks it, which is CPU work and never suspends,
@@ -52,9 +46,8 @@ import java.time.Instant
  *   ([DelegationUnsupportedException], `IDN-4`): `DELEGATION_UNSUPPORTED`; any other [TokenVerificationException]:
  *   `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with the matching `token-*` problem
  *   (RFC 0006 K2); a delegation token answers `token-invalid`. So does a token whose `attributes` claim names one of
- *   [RESERVED_ATTRIBUTES], which CoSec sets for another kind of credential (RC1-25), and one whose subject, tenant,
- *   `jti`, `roles` or `policies` hold an unpaired UTF-16 surrogate, which would name another id's Redis keys (RC1-52,
- *   `IDN-10`): refused before [revocations] is asked about it.
+ *   [RESERVED_ATTRIBUTES], which CoSec sets for another kind of credential (RC1-25); the claims every token must follow
+ *   are those of [me.ahoo.cosec.spi.token.VerifiedToken], checked before [revocations] is asked about it.
  * - The memberships come from the token as [MembershipSource.of] reads them.
  * - Break-glass (RFC 0009 §4.2, `BRK-8`): only when [verifier] is CoSec's own ([CoSecTokenVerifier]), whose credential
  *   is then [Identity.Method.JWT]. Any other verifier's credential is named [method], and never gets break-glass.
@@ -88,9 +81,9 @@ class TokenAuthenticator(
     }
 
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
-        val token = credentials.token ?: return AuthnResult.Anonymous
-        val principal = try {
-            verifier.verify<TokenPrincipal>(SimpleAccessToken(token))
+        val presented = credentials.token ?: return AuthnResult.Anonymous
+        val token = try {
+            verifier.verify(presented)
         } catch (_: TokenExpiredException) {
             return EXPIRED
         } catch (_: TokenRevokedException) {
@@ -100,48 +93,31 @@ class TokenAuthenticator(
         } catch (_: TokenVerificationException) {
             return INVALID
         }
-        if (principal.attributes.keys.any { it in RESERVED_ATTRIBUTES }) {
+        if (token.attributes.keys.any { it in RESERVED_ATTRIBUTES }) {
             return INVALID
         }
-        // Before any store is asked about it: an id with an unpaired surrogate would read another's key (RC1-52).
-        if (!TokenClaims.areWellFormed(principal)) {
-            return INVALID
-        }
-        if (revocations.isRevoked(principal.tokenId)) {
+        if (revocations.isRevoked(token.id)) {
             return REVOKED
         }
-        val tenant = MembershipClaims.tenantOf(principal)
-        val id = PrincipalId(principal.id)
-        val (expiresAt, issuedAt) = times(principal)
-        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt, revocationSkew)) {
+        val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
+        val id = PrincipalId(token.principal)
+        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), token.issuedAt, revocationSkew)) {
             return REVOKED
         }
         return AuthnResult.Authenticated(
             AuthenticatedPrincipal(
                 id,
                 tenant,
-                MembershipSource.of(principal),
-                principal.attributes,
-                Identity.Credential(credentialMethod, principal.tokenId, expiresAt),
+                MembershipSource.of(token),
+                token.attributes,
+                Identity.Credential(credentialMethod, token.id, token.expiresAt),
                 breakGlass = ownTokens,
-                issuedAt = issuedAt,
+                issuedAt = token.issuedAt,
                 apiKeyCredential = false,
+                app = token.app?.let(::AppId),
             ),
             method,
         )
-    }
-
-    /** The token's expiry and issue time, the first of each along its delegation chain, in one walk of it. */
-    private fun times(principal: TokenPrincipal): Pair<Instant?, Instant?> {
-        var expiry: ExpiresAtCapable? = null
-        var issue: IssuedAtCapable? = null
-        var current: Any? = principal
-        while (current != null && (expiry == null || issue == null)) {
-            if (expiry == null && current is ExpiresAtCapable) expiry = current
-            if (issue == null && current is IssuedAtCapable) issue = current
-            current = (current as? Delegated<*>)?.delegate
-        }
-        return expiry?.expiresAt to issue?.issuedAt
     }
 
     companion object {
