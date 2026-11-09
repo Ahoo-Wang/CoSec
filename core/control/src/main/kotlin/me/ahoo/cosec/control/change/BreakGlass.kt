@@ -49,7 +49,8 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
     /**
      * Proposes the binding and stages it, so that it waits for its approval. Its id is derived from [principal] and
      * [expiresAt], never the caller's: a request never replaces another binding (RC1-29), and one whose id is already
-     * taken is refused (409).
+     * taken is refused (409). [operator] is authorized before the platform document is read, so that a refusal tells
+     * nothing of the bindings it holds.
      */
     suspend fun request(
         operator: Operator,
@@ -60,9 +61,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
     ): ChangeRequest {
         requireRequest(reason.isNotBlank()) { "Break-glass needs a reason." }
         val binding = BindingId("break-glass-${principal.value}-${expiresAt.toEpochMilli()}")
-        if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
-            throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
-        }
         val grant = Binding(
             binding,
             SubjectRef.Principal(TenantId.PLATFORM, principal),
@@ -71,6 +69,10 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
             expiresAt = expiresAt.toEpochMilli(),
             breakGlass = true,
         )
+        changes.authority.authorize(operator, SnapshotKey.Platform, listOf(Operation.PutBinding(grant)), ProvenanceKind.BREAK_GLASS)
+        if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
+            throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
+        }
         val proposed = changes.propose(
             operator,
             SnapshotKey.Platform,

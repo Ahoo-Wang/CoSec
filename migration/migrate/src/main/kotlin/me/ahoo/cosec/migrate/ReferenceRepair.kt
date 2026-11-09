@@ -18,15 +18,16 @@ package me.ahoo.cosec.migrate
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.ReferrerHeads
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * What [ReferenceRepair.run] did: the documents it visited, the references it added, the documents it could not, and
- * how many apps the app list names now, `null` when it could not be completed.
+ * What [ReferenceRepair.run] did: the documents it visited, the references it added and removed, the documents it could
+ * not, and how many apps the app list names now, `null` when it could not be completed.
  */
-class RepairResult(val documents: Int, val added: Int, val failed: Map<SnapshotKey, String>, val apps: Int?)
+class RepairResult(val documents: Int, val added: Int, val removed: Int, val failed: Map<SnapshotKey, String>, val apps: Int?)
 
 /**
  * `repair-references` (RFC 0007 §5.8): adds to the back-reference index whatever the head of each document refers to
@@ -38,11 +39,15 @@ class RepairResult(val documents: Int, val added: Int, val failed: Map<SnapshotK
  * approval. The list it completes is as good as [ControlStore.documents]: never fewer than exist, as long as that list
  * has not been lost.
  *
- * It only adds, never removes, so it may run while the control plane runs, and run again: a second run adds nothing.
- * The index stays what it must be, a superset of the true references. A reference added for a head that a publish has
- * replaced meanwhile is an extra one, which blocks a deletion at most; it never hides a reference, so it never lets a
- * deletion through. Every document [ControlStore.documents] lists is visited; one whose head cannot be read, or whose
- * references cannot be written, is reported in [RepairResult.failed], never skipped silently.
+ * Then it removes what the index has and no head does ([Revisions.pruneReferences]): what a publish indexed before a head
+ * write it lost, which would block removing that policy for good.
+ *
+ * It may run while the control plane runs, and run again: a second run changes nothing. The index stays what it must be,
+ * a superset of the true references. A reference added for a head that a publish has replaced meanwhile is an extra one,
+ * which blocks a deletion at most; one is removed only once the publish that indexed it is over and no later revision has
+ * it, so a removal never hides a reference and never lets a deletion through. Every document [ControlStore.documents]
+ * lists is visited; one whose head cannot be read, or whose references cannot be written, is reported in
+ * [RepairResult.failed], never skipped silently.
  */
 class ReferenceRepair(private val store: ControlStore) {
     private val revisions = Revisions(store)
@@ -63,8 +68,20 @@ class ReferenceRepair(private val store: ControlStore) {
                 failed[key] = e.message ?: e.javaClass.name
             }
         }
+        var removed = 0
+        val heads = ReferrerHeads()
+        // Only the platform's and the apps' policies are referred to from other documents (RFC 0007 §5.8).
+        for (key in listed.filterNot { it is SnapshotKey.Tenant }) {
+            try {
+                removed += revisions.pruneReferences(key, heads)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failed.putIfAbsent(key, e.message ?: e.javaClass.name)
+            }
+        }
         val apps = listed.filterIsInstance<SnapshotKey.App>().mapTo(HashSet()) { it.appId }
         val completed = revisions.completeApps(apps)
-        RepairResult(documents, added, failed, if (completed) store.apps()?.value?.entries?.size else null)
+        RepairResult(documents, added, removed, failed, if (completed) store.apps()?.value?.entries?.size else null)
     }
 }

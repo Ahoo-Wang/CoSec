@@ -176,9 +176,9 @@ class RolesTest {
         return ChangeAuthority(authorizer) to asked
     }
 
-    private fun authorized(base: PolicyDocument?, operator: Operator, key: SnapshotKey, operation: Operation): List<String> {
+    private fun authorized(base: PolicyDocument?, operator: Operator, key: SnapshotKey, vararg operations: Operation): List<String> {
         val (authority, asked) = recording()
-        runBlocking { authority.authorize(operator, key, listOf(operation), base = base) }
+        runBlocking { authority.authorize(operator, key, operations.toList(), base = base) }
         return asked
     }
 
@@ -225,6 +225,36 @@ class RolesTest {
             .containsExactly("write doc/app/wms/role/a", "grant scope/*/wms/*")
         val withAll = Operations.apply(wms, before, listOf(Operation.PutRole(all))).candidate!!
         authorized(withAll, PLATO, wms, Operation.PutRole(all)).assert().containsExactly("write doc/app/wms/role/a")
+    }
+
+    /** RFC 0012 §7.2: what `cosec:grant` is asked for is what the candidate derives, not what the base's catalog would. */
+    @Test
+    fun `a star role put with the catalog that defines its permissions is asked cosec grant for`() {
+        authorized(null, PLATO, wms, Operation.PutCatalog(catalog), Operation.PutRole(system("a", RolePermissions.All)))
+            .assert().containsExactly("write doc/app/wms/catalog", "write doc/app/wms/role/a", "grant scope/*/wms/*")
+    }
+
+    @Test
+    fun `a catalog that gives a star role a binding it did not derive is asked cosec grant for`() {
+        val base = Operations.apply(wms, null, listOf(Operation.PutRole(system("a", RolePermissions.All)))).candidate!!
+        authorized(base, PLATO, wms, Operation.PutCatalog(catalog)).assert()
+            .containsExactly("write doc/app/wms/catalog", "grant scope/*/wms/*")
+        val full = Operations.apply(wms, base, listOf(Operation.PutCatalog(catalog))).candidate!!
+        // The same catalog, and one that only takes permissions away, add no binding.
+        authorized(full, PLATO, wms, Operation.PutCatalog(catalog)).assert().containsExactly("write doc/app/wms/catalog")
+        authorized(full, PLATO, wms, Operation.PutCatalog(null)).assert().containsExactly("write doc/app/wms/catalog")
+    }
+
+    @Test
+    fun `a hand-written permission that gives a star role a binding is asked cosec grant for`() {
+        val entry = Catalog(listOf(CatalogGroup("ops", permissions = listOf(CatalogPermission("audit")))))
+        val base = Operations.apply(
+            wms,
+            null,
+            listOf(Operation.PutCatalog(entry), Operation.PutRole(system("a", RolePermissions.All))),
+        ).candidate!!
+        authorized(base, PLATO, wms, Operation.PutPolicy(allow("perm:wms/audit"))).assert()
+            .containsExactly("write doc/app/wms/policy/perm:wms/audit", "grant scope/*/wms/*")
     }
 
     @Test

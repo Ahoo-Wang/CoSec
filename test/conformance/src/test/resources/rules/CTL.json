@@ -348,6 +348,19 @@
         "control:SharedPolicyCopyTest"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-30",
+      "source": "RFC 0007 §5.8",
+      "statement": "A platform or app change that turns a policy other documents refer to into a boundary, or a boundary they refer to into a policy, is refused (422) when it is checked and again when it is written, as removing it is: a binding reaches only a policy and a tenant's boundary only a boundary, so one of the other kind is missing to them. A policy nothing refers to may change kind.",
+      "level": "control",
+      "guards": [
+        "control:BoundaryReferencesTest#a policy a tenant binds does not become a boundary",
+        "control:BoundaryReferencesTest#a boundary a tenant names does not become a policy",
+        "control:BoundaryReferencesTest#a policy nothing refers to changes kind, and a change of content is not one",
+        "control:BoundaryReferencesTest#the head write refuses a change of kind too, for a reference added after the check"
+      ],
+      "pending": null
     }
   ]
 }

@@ -231,7 +231,7 @@ class ControlHttp(private val plane: ControlPlane) {
 
             "rollback" -> post(request) {
                 changeResponse(
-                    plane.rollback(operator, key, it.long("revision"), it.optText("note").orEmpty()),
+                    plane.rollback(operator, key, it.long("revision"), it.optText("note").orEmpty(), confirmations(it)),
                     CREATED
                 )
             }
@@ -297,9 +297,6 @@ class ControlHttp(private val plane: ControlPlane) {
                 val operations = it.array("operations").map { op ->
                     decoded("operations") { ChangeRequestCodec.operation(key, op) }
                 }
-                val confirmations = it.get(
-                    "confirmations"
-                )?.let { c -> arrayOf("confirmations", c) }?.map(::confirmation).orEmpty()
                 // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
                 requireRequest(
                     !it.has("kind")
@@ -311,7 +308,7 @@ class ControlHttp(private val plane: ControlPlane) {
                         it.long("base"),
                         operations,
                         it.optText("note").orEmpty(),
-                        confirmations,
+                        confirmations(it),
                     ),
                     CREATED
                 )
@@ -514,6 +511,10 @@ class ControlHttp(private val plane: ControlPlane) {
         node.only("at", "platform", "app", "tenant")
         return SnapshotVersion(node.long("platform"), node.optLong("app"), node.optLong("tenant"))
     }
+
+    /** The `deny-nomatch` confirmations a request carries (RFC 0007 §9.5); none when it has no such field. */
+    private fun confirmations(node: JsonNode): List<Confirmation> =
+        node.get("confirmations")?.let { arrayOf("confirmations", it) }?.map(::confirmation).orEmpty()
 
     private fun confirmation(node: JsonNode): Confirmation {
         node.only("confirmations", "policy", "statement", "digest", "kind")

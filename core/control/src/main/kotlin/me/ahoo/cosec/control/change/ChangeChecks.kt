@@ -109,11 +109,13 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  * - V1: the candidate must read back with the document codec; what fails is a 400 at its JSON path.
  * - V2: at most [ChangeOptions.maxDocumentBytes] encoded; the ids a change puts must not use the reserved prefixes
  *   `cosec:`, `g:`, `r:` and `role:` (`perm:` is the app document's, which the compiler checks), unless it migrates or
- *   bootstraps; a tenant policy must not reuse a platform policy's id (RFC 0007 §3.1 N2).
+ *   bootstraps, and must be one segment of the entry's resource (RFC 0007 §7.1): no `/`, but for a permission policy's
+ *   `perm:<app>/<id>`; a tenant policy must not reuse a platform policy's id (RFC 0007 §3.1 N2).
  * - V3, compile: every entry must compile, with the limits and external attributes of the platform document
  *   (RFC 0007 §3.1 N3): a `Broken` entry is a 422, never published. An app or tenant candidate's bindings must
- *   resolve, in the candidate, the platform, or for a tenant binding of one app, that app's document (N1). A platform
- *   candidate must not remove a policy other documents refer to (§5.8).
+ *   resolve, in the candidate, the platform, or for a tenant binding of one app, that app's document (N1), and never to
+ *   a platform boundary (§7.6, §9.1). A platform candidate must not remove a policy other documents refer to, nor turn
+ *   one into a boundary or a boundary into a policy (§5.8).
  * - V4 has nothing to check: catalogs declare permission ids, not services, verbs or types (RFC 0004 §4.9). V5's
  *   break-glass rules and the `nomatch` confirmation (ATR-6) are the compiler's; a candidate's boundary must be one the
  *   platform defines (below); protected entries and grants are [ChangeAuthority]'s.
@@ -161,6 +163,7 @@ class ChangeChecks(
             findings += Finding("V2", "$", "the document is ${bytes.size} bytes, more than ${options.maxDocumentBytes}", BAD_REQUEST)
         }
         reservedNames(operations, kind, findings)
+        entryIds(operations, findings)
         appIds(candidate, findings)
         val checkedWith = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
         val platform = if (key == SnapshotKey.Platform) {
@@ -231,6 +234,27 @@ class ChangeChecks(
     }
 
     /**
+     * An entry's id is one segment of the resource `cosec:write` is decided on (RFC 0007 §7.1): an id with a `/` adds
+     * segments, and so walks out of a rule whose last segment is a `*`. Only the ids a change puts: one a document
+     * already holds is not this change's to rename, and removing it stays possible. A permission policy's id is
+     * `perm:<app>/<id>` by definition, the one exception, which a rule reaches with `**`.
+     */
+    private fun entryIds(operations: List<Operation>, findings: MutableList<Finding>) {
+        for ((i, operation) in operations.withIndex()) {
+            val id = when (operation) {
+                is Operation.PutPolicy -> operation.policy.id.value.takeUnless { it.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX) }
+                is Operation.PutBinding -> operation.binding.id.value
+                is Operation.PutRole -> operation.role.id.value
+                is Operation.PutRateLimit -> operation.rule.id
+                else -> null
+            } ?: continue
+            if ('/' in id) {
+                findings += Finding("V2", "operations[$i]", "[${printable(id)}]: an entry's id has no [/]", UNPROCESSABLE)
+            }
+        }
+    }
+
+    /**
      * Every app the candidate names is an app id (SCP-10): the document format takes any id but `*` in a binding's
      * `app`, but no request is ever in an app the rule refuses, and no key names its document. The whole candidate is
      * checked, its head's entries included.
@@ -259,7 +283,8 @@ class ChangeChecks(
     /**
      * Bindings of an app or tenant candidate whose policy is defined neither by it nor by the platform, nor, for a
      * tenant binding of exactly one app, by that app's document (RFC 0007 §3.1 N1). Both are read expanded (RFC 0012
-     * §6.1): a binding a role derives must resolve, in what the app's short forms derive too.
+     * §6.1): a binding a role derives must resolve, in what the app's short forms derive too. A platform boundary is no
+     * policy a binding reaches (RFC 0007 §7.6): the engine would answer it as missing.
      */
     private suspend fun unresolved(
         candidate: PolicyDocument,
@@ -271,16 +296,21 @@ class ChangeChecks(
         // Over the limit the compile step has said so, and there is nothing expanded to look at.
         val expansion = expansionOf(candidate) ?: return
         val effective = expansion.document
-        val defined = effective.policies.map {
-            it.id.value
-        }.toSet() + platform?.policies?.map { it.id.value }.orEmpty() + BUILTIN
+        val (boundaries, policies) = platform?.policies.orEmpty().partition { it.boundary }
+        val defined = effective.policies.map { it.id.value }.toSet() + policies.map { it.id.value } + BUILTIN
+        val boundaryIds = boundaries.mapTo(HashSet()) { it.id.value }
         val apps = HashMap<String, Set<String>>()
         for ((i, binding) in effective.bindings.withIndex()) {
             val policy = binding.policy.value
             if (policy in defined || inApp(candidate, binding, apps, context, checkedWith)) continue
             val written = i < candidate.bindings.size
             val path = expansion.bindingPath(i) + if (written) ".policy" else ""
-            findings += Finding("REFERENCES", path, "[$policy] is defined neither here nor where this document may refer", UNPROCESSABLE)
+            val message = if (policy in boundaryIds) {
+                "[$policy] is a boundary of the platform, and a boundary is not bound"
+            } else {
+                "[$policy] is defined neither here nor where this document may refer"
+            }
+            findings += Finding("REFERENCES", path, message, UNPROCESSABLE)
         }
         roleWarnings(candidate, context, checkedWith, findings)
         val boundary = candidate.boundary ?: return
@@ -356,10 +386,12 @@ class ChangeChecks(
     }
 
     /**
-     * The policies a platform candidate removes that other documents still refer to (RFC 0007 §5.8). A tenant whose
-     * head defines the id itself refers to its own policy, not the platform's (RC1-9): the index lists it for
-     * [sharedIds], and removing the platform's policy ends an ambiguity, so it does not block. Any other referrer does,
-     * one whose head cannot be read included: the index may hold more than the true references, never less.
+     * The policies a platform candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that other
+     * documents still refer to (RFC 0007 §5.8): a binding reaches only a policy and a tenant's `boundary` only a
+     * boundary, so one of the other kind is missing to them. A tenant whose head defines the id itself refers to its
+     * own policy, not the platform's (RC1-9): the index lists it for [sharedIds], and removing the platform's policy ends
+     * an ambiguity, so it does not block. Any other referrer does, one whose head cannot be read included: the index may
+     * hold more than the true references, never less.
      */
     private suspend fun removedReferences(
         base: PolicyDocument?,
@@ -367,13 +399,14 @@ class ChangeChecks(
         context: Context,
         findings: MutableList<Finding>,
     ) {
-        val kept = candidate.policies.map { it.id }.toSet()
-        for (policy in base?.policies.orEmpty().map { it.id }.filter { it !in kept }) {
-            val referrers = context.referrers(SnapshotKey.Platform, policy).filterNotTo(HashSet()) {
-                definesItself(context, it, policy)
+        val kept = candidate.policies.associate { it.id to it.boundary }
+        for (policy in base?.policies.orEmpty().filter { kept[it.id] != it.boundary }) {
+            val referrers = context.referrers(SnapshotKey.Platform, policy.id).filterNotTo(HashSet()) {
+                definesItself(context, it, policy.id)
             }
             if (referrers.isNotEmpty()) {
-                findings += Finding("REFERENCES", "$.policies", "[${policy.value}] is referred to by ${referrers.sorted()}", UNPROCESSABLE)
+                val what = if (policy.id in kept) "changes between a policy and a boundary, and is" else "is"
+                findings += Finding("REFERENCES", "$.policies", "[${policy.id.value}] $what referred to by ${referrers.sorted()}", UNPROCESSABLE)
             }
         }
     }

@@ -33,6 +33,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -206,15 +207,22 @@ class Changes(
      * break-glass rule keys on what it does (a rollback that would bring a break-glass binding back never checks clean),
      * and so do the reserved names, the grant analysis, the approval and the shadow window. The change shows the old
      * revision's entries, and whether a revision exists is history, so [author] needs `cosec:read` on the document
-     * before either is looked at (round-2 review R5).
+     * before either is looked at (round-2 review R5). Like any change, one that restores a `nomatch` DENY needs its
+     * [confirmations] (RFC 0007 §9.5): the old revision's own confirmation was another person's, of another change.
      */
-    suspend fun rollback(author: Operator, key: SnapshotKey, revision: Long, note: String): ChangeRequest {
+    suspend fun rollback(
+        author: Operator,
+        key: SnapshotKey,
+        revision: Long,
+        note: String,
+        confirmations: List<Confirmation> = emptyList(),
+    ): ChangeRequest {
         authority.require(author, key, ControlActions.READ)
         val head = revisions.head(key) ?: throw ChangeRejectedException(NOT_FOUND, "[$key] has no document")
         val body = revisions.revision(key, revision)
             ?: throw ChangeRejectedException(GONE, "[$key] keeps no revision $revision")
         val operations = Operations.diff(key, head.document, body, ApplyMode.REPLACE)
-        return proposeAs(author, key, head.revision, operations, note, ProvenanceKind.ROLLBACK, emptyList())
+        return proposeAs(author, key, head.revision, operations, note, ProvenanceKind.ROLLBACK, confirmations)
     }
 
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
@@ -292,14 +300,14 @@ class Changes(
      * Takes the document's staging slot for a `CHECKED` change and starts its shadow window (RFC 0007 §6.4): the
      * candidate goes to the `candidate:` namespace, named by the window, with the revision of its base, and the change is
      * `SHADOWING`. 409 when the slot is held; a candidate that cannot be written gives the slot back (503). The slot holds
-     * the document's publishing up, so [operator] needs `cosec:publish` on it.
+     * the document's publishing up, so [operator] needs what publishing it needs ([publishing]).
      *
      * Creating or revoking a break-glass binding has no window (RFC 0007 Q12): such a change goes on at once, as if
      * skipped, without `cosec:skip-shadow`.
      */
     suspend fun stage(operator: Operator, id: ChangeId): ChangeRequest {
         val change = visible(operator, id)
-        authority.require(operator, change.key, ControlActions.PUBLISH)
+        authority.require(operator, change.key, publishing(change))
         requireState(change, setOf(ChangeState.CHECKED))
         val head = revisions.head(change.key)
         if (PublishRules.exempt(change, head)) {
@@ -397,7 +405,7 @@ class Changes(
         requireRequest(reason.isNotBlank()) { "Skipping the shadow window needs a reason." }
         val change = visible(operator, id)
         if (PublishRules.exempt(change, revisions.head(change.key))) {
-            authority.require(operator, change.key, ControlActions.PUBLISH)
+            authority.require(operator, change.key, publishing(change))
         } else {
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
         }
@@ -512,7 +520,7 @@ class Changes(
      * else leaves the head as it is: a moved base makes the change `CONFLICTED`, a candidate that no longer compiles
      * (another document changed under it) `DRAFT` with the findings. The slot is released either way.
      *
-     * The [publisher] needs `cosec:publish` on the document and every target of the operations, now (403, 503), and
+     * The [publisher] needs what publishing it needs ([publishing]) and every target of the operations, now (403, 503), and
      * the grant analysis runs again as them on the current heads. When that finds escalations the change's approval
      * does not validly cover (missing, for another candidate, expired, the author's or the publisher's own), the change
      * goes back to `AWAITING_APPROVAL` with them, keeping its slot, and nothing is published.
@@ -532,7 +540,7 @@ class Changes(
         again: String? = null
     ): ChangeRequest {
         val change = visible(publisher, id)
-        authority.require(publisher, change.key, ControlActions.PUBLISH)
+        authority.require(publisher, change.key, publishing(change))
         requireState(change, setOf(ChangeState.READY))
         PublishRules.acknowledged(change, ack)
         candidates.authorize(publisher, change)
@@ -820,6 +828,13 @@ class Changes(
         }
         throw ChangeRejectedException(CONFLICT, "change ${id.value} kept changing")
     }
+
+    /**
+     * The action that stages and publishes [change] on its document: `cosec:publish`, or for a break-glass request or
+     * revoke `cosec:breakglass`, which is all RFC 0007 §8 asks of the person doing either in an emergency.
+     */
+    private fun publishing(change: ChangeRequest): Action =
+        if (change.kind == ProvenanceKind.BREAK_GLASS) ControlActions.BREAKGLASS else ControlActions.PUBLISH
 
     private fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
         if (change.state !in allowed) {
