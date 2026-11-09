@@ -1,0 +1,21 @@
+# Rule: SNP-6
+# Mutant: a periodic pass waits for a load that has been in flight longer than the store read timeout, so documents behind compilations that never end are never revalidated
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -1085,12 +1085,7 @@
+                 if (closed) {
+                     return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
+                 }
+-                inFlight?.let {
+-                    if (pass != null && nanoTime.asLong - it.startedNanos > options.storeReadTimeout.toNanos()) {
+-                        return null
+-                    }
+-                    return it.result
+-                }
++                inFlight?.let { return it.result }
+                 load = newLoad(force, CompletableFuture(), pass?.startRead())
+                 inFlight = load
+                 dirty = false

@@ -156,6 +156,35 @@ class DocumentSnapshotViewsTest {
         }
     }
 
+    /** #1216: the empty document of an absent tenant is the tenant's own, and gives way when one is published. */
+    @Test
+    fun `an absent tenant document is empty for its tenant until one is published`() {
+        publish(SnapshotKey.Platform, allowRead)
+        source().use { source ->
+            val views = DocumentSnapshotViews(source)
+            val scope = scope("acme")
+            val key = ViewKey.of(scope, blocked = false)
+            views.load(key).join()
+            repeat(3) {
+                val view = views.peek(key)!!
+                view.tenant!!.owner.assert().isEqualTo("acme")
+                view.tenant!!.kind.assert().isEqualTo(DocumentKind.TENANT)
+                view.unresolved.assert().isEmpty()
+                decide(view, scope).assert().isEqualTo(Decision.Deny(null))
+            }
+            // The same key goes from absent to present.
+            publish(
+                SnapshotKey.Tenant("acme"),
+                ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]"""
+            )
+            source.reload(SnapshotKey.Tenant("acme")).join().revision.assert().isEqualTo(1)
+            decide(views.peek(key)!!, scope).assert().isInstanceOf(Decision.Permit::class.java)
+            // Another tenant is still on its empty document.
+            val other = scope("other")
+            decide(views.load(ViewKey.of(other, blocked = false)).join(), other).assert().isEqualTo(Decision.Deny(null))
+        }
+    }
+
     @Test
     fun `a platform that fails still lets the blacklist decide`() {
         publish(SnapshotKey.Platform, ""","policies":[{"id":"perm:x/y","statements":[]}]""")
