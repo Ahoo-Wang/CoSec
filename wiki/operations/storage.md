@@ -215,7 +215,9 @@ sequenceDiagram
   documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the interval, the next
   starts as soon as it ends, rather than add four more reads each interval. A pass that has confirmed no document for
   30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
-  pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned.
+  pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
+  not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it: the
+  compilation confirms the document when it ends, and the pass goes on to the documents behind it.
 - **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
   random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every

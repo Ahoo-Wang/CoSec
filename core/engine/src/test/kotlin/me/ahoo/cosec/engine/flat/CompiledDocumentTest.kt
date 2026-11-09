@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -31,6 +32,29 @@ class CompiledDocumentTest {
 
     private fun rejects(message: String, compile: () -> Any) {
         assertThrownBy<IllegalArgumentException> { compile() }.hasMessageContaining(message)
+    }
+
+    /** #1216: a view builds one for every tenant or app with nothing published, per request, so it shares its empties. */
+    @Test
+    fun `a document with nothing in it has nothing to find`() {
+        for (document in listOf(tenant(), CompiledDocument.app(AppId("app"), emptyList(), emptyList()))) {
+            document.anyone.assert().isEmpty()
+            document.role("admin").assert().isNull()
+            document.principal("acme", "alice").assert().isNull()
+            document.breakGlass("(platform)", "plato").assert().isNull()
+            document.policy("p").assert().isNull()
+            document.repeats.assert().isZero()
+            document.readsExternal.assert().isFalse()
+            document.headersRead.assert().isEmpty()
+            document.rateLimits.assert().isEmpty()
+            document.needsApp("app").assert().isFalse()
+            document.isBreakGlass(bound("g", document.kind)).assert().isFalse()
+        }
+        // Only the empty path is shared: a document with a binding or a policy keeps its own.
+        val withBinding = tenant(p, bindings = listOf(anyone("g", "p")))
+        withBinding.anyone.assert().hasSize(1)
+        withBinding.policy("p").assert().isSameAs(p)
+        tenant(p).policy("p").assert().isSameAs(p)
     }
 
     @Test
