@@ -27,7 +27,13 @@ import kotlin.coroutines.cancellation.CancellationException
  * What [ReferenceRepair.run] did: the documents it visited, the references it added and removed, the documents it could
  * not, and how many apps the app list names now, `null` when it could not be completed.
  */
-class RepairResult(val documents: Int, val added: Int, val removed: Int, val failed: Map<SnapshotKey, String>, val apps: Int?)
+class RepairResult(
+    val documents: Int,
+    val added: Int,
+    val removed: Int,
+    val failed: Map<SnapshotKey, String>,
+    val apps: Int?
+)
 
 /**
  * `repair-references` (RFC 0007 §5.8): adds to the back-reference index whatever the head of each document refers to
