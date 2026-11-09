@@ -330,7 +330,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270。
 
-**2026-11-09 暂停（额度不足）**：第二轮审查的 runtime（1 高 2 中 2 低）、control（2 中 8 低）已审，修复在两个 `wip:` 分支上，未开 PR；control 的 M2（删除 DENY 需要审批）未开始。恢复顺序：完成并合入这两批修复 → 第二轮审查其余 4 组（model、spi、engine；后端与 jwt、login、social；edge 与其余扩展；spring-boot、migrate、testkit、api）→ R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
+**2026-11-09 暂停（额度不足）**：第二轮审查的 runtime（1 高 2 中 2 低）、control（2 中 8 低）已审，修复在 Draft PR #1311（runtime）与 #1312（control）上，PR 描述列出了发现和待办；control 的 M2（删除 DENY 需要审批）未开始。恢复顺序：完成并合入这两批修复 → 第二轮审查其余 4 组（model、spi、engine；后端与 jwt、login、social；edge 与其余扩展；spring-boot、migrate、testkit、api）→ R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
