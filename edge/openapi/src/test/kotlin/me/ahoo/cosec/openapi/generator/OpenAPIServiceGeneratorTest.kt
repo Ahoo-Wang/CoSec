@@ -133,6 +133,29 @@ class OpenAPIServiceGeneratorTest {
     }
 
     @Test
+    fun `a blank summary or description is left out of the catalog entry`() {
+        val document = OpenAPIServiceGenerator.appDocument(
+            spec(
+                """
+                {
+                  "/orders": {
+                    "get": {"operationId":"list", "summary":"", "description":"  "},
+                    "post": {"operationId":"create"}
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
+        val entries = document.catalog!!.groups.single().permissions
+        entries.map { it.id }.assert().isEqualTo(listOf("list", "create"))
+        entries.forEach {
+            it.name.assert().isNull()
+            it.description.assert().isNull()
+            it.actions.assert().isEqualTo(listOf("order:${it.id}"))
+        }
+    }
+
+    @Test
     fun `the service comes from info, or its x-cosec-service`() {
         OpenAPIServiceGenerator.service(
             spec("{}", """{"title":"t","version":"1","x-cosec-service":"billing"}""")
