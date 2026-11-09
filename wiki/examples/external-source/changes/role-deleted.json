@@ -1,0 +1,11 @@
+{
+  "document": "tenant:acme",
+  "base": 8,
+  "note": "role-01HQ7Y deleted in the identity system (event 5530)",
+  "operations": [
+    {
+      "op": "removeRole",
+      "id": "role-01HQ7Y"
+    }
+  ]
+}

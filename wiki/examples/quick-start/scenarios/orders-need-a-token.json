@@ -1,0 +1,16 @@
+{
+  "description": "An anonymous caller reads no order (a 401).",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

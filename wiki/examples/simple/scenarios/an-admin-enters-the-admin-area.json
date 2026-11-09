@@ -1,0 +1,20 @@
+{
+  "description": "The role admin opens /admin.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "root",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/admin/users"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Warehouse",
+        "permissions": [
+          {
+            "id": "warehouse.read",
+            "name": "Read warehouses",
+            "action": "wms:warehouse.read"
+          },
+          {
+            "id": "warehouse.edit",
+            "name": "Edit warehouses",
+            "action": "wms:warehouse.edit"
+          }
+        ]
+      },
+      {
+        "name": "Inbound",
+        "spaced": true,
+        "permissions": [
+          {
+            "id": "inbound.read",
+            "name": "Read inbound orders",
+            "action": "wms:inbound.read",
+            "resource": "inbound/**"
+          },
+          {
+            "id": "inbound.ship",
+            "name": "Ship inbound orders",
+            "action": "wms:inbound.ship",
+            "resource": "inbound/{id}"
+          }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "wms.clerk",
+      "name": "Clerk",
+      "permissions": [
+        "warehouse.read",
+        "inbound.read"
+      ]
+    },
+    {
+      "id": "wms.manager",
+      "name": "Manager",
+      "permissions": [
+        "warehouse.read",
+        "warehouse.edit",
+        "inbound.read",
+        "inbound.ship"
+      ]
+    }
+  ]
+}

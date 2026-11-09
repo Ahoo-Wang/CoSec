@@ -1,0 +1,20 @@
+{
+  "description": "A member without a role is granted nothing.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": []
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.read",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

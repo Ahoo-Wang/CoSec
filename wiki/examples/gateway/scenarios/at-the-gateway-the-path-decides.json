@@ -1,0 +1,22 @@
+{
+  "description": "On the gateway there is no route map: GET /billing/invoices/7 is http:GET.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "billing",
+    "roles": [
+      "accountant"
+    ]
+  },
+  "request": {
+    "hostApp": "billing",
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/billing/invoices/7"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

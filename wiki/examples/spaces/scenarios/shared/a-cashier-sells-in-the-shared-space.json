@@ -1,0 +1,23 @@
+{
+  "description": "The pos token holds a pos role in the same space.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "pos",
+    "roles": [
+      "pos.cashier@store-1"
+    ]
+  },
+  "request": {
+    "hostApp": "pos",
+    "action": "pos:sale.create",
+    "resource": {
+      "type": "sale",
+      "id": "1"
+    },
+    "space": "store-1"
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

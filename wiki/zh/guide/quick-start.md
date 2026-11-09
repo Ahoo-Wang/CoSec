@@ -54,79 +54,22 @@ cosec:
 其余配置都有可用的默认值，完整列表见[配置](../operations/configuration.md)。其中两个默认值与本指南有关：
 
 - 策略文档从 Redis 中键前缀 `cosec` 下读取，`cosec-migrate` 也写到这里；
-- 只有配置项指明时才加载路由映射，否则请求就是其路径上的 `http:<METHOD>`。下一步添加一份。
-
-## 把路由映射为动作 {#map-routes-to-actions}
-
-路由映射把请求的方法和路径变成动作和资源，策略就可以写 `order:delete`，而不必重复路径。`src/main/resources/cosec-routes.json`：
-
-```json
-{
-  "service": "order",
-  "routes": [
-    { "method": "GET",    "path": "/orders/{orderId}", "action": "order:read",   "resource": "order/{orderId}" },
-    { "method": "DELETE", "path": "/orders/{orderId}", "action": "order:delete", "resource": "order/{orderId}" }
-  ]
-}
-```
-
-在 `application.yaml` 中指明它：
-
-```yaml
-cosec:
-  authorization:
-    routes:
-      location: classpath:cosec-routes.json
-```
-
-现在 `GET /orders/42` 是资源 `order/42` 上的动作 `order:read`。没有路由匹配的请求保留动作 `http:<METHOD>` 和它的路径：`GET /hello` 是 `http:path:/hello` 上的 `http:GET`。不用路由映射的服务不放这个文件，也不设置该配置项，所有请求都位于 `http` 命名空间。格式及其规则见[路由映射](../integration/web.md#route-maps)。
+- 只有配置项指明时才加载路由映射，否则请求就是其路径上的 `http:<METHOD>`，下面的策略就是按这个写的。用业务动作给路由命名的路由映射见[按业务动作授权](../scenarios/route-maps.md)。
 
 ## 编写第一条策略 {#write-a-first-policy}
 
 CoSec 依据**文档**做决策：一份作用于所有租户的平台文档，加上可选的租户文档和应用文档。每份文档包含策略，以及说明策略作用于谁的绑定。创建目录 `documents` 和文件 `documents/platform.json`：
 
-```json
-{
-  "schema": 2,
-  "revision": 1,
-  "publishedAt": "2026-01-01T00:00:00Z",
-  "policies": [
-    {
-      "id": "public",
-      "statements": [
-        { "name": "hello-and-token", "effect": "allow", "action": "http:GET",
-          "resource": ["http:path:/hello", "http:path:/token"] }
-      ]
-    },
-    {
-      "id": "members",
-      "statements": [
-        { "name": "orders", "effect": "allow", "action": "order:*",
-          "condition": { "eq": ["subject.authenticated", true] } }
-      ]
-    },
-    {
-      "id": "no-delete",
-      "statements": [
-        { "name": "no-delete", "effect": "deny", "action": "order:delete" }
-      ]
-    }
-  ],
-  "bindings": [
-    { "id": "public",    "subject": "*", "app": "*", "space": "*", "policy": "public" },
-    { "id": "members",   "subject": "*", "app": "*", "space": "*", "policy": "members" },
-    { "id": "no-delete", "subject": "*", "app": "*", "space": "*", "policy": "no-delete" }
-  ]
-}
-```
+<<< @/examples/quick-start/documents/platform.json [documents/platform.json]
 
-三个绑定把每条策略作用于任何人（`"subject": "*"`），在任意应用和空间。合起来的含义是：
+四个绑定把每条策略作用于任何人（`"subject": "*"`），在任意应用和空间。合起来的含义是：
 
 - 任何人都可以 `GET /hello` 和 `/token`；
-- 已认证的调用方可以执行任何 `order:` 动作；
-- 任何人都不能 `order:delete`。这条语句胜过 `members`，因为命中的 DENY 总是胜出。
+- 已认证的调用方可以对 `/orders/` 下发起任何请求；
+- 任何人都不能对 `/orders/` 下发起 `DELETE`。这条语句胜过 `members`，因为命中的 DENY 总是胜出；
+- 已认证的调用方可以到达控制 API 的路径。这开放的是路径，不是权限：控制面会以调用方的身份再授权每一步。有了它，你以后才能修改这份文档而不必重来（[之后修改文档](#change-a-document-later)）。
 
-其余请求，例如 `GET /admin`，什么都不匹配，因此被拒绝。字段说明见[策略语言](../policies/language.md)；DENY 为什么胜出、哪些请求默认被拒绝，见[安全模型](./security-model.md#evaluation-order)。
+其余请求，例如 `GET /admin`，什么都不匹配，因此被拒绝。字段说明见[策略语言](../policies/language.md)；DENY 为什么胜出、哪些请求默认被拒绝，见[安全模型](./security-model.md#evaluation-order)。[`wiki/examples/quick-start`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/quick-start/scenarios) 里的场景在每次构建时对这些文档逐句验证上面的说明。角色见[简单模式](../scenarios/simple-mode.md)。
 
 ## 发布平台文档 {#publish-the-platform-document}
 
@@ -221,8 +164,52 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
 每个响应都带有 `CoSec-Request-Id` 响应头，与响应体中的 `requestId` 相同。所有状态码和 problem 类型见[响应与状态码](../integration/web.md#responses-and-status-codes)。
 
+## 之后修改文档 {#change-a-document-later}
+
+`cosec-migrate publish` 只写第一个修订，从不覆盖。之后的每次修改都通过控制面，它在发布前检查并编译变更，所以新增一条策略只要几次调用。上面的平台文档已经允许已登录的调用方到达控制 API；没有这一条，唯一的出路就是清空 Redis。
+
+1. **加上控制面。**它是一个模块，需要 `cosec-cocache`，你已经有了：
+
+   ```kotlin
+   implementation("me.ahoo.cosec:cosec-control")
+   ```
+
+2. **指定第一位管理员。**这会把 `(platform)` 租户的一个主体绑定到内置策略 `cosec:platform-admin`：
+
+   ```bash
+   cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin alice
+   ```
+
+3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
+
+   ```kotlin
+   @Bean
+   fun platformToken(tokenConverter: TokenConverter) = ApplicationRunner {
+       // Demo only: anyone who can run this can administer the deployment.
+       val token = tokenConverter.toToken(TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)"))
+       println("platform token: ${token.accessToken}")
+   }
+   ```
+
+4. **提出、跳过影子窗口、发布。**变更基于你已经看到的修订（这里是第一个，`1`），这样它就不会覆盖更新的修订。这个变更让已登录的调用方可以读取 `/reports/`：
+
+   <<< @/examples/quick-start/changes/add-reports.json [add-reports.json]
+
+   ```bash
+   CONTROL=http://localhost:8080/cosec/control/v1
+   AUTH="Authorization: Bearer $PLATFORM_TOKEN"
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
+   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ```
+
+   影子窗口会先把变更和真实流量比较，没有流量的指南等不起；管理员是信任根，可以跳过它。`GET $CONTROL/documents/platform` 现在返回修订 `2`，带 Alice 普通令牌的 `GET /reports/1` 被放行（这里该路径没有处理器，所以返回 `404`，不是 `403`）。
+
+工作流、检查、影子窗口和审批见[策略测试](../policies/testing.md)。租户和角色的文档变更走同样的步骤：[系统角色与自定义角色](../scenarios/roles.md)。
+
 ## 下一步 {#next-steps}
 
+- 看看哪些可以省掉，再逐步扩展：[简单模式](../scenarios/simple-mode.md)，以及从[不使用空间的应用](../scenarios/app.md)到[网关拓扑](../scenarios/gateway.md)的各个场景。
 - 按角色、按应用和空间授权：[角色权限](../policies/role-permissions.md)。
 - 通过控制面安全地变更文档，使用模拟和影子窗口：[策略测试](../policies/testing.md)。
 - 用真正的登录、刷新和登出替换演示用的 `/token` 端点：[认证](../integration/authentication.md)。

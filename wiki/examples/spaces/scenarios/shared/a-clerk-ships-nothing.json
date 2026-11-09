@@ -1,0 +1,23 @@
+{
+  "description": "The clerk role does not hold inbound.ship.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "wms.clerk@store-1"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    },
+    "space": "store-1"
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

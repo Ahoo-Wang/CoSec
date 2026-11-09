@@ -329,6 +329,15 @@ apply. To keep the app id from widening access:
   route maps and resources disjoint, or add a platform DENY per app prefix, such as DENY `http:*` on
   `http:path:/orders/**` with the condition `{"not": {"eq": ["scope.app", "order"]}}`.
 
+**The route map decides which statements apply.** A request has one action. One that matches a route of the service's
+[route map](../integration/web.md#route-maps) is that route's `service:verb` on a typed resource; any other is
+`http:<METHOD>` on `http:path:<path>`. Statements on `http:` never match a mapped request, and statements on
+`service:verb` never match an unmapped one, and [rate limit rules](../policies/rate-limiting.md#rules) are matched the
+same way. So the map is an input to the decision, owned by the team that owns the service: adding a route moves its
+requests out of the `http` namespace, and with it out of the reach of any platform DENY or limit written on `http:`.
+A restriction that must hold for a path whether or not it is mapped is written twice, for the `http` form and for the
+action ([Authorizing business actions](../scenarios/route-maps.md)). There is no condition on the request path to say it once.
+
 **Client IP.** `max-trusted-index` is the number of proxies in front of the application; the default `1` assumes
 one. CoSec takes that entry counted from the right of `X-Forwarded-For`, which your proxy appended. On a host that
 clients reach directly, set it to `0`, or a client can write any address into the header
@@ -472,6 +481,8 @@ Before production:
 - Register a REQUIRED decision listener before anyone needs break-glass.
 - Put DENYs that must always apply in policies without a condition, and never grant on a header the client
   writes.
+- Write a platform DENY or rate limit on a path for the `http` form and for every action a route map gives that path:
+  [a mapped route is not an `http` request](#trust-boundaries).
 - Give rate limit rules that protect against abuse `"strictFailure": true` if a Redis outage must not lift them.
 - Issue `(platform)` tokens only from a source users cannot influence.
 - Make every service in gateway mode reachable from the gateway only.

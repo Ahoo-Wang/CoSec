@@ -1,0 +1,22 @@
+{
+  "description": "A host with an app refuses a token that declares none.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "roles": [
+      "clerk"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.read",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  }
+}

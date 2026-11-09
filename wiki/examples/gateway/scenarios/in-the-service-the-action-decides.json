@@ -1,0 +1,22 @@
+{
+  "description": "A service that decides again, with its own route map, sees billing:invoice.read.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "billing",
+    "roles": [
+      "accountant"
+    ]
+  },
+  "request": {
+    "hostApp": "billing",
+    "action": "billing:invoice.read",
+    "resource": {
+      "type": "invoice",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

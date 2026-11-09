@@ -1,0 +1,20 @@
+{
+  "document": "tenant:acme",
+  "base": 3,
+  "note": "Night shift may ship",
+  "operations": [
+    {
+      "op": "putRole",
+      "role": {
+        "id": "night-shift",
+        "app": "wms",
+        "name": "Night shift",
+        "description": "Watches the dock",
+        "permissions": [
+          "warehouse.read",
+          "inbound.ship"
+        ]
+      }
+    }
+  ]
+}

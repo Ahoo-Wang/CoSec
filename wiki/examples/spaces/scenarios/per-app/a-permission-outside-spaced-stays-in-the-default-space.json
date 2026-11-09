@@ -1,0 +1,23 @@
+{
+  "description": "warehouse.read is in a group that is not spaced: wh-01 does not get it.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "wms.manager@wh-01"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.read",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    },
+    "space": "wh-01"
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}
