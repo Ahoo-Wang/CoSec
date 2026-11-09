@@ -48,7 +48,7 @@ The starter collects these beans:
 | `RateLimiter` | `me.ahoo.cosec.spi.ratelimit` | one; yours replaces the Redis or local limiter | counts rate-limit permits |
 | `Authenticator` | `me.ahoo.cosec.spi.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
 | `BlacklistSource` | `me.ahoo.cosec.runtime.attribute` | one; the starter wraps it in `BlacklistAttributeProvider` | says who and what is blocked |
-| `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | 7.x-style audit events |
+| `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | the flat audit record of each decision |
 | `ControlStore` | `me.ahoo.cosec.control.store` | one, with `cosec-control`; replaces `CoCacheControlStore` | where the control plane keeps its records |
 | `IdGenerator` | `me.ahoo.cosec.spi.id` | one; replaces `RandomIdGenerator` | request, decision event, token (`jti`) and change ids |
 
@@ -157,7 +157,7 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
   token, header or external attribute value. `event.evaluationTrace` holds the engine's trace at
   `cosec.pipeline.trace-level` (null at `off`, the default).
 - Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`cosec-kafka`), Micrometer, OpenTelemetry,
-  shadow. A 7.x `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
+  shadow. An `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
 - BEST_EFFORT queues hold `cosec.observability.listener.queue-capacity` (1024) events each; on shutdown they drain for
   up to `cosec.observability.listener.drain-timeout` (5s). A service in gateway mode registers no listeners.
 

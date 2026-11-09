@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "An action is an object with two matcher keys. 7.x read only the first (`all`) and dropped `path`; 8.0 actions are strings, so the document does not decode.",
+  "description": "An action is an object with two keys (`all` and `path`). Actions are strings, so the document does not decode, rather than reading one key and dropping the other.",
   "documents": {
     "platform": {
       "schema": 2,

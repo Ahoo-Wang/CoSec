@@ -19,7 +19,7 @@ package me.ahoo.cosec.engine.pattern
  * It matches what Spring's `PathPattern` (the `spring-web` version `main` uses) matches and captures the same values,
  * on this subset: literal segments, `?` (one character), `*` within a segment, `*` as a segment, `{name}` (one segment,
  * captured), `**` and `{*name}` (any number of segments, at the start or the end of the pattern), and the options
- * [caseSensitive] and [decodeAndParseSegments]. `HttpPathPatternParityTest` in `cosec-core` compares the two.
+ * [caseSensitive] and [decodeAndParseSegments]. `HttpPathPatternParityTest` in `cosec-runtime` compares the two.
  *
  * These compile in Spring but not here, so a policy that uses them fails to convert instead of matching differently:
  * - `{name:regex}`: a regular expression has no static cost bound, and `java.util.regex` is not available here.
@@ -107,9 +107,9 @@ class HttpPathPattern private constructor(
     }
 
     /*
-     * Two copies of the walk: one without a table, as it was before there was one, which every pattern without a glob
-     * segment takes, and one with the evaluation's table. One walk taking the table as well cost
-     * FlatAuthorizationBenchmark 7 to 12 % on CI's x86 runners, whose patterns have no glob segment at all.
+     * Two copies of the walk: one without a table, which every pattern without a glob segment takes, and one with the
+     * evaluation's table. One walk taking the table as well cost FlatAuthorizationBenchmark 7 to 12 % on CI's x86
+     * runners, whose patterns have no glob segment at all.
      */
 
     private fun matchPath(path: HttpPath, captures: Array<String?>?): Boolean {

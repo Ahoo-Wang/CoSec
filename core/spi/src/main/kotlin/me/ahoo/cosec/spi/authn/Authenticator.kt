@@ -41,9 +41,9 @@ fun interface Authenticator {
 }
 
 /**
- * The credentials of a request, read by the pipeline the way `DefaultSecurityContextParser` reads them: the token from
- * the `Authorization` header, else (when allowed) the query parameter of that name, else the cookie; the API key from
- * its own header. Null when absent.
+ * The credentials of a request, as the pipeline reads them: the token from the `Authorization` header, else (when
+ * allowed) the query parameter of that name, else the cookie; the API key from its own header. The header is the
+ * channel a client sets on purpose, the others are fallbacks for clients that cannot set it. Null when absent.
  */
 class Credentials(val token: String?, val apiKey: String?) {
     val isEmpty: Boolean get() = token == null && apiKey == null

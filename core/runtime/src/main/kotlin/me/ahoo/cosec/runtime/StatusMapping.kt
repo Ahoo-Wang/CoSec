@@ -165,8 +165,8 @@ internal object StatusMapping {
     )
 
     /**
-     * `RateLimit-Limit`, `-Remaining` and `-Reset` of [result], and `Retry-After` when it was exhausted: the headers
-     * 7.x writes (`SecurityDecision.responseHeaders`), in seconds of at least 1.
+     * `RateLimit-Limit`, `-Remaining` and `-Reset` of [result], and `Retry-After` when it was exhausted, in whole
+     * seconds of at least 1, so a client never reads "retry now".
      */
     private fun rateLimitHeaders(result: RateLimitResult): Map<String, String> {
         val reset = result.resetAfter.toSeconds().coerceAtLeast(1).toString()

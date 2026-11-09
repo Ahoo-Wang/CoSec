@@ -22,7 +22,7 @@ import me.ahoo.cosec.model.TenantId
 
 /**
  * What the credential says about the principal. [tenant] is never blank: the adapter maps a credential without a tenant
- * to [TenantId.DEFAULT], as 7.x does.
+ * to [TenantId.DEFAULT].
  */
 class ScopeSubject(val tenant: TenantId, val authenticated: Boolean, val memberships: Memberships) {
     init {
@@ -60,7 +60,7 @@ sealed interface ScopeResolution {
  *
  * - Tenant: the subject's. An anonymous subject is always in [TenantId.DEFAULT] and has no roles, whatever it is given.
  * - App: the host's ([HostScope]: a gateway route's, else the configured one), when it has one; a declared app that
- *   differs is [ScopeResolution.Rejected.Reason.APP_MISMATCH]. Otherwise the declared one, as in 7.x. A declared app that cannot be an app id (see [isValidAppId]) is
+ *   differs is [ScopeResolution.Rejected.Reason.APP_MISMATCH]. Otherwise the declared one. A declared app that cannot be an app id (see [isValidAppId]) is
  *   [ScopeResolution.Rejected.Reason.APP_MISMATCH] too, whether or not the host has an app.
  * - Space: an empty declaration is [SpaceId.DEFAULT]. Any other space needs at least one role there, or it is
  *   [ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER]: falling back to the default space would let the backend act in a

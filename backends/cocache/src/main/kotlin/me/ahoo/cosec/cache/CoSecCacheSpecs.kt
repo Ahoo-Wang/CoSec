@@ -330,7 +330,8 @@ object CoSecCacheSpecs {
      * What both revocation tables declare, before `cocache.*` properties and customizers:
      *
      * - they are `Store`s, written with an explicit lifetime each ([CoCacheTokenStore]); content the table cannot read
-     *   fails the read, so a 6.x revocation is never reclaimed (deleting it would accept the token again);
+     *   fails the read, so a revocation the table cannot read is never reclaimed (deleting it would accept the token
+     *   again);
      * - "not revoked" is kept locally for [RevokedTokenCache.MISSING_TTL_SECONDS];
      * - a failed Redis read reads as "not revoked" (`unknownRead = ABSENT`), the documented exception to failing closed:
      *   tokens are still signature-verified and expire on their own, and failing closed would reject every

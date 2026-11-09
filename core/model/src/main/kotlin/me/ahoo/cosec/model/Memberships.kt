@@ -21,7 +21,7 @@ class Memberships(
     val source: Source,
     /** The roles in each space, in claim order. The default space's key is [SpaceId.DEFAULT]. */
     val roles: Map<SpaceId, Set<RoleId>>,
-    /** The policies the principal attaches directly (7.x `principal.policies`), in claim order. */
+    /** The policies the principal attaches directly (RFC 0004 §4.4), in claim order. */
     val attachments: List<PolicyId>,
     /**
      * Claimed entries that are not well formed, such as `a@b@c`. Kept for the trace only: like `RoleScope`, they apply

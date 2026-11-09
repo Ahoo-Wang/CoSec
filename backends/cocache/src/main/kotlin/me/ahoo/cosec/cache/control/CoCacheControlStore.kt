@@ -57,10 +57,10 @@ import java.time.Instant
  * reads ([PolicySnapshotCache], one key per document); the records, indexes, back-references and leases are the
  * `Store`s of [ControlCacheSpecs]. Digests are CoCache's, SHA-256 with its algorithm.
  *
- * Writes are `putIfMatch`, one Lua script each (CoCache 6.7), as 7.x's snapshot publisher
- * wrote: the head only over the digest it was read at, a record only where there is none. A write whose reply is lost
- * is resolved by reading the digest back, never by writing again: `putIfMatch` is not idempotent. Nothing waits for
- * replicas (RFC 0007 Q27): a write lost in a failover shows up as a broken chain or a revision regression.
+ * Writes are `putIfMatch`, one Lua script each: the head only over the digest it was read at, a record only where
+ * there is none. A write whose reply is lost is resolved by reading the digest back, never by writing again:
+ * `putIfMatch` is not idempotent. Nothing waits for replicas (RFC 0007 Q27): a write lost in a failover shows up as
+ * a broken chain or a revision regression.
  *
  * Every read is a conditional read without a digest, so it answers from Redis, not from a local copy, and a failed
  * read throws (a `Store`'s conditional read always does). Nothing here blocks the caller: it awaits CoCache's async view.

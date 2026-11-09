@@ -24,7 +24,7 @@
     {
       "id": "MEM-3",
       "source": "RFC 0004 §4.5.1",
-      "statement": "Membership claims read as 7.x RoleScope: `role` is a role in the default space, `role@space` a role in that space only, and a malformed entry (empty role or space, more than one @, `role@*`) applies in no space.",
+      "statement": "Membership claims are read thus: `role` is a role in the default space, `role@space` a role in that space only, and a malformed entry (empty role or space, more than one @, `role@*`) applies in no space.",
       "level": "engine",
       "guards": [
         "runtime:MembershipClaimsTest"

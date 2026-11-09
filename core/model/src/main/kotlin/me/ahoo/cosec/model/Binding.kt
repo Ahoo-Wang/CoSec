@@ -19,12 +19,12 @@ sealed interface SubjectRef {
     data class Principal(val tenant: TenantId, val id: PrincipalId) : SubjectRef
 
     /**
-     * [tenant] is null for a platform-layer binding: it applies to a role of this name in any tenant (7.x semantics,
-     * RFC 0004 §5.2). In a tenant document it is the document's tenant.
+     * [tenant] is null for a platform-layer binding: it applies to a role of this name in any tenant
+     * (RFC 0004 §5.2). In a tenant document it is the document's tenant.
      */
     data class Role(val tenant: TenantId?, val id: RoleId) : SubjectRef
 
-    /** Any principal, anonymous ones included: the 7.x global policies. */
+    /** Any principal, anonymous ones included. */
     data object Anyone : SubjectRef
 }
 

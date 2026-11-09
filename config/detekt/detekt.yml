@@ -26,6 +26,16 @@ style:
         reason: 'The switch to 8.0 is done; say what the code does now (G2).'
       - value: '\b(layered|the layers)\b'
         reason: 'The layered engine is gone (G2).'
+      - value: '\b[67]\.x\b'
+        reason: 'A comment states why, for a reader who never saw 6.x or 7.x; say what the code does now (G2).'
+      - value: '\b7\.0\b'
+        reason: 'A comment states why, for a reader who never saw 7.0; say what the code does now (G2).'
+      - value: 'CoCache [56]'
+        reason: 'CoCache 8 is the only CoCache CoSec runs on; say what the code does, not what an older one did (G2).'
+      - value: 'earlier builds'
+        reason: 'A rolling upgrade has instances of another version: say what the format is and who must read it (G2).'
+      - value: '8\.0\.0-alpha'
+        reason: 'An alpha is not a release anyone upgrades from; say what the code does now (G2).'
     excludes: ['**/test/**', '**/testFixtures/**', '**/jmh/**', '**/migrate/src/**']
   MaxLineLength:
     maxLineLength: 200

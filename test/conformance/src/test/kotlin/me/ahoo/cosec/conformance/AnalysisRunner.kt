@@ -34,8 +34,7 @@ import tools.jackson.databind.JsonNode
 
 /**
  * The `analysis` runner: the analyses of RFC 0005 §4 over the conditions of a scenario, evaluated on one request
- * written as attribute values. The index and the grant check that use them come later (RFC 0005 PR-4, RFC 0007 PR-6);
- * the rules hold for the functions now.
+ * written as attribute values. The grant check that uses them has its own runner ([GrantRunner]).
  *
  * ```jsonc
  * "analysis": { "condition": {...}, "attribute": "scope.app",      // index keys (ANA-1)

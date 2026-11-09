@@ -104,8 +104,8 @@ The rules behind the picture:
   `Dispatchers.IO` or `GlobalScope`.
 - **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
   `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
-  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, which keeps the 7.x Reactor login
-  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
+  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, whose `Authentication`
+  contracts return `Mono`), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
   decisions (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
   and `cosec-jwt`; every other module is `compileOnly` in
