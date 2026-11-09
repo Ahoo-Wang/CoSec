@@ -368,6 +368,7 @@ class ShadowWindowTest {
         val candidate = store.candidate(StoreFixtures.ACME)!!
         store.putCandidate(
             StoreFixtures.ACME,
+            store.stagedCandidate(StoreFixtures.ACME)!!.digest,
             me.ahoo.cosec.runtime.shadow.StoredCandidate(candidate.window, 7, candidate.document)
         )
         val one = Instance("one")

@@ -107,6 +107,9 @@ object CoSecCacheSpecs {
     const val SHADOW_REPORT_CACHE_NAME = "ShadowReportCache"
     const val INSTANCE_STATUS_CACHE_NAME = "InstanceStatusCache"
 
+    /** Which instances have a status to read: a short list, changed when an instance joins or leaves (#1214). */
+    const val INSTANCE_INDEX_CACHE_NAME = "InstanceIndexCache"
+
     /** The instances that reported on each shadow window (RFC 0007 §6.4, round-2 review R1). */
     const val SHADOW_REPORTER_CACHE_NAME = "ShadowReporterCache"
 
@@ -142,6 +145,7 @@ object CoSecCacheSpecs {
         SHADOW_REPORT_CACHE_NAME,
         SHADOW_REPORTER_CACHE_NAME,
         INSTANCE_STATUS_CACHE_NAME,
+        INSTANCE_INDEX_CACHE_NAME,
     )
 
     private val PATHS: Map<String, String> = mapOf(
@@ -162,6 +166,7 @@ object CoSecCacheSpecs {
         SHADOW_REPORT_CACHE_NAME to "shadow:report",
         SHADOW_REPORTER_CACHE_NAME to "shadow:reporters",
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
+        INSTANCE_INDEX_CACHE_NAME to "shadow:instances",
     )
 
     /**

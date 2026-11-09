@@ -378,8 +378,10 @@ What makes it safe:
 - **Changes.** A change request is a base revision plus entry-level operations, checked and compiled with the data
   plane's compiler. A moved head makes it `CONFLICTED` until it is rebased. Each document has one staging slot.
 - **Authorization.** Every control-plane action is authorized again as the operator, with `cosec:*` actions on document
-  resources, against a snapshot that is confirmed current from the store before each check. A grant the analysis cannot
-  prove contained is an escalation and needs an approval by another person.
+  resources, against a snapshot that is confirmed current from the store. The decisions of one change share one
+  confirmation of the documents they read, and the documents are confirmed again at the end: if one moved meanwhile,
+  the decisions are taken again, so a change of a thousand bindings reads them a handful of times, not two thousand
+  (`CTL-8`). A grant the analysis cannot prove contained is an escalation and needs an approval by another person.
 - **Shadow windows.** Instances sample requests (`cosec.authorization.shadow.sample-rate`), evaluate them on the staged
   candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). An instance that cannot
   compile or evaluate the candidate blocks the window, and a blocked change never publishes. Documents compile against

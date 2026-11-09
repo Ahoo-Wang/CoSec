@@ -68,7 +68,7 @@ class ControlMaintenanceTest {
         clock.now = clock.now.plus(Duration.ofDays(1))
 
         store.documents().assert().containsExactly(ACME)
-        store.openChanges().assert().containsExactly(open.id)
+        store.openChanges().map { it.id }.assert().containsExactly(open.id)
         maintenance.reclaim().getValue(ACME).records.assert().containsExactly(first)
         store.recordDigests(ACME).assert().containsExactlyInAnyOrder(second, third)
 
@@ -84,16 +84,9 @@ class ControlMaintenanceTest {
      */
     @Test
     fun `an open change of an app no key can name stops the pass`() = runBlocking<Unit> {
-        val odd = ChangeId("odd")
         val failing = object : ControlStore by store {
-            override suspend fun openChanges(): Set<ChangeId> = store.openChanges() + odd
-
-            override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
-                if (id == odd) {
-                    throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
-                } else {
-                    store.change(id)
-                }
+            override suspend fun openChanges(): List<ChangeRequest> =
+                throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
         }
         val failingChanges = Changes(
             failing,
@@ -234,8 +227,7 @@ class ControlMaintenanceTest {
     @Test
     fun `a pass that cannot read an open change reclaims nothing`() = runBlocking<Unit> {
         val failing = object : ControlStore by store {
-            override suspend fun change(id: ChangeId) =
-                if (id.value == "c1") error("Redis is down") else store.change(id)
+            override suspend fun openChanges(): List<ChangeRequest> = error("Redis is down")
         }
         val blindRevisions = Revisions(failing, clock, revisions.retention)
         val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
@@ -254,7 +246,7 @@ class ControlMaintenanceTest {
     fun `a change nobody finishes expires and leaves the open list`() = runBlocking<Unit> {
         published()
         val stale = changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(allow("read"))), "stale")
-        store.openChanges().assert().containsExactly(stale.id)
+        store.openChanges().map { it.id }.assert().containsExactly(stale.id)
         clock.now = clock.now.plus(Duration.ofDays(8))
         maintenance.closeShadowWindows()
         store.change(stale.id)!!.value.state.assert().isEqualTo(ChangeState.EXPIRED)
@@ -264,5 +256,93 @@ class ControlMaintenanceTest {
     private suspend fun staged(policy: String, base: Long = 1): ChangeId {
         val change = changes.propose(ALICE_OP, ACME, base, listOf(Operation.PutPolicy(allow(policy))), policy)
         return changes.stage(ALICE_OP, change.id).also { it.state.assert().isEqualTo(ChangeState.SHADOWING) }.id
+    }
+
+    /** A store that counts how often each change is read, and how often the open changes are listed. */
+    private inner class Counting : ControlStore by store {
+        val reads = java.util.concurrent.ConcurrentHashMap<ChangeId, Int>()
+        var listings = 0
+
+        override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? {
+            reads.merge(id, 1, Int::plus)
+            return store.change(id)
+        }
+
+        override suspend fun openChanges(): List<ChangeRequest> {
+            listings++
+            return store.openChanges()
+        }
+    }
+
+    private fun counting(): Pair<Counting, ControlMaintenance> {
+        val counting = Counting()
+        val countingRevisions = Revisions(counting, clock, revisions.retention)
+        val countingChanges = Changes(
+            counting,
+            countingRevisions,
+            { ChangeId("n${ids.incrementAndGet()}") },
+            PERMIT_ALL,
+            clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        )
+        return counting to ControlMaintenance(counting, countingRevisions, countingChanges, Duration.ofMinutes(1))
+    }
+
+    /** #1219: the open changes are listed once, and the listing is what the pass goes by. */
+    @Test
+    fun `a pass reads the open changes once and none again - #1219`() = runBlocking<Unit> {
+        published()
+        val open = (1..20).map {
+            changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(allow("p$it"))), "open $it")
+        }
+        val shadowing = staged("shadowed", 1)
+        val (counting, maintenance) = counting()
+
+        maintenance.reclaim()
+
+        counting.listings.assert().isEqualTo(1)
+        counting.reads.assert().isEmpty()
+
+        counting.listings = 0
+        maintenance.closeShadowWindows()
+
+        counting.listings.assert().isEqualTo(1)
+        // Only the one change that is shadowing is looked at again, to close its window; the others are not read.
+        counting.reads.keys.assert().containsExactly(shadowing)
+        open.forEach { changes.get(it.id).state.assert().isEqualTo(ChangeState.CHECKED) }
+    }
+
+    /** #1219: what each document keeps comes from its own open changes, found without a scan of all of them for each. */
+    @Test
+    fun `each document keeps what its own open changes rest on - #1219`() = runBlocking<Unit> {
+        val beta = SnapshotKey.Tenant("beta")
+        suspend fun publish(key: SnapshotKey): SnapshotDigest {
+            clock.now = clock.now.plus(Duration.ofDays(1))
+            return (
+                revisions.publish(
+                    key,
+                    revisions.head(key),
+                    candidate(key),
+                    publication()
+                ) as PublishOutcome.Published
+                )
+                .digest
+        }
+        val acme = mutableListOf(publish(ACME))
+        val other = mutableListOf(publish(beta))
+        // acme's open change rests on its first revision, which retention (the latest only) would otherwise remove.
+        changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(allow("read"))), "open")
+        repeat(2) {
+            acme += publish(ACME)
+            other += publish(beta)
+        }
+        clock.now = clock.now.plus(Duration.ofDays(1))
+
+        val reclaimed = maintenance.reclaim()
+
+        reclaimed.getValue(ACME).records.assert().containsExactly(acme[1])
+        reclaimed.getValue(beta).records.assert().containsExactlyInAnyOrder(other[0], other[1])
+        store.recordDigests(ACME).assert().containsExactlyInAnyOrder(acme[0], acme[2])
+        store.recordDigests(beta).assert().containsExactly(other[2])
     }
 }

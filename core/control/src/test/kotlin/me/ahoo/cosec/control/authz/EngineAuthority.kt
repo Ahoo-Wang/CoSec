@@ -59,6 +59,8 @@ class EngineAuthority(
     private val revisions: Revisions,
     /** Who a recorded principal whose memberships come from a provider is asked about again; none by default. */
     private val membershipProvider: MembershipProvider? = null,
+    /** The views the checker evaluates: the current heads on every load by default, or a source that keeps its own. */
+    views: SnapshotViews = HeadViews(revisions),
 ) {
     private val checker = AuthorizationChecker(
         Pipeline(
@@ -66,7 +68,7 @@ class EngineAuthority(
                 authenticator = Authenticator {
                     AuthnResult.Anonymous
                 },
-                snapshots = SuspendingSnapshotSource(HeadViews(revisions)),
+                snapshots = SuspendingSnapshotSource(views),
                 membershipProvider = membershipProvider,
             )
         ),
@@ -122,7 +124,7 @@ class EngineAuthority(
     }
 
     /** Compiles the current heads on every load, as a source that confirms every document before a check would. */
-    private class HeadViews(private val revisions: Revisions) : SnapshotViews {
+    open class HeadViews(private val revisions: Revisions) : SnapshotViews {
         override fun peek(key: ViewKey): SnapshotView? = null
 
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(

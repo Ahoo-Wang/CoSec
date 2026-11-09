@@ -156,14 +156,17 @@ class CacheTtlPolicyTest {
         ShadowCacheSpecs.reports().path().assert().isEqualTo("cosec:shadow:report")
         ShadowCacheSpecs.statuses().path().assert().isEqualTo("cosec:shadow:status")
         ShadowCacheSpecs.reporters().path().assert().isEqualTo("cosec:shadow:reporters")
+        ShadowCacheSpecs.instances().path().assert().isEqualTo("cosec:shadow:instances")
         ShadowCacheSpecs.reporters().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.REPORT_TTL)
+        ShadowCacheSpecs.instances().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.REPORT_TTL)
         ShadowCacheSpecs.reports().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.REPORT_TTL)
         ShadowCacheSpecs.statuses().policy.ttl.assert().isEqualTo(ShadowCacheSpecs.STATUS_TTL)
         weakened { factory ->
             listOf(
                 ShadowCacheSpecs.reports(),
                 ShadowCacheSpecs.reporters(),
-                ShadowCacheSpecs.statuses()
+                ShadowCacheSpecs.statuses(),
+                ShadowCacheSpecs.instances()
             ).forEach { spec ->
                 factory.create(spec, CoSecCacheSpecs.locks(spec.name))
                 factory.effective(

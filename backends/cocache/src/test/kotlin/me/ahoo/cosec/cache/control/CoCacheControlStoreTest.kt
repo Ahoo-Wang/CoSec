@@ -33,12 +33,15 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisTarget
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
@@ -52,6 +55,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -66,6 +70,7 @@ import java.util.concurrent.CompletableFuture
 
 /** [CoCacheControlStore]'s conditional writes on real CoCache engines; Redis for what must reach Redis. */
 class CoCacheControlStoreTest {
+
     private val key = SnapshotKey.Tenant("acme")
 
     private fun document(revision: Long) = SnapshotDocument(
@@ -244,16 +249,74 @@ class CoCacheControlStoreTest {
             val open = change("c1", ChangeState.DRAFT)
             store.putChange(null, open).assert().isTrue()
             store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
-            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
+            store.openChanges().map { it.id }.assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
             val digest = store.change(ChangeId("c1"))!!.digest
             store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
-            store.openChanges().assert().containsExactly(ChangeId("c2"))
+            store.openChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
 
             // A removal lost after the terminal write: the id is dropped the next time the list is read.
             val listed = lists.get("open-changes")!!
             lists.put("open-changes", listed + ("c1" to Instant.EPOCH))
-            store.openChanges().assert().containsExactly(ChangeId("c2"))
+            store.openChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
             lists.get("open-changes")!!.keys.assert().containsExactly("c2")
+        }
+    }
+
+    /**
+     * #1219: a pass of the control plane's maintenance reads each open change once. Before, the store read each of them
+     * to drop the terminal ones and the pass read them again, so every pass cost twice the open changes.
+     */
+    @Test
+    fun `a maintenance pass reads each open change once - #1219`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val reads = java.util.concurrent.ConcurrentHashMap<ChangeId, Int>()
+            val real = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
+            val counting = object : Store<ChangeId, ChangeRequest> by real {
+                override fun async(): AsyncStore<ChangeId, ChangeRequest> =
+                    object : AsyncStore<ChangeId, ChangeRequest> by real.async() {
+                        override fun getIfChanged(key: ChangeId, digest: Digest?) =
+                            real.async().getIfChanged(key, digest).also { reads.merge(key, 1, Int::plus) }
+                    }
+            }
+            val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
+            val store = store(node, clock = clock, changes = counting)
+            repeat(OPEN_CHANGES) { store.putChange(null, change("c$it", ChangeState.CHECKED)) }
+            val revisions = Revisions(store, clock)
+            val changes = Changes(
+                store,
+                revisions,
+                { ChangeId("unused") },
+                { _, _, _ -> ControlDecision.PERMIT },
+                clock
+            )
+            val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
+            reads.clear()
+
+            maintenance.closeShadowWindows().assert().isEmpty()
+
+            reads.keys.assert().hasSize(OPEN_CHANGES)
+            reads.values.assert().allMatch { it == 1 }
+        }
+    }
+
+    /** #1235: a candidate is written over the candidate that was read, never over another one. */
+    @Test
+    fun `a candidate is written over the candidate read - #1235`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val store = store(node)
+            val body = """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
+            fun candidate(window: String) =
+                StoredCandidate(window, 4, SnapshotDocument(2, 5, Instant.parse("2026-11-01T00:00:00Z"), body))
+            store.stagedCandidate(key).assert().isNull()
+            store.putCandidate(key, null, candidate("c1@1")).assert().isTrue()
+            // Another stage that read nothing: its write finds the first one there.
+            store.putCandidate(key, null, candidate("c2@2")).assert().isFalse()
+            val staged = store.stagedCandidate(key)!!
+            staged.value.window.assert().isEqualTo("c1@1")
+            store.putCandidate(key, staged.digest, candidate("c2@2")).assert().isTrue()
+            // A stage that read the first candidate and was slow: the digest it names is not the candidate's any more.
+            store.putCandidate(key, staged.digest, candidate("c3@3")).assert().isFalse()
+            store.candidate(key)!!.window.assert().isEqualTo("c2@2")
         }
     }
 
@@ -321,10 +384,12 @@ class CoCacheControlStoreTest {
                 }
                 val lists = reading.runtime.create(ControlCacheSpecs.list(reading.keyPrefix))
                 val reader = store(reading, lists = lists, clock = clock)
-                // c1 is listed and missing: it may be being written, so it is not dropped yet.
-                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                // c1 is listed and missing: it may be being written, so it is not dropped yet (and there is no change).
+                reader.openChanges().assert().isEmpty()
+                lists.get("open-changes")!!.keys.assert().containsExactly("c1")
                 clock.now = clock.now.plus(Duration.ofMinutes(59))
-                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                reader.openChanges().assert().isEmpty()
+                lists.get("open-changes")!!.keys.assert().containsExactly("c1")
                 clock.now = clock.now.plus(Duration.ofMinutes(2))
                 reader.openChanges().assert().isEmpty()
                 lists.get("open-changes")!!.assert().isEmpty()
@@ -577,6 +642,8 @@ class CoCacheControlStoreTest {
     }
 
     private companion object {
+        const val OPEN_CHANGES = 25
+
         /** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
         fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
             CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->

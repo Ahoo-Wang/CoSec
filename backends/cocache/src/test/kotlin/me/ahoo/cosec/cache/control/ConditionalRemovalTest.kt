@@ -137,7 +137,7 @@ class ConditionalRemovalTest {
             val candidates = intercepted(real) { real.put(acme, StoredCandidate("c2@2", 4, document)) }
             val store = store(node, candidates = candidates)
             runBlocking {
-                store.putCandidate(acme, StoredCandidate("c1@1", 4, document))
+                store.putCandidate(acme, null, StoredCandidate("c1@1", 4, document)).assert().isTrue()
                 store.withdrawCandidate(acme, "c1@1").assert().isFalse()
                 store.candidate(acme)!!.window.assert().isEqualTo("c2@2")
             }

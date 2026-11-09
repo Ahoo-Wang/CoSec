@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.cache.control
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.Codec
@@ -29,6 +32,7 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.createLocked
 import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
+import me.ahoo.cosec.cache.shadow.StoredCandidateCodec
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
@@ -187,20 +191,26 @@ class CoCacheControlStore internal constructor(
     }
 
     /**
-     * The listed changes that are not terminal. A terminal one is dropped; so is one missing for longer than
-     * [missingGrace], whose first write failed. One missing for less may be being written right now: it stays. One that
-     * does not decode fails this: it is not known to be terminal.
+     * The listed changes that are not terminal, each read once, a few at a time (#1219). A terminal one is dropped; so is
+     * one missing for longer than [missingGrace], whose first write failed. One missing for less may be being written
+     * right now: it stays listed and is not among the changes. One that does not decode fails this: it is not known
+     * to be terminal.
      */
-    override suspend fun openChanges(): Set<ChangeId> {
+    override suspend fun openChanges(): List<ChangeRequest> {
         val listed = read(lists, OPEN_CHANGES)?.first.orEmpty()
         val expired = clock.instant().minus(missingGrace)
-        val closed = listed.filterTo(HashMap()) { (id, listedAt) ->
-            read(changes, ChangeId(id))?.first?.state?.terminal ?: listedAt.isBefore(expired)
-        }.keys
+        val found = listed.entries.chunked(READ_BATCH).flatMap { batch ->
+            coroutineScope {
+                batch.map { (id, listedAt) -> async { Triple(id, listedAt, read(changes, ChangeId(id))?.first) } }
+                    .awaitAll()
+            }
+        }
+        val closed = found.filter { (_, listedAt, change) -> change?.state?.terminal ?: listedAt.isBefore(expired) }
+            .mapTo(HashSet()) { it.first }
         if (closed.isNotEmpty()) {
             updateList(OPEN_CHANGES) { it - closed }
         }
-        return (listed.keys - closed).mapTo(LinkedHashSet(), ::ChangeId)
+        return found.mapNotNull { it.third }.filterNot { it.state.terminal }
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
@@ -211,9 +221,11 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = read(candidates, key)?.first
 
-    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate) {
-        candidates.async().put(key, candidate).await()
-    }
+    override suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>? =
+        read(candidates, key)?.let { (value, digest) -> Versioned(value, digest) }
+
+    override suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean =
+        put(candidates, key, expected, candidate, digest(StoredCandidateCodec, candidate)) is Put.Written
 
     /** `deleteIfMatch` over the digest of the candidate of [window] as read, so another window's is never removed. */
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
@@ -372,6 +384,9 @@ class CoCacheControlStore internal constructor(
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"
         private const val MAX_LIST_ATTEMPTS = 16
+
+        /** How many changes [openChanges] reads at once. */
+        private const val READ_BATCH = 32
 
         /** As `cosec.control.revisions.orphan-age`'s default. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)

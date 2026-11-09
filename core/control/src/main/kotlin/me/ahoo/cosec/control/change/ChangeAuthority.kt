@@ -130,58 +130,62 @@ class ChangeAuthority(
         base: PolicyDocument? = null,
     ) {
         isolate(operator, key)
-        if (kind == ProvenanceKind.BREAK_GLASS) {
-            // RFC 0007 §8: requesting and revoking break-glass is the platform's, by cosec:breakglass alone. Such a
-            // change carries break-glass bindings only, or it never checks clean (BreakGlassRules).
-            require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
-            return
-        }
-        if (breakGlass) {
-            require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
-        }
-        for (operation in operations) {
-            authorizeOperation(operator, key, operation, base)
+        // One confirmation of the control documents for all the decisions of this change, not one for each (#1218).
+        authorizer.batch { via ->
+            if (kind == ProvenanceKind.BREAK_GLASS) {
+                // RFC 0007 §8: requesting and revoking break-glass is the platform's, by cosec:breakglass alone. Such a
+                // change carries break-glass bindings only, or it never checks clean (BreakGlassRules).
+                require(via, operator, ControlActions.BREAKGLASS, ControlResources.document(key))
+                return@batch
+            }
+            if (breakGlass) {
+                require(via, operator, ControlActions.BREAKGLASS, ControlResources.document(key))
+            }
+            for (operation in operations) {
+                authorizeOperation(via, operator, key, operation, base)
+            }
         }
     }
 
-    private suspend fun authorizeOperation(operator: Operator, key: SnapshotKey, operation: Operation, base: PolicyDocument?) {
+    private suspend fun authorizeOperation(
+        via: ControlAuthorizer,
+        operator: Operator,
+        key: SnapshotKey,
+        operation: Operation,
+        base: PolicyDocument?
+    ) {
+        suspend fun need(action: Action, resource: Resource) = require(via, operator, action, resource)
         when (operation) {
-            is Operation.PutPolicy -> require(
-                operator,
-                ControlActions.WRITE,
-                entry(key, POLICY, operation.policy.id.value)
-            )
-            is Operation.RemovePolicy -> require(operator, ControlActions.WRITE, entry(key, POLICY, operation.id.value))
+            is Operation.PutPolicy -> need(ControlActions.WRITE, entry(key, POLICY, operation.policy.id.value))
+            is Operation.RemovePolicy -> need(ControlActions.WRITE, entry(key, POLICY, operation.id.value))
             is Operation.PutBinding -> {
-                require(operator, ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
-                require(operator, ControlActions.GRANT, scopeOf(key, operation.binding))
+                need(ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
+                need(ControlActions.GRANT, scopeOf(key, operation.binding))
             }
 
-            is Operation.RemoveBinding -> require(
-                operator,
-                ControlActions.WRITE,
-                entry(key, BINDING, operation.id.value)
-            )
-            is Operation.PutRateLimit -> require(
-                operator,
-                ControlActions.WRITE,
-                entry(key, RATE_LIMIT, operation.rule.id)
-            )
-            is Operation.RemoveRateLimit -> require(
-                operator,
-                ControlActions.WRITE,
-                entry(key, RATE_LIMIT, operation.id)
-            )
-            is Operation.PutRole -> {
-                require(operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
-                newBinding(key, operation.role, base)?.let { require(operator, ControlActions.GRANT, scopeOf(key, it)) }
-            }
+            is Operation.RemoveBinding -> need(ControlActions.WRITE, entry(key, BINDING, operation.id.value))
+            is Operation.PutRateLimit -> need(ControlActions.WRITE, entry(key, RATE_LIMIT, operation.rule.id))
+            is Operation.RemoveRateLimit -> need(ControlActions.WRITE, entry(key, RATE_LIMIT, operation.id))
+            is Operation.PutRole -> authorizeRole(via, operator, key, operation, base)
+            is Operation.RemoveRole -> need(ControlActions.WRITE, entry(key, ROLE, operation.id.value))
+            is Operation.PutCatalog -> need(ControlActions.WRITE, section(key, "catalog"))
+            is Operation.SetLimits -> need(ControlActions.WRITE, section(key, "limits"))
+            is Operation.SetAttributes -> need(ControlActions.WRITE, section(key, "attributes"))
+            is Operation.SetBoundary -> boundary(via, operator, key)
+        }
+    }
 
-            is Operation.RemoveRole -> require(operator, ControlActions.WRITE, entry(key, ROLE, operation.id.value))
-            is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
-            is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
-            is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
-            is Operation.SetBoundary -> boundary(operator, key)
+    /** `cosec:write` on the role, and `cosec:grant` on the scope of a binding it derives that [base] does not. */
+    private suspend fun authorizeRole(
+        via: ControlAuthorizer,
+        operator: Operator,
+        key: SnapshotKey,
+        operation: Operation.PutRole,
+        base: PolicyDocument?,
+    ) {
+        require(via, operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
+        newBinding(key, operation.role, base)?.let {
+            require(via, operator, ControlActions.GRANT, scopeOf(key, it))
         }
     }
 
@@ -235,11 +239,11 @@ class ChangeAuthority(
      * `cosec:boundary` on [key]'s boundary. A tenant's boundary is the platform's ceiling on it (RFC 0007 §9.1): never a
      * tenant principal's to move, whatever it holds (RC1-10).
      */
-    private suspend fun boundary(operator: Operator, key: SnapshotKey) {
+    private suspend fun boundary(via: ControlAuthorizer, operator: Operator, key: SnapshotKey) {
         if (!operator.platform) {
             throw ChangeRejectedException(FORBIDDEN, "only a platform principal sets a tenant's boundary")
         }
-        require(operator, ControlActions.BOUNDARY, boundaryOf(key))
+        require(via, operator, ControlActions.BOUNDARY, boundaryOf(key))
     }
 
     /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
@@ -322,12 +326,14 @@ class ChangeAuthority(
             escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
         }
         val analysis = analyze(operator, key, base, candidate, documents, now)
-        for (entry in analysis.unprotect) {
-            val resource = when (entry) {
-                is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
-                is ProtectedEntry.Binding -> entry(key, BINDING, entry.id.value)
+        authorizer.batch { via ->
+            for (entry in analysis.unprotect) {
+                val resource = when (entry) {
+                    is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
+                    is ProtectedEntry.Binding -> entry(key, BINDING, entry.id.value)
+                }
+                require(via, operator, ControlActions.UNPROTECT, resource)
             }
-            require(operator, ControlActions.UNPROTECT, resource)
         }
         analysis.verdicts.forEach { (fragment, verdict) ->
             if (verdict is GrantVerdict.Unknown) {
@@ -617,8 +623,16 @@ class ChangeAuthority(
         ControlDecision.INDETERMINATE
     }
 
-    private suspend fun require(operator: Operator, action: Action, resource: Resource) {
-        when (decide(operator, action, resource)) {
+    private suspend fun require(operator: Operator, action: Action, resource: Resource) =
+        require(authorizer, operator, action, resource)
+
+    private suspend fun require(
+        via: ControlAuthorizer,
+        operator: Operator,
+        action: Action,
+        resource: Resource
+    ) {
+        when (decide(via, operator, action, resource)) {
             ControlDecision.PERMIT -> Unit
             ControlDecision.DENY -> throw ChangeRejectedException(
                 FORBIDDEN,
@@ -632,9 +646,17 @@ class ChangeAuthority(
         }
     }
 
+    private suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision =
+        decide(authorizer, operator, action, resource)
+
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision = try {
-        authorizer.decide(operator, action, resource)
+    private suspend fun decide(
+        via: ControlAuthorizer,
+        operator: Operator,
+        action: Action,
+        resource: Resource
+    ): ControlDecision = try {
+        via.decide(operator, action, resource)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

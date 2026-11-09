@@ -13,6 +13,15 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
 
+- **控制面规模**（批次 E2b：#1214、#1217、#1218、#1219，以及 #1290 留下的暂存窗口）。实例把自己的状态写在自己的 key
+  `<s>:shadow:status:<instance>` 下，并登记在 `<s>:shadow:instances:all` 中，所以一次心跳只写一个状态，与实例数无关；旧的
+  `<s>:shadow:status:instances` 不再被读取，两分钟后过期。实例升到这个版本之前，读取某个修订的传播情况时不会计入它（只读；
+  发布从不等它）：请一起升级数据面实例，并把 `~<s>:shadow:instances:*` 加入实例 Redis ACL 的 key 模式
+  （[Redis key](./storage.md#redis-keys)）。同一个变更的所有决定基于对控制面文档的一次确认，结束时再确认一次，大变更不再为每个条目
+  读两次。代码方面：自己实现的 `ControlStore` 从 `openChanges()` 返回未结束的变更请求（`List<ChangeRequest>`，每个只读一次），并把
+  `putCandidate(key, candidate)` 换成 `stagedCandidate(key)` 与 `putCandidate(key, expected, candidate): Boolean`，即在读到的候选之上写入
+  （[扩展](../architecture/extending.md#control-store)）。`CoCacheShadowReports` 的第四个存储是实例列表。`SnapshotDigest.toString()`
+  和条目摘要不变，只是更快。
 - **审计记录说明是什么做出了决定**（批次 R7a，#1237）。`authorization.source` 现在是 `{ via, document, policy, statement }`
   （[审计事件](./observability.md#audit-events)）：旧的 `type` 把租户的角色绑定和边界都记成 `GLOBAL_POLICY`。边界拒绝过去的来源是
   `NONE`、没有 `binding`，现在 `via` 为 `BOUNDARY`，`policy` 是该边界，`binding` 为 `boundary:<tenantId>`。审计日志和 Kafka topic

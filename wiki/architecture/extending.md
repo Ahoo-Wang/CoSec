@@ -431,15 +431,22 @@ With `cosec-control`, the control plane keeps revisions, change requests, stagin
 store answers what the maintenance passes visit:
 
 - `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
-- `openChanges()`: the change requests that may still be open. It may name more, never fewer; callers read each
-  change and go by its state. A listed change whose record does not decode fails `openChanges()` as it fails
-  `change(id)`: it cannot be known to be terminal, so maintenance stops until an operator removes its record.
+- `openChanges()`: the change requests that are not terminal, as the store holds them now, each read once (#1219):
+  maintenance goes by this read and reads a change again only to expire it. Every written change that is not terminal
+  is among them; one listed and not written yet (a first write in flight) is not. A listed change whose record does
+  not decode fails `openChanges()` as it fails `change(id)`: it cannot be known to be terminal, so maintenance stops
+  until an operator removes its record.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
   removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
   `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
 - `withdrawCandidate(key, window)`: removes a document's candidate only while it is still the one of `window`, in one
   atomic step (`CTL-26`). A change withdraws its candidate once it is terminal, when another may already have staged
-  its own. `putCandidate` only writes.
+  its own.
+- `stagedCandidate(key)` and `putCandidate(key, expected, candidate)`: the candidate with the digest a write must name,
+  and a write that lands only over the candidate that was read (`null`: only if there is none), `false` when it
+  changed. A stage reads, checks it still holds the document's staging slot, and writes over what it read; a change
+  preempted meanwhile finds its late write refused, and so never replaces the candidate of the change that took the
+  slot (`CTL-6`). A write whose outcome is unknown is resolved by reading back, never by writing again.
 - `referrers` and `putReferrers`: each referring document with the revision of it that last indexed the reference, so
   that a revision's late removal never takes back what a later revision indexed again (`CTL-25`).
 - `RevisionIndex.reclaiming`: the records reclamation took out of the index and has not yet seen deleted; a store
