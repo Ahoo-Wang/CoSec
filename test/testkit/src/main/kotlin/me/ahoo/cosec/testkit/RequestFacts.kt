@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
@@ -36,7 +37,7 @@ import java.net.URISyntaxException
  * `request.attributes.*`) and injects `"fault"`s.
  */
 @ExperimentalCoSecApi
-class RequestFacts(
+internal class RequestFacts(
     val authenticated: Boolean,
     val principal: String,
     val scope: Scope,

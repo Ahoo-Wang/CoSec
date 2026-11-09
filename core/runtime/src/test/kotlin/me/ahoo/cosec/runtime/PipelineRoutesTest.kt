@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.PipelineFixtures.facts

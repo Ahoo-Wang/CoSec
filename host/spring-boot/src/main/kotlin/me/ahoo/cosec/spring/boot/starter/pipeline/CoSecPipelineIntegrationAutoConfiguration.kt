@@ -79,6 +79,7 @@ import kotlin.time.toKotlinDuration
     MetricsProperties::class,
     Ip2RegionProperties::class,
 )
+@InternalCoSecApi
 class CoSecPipelineIntegrationAutoConfiguration {
     /** MDC for every host: the request's logging context reaches the threads the pipeline resumes on. */
     @Bean
@@ -106,10 +107,12 @@ class CoSecPipelineIntegrationAutoConfiguration {
      * a limiter a strict rule would answer 503 and every other rule would be skipped.
      */
     @Configuration(proxyBeanMethods = false)
+    @InternalCoSecApi
     class RateLimiting {
         @Configuration(proxyBeanMethods = false)
         @ConditionalOnClass(name = ["me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter"])
         @ConditionalOnBean(ReactiveStringRedisTemplate::class)
+        @InternalCoSecApi
         class Redis {
             @Bean
             @ConditionalOnMissingBean
@@ -132,6 +135,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         havingValue = "true",
         matchIfMissing = true
     )
+    @InternalCoSecApi
     class Kafka {
         @Bean
         @ConditionalOnMissingBean
@@ -151,6 +155,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
     @ConditionalOnClass(name = ["me.ahoo.cosec.micrometer.MetricsListener"])
     @ConditionalOnBean(MeterRegistry::class)
     @ConditionalOnProperty(value = [MetricsProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+    @InternalCoSecApi
     class Metrics {
         @Bean
         @ConditionalOnMissingBean
@@ -168,6 +173,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.opentelemetry.TracingListener"])
+    @InternalCoSecApi
     class Tracing {
         @Bean
         @ConditionalOnMissingBean
@@ -182,6 +188,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider"])
     @ConditionalOnProperty(value = ["cosec.ip2region.enabled"], havingValue = "true", matchIfMissing = true)
+    @InternalCoSecApi
     class Ip2Region {
         @Bean
         @ConditionalOnMissingBean

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import org.springframework.boot.availability.ApplicationAvailability
@@ -30,6 +33,7 @@ import java.util.concurrent.TimeUnit
  * has started; this turns that back to [ReadinessState.REFUSING_TRAFFIC] while the snapshot is not ready, and to
  * [ReadinessState.ACCEPTING_TRAFFIC] once it is. Liveness is not touched: a missing document is not a reason to restart.
  */
+@InternalCoSecApi
 class SnapshotReadiness(
     private val source: SnapshotSource<*, *>,
     private val publisher: ApplicationEventPublisher,

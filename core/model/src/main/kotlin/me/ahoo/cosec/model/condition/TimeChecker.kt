@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /** Checks the configuration of a `time` condition (RFC 0005 §2 J5), reporting errors to [error]. */
 internal class TimeChecker(

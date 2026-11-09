@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionLimits
@@ -36,6 +39,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * [SnapshotSource.recompile]); one that cannot be compiled again fails closed. Until the platform is
  * compiled the defaults apply; a host loads the platform first so that no instance document compiles against them.
  */
+@InternalCoSecApi
 class PlatformCompiler(
     private val providers: AttributeCatalog = AttributeCatalog.NONE,
     private val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,

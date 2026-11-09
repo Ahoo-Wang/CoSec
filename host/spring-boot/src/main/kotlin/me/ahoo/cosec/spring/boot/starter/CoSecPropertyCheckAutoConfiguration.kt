@@ -20,7 +20,7 @@ import org.springframework.core.env.ConfigurableEnvironment
 
 /** Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured. */
 @AutoConfiguration
-class CoSecPropertyCheckAutoConfiguration {
+internal class CoSecPropertyCheckAutoConfiguration {
     @Bean
     fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): InitializingBean = InitializingBean {
         UnknownProperties.load(javaClass.classLoader).check(environment)

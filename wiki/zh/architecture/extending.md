@@ -9,7 +9,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 
 ## 扩展点 {#extension-points}
 
-使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，把实现交给使用它的类，通常是通过 `PipelineComponents`。
+使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，用 `PipelineComponents` 和 `SuspendingSnapshotSource.of(store)` 提供的文档组装一个 `Pipeline`，再把实现交给使用它的类。
 
 | 扩展点 | 模块、包 | 实现它来 | starter 接收 |
 |---|---|---|---|
@@ -49,7 +49,7 @@ gate 会成为第二条决策路径。编译器守住这一点：实现 `Request
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点，以及主体声明的能力（`ExpiresAtCapable`、`IssuedAtCapable`、`MembershipMarkerCapable`）。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的所有公共声明，以及控制面的访问分析与授权分析（`AccessQuery`、`AccessEntry`、`AccessReport`、`ControlPlane.analyze`；`GrantAnalyzer`、`GrantAnalysis`、`GrantVerdict`、`GrantFragment`、`Grantee`、`ProtectedEntry`、`Shortfall`、`UnknownReason`）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API，即 `PolicyTestKit`、`PipelineFixture`、`EngineOutcome` 及其异常。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
 这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
@@ -69,6 +69,20 @@ SPI 要从源码、API 文档和本页看；`test/architecture` 的 `SpiMarkerTe
 PR 都是破坏性变更，标题要带 `!`
 （[`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md#3-commits-and-pull-request-titles)）。
 唯一的例外是 `@ExperimentalCoSecApi` 声明的行：删除或修改它不是破坏性变更，不需要 `!`，PR 描述要写明改了哪些实验性声明。
+
+### 会增长的集合 {#sets-that-grow}
+
+对封闭集合做穷尽匹配，在次版本新增成员时就编译不过，已经编译好的二进制遇到新值会抛 `NoWhenBranchMatchedException`。所以每个扩展都把这些集合当作开放的：对它们的 `when` 要有 `else`，监听器和存储实现也不依赖集合是完整的。
+
+| 集合 | 增长方式 |
+|---|---|
+| `AuthnResult.RejectReason` | 新的拒绝原因，例如新的令牌检查 |
+| `Attribute.Kind` | 新的目录属性 |
+| `ProblemType` | 新的 problem，例如 `413` 或 `415` |
+| `Obligation` | 新的义务种类 |
+| `ChangeEvent.Kind` | 新的变更事件种类 |
+
+这里没有列出的集合在 8.0 GA 之后不会增加成员。公共 `data class` 只会是不会增长的值，即形状固定的记录（`PublicApiStabilityTest` 读取已评审的清单）；可能增长的记录是普通类，新增字段时增加一个构造器。
 
 ## 每个扩展都遵守的规则 {#rules-every-extension-follows}
 

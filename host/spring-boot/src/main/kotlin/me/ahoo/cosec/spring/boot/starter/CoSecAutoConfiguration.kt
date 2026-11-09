@@ -28,7 +28,7 @@ import org.springframework.context.annotation.Configuration
 @ConditionalOnCoSecEnabled
 @AutoConfiguration
 @EnableConfigurationProperties(CoSecProperties::class)
-class CoSecAutoConfiguration {
+internal class CoSecAutoConfiguration {
     /**
      * The name of every cache CoSec may create ([CoSecCacheSpecs.CACHE_NAMES]), published to CoCache's name check
      * (CoCache 8.0.0-rc.1): a `cocache.caches.[name]` entry for one this instance does not create, such as a

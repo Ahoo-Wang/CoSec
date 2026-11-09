@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.engine.pattern.ActionPattern
@@ -34,7 +37,7 @@ import me.ahoo.cosec.runtime.document.RoleExpansion
  * - Roles and short-form permissions are read expanded (RFC 0012 §6.1), the one document that is enforced: fragments
  *   are split by permission, on both sides of a change.
  */
-object GrantDocuments {
+internal object GrantDocuments {
     fun of(document: PolicyDocument?): GrantDocument {
         if (document == null) {
             return GrantDocument.EMPTY

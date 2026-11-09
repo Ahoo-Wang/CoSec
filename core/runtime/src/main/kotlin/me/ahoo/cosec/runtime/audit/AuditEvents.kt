@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.audit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
@@ -38,6 +41,7 @@ import java.time.Instant
  * statement applied ([AuditVia]), the document that holds its binding or boundary ([AuditDocument]), the policy and the
  * statement.
  */
+@InternalCoSecApi
 object AuditEvents {
     fun from(event: DecisionEvent): AuditEvent {
         val (decision, reasonCode) = decision(event)

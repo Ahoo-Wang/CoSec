@@ -96,7 +96,7 @@ starter 始终引入 `cosec-runtime`（协程请求 Pipeline、策略文档、�
 - `cosec-migrate` 是命令行工具：把 7.x 的数据转换为 8.0 文档并发布，并为控制面绑定第一位平台管理员（`bootstrap`）。见[升级](../operations/upgrading.md)。
 - `cosec-gateway-server` 是由这些模块构建的、开箱即用的网关：直接部署它，不要依赖它（见[部署](../operations/deployment.md)）。
 
-不使用 Spring Boot 时，自己用 `PipelineComponents` 组装一个 `Pipeline`，在你自己的传输层中调用它。见[扩展 CoSec](../architecture/extending.md)。
+不使用 Spring Boot 时，自己用 `PipelineComponents` 和 `SuspendingSnapshotSource.of(store)` 组装一个 `Pipeline`，在你自己的传输层中调用它。见[扩展 CoSec](../architecture/extending.md)。
 
 ## 下一步 {#where-to-go-next}
 

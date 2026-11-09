@@ -179,6 +179,7 @@ internal object InstanceIndexCodec : Codec<Map<String, Instant>> {
  * The data plane's [CandidateStore] on Redis: reads `<p>:candidate:<docKey>` from Redis, never a local copy
  * (`lookupRemote`, CoCache 8.0.0-rc.1), and throws when Redis fails.
  */
+@InternalCoSecApi
 class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCandidate>) : CandidateStore {
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? =
         when (val read = candidates.suspending().lookupRemote(key)) {
@@ -186,6 +187,7 @@ class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCan
             is Lookup.Absent -> null
         }
 
+    @InternalCoSecApi
     companion object {
         fun create(factory: CoCacheFactory, keyPrefix: String = CoSec.COSEC): CoCacheCandidateStore =
             CoCacheCandidateStore(factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix)))

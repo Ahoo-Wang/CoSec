@@ -22,6 +22,8 @@ import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.Scope
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -29,6 +31,7 @@ import java.util.concurrent.CompletableFuture
  * the [tenant]'s; and the [app]'s when the scope has roles in an app, or when the tenant's document binds one of that
  * app's permission policies to `Anyone` or to a principal ([withAppFor], RC1-17). Null means not needed.
  */
+@InternalCoSecApi
 class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
     override fun equals(other: Any?): Boolean = other is ViewKey && other.tenant == tenant && other.app == app
 
@@ -52,6 +55,7 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
         return ViewKey(tenant, wanted)
     }
 
+    @InternalCoSecApi
     companion object {
         /** A blocked request reads only the platform document, where the blacklist rule is (RFC 0004 §4.7). */
         val BLOCKED = ViewKey(null, null)
@@ -77,6 +81,7 @@ class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
  * tenant documents of RFC 0004, which implement it. The SPI stays future-based (RFC 0003 Q10);
  * [SuspendingSnapshotSource] is the pipeline's view of it.
  */
+@InternalCoSecApi
 interface SnapshotViews {
     /** The view when every document [key] needs is installed, else null. No I/O, no future, on the caller's thread. */
     fun peek(key: ViewKey): SnapshotView?
@@ -93,12 +98,16 @@ interface SnapshotViews {
  * RFC 0006 §5.5.1: the installed view without suspending, else the loaded one. When the tenant's document needs the
  * app's although the scope has no roles ([ViewKey.withAppFor], RC1-17), the view with it, the same way.
  */
-class SuspendingSnapshotSource(private val views: SnapshotViews) {
+class SuspendingSnapshotSource @InternalCoSecApi constructor(
+    private val views: SnapshotViews,
+    private val closeable: AutoCloseable? = null,
+) : AutoCloseable {
     /**
-     * The installed view, found without suspending, else the loaded one. Kotlin spills every local a suspend function
+     * The installed view, found without suspending, else the loaded one. Only the pipeline asks. Kotlin spills every local a suspend function
      * has in scope at a suspension point into the continuation each call allocates; [installed] keeps them out of it,
      * so the second step costs a request no allocation (the JMH A/B of #1194).
      */
+    @InternalCoSecApi
     suspend fun view(scope: Scope, blocked: Boolean): SnapshotView = installed(scope, blocked) ?: loaded(scope, blocked)
 
     /** The view when every document it needs is installed; null when one is not. No I/O, no suspension. */
@@ -114,5 +123,29 @@ class SuspendingSnapshotSource(private val views: SnapshotViews) {
         val view = views.peek(key) ?: views.load(key).await()
         val withApp = key.withAppFor(scope, view.tenant) ?: return view
         return views.peek(withApp) ?: views.load(withApp).await()
+    }
+
+    /** Stops what [of] started; a no-op for a source built around views the host owns. */
+    override fun close() {
+        closeable?.close()
+    }
+
+    companion object {
+        /**
+         * The source of a host without Spring Boot: the documents [store] holds, compiled and installed in memory as a
+         * Spring host's are, with the external attributes of [attributes] declared. Close it with the host.
+         */
+        fun of(
+            store: SnapshotDocumentStore,
+            attributes: AttributeProviders = AttributeProviders.NONE,
+            options: SnapshotOptions = SnapshotOptions(),
+        ): SuspendingSnapshotSource {
+            val compiler = PlatformCompiler(attributes.catalog)
+            val source = DocumentSnapshots.source(store, compiler, options)
+            compiler.bind(source)
+            // The platform first, so that no instance document compiles against the default limits (PlatformCompiler).
+            source.load()
+            return SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true), source)
+        }
     }
 }

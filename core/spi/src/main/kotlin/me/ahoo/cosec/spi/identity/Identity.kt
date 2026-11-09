@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.identity
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 
 /**
@@ -21,7 +22,7 @@ import java.time.Instant
  * to tell who the caller is and in what scope. Never a credential, a policy, a matched statement or binding, an
  * external attribute value, a request header or the client's address.
  */
-data class Identity(
+class Identity(
     /** The tenant the gateway decided in. */
     val tenant: String,
     /** The principal's id. */
@@ -40,8 +41,51 @@ data class Identity(
     /** The token claims the gateway is configured to forward (`cosec.gateway.identity.claims`): strings, numbers, booleans. */
     val claims: Map<String, Any> = emptyMap(),
 ) {
+    private fun fields(): List<Any?> = listOf(
+        tenant,
+        subject,
+        app,
+        space,
+        roles,
+        credential,
+        issuedAt,
+        requestId,
+        claims,
+    )
+
+    override fun equals(other: Any?): Boolean = other is Identity && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "Identity(${fields().joinToString()})"
+
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        tenant: String = this.tenant,
+        subject: String = this.subject,
+        app: String = this.app,
+        space: String = this.space,
+        roles: Set<String> = this.roles,
+        credential: Credential = this.credential,
+        issuedAt: Instant = this.issuedAt,
+        requestId: String = this.requestId,
+        claims: Map<String, Any> = this.claims,
+    ): Identity = Identity(
+        tenant = tenant,
+        subject = subject,
+        app = app,
+        space = space,
+        roles = roles,
+        credential = credential,
+        issuedAt = issuedAt,
+        requestId = requestId,
+        claims = claims,
+    )
+
     /** How the principal authenticated at the gateway: for audit and revocation correlation, never the credential. */
-    data class Credential(
+    class Credential(
         val method: Method,
         /** The token's `jti` or the API key's id. */
         val id: String,
@@ -52,7 +96,30 @@ data class Identity(
          * do not apply to it, here or in a service behind the gateway.
          */
         val capped: Boolean = false,
-    )
+    ) {
+        private fun fields(): List<Any?> = listOf(method, id, expiresAt, capped)
+
+        override fun equals(other: Any?): Boolean = other is Credential && other.fields() == fields()
+
+        override fun hashCode(): Int = fields().hashCode()
+
+        override fun toString(): String = "Credential(${fields().joinToString()})"
+
+        /** These values with some replaced: for CoSec's own use. */
+        @InternalCoSecApi
+        @Suppress("LongParameterList")
+        fun copy(
+            method: Method = this.method,
+            id: String = this.id,
+            expiresAt: Instant? = this.expiresAt,
+            capped: Boolean = this.capped,
+        ): Credential = Credential(
+            method = method,
+            id = id,
+            expiresAt = expiresAt,
+            capped = capped,
+        )
+    }
 
     /**
      * How the principal authenticated, by name: any non-empty one. [JWT] and [API_KEY] are CoSec's own; an authenticator

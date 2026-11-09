@@ -35,7 +35,7 @@ class SocialAuthenticationProperties(
     }
 
     @Suppress("LongParameterList")
-    data class Provider(
+    class Provider(
         var type: AuthDefaultSource,
         var clientId: String,
         var clientSecret: String? = null,
@@ -65,6 +65,43 @@ class SocialAuthenticationProperties(
         var dingTalkExclusiveLogin: Boolean = false,
         var dingTalkExclusiveCorpId: String? = null,
     ) {
+        private fun fields(): List<Any?> = listOf(
+            type,
+            clientId,
+            clientSecret,
+            redirectUri,
+            alipayPublicKey,
+            unionId,
+            stackOverflowKey,
+            agentId,
+            usertype,
+            domainPrefix,
+            httpConfig,
+            ignoreCheckState,
+            scopes,
+            deviceId,
+            clientOsType,
+            packId,
+            pkce,
+            authServerId,
+            ignoreCheckRedirectUri,
+            tenantId,
+            kid,
+            teamId,
+            loginType,
+            lang,
+            dingTalkOrgType,
+            dingTalkCorpId,
+            dingTalkExclusiveLogin,
+            dingTalkExclusiveCorpId,
+        )
+
+        override fun equals(other: Any?): Boolean = other is Provider && other.fields() == fields()
+
+        override fun hashCode(): Int = fields().hashCode()
+
+        override fun toString(): String = "Provider(${fields().joinToString()})"
+
         fun toJustAuthConfig(): AuthConfig {
             return AuthConfig(
                 /* clientId = */

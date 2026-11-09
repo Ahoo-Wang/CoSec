@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.ActionPattern
@@ -32,6 +35,7 @@ import me.ahoo.cosec.model.condition.Condition
  * written. The analysis works on the written condition because it substitutes the grantor's attributes into it before
  * checking it again (RFC 0007 §7.4.3).
  */
+@InternalCoSecApi
 class GrantStatement(
     val effect: Effect,
     val actions: List<ActionPattern>,
@@ -49,6 +53,7 @@ class GrantStatement(
 }
 
 /** A policy: its statements, its condition (which every statement also needs) and its entry flags. */
+@InternalCoSecApi
 class GrantPolicy(
     val id: PolicyId,
     val statements: List<GrantStatement>,
@@ -60,6 +65,7 @@ class GrantPolicy(
 )
 
 /** The policies and bindings of one snapshot document, as the analysis reads them. */
+@InternalCoSecApi
 class GrantDocument(
     val policies: List<GrantPolicy> = emptyList(),
     val bindings: List<Binding> = emptyList(),
@@ -70,6 +76,7 @@ class GrantDocument(
 
     fun policy(id: PolicyId): GrantPolicy? = byId[id]
 
+    @InternalCoSecApi
     companion object {
         val EMPTY: GrantDocument = GrantDocument()
     }
@@ -80,6 +87,7 @@ class GrantDocument(
  * holds every app document, whether or not a change names its app (RC1-4): an app document binds roles, so the grantor
  * may hold or be denied something in any app.
  */
+@InternalCoSecApi
 class GrantSnapshot(
     val platform: GrantDocument = GrantDocument.EMPTY,
     val apps: Map<AppId, GrantDocument> = emptyMap(),
@@ -102,6 +110,7 @@ class GrantSnapshot(
  * authenticated. [attributes] are its token's `attributes` claim, of every JSON type, as the engine holds them; the
  * analysis reads `subject.attributes.<name>` from them through the engine's own [SubjectAttributes.string] (RC1-2).
  */
+@InternalCoSecApi
 class Grantor(
     val tenant: TenantId,
     val id: PrincipalId,
@@ -116,4 +125,5 @@ class Grantor(
 )
 
 /** A change to the document of [tenant]: [candidate] replaces the document the snapshot has (RFC 0007 §7.4.1). */
+@InternalCoSecApi
 class GrantChange(val tenant: TenantId, val candidate: GrantDocument)

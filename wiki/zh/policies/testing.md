@@ -290,12 +290,12 @@ val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platf
 val acme = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", File("tenant-acme.json").readBytes())
 // The platform's limits and declared attributes, as the control plane checks a candidate.
 val compiler = PolicyDocumentCompiler.forPlatform(platform)
-compiler.compile(platform)
-compiler.compile(acme)
+compiler.validate(platform)
+compiler.validate(acme)
 compiler.checkReferences(acme, platform)
 ```
 
-`decode` 抛出 `SnapshotFormatException`，`compile` 抛出 `DocumentCompileException`，其中包含每个错误及其 JSON 路径。
+`decode` 抛出 `SnapshotFormatException`，`validate` 抛出 `DocumentCompileException`，其中包含每个错误及其 JSON 路径。
 
 ### 测试决策 {#testing-decisions}
 
@@ -377,5 +377,37 @@ class PolicyTest {
 只比较 `expect` 写出的字段：`{"decision": "Permit"}` 不论哪条语句允许都通过，写上 `by` 则固定为某条语句，并整体比较。拼错的字段是错误，不会被忽略。
 
 测试工具只评估决策。文档的编译方式与实例相同：使用平台文档的 `limits` 和它声明的 `ext.*` 属性。只由宿主的 `AttributeProvider` 声明的属性在测试工具中无法编译，而且不运行任何提供者，所以读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理。限流规则不运行；请求直接给出动作和资源，不经过路由映射。依赖外部属性值的决策可用 [`simulate`](#simulating-a-request) 试验，它按控制面主机的提供者编译。
+
+### 用真实管道测试代码 {#testing-your-code-against-a-real-pipeline}
+
+`PolicyTestKit` 断言文档的决策，`PipelineFixture` 则运行决策前后的其余部分：用你的文档，构建基于每个实例运行的编译器、快照源和引擎的真实 `Pipeline`。当被测代码读取已放行请求的 `SecurityContext`，或处理函数的结果取决于 CoSec 回答的状态码和 problem 时使用它。它是 `@ExperimentalCoSecApi`，与测试工具的其余部分相同。
+
+```kotlin
+@file:OptIn(ExperimentalCoSecApi::class)
+
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.testkit.PipelineFixture
+import org.junit.jupiter.api.Test
+import java.nio.file.Path
+
+class OrderPermissionsTest {
+    private val reader = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+
+    @Test
+    fun `a reader may read`() = runBlocking {
+        PipelineFixture.load(Path.of("src/test/resources/policies/documents")).use { fixture ->
+            val request = fixture.request("GET", "/orders/1", reader)
+            check(fixture.evaluate(request).status == 200)
+            // 处理函数为已放行的请求读取到的上下文；进一步的检查经过同一个管道。
+            val context = fixture.securityContext(request)
+            check(AuthorizationChecker(fixture.pipeline).check(context, "http:DELETE", "/orders/1").not())
+        }
+    }
+}
+```
+
+`PipelineFixture.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。文档无法编译时，构建夹具就会失败。`Principal` 说明请求是谁，如同令牌一样：`tenant`、`roles`（`role` 或 `role@space`）、`policies`、`app` 和 `attributes`；不提供时请求是匿名的。它只替换凭证检查：状态码、`SecurityContext` 和决策都来自管道。用完关闭夹具，通常一个测试类一个。
 
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。

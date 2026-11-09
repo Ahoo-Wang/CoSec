@@ -406,7 +406,7 @@ declared types must match on every instance and the control host; the change is 
 ## Reproduce narrowly
 
 - Document problems: decode and compile the exact document
-  (`PolicyDocumentCompiler.forPlatform(platform).compile(PolicyDocumentCodec.decode(kind, owner, bytes))`); the
+  (`PolicyDocumentCompiler.forPlatform(platform).validate(PolicyDocumentCodec.decode(kind, owner, bytes))`); the
   exception lists every error with its JSON path.
 - Decisions: `simulate` / `explain` on the control plane, or an engine-level conformance scenario
   (`test/conformance/src/test/resources/scenarios/`) in a CoSec checkout.

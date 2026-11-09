@@ -98,6 +98,8 @@ class Problem internal constructor(
  * The problem vocabulary (RFC 0006 §6.1, Q27): one row per thing a client can do about it. Explicit and implicit
  * denies are both [UNAUTHORIZED] or [FORBIDDEN], so a response never tells a caller that a DENY exists. The `problem`
  * format descriptor in `DocumentFormats` lists the same rows, and `ProblemSchemaTest` keeps them equal.
+ * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`, and an
+ * implementation of a listener or a store never matches it exhaustively.
  */
 enum class ProblemType(val slug: String, val title: String, val status: Int) {
     INVALID_REQUEST("invalid-request", "Invalid Request", 400),

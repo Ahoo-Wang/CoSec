@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.control
 
 import kotlinx.coroutines.runBlocking
@@ -20,6 +22,7 @@ import me.ahoo.cocache.api.ConditionalDelete
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.cache.snapshot.newKeyPrefix
 import me.ahoo.cosec.control.store.ControlStore

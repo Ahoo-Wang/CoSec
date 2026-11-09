@@ -11,15 +11,19 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.openapi.security
 
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import java.util.function.Consumer
 
+@InternalCoSecApi
 object BearerAuthOpenApiCustomizer : Consumer<OpenAPI> {
     const val BEARER_AUTH_NAME = CoSec.COSEC_PREFIX + "BearerAuth"
     const val BEARER_SCHEME = "bearer"

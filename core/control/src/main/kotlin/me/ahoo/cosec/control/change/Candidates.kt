@@ -36,6 +36,7 @@ import java.util.HexFormat
  * The digest an operation's `ifMatch` names: SHA-256 of the entry as the document encodes it, in lowercase hex. Two
  * entries with the same digest are written the same way, so they mean the same.
  */
+@InternalCoSecApi
 object EntryDigest {
     fun of(policy: PolicyDefinition): String = sha256(PolicyDocumentCodec.policyTree(policy))
 
@@ -59,6 +60,7 @@ object EntryDigest {
  * The digest of a candidate (RFC 0007 §7.5): SHA-256 of its body encoded with a fixed header, so it depends only on
  * the policies, bindings and sections a change would publish. Approvals and shadow reports name it.
  */
+@InternalCoSecApi
 object CandidateDigest {
     private val EPOCH: Instant = Instant.EPOCH
 
@@ -83,14 +85,14 @@ object CandidateDigest {
 }
 
 /** The candidate a change's operations make of its base, or the findings that keep them from applying. */
-class Applied(val candidate: PolicyDocument?, val findings: List<Finding>)
+internal class Applied(val candidate: PolicyDocument?, val findings: List<Finding>)
 
 /**
  * Applies entry-level operations to a base document (RFC 0007 §10.1), in order. An operation whose `ifMatch` is not
  * the entry's digest is a 412; removing what is not there and a section the document's kind does not have are 422s.
  * The candidate keeps the base's order of entries: a replaced entry stays where it was, a new one goes last.
  */
-object Operations {
+internal object Operations {
     fun apply(key: SnapshotKey, base: PolicyDocument?, operations: List<Operation>): Applied {
         val draft = Draft(key, base)
         operations.forEachIndexed { i, operation -> draft.apply("operations[$i]", operation) }
@@ -365,6 +367,7 @@ object Operations {
 }
 
 /** How [Changes.apply] treats what the desired document leaves out (RFC 0007 §6.7). */
+@InternalCoSecApi
 enum class ApplyMode {
     /** Adds and changes only: entries and sections the desired document does not mention stay. */
     MERGE,

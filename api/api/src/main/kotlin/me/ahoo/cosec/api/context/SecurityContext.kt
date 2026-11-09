@@ -31,12 +31,20 @@ interface SecurityScope {
  * What the gateway in front of this service says about the request, in a service behind one
  * (`cosec.pipeline.mode=gateway`).
  */
-data class ForwardedIdentity(
+class ForwardedIdentity(
     /** The gateway's `CoSec-Request-Id`, to correlate this request with the gateway's audit record. */
     val gatewayRequestId: String,
     /** The id of the token or API key the caller authenticated with at the gateway, never its value. */
     val credentialId: String,
-)
+) {
+    private fun fields(): List<Any?> = listOf(gatewayRequestId, credentialId)
+
+    override fun equals(other: Any?): Boolean = other is ForwardedIdentity && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "ForwardedIdentity(${fields().joinToString()})"
+}
 
 /**
  * Who the current request is and in what scope, as the pipeline decided it. Read-only: an application reads it, and

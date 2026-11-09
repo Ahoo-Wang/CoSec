@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.IpAddress
@@ -25,6 +28,7 @@ import me.ahoo.cosec.model.condition.IpAddress
  * timed out or it was never planned, and a statement reading it follows its [OnMissing]. A value whose type is not the
  * attribute's declared one is missing too: it never reads as absent.
  */
+@InternalCoSecApi
 class ExternalValues internal constructor(
     /** By path: a `String`, `Boolean`, `Set<String>` or [IpAddress], as the attribute's type says. */
     private val values: Map<String, Any>,
@@ -56,6 +60,7 @@ class ExternalValues internal constructor(
         return value
     }
 
+    @InternalCoSecApi
     companion object {
         /** Nothing fetched: every external attribute is missing. */
         val NONE: ExternalValues = ExternalValues(emptyMap(), emptySet())

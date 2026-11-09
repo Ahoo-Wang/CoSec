@@ -42,6 +42,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * token attributes of that request. [security] is the permitted request itself; [PipelineControlAuthorizer] evaluates
  * the control-plane actions as it, and without it nothing is permitted.
  */
+@InternalCoSecApi
 class Operator(
     val actor: Actor,
     val memberships: Memberships,
@@ -67,6 +68,7 @@ class Operator(
 
     override fun toString(): String = "Operator(${actor.principal.value}@${actor.tenant.value})"
 
+    @InternalCoSecApi
     companion object {
         /** The operator of a request the host pipeline permitted; null for an anonymous one. */
         fun of(security: RequestSecurity): Operator? {
@@ -82,6 +84,7 @@ class Operator(
 }
 
 /** A control-plane decision. Only [PERMIT] lets a step through; [INDETERMINATE] is a 503, [DENY] a 403 (RFC 0007 §7.2). */
+@InternalCoSecApi
 enum class ControlDecision {
     PERMIT,
     DENY,
@@ -131,6 +134,7 @@ fun interface ControlAuthorizer {
 fun interface DocumentConfirmation {
     suspend fun confirm(keys: Set<SnapshotKey>): Map<SnapshotKey, Any>
 
+    @InternalCoSecApi
     companion object {
         /** For a checker whose documents are always current, such as an in-memory one: no versions, none to compare. */
         val CURRENT: DocumentConfirmation = DocumentConfirmation { emptyMap() }
@@ -277,6 +281,7 @@ class PipelineControlAuthorizer(
         is Decision.Indeterminate -> ControlDecision.INDETERMINATE
     }
 
+    @InternalCoSecApi
     companion object {
         private val log = KotlinLogging.logger {}
 
@@ -290,6 +295,7 @@ class PipelineControlAuthorizer(
 }
 
 /** The control-plane actions (RFC 0007 §7.1): `cosec:<verb>`. */
+@InternalCoSecApi
 object ControlActions {
     const val SERVICE: String = "cosec"
     val READ: Action = Action(SERVICE, "read")
@@ -316,6 +322,7 @@ object ControlActions {
  * is empty, is written `(default)`: space ids beginning with `(` are CoSec's, as the tenants `(0)` and `(platform)`, so
  * no real space shares the stand-in (RC1-37; [me.ahoo.cosec.model.scope.ScopeResolver.RESERVED_SPACE_PREFIX]).
  */
+@InternalCoSecApi
 object ControlResources {
     private const val DOC = "doc"
     private const val SCOPE = "scope"

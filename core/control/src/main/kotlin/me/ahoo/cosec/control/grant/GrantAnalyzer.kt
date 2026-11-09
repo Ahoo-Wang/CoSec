@@ -11,9 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourceContainment
@@ -66,7 +68,7 @@ import me.ahoo.cosec.model.decision.StatementRef
  * Conditions come as written. Both sides are checked with the same [zones], within limits twice the document's
  * ([limits]): a statement's condition and its policy's are combined.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionLimits = ConditionLimits.DEFAULT) {
     private val checker = ConditionChecker(
         ConditionLimits(

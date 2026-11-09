@@ -18,9 +18,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
 @ConfigurationProperties(MetricsProperties.PREFIX)
-data class MetricsProperties(
+class MetricsProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
+    private fun fields(): List<Any?> = listOf(enabled)
+
+    override fun equals(other: Any?): Boolean = other is MetricsProperties && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "MetricsProperties(${fields().joinToString()})"
+
     companion object {
         const val PREFIX: String = "cosec.metrics"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY

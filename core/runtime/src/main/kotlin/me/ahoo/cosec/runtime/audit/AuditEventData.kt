@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.audit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditAuthorization
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDevice
@@ -28,17 +29,49 @@ import me.ahoo.cosec.api.audit.AuditTrace
 import me.ahoo.cosec.api.audit.AuditVia
 import java.time.Instant
 
-data class AuditPrincipalData(
+@InternalCoSecApi
+class AuditPrincipalData(
     override val id: String,
     override val authenticated: Boolean,
     override val roles: Set<String>,
-) : AuditPrincipal
+) : AuditPrincipal {
+    private fun fields(): List<Any?> = listOf(id, authenticated, roles)
 
-data class AuditDeviceData(
+    override fun equals(other: Any?): Boolean = other is AuditPrincipalData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditPrincipalData(${fields().joinToString()})"
+
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        id: String = this.id,
+        authenticated: Boolean = this.authenticated,
+        roles: Set<String> = this.roles,
+    ): AuditPrincipalData = AuditPrincipalData(
+        id = id,
+        authenticated = authenticated,
+        roles = roles,
+    )
+}
+
+@InternalCoSecApi
+class AuditDeviceData(
     override val id: String?,
-) : AuditDevice
+) : AuditDevice {
+    private fun fields(): List<Any?> = listOf(id)
 
-data class AuditRequestData(
+    override fun equals(other: Any?): Boolean = other is AuditDeviceData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditDeviceData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditRequestData(
     override val id: String?,
     override val appId: String?,
     override val spaceId: String?,
@@ -47,40 +80,94 @@ data class AuditRequestData(
     override val path: String,
     override val routeId: String?,
     override val device: AuditDeviceData,
-) : AuditRequest
+) : AuditRequest {
+    private fun fields(): List<Any?> = listOf(id, appId, spaceId, remoteIp, method, path, routeId, device)
 
-data class AuditStatementData(
+    override fun equals(other: Any?): Boolean = other is AuditRequestData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditRequestData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditStatementData(
     override val index: Int,
     override val name: String,
-) : AuditStatement
+) : AuditStatement {
+    private fun fields(): List<Any?> = listOf(index, name)
 
-data class AuditSourceData(
+    override fun equals(other: Any?): Boolean = other is AuditStatementData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditStatementData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditSourceData(
     override val via: AuditVia,
     override val document: AuditDocument? = null,
     override val policy: String? = null,
     override val statement: AuditStatementData? = null,
-) : AuditSource
+) : AuditSource {
+    private fun fields(): List<Any?> = listOf(via, document, policy, statement)
 
-data class AuditAuthorizationData(
+    override fun equals(other: Any?): Boolean = other is AuditSourceData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditSourceData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditAuthorizationData(
     override val decision: AuditDecision,
     override val reasonCode: AuditReasonCode,
     override val reason: String,
     override val elapsedNanos: Long,
     override val source: AuditSourceData,
-) : AuditAuthorization
+) : AuditAuthorization {
+    private fun fields(): List<Any?> = listOf(decision, reasonCode, reason, elapsedNanos, source)
 
-data class AuditTraceData(
+    override fun equals(other: Any?): Boolean = other is AuditAuthorizationData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditAuthorizationData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditTraceData(
     override val traceId: String,
     override val spanId: String,
-) : AuditTrace
+) : AuditTrace {
+    private fun fields(): List<Any?> = listOf(traceId, spanId)
 
-data class AuditSnapshotVersionData(
+    override fun equals(other: Any?): Boolean = other is AuditTraceData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditTraceData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditSnapshotVersionData(
     override val platform: Long,
     override val app: Long?,
     override val tenant: Long?,
-) : AuditSnapshotVersion
+) : AuditSnapshotVersion {
+    private fun fields(): List<Any?> = listOf(platform, app, tenant)
 
-data class AuditEventData(
+    override fun equals(other: Any?): Boolean = other is AuditSnapshotVersionData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditSnapshotVersionData(${fields().joinToString()})"
+}
+
+@InternalCoSecApi
+class AuditEventData(
     override val eventId: String,
     override val timestamp: Instant,
     override val tenantId: String,
@@ -92,4 +179,53 @@ data class AuditEventData(
     override val binding: String? = null,
     override val breakGlass: Boolean = false,
     override val kind: String = "DECIDED",
-) : AuditEvent
+) : AuditEvent {
+    private fun fields(): List<Any?> = listOf(
+        eventId,
+        timestamp,
+        tenantId,
+        principal,
+        request,
+        authorization,
+        trace,
+        snapshotVersion,
+        binding,
+        breakGlass,
+        kind,
+    )
+
+    override fun equals(other: Any?): Boolean = other is AuditEventData && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "AuditEventData(${fields().joinToString()})"
+
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        eventId: String = this.eventId,
+        timestamp: Instant = this.timestamp,
+        tenantId: String = this.tenantId,
+        principal: AuditPrincipalData = this.principal,
+        request: AuditRequestData = this.request,
+        authorization: AuditAuthorizationData = this.authorization,
+        trace: AuditTraceData? = this.trace,
+        snapshotVersion: AuditSnapshotVersionData? = this.snapshotVersion,
+        binding: String? = this.binding,
+        breakGlass: Boolean = this.breakGlass,
+        kind: String = this.kind,
+    ): AuditEventData = AuditEventData(
+        eventId = eventId,
+        timestamp = timestamp,
+        tenantId = tenantId,
+        principal = principal,
+        request = request,
+        authorization = authorization,
+        trace = trace,
+        snapshotVersion = snapshotVersion,
+        binding = binding,
+        breakGlass = breakGlass,
+        kind = kind,
+    )
+}

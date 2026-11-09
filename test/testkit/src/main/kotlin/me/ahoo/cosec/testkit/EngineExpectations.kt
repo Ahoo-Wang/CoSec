@@ -11,9 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
@@ -42,7 +44,7 @@ import tools.jackson.databind.node.ObjectNode
  * An exact comparison (the conformance suite) requires the `expect` to say everything about the decision. Otherwise
  * only the fields the `expect` names are compared, so `{ "decision": "Permit" }` passes whichever statement permits.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 object EngineExpectations {
     private val json = JsonNodeFactory.instance
 

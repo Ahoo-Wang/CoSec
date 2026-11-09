@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
@@ -93,7 +96,7 @@ sealed interface EngineOutcome {
  *                 "device": "...", "blocked": false, "headers": {}, "attributes": {} }
  * ```
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class EngineScenarios(
     private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
     private val engine: FlatEngine = CoSecFlatEngine,

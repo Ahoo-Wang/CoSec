@@ -29,7 +29,7 @@ import java.time.Instant
  * do not carry, stops startup instead of being ignored with more or less access than its author meant.
  */
 @ConfigurationProperties(ApiKeyProperties.PREFIX, ignoreUnknownFields = false)
-data class ApiKeyProperties(
+class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
      * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`), under
@@ -41,6 +41,14 @@ data class ApiKeyProperties(
      */
     var keys: List<Key> = emptyList(),
 ) : EnabledCapable {
+    private fun fields(): List<Any?> = listOf(enabled, store, keys)
+
+    override fun equals(other: Any?): Boolean = other is ApiKeyProperties && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "ApiKeyProperties(${fields().joinToString()})"
+
     companion object {
         const val PREFIX: String = "cosec.api-key"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
@@ -52,7 +60,7 @@ data class ApiKeyProperties(
         REDIS,
     }
 
-    data class Key(
+    class Key(
         var id: String = "",
         /** SHA-256 of the key, hex-encoded. Never configure the key itself. */
         var hash: String = "",
@@ -74,6 +82,24 @@ data class ApiKeyProperties(
         var expiresAt: Instant? = null,
         @DefaultValue("true") var enabled: Boolean = true,
     ) {
+        private fun fields(): List<Any?> = listOf(
+            id,
+            hash,
+            principalId,
+            tenantId,
+            app,
+            roles,
+            uncapped,
+            expiresAt,
+            enabled,
+        )
+
+        override fun equals(other: Any?): Boolean = other is Key && other.fields() == fields()
+
+        override fun hashCode(): Int = fields().hashCode()
+
+        override fun toString(): String = "Key(${fields().joinToString()})"
+
         fun toApiKey(): ApiKey {
             require(id.isNotBlank()) { "An API key needs an id." }
             require(HASH.matches(hash)) { "API key [$id] needs the SHA-256 hex of the key as hash." }

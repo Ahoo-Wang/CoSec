@@ -57,6 +57,7 @@ private val log = KotlinLogging.logger {}
  * Whether a request is sampled is decided before its event is made ([sample]); only then does the event carry the
  * [ReplayHandle] that keeps its view reachable.
  */
+@InternalCoSecApi
 class ShadowListener(
     override val name: String,
     /** The share of the requests evaluated again, from 0 to 1. */

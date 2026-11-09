@@ -44,6 +44,7 @@ import java.time.Instant
  *
  * There is no renewal: a new request is approved again. An expired binding stops applying by itself (RFC 0004 §4.2).
  */
+@InternalCoSecApi
 class BreakGlass(private val changes: Changes, private val revisions: Revisions) {
     /**
      * Proposes the binding and stages it, so that it waits for its approval. Its id is derived from [principal] and

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.snapshot
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.model.decision.RateLimitSpec

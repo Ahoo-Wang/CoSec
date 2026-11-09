@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.shadow
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -18,6 +20,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
@@ -36,6 +39,7 @@ private val log = KotlinLogging.logger {}
  * reporter forgets it (#1210). Samples of a forgotten window, which a candidate read before it was withdrawn may still
  * yield, are dropped for [endedRetention]: written as a new report, they would replace the window's last numbers.
  */
+@InternalCoSecApi
 class ShadowRecorder(
     val instance: String,
     private val clock: Clock = Clock.systemUTC(),
@@ -133,6 +137,7 @@ class ShadowRecorder(
         return true
     }
 
+    @InternalCoSecApi
     companion object {
         /** Longer than a candidate source caches a candidate, and than a sampled request takes to compare. */
         val DEFAULT_ENDED_RETENTION: Duration = Duration.ofHours(1)
@@ -152,6 +157,7 @@ class RecordedWindow(val key: SnapshotKey, val report: ShadowReport, val recorde
  * (#1210). A window whose candidate cannot be read is kept, and so is one whose last write failed: the next cycle
  * writes it again. Without [candidates] every window is kept, and written every cycle.
  */
+@InternalCoSecApi
 class ShadowReporter(
     private val recorder: ShadowRecorder,
     private val sink: ShadowReportSink,

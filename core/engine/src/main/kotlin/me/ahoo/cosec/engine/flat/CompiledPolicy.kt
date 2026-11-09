@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
@@ -40,6 +43,7 @@ import me.ahoo.cosec.model.decision.BindingRef
  * reached policy is the "index result ∩ applicable bindings" of §6.2 without merging the two. A platform policy that
  * app and tenant documents bind keeps one index, and updating the platform never recompiles them (RFC 0004 §3 I5).
  */
+@InternalCoSecApi
 class CompiledPolicy(
     id: PolicyId,
     val condition: CheckedCondition?,
@@ -130,6 +134,7 @@ class CompiledPolicy(
 }
 
 /** The policies every platform document has (RFC 0004 §4.7, §4.8). Documents can neither define nor replace them. */
+@InternalCoSecApi
 object BuiltinPolicies {
     /** One DENY statement, matching a blocked request. The first candidate of every evaluation. Cannot be bound. */
     val BLACKLIST: PolicyId = PolicyId("cosec:blacklist")

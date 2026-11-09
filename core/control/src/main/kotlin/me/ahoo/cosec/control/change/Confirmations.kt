@@ -54,7 +54,7 @@ data class Confirmation(val policy: PolicyId, val statement: Int, val digest: St
  * policy condition, that changes no longer matches the confirmation given for it (review K4). One shape: the content
  * is `{statement, policyCondition}`, `policyCondition` being `null` for a policy without a condition.
  */
-object StatementDigest {
+internal object StatementDigest {
     fun of(statement: StatementSource, policyCondition: Condition? = null): String {
         val bare = PolicyDefinition(PolicyId("statement"), false, policyCondition, listOf(unconfirmed(statement)))
         val tree = PolicyDocumentCodec.policyTree(bare)

@@ -20,7 +20,7 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  *
  * [roles] holds what the principal may hold in the token's [app], as `role` or `role@space` (RFC 0012 §3.5).
  */
-data class TokenSubject(
+class TokenSubject(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */
     val id: String,
     /**
@@ -39,6 +39,14 @@ data class TokenSubject(
      */
     val membershipMarker: String? = null,
 ) {
+    private fun fields(): List<Any?> = listOf(id, app, tenant, roles, policies, attributes, membershipMarker)
+
+    override fun equals(other: Any?): Boolean = other is TokenSubject && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "TokenSubject(${fields().joinToString()})"
+
     companion object {
         /** What the token [token] said, so that refreshing it says the same, its app and tenant included. */
         fun of(token: VerifiedToken): TokenSubject = TokenSubject(

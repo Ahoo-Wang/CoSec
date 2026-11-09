@@ -22,7 +22,7 @@ import java.time.Duration
  * Tuning of a [SnapshotSource]. Defaults are the values RFC 0003 §12 decided (Q7, Q18, Q19); the ones marked there as
  * "confirmed after measurement" may change once §4.8 has real numbers.
  */
-data class SnapshotOptions(
+class SnapshotOptions(
     /**
      * How often a pass starts that revalidates every installed document with a conditional read; while the previous
      * pass is still in flight, the next starts as soon as it ends (#1215). A change whose invalidation was lost, or whose
@@ -63,6 +63,73 @@ data class SnapshotOptions(
     /** How long a reload waits before it retries after the compile queue was full. */
     val rejectedReloadRetry: Duration = Duration.ofMillis(200),
 ) {
+    private fun fields(): List<Any?> = listOf(
+        revalidateInterval,
+        lagWarn,
+        lagEscalate,
+        failClosedTenants,
+        failClosedMaxLag,
+        coldLoadTimeout,
+        maxApps,
+        maxTenants,
+        maxAbsent,
+        compileThreads,
+        compileQueueCapacity,
+        reloadConcurrency,
+        prewarmInitialBackoff,
+        prewarmMaxBackoff,
+        lagLogInterval,
+        storeReadTimeout,
+        rejectedReloadRetry,
+    )
+
+    override fun equals(other: Any?): Boolean = other is SnapshotOptions && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "SnapshotOptions(${fields().joinToString()})"
+
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        revalidateInterval: Duration = this.revalidateInterval,
+        lagWarn: Duration = this.lagWarn,
+        lagEscalate: Duration = this.lagEscalate,
+        failClosedTenants: Set<String> = this.failClosedTenants,
+        failClosedMaxLag: Duration = this.failClosedMaxLag,
+        coldLoadTimeout: Duration = this.coldLoadTimeout,
+        maxApps: Int = this.maxApps,
+        maxTenants: Int = this.maxTenants,
+        maxAbsent: Int = this.maxAbsent,
+        compileThreads: Int = this.compileThreads,
+        compileQueueCapacity: Int = this.compileQueueCapacity,
+        reloadConcurrency: Int = this.reloadConcurrency,
+        prewarmInitialBackoff: Duration = this.prewarmInitialBackoff,
+        prewarmMaxBackoff: Duration = this.prewarmMaxBackoff,
+        lagLogInterval: Duration = this.lagLogInterval,
+        storeReadTimeout: Duration = this.storeReadTimeout,
+        rejectedReloadRetry: Duration = this.rejectedReloadRetry,
+    ): SnapshotOptions = SnapshotOptions(
+        revalidateInterval = revalidateInterval,
+        lagWarn = lagWarn,
+        lagEscalate = lagEscalate,
+        failClosedTenants = failClosedTenants,
+        failClosedMaxLag = failClosedMaxLag,
+        coldLoadTimeout = coldLoadTimeout,
+        maxApps = maxApps,
+        maxTenants = maxTenants,
+        maxAbsent = maxAbsent,
+        compileThreads = compileThreads,
+        compileQueueCapacity = compileQueueCapacity,
+        reloadConcurrency = reloadConcurrency,
+        prewarmInitialBackoff = prewarmInitialBackoff,
+        prewarmMaxBackoff = prewarmMaxBackoff,
+        lagLogInterval = lagLogInterval,
+        storeReadTimeout = storeReadTimeout,
+        rejectedReloadRetry = rejectedReloadRetry,
+    )
+
     init {
         revalidateIntervalProblem(revalidateInterval, lagWarn, failClosedTenants, failClosedMaxLag)?.let {
             throw IllegalArgumentException("revalidateInterval $it.")

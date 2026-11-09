@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.snapshot
 
 import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.spi.CoherenceBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.SnapshotCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions

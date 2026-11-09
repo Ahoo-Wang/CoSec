@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.Fixtures7x.app
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission

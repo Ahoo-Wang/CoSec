@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * HTTP names as CoSec compares them: a header name is a token (RFC 9110 §5.6.2: ASCII letters, digits and
@@ -19,6 +23,7 @@ package me.ahoo.cosec.model.condition
  * request side (the runtime's headers and the hosts of `Origin` and `Referer`) fold with this one function, so no
  * Unicode case mapping (`K`, U+212A, folds to `k`) can make two different names meet.
  */
+@InternalCoSecApi
 object HttpNames {
     /** Whether [name] is a non-empty token. */
     fun isToken(name: String): Boolean = name.isNotEmpty() && name.all(::isTokenChar)

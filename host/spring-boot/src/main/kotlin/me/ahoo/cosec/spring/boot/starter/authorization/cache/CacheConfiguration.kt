@@ -13,6 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.core.StoreSpec
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.convert.DurationUnit
 import java.time.Duration
 import java.time.temporal.ChronoUnit
@@ -24,6 +25,7 @@ import java.time.temporal.ChronoUnit
  * as soon as one key is set, so `maximum-size` alone must not drop `local-max-age` to CoCache's default. A null value
  * keeps CoCache's default.
  */
+@InternalCoSecApi
 data class CacheConfiguration(
     /** How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost. */
     @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
@@ -34,6 +36,7 @@ data class CacheConfiguration(
     @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
     var expireAfterAccess: Duration? = null,
 ) {
+    @InternalCoSecApi
     companion object {
         /** How stale a revocation may be on an instance that missed its invalidation message. */
         val DEFAULT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)

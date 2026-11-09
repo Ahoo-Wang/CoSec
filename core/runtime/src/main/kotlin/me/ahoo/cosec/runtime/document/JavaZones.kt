@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.ZoneOffsets
 import me.ahoo.cosec.model.condition.ZoneResolver
 import java.time.DateTimeException
@@ -27,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap
  * the pure condition model leaves out (RFC 0005 §3.2). Each zone's transitions are expanded once, up to [HORIZON_YEAR],
  * and kept: there are a few hundred zones at most.
  */
+@InternalCoSecApi
 object JavaZones : ZoneResolver {
     /** Daylight-saving rules are expanded into transitions until the end of this year. */
     const val HORIZON_YEAR: Int = 2100

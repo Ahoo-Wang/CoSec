@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.openapi
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.openapi.security.BearerAuthOpenApiCustomizer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springdoc.core.customizers.OpenApiCustomizer
@@ -28,7 +31,7 @@ import org.springframework.context.annotation.Bean
     OpenAPIProperties::class,
 )
 @ConditionalOnClass(value = [BearerAuthOpenApiCustomizer::class, OpenApiCustomizer::class])
-class CoSecOpenAPIAutoConfiguration {
+internal class CoSecOpenAPIAutoConfiguration {
     @Bean
     fun bearerAuthOpenApiCustomizer(): OpenApiCustomizer {
         return OpenApiCustomizer {

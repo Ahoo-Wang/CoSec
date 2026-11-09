@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.health.contributor.Health
 import org.springframework.boot.health.contributor.HealthIndicator
 
@@ -23,6 +24,7 @@ import org.springframework.boot.health.contributor.HealthIndicator
  * Redis. An alert: requests are still decided, so it belongs in no readiness group, where one change to Redis would take
  * every instance out of rotation at once.
  */
+@InternalCoSecApi
 class SnapshotEvictionHealthIndicator(private val monitor: EvictionPolicyMonitor) : HealthIndicator {
     override fun health(): Health {
         val status = monitor.status()

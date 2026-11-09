@@ -67,7 +67,7 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 @AutoConfiguration(after = [CoSecControlAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnBean(ControlHttp::class)
-class CoSecControlRoutesAutoConfiguration {
+internal class CoSecControlRoutesAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
     @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.ServerWebExchanges"])
@@ -235,7 +235,7 @@ class CoSecControlRoutesAutoConfiguration {
 }
 
 /** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
-class ControlRoutesWebFilter(
+internal class ControlRoutesWebFilter(
     private val delegate: PipelineWebFilter,
     private val basePath: String
 ) : WebFilter, Ordered {

@@ -39,6 +39,8 @@ class EnginePurityTest {
     val onlyStdlib: ArchRule = classes().should().onlyDependOnClassesThat().resideInAnyPackage(
         "me.ahoo.cosec.model..",
         "me.ahoo.cosec.engine..",
+        // The stability markers: annotation classes, no code to run, so nothing in the package does I/O (RFC 0011 D4).
+        "me.ahoo.cosec.annotations",
         "kotlin",
         "kotlin.collections..",
         "kotlin.jvm..",

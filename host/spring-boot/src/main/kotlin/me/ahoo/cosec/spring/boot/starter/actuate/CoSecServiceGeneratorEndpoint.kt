@@ -43,7 +43,7 @@ import java.util.Locale
  * operation, there is nothing to generate, and an empty route map deployed by mistake drops every `service:verb` DENY.
  */
 @Endpoint(id = CoSecServiceGeneratorEndpoint.ID)
-class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvider<AbstractOpenApiResource>) {
+internal class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvider<AbstractOpenApiResource>) {
     @ReadOperation
     fun generate(@Selector part: String): JsonNode? {
         val bytes = when (part) {
@@ -86,7 +86,7 @@ class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvider<Abstra
 
 @AutoConfiguration
 @ConditionalOnClass(OpenAPIServiceGenerator::class, Endpoint::class, AbstractOpenApiResource::class)
-class CoSecServiceGeneratorEndpointAutoConfiguration {
+internal class CoSecServiceGeneratorEndpointAutoConfiguration {
     @Bean
     fun cosecServiceGeneratorEndpoint(
         springDoc: ObjectProvider<AbstractOpenApiResource>

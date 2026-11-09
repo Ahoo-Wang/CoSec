@@ -11,13 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * Everything one evaluation reads. Immutable.
  *
  * Neither this class nor its parts are data classes: nothing needs `copy` or `componentN`, and only tests compare them.
  */
+@InternalCoSecApi
 class AuthzRequest(
     val subject: Subject,
     val action: Action,

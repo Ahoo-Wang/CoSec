@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.shadow
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
@@ -55,7 +58,7 @@ enum class ShadowOutcome {
  * One sampled request (RFC 0007 §6.4): the fields a decision event has (RFC 0006 §9.2), and the statements that decided
  * on each side, never a header, a token or an attribute value.
  */
-data class ShadowSample(
+class ShadowSample(
     val tenant: String,
     val principal: String,
     val app: String,
@@ -64,14 +67,31 @@ data class ShadowSample(
     val resource: String,
     val enforcedBy: String?,
     val candidateBy: String?,
-)
+) {
+    private fun fields(): List<Any?> = listOf(
+        tenant,
+        principal,
+        app,
+        space,
+        action,
+        resource,
+        enforcedBy,
+        candidateBy,
+    )
+
+    override fun equals(other: Any?): Boolean = other is ShadowSample && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "ShadowSample(${fields().joinToString()})"
+}
 
 /**
  * What one instance saw of one shadow window (RFC 0007 §6.4): counts by outcome, at most [MAX_SAMPLES] samples of each,
  * the base revisions it compared against, and the first and last sample times. Cumulative: each write replaces the
  * instance's previous report for the window.
  */
-data class ShadowReport(
+class ShadowReport(
     val window: String,
     val instance: String,
     val counts: Map<ShadowOutcome, Long>,
@@ -80,6 +100,35 @@ data class ShadowReport(
     val first: Instant?,
     val last: Instant?,
 ) {
+    private fun fields(): List<Any?> = listOf(window, instance, counts, samples, baseRevisions, first, last)
+
+    override fun equals(other: Any?): Boolean = other is ShadowReport && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "ShadowReport(${fields().joinToString()})"
+
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        window: String = this.window,
+        instance: String = this.instance,
+        counts: Map<ShadowOutcome, Long> = this.counts,
+        samples: Map<ShadowOutcome, List<ShadowSample>> = this.samples,
+        baseRevisions: Set<Long> = this.baseRevisions,
+        first: Instant? = this.first,
+        last: Instant? = this.last,
+    ): ShadowReport = ShadowReport(
+        window = window,
+        instance = instance,
+        counts = counts,
+        samples = samples,
+        baseRevisions = baseRevisions,
+        first = first,
+        last = last
+    )
+
     companion object {
         const val MAX_SAMPLES: Int = 20
 
@@ -95,10 +144,41 @@ data class ShadowReport(
 }
 
 /** A document an instance has installed (RFC 0007 §6.5): its revision, and how long since it was last confirmed. */
-data class InstalledDocument(val revision: Long, val lag: Duration)
+class InstalledDocument(val revision: Long, val lag: Duration) {
+    private fun fields(): List<Any?> = listOf(revision, lag)
+
+    override fun equals(other: Any?): Boolean = other is InstalledDocument && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "InstalledDocument(${fields().joinToString()})"
+}
 
 /** What an instance reported having installed, at [at] (RFC 0007 §6.5). */
-data class InstanceStatus(val instance: String, val at: Instant, val documents: Map<SnapshotKey, InstalledDocument>)
+class InstanceStatus(
+    val instance: String,
+    val at: Instant,
+    val documents: Map<SnapshotKey, InstalledDocument>,
+    /**
+     * The document format level this instance reads (RFC 0010 C5): 8.0 is [FORMAT_LEVEL], and the status codec requires
+     * it. The publish gate that compares it with a document's level arrives with the first document field that needs
+     * one (8.1); until then it is carried and not read.
+     */
+    val formatLevel: Int = FORMAT_LEVEL,
+) {
+    private fun fields(): List<Any?> = listOf(instance, at, documents, formatLevel)
+
+    override fun equals(other: Any?): Boolean = other is InstanceStatus && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "InstanceStatus(${fields().joinToString()})"
+
+    companion object {
+        /** The document format level of this version: 8.0 reads level 1. */
+        const val FORMAT_LEVEL: Int = 1
+    }
+}
 
 /** Where each instance writes its shadow reports and its status (RFC 0007 §6.4, §6.5). */
 @CoSecSpi
@@ -123,6 +203,7 @@ interface ShadowReportReader {
 }
 
 /** Reports and statuses in memory: for tests and single-instance deployments. */
+@InternalCoSecApi
 class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : ShadowReportSink, ShadowReportReader {
     private val reports = ConcurrentHashMap<String, ConcurrentHashMap<String, ShadowReport>>()
     private val statuses = ConcurrentHashMap<String, InstanceStatus>()

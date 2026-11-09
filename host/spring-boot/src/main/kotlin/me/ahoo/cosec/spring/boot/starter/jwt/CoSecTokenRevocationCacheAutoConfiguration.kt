@@ -49,7 +49,7 @@ import org.springframework.context.annotation.Bean
     RevocationProperties::class,
     CoSecProperties::class,
 )
-class CoSecTokenRevocationCacheAutoConfiguration(
+internal class CoSecTokenRevocationCacheAutoConfiguration(
     private val revocationProperties: RevocationProperties,
     private val cosecProperties: CoSecProperties,
 ) {

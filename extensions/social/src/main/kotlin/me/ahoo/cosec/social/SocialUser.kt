@@ -17,7 +17,7 @@ package me.ahoo.cosec.social
  *
  * @author ahoo wang
  */
-data class SocialUser(
+class SocialUser(
     val id: String,
     val username: String,
     val nickname: String? = null,
@@ -28,6 +28,23 @@ data class SocialUser(
     val rawInfo: MutableMap<String, Any> = mutableMapOf(),
     val provider: String
 ) {
+    private fun fields(): List<Any?> = listOf(
+        id,
+        username,
+        nickname,
+        avatar,
+        email,
+        location,
+        gender,
+        rawInfo,
+        provider,
+    )
+
+    override fun equals(other: Any?): Boolean = other is SocialUser && other.fields() == fields()
+
+    override fun hashCode(): Int = fields().hashCode()
+
+    override fun toString(): String = "SocialUser(${fields().joinToString()})"
 
     enum class Gender {
         MALE, FEMALE, UNKNOWN

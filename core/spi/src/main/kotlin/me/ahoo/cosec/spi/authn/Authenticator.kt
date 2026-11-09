@@ -75,6 +75,10 @@ sealed interface AuthnResult {
     /** A dependency the authenticator needs failed, such as the API key store: 503. */
     class Unavailable(val cause: Throwable) : AuthnResult
 
+    /**
+     * Why a credential was rejected. A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when`
+     * over it needs an `else`.
+     */
     enum class RejectReason {
         TOKEN_INVALID,
         TOKEN_EXPIRED,

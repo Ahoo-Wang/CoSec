@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /** The static type of an attribute (RFC 0005 §3.2). Values are never converted from one type to another. */
 enum class AttributeType {
@@ -62,6 +66,8 @@ class Attribute private constructor(
 
     /**
      * The attributes of the catalog. A [parameterized] kind's [path] ends with a dot and takes a non-empty name.
+     *
+     * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`.
      */
     enum class Kind(val path: String, val type: AttributeType, val parameterized: Boolean = false) {
         SUBJECT_ID("subject.id", AttributeType.STRING),
@@ -179,10 +185,12 @@ class Attribute private constructor(
  * The external attributes the registered `AttributeProvider`s declare (RFC 0006 §5.4.1). Conditions are checked
  * against the built-in catalog and this one; a path in `ext.` that no provider declares does not compile.
  */
+@InternalCoSecApi
 fun interface AttributeCatalog {
     /** The declared attribute at [path], or null when no provider declares it. */
     fun external(path: String): Attribute?
 
+    @InternalCoSecApi
     companion object {
         /** No provider: every `ext.` path is unknown. */
         val NONE: AttributeCatalog = AttributeCatalog { null }

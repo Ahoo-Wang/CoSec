@@ -507,12 +507,12 @@ val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platf
 val acme = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", File("tenant-acme.json").readBytes())
 // The platform's limits and declared attributes, as the control plane checks a candidate.
 val compiler = PolicyDocumentCompiler.forPlatform(platform)
-compiler.compile(platform)
-compiler.compile(acme)
+compiler.validate(platform)
+compiler.validate(acme)
 compiler.checkReferences(acme, platform)
 ```
 
-`decode` throws `SnapshotFormatException` and `compile` throws `DocumentCompileException`, with every error and its
+`decode` throws `SnapshotFormatException` and `validate` throws `DocumentCompileException`, with every error and its
 JSON path.
 
 ### Testing decisions
@@ -608,5 +608,43 @@ not compile in the kit, and no provider runs, so a statement that reads `ext.*` 
 `onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied.
 Decisions that depend on external values can be tried with [`simulate`](#simulating-a-request), which compiles
 against the control host's providers.
+
+### Testing your code against a real pipeline
+
+Where `PolicyTestKit` asserts what your documents decide, `PipelineFixture` runs the rest of the request around that
+decision: a real `Pipeline` over the compiler, snapshot source and engine every instance runs, from your documents. Use
+it when the code under test reads the permitted request's `SecurityContext`, or a handler's outcome depends on the
+status and problem CoSec answers. It is `@ExperimentalCoSecApi`, like the rest of the test kit.
+
+```kotlin
+@file:OptIn(ExperimentalCoSecApi::class)
+
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.testkit.PipelineFixture
+import org.junit.jupiter.api.Test
+import java.nio.file.Path
+
+class OrderPermissionsTest {
+    private val reader = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+
+    @Test
+    fun `a reader may read`() = runBlocking {
+        PipelineFixture.load(Path.of("src/test/resources/policies/documents")).use { fixture ->
+            val request = fixture.request("GET", "/orders/1", reader)
+            check(fixture.evaluate(request).status == 200)
+            // What a handler reads for the permitted request; further checks go through the same pipeline.
+            val context = fixture.securityContext(request)
+            check(AuthorizationChecker(fixture.pipeline).check(context, "http:DELETE", "/orders/1").not())
+        }
+    }
+}
+```
+
+`PipelineFixture.of(platform, apps, tenants)` takes documents as JSON text. A document that does not compile fails when
+the fixture is built. `Principal` says who a request is, as a token would: `tenant`, `roles` (`role` or `role@space`),
+`policies`, `app` and `attributes`; without one, a request is anonymous. It replaces the credential check only: the
+status codes, `SecurityContext` and decisions are the pipeline's. Close the fixture, usually one per test class.
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

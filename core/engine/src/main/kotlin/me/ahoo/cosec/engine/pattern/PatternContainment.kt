@@ -11,13 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Containment
 
 /**
  * What [PatternContainment.contains] proved about two resource patterns.
  */
+@InternalCoSecApi
 sealed interface ResourceContainment {
     val answer: Containment
 
@@ -26,11 +30,13 @@ sealed interface ResourceContainment {
      * to the variable of the inner one that captures the same value on every such resource; a variable of the outer
      * pattern that no variable of the inner one corresponds to is absent.
      */
+    @InternalCoSecApi
     class Contained(val variables: Map<String, String>) : ResourceContainment {
         override val answer: Containment get() = Containment.YES
     }
 
     /** Not proven. */
+    @InternalCoSecApi
     class Unknown(val reason: String) : ResourceContainment {
         override val answer: Containment get() = Containment.UNKNOWN
     }
@@ -57,6 +63,7 @@ sealed interface ResourceContainment {
  * Literals compare by their exact text, case included, also in case-insensitive patterns: equal text is the only
  * equality case folding cannot break.
  */
+@InternalCoSecApi
 object PatternContainment {
     /** Whether every action [inner] matches, [outer] matches: `service:verb ⊑ service:* ⊑ *`. */
     fun contains(outer: ActionPattern, inner: ActionPattern): Containment {

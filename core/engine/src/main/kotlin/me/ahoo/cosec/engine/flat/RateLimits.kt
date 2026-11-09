@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
@@ -24,6 +27,7 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
  * A rate limit rule as a document writes it (RFC 0006 §8.1): the requests it limits, as one statement (its action,
  * resource and condition; its effect is irrelevant), the attribute that splits it into buckets, and its quota.
  */
+@InternalCoSecApi
 class RateLimitSource(
     val id: String,
     val statement: StatementSource,
@@ -38,6 +42,7 @@ class RateLimitSource(
  * A compiled rate limit rule. [id] is the rule's id within the counters, its document and its own id ([counterId]), so
  * no document counts against another's buckets.
  */
+@InternalCoSecApi
 class CompiledRateLimit internal constructor(
     val id: String,
     internal val policy: CompiledPolicy,
@@ -52,6 +57,7 @@ class CompiledRateLimit internal constructor(
 
     override fun toString(): String = "CompiledRateLimit($id)"
 
+    @InternalCoSecApi
     companion object {
         /** Rule ids are Redis key segments; without `:` or `/`, no rule can name another document's counter. */
         private val ID = Regex("[A-Za-z0-9_.-]+")

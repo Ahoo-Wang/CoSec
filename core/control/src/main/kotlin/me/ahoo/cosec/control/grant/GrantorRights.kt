@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -30,6 +33,7 @@ import me.ahoo.cosec.model.decision.StatementRef
  * A statement the grantor is subject to, with where it applies to the grantor ([applicability]) and its condition
  * together with its policy's ([condition], `null` when neither has one).
  */
+@InternalCoSecApi
 class HeldStatement(
     val statement: GrantStatement,
     val condition: Condition?,
@@ -64,6 +68,7 @@ class HeldStatement(
  * - Where an app document could not be read ([GrantSnapshot.unreadApps]), the grantor's rights are not known at all
  *   ([unread], RC1-4).
  */
+@InternalCoSecApi
 class GrantorRights(
     val allows: List<HeldStatement>,
     val denies: List<HeldStatement>,
@@ -82,6 +87,7 @@ class GrantorRights(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         private val BUILTIN = setOf(PolicyId("cosec:blacklist"), PolicyId("cosec:root"))
         private val EVERYTHING = GrantStatement(Effect.DENY, listOf(ActionPattern.ANY), name = "unresolved")

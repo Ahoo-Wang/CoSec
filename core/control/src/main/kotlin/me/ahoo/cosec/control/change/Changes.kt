@@ -44,6 +44,7 @@ import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
 /** A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). */
+@InternalCoSecApi
 class ChangeRejectedException(
     val status: Int,
     message: String,

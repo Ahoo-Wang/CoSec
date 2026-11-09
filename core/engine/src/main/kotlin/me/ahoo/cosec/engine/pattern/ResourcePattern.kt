@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Resource
 
 /**
@@ -25,6 +28,7 @@ import me.ahoo.cosec.model.Resource
  *   with an empty id, and `order` followed by `**` every `order`. Ids are compared as written, split on `/`, never decoded.
  * - [AnyResource], for a statement without a resource.
  */
+@InternalCoSecApi
 sealed class ResourcePattern {
     /** The names of the captured variables, in the order [Captures] holds them. */
     abstract val variableNames: List<String>
@@ -41,6 +45,7 @@ sealed class ResourcePattern {
     internal open fun matches(target: ResourceTarget, scratch: ScratchSource): Boolean = matches(target)
 
     /** Every resource; captures nothing. */
+    @InternalCoSecApi
     object AnyResource : ResourcePattern() {
         override val variableNames: List<String> = emptyList()
 
@@ -51,6 +56,7 @@ sealed class ResourcePattern {
         override fun toString(): String = "*"
     }
 
+    @InternalCoSecApi
     class Http internal constructor(val path: HttpPathPattern) : ResourcePattern() {
         override val variableNames: List<String> get() = path.variableNames
 
@@ -90,6 +96,7 @@ sealed class ResourcePattern {
         override fun toString(): String = HTTP_PREFIX + path.pattern
     }
 
+    @InternalCoSecApi
     class Typed internal constructor(
         val type: String,
         private val segments: Array<TypedSegment>,
@@ -144,6 +151,7 @@ sealed class ResourcePattern {
         override fun toString(): String = text
     }
 
+    @InternalCoSecApi
     companion object {
         /** The resource type of HTTP requests. */
         const val HTTP_TYPE: String = "http"
@@ -190,6 +198,7 @@ sealed class ResourcePattern {
  * The resource of one request, with its path parsed at most once per option for every [ResourcePattern.Http]. One
  * evaluation owns it; it is not shared between threads.
  */
+@InternalCoSecApi
 class ResourceTarget(val resource: Resource) {
     private var decoded: HttpPath? = null
     private var raw: HttpPath? = null

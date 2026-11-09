@@ -36,7 +36,7 @@ import tools.jackson.core.StreamReadFeature
  * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
  * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
-class UnknownProperties(
+internal class UnknownProperties(
     private val known: Set<String>,
     /** Map- and list-valued properties: any key under them is theirs. */
     private val containers: Set<String>,
