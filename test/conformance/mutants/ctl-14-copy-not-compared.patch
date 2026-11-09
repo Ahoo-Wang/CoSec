@@ -1,0 +1,17 @@
+# Rule: CTL-14
+# Mutant: the control plane accepts a tenant policy of a platform policy's id whatever its content, not only an exact copy
+# Tests: :control:test --tests me.ahoo.cosec.control.change.SharedPolicyCopyTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index f8886489..c6ede5e3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -195,7 +195,7 @@ class ChangeChecks(
+         val shared = platform.policies.associateBy { it.id }
+         candidate.policies.withIndex().forEach { (i, policy) ->
+             val original = shared[policy.id] ?: return@forEach
+-            if (EntryDigest.of(policy) != EntryDigest.of(original)) {
++            if (false) {
+                 findings += Finding(
+                     "V2",
+                     "$.policies[$i].id",

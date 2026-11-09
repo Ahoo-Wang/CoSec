@@ -1,0 +1,17 @@
+# Rule: CTL-29
+# Mutant: the control plane lets the platform change a policy a tenant document holds a copy of
+# Tests: :control:test --tests me.ahoo.cosec.control.change.SharedPolicyCopyTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index f8886489..40b0e8a5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -419,7 +419,7 @@ class ChangeChecks(
+     ) {
+         if (EntryDigest.of(before) == EntryDigest.of(after)) return
+         val tenants = context.referrers(SnapshotKey.Platform, after.id).filterIsInstance<SnapshotKey.Tenant>()
+-        val holding = tenants.associateWith { definesCopy(context, it, after.id) }.filterValues { it != false }
++        val holding = tenants.associateWith { definesCopy(context, it, after.id) }.filterValues { false }
+         if (holding.isEmpty()) return
+         val status = if (holding.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
+         findings += Finding(
