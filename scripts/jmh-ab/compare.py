@@ -16,6 +16,10 @@
 
 Reads <dir>/base-<round>.json and <dir>/head-<round>.json (JMH `-rf json`), rounds numbered from 1.
 Only ratios are reported: absolute scores from a shared runner are not comparable across jobs.
+
+A ratio is only reported for two scores of the same mode in units that convert to one another (`ns/op` and `us/op`,
+`ops/ms` and `ops/s`). Anything else is listed as not comparable and the script exits with status 1: a ref that only
+changed a benchmark's `@OutputTimeUnit` must not read as a change in speed.
 """
 import argparse
 import json
@@ -28,6 +32,10 @@ from pathlib import Path
 ALLOC_KEYS = ("gc.alloc.rate.norm", "·gc.alloc.rate.norm")
 # Modes whose score grows with speed; for the others a ratio above 100 % is slower.
 HIGHER_IS_BETTER = {"thrpt"}
+# JMH's time unit labels, in nanoseconds.
+NANOS = {"ns": 1, "us": 1_000, "ms": 1_000_000, "s": 1_000_000_000, "m": 60_000_000_000,
+         "h": 3_600_000_000_000, "d": 86_400_000_000_000}
+NOT_COMPARABLE = "not comparable"
 
 
 def load(path):
@@ -40,6 +48,30 @@ def load(path):
         pm = e["primaryMetric"]
         out[key] = (e["mode"], pm["score"], pm["scoreUnit"], alloc)
     return out
+
+
+def canonical(score, unit):
+    """(family, score) with the time in nanoseconds, for a unit JMH's primary metrics use; None for any other."""
+    per_op = re.fullmatch(r"([a-z]+)/op", unit)
+    if per_op and per_op.group(1) in NANOS:
+        return "time/op", score * NANOS[per_op.group(1)]
+    ops_per = re.fullmatch(r"ops/([a-z]+)", unit)
+    if ops_per and ops_per.group(1) in NANOS:
+        return "ops/time", score / NANOS[ops_per.group(1)]
+    return None
+
+
+def ratio(base, head):
+    """(head ÷ base in one unit, None), or (None, why the two cannot be compared)."""
+    (base_mode, base_score, base_unit, _), (head_mode, head_score, head_unit, _) = base, head
+    if base_mode != head_mode:
+        return None, f"mode {base_mode} vs {head_mode}"
+    if base_unit == head_unit:
+        return head_score / base_score, None
+    converted = canonical(base_score, base_unit), canonical(head_score, head_unit)
+    if None in converted or converted[0][0] != converted[1][0]:
+        return None, f"unit {base_unit} vs {head_unit}"
+    return converted[1][1] / converted[0][1], None
 
 
 def rounds_of(directory):
@@ -77,20 +109,26 @@ def main():
     head = ["Benchmark", "Params", "Mode"] + [f"R{n}" for n, _, _ in data]
     head += ["Mean", "Min", "Max", "B/op base", "B/op head"]
     rows = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    problems = []
     for key in keys:
         name, params = key
-        ratios, mode, base_b, head_b, cells = [], "", [], [], []
-        for _, b, h in data:
+        ratios, modes, base_b, head_b, cells, issues = [], [], [], [], [], []
+        for n, b, h in data:
             if key in b and key in h and b[key][1] > 0:
-                mode = b[key][0]
-                r = h[key][1] / b[key][1]
+                r, why = ratio(b[key], h[key])
+                if why:
+                    cells.append(NOT_COMPARABLE)
+                    issues.append(f"round {n}: {why}")
+                    continue
+                if b[key][0] not in modes:
+                    modes.append(b[key][0])
                 ratios.append(r)
                 cells.append(fmt_ratio(r))
                 base_b.append(b[key][3])
                 head_b.append(h[key][3])
             else:
                 cells.append("–")
-        if not ratios:
+        if not ratios and not issues:
             continue
 
         def avg(xs):
@@ -100,10 +138,14 @@ def main():
         short = name.rsplit(".", 2)
         label = ".".join(short[-2:]) if len(short) > 2 else name
         p = ", ".join(f"{k}={v}" for k, v in params) or "–"
-        row = [label, p, mode] + cells
-        row += [fmt_ratio(statistics.fmean(ratios)), fmt_ratio(min(ratios)), fmt_ratio(max(ratios))]
+        row = [label, p, "/".join(modes) or "–"] + cells
+        if ratios:
+            row += [fmt_ratio(statistics.fmean(ratios)), fmt_ratio(min(ratios)), fmt_ratio(max(ratios))]
+        else:
+            row += [NOT_COMPARABLE] * 3
         row += [fmt_bytes(avg(base_b)), fmt_bytes(avg(head_b))]
         rows.append("| " + " | ".join(row) + " |")
+        problems += [f"- `{label}` ({p}), {issue}" for issue in issues]
 
     print("### JMH A/B: head / base\n")
     print("\n".join(rows))
@@ -113,6 +155,11 @@ def main():
         "B/op is the mean `gc.alloc.rate.norm` across rounds. **This is a first signal only**: the hard performance\n"
         "gate at switch S1 (RFC 0008 §3.8/§3.9) is measured on an idle machine."
     )
+    if problems:
+        print("\n### Not comparable\n")
+        print("\n".join(problems))
+        print("\nThese rounds are left out of the ratios above: a mode or a unit that does not convert is no ratio.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,10 @@
 package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Test
@@ -133,6 +136,48 @@ class PolicyTestKitTest {
         PolicyTestKit.of("{}", tenants = mapOf("acme" to wide))
         assertThrows<DocumentException> { PolicyTestKit.of(platform, tenants = mapOf("acme" to wide)) }
             .message.assert().startsWith("The tenant acme document:")
+    }
+
+    /**
+     * The host of `Origin` and `Referer` folds to ASCII lower case as the runtime's [HttpAttributes] folds it (#1257),
+     * so a domain condition tests offline what it decides in service. The runtime is the oracle, not a literal.
+     */
+    @Test
+    fun `the host of Origin and Referer reads as the runtime reads it`() {
+        val kit = PolicyTestKit.of(
+            "{}",
+            tenants = mapOf(
+                "acme" to """{"policies": [{"id": "p", "statements": [
+                  {"effect": "allow", "action": "origin:read", "condition": {"eq": ["http.origin.host", "example.com"]}},
+                  {"effect": "allow", "action": "referer:read", "condition": {"eq": ["http.referer.host", "example.com"]}}]}],
+                  "bindings": [{"id": "g", "subject": "*", "app": "*", "space": "*", "policy": "p"}]}"""
+            ),
+        )
+        val urls = listOf(
+            "https://EXAMPLE.com",
+            "https://Example.COM:8443/orders?q=1",
+            "https://example.com",
+            "https://other.com",
+            "not a url",
+        )
+        for ((header, kind) in listOf(
+            "Origin" to Attribute.Kind.HTTP_ORIGIN_HOST,
+            "Referer" to Attribute.Kind.HTTP_REFERER_HOST
+        )) {
+            for (url in urls) {
+                val runtimeHost = HttpAttributes(Headers.of(mapOf(header to listOf(url)))).string(Attribute.of(kind))
+                val outcome = kit.evaluate(
+                    """{"credential": {"tenant": "acme"},
+                       "request": {"action": "${header.lowercase()}:read", "headers": {"$header": "$url"}}}"""
+                )
+                val decision = (outcome as EngineOutcome.Decided).decision
+                if (runtimeHost == "example.com") {
+                    decision.assert().describedAs("$header: $url").isInstanceOf(Decision.Permit::class.java)
+                } else {
+                    decision.assert().describedAs("$header: $url").isInstanceOf(Decision.Deny::class.java)
+                }
+            }
+        }
     }
 
     private fun scenario(expect: String, action: String = "order:read") = ScenarioJson.parse(

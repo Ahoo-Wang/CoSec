@@ -265,4 +265,6 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 
 服务名取 `info.x-cosec-service`，否则取 `info.title`。每个操作的动作是 `<service>:<operationId>`，或它的 `x-cosec-action`。应用文档中每个动作一个权限策略 `perm:<service>/<verb>`，允许该动作作用于任意资源；目录按操作的第一个标签分组（没有标签时为 `default`）。生成的文档没有角色绑定：添加绑定、评审文档，然后按上文发布。操作缺少动作、`operationId` 重复，或两个操作可能匹配同一请求时，生成失败。
 
+路径的 Path Item 是 `$ref`（OpenAPI 3.1）时，生成结果与它所指的 Path Item 相同：指向 `#/components/pathItems/<name>` 的引用会被解析，引用链也会被跟随。目标不存在、引用成环、引用指向别处（另一个文件、URL、文档的其他位置），或该路径在 `$ref` 之外还有自己的操作时，生成失败，并指出路径和引用：OpenAPI 规范没有定义这种组合，丢掉或猜测某个操作的路由映射，授予的权限会比 API 描述的更少或更多。
+
 **下一步：** 限制已允许的请求能以多高的频率执行，见[限流](./rate-limiting.md)。
