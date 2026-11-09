@@ -1,0 +1,26 @@
+{
+  "description": "The service account is also a scanner in wh-02, but the key's cap is not.",
+  "credential": {
+    "tenant": "acme",
+    "id": "svc-scanner",
+    "app": "wms",
+    "roles": [
+      "wms.scanner@wh-01"
+    ],
+    "principalBindings": false,
+    "breakGlass": false
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    },
+    "space": "wh-02"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "SPACE_NOT_MEMBER"
+  }
+}

@@ -69,6 +69,10 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   parallel builds.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
+- The samples of the wiki's `scenarios/` pages are files under `wiki/examples/<scenario>/`, included by both languages.
+  `:conformance:test` (`DocumentationExamplesTest`) compiles their documents, runs their scenarios, decodes their change
+  bodies and loads their route maps, and `SchemaConformanceTest` checks the documents against `schema/`: change a
+  sample and its page together, and write a claim about a decision as a scenario file.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
   (needs Chrome), `pnpm check:docs` (also fails when `wiki/`, `skills/`, the READMEs, `llms.txt`, `SECURITY.md` or
   `k8s/` mention an API removed in 8.0), `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).

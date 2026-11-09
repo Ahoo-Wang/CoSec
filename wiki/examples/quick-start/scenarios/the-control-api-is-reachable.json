@@ -1,0 +1,17 @@
+{
+  "description": "A signed-in caller reaches the control API's path: the control plane then authorizes the step itself.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/cosec/control/v1/changes"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

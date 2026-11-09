@@ -129,7 +129,9 @@ A route map gives each route of a service an action and a typed resource, so pol
 - A route matches a request with exactly its `method` whose path matches its `path` pattern. The resource template's
   `{variables}` are captures of the path.
 - A request no route matches keeps the action `http:<METHOD>` on the resource `http:path:<path>`. A statement on a
-  `service:verb` action never covers it: no route falls back to a wildcard.
+  `service:verb` action never covers it: no route falls back to a wildcard. The reverse holds too: a statement or a
+  rate limit rule on `http:` never covers a mapped request, the platform's included
+  ([Authorizing business actions](../scenarios/route-maps.md)).
 - A route map loads whole or not at all. A location that does not exist, a malformed file (an unknown or missing
   field, a repeated key, a value of the wrong type), a file with no routes, a malformed route, or two routes one
   request could match (same method, paths not provably disjoint) fails startup and names the location.

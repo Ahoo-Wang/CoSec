@@ -1,0 +1,22 @@
+{
+  "description": "A custom role may hold a permission with a resource.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "dispatcher"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -45,6 +45,9 @@ val testSources = rootProject.subprojects.filter { it != project }.map { it.layo
 
 tasks.named<Test>("test") {
     systemProperty("cosec.projects", projectDirectories)
+    // DocumentationExamplesTest reads the samples of the wiki's scenario pages.
+    systemProperty("cosec.repository.root", repositoryRoot.asFile.absolutePath)
+    inputs.dir(repositoryRoot.dir("wiki/examples")).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 /*

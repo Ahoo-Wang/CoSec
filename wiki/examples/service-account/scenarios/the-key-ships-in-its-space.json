@@ -1,0 +1,25 @@
+{
+  "description": "The key's cap lists wms.scanner in wh-01: it ships there.",
+  "credential": {
+    "tenant": "acme",
+    "id": "svc-scanner",
+    "app": "wms",
+    "roles": [
+      "wms.scanner@wh-01"
+    ],
+    "principalBindings": false,
+    "breakGlass": false
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    },
+    "space": "wh-01"
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

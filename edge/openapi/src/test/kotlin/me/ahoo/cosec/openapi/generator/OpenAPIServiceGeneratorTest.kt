@@ -20,6 +20,7 @@ import io.swagger.v3.oas.models.PathItem
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.cosec.runtime.route.RouteResolution
 import me.ahoo.test.asserts.assert
@@ -90,21 +91,32 @@ class OpenAPIServiceGeneratorTest {
     }
 
     @Test
-    fun `the app document grants each action, with a catalog by tag, and compiles`() {
+    fun `the app document grants each action as a short-form permission, with a catalog by tag, and compiles`() {
         val document = OpenAPIServiceGenerator.appDocument(api)
         document.kind.assert().isEqualTo(DocumentKind.APP)
         document.owner.assert().isEqualTo("order")
         PolicyDocumentCompiler().compile(
             PolicyDocumentCodec.decode(DocumentKind.APP, "order", PolicyDocumentCodec.encode(document))
         )
-        val actions = document.policies.flatMap { policy -> policy.statements.flatMap { it.actions } }.toSet()
-        actions.assert().isEqualTo(OpenAPIServiceGenerator.routeMap(api).routes.map { it.action }.toSet())
-        document.policies.map { it.id.value }.assert().contains(
+        // The document writes no policy, binding or role: each catalog entry defines its permission.
+        document.policies.assert().isEmpty()
+        document.bindings.assert().isEmpty()
+        val entries = document.catalog!!.groups.flatMap { it.permissions }
+        entries.forEach { it.actions!!.assert().hasSize(1) }
+        entries.flatMap { it.actions!! }.toSet()
+            .assert().isEqualTo(OpenAPIServiceGenerator.routeMap(api).routes.map { it.action }.toSet())
+        entries.forEach { it.resources.assert().isEmpty() }
+        // What the compiler writes out: a permission policy per entry, allowing the action on any resource.
+        val effective = RoleExpansion.effective(document)
+        effective.policies.map { it.id.value }.assert().contains(
             "perm:order/read",
             "perm:order/delete",
             "perm:order/updateItem"
         )
-        document.policies.forEach { it.statements.single().resources.assert().isEmpty() }
+        effective.policies.forEach { it.statements.single().resources.assert().isEmpty() }
+        // Not spaced: a permission applies in the default space only, until the operator marks a group spaced.
+        document.catalog!!.groups.forEach { it.spaced.assert().isFalse() }
+        String(PolicyDocumentCodec.encode(document)).assert().contains("\"action\"")
         val catalog = document.catalog!!.groups.associate { group -> group.name to group.permissions.map { it.id } }
         catalog.assert().isEqualTo(
             mapOf(

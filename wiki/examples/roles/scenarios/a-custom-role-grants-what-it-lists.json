@@ -1,0 +1,22 @@
+{
+  "description": "acme's night-shift role reads warehouses.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "night-shift"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.read",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

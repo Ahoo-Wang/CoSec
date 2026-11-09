@@ -1,0 +1,23 @@
+{
+  "description": "A token issued for pos is worth nothing to wms.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "pos",
+    "roles": [
+      "clerk"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.read",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "A spaced permission also applies in the default space.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "wms.manager"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

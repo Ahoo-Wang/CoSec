@@ -67,7 +67,7 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 ### 动作与资源 {#action-and-resource}
 
-请求做什么、对什么做。没有路由映射时，HTTP 请求的动作是 `http:<METHOD>`（例如 `http:GET`），资源是 `http:path:<path>`。[路由映射](../architecture/extending.md#route-maps)可以为服务的路由赋予自己的动作和类型化资源，例如作用于 `order/42` 的 `order:read`。
+请求做什么、对什么做。没有路由映射时，HTTP 请求的动作是 `http:<METHOD>`（例如 `http:GET`），资源是 `http:path:<path>`。[路由映射](../architecture/extending.md#route-maps)可以为服务的路由赋予自己的动作和类型化资源，例如作用于 `order/42` 的 `order:read`。一个请求要么是前者要么是后者，绝不会两者兼有，这决定了[哪些语句适用](../scenarios/route-maps.md#a-request-has-one-action)。
 
 ## 文档与策略 {#documents-and-policies}
 
@@ -158,4 +158,4 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 把平台主体绑定到某条平台策略（默认是内置的、放行一切的 `cosec:root`）的紧急绑定，带有过期时间。它只能通过控制面创建，需要第二个人审批，它放行的每个请求都必须写入一个 REQUIRED 审计监听器。它的策略和其他策略一样求值，所以匹配的 DENY 仍然优先；只有在没有其他东西放行该请求时，它才会被报告为放行的原因。
 
-**下一步：** 每次决策都遵守的保证，见[安全模型](./security-model.md)；要编写规则，见[策略语言](../policies/language.md)。
+**下一步：** 这些术语之间的关系，用图来看，见[模型](./model.md)。

@@ -1,0 +1,22 @@
+{
+  "description": "globex has no night-shift role: the name alone grants nothing there.",
+  "credential": {
+    "tenant": "globex",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "night-shift"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.read",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

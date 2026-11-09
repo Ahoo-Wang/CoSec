@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "roles": [
+    {
+      "id": "night-shift",
+      "app": "wms",
+      "name": "Night shift",
+      "description": "Watches the dock",
+      "permissions": [
+        "warehouse.read"
+      ]
+    },
+    {
+      "id": "dispatcher",
+      "app": "wms",
+      "name": "Dispatcher",
+      "permissions": [
+        "warehouse.read",
+        "inbound.ship"
+      ]
+    }
+  ]
+}

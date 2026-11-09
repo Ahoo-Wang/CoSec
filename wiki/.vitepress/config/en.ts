@@ -15,7 +15,7 @@ import { DefaultTheme } from 'vitepress'
 
 export const REPO_URL = 'https://github.com/Ahoo-Wang/CoSec'
 
-// One sidebar for the whole site: with 18 pages, seeing every area at once beats per-section sidebars.
+// One sidebar for the whole site: with 28 pages, seeing every area at once beats per-section sidebars.
 const sidebar: DefaultTheme.SidebarItem[] = [
   {
     text: 'Guide',
@@ -23,8 +23,23 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Introduction', link: '/guide/introduction' },
       { text: 'Quick Start', link: '/guide/quick-start' },
       { text: 'Concepts', link: '/guide/concepts' },
+      { text: 'Model', link: '/guide/model' },
       { text: 'Security Model', link: '/guide/security-model' },
       { text: 'Roadmap', link: '/guide/roadmap' },
+    ],
+  },
+  {
+    text: 'Scenarios',
+    items: [
+      { text: 'Simple Mode', link: '/scenarios/simple-mode' },
+      { text: 'An App Without Spaces', link: '/scenarios/app' },
+      { text: 'System and Custom Roles', link: '/scenarios/roles' },
+      { text: 'Apps With Spaces', link: '/scenarios/spaces' },
+      { text: 'A Service Account in One Space', link: '/scenarios/service-account' },
+      { text: 'A Tenant Owner', link: '/scenarios/tenant-owner' },
+      { text: 'Roles From an External Source', link: '/scenarios/external-source' },
+      { text: 'Authorizing Business Actions', link: '/scenarios/route-maps' },
+      { text: 'Gateway Topologies', link: '/scenarios/gateway' },
     ],
   },
   {

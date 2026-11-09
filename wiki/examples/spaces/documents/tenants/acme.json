@@ -1,0 +1,17 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "roles": [
+    {
+      "id": "wh-01-keeper",
+      "app": "wms",
+      "space": "wh-01",
+      "name": "Keeper of warehouse 1",
+      "permissions": [
+        "inbound.read",
+        "inbound.ship"
+      ]
+    }
+  ]
+}

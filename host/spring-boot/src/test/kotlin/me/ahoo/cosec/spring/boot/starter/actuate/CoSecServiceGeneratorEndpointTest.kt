@@ -61,7 +61,10 @@ class CoSecServiceGeneratorEndpointTest {
             route.get("method").asString().assert().isEqualTo("GET")
             route.get("path").asString().assert().isEqualTo("/orders/{id}")
             route.get("action").asString().assert().isEqualTo("order:getOrder")
-            endpoint.generate(CoSecServiceGeneratorEndpoint.APP)!!.has("policies").assert().isTrue()
+            val permission = endpoint.generate(CoSecServiceGeneratorEndpoint.APP)!!
+                .get("catalog").get("groups").single().get("permissions").single()
+            permission.get("id").asString().assert().isEqualTo("getOrder")
+            permission.get("action").toString().assert().contains("order:getOrder")
             endpoint.generate("other").assert().isNull()
         }
     }

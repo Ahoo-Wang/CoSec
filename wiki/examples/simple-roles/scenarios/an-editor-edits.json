@@ -1,0 +1,20 @@
+{
+  "description": "The role editor, bound in the default tenant's document, may POST articles.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "erin",
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/articles/1"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

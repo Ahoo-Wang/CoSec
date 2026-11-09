@@ -1,0 +1,20 @@
+{
+  "description": "But not open /admin.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "erin",
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/admin/users"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}
