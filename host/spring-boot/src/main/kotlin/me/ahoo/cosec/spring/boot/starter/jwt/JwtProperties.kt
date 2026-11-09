@@ -38,15 +38,7 @@ class JwtProperties(
     class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
         var refresh: Duration = Duration.ofDays(7)
-    ) {
-        private fun fields(): List<Any?> = listOf(access, refresh)
-
-        override fun equals(other: Any?): Boolean = other is TokenValidity && other.fields() == fields()
-
-        override fun hashCode(): Int = fields().hashCode()
-
-        override fun toString(): String = "TokenValidity(${fields().joinToString()})"
-    }
+    )
 
     /**
      * [minSecretBytes]: the shortest `secret` each algorithm accepts, in UTF-8 bytes, its hash's output size (RFC 7518

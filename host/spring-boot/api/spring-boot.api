@@ -34,15 +34,12 @@ public final class me/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties : m
 	public fun <init> ()V
 	public fun <init> (ZLme/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Store;Ljava/util/List;)V
 	public synthetic fun <init> (ZLme/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Store;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public fun getEnabled ()Z
 	public final fun getKeys ()Ljava/util/List;
 	public final fun getStore ()Lme/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Store;
-	public fun hashCode ()I
 	public fun setEnabled (Z)V
 	public final fun setKeys (Ljava/util/List;)V
 	public final fun setStore (Lme/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Store;)V
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Companion {
@@ -52,7 +49,6 @@ public final class me/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Key
 	public fun <init> ()V
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;ZLjava/time/Instant;Z)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;ZLjava/time/Instant;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getEnabled ()Z
 	public final fun getExpiresAt ()Ljava/time/Instant;
@@ -62,7 +58,6 @@ public final class me/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Key
 	public final fun getRoles ()Ljava/util/Set;
 	public final fun getTenantId ()Ljava/lang/String;
 	public final fun getUncapped ()Z
-	public fun hashCode ()I
 	public final fun setApp (Ljava/lang/String;)V
 	public final fun setEnabled (Z)V
 	public final fun setExpiresAt (Ljava/time/Instant;)V
@@ -73,7 +68,6 @@ public final class me/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Key
 	public final fun setTenantId (Ljava/lang/String;)V
 	public final fun setUncapped (Z)V
 	public final fun toApiKey ()Lme/ahoo/cosec/spi/apikey/ApiKey;
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/apikey/ApiKeyProperties$Store : java/lang/Enum {
@@ -91,11 +85,8 @@ public final class me/ahoo/cosec/spring/boot/starter/audit/AuditProperties : me/
 	public fun <init> ()V
 	public fun <init> (Z)V
 	public synthetic fun <init> (ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public fun getEnabled ()Z
-	public fun hashCode ()I
 	public fun setEnabled (Z)V
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/audit/AuditProperties$Companion {
@@ -109,15 +100,12 @@ public final class me/ahoo/cosec/spring/boot/starter/audit/kafka/KafkaAuditPrope
 	public fun <init> ()V
 	public fun <init> (ZLjava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;)V
 	public synthetic fun <init> (ZLjava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getEnabled ()Z
 	public final fun getTopic ()Ljava/lang/String;
-	public fun hashCode ()I
 	public final fun setDelivery (Lme/ahoo/cosec/runtime/event/Delivery;)V
 	public fun setEnabled (Z)V
 	public final fun setTopic (Ljava/lang/String;)V
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/audit/kafka/KafkaAuditProperties$Companion {
@@ -171,7 +159,6 @@ public final class me/ahoo/cosec/spring/boot/starter/authentication/social/Socia
 public final class me/ahoo/cosec/spring/boot/starter/authentication/social/SocialAuthenticationProperties$Provider {
 	public fun <init> (Lme/zhyd/oauth/config/AuthDefaultSource;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/xkcoding/http/config/HttpConfig;ZLjava/util/List;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;)V
 	public synthetic fun <init> (Lme/zhyd/oauth/config/AuthDefaultSource;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/xkcoding/http/config/HttpConfig;ZLjava/util/List;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAgentId ()Ljava/lang/String;
 	public final fun getAlipayPublicKey ()Ljava/lang/String;
 	public final fun getAuthServerId ()Ljava/lang/String;
@@ -200,7 +187,6 @@ public final class me/ahoo/cosec/spring/boot/starter/authentication/social/Socia
 	public final fun getType ()Lme/zhyd/oauth/config/AuthDefaultSource;
 	public final fun getUnionId ()Z
 	public final fun getUsertype ()Ljava/lang/String;
-	public fun hashCode ()I
 	public final fun setAgentId (Ljava/lang/String;)V
 	public final fun setAlipayPublicKey (Ljava/lang/String;)V
 	public final fun setAuthServerId (Ljava/lang/String;)V
@@ -230,7 +216,6 @@ public final class me/ahoo/cosec/spring/boot/starter/authentication/social/Socia
 	public final fun setUnionId (Z)V
 	public final fun setUsertype (Ljava/lang/String;)V
 	public final fun toJustAuthConfig ()Lme/zhyd/oauth/config/AuthConfig;
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/control/ControlProperties {
@@ -339,11 +324,8 @@ public final class me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperti
 	public fun <init> ()V
 	public fun <init> (Z)V
 	public synthetic fun <init> (ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public fun getEnabled ()Z
-	public fun hashCode ()I
 	public fun setEnabled (Z)V
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperties$Companion {
@@ -391,13 +373,10 @@ public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenVali
 	public fun <init> ()V
 	public fun <init> (Ljava/time/Duration;Ljava/time/Duration;)V
 	public synthetic fun <init> (Ljava/time/Duration;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAccess ()Ljava/time/Duration;
 	public final fun getRefresh ()Ljava/time/Duration;
-	public fun hashCode ()I
 	public final fun setAccess (Ljava/time/Duration;)V
 	public final fun setRefresh (Ljava/time/Duration;)V
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/micrometer/MetricsProperties : me/ahoo/cosec/spring/boot/starter/EnabledCapable {
@@ -407,11 +386,8 @@ public final class me/ahoo/cosec/spring/boot/starter/micrometer/MetricsPropertie
 	public fun <init> ()V
 	public fun <init> (Z)V
 	public synthetic fun <init> (ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public fun getEnabled ()Z
-	public fun hashCode ()I
 	public fun setEnabled (Z)V
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/micrometer/MetricsProperties$Companion {

@@ -766,7 +766,6 @@ public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions {
 	public fun <init> ()V
 	public fun <init> (Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Duration;IIIIIILjava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;)V
 	public synthetic fun <init> (Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Duration;IIIIIILjava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getColdLoadTimeout ()Ljava/time/Duration;
 	public final fun getCompileQueueCapacity ()I
 	public final fun getCompileThreads ()I
@@ -784,8 +783,6 @@ public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions {
 	public final fun getReloadConcurrency ()I
 	public final fun getRevalidateInterval ()Ljava/time/Duration;
 	public final fun getStoreReadTimeout ()Ljava/time/Duration;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions$Companion {

@@ -30,7 +30,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **公共 API 已归类**（RFC 0010 C4）。应用需要的保持公开；其余的是 `@InternalCoSecApi`（应用永不选择加入）或 `internal`。`cosec-engine` 的大部分、`cosec-model` 的条件 AST、`cosec-runtime` 的快照视图、影子记录与文档模型、控制面的 `ControlPlane`、授权与访问分析，以及 starter 的自动配置类现在都是内部的。如果你编译时依赖其中之一，请改用文档页面描述的方式：检查和监听器都还在。测试工具里只有 `PolicyTestKit`、`PipelineFixture`、`EngineOutcome` 及其异常是公共的。
 - **`PipelineComponents` 成为普通类**，`SnapshotOptions` 也是；两者都失去了 `copy` 和 `componentN` 函数。`PipelineComponents` 不再接受 `engine`。不使用 Spring Boot 的宿主从 `SuspendingSnapshotSource.of(store)` 获得快照。
 - **`PolicyDocumentCompiler.compile` 成为内部 API。** CI 检查调用 `validate`；`forPlatform(platform)` 是对应的重载。
-- **公共 `data class` 现在只是不会增长的值**（RFC 0010 C4）：`Identity`、`Identity.Credential`、`TokenSubject`、`SocialUser`、`ForwardedIdentity`、`Audit*Data`、`ShadowReport`、`ShadowSample`、`InstalledDocument`、`InstanceStatus` 以及 starter 的 `*Properties` 失去了 `copy` 和 `componentN`。构造和比较方式不变。
+- **公共 `data class` 现在只是不会增长的值**（RFC 0010 C4）：`Identity`、`Identity.Credential`、`TokenSubject`、`SocialUser`、`ForwardedIdentity`、`Audit*Data`、`ShadowReport`、`ShadowSample`、`InstalledDocument`、`InstanceStatus` 以及 starter 的 `*Properties` 失去了 `copy` 和 `componentN`。`Identity`、`Identity.Credential`、`TokenSubject` 和影子记录仍按值比较；其余的不再定义 `equals`。
 - **需要访问令牌的地方拒绝刷新令牌**（`IDN-13`）。`JwtTokenConverter` 在每个刷新令牌上写 `cosec.token: "refresh"`，带该声明的令牌不会完成认证。此前签发的令牌在过期前继续有效。
 - **实例状态携带文档格式级别**（RFC 0010 C5）：没有 `formatLevel` 的实例状态会被本版本的控制面拒绝，读取到它的影子窗口会失败，直到所有实例升级完毕（状态一分钟后过期）。
 

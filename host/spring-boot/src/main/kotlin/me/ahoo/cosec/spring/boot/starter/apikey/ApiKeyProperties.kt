@@ -41,13 +41,6 @@ class ApiKeyProperties(
      */
     var keys: List<Key> = emptyList(),
 ) : EnabledCapable {
-    private fun fields(): List<Any?> = listOf(enabled, store, keys)
-
-    override fun equals(other: Any?): Boolean = other is ApiKeyProperties && other.fields() == fields()
-
-    override fun hashCode(): Int = fields().hashCode()
-
-    override fun toString(): String = "ApiKeyProperties(${fields().joinToString()})"
 
     companion object {
         const val PREFIX: String = "cosec.api-key"
@@ -82,23 +75,6 @@ class ApiKeyProperties(
         var expiresAt: Instant? = null,
         @DefaultValue("true") var enabled: Boolean = true,
     ) {
-        private fun fields(): List<Any?> = listOf(
-            id,
-            hash,
-            principalId,
-            tenantId,
-            app,
-            roles,
-            uncapped,
-            expiresAt,
-            enabled,
-        )
-
-        override fun equals(other: Any?): Boolean = other is Key && other.fields() == fields()
-
-        override fun hashCode(): Int = fields().hashCode()
-
-        override fun toString(): String = "Key(${fields().joinToString()})"
 
         fun toApiKey(): ApiKey {
             require(id.isNotBlank()) { "An API key needs an id." }

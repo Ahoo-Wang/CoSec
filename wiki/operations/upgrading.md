@@ -80,7 +80,8 @@ and have to be provisioned again.
   overload for it.
 - **A public `data class` is now a value that cannot grow** (RFC 0010 C4): `Identity`, `Identity.Credential`,
   `TokenSubject`, `SocialUser`, `ForwardedIdentity`, `Audit*Data`, `ShadowReport`, `ShadowSample`, `InstalledDocument`,
-  `InstanceStatus` and the starter's `*Properties` lost `copy` and `componentN`. Construct and compare them as before.
+  `InstanceStatus` and the starter's `*Properties` lost `copy` and `componentN`. `Identity`, `Identity.Credential`,
+  `TokenSubject` and the shadow records still compare by value; the others no longer define `equals`.
 - **A refresh token is refused where an access token is expected** (`IDN-13`). `JwtTokenConverter` writes
   `cosec.token: "refresh"` on every refresh token; a token with that claim authenticates nothing. Tokens issued before
   this version keep working until they expire.

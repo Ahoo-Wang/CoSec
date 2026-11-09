@@ -137,11 +137,8 @@ public final class me/ahoo/cosec/api/audit/AuditVia : java/lang/Enum {
 
 public final class me/ahoo/cosec/api/context/ForwardedIdentity {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCredentialId ()Ljava/lang/String;
 	public final fun getGatewayRequestId ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class me/ahoo/cosec/api/context/SecurityContext {

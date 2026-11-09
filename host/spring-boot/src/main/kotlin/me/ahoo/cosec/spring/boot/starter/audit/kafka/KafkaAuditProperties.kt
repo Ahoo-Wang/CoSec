@@ -26,13 +26,6 @@ class KafkaAuditProperties(
     /** `required` makes a permit wait for the broker's acknowledgement; best effort by default (RFC 0006 §9.2). */
     @DefaultValue("best-effort") var delivery: Delivery = Delivery.BEST_EFFORT,
 ) : EnabledCapable {
-    private fun fields(): List<Any?> = listOf(enabled, topic, delivery)
-
-    override fun equals(other: Any?): Boolean = other is KafkaAuditProperties && other.fields() == fields()
-
-    override fun hashCode(): Int = fields().hashCode()
-
-    override fun toString(): String = "KafkaAuditProperties(${fields().joinToString()})"
 
     companion object {
         const val PREFIX: String = "cosec.audit.kafka"

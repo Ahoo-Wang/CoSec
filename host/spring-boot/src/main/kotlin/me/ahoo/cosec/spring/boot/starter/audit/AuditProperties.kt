@@ -27,13 +27,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 class AuditProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
-    private fun fields(): List<Any?> = listOf(enabled)
-
-    override fun equals(other: Any?): Boolean = other is AuditProperties && other.fields() == fields()
-
-    override fun hashCode(): Int = fields().hashCode()
-
-    override fun toString(): String = "AuditProperties(${fields().joinToString()})"
 
     companion object {
         const val PREFIX: String = "cosec.audit"

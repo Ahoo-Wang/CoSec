@@ -39,7 +39,6 @@ public final class me/ahoo/cosec/social/SocialProviderManager {
 public final class me/ahoo/cosec/social/SocialUser {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser$Gender;Ljava/util/Map;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser$Gender;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAvatar ()Ljava/lang/String;
 	public final fun getEmail ()Ljava/lang/String;
 	public final fun getGender ()Lme/ahoo/cosec/social/SocialUser$Gender;
@@ -49,8 +48,6 @@ public final class me/ahoo/cosec/social/SocialUser {
 	public final fun getProvider ()Ljava/lang/String;
 	public final fun getRawInfo ()Ljava/util/Map;
 	public final fun getUsername ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/social/SocialUser$Gender : java/lang/Enum {
