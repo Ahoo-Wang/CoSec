@@ -133,6 +133,11 @@ class StoredFormatTest {
     fun `a stored api key has exactly its fields`() {
         val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null))
         assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":2", "\"format\":3")) }
+        assertThrows<IllegalArgumentException> {
+            ApiKeyCodec.decode(
+                written.replace("\"format\":2", "\"format\":\"2\"")
+            )
+        }
         assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
         assertThrows<IllegalArgumentException> {
             ApiKeyCodec.decode(written.replace("\"enabled\":true", "\"enabled\":true,\"policies\":[\"p1\"]"))

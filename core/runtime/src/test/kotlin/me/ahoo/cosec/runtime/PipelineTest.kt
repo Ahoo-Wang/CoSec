@@ -546,6 +546,14 @@ class PipelineTest {
             recording
         ) { it.copy(options = PipelineOptions(allowCookieToken = true)) }.evaluate(facts(cookies = cookie))
 
-        seen.map { it.token }.assert().containsExactly(null, null, "cookie")
+        val allowed = PipelineOptions(allowCookieToken = true)
+        pipeline(recording) { it.copy(options = allowed) }.evaluate(
+            facts(cookies = mapOf("authorization" to listOf(" ", "cookie")))
+        )
+        pipeline(recording) { it.copy(options = allowed) }.evaluate(
+            facts(cookies = mapOf("authorization" to listOf(" ")))
+        )
+
+        seen.map { it.token }.assert().containsExactly(null, null, "cookie", "cookie", null)
     }
 }
