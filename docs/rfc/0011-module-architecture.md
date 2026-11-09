@@ -16,6 +16,8 @@
 
 > **2026-11-09 修订**：令牌契约按 #1302 调整，`CoSecPrincipal` 保留 `java.security.Principal`。`cosec-login`、`cosec-social` 已转 `suspend`（#1303），Reactor 只留在 edge 与 host。
 
+> **2026-11-09 修订（#1307）**：`cosec-model` 依赖 `cosec-annotations`，否则带标记的类型可以不声明 opt-in 就被使用。
+
 ## 0. 结论先行
 
 目标是让核心模型稳定、可靠、可扩展：技术的变化只发生在外圈，核心模块的公共 API 不因第三方库、宿主或存储的变化而变化。
