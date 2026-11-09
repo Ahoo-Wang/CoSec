@@ -25,8 +25,8 @@ import java.time.Instant
  * `cosec.pipeline.api-key-header`. A key's memberships come from its principal's `MembershipProvider`, so one is
  * required (RFC 0009 §4.2, `IDN-6`).
  *
- * Unknown fields fail binding rather than being dropped: a key configured with 8.0's predecessors' `policies` or
- * `attributes`, which keys no longer carry, stops startup instead of silently losing or keeping access.
+ * Unknown fields fail binding rather than being dropped: a key configured with `policies` or `attributes`, which keys
+ * do not carry, stops startup instead of being ignored with more or less access than its author meant.
  */
 @ConfigurationProperties(ApiKeyProperties.PREFIX, ignoreUnknownFields = false)
 data class ApiKeyProperties(

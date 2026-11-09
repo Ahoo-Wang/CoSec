@@ -33,8 +33,8 @@ import me.ahoo.cosec.testkit.text
 import tools.jackson.databind.JsonNode
 
 /**
- * Reads the condition syntax of RFC 0005 §3.1 into a [Condition] and checks it. The document codec of RFC 0004 PR-4
- * replaces it; until then the suite needs its own reader, and it is written from the RFC, not from a codec.
+ * Reads the condition syntax of RFC 0005 §3.1 into a [Condition] and checks it. The suite has its own reader,
+ * written from the RFC and not from the document codec, so a codec bug cannot hide a rule.
  */
 object ConditionReader {
     private val checker = ConditionChecker()

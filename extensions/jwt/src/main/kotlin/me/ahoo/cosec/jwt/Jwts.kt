@@ -129,8 +129,8 @@ internal object Jwts {
     }
 
     /**
-     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so tokens
-     * without it parse exactly as before. Any value is kept, including one that is not a string, for
+     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so a token
+     * without it yields the principal itself. Any value is kept, including one that is not a string, for
      * the pipeline to refuse (`MembershipSource.Unusable` in `cosec-runtime`).
      */
     private fun withMembershipMarker(principal: CoSecPrincipal, decodedAccessToken: DecodedJWT): CoSecPrincipal {

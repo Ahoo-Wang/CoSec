@@ -60,6 +60,6 @@ class Environment(
     val remoteIp: String,
     val requestId: String,
     val deviceId: String,
-    /** Decided beforehand by `BlacklistChecker` (RFC 0002 stages 2–3); an attribute provider supplies it later. */
+    /** Whether the principal, IP or device is blacklisted (RFC 0006 §5.4.4): the built-in DENY of the blacklist rule reads it. */
     val blocked: Boolean,
 )

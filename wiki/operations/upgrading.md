@@ -783,8 +783,7 @@ between the header and the query string or within either, the request is `400`. 
 On Spring MVC, 7.x read a query parameter with `HttpServletRequest.getParameter`, which also returns the fields of an
 `application/x-www-form-urlencoded` body. So for a form POST, the container parsed and consumed the body inside
 CoSec's filter, and a body field counted as a query parameter. 8.0 reads the URL query string only, on every adapter,
-and never touches the body
-([Form POST body is empty after CoSec on Spring MVC](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)).
+and never touches the body.
 A form field no longer sets `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id`, nor the `authorization` token
 read with `cosec.pipeline.allow-query-token=true`. Clients that send these as form fields must send them as headers
 or in the query string.

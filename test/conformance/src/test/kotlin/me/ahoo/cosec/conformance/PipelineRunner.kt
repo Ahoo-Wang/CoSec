@@ -147,7 +147,7 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
 /**
  * The `pipeline` runner (RFC 0008 §3.3): an HTTP request → [Pipeline] → its outcome, with the scenario's documents
  * compiled as the `engine` runner compiles them and test doubles for every SPI the pipeline calls. The adapters
- * (RFC 0006 PR-7) and listeners (PR-6) are not part of it yet.
+ * and listeners are not part of it: the adapter and listener tests cover them.
  *
  * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and the request's host
  * attributes (`http.*` from the headers, `request.attributes.*` from `requestAttributes`), through the pipeline's own

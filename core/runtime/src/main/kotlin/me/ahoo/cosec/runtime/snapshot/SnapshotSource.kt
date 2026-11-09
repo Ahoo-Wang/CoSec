@@ -79,7 +79,7 @@ import java.util.function.LongSupplier
  * evicted since) is cold-loaded with the conditional read, so an older local copy can never replace what this instance
  * already served.
  *
- * Failures keep 7.0's semantics (RFC 0003 §4.4): a read that fails while a document is installed keeps it (F6, bounded
+ * Failures are handled as follows (RFC 0003 §4.4): a read that fails while a document is installed keeps it (F6, bounded
  * by lag and [checkFresh]); a document that is present but cannot be decoded or compiled is installed as
  * [DocumentState.Failed] (F3, F5), a compilation that ends in a [VirtualMachineError] included (`SNP-8`); a cold read
  * that fails is answered as failed and not installed (F1).

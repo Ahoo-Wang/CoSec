@@ -61,7 +61,7 @@ class OneDecisionPathTest {
 
         val ADAPTERS = arrayOf("me.ahoo.cosec.webflux..", "me.ahoo.cosec.servlet..", "me.ahoo.cosec.gateway..")
 
-        /** Both decision models: the binding model's, and the layered one until the switch removes it. */
+        /** The packages of the decision types. */
         val DECISIONS = arrayOf("me.ahoo.cosec.model.decision..", "me.ahoo.cosec.model")
     }
 }

@@ -35,7 +35,7 @@ import java.time.Instant
  * Maps a [DecisionEvent] to the audit record of `cosec-api` (RFC 0006 §9.5.3). The audit keeps the detailed reason the
  * response body does not: explicit and implicit denies apart, token rejections by kind, the cause of a 503.
  *
- * The audit record keeps its source types, so consumers of the audit stream read the same fields: a binding of the
+ * The audit record has source types of its own, so it depends on none of the engine's: a binding of the
  * platform or a tenant document is a global policy, an attachment a principal policy, a role binding of an app document
  * a role permission, the builtin rule the blacklist.
  */
@@ -153,7 +153,7 @@ object AuditEvents {
 
 /**
  * A [DecisionListener] over an [AuditEventSink] (RFC 0006 §9.5.3): maps each event with [AuditEvents.from], so a sink
- * written for 7.x needs no mapping of its own.
+ * receives the stable audit record and needs no knowledge of the engine's types.
  *
  * Always BEST_EFFORT: `AuditEventSink.publish` returns before anything is written and reports no failure, so it can
  * never acknowledge a write. As a REQUIRED listener it would always "succeed", and a break-glass permit would proceed

@@ -165,7 +165,7 @@ class ProblemBodyPropertyTest {
         const val SEED = 20261026L
         const val ITERATIONS = 5_000
 
-        /** 429 comes with the rate-limit obligations (RFC 0006 PR-5); [ProblemEncoderTest] covers its encoding. */
+        /** 429 comes from a rate-limit obligation, not from a decision; [ProblemEncoderTest] covers its encoding. */
         val MAPPED_TYPES = ProblemType.entries - ProblemType.TOO_MANY_REQUESTS
     }
 }

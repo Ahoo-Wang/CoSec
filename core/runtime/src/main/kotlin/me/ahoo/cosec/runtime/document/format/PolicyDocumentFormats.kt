@@ -26,8 +26,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**
  * The 8.0 formats (RFC 0004 §7.1, RFC 0005 §3.1, §5.1): bindings, catalogs, and the definitions of `schema: 2`
- * platform, app and tenant documents, which [DocumentFormats] puts into `cosec-snapshot-document`. The switch hands the
- * 7.x file names (`cosec-policy`, `condition`, `action`) over to these (RFC 0007 §10.4).
+ * platform, app and tenant documents, which [DocumentFormats] puts into `cosec-snapshot-document`.
  */
 internal object PolicyDocumentFormats {
     private fun ref(file: String, definition: String? = null) = Ref("$file.schema.json", definition)
@@ -377,7 +376,7 @@ internal object PolicyDocumentFormats {
                                     examples = listOf("SHA-256:$DIGEST_HEX"),
                                     counterExamples = listOf(
                                         "SHA-256:${DIGEST_HEX.uppercase()}",
-                                        // A 7.x-era SHA-1 digest, without the algorithm.
+                                        // 40 hex digits (a SHA-1 length), without an algorithm prefix.
                                         "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6",
                                         DIGEST_HEX,
                                         "SHA-1:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6",
