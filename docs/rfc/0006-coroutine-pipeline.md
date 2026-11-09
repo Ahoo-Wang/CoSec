@@ -17,6 +17,8 @@
 
 > **2026-11-08 修订**：`required` 监听器的超时属性是 `cosec.observability.listener.required-timeout`（#1283）；`decideAs` 与 `decide(security, app, …)` 是内部 API（#1283）。限流计数器 id 统一为 `platform/<id>`、`app:<app>/<id>`、`tenant:<tenant>/<id>`，键控桶前缀是 `k:`（#1284）。
 
+> **2026-11-08 修订**：`authorization` Cookie 只在 `cosec.pipeline.allow-cookie-token=true` 时读作令牌，`CoSec-*` 只读请求头（#1295）。审计记录用 `AuditVia`，`KafkaAuditListener` 关闭时在 `drain-timeout` 内等待队列（#1297）。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
