@@ -1,0 +1,18 @@
+# Rule: SNP-10
+# Mutant: a staged platform candidate is compiled as the platform the instance enforces, whose limits and attributes then compile everything else
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.PlatformCompilerCandidateTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/PlatformCompiler.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/PlatformCompiler.kt
+index 5a2aecef..ca6d7707 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/PlatformCompiler.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/PlatformCompiler.kt
+@@ -91,8 +91,7 @@ class PlatformCompiler(
+         if (key != SnapshotKey.Platform) {
+             return inputs.compiler.compile(key, document)
+         }
+-        val platform = platformOf(document)
+-        return inputsOf(platform).compiler.compile(platform)
++        return compile(key, document)
+     }
+ 
+     private fun platformOf(document: SnapshotDocument): PolicyDocument {

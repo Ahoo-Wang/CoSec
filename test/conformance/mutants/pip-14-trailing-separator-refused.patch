@@ -1,0 +1,17 @@
+# Rule: PIP-14
+# Mutant: a trailing separator is refused as an empty segment
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+index b05d96ef..b830f908 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+@@ -106,7 +106,7 @@ object PathNormalizer {
+             // An encoded `;` (`..%3Bx`) is a dot segment to whatever decodes before it strips path parameters.
+             val segment = segments[index].substringBefore(';')
+             // The first is what comes before the leading separator, the last what comes after a trailing one.
+-            if (isDotSegment(segment) || (segment.isEmpty() && index in 1 until segments.lastIndex)) {
++            if (isDotSegment(segment) || (segment.isEmpty() && index in 1..segments.lastIndex)) {
+                 return true
+             }
+         }

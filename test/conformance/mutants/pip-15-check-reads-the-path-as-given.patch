@@ -1,0 +1,17 @@
+# Rule: PIP-15
+# Mutant: a check decides a path as given, not as enforcement normalizes it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+index 2b772c4d..716f4d2d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+@@ -105,7 +105,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
+     @OptIn(InternalCoSecApi::class)
+     private fun enforceable(resource: Resource): Resource? {
+         val id = if (resource.type == HTTP) {
+-            PathNormalizer.normalize(resource.id)
++            resource.id
+         } else {
+             resource.id.takeIf(PathNormalizer::withinBounds)
+         }

@@ -109,6 +109,9 @@ class PathNormalizerTest {
             "/a/b/|/a/b/",
             "/a/;x|/a/",
             "/a;x/|/a/",
+            "/a.json/|/a.json/",
+            "/a%20b/|/a%20b/",
+            "/|/",
             "/a%252Fb|/a%252Fb",
         ]
     )
