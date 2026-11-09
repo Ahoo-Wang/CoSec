@@ -19,7 +19,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `MembershipProvider` | `cosec-spi`，`spi.membership` | 为凭证不携带角色和附加策略的主体提供它们：带 provider 标记的令牌，以及每个 API key。说明主体是否已知且处于启用状态。 | 一个 bean；启用 API key 时必需 |
 | `MembershipLoader` | `cosec-cocache`，`cache` | 加载 `CoCacheMembershipProvider` 在 Redis 中为所有实例缓存的成员关系。 | 一个 bean，没有 `MembershipProvider` 时包装进 `CoCacheMembershipProvider` |
 | `AttributeProvider` | `cosec-spi`，`spi.attribute` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
-| `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
+| `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收每次决策的扁平审计记录。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
 | `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cosec-cocache` 时 |
 | `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |

@@ -54,7 +54,7 @@ class RequestSecurity internal constructor(
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
 ) {
-    /** The application-facing view, read-only but for the 7.x attribute map, which nothing in the pipeline reads. */
+    /** The application-facing view; the pipeline reads nothing back from its attribute map. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
 
     /**

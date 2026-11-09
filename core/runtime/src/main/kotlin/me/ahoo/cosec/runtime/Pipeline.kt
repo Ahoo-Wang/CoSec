@@ -448,8 +448,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     /**
-     * Runs a permit's obligations in order (RFC 0006 §8.3), as 7.x `RateLimitingAuthorization` does: the first exhausted
-     * rule is a 429 and the later rules spend nothing; earlier rules keep what they spent; the response reports the rule
+     * Runs a permit's obligations in order (RFC 0006 §8.3): the first exhausted rule is a 429 and the later rules
+     * spend nothing, since the request is refused already; earlier rules keep what they spent; the response reports the rule
      * with the fewest permits left. A rule that cannot be counted (its limiter failed, timed out or is missing, or its
      * bucket could not be read) refuses the request (503) when it is strict, and is skipped otherwise.
      */
@@ -854,7 +854,10 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return given ?: idGenerator.generate()
     }
 
-    /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */
+    /**
+     * The token is the first non-blank one of the `Authorization` header, the query parameter when allowed, and the
+     * cookie: the header is the channel a client sets on purpose, the others are fallbacks for clients that cannot set it.
+     */
     private fun credentials(facts: HttpFacts): Credentials {
         val token = facts.headers.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
             ?: queryToken(facts)

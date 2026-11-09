@@ -31,10 +31,10 @@ private val log = KotlinLogging.logger {}
  * `cosec.*` properties CoSec does not read. Spring ignores an unknown key, so a key 8.0 renamed or removed would silently
  * stop doing what it says (`cosec.authentication.enabled: false` turning nothing off, say). Every `cosec.*` key in the
  * environment must be one of CoSec's configuration metadata (`META-INF/spring-configuration-metadata.json`), or lie
- * under a map- or list-valued one; the 7.x keys 8.0 renamed or removed are named with what replaces them ([RENAMED]).
+ * under a map- or list-valued one; the keys 8.0 renamed or removed are named with what replaces them ([RENAMED]).
  * Keys are compared as Spring's binder compares them ([ConfigurationPropertyName]: case and dashes do not count), so
- * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A spelling Spring does
- * not bind to a known key (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`, a typo) is still unknown.
+ * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A typo, or a spelling
+ * Spring's documentation does not offer (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`), is still unknown.
  * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
  * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
@@ -88,7 +88,7 @@ class UnknownProperties(
             "cosec.key-prefix, the prefix of every key; copy the token revocations and API keys first"
         private val INDEX = Regex("\\[[^]]*]")
 
-        /** What 8.0 did with a 7.x key, by key or by prefix (ending in `.`). */
+        /** What 8.0 did with a key of an earlier release, by key or by prefix (ending in `.`). */
         val RENAMED: Map<String, String> = linkedMapOf(
             "cosec.authentication.enabled" to "cosec.authentication.login.enabled",
             "cosec.authentication.social." to "cosec.authentication.login.social.",

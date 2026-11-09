@@ -34,7 +34,7 @@ The listeners the starter registers:
 | `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cosec-cocache` and `cosec.authorization.shadow.enabled` (default `true`) |
 
 Any `DecisionListener` bean of yours joins them; names must be unique, or startup fails
-([Extending](../architecture/extending.md)). An `AuditEventSink` bean, such as one written for 7.x, joins them too: the
+([Extending](../architecture/extending.md)). An `AuditEventSink` bean joins them too: the
 starter wraps it as a `BEST_EFFORT` listener named after the bean (`AuditListener.of(sink, beanName)`), in its
 `@Order` among the listeners. It is always `BEST_EFFORT`, because `AuditEventSink.publish` cannot acknowledge a write.
 A bean that is both is registered once, as the `DecisionListener` it is.

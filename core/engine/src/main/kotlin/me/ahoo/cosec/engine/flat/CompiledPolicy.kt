@@ -28,8 +28,9 @@ import me.ahoo.cosec.model.decision.BindingRef
  *
  * [condition] is the policy condition (for a permission policy, the app condition, RFC 0004 §5.1); null when there is
  * none. Within one evaluation it is evaluated at most once, and only once a statement of the policy matched its action
- * and resource, or failed matching the resource (`ALG-7`). Policies that share a condition should share the instance: it then runs once for all of them,
- * as the app condition does in 7.x. It cannot read captured variables.
+ * and resource, or failed matching the resource (`ALG-7`). Policies that share a condition should share the instance:
+ * it then runs once for all of them. It cannot read captured variables: a capture belongs to one statement, and the
+ * condition runs once for the policy, whichever statement matched.
  *
  * Each statement's [CompiledStatement.index] is its position in [statements]. A policy's statements of one effect are
  * indexed from [IndexOptions.minStatements] on; fewer are scanned in order, which costs less than a lookup.

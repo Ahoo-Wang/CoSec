@@ -31,7 +31,7 @@ internal object FormatPatterns {
     private const val CLOCK = """([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,9})?)?"""
     private const val OFFSET = """(Z|[+-]((0\d|1[0-7]):[0-5]\d|18:00))"""
 
-    /** `HH:mm`, `HH:mm:ss` or `HH:mm:ss.f…`, as `LocalTime.parse` (7.x) and `IsoTime` (8.0) read a time of day. */
+    /** `HH:mm`, `HH:mm:ss` or `HH:mm:ss.f…`, as `IsoTime` reads a time of day. */
     const val TIME_OF_DAY = "^$CLOCK$"
     val TIME_OF_DAY_COUNTER_EXAMPLES = listOf("9:00", "24:00", "12:60", "12:00:60", "noon")
 

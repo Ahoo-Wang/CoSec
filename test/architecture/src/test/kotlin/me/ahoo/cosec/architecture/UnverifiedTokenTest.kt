@@ -32,8 +32,8 @@ import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 
 /**
- * `PIP-11`: only the verifier turns a token into a principal. 7.x inject mode read a forwarded JWT without checking its
- * signature; nothing in CoSec may do that again. The classpath here holds every module the starter wires.
+ * `PIP-11`: only the verifier turns a token into a principal. A JWT read without checking its signature lets anyone
+ * claim any identity; nothing in CoSec may do that. The classpath here holds every module the starter wires.
  */
 @AnalyzeClasses(packages = ["me.ahoo.cosec"], importOptions = [DoNotIncludeTests::class])
 class UnverifiedTokenTest {

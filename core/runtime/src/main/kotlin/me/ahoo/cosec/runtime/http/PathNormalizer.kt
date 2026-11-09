@@ -17,9 +17,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.io.ByteArrayOutputStream
 
 /**
- * The path every request is authorized on (RFC 0006 §5.3.1): the rules of `RequestPaths` in `cosec-core`, without
- * Spring's `UriUtils`, plus the last three below, which only reject more; `RequestPaths` goes with the 7.x pipeline at the
- * switch (RFC 0008 §4.4). Every rejection is 400 `invalid-request`.
+ * The path every request is authorized on (RFC 0006 §5.3.1), by the rules below and without Spring's `UriUtils`.
+ * Every rejection is 400 `invalid-request`.
  *
  * - `;` path parameters are removed from every segment: Spring's routing and servlet containers ignore them, so
  *   `/admin;x` reaches `/admin` and `/public/..;/admin` resolves to `/admin`.

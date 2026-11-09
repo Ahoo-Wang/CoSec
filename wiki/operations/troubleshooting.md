@@ -391,8 +391,7 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
-check, as it needs `cosec-gateway` instead. An application that moved from 7.x's capabilities adds the modules
-themselves ([Modules, artifacts and packages](./upgrading.md#modules-artifacts-and-packages)).
+check, as it needs `cosec-gateway` instead.
 
 ### Startup fails on an exposed actuator endpoint
 
@@ -710,13 +709,6 @@ refuses it. Find what sent it: a token issuer, a user store, a membership provid
 
 A rate limit `key` whose value holds an unpaired surrogate counts in a bucket of its own, written escaped
 (`e:<value>`, `\` doubled): never in the bucket of the value with `?` in its place.
-
-## Form POST body is empty after CoSec on Spring MVC
-
-A 7.x symptom: its WebMvc adapter read query parameters through `HttpServletRequest.getParameter`, which made the
-servlet container parse an `application/x-www-form-urlencoded` body inside CoSec's filter, so the application found
-the body empty and a form field could set `CoSec-App-Id` or `CoSec-Space-Id`. 8.0 reads only the URL query string and
-never touches the body. Send the `CoSec-*` parameters as headers or query parameters ([Upgrading](./upgrading.md)).
 
 ## Audit events are missing
 

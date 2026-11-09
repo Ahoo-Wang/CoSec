@@ -56,7 +56,7 @@ class HttpPath private constructor(
         /**
          * Parses [path]. With [decodeAndParseSegments], a malformed percent-escape (`%zz`, or a `%` without two hex
          * digits) throws [IllegalArgumentException], as it does in Spring: such a path has no defined meaning, and the
-         * pipeline rejects it before authorization (`RequestPaths`).
+         * pipeline rejects it before authorization (`PathNormalizer`).
          */
         fun parse(path: String, decodeAndParseSegments: Boolean = true): HttpPath {
             // Sized exactly up front, and segments copied as they are unless the path has anything to decode: parsing

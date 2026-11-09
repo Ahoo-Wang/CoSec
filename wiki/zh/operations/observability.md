@@ -31,7 +31,7 @@ starter 注册的监听器：
 | `ShadowListener`（`shadow`） | `BEST_EFFORT` | `cosec-cocache` 和 `cosec.authorization.shadow.enabled`（默认 `true`） |
 
 你自己的任何 `DecisionListener` bean 都会加入它们；名字必须唯一，否则启动失败（[扩展](../architecture/extending.md)）。
-`AuditEventSink` bean（例如为 7.x 编写的）也会加入：starter 把它包装成以 bean 名命名的 `BEST_EFFORT` 监听器
+`AuditEventSink` bean 也会加入：starter 把它包装成以 bean 名命名的 `BEST_EFFORT` 监听器
 （`AuditListener.of(sink, beanName)`），按它的 `@Order` 排在监听器之间。它总是 `BEST_EFFORT`，因为
 `AuditEventSink.publish` 无法确认写入。同时是两者的 bean 只注册一次，作为它本身的 `DecisionListener`。
 

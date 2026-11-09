@@ -97,7 +97,7 @@ class Problem internal constructor(
 /**
  * The problem vocabulary (RFC 0006 §6.1, Q27): one row per thing a client can do about it. Explicit and implicit
  * denies are both [UNAUTHORIZED] or [FORBIDDEN], so a response never tells a caller that a DENY exists. The `problem`
- * format descriptor in `cosec-core` lists the same rows, and `ProblemSchemaTest` keeps them equal.
+ * format descriptor in `DocumentFormats` lists the same rows, and `ProblemSchemaTest` keeps them equal.
  */
 enum class ProblemType(val slug: String, val title: String, val status: Int) {
     INVALID_REQUEST("invalid-request", "Invalid Request", 400),

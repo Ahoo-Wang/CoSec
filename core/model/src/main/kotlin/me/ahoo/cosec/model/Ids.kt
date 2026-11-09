@@ -47,7 +47,7 @@ value class SpaceId(val value: String) {
     }
 
     companion object {
-        /** Same as `SpaceIdCapable.DEFAULT`. */
+        /** The default space: the empty id. */
         val DEFAULT = SpaceId("")
     }
 }
@@ -64,8 +64,8 @@ value class BindingId(val value: String)
 /**
  * The text rule every kind of id follows, wherever it enters CoSec (RC1-52, `IDN-10`): no unpaired UTF-16 surrogate.
  *
- * UTF-8 has no encoding for one. CoCache 6 and Spring's string template, which write Redis keys, put `?` in its place, so
- * the tenant `beta\uD800` and the tenant `beta?` would name the same Redis key, and one would read the other's
+ * UTF-8 has no encoding for one. The clients that write Redis keys from a string (a template, a key encoder) put `?` in
+ * its place, so the tenant `beta\uD800` and the tenant `beta?` would name the same Redis key, and one would read the other's
  * documents, memberships and revocations. An id with one is refused where it enters (a token, an API key, a provider's
  * answer, a control request), so no two ids ever share a stored key.
  */

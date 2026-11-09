@@ -124,7 +124,7 @@ class CoSecSnapshotAutoConfiguration {
          * cannot read, whatever this check's mode, unless `cocache.redis.assume-maxmemory-policy` names one.
          *
          * Both read the backend of the runtime the snapshot store is created on ([CoCacheFactory.runtime]), as CoCache's
-         * does since 8.0.0-alpha.6 (#874): an application's own `CacheRuntime` need not expose its backend as a bean,
+         * does: an application's own `CacheRuntime` need not expose its backend as a bean,
          * and a `CoherenceBackend` bean beside it may not be the Redis that holds the snapshot.
          */
         @Bean
@@ -419,7 +419,7 @@ internal object EvictionPolicyCheck {
         /** CoCache's in-memory backend: nothing is evicted behind its back. */
         data object NotRedis : Reading
 
-        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them from `INFO memory` (CoCache 6.10). */
+        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them from `INFO memory`. */
         data class Policies(val policies: Map<String, String>) : Reading
 
         data class Unreadable(val reason: String) : Reading

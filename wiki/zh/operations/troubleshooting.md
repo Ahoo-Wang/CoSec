@@ -320,7 +320,7 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`，以及 `cosid-spring-boot-starter` 5.x 和它的 `cosid.*` 生成器；或者删除这个键，继续使用 CoSec 自己的 id |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
-Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。从 7.x capability 迁移过来的应用要自己添加这些模块（[模块、制品与包](./upgrading.md#modules-artifacts-and-packages)）。
+Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。
 
 ### 暴露了 actuator 端点导致启动失败 {#startup-fails-on-an-exposed-actuator-endpoint}
 
@@ -552,13 +552,6 @@ CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16
 [控制面错误](#control-plane-errors)），所以它只出现在拒绝它的那一行里。找出发送它的一方：令牌签发方、用户存储、成员关系提供方，或调用控制 API 的脚本。
 
 限流 `key` 的值带落单代理项时，计入它自己的桶，以转义形式写出（`e:<value>`，`\` 加倍）：从不计入把它换成 `?` 的那个值的桶。
-
-## Spring MVC 上经过 CoSec 后表单 POST 请求体为空 {#form-post-body-is-empty-after-cosec-on-spring-mvc}
-
-这是 7.x 的症状：它的 WebMvc 适配器通过 `HttpServletRequest.getParameter` 读取查询参数，这会让 servlet 容器在 CoSec 的
-过滤器中解析 `application/x-www-form-urlencoded` 请求体，于是应用读到的请求体为空，而且表单字段可以设置 `CoSec-App-Id`
-或 `CoSec-Space-Id`。8.0 只读取 URL 查询字符串，从不触碰请求体。请把 `CoSec-*` 参数放在请求头或查询参数中发送
-（[升级](./upgrading.md)）。
 
 ## 审计事件缺失 {#audit-events-are-missing}
 

@@ -36,8 +36,7 @@ interface RoleIdCapable {
  * @see RoleIdCapable
  * @see SpaceIdCapable
  *
- * Cache-key representation only: role IDs never contain '@' (see [RoleCapable.roles]),
- * so the `roleId@spaceId` encoding is unambiguous.
+ * The `roleId@spaceId` encoding is unambiguous because role IDs never contain '@' (see [RoleCapable.roles]).
  */
 data class SpacedRoleId(
     override val roleId: RoleId,

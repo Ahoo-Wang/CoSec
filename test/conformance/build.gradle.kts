@@ -68,7 +68,7 @@ val verifyRuleCoverage = tasks.register<JavaExec>("verifyRuleCoverage") {
 
 /*
  * RFC 0008 §3.7: applies each patch of test/conformance/mutants to HEAD in a temporary git worktree and asserts that at
- * least one of the tests it names fails. Manual (each mutant rebuilds), run before S1: -Pmutants=a,b runs only those.
+ * least one of the tests it names fails. Manual (each mutant rebuilds): -Pmutants=a,b runs only those.
  */
 tasks.register<JavaExec>("mutationCheck") {
     group = "verification"

@@ -61,7 +61,7 @@ import java.time.Instant
  * document, where it means any tenant. A platform principal names its tenant.
  */
 object PolicyDocumentCodec {
-    /** The format of platform, app and tenant documents. RFC 0003's 7.0-shaped documents are schema 1. */
+    /** The format of platform, app and tenant documents: the `schema` they declare. */
     const val SCHEMA: Int = SnapshotDocument.DOCUMENT_SCHEMA
     const val WILDCARD: String = Match.WILDCARD
 

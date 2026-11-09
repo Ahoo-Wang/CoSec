@@ -177,7 +177,7 @@ sealed class CheckedCondition(
     }
 
     /**
-     * `time`, with the semantics of the 7.x `time` condition, read against `environment.time` instead of a clock
+     * `time`, read against `environment.time` instead of a clock
      * (RFC 0005 §2 J5): inside `[notBefore, notAfter)` and, when given, the daily window `[from, to)` and the days of
      * the week, in [zone]. A window with `from` after `to` crosses midnight, and its early-morning part belongs to the
      * day it started on.

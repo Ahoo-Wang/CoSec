@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * The document formats CoSec reads, one [SchemaFile] per generated file in `schema/` (RFC 0007 §10.4, Q19).
  *
  * A change to what a codec or the snapshot compiler accepts changes this descriptor in the same PR; run
- * `./gradlew :core:generateSchemas` and commit the files. `verifySchemas` (part of `check`) fails when they are
+ * `./gradlew :runtime:generateSchemas` and commit the files. `verifySchemas` (part of `check`) fails when they are
  * stale, and `SchemaConformanceTest` fails when the descriptor and the codecs disagree.
  *
  * [problemSchema] is the one format CoSec writes rather than reads: `cosec-runtime`'s `ProblemSchemaTest` binds it to the
@@ -131,7 +131,7 @@ object DocumentFormats {
 
     /**
      * The `CoSec-Identity` header a gateway forwards to the services behind it, after base64url: format v1
-     * (`IdentityCodec` in `me.ahoo.cosec.identity`). Only what the gateway verified or resolved.
+     * (`IdentityCodec` in `me.ahoo.cosec.runtime.identity`). Only what the gateway verified or resolved.
      */
     val identitySchema = SchemaFile(
         name = IDENTITY,
@@ -228,7 +228,7 @@ object DocumentFormats {
     }
 }
 
-/** A time of day: `from` and `to` of a time condition, in 7.x and 8.0 documents. */
+/** A time of day: `from` and `to` of a time condition. */
 internal fun timeOfDay(vararg examples: String) = StringType(
     pattern = FormatPatterns.TIME_OF_DAY,
     examples = examples.toList(),
