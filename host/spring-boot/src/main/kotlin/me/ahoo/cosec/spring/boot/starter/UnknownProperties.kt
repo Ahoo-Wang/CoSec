@@ -44,8 +44,13 @@ class UnknownProperties(
     private val containers: Set<String>,
 ) {
     // ConfigurationPropertyName's equality and hash code ignore case and dashes: the names Spring's binder treats as one.
-    private val knownNames: Set<ConfigurationPropertyName> = known.mapNotNullTo(HashSet(), ConfigurationPropertyName::ofIfValid)
-    private val containerNames: List<ConfigurationPropertyName> = containers.mapNotNull(ConfigurationPropertyName::ofIfValid)
+    private val knownNames: Set<ConfigurationPropertyName> = known.mapNotNullTo(
+        HashSet(),
+        ConfigurationPropertyName::ofIfValid
+    )
+    private val containerNames: List<ConfigurationPropertyName> = containers.mapNotNull(
+        ConfigurationPropertyName::ofIfValid
+    )
 
     /** The `cosec.*` keys of [environment] that CoSec does not read, sorted. */
     fun of(environment: ConfigurableEnvironment): List<String> =
