@@ -13,6 +13,28 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
 
+- **审计记录说明是什么做出了决定**（批次 R7a，#1237）。`authorization.source` 现在是 `{ via, document, policy, statement }`
+  （[审计事件](./observability.md#audit-events)）：旧的 `type` 把租户的角色绑定和边界都记成 `GLOBAL_POLICY`。边界拒绝过去的来源是
+  `NONE`、没有 `binding`，现在 `via` 为 `BOUNDARY`，`policy` 是该边界，`binding` 为 `boundary:<tenantId>`。审计日志和 Kafka topic
+  的消费方随之修改：
+
+  | 之前 | 现在 |
+  |---|---|
+  | `source.type` `BLACKLIST` | `source.via` `BUILTIN` |
+  | `source.type` `ROOT` | `source.via` `BINDING`、`source.policy` `cosec:root`（break-glass 放行还带 `breakGlass: true`） |
+  | `source.type` `ROLE_PERMISSION` | `source.via` `BINDING`、`source.document` `APP` |
+  | `source.type` `PRINCIPAL_POLICY` | `source.via` `ATTACHMENT` |
+  | `source.type` `GLOBAL_POLICY` | `source.via` `BINDING`、`source.document` `PLATFORM` 或 `TENANT` |
+  | `source.policy.id` | `source.policy` |
+  | `source.policy.statement` | `source.statement` |
+  | `source.policy.type`、`source.role`、`principal.policies`、`request.device.userAgent` | 已删除：`type` 只是重复 `source.type`，其余的总是空的 |
+
+  代码层面：`AuditSourceType`、`AuditPolicy`、`AuditRole`、`AuditPermission` 及其数据类、`PolicyType` 和
+  `AuditReasonCode.REGEX_TIMEOUT` 已删除，新增 `AuditVia` 和 `AuditDocument`，没有人读取的属性键
+  `AuditTrace.TRACE_ID_ATTRIBUTE_KEY` 和 `SPAN_ID_ATTRIBUTE_KEY` 也已移除。
+- **关闭时等待 Kafka 审计**（批次 R7a，#1250）。`KafkaAuditListener` 最多等待 `cosec.observability.listener.drain-timeout`，
+  让它手中的发送和 broker 的应答完成，之后才关闭 producer。一次关闭可能用掉两倍这段时间（一次给监听器的队列，一次给这里）：
+  请检查 pod 的终止宽限期。
 - **`authorization` cookie 只在明确开启时读取**（批次 R6、`PIP-13`）。唯一凭证是这个 cookie 的请求现在是匿名请求。浏览器会自动带上 cookie，跨站请求也不例外，默认读取它等于让每个部署都要应对 CSRF。把令牌放在 `Authorization` 请求头中，或者设置 `cosec.pipeline.allow-cookie-token=true` 并自行防御 CSRF（[认证](../integration/authentication.md)）。无论是否读取，网关都会从转发的请求中移除这个 cookie。
 - **`CoSec-App-Id`、`CoSec-Space-Id` 和 `CoSec-Device-Id` 只读请求头**（批次 R6、`SCP-4`）。同名查询参数不再被读取：它不设置任何值，也不再让请求产生歧义。把它们放在 URL 中的客户端改为发送请求头（[应用与空间](../integration/web.md#app-and-space)）。
 - **未知的 `cosec.*` key 总是让启动失败**（批次 R6、`SNP-9`）。`cosec.unknown-properties` 和 `UnknownPropertiesMode` 已删除，设置这个配置项本身现在就是未知 key：请移除它。错误信息列出这些 key，并链接到[已删除和改名的 key 对照表](#removed-and-renamed-properties)，不再逐个给出替代项。
@@ -639,7 +661,7 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `BlacklistChecker` | 放在 `AttributeProvider` bean（`BlacklistAttributeProvider`）后面的 `BlacklistSource`。 |
 | `RequestAttributesAppender`、`GatewayRouteRequestAttributesAppender` | `AttributeProvider`。 |
 | `SimpleSecurityContext`、扩展属性 `CoSecPrincipal.tenant` | 无：请求的 `SecurityContext` 由管道创建。测试中请 mock 或自行实现该接口；主体的租户在 `TenantCapable` 上。 |
-| `KafkaAuditEventSink` | `KafkaAuditListener`，一个 `DecisionListener`，classpath 上有 `cosec-kafka` 时由 starter 注册（[可观测性](./observability.md)）。记录的 key 和 value 不变。 |
+| `KafkaAuditEventSink` | `KafkaAuditListener`，一个 `DecisionListener`，classpath 上有 `cosec-kafka` 时由 starter 注册（[可观测性](./observability.md)）。记录的 key 不变，value 是审计事件（[可观测性的变化](#observability-changes)）。 |
 | `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面（库或 HTTP API）；第一次写入用 `cosec-migrate publish`。 |
 | `LocalPolicyInitializer` 以及 `init-repository`/`force-refresh` | `cosec-migrate convert` 与 `publish`，或控制面的声明式 `apply`。 |
 | `CoSecExplainEndpoint`（`cosecExplain` actuator）、`AuthorizationExplainer`、`ExplainWarningCode` | 控制面的 `explain`（需要权限，可指定任一修订）；见[代码中的检查](../integration/checks.md)。 |
@@ -741,9 +763,9 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **审计事件**为每个结果写出，包括 `400`、取消的请求、认证失败和错误，由 `kind` 说明是哪一种（`DECIDED`、`BAD_REQUEST`、
   `AUTHENTICATION_UNAVAILABLE`、`CANCELLED`、`ERROR`）。新字段：`snapshotVersion`（读取的修订）、`binding`（做出决策的语句所经过的绑定，或
   `attached:<policy>`）、`breakGlass`。新取值：决策 `INDETERMINATE`；原因码 `INDETERMINATE`、`SCOPE_REJECTED`、`RATE_LIMITER_UNAVAILABLE`、
-  `TOKEN_REVOKED`、`BOUNDARY`。来源类型保留 7.x 的名称：平台文档或租户文档中的绑定为 `GLOBAL_POLICY`，附加策略为 `PRINCIPAL_POLICY`，
-  应用文档中的角色绑定为 `ROLE_PERMISSION`，内置黑名单规则为 `BLACKLIST`。`elapsedNanos` 现在覆盖整个 pipeline（认证、属性、限流），而不只是
-  授权。7.x 的 `AuditEventSink` 无需修改即可继续使用。
+  `TOKEN_REVOKED`、`BOUNDARY`。`authorization.source` 用绑定模型的术语说明是什么做出了决定：`via`、`document`、`policy` 和 `statement`
+  取代来源的 `type`、`policy` 和 `role`，`principal.policies` 和 `request.device.userAgent` 已删除（[审计事件](./observability.md#audit-events)）。
+  `elapsedNanos` 现在覆盖整个 pipeline（认证、属性、限流），而不只是授权。`AuditEventSink` 仍然收到扁平记录；读取上述字段的实现需要随之修改。
 - **指标**：`cosec.authorization` 计时器同样覆盖整个 pipeline。它的 `source` 标签现在是 `binding`、`attachment`、`builtin`、`boundary`、
   `scope` 或 `none`（7.x：`global_policy`、`principal_policy`、`role_permission`、`root`、`blacklist`、`none`、`unknown`）；`result` 新增
   `indeterminate`、`bad_request` 和 `cancelled`；`cause` 是新标签，只出现在 `indeterminate` 上。新计数器：`cosec.listener.dropped`、

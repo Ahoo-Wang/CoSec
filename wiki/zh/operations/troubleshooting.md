@@ -15,7 +15,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 1. 取响应头 `CoSec-Request-Id`，它也是 problem 响应体中的 `requestId`。
 2. 找到它的审计事件。审计日志把拒绝、`429`、`503` 和错误以 `WARN` 和 `ERROR` 写到 logger `me.ahoo.cosec.audit`。
-   查看 `authorization.reasonCode` 和 `authorization.reason`、`authorization.source.policy` 中做出决定的语句、它所
+   查看 `authorization.reasonCode` 和 `authorization.reason`、`authorization.source` 中做出决定的语句、它所
    通过的 `binding`，以及它读取的 `snapshotVersion`（[审计事件](./observability.md#audit-events)）。
 3. 要看一个决策检查过的每条语句以及每条为什么匹配或不匹配，通过控制面对请求做 explain
    （[解释一个决策](../integration/checks.md)）。有 `cosec-opentelemetry` 时，做出决定的语句也在 `cosec.authorize`
@@ -186,7 +186,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 1. **查看做出决定的语句**：审计事件或 explain 结果中的 `source.policy`、`binding` 和 `breakGlass`。
 2. **过宽的允许。** 查找动作或资源为 `*` 或 `**`、绑定到 `*` 主体、或没有条件的允许。添加一条拒绝，或者收窄这条允许。
 3. **没有匹配的拒绝。** 它的动作、资源和条件都必须匹配。对请求做 explain，看拒绝在哪里没有匹配。
-4. **break-glass。** `breakGlass: true` 且 `source.type` 为 `ROOT`，表示 `cosec:root` 的 break-glass 绑定放行了请求；这类
+4. **break-glass。** `breakGlass: true` 且 `source.policy` 为 `cosec:root`，表示 `cosec:root` 的 break-glass 绑定放行了请求；这类
    绑定会自行过期，也可以通过控制面吊销。
 5. **旧的修订。** `snapshotVersion` 指明决策读取的修订。如果它们比已发布的旧，见[决策使用了旧的修订](#decisions-use-an-old-revision)。
 

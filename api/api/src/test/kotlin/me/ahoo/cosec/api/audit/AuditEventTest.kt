@@ -24,9 +24,6 @@ class AuditEventTest {
             AuditDevice::class,
             AuditRequest::class,
             AuditStatement::class,
-            AuditPolicy::class,
-            AuditPermission::class,
-            AuditRole::class,
             AuditSource::class,
             AuditAuthorization::class,
             AuditTrace::class,
@@ -52,7 +49,6 @@ class AuditEventTest {
                 "TOKEN_EXPIRED",
                 "TOKEN_INVALID",
                 "TOO_MANY_REQUESTS",
-                "REGEX_TIMEOUT",
                 "ERROR",
                 "INDETERMINATE",
                 "SCOPE_REJECTED",
@@ -65,17 +61,14 @@ class AuditEventTest {
     }
 
     @Test
-    fun auditSourceTypeValues() {
-        AuditSourceType.entries.map { it.name }.toSet().assert().isEqualTo(
-            setOf(
-                "ROOT",
-                "BLACKLIST",
-                "GLOBAL_POLICY",
-                "PRINCIPAL_POLICY",
-                "ROLE_PERMISSION",
-                "NONE",
-                "UNKNOWN",
-            ),
+    fun auditViaValues() {
+        AuditVia.entries.map { it.name }.toSet().assert().isEqualTo(
+            setOf("BINDING", "ATTACHMENT", "BUILTIN", "BOUNDARY", "NONE"),
         )
+    }
+
+    @Test
+    fun auditDocumentValues() {
+        AuditDocument.entries.map { it.name }.toSet().assert().isEqualTo(setOf("PLATFORM", "APP", "TENANT"))
     }
 }

@@ -99,7 +99,10 @@ import org.springframework.test.util.ReflectionTestUtils
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 /** What the starter registers from the application's own beans: the blacklist, audit sinks, memberships, listeners. */
@@ -264,6 +267,28 @@ class StarterWiringTest {
             context.startupFailure.assert().isNull()
             context.getBean(KafkaAuditListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
         }
+    }
+
+    /** #1250: the Kafka audit's own wait at shutdown is the listeners' drain timeout, not a fixed one. */
+    @Test
+    fun `the Kafka audit waits at shutdown for the listeners' drain timeout`() {
+        val asked = CountDownLatch(1)
+        val kafka = mockk<KafkaOperations<String, String>> {
+            every { send(any<String>(), any<String>(), any<String>()) } answers {
+                asked.countDown()
+                CompletableFuture()
+            }
+        }
+        pipelineRunner.withBean(KafkaOperations::class.java, { kafka })
+            .withPropertyValues("cosec.observability.listener.drain-timeout=100ms")
+            .run { context ->
+                status(context, token(context, "bob")).assert().isEqualTo(200)
+                asked.await(5, TimeUnit.SECONDS).assert().isTrue()
+                val startedAt = System.nanoTime()
+                context.getBean(KafkaAuditListener::class.java).destroy()
+                // The default bound is 5 seconds.
+                (System.nanoTime() - startedAt).nanoseconds.assert().isLessThan(3.seconds)
+            }
     }
 
     /** STA-1: a REQUIRED audit that was not created fails startup instead of deciding without it. */

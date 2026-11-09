@@ -18,9 +18,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import me.ahoo.cosec.api.audit.AuditDecision
+import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditReasonCode
-import me.ahoo.cosec.api.audit.AuditSourceType
-import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.audit.AuditVia
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -39,7 +39,6 @@ class LoggingAuditEventSinkTest {
             id = "u1",
             authenticated = true,
             roles = setOf("admin@0"),
-            policies = emptySet(),
         ),
         request = AuditRequestData(
             id = "req-1",
@@ -49,7 +48,7 @@ class LoggingAuditEventSinkTest {
             method = "POST",
             path = "/api/orders",
             routeId = null,
-            device = AuditDeviceData(id = "device-1", userAgent = "test-agent"),
+            device = AuditDeviceData(id = "device-1"),
         ),
         authorization = AuditAuthorizationData(
             decision = decision,
@@ -57,12 +56,10 @@ class LoggingAuditEventSinkTest {
             reason = "Explicit Deny",
             elapsedNanos = 350000,
             source = AuditSourceData(
-                type = AuditSourceType.GLOBAL_POLICY,
-                policy = AuditPolicyData(
-                    id = "deny-write",
-                    type = PolicyType.GLOBAL,
-                    statement = AuditStatementData(index = 0, name = "deny-orders-write"),
-                ),
+                via = AuditVia.BINDING,
+                document = AuditDocument.PLATFORM,
+                policy = "deny-write",
+                statement = AuditStatementData(index = 0, name = "deny-orders-write"),
             ),
         ),
         trace = null,
@@ -110,8 +107,8 @@ class LoggingAuditEventSinkTest {
         val json = recording.json.toString()
         json.assert().contains("\"decision\":\"EXPLICIT_DENY\"")
         json.assert().contains("\"principal\":{\"id\":\"u1\",\"authenticated\":true")
-        json.assert().contains("\"device\":{\"id\":\"device-1\",\"userAgent\":\"test-agent\"}")
-        json.assert().contains("\"policy\":{\"id\":\"deny-write\",\"type\":\"global\"")
+        json.assert().contains("\"device\":{\"id\":\"device-1\"}")
+        json.assert().contains("\"source\":{\"via\":\"BINDING\",\"document\":\"PLATFORM\",\"policy\":\"deny-write\"")
         json.assert().contains("\"elapsedNanos\":350000")
     }
 

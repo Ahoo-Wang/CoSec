@@ -50,6 +50,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
+import kotlin.time.toKotlinDuration
 
 /**
  * What the optional modules add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
@@ -74,6 +75,7 @@ import org.springframework.kafka.core.KafkaOperations
     CoSecProperties::class,
     AuditProperties::class,
     KafkaAuditProperties::class,
+    ListenerProperties::class,
     MetricsProperties::class,
     Ip2RegionProperties::class,
 )
@@ -136,10 +138,12 @@ class CoSecPipelineIntegrationAutoConfiguration {
         fun cosecKafkaAuditListener(
             kafkaOperations: KafkaOperations<String, String>,
             environment: org.springframework.core.env.Environment,
+            listenerProperties: ListenerProperties,
         ): KafkaAuditListener = KafkaAuditListener(
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
             kafkaAuditDelivery(environment),
+            drainTimeout = listenerProperties.drainTimeout.toKotlinDuration(),
         )
     }
 

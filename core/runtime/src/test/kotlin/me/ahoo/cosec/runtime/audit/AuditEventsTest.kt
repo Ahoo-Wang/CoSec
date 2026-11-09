@@ -17,10 +17,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import me.ahoo.cosec.api.audit.AuditDecision
+import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.audit.AuditSourceType
+import me.ahoo.cosec.api.audit.AuditVia
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -154,8 +155,13 @@ class AuditEventsTest {
         val event = audit(Decision.Permit(bound))
         event.authorization.decision.assert().isEqualTo(AuditDecision.ALLOW)
         event.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.ALLOW)
-        event.authorization.source.type.assert().isEqualTo(AuditSourceType.GLOBAL_POLICY)
-        event.authorization.source.policy!!.statement.name.assert().isEqualTo("read")
+        event.authorization.source.let {
+            it.via.assert().isEqualTo(AuditVia.BINDING)
+            it.document.assert().isEqualTo(AuditDocument.TENANT)
+            it.policy.assert().isEqualTo("orders")
+            it.statement!!.index.assert().isEqualTo(1)
+            it.statement!!.name.assert().isEqualTo("read")
+        }
         event.binding.assert().isEqualTo("g:orders")
         event.trace!!.spanId.assert().isEqualTo("span-1")
         event.tenantId.assert().isEqualTo(PipelineFixtures.TENANT.value)
@@ -168,12 +174,21 @@ class AuditEventsTest {
     fun deniesKeepExplicitImplicitAndScopeApart() {
         audit(PipelineFixtures.EXPLICIT_DENY).authorization.let {
             it.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
-            it.source.type.assert().isEqualTo(AuditSourceType.PRINCIPAL_POLICY)
+            it.source.via.assert().isEqualTo(AuditVia.ATTACHMENT)
+            it.source.document.assert().isNull()
         }
         audit(Decision.Deny(null)).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.IMPLICIT_DENY)
-        audit(Decision.Deny(null)).authorization.source.type.assert().isEqualTo(AuditSourceType.NONE)
-        audit(Decision.Deny(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)))
-            .authorization.reasonCode.assert().isEqualTo(AuditReasonCode.SCOPE_REJECTED)
+        audit(Decision.Deny(null)).authorization.source.let {
+            it.via.assert().isEqualTo(AuditVia.NONE)
+            it.document.assert().isNull()
+            it.policy.assert().isNull()
+            it.statement.assert().isNull()
+        }
+        audit(Decision.Deny(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH))).let {
+            it.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.SCOPE_REJECTED)
+            it.authorization.source.via.assert().isEqualTo(AuditVia.NONE)
+            it.binding.assert().isNull()
+        }
         // RFC 0007 §7.6: a boundary deny is an explicit deny whose reason only audit records.
         audit(Decision.Deny(StatementRef.Boundary(PolicyId("fence"), PipelineFixtures.TENANT))).authorization.let {
             it.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
@@ -192,15 +207,56 @@ class AuditEventsTest {
             .assert().isEqualTo(AuditReasonCode.DELEGATION_UNSUPPORTED)
     }
 
+    /** #1237: a boundary refusal is recorded as the boundary, not as "no statement decided". */
     @Test
-    fun builtinRootAndRoleSources() {
-        fun source(policy: String, via: BindingRef) =
-            audit(Decision.Permit(StatementRef.Policy(PolicyId(policy), 0, "s", via))).authorization.source.type
-        source("cosec:blacklist", BindingRef.Builtin).assert().isEqualTo(AuditSourceType.BLACKLIST)
-        source("cosec:root", BindingRef.Bound(BindingId("root"), DocumentKind.PLATFORM)).assert()
-            .isEqualTo(AuditSourceType.ROOT)
-        source("perm:order/read", BindingRef.Bound(BindingId("r"), DocumentKind.APP)).assert()
-            .isEqualTo(AuditSourceType.ROLE_PERMISSION)
+    fun aBoundaryRefusalKeepsItsSourceAndBinding() {
+        val event = audit(Decision.Deny(StatementRef.Boundary(PolicyId("fence"), PipelineFixtures.TENANT)))
+        event.authorization.source.let {
+            it.via.assert().isEqualTo(AuditVia.BOUNDARY)
+            it.document.assert().isEqualTo(AuditDocument.PLATFORM)
+            it.policy.assert().isEqualTo("fence")
+            it.statement.assert().isNull()
+        }
+        event.binding.assert().isEqualTo("boundary:${PipelineFixtures.TENANT.value}")
+    }
+
+    /** The source says how a statement applied and which document holds it, whatever the policy is called. */
+    @Test
+    fun theSourceNamesTheViaAndTheDocument() {
+        fun event(policy: String, via: BindingRef) =
+            audit(Decision.Permit(StatementRef.Policy(PolicyId(policy), 0, "s", via)))
+        event("cosec:blacklist", BindingRef.Builtin).let {
+            it.authorization.source.via.assert().isEqualTo(AuditVia.BUILTIN)
+            it.authorization.source.document.assert().isNull()
+            it.authorization.source.policy.assert().isEqualTo("cosec:blacklist")
+            it.binding.assert().isEqualTo("builtin")
+        }
+        event("cosec:root", BindingRef.Bound(BindingId("root"), DocumentKind.PLATFORM)).let {
+            it.authorization.source.via.assert().isEqualTo(AuditVia.BINDING)
+            it.authorization.source.document.assert().isEqualTo(AuditDocument.PLATFORM)
+            it.authorization.source.policy.assert().isEqualTo("cosec:root")
+        }
+        event("perm:order/read", BindingRef.Bound(BindingId("r"), DocumentKind.APP))
+            .authorization.source.document.assert().isEqualTo(AuditDocument.APP)
+        event("fence", BindingRef.Boundary(PipelineFixtures.TENANT)).let {
+            it.authorization.source.via.assert().isEqualTo(AuditVia.BOUNDARY)
+            it.authorization.source.document.assert().isEqualTo(AuditDocument.PLATFORM)
+            it.binding.assert().isEqualTo("boundary:${PipelineFixtures.TENANT.value}")
+        }
+    }
+
+    /** RFC 0012: a tenant document's role binding is a binding of the tenant, under its derived id. */
+    @Test
+    fun aDerivedRoleBindingOfATenantDocumentIsATenantBinding() {
+        val id = "role:reader@order:order.read"
+        val event = audit(
+            Decision.Permit(
+                StatementRef.Policy(PolicyId("orders"), 0, "s", BindingRef.Bound(BindingId(id), DocumentKind.TENANT))
+            )
+        )
+        event.authorization.source.via.assert().isEqualTo(AuditVia.BINDING)
+        event.authorization.source.document.assert().isEqualTo(AuditDocument.TENANT)
+        event.binding.assert().isEqualTo(id)
     }
 
     @Test
