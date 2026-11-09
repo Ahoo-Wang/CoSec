@@ -1,0 +1,77 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: Update Armed Pull Requests
+
+# `main` requires a branch to be up to date, and merge queues are not available to a repository owned by a user. So
+# whenever the queue can move, this brings the oldest pull request with auto-merge enabled up to date, and CI then
+# merges it. One at a time: updating them all would rerun CI for every one each time another merges.
+#
+# Never checks out or runs pull request code, so `pull_request_target` is safe here: it reads metadata only.
+
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    types: [auto_merge_enabled]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: update-armed-prs
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Update the oldest armed pull request that is behind
+        env:
+          # A personal access token: a push made with GITHUB_TOKEN does not start CI.
+          GH_TOKEN: ${{ secrets.AUTO_UPDATE_TOKEN || secrets.RENOVATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The required checks of `main`. Others, such as Codecov's, neither hold the queue nor stop a pull request.
+          required='["CI","Analyze (java-kotlin)","Semantic PR Title"]'
+          armed() {
+            gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --limit 100 \
+              --json number,createdAt,isDraft,isCrossRepository,autoMergeRequest,mergeStateStatus,statusCheckRollup \
+              --jq '[.[] | select(.autoMergeRequest != null and (.isDraft | not) and (.isCrossRepository | not))] | sort_by(.createdAt)'
+          }
+          # GitHub reports UNKNOWN for a moment after `main` moves.
+          for _ in 1 2 3 4 5 6; do
+            prs=$(armed)
+            [ "$(jq '[.[] | select(.mergeStateStatus == "UNKNOWN")] | length' <<<"$prs")" = 0 ] && break
+            sleep 15
+          done
+          filter=$(cat <<'JQ'
+          def checks: [.statusCheckRollup[] | select((.name // .context) as $n | $required | index($n))];
+          def running: [checks[] | select((.status // "COMPLETED") != "COMPLETED" or .state == "PENDING")] | length > 0;
+          def failed: [checks[] | select((.conclusion // .state) | IN("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED"))] | length > 0;
+          if any(.[]; .mergeStateStatus != "BEHIND" and running) then empty
+          else [.[] | select(.mergeStateStatus == "BEHIND" and (failed | not))] | first | .number // empty
+          end
+          JQ
+          )
+          next=$(jq -r --argjson required "$required" "$filter" <<<"$prs")
+          if [ -z "$next" ]; then
+            echo "Nothing to update."
+            exit 0
+          fi
+          echo "Updating #$next."
+          gh pr update-branch "$next" --repo "$GITHUB_REPOSITORY"
