@@ -79,7 +79,8 @@ contain `:`, so a key names one document only.
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open; the change it belongs to removes it, only while it is still its own (`CTL-26`) |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
-| `<s>:shadow:status:instances` | every data-plane instance | each instance's installed revisions and their lag; expires 2 minutes after its last write, and entries older than a minute are ignored |
+| `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored |
+| `<s>:shadow:instances:all` | every data-plane instance | the instances that have a status, each with when it listed itself; an instance lists itself when it starts and again every hour, and whoever writes the list drops entries older than 3 hours; expires as the reports |
 | `<s>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
@@ -155,9 +156,9 @@ the documents and the candidates, and write only shadow reports and statuses. A 
 - Control-plane credentials: every key under `<s>:`.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
-  [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows). Every instance still writes
-  `<s>:shadow:reporters:*` and `<s>:shadow:status:*`, which CoCache writes through Lua scripts, so an ACL cannot make
-  them add-only.
+  [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows), and to its own status key
+  (`<s>:shadow:status:<instance>`). Every instance still writes `<s>:shadow:reporters:*` and `<s>:shadow:instances:*`,
+  which CoCache writes through Lua scripts, so an ACL cannot make them add-only.
 
 A window's numbers are the sum of one report per instance, each that instance's latest. The control plane keeps a
 window open (the step answers `503`) rather than count anything doubtful: a report under one instance's key that names
@@ -171,7 +172,7 @@ An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax; `%R
 the keys and takes every command away; the second grants the commands and channels it needs:
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
 ACL SETUSER cosec-pod-a <the commands and channels CoCache lists> +info
 ```
 

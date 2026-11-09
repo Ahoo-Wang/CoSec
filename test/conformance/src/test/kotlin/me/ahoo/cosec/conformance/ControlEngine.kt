@@ -84,7 +84,10 @@ class ControlEngine(
 
     val authorizer: ControlAuthorizer = PipelineControlAuthorizer(
         checker,
-        { if (outage) throw IllegalStateException("the snapshot source is down") },
+        {
+            if (outage) throw IllegalStateException("the snapshot source is down")
+            emptyMap()
+        },
     )
 
     /**

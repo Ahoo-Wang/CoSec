@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.HexFormat
 
 /**
  * The digest an operation's `ifMatch` names: SHA-256 of the entry as the document encodes it, in lowercase hex. Two
@@ -48,7 +49,10 @@ object EntryDigest {
     internal fun sha256(tree: JsonNode): String = hex(CoSecJson.mapper.writeValueAsBytes(tree))
 
     internal fun hex(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        HEX.formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
+    /** Lower-case hex, a byte at a time: the fixed cost of `String.format` per byte showed in the diff of large documents. */
+    private val HEX: HexFormat = HexFormat.of()
 }
 
 /**

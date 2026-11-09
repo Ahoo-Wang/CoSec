@@ -232,6 +232,7 @@ class PipelineStarterRedisTest {
             runBlocking {
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Platform,
+                    null,
                     StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, uncompilable.encodeToByteArray())),
                 )
             }
@@ -268,6 +269,7 @@ class PipelineStarterRedisTest {
             runBlocking {
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Tenant("acme"),
+                    null,
                     StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, granting.encodeToByteArray())),
                 )
             }

@@ -22,7 +22,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
@@ -49,9 +48,10 @@ private val log = KotlinLogging.logger {}
  *   [SHADOW_LEASE], so one instance does it per period. The pass is bounded by [shadowInterval] and the lease lasts
  *   twice that, so it never outlives the lease; it is released when the pass ends.
  *
- * Changes are read through [Changes.get], which expires one past `cosec.control.changes.expire-after` (RFC 0007
- * §6.1): so a change nobody finishes still leaves the open list. A failure on one document or change is logged and
- * the pass goes on with the next; the next pass tries again.
+ * The open changes are read once, by [ControlStore.openChanges], and a pass goes by that read (#1219). One past
+ * `cosec.control.changes.expire-after` (RFC 0007 §6.1) is expired through [Changes.current]: so a change nobody
+ * finishes still leaves the open list. A failure on one document or change is logged and the pass goes on with the
+ * next; the next pass tries again.
  */
 class ControlMaintenance(
     private val store: ControlStore,
@@ -82,9 +82,12 @@ class ControlMaintenance(
             log.warn(e) { "Could not read the open changes; no revision is reclaimed this pass." }
             return emptyMap()
         }
+        // Grouped once: a scan of every open change for each document is the product of the two (#1219).
+        val resting = HashMap<SnapshotKey, MutableSet<SnapshotDigest>>()
+        open.forEach { resting.getOrPut(it.key) { HashSet() } += it.restsOn() }
         val reclaimed = LinkedHashMap<SnapshotKey, Reclaimed>()
         for (key in documents) {
-            val keep = open.filter { it.key == key }.flatMapTo(HashSet()) { it.restsOn() }
+            val keep = resting[key].orEmpty()
             attempt("reclaim the revisions of [$key]") { revisions.reclaim(key, keep) }
                 ?.takeIf { it.any }
                 ?.let { reclaimed[key] = it }
@@ -109,8 +112,9 @@ class ControlMaintenance(
         }
         try {
             return withTimeout(shadowInterval.toKotlinDuration()) {
-                val shadowing = store.openChanges().mapNotNull { id ->
-                    attempt("read change [${id.value}]") { current(id) }?.takeIf { it.state == ChangeState.SHADOWING }
+                val shadowing = store.openChanges().mapNotNull { change ->
+                    attempt("read change [${change.id.value}]") { current(change) }
+                        ?.takeIf { it.state == ChangeState.SHADOWING }
                 }
                 shadowing.mapNotNull { change ->
                     attempt("look at the shadow window of change [${change.id.value}]") { changes.shadowed(change.id) }
@@ -124,16 +128,19 @@ class ControlMaintenance(
         }
     }
 
-    /** Every open change as it is now; throws when one cannot be read. */
+    /**
+     * Every open change as it is now; throws when one cannot be read. The store read each of them once to list it, and
+     * that read is the one this pass goes by (#1219): only a change past its expiry is read again, to be expired.
+     */
     private suspend fun openChanges(): List<ChangeRequest> =
         store.openChanges().mapNotNull { current(it) }.filterNot { it.state.terminal }
 
     /**
-     * [id] as it is now, expired if it is past its time; null when it is not written yet or no longer exists. One that
-     * cannot be read stops the pass: it might be a change that rests on a revision.
+     * [change] as it is now, expired if it is past its time; null when it no longer exists. One that cannot be
+     * expired stops the pass: it might be a change that rests on a revision.
      */
-    private suspend fun current(id: ChangeId): ChangeRequest? = try {
-        changes.get(id)
+    private suspend fun current(change: ChangeRequest): ChangeRequest? = try {
+        changes.current(change)
     } catch (e: ChangeRejectedException) {
         if (e.status != NOT_FOUND) throw e
         null

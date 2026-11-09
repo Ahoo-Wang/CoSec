@@ -17,6 +17,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.runtime.shadow.ShadowCodec
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -103,8 +104,8 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         synchronized(lock) { apps = null }
     }
 
-    override suspend fun openChanges(): Set<ChangeId> = synchronized(lock) {
-        changes.filterValues { (change, _) -> !change.state.terminal }.keys.toSet()
+    override suspend fun openChanges(): List<ChangeRequest> = synchronized(lock) {
+        changes.values.map { (change, _) -> change }.filterNot { it.state.terminal }
     }
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
@@ -137,9 +138,17 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
 
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = synchronized(lock) { candidates[key] }
 
-    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate) {
-        synchronized(lock) { candidates[key] = candidate }
-    }
+    override suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>? =
+        synchronized(lock) { candidates[key]?.let { Versioned(it, candidateDigest(it)) } }
+
+    override suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean =
+        synchronized(lock) {
+            if (candidates[key]?.let(::candidateDigest) != expected) {
+                return false
+            }
+            candidates[key] = candidate
+            true
+        }
 
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean = synchronized(lock) {
         candidates[key]?.window == window && candidates.remove(key) != null
@@ -192,6 +201,8 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         val entries = apps.entries.sorted().joinToString("") { "${it.length}:$it" }
         return digest("$entries|${apps.complete}".encodeToByteArray())
     }
+
+    private fun candidateDigest(candidate: StoredCandidate): SnapshotDigest = digest(ShadowCodec.encode(candidate))
 
     private fun referrersDigest(referrers: Map<SnapshotKey, Long>): SnapshotDigest =
         digest(referrers.map { (key, revision) -> "$key=$revision" }.sorted().joinToString("\n").encodeToByteArray())

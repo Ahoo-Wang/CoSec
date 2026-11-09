@@ -80,6 +80,18 @@ sets, its approved changes and a document that spells a day of the week another 
   In code: `AuditSourceType`, `AuditPolicy`, `AuditRole`, `AuditPermission`, their data classes, `PolicyType` and
   `AuditReasonCode.REGEX_TIMEOUT` are gone, `AuditVia` and `AuditDocument` are new, and the attribute keys
   `AuditTrace.TRACE_ID_ATTRIBUTE_KEY` and `SPAN_ID_ATTRIBUTE_KEY`, which nothing read, are removed.
+- **Control-plane scale** (batch E2b: #1214, #1217, #1218, #1219, and the stage window #1290 left open). An instance
+  writes its status under its own key, `<s>:shadow:status:<instance>`, and is listed in `<s>:shadow:instances:all`, so a
+  heartbeat writes one status however many instances there are; the old `<s>:shadow:status:instances` is not read
+  and expires in two minutes. Until an instance runs this version it is not counted when a revision's propagation
+  is read (read-only; publishing never waits for it): upgrade the data-plane instances together, and add
+  `~<s>:shadow:instances:*` to the key patterns of an instance's Redis ACL ([Redis keys](./storage.md#redis-keys)).
+  The decisions of one change are taken on one confirmation of the control documents, confirmed again at the end, so a
+  large change no longer reads them twice per entry. In code: a `ControlStore` of your own returns the non-terminal
+  change requests from `openChanges()` (a `List<ChangeRequest>`, each read once), and replaces `putCandidate(key,
+  candidate)` with `stagedCandidate(key)` and `putCandidate(key, expected, candidate): Boolean`, a write over the
+  candidate read ([Extending](../architecture/extending.md#control-store)). `CoCacheShadowReports` takes the list of
+  instances as its fourth store. `SnapshotDigest.toString()` and the digests of entries are unchanged, only faster.
 - **Shutdown waits for the Kafka audit** (batch R7a, #1250). `KafkaAuditListener` waits up to
   `cosec.observability.listener.drain-timeout` for the sends it still holds and the broker's answers, so the producer is
   closed after them. A shutdown can take that timeout twice, once for the listeners' queues and once here: check the

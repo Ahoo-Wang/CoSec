@@ -16,7 +16,10 @@
 package me.ahoo.cosec.control.authz
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.model.Action
@@ -32,6 +35,7 @@ import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Who asks the control plane (RFC 0007 §10.1): a principal the host pipeline authenticated, with the memberships and
@@ -104,20 +108,32 @@ fun interface ControlAuthorizer {
         action: Action,
         resource: Resource,
     ): ControlDecision = ControlDecision.INDETERMINATE
+
+    /**
+     * Runs [block], one change's authorization (#1218), with an authorizer whose decisions may share what one
+     * confirmation of the documents made current, as long as those documents are the same at the end. An implementation
+     * that confirms before every decision answers with [this] and [block] as it is; [PipelineControlAuthorizer]
+     * confirms once, evaluates every decision on that view, confirms again at the end, and runs [block] again when a
+     * confirmed document moved meanwhile. A decision is never taken from a view older than the start of [block], and
+     * nothing [block] returns rests on documents that changed during it.
+     */
+    suspend fun <T> batch(block: suspend (ControlAuthorizer) -> T): T = block(this)
 }
 
 /**
  * Makes the documents the control plane's checker evaluates current before a check (RFC 0007 §7.2): a conditional read
  * of each, so that a just-revoked administrator gets no lag window. The host wires it to the checker's own
- * `SnapshotSource` (one apart from the data plane's); a failure is an indeterminate decision.
+ * `SnapshotSource` (one apart from the data plane's); a failure is an indeterminate decision. It answers a version of
+ * each document it confirmed, a value that equals another only while the document is the same (its revision: the
+ * control plane moves a document only to a higher one), so that [ControlAuthorizer.batch] can tell whether one moved.
  */
 @InternalCoSecApi
 fun interface DocumentConfirmation {
-    suspend fun confirm(keys: Set<SnapshotKey>)
+    suspend fun confirm(keys: Set<SnapshotKey>): Map<SnapshotKey, Any>
 
     companion object {
-        /** For a checker whose documents are always current, such as an in-memory one. */
-        val CURRENT: DocumentConfirmation = DocumentConfirmation { }
+        /** For a checker whose documents are always current, such as an in-memory one: no versions, none to compare. */
+        val CURRENT: DocumentConfirmation = DocumentConfirmation { emptyMap() }
     }
 }
 
@@ -134,7 +150,7 @@ class PipelineControlAuthorizer(
 ) : ControlAuthorizer {
     override suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision {
         val security = operator.security ?: return ControlDecision.DENY
-        if (!confirmed(operator.tenant, operator.toString())) {
+        if (confirmed(operator.tenant, operator.toString()) == null) {
             return ControlDecision.INDETERMINATE
         }
         return of(checker.decide(security, app, action, resource))
@@ -149,22 +165,110 @@ class PipelineControlAuthorizer(
         resource: Resource,
     ): ControlDecision {
         val security = operator.security ?: return ControlDecision.DENY
-        if (!confirmed(principal.tenant, "${principal.id.value}@${principal.tenant.value}")) {
+        if (confirmed(principal.tenant, "${principal.id.value}@${principal.tenant.value}") == null) {
             return ControlDecision.INDETERMINATE
         }
         return of(checker.decideAs(security, principal, memberships, app, action, resource))
     }
 
-    /** Whether the documents an evaluation for [tenant] reads are confirmed current; a failure is indeterminate. */
+    /**
+     * One confirmation of the documents for all of [block]'s decisions (#1218), instead of one for each: a change of a
+     * thousand bindings asked for two thousand and one. The batch confirms each set of documents the first time a
+     * decision needs it and keeps what it found, and once [block] has returned confirms them all again: if every one is
+     * the version it first found, no decision rests on a document that moved while they were taken. If one moved,
+     * the decisions are taken again from the start on a new confirmation, so a principal revoked meanwhile is denied
+     * exactly as it would be by a confirmation before each decision. A [block] that throws is not confirmed again: a
+     * refusal, on documents at least as old, is the safe answer. Documents that cannot be confirmed again, or keep
+     * moving, are a 503.
+     */
+    override suspend fun <T> batch(block: suspend (ControlAuthorizer) -> T): T {
+        repeat(MAX_BATCHES) {
+            val batch = Batch()
+            val result = block(batch)
+            if (batch.stillCurrent()) {
+                return result
+            }
+        }
+        throw ChangeRejectedException(
+            UNAVAILABLE,
+            "the control documents kept changing while the change was authorized"
+        )
+    }
+
+    /** Confirms the documents [tenant]'s evaluation reads: the versions found, or null when it failed (indeterminate). */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun confirmed(tenant: TenantId, who: String): Boolean = try {
-        confirmation.confirm(setOf(SnapshotKey.Platform, SnapshotKey.Tenant(tenant.value), SnapshotKey.App(app.value)))
-        true
-    } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+    private suspend fun confirmed(tenant: TenantId, who: String): Map<SnapshotKey, Any>? = try {
+        confirmation.confirm(keysOf(tenant))
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         log.warn(e) { "Confirming the documents of $who failed - indeterminate." }
-        false
+        null
+    }
+
+    private fun keysOf(tenant: TenantId): Set<SnapshotKey> =
+        setOf(SnapshotKey.Platform, SnapshotKey.Tenant(tenant.value), SnapshotKey.App(app.value))
+
+    /** Decisions on the documents one confirmation per tenant made current, and what that found, to compare at the end. */
+    private inner class Batch : ControlAuthorizer {
+        private val lock = Mutex()
+
+        /** The documents confirmed for a tenant, or null for one that could not be: its decisions stay indeterminate. */
+        private val confirmedFor = HashMap<TenantId, Boolean>()
+
+        /** The version of each document when the batch first confirmed it. */
+        private val first = HashMap<SnapshotKey, Any>()
+
+        override suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision {
+            val security = operator.security ?: return ControlDecision.DENY
+            if (!confirm(operator.tenant, operator.toString())) {
+                return ControlDecision.INDETERMINATE
+            }
+            return of(checker.decide(security, app, action, resource))
+        }
+
+        override suspend fun decideAs(
+            operator: Operator,
+            principal: AuthenticatedPrincipal,
+            memberships: Memberships,
+            action: Action,
+            resource: Resource,
+        ): ControlDecision {
+            val security = operator.security ?: return ControlDecision.DENY
+            if (!confirm(principal.tenant, "${principal.id.value}@${principal.tenant.value}")) {
+                return ControlDecision.INDETERMINATE
+            }
+            return of(checker.decideAs(security, principal, memberships, app, action, resource))
+        }
+
+        /** Nested, a batch is one batch: the outer confirmation covers them. */
+        override suspend fun <T> batch(block: suspend (ControlAuthorizer) -> T): T = block(this)
+
+        private suspend fun confirm(tenant: TenantId, who: String): Boolean = lock.withLock {
+            confirmedFor.getOrPut(tenant) {
+                val versions = confirmed(tenant, who) ?: return@getOrPut false
+                versions.forEach { (key, version) -> first.putIfAbsent(key, version) }
+                true
+            }
+        }
+
+        /** Whether every document the batch confirmed is still the version it found; a failure to confirm is a 503. */
+        @Suppress("TooGenericExceptionCaught")
+        suspend fun stillCurrent(): Boolean {
+            val keys = lock.withLock { first.keys.toSet() }
+            if (keys.isEmpty()) {
+                return true
+            }
+            val now = try {
+                confirmation.confirm(keys)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn(e) { "Confirming the control documents again failed - indeterminate." }
+                throw ChangeRejectedException(UNAVAILABLE, "the control documents could not be confirmed again", e)
+            }
+            return lock.withLock { first.all { (key, version) -> now[key] == version } }
+        }
     }
 
     private fun of(decision: Decision): ControlDecision = when (decision) {
@@ -178,6 +282,10 @@ class PipelineControlAuthorizer(
 
         /** `cosec.control.app-id` by default. */
         val CONTROL_APP: AppId = AppId("cosec-control")
+
+        /** How often one change's decisions are taken again because a document moved under them. */
+        private const val MAX_BATCHES = 4
+        private const val UNAVAILABLE = 503
     }
 }
 

@@ -87,7 +87,7 @@ public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cos
 	public fun index (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun openChanges (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putApps (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/AppList;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/runtime/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun putCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/runtime/shadow/StoredCandidate;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putChange (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/change/ChangeRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putHead (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun putIndex (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lme/ahoo/cosec/control/store/RevisionIndex;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -99,6 +99,7 @@ public final class me/ahoo/cosec/cache/control/CoCacheControlStore : me/ahoo/cos
 	public fun releaseLease (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeRecord (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun stage (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun stagedCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun withdrawCandidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -136,8 +137,8 @@ public final class me/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion {
 
 public final class me/ahoo/cosec/cache/shadow/CoCacheShadowReports : me/ahoo/cosec/runtime/shadow/ShadowReportReader, me/ahoo/cosec/runtime/shadow/ShadowReportSink {
 	public static final field Companion Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports$Companion;
-	public fun <init> (Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Ljava/time/Clock;)V
-	public synthetic fun <init> (Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun write (Lme/ahoo/cosec/runtime/shadow/InstanceStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

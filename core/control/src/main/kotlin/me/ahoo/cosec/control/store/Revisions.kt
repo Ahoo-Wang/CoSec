@@ -400,16 +400,19 @@ class Revisions(
      * and added.
      */
     suspend fun history(key: SnapshotKey): List<RevisionEntry> {
-        val head = head(key) ?: return store.index(key)?.value?.entries.orEmpty()
+        // The head as stored: its envelope says its revision, and it is decoded only when the chain has to be walked
+        // from it, not for every listing and every explain at a revision (L6 of #1240, up to 8 MB a call).
+        val stored = store.head(requireDocumentKey(key)) ?: return store.index(key)?.value?.entries.orEmpty()
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
         // Nothing above the head: what a head that moved back (a partial loss of data) left in the index is not on the
         // chain. A revision published after the head was read is left out of this read alone, and what reclamation
         // removes comes from this list, so it is never taken for one to remove.
-        val entries = indexed.entries.filter { it.revision <= head.revision }
+        val entries = indexed.entries.filter { it.revision <= stored.document.revision }
         val latest = entries.lastOrNull()?.revision ?: 0
-        if (head.revision <= latest) {
+        if (stored.document.revision <= latest) {
             return entries
         }
+        val head = Head(key, decode(key, stored.document), stored)
         val missing = ArrayList<RevisionEntry>()
         var document: PolicyDocument? = head.document
         var digest: SnapshotDigest? = head.digest
