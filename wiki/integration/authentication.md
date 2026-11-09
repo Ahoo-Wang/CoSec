@@ -77,7 +77,12 @@ no credential at all is anonymous.
 1. the `Authorization` header (the `Bearer ` prefix is optional);
 2. the `authorization` query parameter, only with `cosec.pipeline.allow-query-token=true`, because URLs leak into
    access logs and `Referer` headers;
-3. the `authorization` cookie.
+3. the `authorization` cookie, only with `cosec.pipeline.allow-cookie-token=true`.
+
+The cookie is off by default because a browser sends a cookie on its own, on a cross-site request too: a page on
+another site could then act with the user's token, where only the page's own code can set a header. CoSec has no CSRF
+protection, so a deployment that turns this on defends against CSRF itself: `SameSite` on the cookie, and an
+anti-forgery token or an `Origin` check on every request that changes state.
 
 Blank values are skipped. The API key comes from the header `cosec.pipeline.api-key-header` (default `X-API-Key`)
 only.
@@ -365,8 +370,8 @@ the non-blocking `RedisApiKeyReader`. Manage keys through the `RedisApiKeyStore`
 Every request with a key then reads Redis. If Redis cannot be read, the request is `503`: unlike token revocation, an
 API key lookup fails closed. A key is stored as `{"format":2,"id":…,"principalId":…,"tenantId":…,"roles":[…]|null,
 "expiresAt":…|null,"enabled":…}`, every field always written. A key stored in the format before 8.0, which granted
-roles and policies of its own, is refused when it is read, never taken as a key without a cap: the request is `503`
-and the log names `cosec-migrate api-keys`, which converts such keys
+roles and policies of its own, is refused when it is read, never taken as a key without a cap: the request is `503`.
+`cosec-migrate api-keys` converts such keys
 ([Upgrading](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)).
 
 **Elsewhere**: declare your own `ApiKeyReader` bean, a non-blocking lookup by hash that throws when it cannot read.

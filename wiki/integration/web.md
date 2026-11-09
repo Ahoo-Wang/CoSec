@@ -205,7 +205,8 @@ request id is escaped. The vocabulary is also published as `schema/problem.schem
 
 ## App and space
 
-The client sends the `CoSec-*` parameters as headers or as query parameters of the same name:
+The client sends the `CoSec-*` parameters as headers. A query parameter of the same name is not read: a scope in a URL
+would reach access logs and `Referer` headers.
 
 | Parameter | Meaning | Conditions read it as |
 |---|---|---|
@@ -216,14 +217,13 @@ The client sends the `CoSec-*` parameters as headers or as query parameters of t
 
 Rules for reading them:
 
-- Header names match ignoring case; query parameter names match exactly.
-- A parameter may be sent several times, in the header, in the query or both, as long as every value is the same.
-  When every value is blank (empty, or ASCII whitespace only), the parameter is not sent.
-- Two different values, anywhere, make the request ambiguous: the pipeline and your handler could read different
-  scopes. It is refused with `400` `invalid-request`. A blank value beside a non-blank one is different too: a handler
-  that read the blank one would be in the default space. Blank means ASCII whitespace only, so a value of Unicode
-  spaces, such as `%E3%80%80`, which `trim()` keeps, is a value. A `CoSec-*` query value with a malformed
-  percent-escape is refused the same way.
+- Header names match ignoring case.
+- A parameter may be sent several times, as long as every value is the same. When every value is blank (empty, or
+  ASCII whitespace only), the parameter is not sent.
+- Two different values make the request ambiguous: the pipeline and your handler could read different scopes. It is
+  refused with `400` `invalid-request`. A blank value beside a non-blank one is different too: a handler that read the
+  blank one would be in the default space. Blank means ASCII whitespace only, so a value of Unicode spaces, such as a
+  no-break space, which `trim()` keeps, is a value.
 - A request body is never read: an authorization filter does not read request bodies.
 
 How `ScopeResolver` checks the app and space, and what the client therefore controls, is in
@@ -466,8 +466,9 @@ without `expires-at`): a service could not bound such an identity.
 
 **Credentials.** The gateway forwards none of the client's credentials, no header, query parameter or cookie: from
 every request it forwards it removes the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`,
-under whatever name that gives it), the `authorization` query parameter, and the `authorization` cookie from each
-`Cookie` header, its name matched ignoring case (a header left with no cookie is not sent), and from the cookies a
+under whatever name that gives it), the `authorization` query parameter, and, whether or not the gateway itself reads
+it (`cosec.pipeline.allow-cookie-token`), the `authorization` cookie from each `Cookie` header, its name matched
+ignoring case (a header left with no cookie is not sent), and from the cookies a
 later filter or a `forward:` route's handler reads. A compromised service so never sees a token or a key it could
 replay at the gateway. Other cookies go downstream as they came, each pair byte for byte; the token's pair goes with
 one `;`, so no empty pair is left, and a header left with only empty pairs is not sent. Only the whitespace at the

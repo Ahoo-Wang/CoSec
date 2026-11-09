@@ -46,10 +46,8 @@ The request cannot be read without ambiguity, so it is refused before authentica
 `BAD_REQUEST`. Causes:
 
 - the path has `.` or `..` segments, or a malformed percent-escape;
-- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different values, between the header
-  and the query string or within either, a blank one beside a non-blank one included (`?CoSec-Space-Id=` with the
-  header `CoSec-Space-Id: s1`), or its query value has a malformed percent-escape. Send each parameter once, or leave
-  it out;
+- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
+  a non-blank one included. Send each header once, or leave it out;
 - a route map captures a value that would change the resource id's segments;
 - a header was sent more than once with different values, and a document the request is decided on reads it, in a
   condition, a boundary or a rate limit rule, whichever the statement's effect and whether it applies to this request
@@ -69,9 +67,9 @@ Fix the client ([Web integration](../integration/web.md)). On the control API, a
 The caller is anonymous, and the request was denied: no credential was sent, or no statement allows anonymous callers
 to do this. A scope rejection of an anonymous caller is also `unauthorized`.
 
-1. **Was a credential sent where CoSec reads it?** A token in the `Authorization` header or an `authorization` cookie,
-   or the `authorization` query parameter with
-   [`cosec.pipeline.allow-query-token=true`](./configuration.md#pipeline); an API key in the
+1. **Was a credential sent where CoSec reads it?** A token in the `Authorization` header, the
+   `authorization` query parameter with [`cosec.pipeline.allow-query-token=true`](./configuration.md#pipeline), or the
+   `authorization` cookie with [`cosec.pipeline.allow-cookie-token=true`](./configuration.md#pipeline); an API key in the
    [`cosec.pipeline.api-key-header`](./configuration.md#pipeline) header with `cosec.api-key.enabled=true`.
 2. **Should anonymous callers be allowed here?** Then bind a statement that allows them; otherwise send a credential.
 
@@ -191,7 +189,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the requests of some principals or keys | The authenticator gave a principal whose id, tenant, credential id or claimed roles hold an unpaired UTF-16 surrogate (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`), or an API key's stored record names one (`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`, `IDN-10`). Such an id would share a Redis key with another, so the request fails closed instead. | Fix the authenticator, or the key's record: an id is Unicode text. |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in the format before 8.0, which is refused when read (`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in another format, which is refused when read (`API key format [null] is not 2.`; `null` means the record has no `format`, as a key written by 7.x). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
 A DENY still decides: if a DENY matches, the request is `401` or `403` even when a document is unavailable.
@@ -344,13 +342,13 @@ change is shadowed ([Testing changes](../policies/testing.md)).
 
 ```text
 CoSec does not read <n> cosec.* properties, which would do nothing:
-  cosec.authentication.enabled -> cosec.authentication.login.enabled
-Remove or rename them; cosec.unknown-properties=warn only logs this.
+  cosec.authentication.enabled
+Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties
 ```
 
-A `cosec.*` key that no CoSec module reads: a typo, or a 7.x key, whose replacement follows `->`
-([7.x keys](./upgrading.md#removed-and-renamed-properties)). Rename or remove it.
-[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) only logs the list.
+A `cosec.*` key that no CoSec module reads: a typo, or a key a release renamed or removed
+([the table](./upgrading.md#removed-and-renamed-properties)). Rename or remove it; no property
+[turns the check off](./configuration.md#unknown-properties).
 
 On Kubernetes, with 8.0.0-alpha.1, keys such as `cosec.gateway.service.host` and `cosec.gateway.port` came from service
 links, and every pod of the namespace crash-looped on `CoSec does not read 8 cosec.* properties`. For every Service
@@ -515,20 +513,18 @@ bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 ### Startup fails on a removed key prefix
 
 ```text
-CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
-  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
-  API keys: cosec:api-key -> b:api-key
-  ...
+CoSec does not read 1 cosec.* property, which would do nothing:
+  cosec.authorization.snapshot.key-prefix
+Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties
 ```
 
 The environment still sets `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` or
-`cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). Startup fails
-whatever [`cosec.unknown-properties`](./configuration.md#unknown-properties) says: the old layout may keep token revocations and API
-keys under another prefix than the one now read, and a revocation nobody reads lets the token it revoked through
-again. The message lists the families that would move, computed from the old values and the
-`cosec.key-prefix` to set: the current one, or, while it is unset, the snapshot documents' prefix. Copy the token revocations and the API keys to their new keys first (`COPY`, or `RENAME`, which
-keeps their expiry), set `cosec.key-prefix` to where the snapshot documents are, then remove the old properties
-([Upgrading](./upgrading.md#from-8-0-0-alpha-2)).
+`cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). It fails like
+any [unknown key](./configuration.md#unknown-properties), but renaming it is not enough: the old layout may keep token
+revocations and API keys under another prefix than the one now read, and a revocation nobody reads lets the token it
+revoked through again. Work out [which families move](./upgrading.md#from-8-0-0-alpha-2), copy the token revocations and
+the API keys to their new keys first (`COPY`, or `RENAME`, which keeps their expiry), set `cosec.key-prefix` to where
+the snapshot documents are, then remove the old properties.
 
 ### Startup fails without a token store
 

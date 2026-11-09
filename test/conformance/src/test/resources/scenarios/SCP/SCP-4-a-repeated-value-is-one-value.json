@@ -2,9 +2,9 @@
   "rules": [
     "SCP-4"
   ],
-  "polarity": "positive",
+  "polarity": "negative",
   "level": "pipeline",
-  "description": "%43oSec-App-Id decodes to CoSec-App-Id, so it disagrees with the header: 400.",
+  "description": "CoSec-App-Id is sent twice with the same value: one value, and the request is permitted.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,13 +33,15 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "%43oSec-App-Id=other",
     "headers": {
-      "cosec-app-id": "shop"
+      "CoSec-App-Id": [
+        "shop",
+        "shop"
+      ]
     }
   },
   "expect": {
-    "status": 400,
-    "type": "invalid-request"
+    "status": 200,
+    "proceed": true
   }
 }

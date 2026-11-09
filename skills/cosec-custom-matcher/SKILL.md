@@ -183,7 +183,7 @@ fun interface Authenticator {
 }
 ```
 
-`Credentials` holds the bearer token (`Authorization` header, cookie, or query when allowed) and the API key header.
+`Credentials` holds the bearer token (`Authorization` header, or the query or the cookie when allowed) and the API key header.
 Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), "method")`,
 `Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from

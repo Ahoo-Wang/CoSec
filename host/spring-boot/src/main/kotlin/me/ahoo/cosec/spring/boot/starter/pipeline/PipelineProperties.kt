@@ -37,6 +37,12 @@ class PipelineProperties {
     /** Whether a token may come in the query string; off, since URLs end up in logs. */
     var allowQueryToken: Boolean = false
 
+    /**
+     * Whether a token may come in the `authorization` cookie; off, since a browser sends a cookie on its own, on a
+     * cross-site request too. Turn it on only with your own CSRF defense.
+     */
+    var allowCookieToken: Boolean = false
+
     /** The header an API key comes in. No document may read it (`CND-5`, [credentialHeaders]). */
     var apiKeyHeader: String = DEFAULT_API_KEY_HEADER
 

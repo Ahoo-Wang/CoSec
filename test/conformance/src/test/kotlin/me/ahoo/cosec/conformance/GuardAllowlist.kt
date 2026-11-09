@@ -87,9 +87,9 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
             "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
-            "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
-            "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
-            "spring-boot:RemovedKeyPrefixesTest#every removed prefix counts, by any of its names",
+            "spring-boot:UnknownPropertiesTest#a key prefix cosec key-prefix replaced fails startup",
+            "spring-boot:UnknownPropertiesTest#a replaced key prefix in the environment fails startup",
+            "spring-boot:UnknownPropertiesTest#no property turns the check off",
         ),
         "timing" to setOf(
             "runtime:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument",

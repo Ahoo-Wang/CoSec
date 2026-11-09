@@ -115,13 +115,13 @@
     {
       "id": "SNP-9",
       "source": "RFC 0003 §4.1; RC1-46; review M3 of #1200",
-      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup whatever `cosec.unknown-properties` says, naming the families that move and that revocations and API keys must be copied first, so no revocation is left where nothing reads it.",
+      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup as a key CoSec does not read, and no property turns that check off, so no revocation is left where nothing reads it.",
       "level": "startup",
       "guards": [
         "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
-        "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
-        "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
-        "spring-boot:RemovedKeyPrefixesTest#every removed prefix counts, by any of its names"
+        "spring-boot:UnknownPropertiesTest#a key prefix cosec key-prefix replaced fails startup",
+        "spring-boot:UnknownPropertiesTest#a replaced key prefix in the environment fails startup",
+        "spring-boot:UnknownPropertiesTest#no property turns the check off"
       ],
       "pending": null
     }

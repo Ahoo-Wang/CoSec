@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "RC1-16: CoSec-Space-Id is only an ideographic space: not ambiguous, and not blank either, so it is a declared space, which an anonymous request cannot be in (SCP-3): 401, not the default space.",
+  "description": "RC1-16: CoSec-Space-Id is only a no-break space: not ambiguous, and not blank either, so it is a declared space, which an anonymous request cannot be in (SCP-3): 401, not the default space.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,7 +33,9 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-Space-Id=%E3%80%80"
+    "headers": {
+      "CoSec-Space-Id": "\u00a0"
+    }
   },
   "expect": {
     "status": 401,

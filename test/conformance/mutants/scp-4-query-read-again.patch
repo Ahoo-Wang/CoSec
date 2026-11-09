@@ -1,0 +1,17 @@
+# Rule: SCP-4
+# Mutant: a CoSec-* query parameter is read beside the header, so the scope reaches the URL again and a request that names a space there is treated as declaring it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CoSecParametersTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
+index 914e63fe..27bd65f2 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
+@@ -35,7 +35,7 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
+         /** The parameters of [facts], or null when one of them is ambiguous. Header names match ignoring case. */
+         fun read(facts: HttpFacts): CoSecParameters? {
+             val appId = single(facts.headers.values(APP_ID)) ?: return null
+-            val spaceId = single(facts.headers.values(SPACE_ID)) ?: return null
++            val spaceId = single(facts.headers.values(SPACE_ID) + QueryParameters.values(facts.rawQuery, setOf(SPACE_ID))?.get(SPACE_ID).orEmpty()) ?: return null
+             val deviceId = single(facts.headers.values(DEVICE_ID)) ?: return null
+             return CoSecParameters(appId, spaceId, deviceId)
+         }

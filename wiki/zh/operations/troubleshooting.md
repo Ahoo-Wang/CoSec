@@ -42,8 +42,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求无法被无歧义地读取，因此在认证之前就被拒绝。审计事件的 `kind` 为 `BAD_REQUEST`。原因：
 
 - 路径含有 `.` 或 `..` 段，或者有格式错误的百分号转义；
-- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的值（在请求头和查询字符串之间，或在其中
-  任一处之内），空白值与非空白值同时出现也算（例如请求头 `CoSec-Space-Id: s1` 加上 `?CoSec-Space-Id=`），或者它的查询值有格式错误的百分号转义。每个参数只发送一次，或者不发送；
+- `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 请求头出现两个不同的值，包括空白值与非空白值同时出现。每个请求头只发送一次，或者不发送；
 - 路由映射捕获的值会改变资源 id 的分段；
 - 某个请求头以不同的值发送了多次，而决策所依据的文档在条件、边界或限流规则中读取它，无论语句的效果是什么，也无论它是否适用于本请求（`PIP-12`）。这一项在认证和
   确定作用域之后、文档已知时检查。只发送一次该请求头，或只用一个值。最常见的是代理会追加的请求头，例如 `X-Forwarded-For`：两层代理各追加一行时，视图中读取它的文档使每个请求都为 `400`，即使读取它的语句只覆盖 `DELETE` 而请求是 `GET`；平台的语句会对每个租户这样做。让代理发送合并后的一行，或者通过宿主只解析一次的 `environment.ip` 读取客户端地址；
@@ -57,8 +56,9 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 调用方是匿名的，请求被拒绝：没有发送凭证，或者没有语句允许匿名调用方这样做。匿名调用方的作用域被拒绝时也是
 `unauthorized`。
 
-1. **凭证是否发到了 CoSec 读取的位置？** 令牌放在 `Authorization` 请求头或 `authorization` cookie 中，或者在
-   [`cosec.pipeline.allow-query-token=true`](./configuration.md#pipeline) 时放在 `authorization` 查询参数中；API key
+1. **凭证是否发到了 CoSec 读取的位置？** 令牌放在 `Authorization` 请求头中，或者在
+   [`cosec.pipeline.allow-query-token=true`](./configuration.md#pipeline) 时放在 `authorization` 查询参数中，或者在
+   [`cosec.pipeline.allow-cookie-token=true`](./configuration.md#pipeline) 时放在 `authorization` cookie 中；API key
    放在 [`cosec.pipeline.api-key-header`](./configuration.md#pipeline) 请求头中，并且 `cosec.api-key.enabled=true`。
 2. **这里是否应该允许匿名调用方？** 是的话，绑定一条允许他们的语句；否则发送凭证。
 
@@ -161,7 +161,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过 [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline)：例如 Redis API key 存储无法访问。 | 恢复存储。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，某个认证器的每个请求 | 你自己的 `Authenticator` 把凭证的方式命名为 `jwt`，而它保留给 CoSec 的令牌（`The authentication method [jwt] is CoSec's own token's ...`）。 | 按你的凭证命名方式，例如 `Identity.Method("ldap")`（[扩展](../architecture/extending.md#authenticators)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。 | 修正认证器或 key 的记录：id 是 Unicode 文本。 |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以 8.0 之前的格式存储，读取时被拒绝（`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`）。 | 转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以其他格式存储，读取时被拒绝（`API key format [null] is not 2.`；`null` 表示记录没有 `format`，例如 7.x 写入的 key）。 | 转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
 DENY 仍然会做出决定：只要匹配到 DENY，即使某个文档不可用，请求也是 `401` 或 `403`。
@@ -280,12 +280,12 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 ```text
 CoSec does not read <n> cosec.* properties, which would do nothing:
-  cosec.authentication.enabled -> cosec.authentication.login.enabled
-Remove or rename them; cosec.unknown-properties=warn only logs this.
+  cosec.authentication.enabled
+Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties
 ```
 
-CoSec 的任何模块都不读取的 `cosec.*` key：拼写错误，或 7.x 的 key，`->` 之后是替代它的配置（[7.x key](./upgrading.md#removed-and-renamed-properties)）。
-改名或删除它。[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) 只记录这份列表。
+CoSec 的任何模块都不读取的 `cosec.*` key：拼写错误，或某个版本改名、删除的 key（[对照表](./upgrading.md#removed-and-renamed-properties)）。
+改名或删除它；没有任何配置项能[关闭这项检查](./configuration.md#unknown-properties)。
 
 在 Kubernetes 上，8.0.0-alpha.1 中 `cosec.gateway.service.host`、`cosec.gateway.port` 这类 key 来自 Service 链接，该命名空间中的每个 pod
 都会因 `CoSec does not read 8 cosec.* properties` 而反复崩溃重启。名字为 `cosec` 或以 `cosec-` 开头的 Service（`k8s/` 中的清单把
@@ -429,13 +429,12 @@ Redis 的 CPU，在这些范围内调大它（[存储](./storage.md#what-revalid
 ### 已移除的 key 前缀导致启动失败 {#startup-fails-on-a-removed-key-prefix}
 
 ```text
-CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
-  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
-  API keys: cosec:api-key -> b:api-key
-  ...
+CoSec does not read 1 cosec.* property, which would do nothing:
+  cosec.authorization.snapshot.key-prefix
+Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties
 ```
 
-环境中仍然设置了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 或 `cosec.api-key.key-prefix`，它们已被 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代（`SNP-9`）。无论 [`cosec.unknown-properties`](./configuration.md#unknown-properties) 如何设置，启动都会失败：旧布局可能把令牌吊销和 API key 保存在与现在读取的前缀不同的前缀下，而没人读取的吊销会让被它吊销的令牌再次通过。消息列出会移动的 key 族，根据旧值和应设置的 `cosec.key-prefix` 计算得出：已设置时为当前值，未设置时为快照文档的前缀。先把令牌吊销和 API key 复制到新的 key 下（`COPY`，或保留过期时间的 `RENAME`），把 `cosec.key-prefix` 设为快照文档所在的前缀，然后移除旧配置项（[升级](./upgrading.md#from-8-0-0-alpha-2)）。
+环境中仍然设置了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 或 `cosec.api-key.key-prefix`，它们已被 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代（`SNP-9`）。它和其他[未知 key](./configuration.md#unknown-properties) 一样让启动失败，但只改名是不够的：旧布局可能把令牌吊销和 API key 保存在与现在读取的前缀不同的前缀下，而没人读取的吊销会让被它吊销的令牌再次通过。先算出[哪些 key 族会移动](./upgrading.md#from-8-0-0-alpha-2)，把令牌吊销和 API key 复制到新的 key 下（`COPY`，或保留过期时间的 `RENAME`），把 `cosec.key-prefix` 设为快照文档所在的前缀，然后移除旧配置项。
 
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 

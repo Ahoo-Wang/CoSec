@@ -205,6 +205,7 @@ class CoSecPipelineAutoConfiguration {
                 attributeTimeout = authorizationProperties.attributes.timeout.toKotlinDuration(),
                 rateLimitTimeout = authorizationProperties.rateLimit.timeout.toKotlinDuration(),
                 allowQueryToken = pipelineProperties.allowQueryToken,
+                allowCookieToken = pipelineProperties.allowCookieToken,
                 apiKeyHeader = pipelineProperties.apiKeyHeader,
                 traceLevel = pipelineProperties.traceLevel,
             ),
