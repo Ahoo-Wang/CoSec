@@ -12,11 +12,9 @@
  */
 
 dependencies {
-    // Guava: the modules whose main code uses it declare it; the root build adds it to none.
-    implementation("com.google.guava:guava")
     api(project(":login"))
     api("org.springframework.data:spring-data-redis")
     api("me.zhyd.oauth:JustAuth")
-    testImplementation("io.projectreactor:reactor-test")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("io.lettuce:lettuce-core")
 }

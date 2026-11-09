@@ -174,9 +174,9 @@ CoSec does not ship a login endpoint. You check the credentials, CoSec turns the
 
 1. Implement `Authentication<C>` for your credential type `C`, and declare it as a bean. It answers a `TokenSubject`
    (`me.ahoo.cosec.login.token`), what the token will say. The starter registers every `Authentication` bean by the
-   credential type it supports.
-2. Call `TokenCompositeAuthentication.authenticateAsToken(credentials)` from your endpoint. It picks the
-   `Authentication` for the credentials' type (or a supertype), and returns a `Mono<CompositeToken>` with the
+   credential type it supports, in a registry of that application context.
+2. Call `TokenCompositeAuthentication.authenticateAsToken(credentials)`, a suspending function, from your endpoint. It
+   picks the `Authentication` for the credentials' type (or a supertype), and returns a `CompositeToken` with the
    `accessToken` and `refreshToken`.
 
 ```kotlin
@@ -187,18 +187,26 @@ class PasswordAuthentication(private val users: UserService) :
     Authentication<PasswordCredentials> {
     override val supportCredentials = PasswordCredentials::class.java
 
-    override fun authenticate(credentials: PasswordCredentials): Mono<TokenSubject> =
-        users.verify(credentials.username, credentials.password)
-            .map { user -> TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order")) }
+    override suspend fun authenticate(credentials: PasswordCredentials): TokenSubject {
+        val user = users.verify(credentials.username, credentials.password)
+        return TokenSubject(id = user.id, app = "order", roles = user.rolesIn("order"))
+    }
 }
 
 @RestController
 class LoginController(private val authentication: TokenCompositeAuthentication) {
     @PostMapping("/auth/login")
-    fun login(@RequestBody credentials: PasswordCredentials): Mono<out CompositeToken> =
+    suspend fun login(@RequestBody credentials: PasswordCredentials): CompositeToken =
         authentication.authenticateAsToken(credentials)
 }
 ```
+
+`authenticate` refuses a login by throwing: it has no empty answer, and no token is issued for a login that failed or
+whose caller has gone. It runs on the caller's thread, an event loop in WebFlux, so an implementation over a blocking
+client (a JDBC user table, say) moves that call to a bounded dispatcher of its own with
+`runInterruptible(myDispatcher) { ... }`. Spring runs a `suspend` controller function in both WebFlux and Spring MVC.
+MVC needs `kotlinx-coroutines-reactor` on the classpath for it; without it, call `runBlocking { ... }` on the request
+thread.
 
 `Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
 and `TokenConverter` are in `me.ahoo.cosec.login.token`), from `cosec-login`, which the starter brings; they are not
@@ -233,7 +241,7 @@ data class RefreshCredentials(override val accessToken: String, override val ref
     RefreshTokenCredentials
 
 @PostMapping("/auth/refresh")
-fun refresh(@RequestBody credentials: RefreshCredentials): Mono<out CompositeToken> =
+suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToken =
     authentication.authenticateAsToken(credentials)
 ```
 
@@ -394,7 +402,7 @@ document a request reads, and conditions read it as `subject.tenant` or `scope.t
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
 To let a user switch tenants, extend `AbstractSwitchTenantAuthentication` and implement
-`switchTenant(targetTenantId, previous)`, with `previous` the `SecurityContext` of the request asking: check that the user belongs to the target tenant, and answer what it
+`switchTenant(targetTenantId, previous)`, with `previous` the `SecurityContext` of the request asking: check that the user belongs to the target tenant (throw to refuse), and answer what it
 holds there, looked up for that tenant: a `TenantMembership` of its roles, policies and attributes in the target
 tenant, or `TenantMembership.fromProvider()` when your `MembershipProvider` answers for it. Then issue a new token for
 the `TokenSubject` `authenticate` returns. It has the previous principal's id, the target tenant and only that
@@ -436,7 +444,7 @@ With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](ht
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 
-1. Send the user to `socialAuthentication.authorizeUrl("<name>")`. The URL carries a fresh OAuth `state`, 128
+1. Send the user to `socialAuthentication.authorizeUrl("<name>")`, a suspending function. The URL carries a fresh OAuth `state`, 128
    random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since the state must be
    unpredictable and those ids need not be. The state is kept in Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
@@ -453,10 +461,10 @@ providers. Configure each provider under `cosec.authentication.login.social.regi
    the user id, `gender` to `UNKNOWN` and `rawInfo` empty. A success response without a user id, or without a user, is
    refused with a `SocialAuthenticationException`.
 
-Both steps block their thread. `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache,
-and the callback's `authenticateAsToken` calls the provider over JustAuth's blocking HTTP. Call them off the event
-loop: in WebFlux, `Mono.fromCallable { socialAuthentication.authorizeUrl("<name>") }` and the callback's `Mono`, each
-with `.subscribeOn(Schedulers.boundedElastic())`.
+JustAuth blocks: `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache, and the callback
+calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, of at most 16 threads, so
+you can call them from any thread, an event loop included. A provider that hangs delays only its own logins, and
+cancelling a request interrupts its call.
 
 ## Behind a gateway
 

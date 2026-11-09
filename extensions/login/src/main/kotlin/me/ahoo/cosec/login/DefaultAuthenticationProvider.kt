@@ -15,13 +15,15 @@ package me.ahoo.cosec.login
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
 
+private val log = KotlinLogging.logger {}
+
 /**
- * Default Authentication Provider .
+ * The registry of [Authentication]s. One instance per application: the starter assembles one for each Spring context,
+ * so what one context registers or closes never reaches another (#1222).
  *
  * @author ahoo wang
  */
-object DefaultAuthenticationProvider : AuthenticationProvider {
-    private val log = KotlinLogging.logger {}
+class DefaultAuthenticationProvider : AuthenticationProvider {
     private val authenticationMaps:
         MutableMap<Class<out Credentials>, Authentication<out Credentials>> = ConcurrentHashMap()
 

@@ -1,13 +1,13 @@
 public final class me/ahoo/cosec/social/DirectSocialUserPrincipalConverter : me/ahoo/cosec/social/SocialUserPrincipalConverter {
 	public fun <init> (Ljava/lang/String;)V
-	public fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;)Lreactor/core/publisher/Mono;
+	public fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/social/SocialAuthentication : me/ahoo/cosec/login/Authentication {
-	public fun <init> (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;)V
-	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;)Lreactor/core/publisher/Mono;
-	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
-	public final fun authorizeUrl (Ljava/lang/String;)Ljava/lang/String;
+	public fun <init> (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;Lme/ahoo/cosec/social/SocialProviderManager;)V
+	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun authorizeUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getSupportCredentials ()Ljava/lang/Class;
 }
 
@@ -19,8 +19,8 @@ public final class me/ahoo/cosec/social/SocialAuthenticationException : me/ahoo/
 }
 
 public abstract interface class me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public abstract fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
-	public abstract fun authorizeUrl ()Ljava/lang/String;
+	public abstract fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun authorizeUrl (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun getName ()Ljava/lang/String;
 }
 
@@ -29,7 +29,7 @@ public abstract interface class me/ahoo/cosec/social/SocialCredentials : me/ahoo
 }
 
 public final class me/ahoo/cosec/social/SocialProviderManager {
-	public static final field INSTANCE Lme/ahoo/cosec/social/SocialProviderManager;
+	public fun <init> ()V
 	public final fun get (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
 	public final fun getRequired (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
 	public final fun register (Ljava/lang/String;Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
@@ -77,7 +77,7 @@ public abstract interface class me/ahoo/cosec/social/SocialUserPrincipalConverte
 	public static final field Companion Lme/ahoo/cosec/social/SocialUserPrincipalConverter$Companion;
 	public static final field OAUTH_PROVIDER Ljava/lang/String;
 	public static final field OAUTH_USER_ID Ljava/lang/String;
-	public abstract fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;)Lreactor/core/publisher/Mono;
+	public abstract fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/social/SocialUserPrincipalConverter$Companion {
@@ -91,9 +91,10 @@ public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/o
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;)V
-	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;)Lreactor/core/publisher/Mono;
-	public fun authorizeUrl ()Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;I)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun authorizeUrl (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getName ()Ljava/lang/String;
 	public final fun name ()Ljava/lang/String;
 }

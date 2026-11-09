@@ -69,6 +69,7 @@ class CoSecSocialAuthenticationAutoConfiguration(
     @Bean
     @ConditionalOnMissingBean
     fun socialProviderManager(authStateCache: AuthStateCache): SocialProviderManager {
+        val socialProviderManager = SocialProviderManager()
         for ((key, provider) in socialAuthenticationProperties.registration) {
             val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
@@ -78,9 +79,9 @@ class CoSecSocialAuthenticationAutoConfiguration(
             val authConfig = provider.toJustAuthConfig()
             val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, authConfig, authStateCache)
             val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest)
-            SocialProviderManager.register(authProvider)
+            socialProviderManager.register(authProvider)
         }
-        return SocialProviderManager
+        return socialProviderManager
     }
 
     @Bean
@@ -92,9 +93,10 @@ class CoSecSocialAuthenticationAutoConfiguration(
     @Bean
     @ConditionalOnMissingBean
     fun socialAuthentication(
-        principalConverter: SocialUserPrincipalConverter
+        principalConverter: SocialUserPrincipalConverter,
+        socialProviderManager: SocialProviderManager,
     ): SocialAuthentication {
-        return SocialAuthentication(principalConverter)
+        return SocialAuthentication(principalConverter, socialProviderManager)
     }
 }
 

@@ -1,7 +1,7 @@
 # AGENTS.md
 
 CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 21, Spring Boot 4, Kotlin coroutines (Project
-Reactor only at the edges, in the extensions and in `cosec-login`'s API), built with Gradle (Kotlin DSL). This file is
+Reactor only at the edges and in the host), built with Gradle (Kotlin DSL). This file is
 for agents and contributors **changing** CoSec. To **use** CoSec, see `skills/` and https://cosec.ahoo.me.
 Branching, reviews and releases: `CONTRIBUTING.md`.
 `main` is the 8.0 line; `7.x` and `release/6.1.x` take only backported security (and, on `7.x`, critical) fixes, which
@@ -95,7 +95,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library and `spi` adds coroutines;
   `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; only `cosid` and the
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
-  (Reactor only in edge, extensions and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
+  (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports and `CoSecJson`;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
@@ -140,8 +140,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
     or Reactive Streams bridges or a Redis client, or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
   - Every other module adapts one technology: `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` (HTTP bridges),
     `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits),
-    `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`; the one module that keeps Reactor in
-    its API), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
+    `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
     `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps),
     `cosec-cosid` (an `IdGenerator` over CosId 5). Only `cosec-cosid` and the starter, which wires it, may reference
     or bring CosId (`DependencyRules.COSID_OWNERS`).
@@ -236,7 +235,7 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 - Every source file starts with the header in `config/detekt/license.template`; detekt fails otherwise.
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
-  Gateway bridges, in their convenience extensions and in `cosec-login`'s 7.x login contracts.
+  Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
   concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the

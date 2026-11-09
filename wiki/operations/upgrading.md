@@ -52,6 +52,18 @@ and have to be provisioned again.
 - **`AttributeRequest` carries the `tenant`**, and `Subject.tenantId` is removed: a stage-A provider reads `request.tenant`.
 - **`SwitchTenantCredentials` carries the `context`** (`SecurityContext`) of the request instead of a `principal`, and
   `switchTenant` receives it. The new token keeps the previous token's app.
+- **Login is suspending, and `cosec-login` no longer brings Reactor** (batch R7c). `Authentication.authenticate`,
+  `TokenCompositeAuthentication.authenticateAsToken`, `AbstractSwitchTenantAuthentication.switchTenant`,
+  `SocialAuthenticationProvider.authorizeUrl` and `authenticate`, `SocialAuthentication.authorizeUrl` and
+  `SocialUserPrincipalConverter.convert` are `suspend` functions that return the value instead of a `Mono`. To migrate:
+  make the override `suspend` and return the value; await a Reactor client with `awaitSingle()`; make the controller
+  function `suspend`. A `Mono.empty()` that refused a login becomes an exception, since there is no empty answer. A module
+  that compiled against Reactor through `cosec-login` declares it itself. `cosec-social` no longer brings Guava.
+- **`DefaultAuthenticationProvider` and `SocialProviderManager` are classes**, and the starter assembles one of each per
+  application context (#1222). Replace a call on the old singletons with the `AuthenticationProvider` or
+  `SocialProviderManager` bean; `SocialAuthentication` takes the manager in its constructor.
+- **`JustAuthProvider` runs on its own dispatcher**, at most 16 threads per provider, so social login no longer needs
+  `Schedulers.boundedElastic()`.
 - **Libraries export what their public classes implement** (`cocache`, `kafka`, `ip2region`, `micrometer`, `opentelemetry`):
   you may drop a dependency you added only to compile against them.
 
@@ -1241,6 +1253,8 @@ Code that uses any of these no longer compiles or is no longer called.
 | `me.ahoo.cosec.limiter.RateLimiter` and its `LocalRateLimiter`, `RedisRateLimiter` (`cosec-cocache`) | `me.ahoo.cosec.spi.ratelimit.RateLimiter`, a suspending SPI; the starter registers its `LocalRateLimiter` or `ReactiveRedisRateLimiter` ([Rate limiting](../policies/rate-limiting.md)). `RateLimit` and `RateLimitResult` remain. |
 | `Jwts.toPrincipal(String)`, `Jwts.decode`, `Jwts.verifyTimeClaims` | None: `Jwts` is internal to `cosec-jwt`. Turn a token into a principal with `TokenVerifier.verify`, which checks the signature. |
 | `PrincipalConverter`, `TokenVerifier.toPrincipal` | `TokenVerifier.verify`. |
+| `Authentication.authenticate`, `TokenCompositeAuthentication.authenticateAsToken`, the social providers: `Mono<...>` | Suspending functions that return the value; a failed login throws ([Logging in](../integration/authentication.md#logging-in)). |
+| `DefaultAuthenticationProvider` and `SocialProviderManager` as objects | Classes, one instance per application context: inject the `AuthenticationProvider` or `SocialProviderManager` bean. |
 | `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
 | Filters `ReactiveAuthorizationFilter`, `AuthorizationFilter` (servlet), `AuthorizationGatewayFilter`, and their constructors taking an `Authorization` | `PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`, created by the starter. |
 | `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |

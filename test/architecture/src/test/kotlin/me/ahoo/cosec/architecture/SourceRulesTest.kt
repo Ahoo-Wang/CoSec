@@ -37,8 +37,8 @@ class SourceRulesTest {
             ClassFileImporter().withImportOption(ImportOption.DoNotIncludeTests()).importPackages("me.ahoo.cosec")
         }
 
-        /** Reactor stays at the bridges (§5): edge, extensions and the host. */
-        private val NO_REACTOR = setOf("api", "core", "backends")
+        /** Reactor stays at the bridges: the edge and the host. Login is suspending like every other extension. */
+        private val NO_REACTOR = setOf("api", "core", "backends", "extensions")
 
         /** Reactor a backend takes from its own client, with the reason: the non-blocking Redis reads return it. */
         private val REACTOR_TECHNOLOGY: Map<String, String> = mapOf(

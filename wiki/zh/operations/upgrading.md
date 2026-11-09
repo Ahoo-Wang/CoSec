@@ -22,6 +22,9 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **`sub` 以 `(` 开头的令牌无效**（`IDN-12`），没有 `sub` 或 `jti` 的令牌也无效：令牌不能使用 CoSec 自己的 id，尤其是匿名主体 `(0)`。
 - **`AttributeRequest` 携带 `tenant`**，`Subject.tenantId` 已删除：A 阶段提供者读取 `request.tenant`。
 - **`SwitchTenantCredentials` 携带请求的 `context`（`SecurityContext`）**，不再是 `principal`，`switchTenant` 接收它。新令牌保留原令牌的应用。
+- **登录改为挂起函数，`cosec-login` 不再引入 Reactor**（批次 R7c）。`Authentication.authenticate`、`TokenCompositeAuthentication.authenticateAsToken`、`AbstractSwitchTenantAuthentication.switchTenant`、`SocialAuthenticationProvider.authorizeUrl` 和 `authenticate`、`SocialAuthentication.authorizeUrl` 以及 `SocialUserPrincipalConverter.convert` 都是 `suspend` 函数，直接返回值而不是 `Mono`。迁移方法：把重写改成 `suspend` 并返回值；用 `awaitSingle()` 等待 Reactor 客户端；把控制器函数改成 `suspend`。用 `Mono.empty()` 拒绝登录的代码要改为抛出异常，因为不再有“空”的回答。通过 `cosec-login` 编译 Reactor 的模块需要自行声明它。`cosec-social` 不再引入 Guava。
+- **`DefaultAuthenticationProvider` 和 `SocialProviderManager` 改为类**，starter 为每个应用上下文各装配一个（#1222）。对旧单例的调用请换成 `AuthenticationProvider` 或 `SocialProviderManager` Bean；`SocialAuthentication` 通过构造函数接收管理器。
+- **`JustAuthProvider` 运行在自己的调度器上**，每个提供方最多 16 个线程，社交登录不再需要 `Schedulers.boundedElastic()`。
 - **库模块导出其公共类实现的类型**（`cocache`、`kafka`、`ip2region`、`micrometer`、`opentelemetry`）：只为编译它们而添加的依赖可以去掉。
 
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
@@ -713,6 +716,8 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `me.ahoo.cosec.limiter.RateLimiter` 及其 `LocalRateLimiter`、`RedisRateLimiter`（`cosec-cocache`） | 挂起的 SPI `me.ahoo.cosec.spi.ratelimit.RateLimiter`；starter 注册它的 `LocalRateLimiter` 或 `ReactiveRedisRateLimiter`（[限流](../policies/rate-limiting.md)）。`RateLimit` 和 `RateLimitResult` 保留。 |
 | `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用会校验签名的 `TokenVerifier.verify` 把令牌变成主体。 |
 | `PrincipalConverter`、`TokenVerifier.toPrincipal` | `TokenVerifier.verify`。 |
+| `Authentication.authenticate`、`TokenCompositeAuthentication.authenticateAsToken`、社交登录提供方：`Mono<...>` | 直接返回值的挂起函数；登录失败时抛出异常（[登录](../integration/authentication.md#logging-in)）。 |
+| 作为 object 的 `DefaultAuthenticationProvider` 和 `SocialProviderManager` | 改为类，每个应用上下文一个实例：请注入 `AuthenticationProvider` 或 `SocialProviderManager` Bean。 |
 | `AuthorizationChecker.check(...)`：`Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`，挂起函数；`cosec-webflux` 提供 `Mono<Boolean>` 形式，`cosec-webmvc` 提供阻塞形式（[代码中的检查](../integration/checks.md)）。 |
 | 过滤器 `ReactiveAuthorizationFilter`、`AuthorizationFilter`（servlet）、`AuthorizationGatewayFilter`，以及它们接受 `Authorization` 的构造器 | 由 starter 创建的 `PipelineWebFilter`、`PipelineServletFilter`、`PipelineGatewayFilter`。 |
 | `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | CoSec 网关之后的 `cosec.pipeline.mode=gateway`（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。8.0 的过滤器在每个放行的请求上放入安全上下文。 |

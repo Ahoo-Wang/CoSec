@@ -288,7 +288,7 @@ public final class me/ahoo/cosec/spring/boot/starter/authentication/LoginPropert
 public class me/ahoo/cosec/spring/boot/starter/authentication/social/CoSecSocialAuthenticationAutoConfiguration {
 	public fun <init> (Lme/ahoo/cosec/spring/boot/starter/authentication/social/SocialAuthenticationProperties;)V
 	public fun authStateCache (Lorg/springframework/data/redis/core/StringRedisTemplate;Lme/ahoo/cosec/spring/boot/starter/CoSecProperties;)Lme/zhyd/oauth/cache/AuthStateCache;
-	public fun socialAuthentication (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;)Lme/ahoo/cosec/social/SocialAuthentication;
+	public fun socialAuthentication (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;Lme/ahoo/cosec/social/SocialProviderManager;)Lme/ahoo/cosec/social/SocialAuthentication;
 	public fun socialProviderManager (Lme/zhyd/oauth/cache/AuthStateCache;)Lme/ahoo/cosec/social/SocialProviderManager;
 	public fun socialUserPrincipalConverter (Lme/ahoo/cosec/spring/boot/starter/pipeline/RuntimeAuthorizationProperties;)Lme/ahoo/cosec/social/SocialUserPrincipalConverter;
 }
