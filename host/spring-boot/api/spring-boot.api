@@ -808,7 +808,7 @@ public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegration
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration$Kafka {
 	public fun <init> ()V
-	public fun cosecKafkaAuditListener (Lorg/springframework/kafka/core/KafkaOperations;Lorg/springframework/core/env/Environment;)Lme/ahoo/cosec/kafka/KafkaAuditListener;
+	public fun cosecKafkaAuditListener (Lorg/springframework/kafka/core/KafkaOperations;Lorg/springframework/core/env/Environment;Lme/ahoo/cosec/spring/boot/starter/pipeline/ListenerProperties;)Lme/ahoo/cosec/kafka/KafkaAuditListener;
 }
 
 public class me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration$Metrics {

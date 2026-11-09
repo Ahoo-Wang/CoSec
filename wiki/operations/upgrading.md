@@ -15,6 +15,30 @@ observability. This page is the single home of migration steps. Release notes fo
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
 sets, its approved changes and a document that spells a day of the week another way (below).
 
+- **The audit record says what decided** (batch R7a, #1237). `authorization.source` is now
+  `{ via, document, policy, statement }` ([Audit events](./observability.md#audit-events)): the old `type` recorded a
+  tenant's role binding and a boundary as `GLOBAL_POLICY`. A boundary refusal, which had the source `NONE` and no
+  `binding`, now has `via` `BOUNDARY`, the boundary as `policy`, and `binding` `boundary:<tenantId>`. Consumers of the
+  audit log and of the Kafka topic change with it:
+
+  | Before | Now |
+  |---|---|
+  | `source.type` `BLACKLIST` | `source.via` `BUILTIN` |
+  | `source.type` `ROOT` | `source.via` `BINDING`, `source.policy` `cosec:root` (and `breakGlass: true` for a break-glass permit) |
+  | `source.type` `ROLE_PERMISSION` | `source.via` `BINDING`, `source.document` `APP` |
+  | `source.type` `PRINCIPAL_POLICY` | `source.via` `ATTACHMENT` |
+  | `source.type` `GLOBAL_POLICY` | `source.via` `BINDING`, `source.document` `PLATFORM` or `TENANT` |
+  | `source.policy.id` | `source.policy` |
+  | `source.policy.statement` | `source.statement` |
+  | `source.policy.type`, `source.role`, `principal.policies`, `request.device.userAgent` | gone: `type` only repeated `source.type`, the others were always empty |
+
+  In code: `AuditSourceType`, `AuditPolicy`, `AuditRole`, `AuditPermission`, their data classes, `PolicyType` and
+  `AuditReasonCode.REGEX_TIMEOUT` are gone, `AuditVia` and `AuditDocument` are new, and the attribute keys
+  `AuditTrace.TRACE_ID_ATTRIBUTE_KEY` and `SPAN_ID_ATTRIBUTE_KEY`, which nothing read, are removed.
+- **Shutdown waits for the Kafka audit** (batch R7a, #1250). `KafkaAuditListener` waits up to
+  `cosec.observability.listener.drain-timeout` for the sends it still holds and the broker's answers, so the producer is
+  closed after them. A shutdown can take that timeout twice, once for the listeners' queues and once here: check the
+  pod's termination grace period.
 - **The `authorization` cookie is read only on request** (batch R6, `PIP-13`). A request whose only credential is that
   cookie is now anonymous. A browser sends a cookie on its own, on a cross-site request too, so reading it by default
   made every deployment answer for CSRF. Send the token in the `Authorization` header, or set
@@ -1108,7 +1132,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `BlacklistChecker` | A `BlacklistSource` behind an `AttributeProvider` bean (`BlacklistAttributeProvider`). |
 | `RequestAttributesAppender`, `GatewayRouteRequestAttributesAppender` | `AttributeProvider`. |
 | `SimpleSecurityContext`, the extension `CoSecPrincipal.tenant` | None: the pipeline makes the request's `SecurityContext`. In a test, mock or implement the interface; a principal's tenant is on `TenantCapable`. |
-| `KafkaAuditEventSink` | `KafkaAuditListener`, a `DecisionListener` the starter registers when `cosec-kafka` is on the classpath ([Observability](./observability.md)). The record's key and value are the same. |
+| `KafkaAuditEventSink` | `KafkaAuditListener`, a `DecisionListener` the starter registers when `cosec-kafka` is on the classpath ([Observability](./observability.md)). The record's key is the same, and its value is the audit event ([Observability changes](#observability-changes)). |
 | `PolicyRepository`, `AppRolePermissionRepository`, the Redis repositories and caches, `SnapshotPublisher`, `RedisSnapshotPublisher`, `PolicyHistory`, `RedisPolicyRevisionStore`, writes to `AppPermissionCache`/`RolePermissionCache` | The control plane (library or HTTP API) for writes; `cosec-migrate publish` for the first ones. |
 | `LocalPolicyInitializer` and `init-repository`/`force-refresh` | `cosec-migrate convert` and `publish`, or the control plane's declarative `apply`. |
 | `CoSecExplainEndpoint` (`cosecExplain` actuator), `AuthorizationExplainer`, `ExplainWarningCode` | The control plane's `explain` (authorized, and for any revision); see [Checks](../integration/checks.md). |
@@ -1227,11 +1251,12 @@ Two settings changed during the 8.0 previews:
   errors, and `kind` says which (`DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED`, `ERROR`). New
   fields: `snapshotVersion` (the revisions read), `binding` (the binding the deciding statement applied through, or
   `attached:<policy>`), `breakGlass`. New values: decision `INDETERMINATE`; reason codes `INDETERMINATE`,
-  `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`. The source types keep their 7.x names:
-  a binding of the platform or a tenant document is `GLOBAL_POLICY`, an attachment `PRINCIPAL_POLICY`, a role binding
-  of an app document `ROLE_PERMISSION`, the built-in blacklist rule `BLACKLIST`. `elapsedNanos` now covers the whole
-  pipeline (authentication, attributes, rate limits), not only the authorization. A 7.x `AuditEventSink` keeps working
-  without changes.
+  `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`. `authorization.source` says what decided
+  in terms of the binding model: `via`, `document`, `policy` and `statement` replace the source `type`, `policy` and
+  `role`, and `principal.policies` and `request.device.userAgent` are gone
+  ([Audit events](./observability.md#audit-events)). `elapsedNanos` now covers the whole pipeline (authentication,
+  attributes, rate limits), not only the authorization. An `AuditEventSink` still receives the flat record; one that
+  reads those fields changes with them.
 - **Metrics**: the `cosec.authorization` timer covers the whole pipeline too. Its `source` tag is now `binding`,
   `attachment`, `builtin`, `boundary`, `scope` or `none` (7.x: `global_policy`, `principal_policy`,
   `role_permission`, `root`, `blacklist`, `none`, `unknown`); `result` adds `indeterminate`, `bad_request` and

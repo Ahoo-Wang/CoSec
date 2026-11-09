@@ -42,7 +42,9 @@ starter 注册的监听器：
 - **`REQUIRED` 监听器应按事件的 `id` 保持幂等**：超时的写入可能其实已经成功。
 - **关闭时**，监听器停止接收事件，已在队列中的事件仍会继续投递，最多
   [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后剩下的被丢弃，并以 `WARN` 记录
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`
+  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`。随后 Kafka 审计监听器
+  最多再用同样长的时间，等待它手中的发送以及 broker 对这些发送的应答，然后才关闭 producer。到达这个上限时，排队的发送
+  被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...`
 - **求值追踪。** `DecisionEvent` 带有 `evaluationTrace`，即引擎查看过的内容，深度由
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline) 决定：`off`（默认，没有追踪，也没有开销）、`full`
   （决策到达的每一层的每条规则，包括决定性规则之后的规则）或 `exhaustive`（还包括决策没有到达的层）。在 `off` 时，以及
@@ -59,13 +61,13 @@ starter 注册的监听器：
 |---|---|
 | `eventId`、`timestamp`、`tenantId` | 事件本身；`tenantId` 是主体的租户 |
 | `kind` | `DECIDED`、`BAD_REQUEST`（`400`）、`AUTHENTICATION_UNAVAILABLE`、`CANCELLED` 或 `ERROR`（`500`） |
-| `principal` | `id`、`authenticated`、`roles`（解析出的作用域中的角色）；`policies` 总是空的 |
+| `principal` | `id`、`authenticated`、`roles`（解析出的作用域中的角色） |
 | `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`device.id` |
 | `authorization.decision`、`authorization.reasonCode` | 见下表 |
 | `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | 整个管道，从请求开始到得出结果 |
-| `authorization.source` | `type`，以及做出决定的 `policy`（`id`、`type`、`statement.index`、`statement.name`） |
-| `binding` | 做出决定的语句通过什么生效：绑定 id、`attached:<policyId>`、`builtin`（黑名单）或 `boundary:<tenantId>` |
+| `authorization.source` | 是什么做出了决定：`via`、`document`、`policy`（策略 id）和 `statement`（`index`、`name`）；见下面第二张表 |
+| `binding` | 做出决定的语句通过什么生效：绑定 id（角色派生的绑定为 `role:<roleId>@<app>:<permission>`）、`attached:<policyId>`、`builtin`（黑名单）或 `boundary:<tenantId>` |
 | `snapshotVersion` | 决策读取的修订：`platform`，以及读取了时的 `app` 和 `tenant` |
 | `breakGlass` | 放行是否来自 break-glass 绑定 |
 | `trace` | 追踪生效时请求 span 的 `traceId` 和 `spanId` |
@@ -84,9 +86,15 @@ starter 注册的监听器：
 | 其他任何 `503`，以及被取消的请求 | `INDETERMINATE` | `INDETERMINATE` |
 | `500` | `ERROR` | `ERROR` |
 
-`authorization.source.type` 说明做出决定的语句来自哪里：`BLACKLIST`（内置黑名单）、`ROOT`（`cosec:root` 的 break-glass
-绑定）、`ROLE_PERMISSION`（应用文档中的绑定）、`PRINCIPAL_POLICY`（附加策略）、`GLOBAL_POLICY`（平台文档或租户文档中
-的绑定，或边界），没有语句做出决定时为 `NONE`。
+`authorization.source.via` 说明做出决定的内容如何生效，`document` 说明它在哪个快照文档中：
+
+| `via` | `document` | 含义 |
+|---|---|---|
+| `BINDING` | `PLATFORM`、`APP` 或 `TENANT` | 该文档中的绑定，包括角色派生的绑定；`binding` 是它的 id。break-glass 放行是 `cosec:root` 的绑定，并带 `breakGlass: true` |
+| `ATTACHMENT` | `null` | 通过主体的成员关系附加的策略 |
+| `BUILTIN` | `null` | 内置黑名单 |
+| `BOUNDARY` | `PLATFORM` | 租户的平台边界拒绝了一次放行。`policy` 是该边界，`statement` 为 `null`，因为它没有语句匹配 |
+| `NONE` | `null` | 没有语句做出决定：没有任何允许、作用域被拒绝，或没有得出决策。`policy` 和 `statement` 为 `null` |
 
 ### 审计日志与 Kafka {#audit-log-and-kafka}
 

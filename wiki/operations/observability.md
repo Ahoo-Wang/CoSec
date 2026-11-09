@@ -47,7 +47,10 @@ A bean that is both is registered once, as the `DecisionListener` it is.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
 - **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
   [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). What is left then is dropped, with
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`.
+  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`. The Kafka
+  audit listener then gets up to the same timeout for the sends it still holds and the broker's answers to them, before
+  the producer is closed. At that bound its queued sends are dropped and a send in progress is interrupted, with
+  `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...` at `WARN`.
 - **The evaluation trace.** A `DecisionEvent` carries `evaluationTrace`, what the engine looked at, to the depth of
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline): `off` (the default, no trace and no cost), `full`
   (every rule of each layer the decision reaches, including those after the deciding one) or `exhaustive` (also the
@@ -66,13 +69,13 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 |---|---|
 | `eventId`, `timestamp`, `tenantId` | the event; `tenantId` is the principal's tenant |
 | `kind` | `DECIDED`, `BAD_REQUEST` (`400`), `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR` (`500`) |
-| `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope); `policies` is always empty |
+| `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope) |
 | `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `device.id` |
 | `authorization.decision`, `authorization.reasonCode` | see the table below |
 | `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
-| `authorization.source` | `type`, and the deciding `policy` (`id`, `type`, `statement.index`, `statement.name`) |
-| `binding` | how the deciding statement applied: a binding id, `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
+| `authorization.source` | what decided: `via`, `document`, `policy` (its id) and `statement` (`index`, `name`); see the second table below |
+| `binding` | how the deciding statement applied: a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
 | `snapshotVersion` | the revisions the decision read: `platform`, and `app` and `tenant` when it read them |
 | `breakGlass` | whether the permit came through a break-glass binding |
 | `trace` | `traceId` and `spanId` of the request's span, when tracing is active |
@@ -91,10 +94,15 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |
 | `500` | `ERROR` | `ERROR` |
 
-`authorization.source.type` says where the deciding statement came from: `BLACKLIST` (the built-in blacklist),
-`ROOT` (a break-glass binding of `cosec:root`), `ROLE_PERMISSION` (a binding of an app document),
-`PRINCIPAL_POLICY` (an attached policy), `GLOBAL_POLICY` (a binding of the platform or a tenant document, or a
-boundary), or `NONE` when no statement decided.
+`authorization.source.via` says how what decided came to apply, and `document` which snapshot document holds it:
+
+| `via` | `document` | Meaning |
+|---|---|---|
+| `BINDING` | `PLATFORM`, `APP` or `TENANT` | a binding of that document, a role's derived binding included; `binding` is its id. A break-glass permit is a binding of `cosec:root`, with `breakGlass: true` |
+| `ATTACHMENT` | `null` | a policy attached through the principal's memberships |
+| `BUILTIN` | `null` | the built-in blacklist |
+| `BOUNDARY` | `PLATFORM` | the tenant's platform boundary refused a permit. `policy` is the boundary and `statement` is `null`, since none of its statements matched |
+| `NONE` | `null` | no statement decided: nothing allowed the request, its scope was rejected, or no decision was made. `policy` and `statement` are `null` |
 
 ### Audit log and Kafka
 

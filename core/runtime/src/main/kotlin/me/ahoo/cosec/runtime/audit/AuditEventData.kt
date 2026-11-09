@@ -16,31 +16,26 @@ package me.ahoo.cosec.runtime.audit
 import me.ahoo.cosec.api.audit.AuditAuthorization
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDevice
+import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditPermission
-import me.ahoo.cosec.api.audit.AuditPolicy
 import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.audit.AuditRole
 import me.ahoo.cosec.api.audit.AuditSnapshotVersion
 import me.ahoo.cosec.api.audit.AuditSource
-import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.api.audit.AuditStatement
 import me.ahoo.cosec.api.audit.AuditTrace
-import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.audit.AuditVia
 import java.time.Instant
 
 data class AuditPrincipalData(
     override val id: String,
     override val authenticated: Boolean,
     override val roles: Set<String>,
-    override val policies: Set<String>,
 ) : AuditPrincipal
 
 data class AuditDeviceData(
     override val id: String?,
-    override val userAgent: String?,
 ) : AuditDevice
 
 data class AuditRequestData(
@@ -59,26 +54,11 @@ data class AuditStatementData(
     override val name: String,
 ) : AuditStatement
 
-data class AuditPolicyData(
-    override val id: String,
-    override val type: PolicyType,
-    override val statement: AuditStatementData,
-) : AuditPolicy
-
-data class AuditPermissionData(
-    override val id: String,
-    override val name: String,
-) : AuditPermission
-
-data class AuditRoleData(
-    override val id: String,
-    override val permission: AuditPermissionData,
-) : AuditRole
-
 data class AuditSourceData(
-    override val type: AuditSourceType,
-    override val policy: AuditPolicyData? = null,
-    override val role: AuditRoleData? = null,
+    override val via: AuditVia,
+    override val document: AuditDocument? = null,
+    override val policy: String? = null,
+    override val statement: AuditStatementData? = null,
 ) : AuditSource
 
 data class AuditAuthorizationData(

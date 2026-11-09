@@ -35,7 +35,15 @@ public final class me/ahoo/cosec/api/audit/AuditDecision : java/lang/Enum {
 
 public abstract interface class me/ahoo/cosec/api/audit/AuditDevice {
 	public abstract fun getId ()Ljava/lang/String;
-	public abstract fun getUserAgent ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/api/audit/AuditDocument : java/lang/Enum {
+	public static final field APP Lme/ahoo/cosec/api/audit/AuditDocument;
+	public static final field PLATFORM Lme/ahoo/cosec/api/audit/AuditDocument;
+	public static final field TENANT Lme/ahoo/cosec/api/audit/AuditDocument;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/api/audit/AuditDocument;
+	public static fun values ()[Lme/ahoo/cosec/api/audit/AuditDocument;
 }
 
 public abstract interface class me/ahoo/cosec/api/audit/AuditEvent {
@@ -59,21 +67,9 @@ public final class me/ahoo/cosec/api/audit/AuditEvent$DefaultImpls {
 	public static fun getSnapshotVersion (Lme/ahoo/cosec/api/audit/AuditEvent;)Lme/ahoo/cosec/api/audit/AuditSnapshotVersion;
 }
 
-public abstract interface class me/ahoo/cosec/api/audit/AuditPermission {
-	public abstract fun getId ()Ljava/lang/String;
-	public abstract fun getName ()Ljava/lang/String;
-}
-
-public abstract interface class me/ahoo/cosec/api/audit/AuditPolicy {
-	public abstract fun getId ()Ljava/lang/String;
-	public abstract fun getStatement ()Lme/ahoo/cosec/api/audit/AuditStatement;
-	public abstract fun getType ()Lme/ahoo/cosec/api/policy/PolicyType;
-}
-
 public abstract interface class me/ahoo/cosec/api/audit/AuditPrincipal {
 	public abstract fun getAuthenticated ()Z
 	public abstract fun getId ()Ljava/lang/String;
-	public abstract fun getPolicies ()Ljava/util/Set;
 	public abstract fun getRoles ()Ljava/util/Set;
 }
 
@@ -86,7 +82,6 @@ public final class me/ahoo/cosec/api/audit/AuditReasonCode : java/lang/Enum {
 	public static final field IMPLICIT_DENY Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field INDETERMINATE Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field RATE_LIMITER_UNAVAILABLE Lme/ahoo/cosec/api/audit/AuditReasonCode;
-	public static final field REGEX_TIMEOUT Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field SCOPE_REJECTED Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field TOKEN_EXPIRED Lme/ahoo/cosec/api/audit/AuditReasonCode;
 	public static final field TOKEN_INVALID Lme/ahoo/cosec/api/audit/AuditReasonCode;
@@ -114,11 +109,6 @@ public final class me/ahoo/cosec/api/audit/AuditRequest$Companion {
 	public static final field ROUTE_ID_ATTRIBUTE_KEY Ljava/lang/String;
 }
 
-public abstract interface class me/ahoo/cosec/api/audit/AuditRole {
-	public abstract fun getId ()Ljava/lang/String;
-	public abstract fun getPermission ()Lme/ahoo/cosec/api/audit/AuditPermission;
-}
-
 public abstract interface class me/ahoo/cosec/api/audit/AuditSnapshotVersion {
 	public abstract fun getApp ()Ljava/lang/Long;
 	public abstract fun getPlatform ()J
@@ -126,22 +116,10 @@ public abstract interface class me/ahoo/cosec/api/audit/AuditSnapshotVersion {
 }
 
 public abstract interface class me/ahoo/cosec/api/audit/AuditSource {
-	public abstract fun getPolicy ()Lme/ahoo/cosec/api/audit/AuditPolicy;
-	public abstract fun getRole ()Lme/ahoo/cosec/api/audit/AuditRole;
-	public abstract fun getType ()Lme/ahoo/cosec/api/audit/AuditSourceType;
-}
-
-public final class me/ahoo/cosec/api/audit/AuditSourceType : java/lang/Enum {
-	public static final field BLACKLIST Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static final field GLOBAL_POLICY Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static final field NONE Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static final field PRINCIPAL_POLICY Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static final field ROLE_PERMISSION Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static final field ROOT Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static final field UNKNOWN Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public static fun values ()[Lme/ahoo/cosec/api/audit/AuditSourceType;
+	public abstract fun getDocument ()Lme/ahoo/cosec/api/audit/AuditDocument;
+	public abstract fun getPolicy ()Ljava/lang/String;
+	public abstract fun getStatement ()Lme/ahoo/cosec/api/audit/AuditStatement;
+	public abstract fun getVia ()Lme/ahoo/cosec/api/audit/AuditVia;
 }
 
 public abstract interface class me/ahoo/cosec/api/audit/AuditStatement {
@@ -150,16 +128,19 @@ public abstract interface class me/ahoo/cosec/api/audit/AuditStatement {
 }
 
 public abstract interface class me/ahoo/cosec/api/audit/AuditTrace {
-	public static final field Companion Lme/ahoo/cosec/api/audit/AuditTrace$Companion;
-	public static final field SPAN_ID_ATTRIBUTE_KEY Ljava/lang/String;
-	public static final field TRACE_ID_ATTRIBUTE_KEY Ljava/lang/String;
 	public abstract fun getSpanId ()Ljava/lang/String;
 	public abstract fun getTraceId ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/api/audit/AuditTrace$Companion {
-	public static final field SPAN_ID_ATTRIBUTE_KEY Ljava/lang/String;
-	public static final field TRACE_ID_ATTRIBUTE_KEY Ljava/lang/String;
+public final class me/ahoo/cosec/api/audit/AuditVia : java/lang/Enum {
+	public static final field ATTACHMENT Lme/ahoo/cosec/api/audit/AuditVia;
+	public static final field BINDING Lme/ahoo/cosec/api/audit/AuditVia;
+	public static final field BOUNDARY Lme/ahoo/cosec/api/audit/AuditVia;
+	public static final field BUILTIN Lme/ahoo/cosec/api/audit/AuditVia;
+	public static final field NONE Lme/ahoo/cosec/api/audit/AuditVia;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/api/audit/AuditVia;
+	public static fun values ()[Lme/ahoo/cosec/api/audit/AuditVia;
 }
 
 public abstract interface class me/ahoo/cosec/api/context/SecurityContext : me/ahoo/cosec/api/tenant/TenantCapable {
@@ -198,15 +179,6 @@ public abstract interface class me/ahoo/cosec/api/context/request/SpaceIdCapable
 
 public final class me/ahoo/cosec/api/context/request/SpaceIdCapable$Companion {
 	public static final field DEFAULT Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/api/policy/PolicyType : java/lang/Enum {
-	public static final field CUSTOM Lme/ahoo/cosec/api/policy/PolicyType;
-	public static final field GLOBAL Lme/ahoo/cosec/api/policy/PolicyType;
-	public static final field SYSTEM Lme/ahoo/cosec/api/policy/PolicyType;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/api/policy/PolicyType;
-	public static fun values ()[Lme/ahoo/cosec/api/policy/PolicyType;
 }
 
 public abstract interface class me/ahoo/cosec/api/principal/CoSecPrincipal : java/security/Principal, me/ahoo/cosec/api/principal/PolicyCapable, me/ahoo/cosec/api/principal/RoleCapable {

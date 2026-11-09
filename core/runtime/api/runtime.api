@@ -229,14 +229,12 @@ public final class me/ahoo/cosec/runtime/audit/AuditAuthorizationData : me/ahoo/
 }
 
 public final class me/ahoo/cosec/runtime/audit/AuditDeviceData : me/ahoo/cosec/api/audit/AuditDevice {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;)V
 	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/runtime/audit/AuditDeviceData;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditDeviceData;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditDeviceData;
+	public final fun copy (Ljava/lang/String;)Lme/ahoo/cosec/runtime/audit/AuditDeviceData;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditDeviceData;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditDeviceData;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun getId ()Ljava/lang/String;
-	public fun getUserAgent ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -295,47 +293,16 @@ public final class me/ahoo/cosec/runtime/audit/AuditListener$Companion {
 	public final fun of (Lme/ahoo/cosec/spi/audit/AuditEventSink;Ljava/lang/String;)Lme/ahoo/cosec/runtime/audit/AuditListener;
 }
 
-public final class me/ahoo/cosec/runtime/audit/AuditPermissionData : me/ahoo/cosec/api/audit/AuditPermission {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/runtime/audit/AuditPermissionData;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditPermissionData;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditPermissionData;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getId ()Ljava/lang/String;
-	public fun getName ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/audit/AuditPolicyData : me/ahoo/cosec/api/audit/AuditPolicy {
-	public fun <init> (Ljava/lang/String;Lme/ahoo/cosec/api/policy/PolicyType;Lme/ahoo/cosec/runtime/audit/AuditStatementData;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Lme/ahoo/cosec/api/policy/PolicyType;
-	public final fun component3 ()Lme/ahoo/cosec/runtime/audit/AuditStatementData;
-	public final fun copy (Ljava/lang/String;Lme/ahoo/cosec/api/policy/PolicyType;Lme/ahoo/cosec/runtime/audit/AuditStatementData;)Lme/ahoo/cosec/runtime/audit/AuditPolicyData;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditPolicyData;Ljava/lang/String;Lme/ahoo/cosec/api/policy/PolicyType;Lme/ahoo/cosec/runtime/audit/AuditStatementData;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditPolicyData;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getId ()Ljava/lang/String;
-	public synthetic fun getStatement ()Lme/ahoo/cosec/api/audit/AuditStatement;
-	public fun getStatement ()Lme/ahoo/cosec/runtime/audit/AuditStatementData;
-	public fun getType ()Lme/ahoo/cosec/api/policy/PolicyType;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class me/ahoo/cosec/runtime/audit/AuditPrincipalData : me/ahoo/cosec/api/audit/AuditPrincipal {
-	public fun <init> (Ljava/lang/String;ZLjava/util/Set;Ljava/util/Set;)V
+	public fun <init> (Ljava/lang/String;ZLjava/util/Set;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Z
 	public final fun component3 ()Ljava/util/Set;
-	public final fun component4 ()Ljava/util/Set;
-	public final fun copy (Ljava/lang/String;ZLjava/util/Set;Ljava/util/Set;)Lme/ahoo/cosec/runtime/audit/AuditPrincipalData;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditPrincipalData;Ljava/lang/String;ZLjava/util/Set;Ljava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditPrincipalData;
+	public final fun copy (Ljava/lang/String;ZLjava/util/Set;)Lme/ahoo/cosec/runtime/audit/AuditPrincipalData;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditPrincipalData;Ljava/lang/String;ZLjava/util/Set;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditPrincipalData;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun getAuthenticated ()Z
 	public fun getId ()Ljava/lang/String;
-	public fun getPolicies ()Ljava/util/Set;
 	public fun getRoles ()Ljava/util/Set;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -367,20 +334,6 @@ public final class me/ahoo/cosec/runtime/audit/AuditRequestData : me/ahoo/cosec/
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/runtime/audit/AuditRoleData : me/ahoo/cosec/api/audit/AuditRole {
-	public fun <init> (Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditPermissionData;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Lme/ahoo/cosec/runtime/audit/AuditPermissionData;
-	public final fun copy (Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditPermissionData;)Lme/ahoo/cosec/runtime/audit/AuditRoleData;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditRoleData;Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditPermissionData;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditRoleData;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getId ()Ljava/lang/String;
-	public synthetic fun getPermission ()Lme/ahoo/cosec/api/audit/AuditPermission;
-	public fun getPermission ()Lme/ahoo/cosec/runtime/audit/AuditPermissionData;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class me/ahoo/cosec/runtime/audit/AuditSnapshotVersionData : me/ahoo/cosec/api/audit/AuditSnapshotVersion {
 	public fun <init> (JLjava/lang/Long;Ljava/lang/Long;)V
 	public final fun component1 ()J
@@ -397,19 +350,20 @@ public final class me/ahoo/cosec/runtime/audit/AuditSnapshotVersionData : me/aho
 }
 
 public final class me/ahoo/cosec/runtime/audit/AuditSourceData : me/ahoo/cosec/api/audit/AuditSource {
-	public fun <init> (Lme/ahoo/cosec/api/audit/AuditSourceType;Lme/ahoo/cosec/runtime/audit/AuditPolicyData;Lme/ahoo/cosec/runtime/audit/AuditRoleData;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/api/audit/AuditSourceType;Lme/ahoo/cosec/runtime/audit/AuditPolicyData;Lme/ahoo/cosec/runtime/audit/AuditRoleData;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Lme/ahoo/cosec/api/audit/AuditSourceType;
-	public final fun component2 ()Lme/ahoo/cosec/runtime/audit/AuditPolicyData;
-	public final fun component3 ()Lme/ahoo/cosec/runtime/audit/AuditRoleData;
-	public final fun copy (Lme/ahoo/cosec/api/audit/AuditSourceType;Lme/ahoo/cosec/runtime/audit/AuditPolicyData;Lme/ahoo/cosec/runtime/audit/AuditRoleData;)Lme/ahoo/cosec/runtime/audit/AuditSourceData;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditSourceData;Lme/ahoo/cosec/api/audit/AuditSourceType;Lme/ahoo/cosec/runtime/audit/AuditPolicyData;Lme/ahoo/cosec/runtime/audit/AuditRoleData;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditSourceData;
+	public fun <init> (Lme/ahoo/cosec/api/audit/AuditVia;Lme/ahoo/cosec/api/audit/AuditDocument;Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditStatementData;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/api/audit/AuditVia;Lme/ahoo/cosec/api/audit/AuditDocument;Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditStatementData;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lme/ahoo/cosec/api/audit/AuditVia;
+	public final fun component2 ()Lme/ahoo/cosec/api/audit/AuditDocument;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Lme/ahoo/cosec/runtime/audit/AuditStatementData;
+	public final fun copy (Lme/ahoo/cosec/api/audit/AuditVia;Lme/ahoo/cosec/api/audit/AuditDocument;Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditStatementData;)Lme/ahoo/cosec/runtime/audit/AuditSourceData;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/runtime/audit/AuditSourceData;Lme/ahoo/cosec/api/audit/AuditVia;Lme/ahoo/cosec/api/audit/AuditDocument;Ljava/lang/String;Lme/ahoo/cosec/runtime/audit/AuditStatementData;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/audit/AuditSourceData;
 	public fun equals (Ljava/lang/Object;)Z
-	public synthetic fun getPolicy ()Lme/ahoo/cosec/api/audit/AuditPolicy;
-	public fun getPolicy ()Lme/ahoo/cosec/runtime/audit/AuditPolicyData;
-	public synthetic fun getRole ()Lme/ahoo/cosec/api/audit/AuditRole;
-	public fun getRole ()Lme/ahoo/cosec/runtime/audit/AuditRoleData;
-	public fun getType ()Lme/ahoo/cosec/api/audit/AuditSourceType;
+	public fun getDocument ()Lme/ahoo/cosec/api/audit/AuditDocument;
+	public fun getPolicy ()Ljava/lang/String;
+	public synthetic fun getStatement ()Lme/ahoo/cosec/api/audit/AuditStatement;
+	public fun getStatement ()Lme/ahoo/cosec/runtime/audit/AuditStatementData;
+	public fun getVia ()Lme/ahoo/cosec/api/audit/AuditVia;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

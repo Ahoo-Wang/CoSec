@@ -17,7 +17,7 @@ The response body says only what the client can act on. The detail is in the aud
 1. Take the `CoSec-Request-Id` response header, which is also the `requestId` of the problem body.
 2. Find its audit event. The audit log writes denials, `429`s, `503`s and errors to the logger `me.ahoo.cosec.audit` at
    `WARN` and `ERROR`. Read `authorization.reasonCode` and `authorization.reason`, the deciding statement in
-   `authorization.source.policy`, the `binding` it applied through, and the `snapshotVersion` it read
+   `authorization.source`, the `binding` it applied through, and the `snapshotVersion` it read
    ([Audit events](./observability.md#audit-events)).
 3. For every statement a decision checked and why each matched or not, explain the request through the control plane
    ([Explaining a decision](../integration/checks.md)). With `cosec-opentelemetry` the deciding statement is also on
@@ -224,7 +224,7 @@ is a <type>, not a string: ...`: quote the value, and give one app.
    condition. Add a deny, or narrow the allow.
 3. **A deny that does not match.** Its action, its resource and its condition must all match. Explain the request to
    see where the deny missed.
-4. **Break-glass.** `breakGlass: true` and `source.type` `ROOT` mean a break-glass binding of `cosec:root` permitted
+4. **Break-glass.** `breakGlass: true` and `source.policy` `cosec:root` mean a break-glass binding of `cosec:root` permitted
    the request; such bindings expire on their own and can be revoked through the control plane.
 5. **An old revision.** `snapshotVersion` names the revisions the decision read. If they are older than what was
    published, see [Decisions use an old revision](#decisions-use-an-old-revision).
