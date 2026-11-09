@@ -50,8 +50,8 @@ internal interface CandidateVisitor {
  *    role in document (grant) order;
  * 5. break-glass bindings of the principal, by binding id, last.
  *
- * The order never changes the decision, only which statement is reported when several match; without errors it is the
- * statement 7.x reports, as the 7.x layers are in this order. Break-glass comes last (review A2 of #1070): it bypasses a
+ * The order never changes the decision, only which statement is reported when several match: the first in this
+ * order. Break-glass comes last (review A2 of #1070): it bypasses a
  * *missing* ALLOW (RFC 0004 §4.8), so it reports a permit only when nothing else permits, and a request another binding
  * permits is never a use of break-glass, which would need a REQUIRED audit (RFC 0006 §9.4.3). Visits allocate nothing: the arrays are the index's own.
  * An anonymous principal has no principal bindings, break-glass bindings or attachments. One without

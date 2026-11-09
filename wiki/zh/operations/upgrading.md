@@ -414,7 +414,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 在 Spring MVC 上，7.x 用 `HttpServletRequest.getParameter` 读取查询参数，而它也会返回 `application/x-www-form-urlencoded` 请求体中的字段。
 所以对表单 POST，容器会在 CoSec 的过滤器中解析并消费请求体，请求体字段也被当作查询参数。8.0 在每个适配器上都只读取 URL 查询字符串，
-并且永远不碰请求体（[Spring MVC 上经过 CoSec 后表单 POST 请求体为空](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)）。
+并且永远不碰请求体。
 表单字段不再设置 `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id`，也不再设置在 `cosec.pipeline.allow-query-token=true` 时读取的
 `authorization` 令牌。把这些作为表单字段发送的客户端，必须改为通过请求头或查询字符串发送。
 

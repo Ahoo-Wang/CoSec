@@ -203,7 +203,7 @@ class ScopeResolverTest {
             .assert().isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
     }
 
-    /** 7.x builds every anonymous context in the default tenant; the resolver does not trust anything else. */
+    /** An anonymous subject is always in the default tenant; the resolver does not trust any other it is given. */
     @Test
     fun `an anonymous subject is in the default tenant and has no roles`() {
         val anonymous = ScopeSubject(acme, authenticated = false, memberships)

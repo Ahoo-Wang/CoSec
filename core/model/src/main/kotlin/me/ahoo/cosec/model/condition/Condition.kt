@@ -46,7 +46,7 @@ sealed interface Condition {
     /** `{"cidr": [attribute, [blocks...]]}`. */
     class Cidr(val attribute: String, val blocks: List<Literal>) : Condition
 
-    /** `{"time": {...}}`: the configuration of the 7.x `time` condition, read against `environment.time`. */
+    /** `{"time": {...}}`: the configuration of the `time` condition, read against `environment.time`, not a clock. */
     class Time(
         val notBefore: String? = null,
         val notAfter: String? = null,

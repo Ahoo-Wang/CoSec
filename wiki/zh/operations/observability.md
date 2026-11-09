@@ -26,12 +26,12 @@ starter 注册的监听器：
 |---|---|---|
 | `LoggingAuditListener`（`logging-audit`） | `BEST_EFFORT` | `cosec.audit.enabled`（默认 `true`） |
 | `KafkaAuditListener`（`kafka-audit`） | [`cosec.audit.kafka.delivery`](./configuration.md#audit)，默认 `BEST_EFFORT` | `cosec-kafka`、一个 `KafkaOperations` bean、`cosec.audit.enabled` 和 `cosec.audit.kafka.enabled`（都默认 `true`） |
-| `MetricsListener`（`metrics`） | `BEST_EFFORT` | `cosec-micrometer`、一个 `MeterRegistry` bean 和 `cosec.metrics.enabled`（默认 `true`） |
+| `MetricsListener`（`metrics`） | `BEST_EFFORT` | `cosec-micrometer`、一个 `MeterRegistry` bean（包括 Spring Boot 自动配置的那个）和 `cosec.metrics.enabled`（默认 `true`） |
 | `TracingListener`（`tracing`） | `BEST_EFFORT` | `cosec-opentelemetry` |
 | `ShadowListener`（`shadow`） | `BEST_EFFORT` | `cosec-cocache` 和 `cosec.authorization.shadow.enabled`（默认 `true`） |
 
 你自己的任何 `DecisionListener` bean 都会加入它们；名字必须唯一，否则启动失败（[扩展](../architecture/extending.md)）。
-`AuditEventSink` bean（例如为 7.x 编写的）也会加入：starter 把它包装成以 bean 名命名的 `BEST_EFFORT` 监听器
+`AuditEventSink` bean 也会加入：starter 把它包装成以 bean 名命名的 `BEST_EFFORT` 监听器
 （`AuditListener.of(sink, beanName)`），按它的 `@Order` 排在监听器之间。它总是 `BEST_EFFORT`，因为
 `AuditEventSink.publish` 无法确认写入。同时是两者的 bean 只注册一次，作为它本身的 `DecisionListener`。
 
@@ -163,7 +163,8 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`，以及
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
 - **传播情况。** 控制面的 `GET /documents/<doc>/revisions/<n>/propagation` 回答最近一分钟内报告过的实例中，有多少已经
-  装入修订 `<n>` 或更新的修订。只有开启影子窗口的实例才会报告（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。
+  装入修订 `<n>` 或更新的修订。实例只有在能够评估某个修订时才算装入了它：读到了该修订却编译失败的实例仍会报告，所以计入被统计的实例，
+  但不算已装入。只有开启影子窗口的实例才会报告（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。
 - **每个决策。** 审计事件中的 `snapshotVersion` 和 span 上的 `cosec.snapshot.version` 指明决策读取的修订。
 
 ## 控制面变更日志 {#control-plane-change-log}

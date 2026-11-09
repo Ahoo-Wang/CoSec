@@ -57,10 +57,10 @@ import java.time.Instant
  * reads ([PolicySnapshotCache], one key per document); the records, indexes, back-references and leases are the
  * `Store`s of [ControlCacheSpecs]. Digests are CoCache's, SHA-256 with its algorithm.
  *
- * Writes are `putIfMatch`, one Lua script each (CoCache 6.7), as 7.x's snapshot publisher
- * wrote: the head only over the digest it was read at, a record only where there is none. A write whose reply is lost
- * is resolved by reading the digest back, never by writing again: `putIfMatch` is not idempotent. Nothing waits for
- * replicas (RFC 0007 Q27): a write lost in a failover shows up as a broken chain or a revision regression.
+ * Writes are `putIfMatch`, one Lua script each: the head only over the digest it was read at, a record only where
+ * there is none. A write whose reply is lost is resolved by reading the digest back, never by writing again:
+ * `putIfMatch` is not idempotent. Nothing waits for replicas (RFC 0007 Q27): a write lost in a failover shows up as
+ * a broken chain or a revision regression.
  *
  * Every read is a conditional read without a digest, so it answers from Redis, not from a local copy, and a failed
  * read throws (a `Store`'s conditional read always does). Nothing here blocks the caller: it awaits CoCache's async view.
@@ -219,12 +219,29 @@ class CoCacheControlStore internal constructor(
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
         deleteIf(candidates, key) { it.window == window }
 
+    /**
+     * Writes the lease where there is none (`putIfMatch` over nothing). [holder] taking its own lease again renews it for
+     * the full [duration], as `InMemoryControlStore` does: a `true` that left the old expiry would let a task that
+     * believes it holds the lease for [duration] lose it within moments. The renewal is `putIfMatch` over the lease as
+     * read, so one that expired and was taken by another holder in between is not overwritten: it is read again.
+     */
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
-        val result = leases.async().putIfMatch(name, null, holder, duration).await()
-        if (result is ConditionalPut.Written) {
-            return true
+        val async = leases.async()
+        repeat(MAX_LIST_ATTEMPTS) {
+            if (async.putIfMatch(name, null, holder, duration).await() is ConditionalPut.Written) {
+                return true
+            }
+            val (current, digest) = read(leases, name) ?: return@repeat
+            if (current != holder) {
+                return false
+            }
+            if (async.putIfMatch(name, cocacheDigest(digest), holder, duration).await() is ConditionalPut.Written) {
+                return true
+            }
         }
-        return (read(leases, name)?.first) == holder
+        throw IllegalStateException(
+            "The lease [$name] kept changing while it was taken; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
     }
 
     /**

@@ -225,7 +225,7 @@ class Simulator(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's, as before.
+        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's.
         val tenantCauses = ArrayList<Cause>(0)
         val tenant = documentOf(documents.tenant, compiler, tenantCauses) {
             CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())

@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "A statement spells its condition key `conditon`. 7.x dropped the unknown key and allowed unconditionally; 8.0 does not decode the document.",
+  "description": "A statement spells its condition key `conditon`: the document does not decode, rather than dropping the unknown key and allowing unconditionally.",
   "documents": {
     "platform": {
       "schema": 2,

@@ -96,7 +96,7 @@ class CoSecPipelineAutoConfiguration {
 
     /**
      * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
-     * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
+     * named after the bean (RFC 0006 §9.5.3), so a sink needs no listener of its own. All in `@Order`.
      * On shutdown, delivers what is queued for up to `cosec.observability.listener.drain-timeout`, then drops the rest.
      * `cosec.audit.kafka.delivery=required` asks for a REQUIRED Kafka record of every decision: startup fails when that
      * listener was not created, rather than deciding without it (STA-1).

@@ -102,7 +102,7 @@ import kotlin.time.Duration.Companion.seconds
  * problem body, every problem type of §6.1 included. Their decision events agree on the request id, the trace, the
  * subject and the scope, and the response body names the same trace.
  *
- * Only the 8.0 pipeline runs here (RFC 0008 §4.1). `too-many-requests` joins with RFC 0006 PR-5.
+ * Only the 8.0 pipeline runs here (RFC 0008 §4.1).
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class WebAdapterParityTest {

@@ -24,7 +24,7 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
 | `MembershipLoader` | `cosec-cocache`, `cache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
-| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
+| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive the flat audit record of each decision. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |

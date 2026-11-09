@@ -1,0 +1,19 @@
+# Rule: CTL-26
+# Mutant: a holder that takes its own lease again gets true without the lease being renewed, so a task that believes it holds the lease for the full duration loses it with what was left of the earlier one
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.control.ControlLeaseTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt
+index fdc5943b..675fa423 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/control/CoCacheControlStore.kt
+@@ -235,9 +235,7 @@ class CoCacheControlStore internal constructor(
+             if (current != holder) {
+                 return false
+             }
+-            if (async.putIfMatch(name, cocacheDigest(digest), holder, duration).await() is ConditionalPut.Written) {
+-                return true
+-            }
++            return true
+         }
+         throw IllegalStateException(
+             "The lease [$name] kept changing while it was taken; gave up after $MAX_LIST_ATTEMPTS attempts."

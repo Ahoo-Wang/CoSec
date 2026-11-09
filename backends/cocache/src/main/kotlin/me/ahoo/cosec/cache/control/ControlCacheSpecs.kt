@@ -211,8 +211,8 @@ private fun JsonNode.only(what: String, vararg names: String) {
 
 /**
  * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
- * records are left to delete (#1226), so that an index with none is written as earlier builds wrote it and they still
- * read it.
+ * records are left to delete, so that an index with none carries no field a reader that does not know it would
+ * refuse: the decoders of the stored formats reject unknown fields.
  */
 internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
