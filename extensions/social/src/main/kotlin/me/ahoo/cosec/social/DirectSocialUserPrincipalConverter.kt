@@ -13,8 +13,6 @@
 package me.ahoo.cosec.social
 
 import me.ahoo.cosec.login.token.TokenSubject
-import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
 
 /**
  * The principal of a social login as it is: the id `<provider user id>@<provider>`, no roles, policies or tenant. Its
@@ -30,7 +28,7 @@ import reactor.kotlin.core.publisher.toMono
  */
 class DirectSocialUserPrincipalConverter(private val app: String?) : SocialUserPrincipalConverter {
 
-    override fun convert(provider: String, authUser: SocialUser): Mono<TokenSubject> {
+    override suspend fun convert(provider: String, authUser: SocialUser): TokenSubject {
         return TokenSubject(
             id = asProviderUserId(provider, authUser),
             app = app,
@@ -38,7 +36,7 @@ class DirectSocialUserPrincipalConverter(private val app: String?) : SocialUserP
                 SocialUserPrincipalConverter.OAUTH_PROVIDER to provider,
                 SocialUserPrincipalConverter.OAUTH_USER_ID to authUser.id,
             ),
-        ).toMono()
+        )
     }
 
     /**

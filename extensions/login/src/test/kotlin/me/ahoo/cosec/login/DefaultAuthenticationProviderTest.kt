@@ -21,27 +21,38 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 internal class DefaultAuthenticationProviderTest {
+    private val authenticationProvider = DefaultAuthenticationProvider()
 
     @Test
     fun register() {
         assertThrows(IllegalArgumentException::class.java) {
-            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java,
             )
         }
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(mockk())
-        DefaultAuthenticationProvider.register(refreshTokenAuthentication)
+        authenticationProvider.register(refreshTokenAuthentication)
         (
-            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java,
             )
             ).assert().isEqualTo(refreshTokenAuthentication)
 
         (
-            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
                 MockRefreshTokenCredentials::class.java,
             )
             ).assert().isEqualTo(refreshTokenAuthentication)
+    }
+
+    /** #1222: registries share nothing. */
+    @Test
+    fun `a registration stays in its registry`() {
+        authenticationProvider.register(SimpleRefreshTokenAuthentication(mockk()))
+
+        DefaultAuthenticationProvider()
+            .get<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(RefreshTokenCredentials::class.java)
+            .assert().isNull()
     }
 
     data class MockRefreshTokenCredentials(override val accessToken: String, override val refreshToken: String) :

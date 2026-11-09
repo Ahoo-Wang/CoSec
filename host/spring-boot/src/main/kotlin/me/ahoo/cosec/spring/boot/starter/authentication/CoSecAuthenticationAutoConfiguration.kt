@@ -37,17 +37,22 @@ import org.springframework.context.annotation.Primary
     LoginProperties::class,
 )
 class CoSecAuthenticationAutoConfiguration {
+    /**
+     * This context's own registry of its own beans (#1222). The composites depend on this bean, so `getBeansOfType`
+     * leaves them out as beans in creation: a composite in the registry would dispatch to itself.
+     */
     @Bean
     @ConditionalOnMissingBean
     fun authenticationProvider(
         applicationContext: ApplicationContext
     ): AuthenticationProvider {
+        val authenticationProvider = DefaultAuthenticationProvider()
         applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
             @Suppress("UNCHECKED_CAST")
             it as Authentication<Credentials>
-            DefaultAuthenticationProvider.register(it)
+            authenticationProvider.register(it)
         }
-        return DefaultAuthenticationProvider
+        return authenticationProvider
     }
 
     @Bean

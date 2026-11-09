@@ -14,18 +14,15 @@ package me.ahoo.cosec.social
 
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.token.TokenSubject
-import reactor.core.publisher.Mono
 
 /**
  * Social Authentication .
  *
- * Blocking, like the [SocialAuthenticationProvider]s it calls: [authorizeUrl] and [authenticate] run off an event loop,
- * on `Schedulers.boundedElastic()` in WebFlux.
- *
  * @author ahoo wang
  */
 class SocialAuthentication(
-    private val principalConverter: SocialUserPrincipalConverter
+    private val principalConverter: SocialUserPrincipalConverter,
+    private val providers: SocialProviderManager,
 ) : Authentication<SocialCredentials> {
     override val supportCredentials: Class<SocialCredentials>
         get() {
@@ -38,15 +35,12 @@ class SocialAuthentication(
      * @param provider OAuth Provider id
      * @return Authorize Url
      */
-    fun authorizeUrl(provider: String): String {
-        return SocialProviderManager.getRequired(provider).authorizeUrl()
+    suspend fun authorizeUrl(provider: String): String {
+        return providers.getRequired(provider).authorizeUrl()
     }
 
-    override fun authenticate(credentials: SocialCredentials): Mono<TokenSubject> {
-        return SocialProviderManager.getRequired(credentials.provider)
-            .authenticate(credentials)
-            .flatMap {
-                principalConverter.convert(credentials.provider, it)
-            }
+    override suspend fun authenticate(credentials: SocialCredentials): TokenSubject {
+        val user = providers.getRequired(credentials.provider).authenticate(credentials)
+        return principalConverter.convert(credentials.provider, user)
     }
 }

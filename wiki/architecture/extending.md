@@ -28,6 +28,9 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
+| `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
+| `TokenConverter` | `cosec-login`, `login.token` | Issue tokens in another format. | one bean, replacing `JwtTokenConverter` |
+| `SocialUserPrincipalConverter` | `cosec-social`, `social` | Turn a provider's user into your principal. | one bean, replacing `DirectSocialUserPrincipalConverter` |
 | `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
@@ -87,14 +90,14 @@ and needs no `!`, and the pull request description says which experimental decla
 
 ## Rules every extension follows
 
-The pipeline calls every SPI on the request path, often on a Netty event loop. Every SPI here follows the same
-contract:
+The pipeline calls every SPI on the request path, often on a Netty event loop. The login contracts run on your login
+endpoint, on the same threads. Every SPI here follows the same contract:
 
 - **Never block the calling thread.** The SPIs are `suspend` functions (the snapshot store returns
   `CompletableFuture`s). A suspending client is fine. An implementation over a blocking client (JDBC, a blocking HTTP
-  client) moves the call to its own bounded executor with `runInterruptible(myDispatcher) { ... }`. Do not use
-  `Dispatchers.IO` inside CoSec modules (`RuntimeBoundaryTest` forbids it there); in your own code, prefer a bounded
-  executor sized for the dependency.
+  client) moves the call to its own bounded executor with `runInterruptible(myDispatcher) { ... }`, sized for that
+  dependency: `Dispatchers.IO.limitedParallelism(n)` or an executor of your own, as `JustAuthProvider` does. A bare
+  `Dispatchers.IO` is shared with everything else in the process, and `RuntimeBoundaryTest` forbids it in `cosec-runtime`.
 - **Stop when cancelled.** Timeouts are cooperative: at an SPI's timeout, or at `cosec.pipeline.timeout`, the pipeline
   cancels the call and waits for it to return before it answers `503`. `withContext(myDispatcher)` cannot stop a
   blocking call, so a JDBC query that hangs for 30 seconds holds the request for 30 seconds, not for its 300 ms

@@ -16,7 +16,6 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import reactor.core.publisher.Mono
 
 /**
  * Switches a signed-in principal to another tenant (`wiki/integration/authentication.md`), to issue a token for it.
@@ -32,27 +31,25 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
     override val supportCredentials: Class<SwitchTenantCredentials>
         get() = SwitchTenantCredentials::class.java
 
-    final override fun authenticate(credentials: SwitchTenantCredentials): Mono<TokenSubject> {
+    final override suspend fun authenticate(credentials: SwitchTenantCredentials): TokenSubject {
         val target = credentials.targetTenantId
         val previous = credentials.context
-        return Mono.defer {
-            check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
-            switchTenant(target, previous)
-        }.map { inTarget(previous, target, it) }
+        check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
+        return inTarget(previous, target, switchTenant(target, previous))
     }
 
     /**
      * What [previous]'s user holds in [targetTenantId], looked up for that tenant, never copied from
-     * [previous]. An error, or empty, refuses the switch: check here that the user belongs to the tenant.
+     * [previous]. An exception refuses the switch: check here that the user belongs to the tenant.
      *
      * @param targetTenantId target tenant id
      * @param previous the permitted request of the token the user switches from
      * @return the memberships of the new token
      */
-    protected abstract fun switchTenant(
+    protected abstract suspend fun switchTenant(
         targetTenantId: String,
         previous: SecurityContext
-    ): Mono<TenantMembership>
+    ): TenantMembership
 
     private fun inTarget(previous: SecurityContext, target: String, membership: TenantMembership): TokenSubject =
         TokenSubject(
