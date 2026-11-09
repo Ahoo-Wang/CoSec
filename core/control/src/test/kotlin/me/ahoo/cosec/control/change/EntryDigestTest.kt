@@ -39,9 +39,9 @@ class EntryDigestTest {
             val hash = MessageDigest.getInstance("SHA-256").digest(bytes)
             val expected = hash.joinToString(separator = "") { "%02x".format(it) }
             EntryDigest.hex(bytes).assert().isEqualTo(expected)
-            leadingZero += hash.count { it in 0..0x0f }
+            leadingZero += hash.count { (it.toInt() and 0xF0) == 0 }
         }
         // The cases that a hex encoder gets wrong were among them.
-        (leadingZero > 0).assert().isTrue()
+        leadingZero.assert().isGreaterThan(0)
     }
 }
