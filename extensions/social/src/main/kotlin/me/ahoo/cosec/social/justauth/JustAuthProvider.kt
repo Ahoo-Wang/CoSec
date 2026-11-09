@@ -63,6 +63,7 @@ class JustAuthProvider(
                 )
             }
             val authUser = authResponse.data
+                ?: throw SocialAuthenticationException("The [$name] provider returned no user.")
             return@defer authUser.toSocialUser(name).toMono()
         }
     }

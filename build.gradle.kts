@@ -164,8 +164,25 @@ subprojects {
                 }
             }
         }
-        val resolved = listOf("compileClasspath", "runtimeClasspath").map { name ->
-            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }.map { artifacts ->
+        // What an application that compiles against the project, reading its Gradle API variant (usage java-api), gets
+        // from it: the project and what its `api` dependencies name. Not the implementation classpath the project's
+        // own tests see, which hides a dependency a public signature needs and the API variant does not export.
+        val apiConsumer = configurations.create("architectureApiConsumer") {
+            isCanBeConsumed = false
+            isCanBeResolved = true
+            attributes {
+                attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_API))
+                attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+            }
+        }
+        dependencies.add(apiConsumer.name, dependencies.project(mapOf("path" to path)))
+        val resolved = listOf(
+            "compileClasspath" to "compileClasspath",
+            "runtimeClasspath" to "runtimeClasspath",
+            apiConsumer.name to "apiElements",
+        ).map { (configuration, name) ->
+            configurations.named(configuration).flatMap { it.incoming.artifacts.resolvedArtifacts }.map { artifacts ->
                 artifacts.map { artifact ->
                     when (val id = artifact.id.componentIdentifier) {
                         is ProjectComponentIdentifier -> "resolved $name project ${id.projectPath.removePrefix(":")}"

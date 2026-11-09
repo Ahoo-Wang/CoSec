@@ -14,6 +14,7 @@
 package me.ahoo.cosec.openapi.generator
 
 import io.swagger.v3.core.util.Json
+import io.swagger.v3.core.util.Json31
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.PathItem
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -147,5 +148,81 @@ class OpenAPIServiceGeneratorTest {
         )
         fails("""{"/a":{"get":{"operationId":"x","x-cosec-action":"billing:pay"}}}""", "not of service [order]")
         fails("""{"/a":{"get":{"operationId":"has space"}}}""", "action")
+    }
+
+    private fun spec31(paths: String, pathItems: String): OpenAPI = Json31.mapper().readValue(
+        """{"openapi":"3.1.0","info":{"title":"order","version":"1"},"paths":$paths,
+           "components":{"pathItems":$pathItems}}""",
+        OpenAPI::class.java,
+    )
+
+    /** A Path Item `$ref` is the same document as the item inline (#1262), not a path without operations. */
+    @Test
+    fun `a path item reference generates what the inline item generates`() {
+        val operations = """{"get":{"operationId":"listOrders","tags":["orders"]},"post":{"operationId":"create"}}"""
+        val inline = Json31.mapper().readValue(
+            """{"openapi":"3.1.0","info":{"title":"order","version":"1"},"paths":{"/orders":$operations}}""",
+            OpenAPI::class.java,
+        )
+        val referenced = spec31(
+            """{"/orders":{"${'$'}ref":"#/components/pathItems/Orders"}}""",
+            """{"Orders":$operations}""",
+        )
+        referenced.paths["/orders"]!!.`$ref`.assert().isEqualTo("#/components/pathItems/Orders")
+        val routes = OpenAPIServiceGenerator.routeMap(referenced)
+        routes.routes.assert().hasSize(2)
+        String(RouteMapCodec.encode(routes)).assert()
+            .isEqualTo(String(RouteMapCodec.encode(OpenAPIServiceGenerator.routeMap(inline))))
+        val now = java.time.Instant.parse("2026-01-01T00:00:00Z")
+        String(PolicyDocumentCodec.encode(OpenAPIServiceGenerator.appDocument(referenced, publishedAt = now))).assert()
+            .isEqualTo(
+                String(PolicyDocumentCodec.encode(OpenAPIServiceGenerator.appDocument(inline, publishedAt = now)))
+            )
+    }
+
+    @Test
+    fun `a path item reference to a reference is followed`() {
+        val api = spec31(
+            """{"/orders":{"${'$'}ref":"#/components/pathItems/Alias"}}""",
+            """{"Alias":{"${'$'}ref":"#/components/pathItems/Orders"},"Orders":{"get":{"operationId":"listOrders"}}}""",
+        )
+        OpenAPIServiceGenerator.routeMap(api).routes.map { it.action }.assert().containsExactly("order:listOrders")
+    }
+
+    /** What cannot be resolved fails, naming the path and the reference: a document missing routes grants less. */
+    @Test
+    fun `a path item reference that cannot be resolved fails generation`() {
+        fun fails(reference: String, pathItems: String, message: String) {
+            val api = spec31("""{"/orders":{"${'$'}ref":"$reference"}}""", pathItems)
+            for (generate in listOf<() -> Any>(
+                { OpenAPIServiceGenerator.operations(api) },
+                { OpenAPIServiceGenerator.routeMap(api) },
+                { OpenAPIServiceGenerator.appDocument(api) },
+            )) {
+                assertThrows<OpenAPIGenerationException> { generate() }.message.assert()
+                    .contains("/orders").contains(reference).contains(message)
+            }
+        }
+        val orders = """{"Orders":{"get":{"operationId":"listOrders"}}}"""
+        fails("#/components/pathItems/Missing", orders, "no such path item")
+        fails("orders.yaml#/Orders", orders, "only a path item of this document")
+        fails("https://example.com/orders.json#/Orders", orders, "only a path item of this document")
+        fails("#/paths/~1other", orders, "only a path item of this document")
+        fails(
+            "#/components/pathItems/A",
+            """{"A":{"${'$'}ref":"#/components/pathItems/B"},"B":{"${'$'}ref":"#/components/pathItems/A"}}""",
+            "refers to itself",
+        )
+    }
+
+    /** The spec leaves the fields beside a `$ref` undefined; guessing which side wins could grant more or less. */
+    @Test
+    fun `a path item reference beside operations of its own fails generation`() {
+        val api = spec31(
+            """{"/orders":{"${'$'}ref":"#/components/pathItems/Orders","delete":{"operationId":"remove"}}}""",
+            """{"Orders":{"get":{"operationId":"listOrders"}}}""",
+        )
+        assertThrows<OpenAPIGenerationException> { OpenAPIServiceGenerator.routeMap(api) }.message.assert()
+            .contains("/orders").contains("beside")
     }
 }

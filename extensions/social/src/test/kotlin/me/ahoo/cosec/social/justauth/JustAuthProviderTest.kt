@@ -100,4 +100,38 @@ internal class JustAuthProviderTest {
             }
             .verifyComplete()
     }
+
+    /** A success response whose user has none of the optional profile fields still logs in (#1249). */
+    @Test
+    fun authenticateSuccessWithoutOptionalFields() {
+        val oAuthCredentials = JustAuthCredentials("clientId")
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
+                every { ok() } returns true
+                every { data } returns AuthUser.builder().uuid("u1").build()
+            }
+        }
+        JustAuthProvider("figma", authRequest).authenticate(oAuthCredentials)
+            .test()
+            .consumeNextWith {
+                it.id.assert().isEqualTo("u1")
+                it.provider.assert().isEqualTo("figma")
+            }
+            .verifyComplete()
+    }
+
+    @Test
+    fun authenticateSuccessWithoutUser() {
+        val oAuthCredentials = JustAuthCredentials("clientId")
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
+                every { ok() } returns true
+                every { data } returns null
+            }
+        }
+        JustAuthProvider("clientId", authRequest).authenticate(oAuthCredentials)
+            .test()
+            .expectError(SocialAuthenticationException::class.java)
+            .verify()
+    }
 }

@@ -140,6 +140,9 @@ The rules behind the picture:
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
+- `ApiVariantTest`: a library module's Gradle API variant (usage `java-api`, what an application compiles against)
+  carries the CoSec module whose type a public class extends or implements, and Jackson where a public signature names
+  it. The module's own tests see its implementation classpath and cannot tell.
 - `SpiMarkerTest`: every public interface of `cosec-spi` that an application can implement, and every extension point
   [Extending](./extending.md#extension-points) lists, carries `@CoSecSpi`, and the marker is on nothing else.
 

@@ -43,6 +43,9 @@ jobs:
         id: plan
         run: python3 -I scripts/ci/plan.py --github-output "$GITHUB_OUTPUT"
 
+      - name: Test the JMH A/B comparison
+        run: python3 -I -m unittest discover -s scripts/jmh-ab
+
   test:
     name: Test ${{ matrix.name }}
     needs: plan
