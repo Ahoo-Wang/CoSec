@@ -134,7 +134,7 @@ Space 是不透明字符串，CoSec 不保存它的归属。关系由角色决�
 
 > 2026-11-08 维护者"按建议定"。随 R7b（主体与令牌契约重切）交付，不在 G1–G3 里。
 
-token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 只允许单个值。今天的 token 不声明 App，也不校验 audience：同一个签名密钥下，发给一个 App 的 token 在另一个 App 也有效，只要两边有同名角色就生效。
+token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 只允许单个值（也接受只含一个字符串的数组，这是 RFC 7519 的写法）。API key 记录是格式 3，带必填的 `app`。今天的 token 不声明 App，也不校验 audience：同一个签名密钥下，发给一个 App 的 token 在另一个 App 也有效，只要两边有同名角色就生效。
 
 `ScopeResolver` 按下表解析：
 

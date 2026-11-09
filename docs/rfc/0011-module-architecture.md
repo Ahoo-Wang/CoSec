@@ -14,6 +14,8 @@
 
 > **2026-11-08 修订（#1293）**：`STA-1` 的模块检查只在模块真正被用到时生效：网关模式且关闭 JWT 时不需要 `cosec-cocache` 的 Redis。
 
+> **2026-11-09 修订**：令牌契约按 #1302 调整，`CoSecPrincipal` 保留 `java.security.Principal`。`cosec-login`、`cosec-social` 已转 `suspend`（#1303），Reactor 只留在 edge 与 host。
+
 ## 0. 结论先行
 
 目标是让核心模型稳定、可靠、可扩展：技术的变化只发生在外圈，核心模块的公共 API 不因第三方库、宿主或存储的变化而变化。
