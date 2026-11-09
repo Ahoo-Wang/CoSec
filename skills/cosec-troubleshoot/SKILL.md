@@ -357,7 +357,11 @@ host's log, `Control API <method> <path> by <tenant>/<principal> is <status> (re
 `INFO` from `me.ahoo.cosec.control.api`, matching the problem's `requestId`.
 
 A platform change with the `V2` finding `[<id>] is a policy id [tenant:...] already use` adds an id a tenant document
-defines or binds; rename the platform policy, or have the tenant remove its own first. A `REVIEW_NEEDED` change event
+defines or binds; rename the platform policy, or have the tenant remove its own first. A tenant change with the `V2`
+finding `[<id>] is a platform policy's id, and this policy is not an exact copy of it` has the id of a platform policy
+and different content: a tenant may hold only an exact copy of it (the partition flow), so rename it or make it
+identical. While a copy exists the platform's policy cannot be changed (`[<id>] is copied by [tenant:...]`). A
+`REVIEW_NEEDED` change event
 after a publish means another document the change was checked with moved before the write and the analysis now finds
 an escalation nobody approved; the change stays published and needs a person's review.
 

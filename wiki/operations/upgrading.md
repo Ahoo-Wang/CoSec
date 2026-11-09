@@ -568,7 +568,8 @@ migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 Its commands are below. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
 `publish`, `bootstrap` and `repair-references` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
 nodes, comma-separated (`redis://node-1:6379,redis://node-2:6379`). The other commands read Redis with clients that
-do not, and refuse it.
+do not, and refuse it. Each command takes only the options listed for it: another one, `publish --dry-run` for
+example, is a usage error before anything is read or written, never ignored.
 
 | Command | What it does |
 |---|---|
@@ -588,7 +589,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 | Option | Meaning |
 |---|---|
 | `--from-redis <uri>` | Read 7.x data from this Redis: the policies, the global policy index, app permissions and role grants under `--key-prefix`, and the schema marker `<prefix>:meta:schema`, which must be `7`. Policy history (`<prefix>:policy:history:*`) is skipped. |
-| `--from-files <dir>` | Read an export instead: `policies.json` (an array of 7.x policies, each with its `id`), `global-policies.json` (an array of the ids in the global policy index) and `app-role-permissions.json` (one entry per app: `{"appPermission": {...}, "grants": {"admin": ["*"], "auditor@s1": ["invoice.read"]}}`, or `{"appId": "...", "grants": {...}}` for an app without an app permission). The three files are required; `rate-limit-rules.json` is optional. Use this for 7.x local policy files: put their contents into `policies.json`. |
+| `--from-files <dir>` | Read an export instead: `policies.json` (an array of 7.x policies, each with its `id`), `global-policies.json` (an array of the ids in the global policy index) and `app-role-permissions.json` (one entry per app: `{"appPermission": {...}, "grants": {"admin": ["*"], "auditor@s1": ["invoice.read"]}}`, or `{"appId": "...", "grants": {...}}` for an app without an app permission; `grants` is an object, or absent for no grants, and anything else fails the read, naming `app-role-permissions.json[i].grants`). The three files are required; `rate-limit-rules.json` is optional. Use this for 7.x local policy files: put their contents into `policies.json`. |
 | `--key-prefix <p>` | The 7.x key prefix; default `cosec`. |
 | `--out <dir>` | A directory that does not exist or is empty. `convert` never overwrites. |
 | `--rate-limit-rules <file>` | The 7.x rate limit rules (`cosec.limiter.locations`): one rule object or an array of rules, each with its `id`. Merge several rule files into one array. |
@@ -602,7 +603,13 @@ The output directory:
 | `apps/<appId>.json` | One app document per 7.x app permission: its permission catalog and role bindings. |
 | `tenants/<tenantId>.json` | Tenant documents, with `--partition by-owner` only. |
 | `provenance.json` | Where each policy and binding came from in the 7.x data. Only for an accepted conversion. |
-| `report.json` | `accepted`, the input's SHA-256, counts, `rejections`, `warnings`, `semanticChanges`, and the SHA-256 of every file written. |
+| `report.json` | `accepted`, the input's SHA-256, counts, `rejections`, `warnings`, `semanticChanges`, the SHA-256 of every file written, and `documentIds`. |
+
+File names are the URL-encoded ids. An id whose encoded name would be longer than 200 characters (30 Chinese
+characters are 275) gets a bounded name instead: a prefix of the encoded id, `~` and the SHA-256 of the id. `~` is
+never in an encoded name, and `report.json` records in `documentIds` which id each such file holds; `publish` checks
+the name against that id. A write that fails removes the files it wrote, so the directory is as new as before and
+`convert` can run again.
 
 A rejected conversion writes `report.json` only. The console prints the same counts, warnings and rejections.
 
@@ -620,14 +627,14 @@ then convert again into a new directory.
 | `UNDECODABLE` | Not valid 7.x JSON, not decodable by 7.x's own model, or it needs a class missing from the classpath (an `ognl` condition, a custom matcher). | Fix the stored JSON. A custom matcher has no 8.0 form; see `CUSTOM_ACTION` and `CUSTOM_CONDITION`. |
 | `RESERVED_POLICY_ID` | A policy id starts with `perm:`, `g:`, `r:` or `cosec:`, which generated ids use. | Rename the policy and every attachment that names it. |
 | `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id, or an unpaired UTF-16 surrogate in any id of a converted document (a JSON escape such as `"\uD800"`, `IDN-10`), located by the document and its JSON path. | Rename it. In 8.0 `*` means any app or space. |
-| `DUPLICATE_ID` | The same policy twice in an export, or the same permission twice in one app. | Keep one. |
+| `DUPLICATE_ID` | The same policy twice in an export, the same app twice in an export (one entry would replace the other, and its grants would be lost), the same permission twice in one app, or two app or tenant ids whose converted file names differ only in case (`Order` and `order`: one file on macOS and Windows). Ids that differ in more than their file names, such as `strasse` and `straße`, are not a collision. | Keep one, or rename. |
 | `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
 | `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...). |
 | `EXPRESSION_CONDITION` | A `spel` or `ognl` condition. | Rewrite it as conditions of the [policy language](../policies/language.md). |
 | `CUSTOM_CONDITION` | A condition of a custom `ConditionMatcherFactory`. | Move the value it reads into an `AttributeProvider` and write a condition on that attribute ([Extending](../architecture/extending.md)). |
 | `ACTION_NOT_TRANSLATED` | A `#{...}` path template, a path `separator` other than `/`, an action array whose members have different methods, or a method that is not an HTTP token. | See [Path templates in actions](#path-templates-in-actions); split statements by method; remove methods no request can have. |
 | `CUSTOM_ACTION` | An action of a custom `ActionMatcherFactory`. | Rewrite it as HTTP paths and methods, or as route-mapped actions. |
-| `DOES_NOT_COMPILE` | A translated statement does not compile, such as a path pattern outside what 8.0 accepts. | See the message and the [policy language](../policies/language.md). |
+| `DOES_NOT_COMPILE` | A translated statement does not compile, such as a path pattern outside what 8.0 accepts; or a document does not compile as a whole, such as when each policy fits the budget of path patterns and all of them together exceed it. The rejection names the policy it can trace, else the document. | See the message and the [policy language](../policies/language.md). |
 
 Warnings do not stop a conversion. The current ones: a policy in the global policy index whose type is not `GLOBAL`
 (converted as an attachable policy, since 7.x did not apply it to everyone), a tenant's policy with DENY statements kept
@@ -663,6 +670,7 @@ never overwrites 8.0 data.
 Writes are one per document. If one fails, the message names the documents already written; run again with
 `--resume`, which skips a document already published with the same content and refuses one with different content.
 `--key-prefix` is the deployment's prefix, the same as [`cosec.key-prefix`](./configuration.md#key-prefix).
+`publish` takes no `--dry-run`; to see what it would do, read `report.json`.
 
 After `publish`, change policies through the control plane only. Running `convert` and `publish` again does not update
 documents that exist.
@@ -679,6 +687,31 @@ comes from `publish`, so publish first. `bootstrap` binds principal `alice` of t
 platform tenant's document, and records it as a revision of kind `BOOTSTRAP`. It refuses when that document already
 binds someone to `cosec:platform-admin`; `--force` is for the recovery where every one of them is lost. Anyone with
 the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
+
+The document is compiled as the data plane compiles it, with the limits and the attributes the platform document
+declares, so a recovery keeps the policies that use `ext.*` attributes. A platform document that cannot be read fails
+the command.
+
+#### Partition plan
+
+```bash
+cosec-migrate partition plan (--from-redis redis://localhost:6379 [--key-prefix cosec] | --from-files ./export) --out ./plan
+```
+
+After a `--partition platform` publish, `partition plan` moves each tenant's attachable policies to the tenant's own
+document in steps, each an ordinary change with a shadow window. It converts the data twice, as `platform` and as
+`by-owner`, and writes for each tenant a document holding an **exact copy** of the policies that tenant owns, to
+`tenant-<encoded id>.json` in `--out` (the same encoding and bound as the converted files; the console names the tenant
+of each file). It writes nothing to Redis, and nothing at all when a file of the plan exists already.
+
+1. Submit each file with `apply` in merge mode. A tenant document may hold a policy of a platform policy's id only as
+   an exact copy of it, so the change passes the checks; both layers then hold the same content, which the engine
+   resolves as one policy, and the shadow window shows no difference.
+2. While a tenant holds a copy, the platform's policy cannot be changed (`V2`, naming the tenant): changing it would
+   leave one id with two contents, which the engine refuses. Neither can the copy be edited.
+3. Remove the platform's policies with a platform change. Removing a policy a tenant holds a copy of is allowed; the
+   tenant's bindings then resolve to the tenant's copy, which grants exactly what the platform's did.
+4. The copies are now the tenant's own policies, and editable.
 
 #### Repair the back-reference index
 
@@ -944,6 +977,14 @@ request with the key would be `401`.
 3. Run again without `--dry-run`. Each key is rewritten only while it still holds what was read, so a key revoked or
    disabled in between is never brought back: the report lists it under `changedSinceRead`, and the command exits `1`
    and asks to be run again. Keys already converted are left as they are, so the command can be repeated.
+
+The converted key does not keep its old roles and policies: the report is the only place they are. It is written
+(`status: planned`) before the first key is rewritten, replaced by the final one (`converted`) when the run is done, and
+a run that finds a report which is not that of a dry run or of a refusal in `--out` stops without touching a key: a
+repeat would find the keys converted and replace the plan with an empty one. Give a repeated run an `--out` of its own,
+and move a report away only once its `memberships` and bindings are carried out. Two runs may share one `--out` only
+when the first was a `--dry-run`. `--out` is created before anything is written, so one that cannot be written stops
+the run first. `SCAN` may return a key twice; it is read once.
 
 A key converted before step 2 is complete is refused or narrower, never wider.
 

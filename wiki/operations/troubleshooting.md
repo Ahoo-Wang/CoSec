@@ -634,6 +634,11 @@ for a check, `412` for an `ifMatch` that does not hold).
   a policy of that id, and the platform's would make it ambiguous there. Give the platform policy another id, or have
   the tenant remove or rename its own first. With `, or whose document could not be read` (`503`), a tenant document
   the index names could not be read; retry once Redis answers.
+- **`[<id>] is a platform policy's id, and this policy is not an exact copy of it`** (`V2`) on a tenant change: the
+  tenant's policy has the id of a platform policy and different content, which the engine would refuse as ambiguous. A
+  tenant may hold only an exact copy ([Partition plan](./upgrading.md#partition-plan)); give the policy another id, or
+  make it identical to the platform's. The same rule holds the platform's policy still while a tenant holds a copy:
+  **`[<id>] is copied by [tenant:...]: change it only after their copies are removed`** (`V2`) on a platform change.
 - **A `REVIEW_NEEDED` change event** after a publish: another document the change was checked with moved before its
   write, and the analysis on the current heads finds an escalation nobody approved. The change is published; review it
   as [What a publish compares](./storage.md#what-a-publish-compares) describes. With the escalation reason
