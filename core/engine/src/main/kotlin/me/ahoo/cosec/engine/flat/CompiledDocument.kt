@@ -111,35 +111,45 @@ class CompiledDocument private constructor(
         require(boundary == null || kind != DocumentKind.PLATFORM || boundary in boundaries) {
             "The default boundary $boundary is not a boundary policy of the platform document"
         }
-        val anyone = ArrayList<BoundEntry>()
-        val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
-        val principals = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
-        val roles = LinkedHashMap<String, ArrayList<BoundEntry>>()
-        val ruleIds = HashSet<String>()
-        for (rule in rateLimits) {
-            require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
-        }
-        val slots = repeatSlots(bindings)
-        val ids = HashSet<String>()
-        for (binding in bindings) {
-            require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
-            val entry = entry(binding, slots[binding.policy.value] ?: NOT_REPEATED)
-            when (val subject = binding.subject) {
-                SubjectRef.Anyone -> anyone += entry
-                is SubjectRef.Principal -> {
-                    val index = if (binding.breakGlass) breakGlass else principals
-                    index.getOrPut(subject.tenant.value, ::HashMap).getOrPut(subject.id.value, ::ArrayList) += entry
-                }
-
-                is SubjectRef.Role -> roles.getOrPut(subject.id.value, ::ArrayList) += entry
+        if (bindings.isEmpty() && rateLimits.isEmpty()) {
+            // Nothing published for the tenant or app: a view builds one of these per request, so it holds no collections.
+            this.anyone = NO_ENTRIES
+            this.breakGlass = emptyMap()
+            this.principals = emptyMap()
+            this.roles = emptyMap()
+            this.breakGlassIds = emptySet()
+            this.repeats = 0
+        } else {
+            val anyone = ArrayList<BoundEntry>()
+            val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
+            val principals = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
+            val roles = LinkedHashMap<String, ArrayList<BoundEntry>>()
+            val ruleIds = HashSet<String>()
+            for (rule in rateLimits) {
+                require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
             }
+            val slots = repeatSlots(bindings)
+            val ids = HashSet<String>()
+            for (binding in bindings) {
+                require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
+                val entry = entry(binding, slots[binding.policy.value] ?: NOT_REPEATED)
+                when (val subject = binding.subject) {
+                    SubjectRef.Anyone -> anyone += entry
+                    is SubjectRef.Principal -> {
+                        val index = if (binding.breakGlass) breakGlass else principals
+                        index.getOrPut(subject.tenant.value, ::HashMap).getOrPut(subject.id.value, ::ArrayList) += entry
+                    }
+
+                    is SubjectRef.Role -> roles.getOrPut(subject.id.value, ::ArrayList) += entry
+                }
+            }
+            this.anyone = anyone.sortedWith(BY_POLICY_THEN_ID).toTypedArray()
+            this.breakGlass = breakGlass.sortedById()
+            this.principals = principals.sortedById()
+            this.roles = roles.mapValues { it.value.toTypedArray() }
+            this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
+            this.repeats = slots.size
         }
-        this.anyone = anyone.sortedWith(BY_POLICY_THEN_ID).toTypedArray()
-        this.breakGlass = breakGlass.sortedById()
-        this.principals = principals.sortedById()
-        this.roles = roles.mapValues { it.value.toTypedArray() }
-        this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
-        this.repeats = slots.size
     }
 
     /**
@@ -269,6 +279,7 @@ class CompiledDocument private constructor(
     @InternalCoSecApi
     companion object {
         private const val NOT_REPEATED = -1
+        private val NO_ENTRIES = emptyArray<BoundEntry>()
 
         // Plain comparators: kotlin.comparisons is not among the packages the engine may use (EnginePurityTest).
         private val BY_ID = Comparator<BoundEntry> { a, b -> a.via.id.value.compareTo(b.via.id.value) }
@@ -398,7 +409,7 @@ class CompiledDocument private constructor(
             CompiledDocument(
                 DocumentKind.APP,
                 app.value,
-                index(DocumentKind.APP, policies),
+                if (policies.isEmpty()) emptyMap() else index(DocumentKind.APP, policies),
                 bindings,
                 rateLimits = rateLimits
             )
@@ -420,7 +431,7 @@ class CompiledDocument private constructor(
             CompiledDocument(
                 DocumentKind.TENANT,
                 tenant.value,
-                index(DocumentKind.TENANT, policies),
+                if (policies.isEmpty()) emptyMap() else index(DocumentKind.TENANT, policies),
                 bindings,
                 boundary = boundary,
                 rateLimits = rateLimits,

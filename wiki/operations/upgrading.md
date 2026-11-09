@@ -457,6 +457,11 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   attribute its action and resource read, a stage-A provider included (without the scope, as stage A asks), where a
   stage-A attribute was unavailable (`AttributeUnavailable`) unless some stage-B provider was registered. A stage-A
   provider is now called by each check that needs one of its attributes.
+- **Providers are asked for fewer attributes** (#1211, `ATR-8`). The attribute plan walks the statements the
+  evaluation visits, those the statement index gives, instead of every statement whose action matches: a statement
+  whose resource path cannot match the request plans nothing, nor does its policy condition. A stage-B provider is no
+  longer called for a request that no statement reading its attribute can match. What a request is decided on does
+  not change.
 - **One revalidation pass at a time** (#1215, `SNP-6`). A periodic pass that outlasts `revalidate-interval` is no
   longer joined by another: the next starts as soon as it ends, so a slow Redis sees at most four revalidation reads
   from an instance at once. A change whose invalidation was lost is installed by the first pass that reaches its

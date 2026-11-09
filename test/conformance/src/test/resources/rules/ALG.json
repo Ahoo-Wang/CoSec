@@ -68,6 +68,7 @@
       "level": "engine",
       "guards": [
         "engine:FlatEngineTest#a condition runs once per evaluation, also when policies share it",
+        "engine:FlatEngineTest#a condition runs once however many others the evaluation reached",
         "engine:FlatEngineTest#a condition is not evaluated when no statement of the policy matches the action and resource"
       ],
       "pending": null,

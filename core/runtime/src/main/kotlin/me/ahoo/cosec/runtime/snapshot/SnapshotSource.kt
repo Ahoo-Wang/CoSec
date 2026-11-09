@@ -904,6 +904,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         ) {
             val startedAt: Instant = clock.instant()
 
+            /** When this load started, in [nanoTime]: what a periodic pass measures its age by. */
+            val startedNanos: Long = nanoTime.asLong
+
             /** Whether the read may have been answered from a local copy rather than the store of record. */
             var fromLocalCopy = false
 
@@ -1068,6 +1071,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         /**
          * Starts a load unless one is in flight, in which case it returns that one. Null when this slot was removed;
          * after [close], an already failed entry. A load that [pass] starts counts as a read of it until the read ends.
+         *
+         * A [pass] does not wait for a load that has been in flight longer than [SnapshotOptions.storeReadTimeout],
+         * whoever started it, and gets null as for a removed slot: the store's answer is in by then, so the load is held
+         * by a compilation, and confirms the document when it ends. Waiting would stop the pass behind it, and the
+         * documents after it would never be revalidated once as many compilations as there are lanes never end (`SNP-6`).
          */
         fun load(force: Boolean = false, pass: Pass? = null): CompletableFuture<SnapshotEntry<T>>? {
             val load: Load
@@ -1078,7 +1086,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 if (closed) {
                     return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
                 }
-                inFlight?.let { return it.result }
+                inFlight?.let {
+                    if (pass != null && nanoTime.asLong - it.startedNanos > options.storeReadTimeout.toNanos()) {
+                        return null
+                    }
+                    return it.result
+                }
                 load = newLoad(force, CompletableFuture(), pass?.startRead())
                 inFlight = load
                 dirty = false

@@ -1,0 +1,18 @@
+# Rule: ALG-7
+# Mutant: past the conditions the request-local cache scans, a condition is not remembered, so it runs again for every policy that reaches it
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEngineTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -708,9 +708,7 @@
+         var guards = guards
+         var results = guardResults
+         if (guards == null || results == null) {
+-            val map = guardMap
+-            if (map != null) {
+-                map[guard] = error ?: result
++            if (guardMap != null) {
+                 return
+             }
+             guards = arrayOfNulls(INITIAL_GUARDS)

@@ -372,6 +372,46 @@ class SnapshotRevalidationTest {
     }
 
     /**
+     * `SNP-6`, #1231's review (L4): a pass does not wait for a load that has been in flight longer than
+     * `storeReadTimeout`, whoever started it. Only a compilation holds it by then, and it confirms its document when it
+     * ends. With one lane and a compilation that never ends, each pass would stop at it and the documents behind it
+     * would never be read; here every document is read although no compilation ends before the last tick.
+     */
+    @Test
+    fun aPassDoesNotWaitForACompilationThatOutlivedTheStoreReadTimeout() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 1)
+        testSource(store, options = options, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            val apps = installed(source, 3)
+            store.dropNotifications = true
+            apps.forEach { store.put(it, document(2, "${it.appId}-2")) }
+            stuck.set(true)
+            store.readLog.clear()
+            val first = source.tick()
+            first.isDone.assert().isFalse()
+            // One tick per document, each past `storeReadTimeout` after the last: the pass before it is abandoned.
+            repeat(apps.size) {
+                elapsed.advance(options.storeReadTimeout.plusSeconds(1))
+                source.tick()
+            }
+            apps.forEach { key ->
+                store.readLog.count { it == key }.assert().describedAs("reads of $key").isGreaterThanOrEqualTo(1)
+            }
+
+            stuck.set(false)
+            while (parked.isNotEmpty()) {
+                parked.removeAt(0).run()
+            }
+            first.isDone.assert().isTrue()
+            apps.forEach { key -> source.peek(key.appId)!!.appCompiled.revision.assert().isEqualTo(2) }
+        }
+    }
+
+    /**
      * #1215, `SNP-6`: stalled means no document finished for `storeReadTimeout`, counted from the last one, not from the
      * start. A pass whose compilations are slow but still finishing is not abandoned (it would start again from the
      * first document every `storeReadTimeout`, and the documents after it would never be reached), and a step of the
