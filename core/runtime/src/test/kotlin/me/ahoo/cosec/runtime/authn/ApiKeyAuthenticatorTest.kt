@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.authn
 
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -45,6 +46,7 @@ class ApiKeyAuthenticatorTest {
 
     private val keys = mapOf(
         "valid" to key("billing"),
+        "for-order" to key("for-order", app = "order"),
         "uncapped" to key("uncapped", roles = null),
         "empty" to key("empty", roles = emptySet()),
         "disabled" to key("disabled", enabled = false),
@@ -81,6 +83,13 @@ class ApiKeyAuthenticatorTest {
     }
 
     /** `IDN-2`: an empty cap is a cap that leaves nothing, never no cap. */
+    /** RFC 0012 §3.5 (`SCP-11`): a key's app is its principal's, and a key declaring none declares none. */
+    @Test
+    fun theAppOfAKeyIsTheAppOfItsPrincipal() = runTest {
+        (authenticate("for-order") as AuthnResult.Authenticated).principal.app.assert().isEqualTo(AppId("order"))
+        (authenticate("valid") as AuthnResult.Authenticated).principal.app.assert().isNull()
+    }
+
     @Test
     fun anEmptyCapIsNotUncapped() = runTest {
         val principal = (authenticate("empty") as AuthnResult.Authenticated).principal

@@ -142,7 +142,8 @@
         "runtime:AuthorizationCheckerTest#decidesInTheDefaultSpaceOfAnotherApp",
         "cocache:StoredFormatTest#a stored api key has exactly its fields",
         "login:AbstractSwitchTenantAuthenticationTest#the new token keeps the app of the previous one",
-        "spi:VerifiedTokenTest#anAppThatCannotBeAnAppIdIsRefused"
+        "spi:VerifiedTokenTest#anAppThatCannotBeAnAppIdIsRefused",
+        "runtime:ApiKeyAuthenticatorTest#theAppOfAKeyIsTheAppOfItsPrincipal"
       ]
     }
   ]
