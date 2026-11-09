@@ -66,6 +66,24 @@ class JwtTokenVerifierTest {
         .apply(builder)
         .sign(JwtFixture.ALGORITHM)
 
+    /** `IDN-13`: a refresh token is signed and unexpired, and is still not an access token: it never becomes a principal. */
+    @Test
+    fun aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected() {
+        val composite = jwtTokenConverter.toToken(TokenSubject("alice", null))
+        val accessTokenId = JWT.decode(composite.accessToken).id
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.verify(composite.refreshToken)
+        }.message().doesNotContain(accessTokenId)
+        // Bearer-prefixed, as a client would send it; the marker's name is the claim the converter writes.
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.verify("Bearer " + composite.refreshToken)
+        }
+        // A token saying nothing of its use is an access token, as one issued by another converter is.
+        jwtTokenVerifier.verify(signed { }).principal.assert().isEqualTo("alice")
+        // Refreshing is unaffected: the refresh token is read there, and its access token is the one verified.
+        jwtTokenVerifier.refresh(composite).principal.assert().isEqualTo("alice")
+    }
+
     /** `IDN-4`: a delegation token never becomes a principal, whatever else about it is valid. */
     @Test
     fun aDelegationTokenIsRefused() {

@@ -32,8 +32,8 @@ The access token carries the principal, so authenticating a request needs no loo
 | `cosec.membership` | `"provider"` in place of `roles` and `policies`, when they come from a `MembershipProvider` ([Memberships](#memberships)). Left out otherwise. |
 | `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
 
-The refresh token carries only its own `jti`, `iat`, `exp`, and, as `sub`, the `jti` of the access token it belongs
-to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
+The refresh token carries only its own `jti`, `iat`, `exp`, `cosec.token: "refresh"` and, as `sub`, the `jti` of the
+access token it belongs to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
 from `RandomIdGenerator` ([Ids](../architecture/extending.md#ids)). The lifetimes are
 `cosec.jwt.token-validity.access` (10 minutes) and `cosec.jwt.token-validity.refresh` (7 days).
 
@@ -51,6 +51,12 @@ library would write `?` and issue a token of another principal. Surrogate pairs,
 **An id beginning with `(` is CoSec's.** A token whose `sub` begins with `(`, as the tenants `(0)` and `(platform)` and the
 anonymous principal `(0)` do, is `token-invalid` (`IDN-12`), and `JwtTokenConverter` refuses to sign one. So is a token with
 no `sub` or `jti`.
+
+**A refresh token is not an access token.** A token with a `cosec.token` claim, which `JwtTokenConverter` writes on
+every refresh token as `refresh`, is `token-invalid` wherever an access token is expected, on every path that verifies
+one (`IDN-13`): signed and unexpired, it still never authenticates, so it can never be the principal its `sub` names.
+A token from another issuer that does not write the claim is read as an access token; only
+[`refresh`](#refreshing-tokens) reads a refresh token.
 
 **Delegation tokens are refused.** A token with an `act` claim (an [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)
 delegation token: `sub` is the party acted for, `act` the one acting) is rejected as `token-invalid`, even when its

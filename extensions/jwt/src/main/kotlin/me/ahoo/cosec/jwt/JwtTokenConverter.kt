@@ -104,6 +104,7 @@ class JwtTokenConverter(
                 .withSubject(accessTokenId)
                 .withIssuedAt(now)
                 .withExpiresAt(refreshTokenExp)
+                .withClaim(Jwts.TOKEN_USE_CLAIM, Jwts.REFRESH_TOKEN)
                 .sign(algorithm)
         return SimpleCompositeToken(accessToken, refreshToken)
     }

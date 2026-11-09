@@ -1,0 +1,18 @@
+# Rule: IDN-13
+# Mutant: a refresh token is read as an access token: it authenticates as a principal named after the access token's id
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index 5de2b0a8..6e678b2d 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -58,9 +58,6 @@ internal object Jwts {
+      * A token with no `sub` or `jti` is invalid.
+      */
+     fun toVerifiedToken(decodedAccessToken: DecodedJWT): VerifiedToken {
+-        if (!decodedAccessToken.getClaim(TOKEN_USE_CLAIM).isMissing) {
+-            throw TokenVerificationException("The token is not an access token.")
+-        }
+         if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
+             throw DelegationUnsupportedException(
+                 "The token delegates (it carries an `act` claim), which CoSec does not support."
