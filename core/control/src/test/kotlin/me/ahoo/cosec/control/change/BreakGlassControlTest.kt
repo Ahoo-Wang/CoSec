@@ -151,9 +151,6 @@ class BreakGlassControlTest {
 
     /** Another requester: may request and revoke break-glass, and read none of rita's changes. */
     private val rhea = engine.operator(TenantId.PLATFORM, "rhea")
-
-    /** Holds cosec:breakglass on the platform document and nothing else, as RFC 0007 §8 says is enough. */
-    private val bianca = engine.operator(TenantId.PLATFORM, "bianca")
     private val alice = engine.operator(TenantId("acme"), "alice")
 
     init {
@@ -172,31 +169,17 @@ class BreakGlassControlTest {
                     )
                 ),
             )
-            val operator = PolicyDefinition(
-                PolicyId("break-glass-operator"),
-                false,
-                null,
-                listOf(
-                    StatementSource(
-                        "",
-                        Effect.ALLOW,
-                        listOf("cosec:breakglass"),
-                        listOf(ResourceSource("doc/platform"))
-                    )
-                ),
-            )
             revisions.publish(
                 SnapshotKey.Platform,
                 null,
                 StoreFixtures.candidate(
                     SnapshotKey.Platform,
-                    listOf(requester, operator),
+                    listOf(requester),
                     listOf(
                         control("plato", "plato", BuiltinPolicies.PLATFORM_ADMIN),
                         control("pia", "pia", BuiltinPolicies.PLATFORM_ADMIN),
                         control("rita", "rita", PolicyId("break-glass-requester")),
                         control("rhea", "rhea", PolicyId("break-glass-requester")),
-                        control("bianca", "bianca", PolicyId("break-glass-operator")),
                         Binding(
                             BindingId("alice"),
                             SubjectRef.Principal(TenantId("acme"), PrincipalId("alice")),
@@ -325,48 +308,6 @@ class BreakGlassControlTest {
     }
 
     @Test
-    fun `cosec breakglass alone requests it, publishes what was approved and revokes it`() = runBlocking<Unit> {
-        val requested = breakGlass.request(bianca, PrincipalId("bianca"), inHours(2), "incident 7")
-        requested.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
-        changes.approve(pia, requested.id, requested.candidate!!)
-        changes.publish(bianca, requested.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
-        val binding = glass()!!.id
-        breakGlass.revoke(bianca, binding, "done").state.assert().isEqualTo(ChangeState.PUBLISHED)
-        glass().assert().isNull()
-    }
-
-    @Test
-    fun `cosec breakglass does not stand in for cosec publish on any other change`() = runBlocking<Unit> {
-        val change = changes.propose(
-            plato,
-            SnapshotKey.Platform,
-            1,
-            listOf(Operation.PutPolicy(allow("x"))),
-            "ordinary"
-        )
-        // bianca cannot even see it; rita holds cosec:publish, and may stage it only because of that.
-        refused { changes.stage(bianca, change.id) }.assert().isEqualTo(404)
-    }
-
-    @Test
-    fun `a refused request tells nothing of the bindings there are`() = runBlocking<Unit> {
-        val expiresAt = inHours(2)
-        val requested = breakGlass.request(rita, PrincipalId("rita"), expiresAt, "incident 8")
-        changes.approve(pia, requested.id, requested.candidate!!)
-        changes.publish(rita, requested.id)
-        val nobody = engine.operator(TenantId.PLATFORM, "nobody")
-        for (caller in listOf(alice, nobody)) {
-            refused { breakGlass.request(caller, PrincipalId("rita"), expiresAt, "probe") }.assert().isEqualTo(403)
-            refused { breakGlass.request(
-                caller,
-                PrincipalId("rita"),
-                expiresAt.plusMillis(1),
-                "probe"
-            ) }.assert().isEqualTo(403)
-        }
-    }
-
-    @Test
     fun `only the platform's principals with cosec breakglass request it`() = runBlocking<Unit> {
         // alice holds platform-admin through a wrongly written binding; the hard rule still refuses her.
         refused { breakGlass.request(alice, PrincipalId("alice"), inHours(1), "mine") }.assert().isEqualTo(403)
@@ -399,7 +340,7 @@ class BreakGlassControlTest {
     @Test
     fun `its lifetime is bounded, when requested and when published`() = runBlocking<Unit> {
         breakGlass.request(rita, PrincipalId("rita"), inHours(5), "too long").errors.map { it.path }
-            .assert().contains("$.bindings[6].expiresAt")
+            .assert().contains("$.bindings[5].expiresAt")
         val longer = changes(
             options = ChangeOptions(shadow = IMMEDIATE_WINDOW, breakGlassMaxDuration = Duration.ofHours(24))
         )

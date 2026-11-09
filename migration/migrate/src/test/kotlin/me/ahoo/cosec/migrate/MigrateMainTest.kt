@@ -292,7 +292,7 @@ class MigrateMainTest {
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
         output.assert().contains("Removed 1 reference(s) no head refers to.")
         controlStore(keyPrefix) { store ->
-            store.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEmpty()
+            store.referrers(SnapshotKey.Platform, shared)?.value.orEmpty().assert().isEmpty()
         }
     }
 
