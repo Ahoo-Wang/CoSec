@@ -88,6 +88,20 @@ and have to be provisioned again.
 - **Instance statuses carry the document format level** (RFC 0010 C5): an instance reporting without `formatLevel` is
   refused by a control plane of this version, and a shadow window reading one fails until every instance has been
   upgraded (a status expires after a minute).
+- **The control plane refuses what used to fail at run time.** A platform change that turns a policy other documents
+  refer to into a boundary, or a boundary they refer to into a policy, is `REFERENCES` (`422`, `CTL-30`). A binding that
+  names a platform boundary is `REFERENCES` too: such a binding never granted, every request it applied to was `503`,
+  and a document that holds one has to remove it before it publishes again. An id a change puts holds no `/` (`V2`,
+  `422`): a rule ending in `*` did not reach such an entry. A permission policy's `perm:<app>/<id>` may; entries that
+  already hold one can stay or be removed.
+- **`cosec:grant` follows what a role derives** (RFC 0012 §7.2): a `putCatalog` or `putPolicy` that makes a `"*"` role
+  derive a binding it did not needs `cosec:grant` on the role's scope, as a `putRole` does.
+- **`cosec:breakglass` is enough for break-glass** (RFC 0007 §8): requesting one, publishing it once approved and
+  revoking it no longer also need `cosec:publish`. No other change takes `cosec:breakglass` in its place.
+- **A rollback carries `confirmations`**, as a proposal does, when it brings back a DENY with `onMissing: "nomatch"`.
+  Until now such a rollback could not be confirmed at all.
+- **`repair-references` also removes** what a publish indexed before a head write it lost, and prints
+  `Removed <n> reference(s) no head refers to.`. [Repair the back-reference index](#repair-the-back-reference-index).
 
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
@@ -673,7 +687,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `publish` | Writes the documents of an accepted conversion to Redis as their first revisions, through the control plane's store. Never touches the 7.x keys. |
 | `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
-| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, and completes the app list. Only adds. |
+| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
 
 #### Convert
 
@@ -818,8 +832,11 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 The control plane keeps an index of which documents refer to which policy, so that a platform change cannot remove a
 policy a document still uses, nor add one whose id a tenant document uses ([Storage](./storage.md#redis-keys)).
 `repair-references` reads the head of every document the store lists and adds whatever the index misses; it prints
-how many documents it visited and how many references it added. It only adds, so it may run while the control plane
-runs, and running it again adds nothing: an entry the index has stays, and an extra one blocks a removal at most. A
+how many documents it visited and how many references it added. Then it removes the references no head has, which a
+publish indexed before a head write it lost, and prints how many: left there, one would block removing that policy for
+good. A reference goes only once its document's head is at or above the revision that indexed it, so a publish still in
+flight keeps its own, and a lost one stays until that document has published past it. So it may run while the control
+plane runs, and running it again changes nothing. A
 document whose head cannot be read is printed as `FAILED <doc>: <reason>`, the others are still visited, and the
 command exits with `1`.
 

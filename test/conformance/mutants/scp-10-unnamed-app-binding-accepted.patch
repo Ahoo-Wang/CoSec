@@ -3,13 +3,13 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index c2820d00..44aeefd3 100644
+index c5fec854..a4a7e5bb 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -146,7 +146,6 @@ class ChangeChecks(
-             findings += Finding("V2", "$", "the document is ${bytes.size} bytes, more than ${options.maxDocumentBytes}", BAD_REQUEST)
+@@ -164,7 +164,6 @@ class ChangeChecks(
          }
          reservedNames(operations, kind, findings)
+         entryIds(operations, findings)
 -        appIds(candidate, findings)
          val checkedWith = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
          val platform = if (key == SnapshotKey.Platform) {
