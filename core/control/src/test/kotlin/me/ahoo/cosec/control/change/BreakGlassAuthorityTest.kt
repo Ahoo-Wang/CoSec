@@ -114,7 +114,10 @@ class BreakGlassAuthorityTest {
                 null,
                 StoreFixtures.candidate(
                     SnapshotKey.Platform,
-                    listOf(holding("operator", "cosec:breakglass"), holding("reader", "cosec:breakglass", "cosec:read")),
+                    listOf(
+                        holding("operator", "cosec:breakglass"),
+                        holding("reader", "cosec:breakglass", "cosec:read")
+                    ),
                     listOf(
                         control("plato", BuiltinPolicies.PLATFORM_ADMIN),
                         control("pia", BuiltinPolicies.PLATFORM_ADMIN),
@@ -160,7 +163,13 @@ class BreakGlassAuthorityTest {
 
     @Test
     fun `cosec breakglass does not stand in for cosec publish on any other change`() = runBlocking<Unit> {
-        val change = changes.propose(plato, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(allow("x"))), "ordinary")
+        val change = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(allow("x"))),
+            "ordinary"
+        )
         refused { changes.stage(vera, change.id) }.assert().isEqualTo(403)
         changes.skipShadow(plato, change.id, "test").state.assert().isEqualTo(ChangeState.READY)
         refused { changes.publish(vera, change.id) }.assert().isEqualTo(403)
