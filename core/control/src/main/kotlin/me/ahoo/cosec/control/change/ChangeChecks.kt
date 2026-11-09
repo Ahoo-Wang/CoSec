@@ -29,6 +29,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.document.DocumentCompileException
 import me.ahoo.cosec.runtime.document.Expansion
+import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
@@ -164,10 +165,7 @@ class ChangeChecks(
             head?.document
         }
         if (candidate.kind == DocumentKind.TENANT && platform != null) {
-            val shared = platform.policies.map { it.id.value }.toSet()
-            candidate.policies.withIndex().filter { it.value.id.value in shared }.forEach { (i, policy) ->
-                findings += Finding("V2", "$.policies[$i].id", "[${policy.id.value}] is a platform policy's id", UNPROCESSABLE)
-            }
+            sharesPlatformIds(candidate, platform, findings)
         }
         try {
             PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit, credentialHeaders)
@@ -185,6 +183,27 @@ class ChangeChecks(
             else -> unresolved(candidate, platform, context, checkedWith, findings)
         }
         return CheckResult(findings, checkedWith)
+    }
+
+    /**
+     * A tenant policy takes a platform policy's id only as an exact copy of it (RFC 0007 N2, §9.4, #1224): that is the
+     * first step of the partition flow, where both layers hold the same content and resolve it alike. Any other policy
+     * of that id would be ambiguous (the engine fails closed on it), and the copy cannot be edited while the platform's
+     * stands, since the edit would no longer be a copy. Removing the copy, or the platform's, is not checked here.
+     */
+    private fun sharesPlatformIds(candidate: PolicyDocument, platform: PolicyDocument, findings: MutableList<Finding>) {
+        val shared = platform.policies.associateBy { it.id }
+        candidate.policies.withIndex().forEach { (i, policy) ->
+            val original = shared[policy.id] ?: return@forEach
+            if (EntryDigest.of(policy) != EntryDigest.of(original)) {
+                findings += Finding(
+                    "V2",
+                    "$.policies[$i].id",
+                    "[${policy.id.value}] is a platform policy's id, and this policy is not an exact copy of it",
+                    UNPROCESSABLE,
+                )
+            }
+        }
     }
 
     /**
@@ -365,9 +384,12 @@ class ChangeChecks(
         context: Context,
         findings: MutableList<Finding>,
     ) {
-        val existing = base?.policies.orEmpty().map { it.id }.toSet()
+        val existing = base?.policies.orEmpty().associateBy { it.id }
         for ((i, policy) in candidate.policies.withIndex()) {
-            if (policy.id in existing) continue
+            if (policy.id in existing) {
+                changedWithCopies(existing.getValue(policy.id), policy, i, context, findings)
+                continue
+            }
             val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
             val uses = tenants.associateWith { uses(context, it, policy.id) }
             val using = uses.filterValues { it != false }.keys
@@ -381,6 +403,43 @@ class ChangeChecks(
                 status,
             )
         }
+    }
+
+    /**
+     * A platform policy that tenants hold exact copies of (the partition flow, RFC 0007 §9.4) is frozen while they do:
+     * changing it would leave the two layers with one id and two contents, which the engine refuses. A tenant whose
+     * head cannot be read counts as holding a copy.
+     */
+    private suspend fun changedWithCopies(
+        before: PolicyDefinition,
+        after: PolicyDefinition,
+        index: Int,
+        context: Context,
+        findings: MutableList<Finding>,
+    ) {
+        if (EntryDigest.of(before) == EntryDigest.of(after)) return
+        val tenants = context.referrers(SnapshotKey.Platform, after.id).filterIsInstance<SnapshotKey.Tenant>()
+        val holding = tenants.associateWith { definesCopy(context, it, after.id) }.filterValues { it != false }
+        if (holding.isEmpty()) return
+        val status = if (holding.values.any { it == null }) UNAVAILABLE else UNPROCESSABLE
+        findings += Finding(
+            "V2",
+            "$.policies[$index].id",
+            "[${after.id.value}] is copied by ${holding.keys.map { it.toString() }.sorted()}: change it only after their copies are removed" +
+                if (status == UNAVAILABLE) ", or whose document could not be read" else "",
+            status,
+        )
+    }
+
+    /** Whether the head of [tenant] defines [policy] itself; `null` when it cannot be read. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun definesCopy(context: Context, tenant: SnapshotKey.Tenant, policy: PolicyId): Boolean? = try {
+        context.head(tenant)?.document?.policies?.any { it.id == policy } == true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "The document of [$tenant] could not be read; [${policy.value}] is refused as one it may copy." }
+        null
     }
 
     /** Whether the head of [tenant] defines or binds [policy]; `null` when it cannot be read. */

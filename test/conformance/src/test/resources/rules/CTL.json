@@ -158,11 +158,12 @@
     },
     {
       "id": "CTL-14",
-      "source": "RFC 0007 §3.1 N2, §9.2, Q15",
-      "statement": "The control plane refuses a tenant policy whose id the platform document already uses (422); the data plane would read such an id as ambiguous unless both contents are the same.",
+      "source": "RFC 0007 §3.1 N2, §9.2, §9.4, Q15, #1224",
+      "statement": "The control plane refuses a tenant policy whose id the platform document already uses unless it is an exact copy of the platform's policy (422): the data plane reads such an id as ambiguous unless both contents are the same, and the copy is the first step of the partition flow.",
       "level": "control",
       "guards": [
-        "control:PublishCompileTest"
+        "control:PublishCompileTest",
+        "control:SharedPolicyCopyTest"
       ],
       "pending": null
     },
@@ -328,6 +329,16 @@
       "level": "control",
       "guards": [
         "control:SectionFieldsHttpTest#a section field of the wrong type is a 400 and proposes nothing - #1275"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-29",
+      "source": "RFC 0007 §9.4, #1224",
+      "statement": "The control plane refuses a change of a platform policy while a tenant document holds a copy of it (422), naming the tenant, so the two layers never hold one id with two contents; removing the copy, or the platform's policy, is not refused.",
+      "level": "control",
+      "guards": [
+        "control:SharedPolicyCopyTest"
       ],
       "pending": null
     }

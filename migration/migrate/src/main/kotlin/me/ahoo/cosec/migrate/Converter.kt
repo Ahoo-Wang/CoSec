@@ -116,6 +116,62 @@ class Converter(private val compiler: PolicyDocumentCompiler = PolicyDocumentCom
     }
 }
 
+private val POLICY_PATH = Regex("""^\$\.policies\[(\d+)]""")
+
+/** Where the input of [path] in the document of [key] came from: its policy's origin, else the document's name. */
+private fun originOf(
+    origins: List<Provenance.PolicyOrigin>,
+    key: SnapshotKey,
+    policies: List<PolicyDefinition>,
+    path: String,
+): String {
+    val index = POLICY_PATH.find(path)?.groupValues?.get(1)?.toInt()
+    val policy = index?.let { policies.getOrNull(it) } ?: return key.toString()
+    return origins.firstOrNull { it.document == key.toString() && it.policyId == policy.id.value }?.source ?: key.toString()
+}
+
+/**
+ * The apps (or tenants) of a conversion by id, each of which names a file. An export may list an app twice, and which
+ * entry is right is not for the migration to guess (#1232); two ids whose files differ only in case name one file on a
+ * case-insensitive file system (macOS, Windows), where one document would replace the other. The names are the ones
+ * [ConvertedDirectory] writes, not the raw ids: `straße` and `strasse` fold to one id in Unicode and to two files here
+ * (#1259).
+ */
+private class SeenIds(
+    private val kind: String,
+    private val reject: (RejectionKind, String, String) -> Unit,
+) {
+    private val locations = HashMap<String, String>()
+    private val folded = HashMap<String, String>()
+
+    /** Whether [id] was seen at an earlier location, which is rejected. */
+    fun repeated(id: String, location: String): Boolean {
+        val first = locations.putIfAbsent(id, location) ?: return false
+        reject(
+            RejectionKind.DUPLICATE_ID,
+            location,
+            "$kind [${Identifiers.printable(id)}] is listed more than once (first at $first): one entry would replace " +
+                "the other and lose its permissions or grants; keep one",
+        )
+        return true
+    }
+
+    /** Whether the file of [id] differs from the file of every other id in more than case. */
+    fun distinctInCase(id: String, location: String): Boolean {
+        val other = folded.putIfAbsent(ConvertedDirectory.fileName(id).lowercase(), id)
+        if (other == null || other == id) {
+            return true
+        }
+        reject(
+            RejectionKind.DUPLICATE_ID,
+            location,
+            "$kind id [${Identifiers.printable(id)}] differs from [${Identifiers.printable(other)}] only in case: " +
+                "their converted files would collide; rename one",
+        )
+        return false
+    }
+}
+
 private class Run(val source: Source7x, val options: ConvertOptions, val compiler: PolicyDocumentCompiler) {
     val rejections = ArrayList<Rejection>()
     val warnings = ArrayList<Warning>()
@@ -141,9 +197,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     val bindingOrigins = ArrayList<Provenance.BindingOrigin>()
     val rateLimits = ArrayList<ConvertedRateLimit>()
 
-    /** App and tenant ids by their case-folded form: each names a file, and file systems may ignore case. */
-    val appCases = HashMap<String, String>()
-    val tenantCases = HashMap<String, String>()
+    /** The apps and tenants seen, for the files they name: file systems may ignore case. */
+    val apps = SeenIds("app") { kind, location, message -> reject(kind, location, message) }
+    val tenants = SeenIds("tenant") { kind, location, message -> reject(kind, location, message) }
 
     fun reject(kind: RejectionKind, location: String, message: String) {
         rejections += Rejection(kind, location, message)
@@ -307,24 +363,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return if (translated.none { it == null }) policy else null
     }
 
-    /**
-     * Whether [id] differs from every other app (or tenant) id in more than case. Two that differ only in case name
-     * one file on a case-insensitive file system (macOS, Windows), where one document would replace the other.
-     */
-    private fun distinctInCase(id: String, seen: MutableMap<String, String>, location: String, kind: String): Boolean {
-        val folded = id.uppercase().lowercase()
-        val other = seen.putIfAbsent(folded, id)
-        if (other == null || other == id) {
-            return true
-        }
-        reject(
-            RejectionKind.DUPLICATE_ID,
-            location,
-            "$kind id [$id] differs from [$other] only in case: their converted files would collide; rename one",
-        )
-        return false
-    }
-
     /** Whether [tree] names an id other than the [id] its key or position names. */
     private fun namesAnotherId(tree: JsonNode, id: String): Boolean {
         val content = tree.get(ID)?.takeUnless { it.isNull } ?: return false
@@ -359,7 +397,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             )
             return null
         }
-        if (!distinctInCase(tenantId, tenantCases, location, "tenant")) {
+        if (!tenants.distinctInCase(tenantId, location)) {
             return null
         }
         val key = SnapshotKey.Tenant(tenantId)
@@ -391,7 +429,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     private fun convertApp(app: Source7x.App) {
         count("apps")
         val appId = app.appId
-        if (!distinctInCase(appId, appCases, app.location, "app")) {
+        if (apps.repeated(appId, app.location) || !apps.distinctInCase(appId, app.location)) {
             return
         }
         val tree = appPermissionTree(app) ?: return
@@ -707,9 +745,20 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
                 catalogs[key],
                 rateLimits = rateLimits.of(key),
             )
-            // Every policy compiled on its own; the whole document must too (ids, bindings, break-glass rules).
-            compiler.compile(document)
-            documents[key] = document
+            // Every policy compiled on its own; the whole document must too (ids, bindings, break-glass rules, and the
+            // budgets of the whole: a refusal of the data, so it is reported and written like the others, #1247).
+            try {
+                compiler.compile(document)
+                documents[key] = document
+            } catch (error: DocumentCompileException) {
+                error.errors.forEach {
+                    reject(
+                        RejectionKind.DOES_NOT_COMPILE,
+                        originOf(policyOrigins, key, keyPolicies, it.path),
+                        "the $key document: ${it.path}: ${it.message}"
+                    )
+                }
+            }
         }
         return documents
     }

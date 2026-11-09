@@ -34,9 +34,17 @@ import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.runtime.json.CoSecJson
+import tools.jackson.core.JacksonException
+import tools.jackson.databind.JsonNode
+import java.io.IOException
 import java.io.PrintStream
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import kotlin.system.exitProcess
 
 /**
@@ -72,9 +80,25 @@ object MigrateMain {
     const val USAGE = 2
     private const val SCAN_COUNT = 1000L
 
-    /** The commands that accept `--cluster`: the others read or write Redis with plain clients that do not. */
-    private val CLUSTER_COMMANDS = listOf("publish", "bootstrap", "repair-references", "cocache8")
+    /**
+     * The options each command reads. One it does not read is a usage error, before anything is read or written: it
+     * would otherwise be accepted and ignored, as `publish --dry-run` was, which published for real (#1225). `--cluster`
+     * is for the commands that write through the control plane's store; the others use plain Redis clients.
+     */
+    private val OPTIONS = mapOf(
+        "convert" to setOf("from-redis", "from-files", "key-prefix", "out", "partition", "rate-limit-rules"),
+        "publish" to setOf("to-redis", "cluster", "key-prefix", "in", "resume"),
+        "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
+        "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
+        "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
+        "api-keys" to setOf(
+            "redis", "key-prefix", "out", "memberships", "grant-to-principal", "role-prefix", "dry-run"
+        ),
+        "cocache8" to setOf("redis", "cluster", "key-prefix", "out", "discard-pending", "dry-run"),
+    )
     const val API_KEYS_REPORT_FILE = "api-keys-report.json"
+    private const val STATUS_PLANNED = "planned"
+    private val REPLACEABLE_STATUS = setOf(ApiKeyMigrationPlan.STATUS_DRY_RUN, ApiKeyMigrationPlan.STATUS_REJECTED)
 
     private val USAGE_TEXT = """
         Usage:
@@ -119,10 +143,15 @@ object MigrateMain {
     }
 
     private fun dispatch(command: String?, options: Options, out: PrintStream): Int {
-        if (options.flag("cluster") && command !in CLUSTER_COMMANDS) {
-            throw UsageException(
-                "--cluster is for ${CLUSTER_COMMANDS.joinToString()}, which write through the control plane's store."
-            )
+        OPTIONS[command]?.let { allowed ->
+            val unused = options.names - allowed
+            if (unused.isNotEmpty()) {
+                throw UsageException(
+                    "$command does not take ${unused.sorted().joinToString { "--$it" }}" +
+                        (if ("cluster" in unused) " (--cluster is for the commands that write through the control plane's store)" else "") +
+                        ". It takes ${allowed.sorted().joinToString { "--$it" }}."
+                )
+            }
         }
         return command(command, options, out)
     }
@@ -150,6 +179,9 @@ object MigrateMain {
         fun required(name: String): String = values[name] ?: throw UsageException("Missing --$name.")
 
         fun flag(name: String): Boolean = name in flags
+
+        /** Every option given, valued or not. */
+        val names: Set<String> get() = values.keys + flags
 
         companion object {
             private val VALUED = setOf(
@@ -342,8 +374,9 @@ object MigrateMain {
             summarize(if (platform.report.accepted) byOwner.report else platform.report, out)
             return FAILED
         }
-        val written = PartitionPlan.write(PartitionPlan.of(platform, byOwner), Path.of(options.required("out")))
-        written.forEach { out.println("Planned $it") }
+        val plan = PartitionPlan.of(platform, byOwner)
+        val written = PartitionPlan.write(plan, Path.of(options.required("out")))
+        plan.keys.zip(written).forEach { (key, path) -> out.println("Planned $key: $path") }
         out.println("Planned ${written.size} tenant(s): submit each with apply (merge). Nothing was written to Redis.")
         return OK
     }
@@ -353,6 +386,11 @@ object MigrateMain {
      * (`SNP-9`), to the format of RFC 0009 and writes the
      * change report. With `--dry-run`, or when a key is refused, nothing is written to Redis. Keys already converted are
      * left as they are, so a run can be repeated; each key is rewritten only while it still holds what was read.
+     *
+     * The report is the only place the roles and policies a key had are kept (the converted key does not hold them), so
+     * it is on disk before the first key is rewritten, and a report that holds the plan of a run that rewrote keys is
+     * never overwritten: a repeated run, which finds those keys converted, would otherwise replace the plan with an
+     * empty one (#1220). The report of a dry run or of a refusal may be replaced by the run that follows it.
      */
     private fun apiKeys(options: Options, out: PrintStream): Int {
         val uri = options.required("redis")
@@ -376,17 +414,72 @@ object MigrateMain {
                         options.value("role-prefix") ?: ApiKeyMigration.DEFAULT_ROLE_PREFIX,
                     ).plan(stored.legacy)
                 }.withRejections(stored.unreadable)
-                val changed = if (plan.accepted && !dryRun) write(commands, apiKeyPrefix, plan) else emptyList()
-                Files.createDirectories(outDirectory)
                 val report = outDirectory.resolve(API_KEYS_REPORT_FILE)
-                val json = plan.report(dryRun, stored.converted, changed)
-                Files.write(report, CoSecJson.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(json))
+                Files.createDirectories(outDirectory)
+                requireReplaceable(report)
+                val rewrites = plan.accepted && !dryRun
+                writeReport(
+                    report,
+                    plan.report(dryRun, stored.converted, status = if (rewrites) STATUS_PLANNED else null)
+                )
+                val changed = if (rewrites) write(commands, apiKeyPrefix, plan) else emptyList()
+                if (rewrites) {
+                    finalReport(report, plan.report(dryRun, stored.converted, changed))
+                }
                 summarize(plan, out)
                 out.println("Wrote $report")
                 return outcome(plan, dryRun, changed, out)
             }
         } finally {
             client.shutdown()
+        }
+    }
+
+    /** The report [report] names may be replaced only while it is the report of a run that rewrote no key. */
+    private fun requireReplaceable(report: Path) {
+        if (!Files.exists(report, LinkOption.NOFOLLOW_LINKS)) {
+            return
+        }
+        val status = if (Files.isRegularFile(report, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                CoSecJson.mapper.readTree(Files.readAllBytes(report))?.get("status")?.takeIf { it.isString }?.asString()
+            } catch (_: JacksonException) {
+                null
+            }
+        } else {
+            null
+        }
+        require(status in REPLACEABLE_STATUS) {
+            "$report exists and is not the report of a dry run or of a refused run: it may hold the plan of keys already " +
+                "rewritten, and is never overwritten. Give --out a directory of its own, or move the report away once its plan is carried out."
+        }
+    }
+
+    /** Writes [json] to [path] as a whole or not at all, and to disk before it returns. */
+    private fun writeReport(path: Path, json: JsonNode) {
+        val bytes = CoSecJson.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(json)
+        val temporary = Files.createTempFile(path.toAbsolutePath().parent, path.fileName.toString(), ".tmp")
+        try {
+            FileChannel.open(temporary, StandardOpenOption.WRITE).use { channel ->
+                channel.write(ByteBuffer.wrap(bytes))
+                channel.force(true)
+            }
+            Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            Files.deleteIfExists(temporary)
+        }
+    }
+
+    /** The report after the keys were rewritten; the planned one stays on disk when this fails. */
+    private fun finalReport(report: Path, json: JsonNode) {
+        try {
+            writeReport(report, json)
+        } catch (error: IOException) {
+            throw IllegalStateException(
+                "The keys were rewritten, but the final $report could not be written (${error.message}): " +
+                    "it still holds the plan, with status $STATUS_PLANNED.",
+                error,
+            )
         }
     }
 

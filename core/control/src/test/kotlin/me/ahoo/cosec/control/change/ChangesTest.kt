@@ -126,7 +126,14 @@ class ChangesTest {
                 ProvenanceKind.MIGRATE
             )
         }.exceptionOrNull().let { (it as ChangeRejectedException).status }.assert().isEqualTo(400)
-        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("shared"))), "shadowing")
+        // An exact copy is the partition flow's first step (N2, §9.4); a policy that differs shadows the platform's.
+        changes.propose(
+            ALICE_OP,
+            ACME,
+            0,
+            listOf(Operation.PutPolicy(allow("shared", action = "order:*"))),
+            "shadowing"
+        )
             .errors.map { it.check to it.path }.assert().containsExactly("V2" to "$.policies[0].id")
         val big = (1..30).map { Operation.PutPolicy(allow("p$it", resource = "order/${"x".repeat(40)}")) }
         changes.propose(
