@@ -61,9 +61,6 @@ jobs:
           build-mode: manual
           queries: security-and-quality
 
-      # The CodeQL Kotlin extractor runs inside the Kotlin compiler and needs far more heap than a normal
-      # build: with defaults the Kotlin daemon fails with "GC overhead limit exceeded". Give it an explicit
-      # heap and limit parallel compilations so concurrent extractions fit in the runner's memory.
       # services.gradle.org answers 504 often enough to fail this required check. Fetch the wrapper's distribution first.
       - name: Download Gradle
         run: |
@@ -73,6 +70,9 @@ jobs:
           done
           exit 1
 
+      # The CodeQL Kotlin extractor runs inside the Kotlin compiler and needs far more heap than a normal
+      # build: with defaults the Kotlin daemon fails with "GC overhead limit exceeded". Give it an explicit
+      # heap and limit parallel compilations so concurrent extractions fit in the runner's memory.
       - name: Build
         run: >-
           ./gradlew --no-daemon --no-build-cache --no-parallel --no-configuration-cache --max-workers=2
