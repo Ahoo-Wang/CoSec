@@ -315,7 +315,10 @@ class RevisionsTest {
         }
 
         /** A publish of [document] that indexes its references and then writes no head, as one that lost its slot does. */
-        private fun lost(document: me.ahoo.cosec.runtime.document.PolicyDocument, key: SnapshotKey = ACME) = runBlocking {
+        private fun lost(
+            document: me.ahoo.cosec.runtime.document.PolicyDocument,
+            key: SnapshotKey = ACME
+        ) = runBlocking {
             revisions.publish(key, revisions.head(key), document, publication("lost"), precondition = { false })
                 .assert().isInstanceOf(PublishOutcome.Conflicted::class.java)
         }

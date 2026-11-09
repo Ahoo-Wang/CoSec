@@ -128,7 +128,11 @@ class NomatchConfirmationTest {
             listOf(Operation.SetAttributes(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL))))
         )
         val confirmation = Confirmation(PolicyId("fence"), 0, StatementDigest.of(lapsing().statements.single()))
-        publish(ACME, listOf(Operation.PutPolicy(lapsing())), listOf(confirmation)).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        publish(
+            ACME,
+            listOf(Operation.PutPolicy(lapsing())),
+            listOf(confirmation)
+        ).state.assert().isEqualTo(ChangeState.PUBLISHED)
         publish(ACME, listOf(Operation.RemovePolicy(PolicyId("fence")))).state.assert().isEqualTo(ChangeState.PUBLISHED)
 
         val unconfirmed = changes.rollback(operatorFor(ACME), ACME, 1, "restore")

@@ -241,7 +241,12 @@ class RolesTest {
             .containsExactly("write doc/app/wms/catalog", "grant scope/*/wms/*")
         val full = Operations.apply(wms, base, listOf(Operation.PutCatalog(catalog))).candidate!!
         // The same catalog, and one that only takes permissions away, add no binding.
-        authorized(full, PLATO, wms, Operation.PutCatalog(catalog)).assert().containsExactly("write doc/app/wms/catalog")
+        authorized(
+            full,
+            PLATO,
+            wms,
+            Operation.PutCatalog(catalog)
+        ).assert().containsExactly("write doc/app/wms/catalog")
         authorized(full, PLATO, wms, Operation.PutCatalog(null)).assert().containsExactly("write doc/app/wms/catalog")
     }
 

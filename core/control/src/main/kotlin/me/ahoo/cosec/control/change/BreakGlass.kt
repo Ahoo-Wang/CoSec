@@ -69,7 +69,12 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
             expiresAt = expiresAt.toEpochMilli(),
             breakGlass = true,
         )
-        changes.authority.authorize(operator, SnapshotKey.Platform, listOf(Operation.PutBinding(grant)), ProvenanceKind.BREAK_GLASS)
+        changes.authority.authorize(
+            operator,
+            SnapshotKey.Platform,
+            listOf(Operation.PutBinding(grant)),
+            ProvenanceKind.BREAK_GLASS
+        )
         if (revisions.head(SnapshotKey.Platform)?.document?.bindings?.any { it.id == binding } == true) {
             throw ChangeRejectedException(CONFLICT, "the platform document already has a binding [${binding.value}]")
         }

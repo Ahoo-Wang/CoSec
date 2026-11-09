@@ -242,7 +242,9 @@ class ChangeChecks(
     private fun entryIds(operations: List<Operation>, findings: MutableList<Finding>) {
         for ((i, operation) in operations.withIndex()) {
             val id = when (operation) {
-                is Operation.PutPolicy -> operation.policy.id.value.takeUnless { it.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX) }
+                is Operation.PutPolicy -> operation.policy.id.value.takeUnless {
+                    it.startsWith(PolicyDocumentCompiler.PERMISSION_PREFIX)
+                }
                 is Operation.PutBinding -> operation.binding.id.value
                 is Operation.PutRole -> operation.role.id.value
                 is Operation.PutRateLimit -> operation.rule.id

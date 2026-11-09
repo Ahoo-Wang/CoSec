@@ -176,7 +176,14 @@ class BreakGlassControlTest {
                 PolicyId("break-glass-operator"),
                 false,
                 null,
-                listOf(StatementSource("", Effect.ALLOW, listOf("cosec:breakglass"), listOf(ResourceSource("doc/platform")))),
+                listOf(
+                    StatementSource(
+                        "",
+                        Effect.ALLOW,
+                        listOf("cosec:breakglass"),
+                        listOf(ResourceSource("doc/platform"))
+                    )
+                ),
             )
             revisions.publish(
                 SnapshotKey.Platform,
@@ -330,7 +337,13 @@ class BreakGlassControlTest {
 
     @Test
     fun `cosec breakglass does not stand in for cosec publish on any other change`() = runBlocking<Unit> {
-        val change = changes.propose(plato, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(allow("x"))), "ordinary")
+        val change = changes.propose(
+            plato,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(allow("x"))),
+            "ordinary"
+        )
         // bianca cannot even see it; rita holds cosec:publish, and may stage it only because of that.
         refused { changes.stage(bianca, change.id) }.assert().isEqualTo(404)
     }
@@ -344,7 +357,12 @@ class BreakGlassControlTest {
         val nobody = engine.operator(TenantId.PLATFORM, "nobody")
         for (caller in listOf(alice, nobody)) {
             refused { breakGlass.request(caller, PrincipalId("rita"), expiresAt, "probe") }.assert().isEqualTo(403)
-            refused { breakGlass.request(caller, PrincipalId("rita"), expiresAt.plusMillis(1), "probe") }.assert().isEqualTo(403)
+            refused { breakGlass.request(
+                caller,
+                PrincipalId("rita"),
+                expiresAt.plusMillis(1),
+                "probe"
+            ) }.assert().isEqualTo(403)
         }
     }
 

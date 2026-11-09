@@ -676,7 +676,9 @@ class Revisions(
             return
         }
         heads.read[referrer] = try {
-            head(referrer).let { ReferrerHeads.Referring(it?.revision ?: 0, it?.let { head -> references(head.document) }.orEmpty()) }
+            head(referrer).let {
+                ReferrerHeads.Referring(it?.revision ?: 0, it?.let { head -> references(head.document) }.orEmpty())
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -700,7 +702,9 @@ class Revisions(
         }
         // What a short form derives is a policy like any other: tenants' roles may refer to it (RFC 0012 §7.5).
         val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
-        val blocked = RoleExpansion.effective(base.document).policies.filter { kept[it.id] != it.boundary }.map { it.id }
+        val blocked = RoleExpansion.effective(
+            base.document
+        ).policies.filter { kept[it.id] != it.boundary }.map { it.id }
             .associateWith { policy ->
                 val referrers = referrers(key, policy) - key
                 referrers.filterNotTo(HashSet()) { definesItself(it, policy) }

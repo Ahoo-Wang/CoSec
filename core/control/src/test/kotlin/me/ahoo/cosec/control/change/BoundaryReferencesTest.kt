@@ -88,7 +88,9 @@ class BoundaryReferencesTest {
             .assert().isEqualTo(ChangeState.PUBLISHED)
         publish(platform, Operation.PutPolicy(allow("free")))
         publish(platform, Operation.PutPolicy(boundary(allow("free")))).state.assert().isEqualTo(ChangeState.PUBLISHED)
-        harness.revisions.head(platform)!!.document.policies.single { it.id == PolicyId("free") }.boundary.assert().isTrue()
+        harness.revisions.head(
+            platform
+        )!!.document.policies.single { it.id == PolicyId("free") }.boundary.assert().isTrue()
     }
 
     @Test
@@ -96,8 +98,21 @@ class BoundaryReferencesTest {
         publish(platform, Operation.PutPolicy(shared))
         publish(ACME, Operation.PutBinding(bind("b", "shared")))
         val head = harness.revisions.head(platform)!!
-        val candidate = PolicyDocument(head.document.kind, head.document.owner, 1, head.document.publishedAt, listOf(boundary(shared)), emptyList())
-        val refused = harness.revisions.publish(platform, head, candidate, Publication("c", ProvenanceKind.PUBLISH, PLATO.actor))
+        val candidate =
+            PolicyDocument(
+                head.document.kind,
+                head.document.owner,
+                1,
+                head.document.publishedAt,
+                listOf(boundary(shared)),
+                emptyList()
+            )
+        val refused = harness.revisions.publish(
+            platform,
+            head,
+            candidate,
+            Publication("c", ProvenanceKind.PUBLISH, PLATO.actor)
+        )
         (refused as PublishOutcome.Referenced).referrers.assert().isEqualTo(mapOf(shared.id to setOf(ACME)))
         harness.revisions.head(platform)!!.revision.assert().isEqualTo(head.revision)
     }
