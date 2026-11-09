@@ -275,7 +275,7 @@ class KafkaAuditListenerTest {
     fun shutdownEndsAtItsBoundAndMakesNoQueuedSendAfterIt() {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val interrupted = AtomicBoolean()
+        val interrupted = CountDownLatch(1)
         val sends = AtomicInteger()
         val kafka = mockk<KafkaOperations<String, String>> {
             every { send(any<String>(), any<String>(), any<String>()) } answers {
@@ -286,7 +286,7 @@ class KafkaAuditListenerTest {
                         release.await()
                         break
                     } catch (_: InterruptedException) {
-                        interrupted.set(true)
+                        interrupted.countDown()
                     }
                 }
                 CompletableFuture.completedFuture(mockk<SendResult<String, String>>())
@@ -308,7 +308,8 @@ class KafkaAuditListenerTest {
 
         elapsed.assert().isGreaterThanOrEqualTo(bound)
         elapsed.assert().isLessThan(5.seconds)
-        interrupted.get().assert().isTrue()
+        // On the sender's own thread, so it may land just after destroy() returns.
+        interrupted.await(5, TimeUnit.SECONDS).assert().isTrue()
         release.countDown()
         Thread.sleep(200)
         sends.get().assert().isEqualTo(1)
