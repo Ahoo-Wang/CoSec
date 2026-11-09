@@ -205,8 +205,10 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 
 ## Tokens, memberships and API keys
 
-- Tokens are read from the `Authorization` header, then the `authorization` cookie; the query parameter only with
-  `cosec.pipeline.allow-query-token=true`. Issue them with the `TokenConverter` bean.
+- Tokens are read from the `Authorization` header; the query parameter only with
+  `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with `cosec.pipeline.allow-cookie-token=true`
+  (a browser sends a cookie on a cross-site request too, so that application defends against CSRF itself). Issue them
+  with the `TokenConverter` bean.
 - A token's `roles` claim (`role` in the default space, `role@space` elsewhere) and `policies` claim (attached policy
   ids, which must be `attachable`) are the principal's memberships. A token with the claim `cosec.membership:
   "provider"` and no roles or policies takes them from a `MembershipProvider` bean instead; a `JwtTokenConverter` bean
@@ -224,8 +226,8 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   starter wires `CoCacheMembershipProvider`. A key whose principal the provider does not know or knows as deactivated is
   `token-invalid`. A user's key is a personal access token; a workload principal's key is a service account's.
   Keys stored before 8.0 are converted with `cosec-migrate api-keys`.
-- Clients send `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
-  `CoSec-Space-Id` for a non-default space, each once; a space needs a role there, or the request is denied (403
+- Clients send the headers `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
+  `CoSec-Space-Id` for a non-default space, each once (the query string is not read); a space needs a role there, or the request is denied (403
   `scope-rejected`; 401 for an anonymous caller). Details:
   https://cosec.ahoo.me/integration/authentication.
 

@@ -35,7 +35,7 @@ import java.time.Duration
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
-/** A `cosec.*` key CoSec does not read fails startup, with what 8.0 replaced it with when it was a 7.x key. */
+/** A `cosec.*` key CoSec does not read fails startup, and the message links the upgrade page. */
 class UnknownPropertiesTest {
     private val runner = ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(CoSecPropertyCheckAutoConfiguration::class.java))
@@ -65,31 +65,80 @@ class UnknownPropertiesTest {
             "cosec.authentication.login.enabled=false",
             "cosec.authorization.snapshot.fail-closed.tenants[0]=acme",
             "cosec.authentication.login.social.registration.github.client-id=id",
-            "cosec.unknown-properties=fail",
+            "cosec.key-prefix=b",
             // Read from the environment by the Kafka audit listener: declared in KafkaAuditProperties for the metadata.
             "cosec.audit.kafka.delivery=required",
         ).run { context -> context.startupFailure.assert().isNull() }
     }
 
     @Test
-    fun `a 7_x key names what replaced it`() {
+    fun `a 7_x key fails startup and the message links the upgrade page`() {
         runner.withPropertyValues(
             "cosec.authentication.enabled=false",
             "cosec.authentication.social.registration.github.client-id=id",
             "cosec.limiter.enabled=true",
-            "cosec.authorization.cache.token.expire-after-write=30",
-            "cosec.authorization.cache.token.expire-unit=SECONDS",
         ).run { context ->
             val message = context.startupFailure!!.messages()
-            message.assert().contains("cosec.authentication.enabled -> cosec.authentication.login.enabled")
-            message.assert().contains(
-                "cosec.authentication.social.registration.github.client-id -> cosec.authentication.login.social."
-            )
-            message.assert().contains("cosec.limiter.enabled -> removed")
-            message.assert().contains(
-                "cosec.authorization.cache.token.expire-after-write -> cosec.authentication.revocation.cache.local-max-age"
-            )
-            message.assert().contains("cosec.authorization.cache.token.expire-unit -> removed")
+            message.assert().contains("CoSec does not read 3 cosec.* properties,")
+            message.assert().contains("cosec.authentication.enabled")
+            message.assert().contains("cosec.authentication.social.registration.github.client-id")
+            message.assert().contains("cosec.limiter.enabled")
+            message.assert().contains(UnknownProperties.DOCUMENTATION)
+        }
+    }
+
+    /**
+     * `SNP-9`: an environment written for the three prefixes `cosec.key-prefix` replaced must not start. Its token
+     * revocations may lie under a prefix nothing reads now, and the tokens they revoked would be accepted again.
+     */
+    @Test
+    fun `a key prefix cosec key-prefix replaced fails startup`() {
+        for (
+        key in listOf(
+            "cosec.authorization.snapshot.key-prefix=b",
+            "cosec.authorization.cache.key-prefix=c",
+            "cosec.api-key.key-prefix=x:keys",
+            "cosec.api-key.keyPrefix=x:keys",
+        )
+        ) {
+            runner.withPropertyValues(key, "cosec.key-prefix=b").run { context ->
+                val message = context.startupFailure!!.messages()
+                message.assert().contains("CoSec does not read 1 cosec.* property,")
+                message.assert().containsIgnoringCase(key.substringBefore('='))
+                message.assert().contains(UnknownProperties.DOCUMENTATION)
+            }
+        }
+    }
+
+    /** `SNP-9`: in any spelling Spring would have bound, the variable a deployment set for the old prefix fails too. */
+    @Test
+    fun `a replaced key prefix in the environment fails startup`() {
+        for (
+        variable in listOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_KEYPREFIX",
+            "COSEC_AUTHORIZATION_SNAPSHOT_KEY_PREFIX",
+            "COSEC_AUTHORIZATION_CACHE_KEYPREFIX",
+            "COSEC_APIKEY_KEYPREFIX",
+            "COSEC_API_KEY_KEY_PREFIX",
+        )
+        ) {
+            runner.withEnvironment(mapOf(variable to "b")).run { context ->
+                context.startupFailure!!.messages().assert().contains("CoSec does not read 1 cosec.* property,")
+            }
+        }
+    }
+
+    /** `SNP-9`: with a switch, a moved prefix could be ignored and the revocations under it left unread. */
+    @Test
+    fun `no property turns the check off`() {
+        runner.withPropertyValues("cosec.unknown-properties=warn", "cosec.authorization.cache.key-prefix=c")
+            .run { context ->
+                val message = context.startupFailure!!.messages()
+                message.assert().contains("cosec.unknown-properties")
+                message.assert().contains("cosec.authorization.cache.key-prefix")
+            }
+        runner.withPropertyValues("cosec.enabled=false", "cosec.nothing=1").run { context ->
+            context.startupFailure!!.messages().assert().contains("cosec.nothing")
         }
     }
 
@@ -182,13 +231,6 @@ class UnknownPropertiesTest {
         )
         Binder.get(environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
             .isBound.assert().isFalse()
-    }
-
-    @Test
-    fun `warn only logs`() {
-        runner.withPropertyValues("cosec.unknown-properties=warn", "cosec.nothing=1").run { context ->
-            context.startupFailure.assert().isNull()
-        }
     }
 
     // What `kubectl exec <pod> -- env` shows in a namespace with this Service (ClusterIP, port 80/TCP named http):

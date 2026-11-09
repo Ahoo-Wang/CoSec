@@ -401,8 +401,8 @@ class WebAdapterParityTest {
             Scenario("an ambiguous path is 400", path = "/public/%2e%2e/admin", status = 400, type = "invalid-request"),
             Scenario(
                 "an ambiguous CoSec parameter is 400",
-                path = "/public/page?CoSec-App-Id=other",
-                headers = app,
+                path = "/public/page",
+                headers = app + ("cosec-app-id" to "other"),
                 status = 400,
                 type = "invalid-request"
             ),

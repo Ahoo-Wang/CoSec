@@ -148,7 +148,8 @@ it, and one without an id does not count. A principal you construct has no `issu
 tokens (`subjectRevokedBefore`) takes its approvals back.
 
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
-parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
+parameter when `cosec.pipeline.allow-query-token` is on, else the cookie when `cosec.pipeline.allow-cookie-token` is on)
+and the API key header
 (`cosec.pipeline.api-key-header`).
 
 The starter's default is a `CompositeAuthenticator`: a request with an API key is judged by the API key authenticator

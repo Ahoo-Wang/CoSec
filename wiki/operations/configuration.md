@@ -21,8 +21,9 @@ enum values are case-insensitive. Properties that 7.x had and 8.0 does not are l
 Startup fails on a `cosec.*` key CoSec does not read, whatever else is configured (`cosec.enabled=false` included): a
 misspelled, renamed or removed key would otherwise do nothing. A key is known when the configuration metadata on the
 classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when it lies under a map- or list-valued
-property. The message lists every unknown key and, for a 7.x key, what replaced it
-([the 7.x key table](./upgrading.md#removed-and-renamed-properties)).
+property. The message lists every unknown key and links
+[the table of removed and renamed keys](./upgrading.md#removed-and-renamed-properties). No property turns this check
+off: a key prefix a release replaced, had it been ignored, would leave token revocations where nothing reads them.
 
 Keys are compared as Spring's binder compares them, so every spelling it documents for a known key is known:
 `local-max-age`, `localMaxAge` or `local_max_age` in a properties file, and `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`
@@ -44,10 +45,6 @@ Every other `COSEC_*` variable is checked (`COSEC_JWT_SECRT` fails startup), and
 never unknown whatever its source, so the exemption cannot hide a property CoSec reads. Setting
 `enableServiceLinks: false` on the pod keeps the variables out of the environment altogether
 ([Troubleshooting](./troubleshooting.md#startup-fails-on-an-unknown-property)).
-
-| Property | Type | Default | Effect |
-|---|---|---|---|
-| `cosec.unknown-properties` | `fail`, `warn` | `fail` | `fail` stops startup on an unknown `cosec.*` key; `warn` logs the same list at `WARN` and starts. |
 
 ## Feature switches
 
@@ -86,8 +83,8 @@ Within one application, CoCache refuses to create a cache whose storage keys wou
 puts a CoSec cache under one of the application's own caches fails startup
 ([Troubleshooting](./troubleshooting.md#startup-fails-on-overlapping-cache-keys)).
 It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
-`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, whatever `cosec.unknown-properties`
-says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
+`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, as any key CoSec does not read does
+([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
@@ -102,6 +99,7 @@ says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-pref
 | `cosec.pipeline.timeout` | duration | `5s` | The whole evaluation of one request. Past it the request is answered `503` `unavailable`. |
 | `cosec.pipeline.authentication-timeout` | duration | `1s` | One call of the `Authenticator`. Past it, `503`. |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | Also read the access token from the `authorization` query parameter. Off because URLs end up in access logs, browser history and `Referer` headers. |
+| `cosec.pipeline.allow-cookie-token` | boolean | `false` | Also read the access token from the `authorization` cookie. Off because a browser sends a cookie on its own, on a cross-site request too: turn it on only with your own CSRF defense ([Authentication](../integration/authentication.md)). |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | The request header an API key comes in. No document may read it: every compiler of the host refuses a reference to it, as to the other credential headers ([Headers](../policies/language.md#headers)). |
 | `cosec.pipeline.trace-level` | `off`, `full`, `exhaustive` | `off` | How much of each evaluation the engine traces. Decision events carry the trace as `evaluationTrace` (null at `off`, and when the request did not reach the engine); a higher level costs time on every request. |
 | `cosec.pipeline.mode` | `enforce`, `gateway` | `enforce` | `enforce`: the host decides with policies. `gateway`: a service behind a CoSec gateway reads the caller from the `CoSec-Identity` header the gateway forwards, and wires no authenticator, API keys, snapshot, policies, control plane or Redis of its own ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)). Any other value fails startup, and so does `gateway` on a Spring Cloud Gateway host. In `gateway` mode only the gateway may be able to reach the service: startup logs a `WARN` saying so. In `gateway` mode `cosec.jwt.enabled` defaults to `false`: a service that also issues tokens sets it to `true`. |

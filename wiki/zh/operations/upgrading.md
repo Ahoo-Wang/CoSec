@@ -13,6 +13,10 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
 
+- **`authorization` cookie 只在明确开启时读取**（批次 R6、`PIP-13`）。唯一凭证是这个 cookie 的请求现在是匿名请求。浏览器会自动带上 cookie，跨站请求也不例外，默认读取它等于让每个部署都要应对 CSRF。把令牌放在 `Authorization` 请求头中，或者设置 `cosec.pipeline.allow-cookie-token=true` 并自行防御 CSRF（[认证](../integration/authentication.md)）。无论是否读取，网关都会从转发的请求中移除这个 cookie。
+- **`CoSec-App-Id`、`CoSec-Space-Id` 和 `CoSec-Device-Id` 只读请求头**（批次 R6、`SCP-4`）。同名查询参数不再被读取：它不设置任何值，也不再让请求产生歧义。把它们放在 URL 中的客户端改为发送请求头（[应用与空间](../integration/web.md#app-and-space)）。
+- **未知的 `cosec.*` key 总是让启动失败**（批次 R6、`SNP-9`）。`cosec.unknown-properties` 和 `UnknownPropertiesMode` 已删除，设置这个配置项本身现在就是未知 key：请移除它。错误信息列出这些 key，并链接到[已删除和改名的 key 对照表](#removed-and-renamed-properties)，不再逐个给出替代项。
+- **没有 `format` 的已存储 API key 和其他错误格式一样失败**（批次 R6）：消息是 `API key format [null] is not 2.`。这样的 key 原本就被拒绝；`cosec-migrate api-keys` 仍然可以转换它。
 - **角色和简写权限**（RFC 0012）。目录条目可以用 `action` 和 `resource` 定义权限，应用和租户文档可以有 `roles`（[角色权限](../policies/role-permissions.md#roles)）。`schema` 仍是 2，已发布内容的含义不变。旧实例读不了带这些字段的文档：严格读取器拒绝未知字段，按失败关闭处理。**先升级全部数据面实例，再发布这样的文档**。变更不能再写入 id 以 `role:` 开头的策略或绑定，已有的仍可读。`GET /documents/{key}/diff` 多了 `roles`，策略和绑定按展开后的文档报告。`POST /analyze` 不再把租户对可读应用权限的绑定算作 opaque。代码方面：`Operation` 增加 `PutRole` 和 `RemoveRole`，`DocumentDiff`、`CatalogPermission` 和 `PolicyDocument` 增加了字段。
 - **控制面的正确性**（审计批次 E2a：#1205、#1206、#1207、#1210、#1226、#1227）。修订 diff 的 `sections` 按内容比较目录、限制、属性、边界和限流规则：同 id 的规则改了额度也算变化。`POST /analyze` 只列出能在所查询租户生效的绑定，所以平台中给别的租户的主体或角色的绑定不再列出。候选撤回、最后一次报告写入之后，实例忘掉这个影子窗口。代码方面：自己实现的 `ControlStore` 要实现 `withdrawCandidate(key, window)`（`putCandidate` 只接受候选，不再接受 `null`）、带每个引用方修订的 `referrers` 与 `putReferrers`（`Map<SnapshotKey, Long>`），并保存 `RevisionIndex.reclaiming`；`releaseLease` 必须在一步中检查并删除（[扩展](../architecture/extending.md#control-store)）。`ShadowRecorder.record` 的第一个参数是窗口的文档，`forget` 接受它最后一次报告计入的样本数，`ShadowReporter` 接受它读取已结束窗口所用的 `CandidateStore`。
 - **控制面实例一起升级，并重建反向引用集合**（批次 R4）。反向引用集合（`<p>:control:refs:*`）只能按对象形式读取：每个引用方及其修订。alpha.3 写入的文档 key 的 JSON 数组是格式错误：涉及它的发布会失败，而 `cosec-migrate repair-references` 写之前要先读集合，所以也越不过它。先停掉 alpha.3 的控制面实例，删除这些 key，运行这个版本的 `cosec-migrate repair-references`（它按 head 重新写入每个集合，带上每个引用方的修订），然后才启动这个版本的控制面实例。alpha.3 的控制面实例读不了这样写入的集合，也读不了列有待删记录的修订索引，遇到它们即按失败关闭处理：它涉及这些集合的发布会失败，对该文档的回收会停止。数据面实例不必按顺序：alpha.3 的实例只是会一直写已结束影子窗口的报告。
@@ -68,7 +72,13 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **控制面只接受应用 id**（`SCP-10`）。应用 id 不为空白、不是 `*`、不含 `:` 和控制字符，且不超过 128 个字符；之前的构建接受任何不含 `:` 的应用。现在其他应用中的绑定是位于 `$.bindings[i].app` 的 `V2` 发现（`400`），无论它在候选中的什么位置。`analyze` 对这种应用回答 `400`。**升级控制面之前**，移除这种应用中的租户绑定，放弃这种应用文档上未结束的变更，并清空以这种 id 发布的应用文档（发布一个没有策略和绑定的修订），这会移除它们的反向引用。升级之后就无法再处理它们，遗留下来的内容是格式错误，按失败关闭处理，绝不跳过：保留这种绑定的文档仍然可读，而该绑定不授予任何东西，但发布和 `repair-references` 都过不去；这种应用上未结束的变更回答 `503`，并让每一轮维护都停下，直到它的记录被移除；应用列表中的条目让授予涉及的每个应用都变成未知，直到删除 `<p>:control:apps:all` 并运行 `cosec-migrate repair-references`；指向这种应用的反向引用让读取该集合的操作都失败，直到删除该集合并运行 `repair-references`；实例状态的条目让实例状态的读取失败，直到它过期（该实例最后一次写入后两分钟）。
 - **按策略决策的宿主丢弃客户端的 `CoSec-Identity`**（RC1-18、`IDN-9`）。`enforce` 模式的 WebFlux 或 Spring MVC 宿主会从处理器看到的请求中移除该头，因此它从不转递客户端写的身份。在那里读取它的代码读到的是任何客户端都能写的内容；请读取 `SecurityContext`。
 - **租户把应用权限授给 `Anyone` 或某个主体的绑定现在能解析**（RC1-17、`TNT-4`）。该应用中的请求现在无论主体有什么角色都读取应用文档，因此绑定中的 DENY 或 ALLOW 生效（过去这样的请求都是 `503`），应用文档的限流规则也随之生效。`simulate`、`explain` 和影子窗口按同一规则读取它（`CTL-3`）。代码中，`CompiledDocument.tenant` 接收集合 `boundApps`，由 `CompiledDocument.needsApp` 回答；自行构造的 `ShadowListener` 需要已安装的视图（`views`），才能比较让请求读取应用文档的租户候选，没有视图时上报 `CANDIDATE_ERROR`。
-- **一个 key 前缀**（RC1-46、`SNP-9`）。[`cosec.key-prefix`](./configuration.md#key-prefix) 取代 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`。仍设置其中任何一项的环境无论 `cosec.unknown-properties` 如何都会启动失败，错误消息列出哪些 key 族会移到当前的 `cosec.key-prefix` 之下，以及从哪里移到哪里。每个 key 都在它之下：API key 在 `<p>:api-key` 下，过去固定的限流计数器和社交登录的 OAuth 状态分别在 `<p>:rate-limiter` 和 `<p>:oauth:state` 下（[Redis key](./storage.md#redis-keys)）。使用默认值时每个 key 都还在原处。设置过这三项之一的部署，改为把 `cosec.key-prefix` 设成原来的快照前缀；**保存在其他前缀下的吊销和 API key 不再被读取**，在那里吊销的令牌会重新被接受：切换之前，把每个这样的 key 复制到新前缀下（`COPY`，或保留过期时间的 `RENAME`）。成员关系会自行重新填充。`cosec-migrate api-keys` 不再接受 `--api-key-prefix`：它转换 `<--key-prefix>:api-key` 下的 key。
+- **一个 key 前缀**（RC1-46、`SNP-9`）。[`cosec.key-prefix`](./configuration.md#key-prefix) 取代 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`。仍设置其中任何一项的环境都会启动失败，和其他 CoSec 不读取的 key 一样。每个 key 都在它之下：API key 在 `<p>:api-key` 下，过去固定的限流计数器和社交登录的 OAuth 状态分别在 `<p>:rate-limiter` 和 `<p>:oauth:state` 下（[Redis key](./storage.md#redis-keys)）。使用默认值时每个 key 都还在原处。设置过这三项之一的部署，改为把 `cosec.key-prefix` 设成原来的快照前缀；**保存在其他前缀下的吊销和 API key 不再被读取**，在那里吊销的令牌会重新被接受：切换之前，把每个这样的 key 复制到新前缀下（`COPY`，或保留过期时间的 `RENAME`）。成员关系会自行重新填充。`cosec-migrate api-keys` 不再接受 `--api-key-prefix`：它转换 `<--key-prefix>:api-key` 下的 key。
+
+  设 `<p>` 为 `cosec.key-prefix` 的值，各 key 族的移动如下：
+  - 快照文档、控制面记录、候选和影子报告：从旧的 `cosec.authorization.snapshot.key-prefix`（默认 `cosec`）移到 `<p>`；
+  - 令牌吊销和成员关系：从旧的 `cosec.authorization.cache.key-prefix`（默认 `cosec`）移到 `<p>`，应用自己创建的成员关系缓存除外，它们留在自己的前缀下；
+  - API key：从旧的 `cosec.api-key.key-prefix`（默认 `cosec:api-key`）移到 `<p>:api-key`；
+  - 限流计数器和社交登录的 OAuth 状态：从 `cosec` 移到 `<p>`。
 - **`revalidate-interval` 不能关闭周期确认**（RC1-50、`SNP-6`）。失效消息丢失时，周期确认是唯一的界，因此 `cosec.authorization.snapshot.revalidate-interval` 必须至少为 `1s`（每一轮都从 Redis 读取每个已安装的文档）、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败并指出该配置项，`SnapshotOptions` 也同样拒绝。把 `0` 换成范围内的值；更长的间隔可以降低确认在 Redis 上的开销（[存储](./storage.md#what-revalidation-costs-redis)）。
 - **路径模式有开销上界**（RC1-8、`DOC-4`）。`http:path:` 模式不超过 2,048 个字符，把 `*`、`?` 或 `{name}` 与其他文本混在一起的段最多 16 个部分（连续的 `*` 算一个），一个文档中这样的片段合计最多 2,048 个通配单位（它们的部分数加上文本的字符数，前导 `**` 之后的片段和以捕获变量为 key 的限流规则计两次），类型化模式不超过 2,058 个字符（[策略语言](../policies/language.md#path-pattern-bounds)）。控制面对超出上界的变更回答 `COMPILE` 发现（`422`），位置为该模式或 `$`。之前发布、含有这种模式的文档在升级后的实例上不再能编译，读取它的每个请求都失败关闭：升级数据面之前，改写它并发布。
 - **每个策略在每一遍中对每个绑定它的文档只求值一次**（`ALG-9`），无论该文档有多少条绑定生效；在附加策略中声明两次的策略只附加一次。决策及其报告的语句和绑定都不变：报告的是候选顺序中的第一条绑定。追踪按第一条绑定的结果列出之后的绑定，不再重新求值。
@@ -340,7 +350,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 
 #### 声明空间的匿名请求返回 401 {#anonymous-requests-that-declare-a-space-are-401}
 
-规则 `SCP-3`：带非空 `CoSec-Space-Id`（请求头或查询参数）的匿名请求返回 `401` `unauthorized`，即使路径对所有人开放。匿名主体没有角色，
+规则 `SCP-3`：带非空 `CoSec-Space-Id` 请求头的匿名请求返回 `401` `unauthorized`，即使路径对所有人开放。匿名主体没有角色，
 所以不是任何空间的成员（C3）。令牌被拒绝的请求也是匿名请求，它得到带该令牌 problem 类型的 `401`。在公开端点上发送 `CoSec-Space-Id`
 的客户端必须停止在那里发送它。
 
@@ -416,7 +426,7 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 所以对表单 POST，容器会在 CoSec 的过滤器中解析并消费请求体，请求体字段也被当作查询参数。8.0 在每个适配器上都只读取 URL 查询字符串，
 并且永远不碰请求体。
 表单字段不再设置 `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id`，也不再设置在 `cosec.pipeline.allow-query-token=true` 时读取的
-`authorization` 令牌。把这些作为表单字段发送的客户端，必须改为通过请求头或查询字符串发送。
+`authorization` 令牌。把这些作为表单字段发送的客户端，必须改为通过请求头发送；令牌在开启该配置项时也可以放在查询字符串中。
 
 ### 认证 {#authentication}
 
@@ -502,6 +512,11 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 在 CoSec 网关之后、自己校验令牌的服务不再收到 `Authorization` 头。要么在网关上设置 `cosec.gateway.identity.forward-authorization=true`，
 并经 `lb://` 或带 `cosec-identity: true` 的路由访问该服务，要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 `authorization` cookie 中的令牌在同一个开关下也会被移除。
+
+#### 客户端发送令牌和作用域的方式变了 {#clients-send-tokens-and-scope-differently}
+
+- 7.x 在每个请求上都读取的 `authorization` cookie，现在只在 `cosec.pipeline.allow-cookie-token=true` 时读取：浏览器会自动带上 cookie，跨站请求也不例外，而 CoSec 不提供 CSRF 防护。把令牌放在 `Authorization` 请求头中，或者打开这个配置项并自行防御 CSRF（[认证](../integration/authentication.md)）。
+- 7.x 也从查询字符串读取的 `CoSec-App-Id`、`CoSec-Space-Id` 和 `CoSec-Device-Id`，现在只从请求头读取（[应用与空间](../integration/web.md#app-and-space)）。
 
 ### 存储与 Redis {#storage-and-redis}
 
@@ -671,9 +686,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 
 这里没有列出的 7.x `cosec.*` 属性保持名称和含义不变。8.0 的全部属性及默认值见[配置](./configuration.md)。
 
-下面每个 key 在 8.0 中都会让启动失败，错误信息会给出替代它的配置（starter 中的 `UnknownProperties.RENAMED`）。8.0 不读取的其他
-`cosec.*` key 也一样；`cosec.unknown-properties=warn` 只记录它们（[未知配置项](./configuration.md#unknown-properties)）。以 `.` 结尾的
-key 代表它之下的每个 key。
+下面每个 key 在 8.0 中都会让启动失败，错误信息会链接到这张表。8.0 不读取的其他 `cosec.*` key 也一样；没有任何配置项能关闭这项检查（[未知配置项](./configuration.md#unknown-properties)）。以 `.` 结尾的 key 代表它之下的每个 key。
 
 | 7.x | 8.0 |
 |---|---|
@@ -699,10 +712,14 @@ key 代表它之下的每个 key。
 | `cosec.inject.enabled` | 已删除（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。 |
 | `cosec.api-key.store-blocking` | 已删除。 |
 | `cosec.jwt.token-revocation.enabled` | 已删除：吊销始终开启（[令牌吊销始终开启](#token-revocation-is-always-on)）。 |
+| `cosec.authorization.cache.key-prefix` | `cosec.key-prefix`，每个 key 的前缀：先复制令牌吊销（[哪些 key 族会移动](#from-8-0-0-alpha-2)）。 |
+| `cosec.api-key.key-prefix` | `cosec.key-prefix`：先复制 API key（[哪些 key 族会移动](#from-8-0-0-alpha-2)）。 |
+| `cosec.authorization.snapshot.key-prefix`（8.0 预览版） | `cosec.key-prefix`：把它设为这个前缀（[哪些 key 族会移动](#from-8-0-0-alpha-2)）。 |
+| `cosec.unknown-properties`（8.0 预览版） | 已删除：未知 key 总是让启动失败。 |
 
-`cosec.authorization.cache.token.*` 现在是 `cosec.authentication.revocation.cache.*`。`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix` 由 [`cosec.key-prefix`](./configuration.md#key-prefix) 取代，它是一个部署写入的每个 key 的前缀。
+`cosec.authorization.cache.token.*` 现在是 `cosec.authentication.revocation.cache.*`。
 
-新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别、模式）、`cosec.gateway.identity.*`、`cosec.unknown-properties`、
+新的属性组：`cosec.pipeline.*`（超时、查询和 cookie 令牌、API key 请求头、trace 级别、模式）、`cosec.gateway.identity.*`、
 `cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、
 `cosec.authorization.snapshot.*`、`cosec.authorization.shadow.*`、`cosec.authentication.revocation.*`、
 `cosec.audit.kafka.delivery`、`cosec.observability.listener.*` 和 `cosec.control.*`。

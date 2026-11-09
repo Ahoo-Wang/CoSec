@@ -38,6 +38,11 @@ class PipelineOptions(
     val rateLimitTimeout: Duration = 500.milliseconds,
     /** Whether the token may come from the `authorization` query parameter; off, as tokens in URLs leak into logs. */
     val allowQueryToken: Boolean = false,
+    /**
+     * Whether the token may come from the `authorization` cookie (`cosec.pipeline.allow-cookie-token`); off, as a browser
+     * sends a cookie on its own, on a cross-site request too: a host that turns this on defends against CSRF itself.
+     */
+    val allowCookieToken: Boolean = false,
     /** The header an API key comes in. */
     val apiKeyHeader: String = "X-API-Key",
     /** How much of the engine's trace decision events carry (`DecisionEvent.evaluationTrace`); `OFF` costs nothing. */

@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "The token has expired, but everyone may read: as anonymous the request is permitted, so a browser with an old cookie still opens public pages.",
+  "description": "The token has expired, but everyone may read: as anonymous the request is permitted, so a browser with an old token still opens public pages.",
   "documents": {
     "platform": {
       "policies": [

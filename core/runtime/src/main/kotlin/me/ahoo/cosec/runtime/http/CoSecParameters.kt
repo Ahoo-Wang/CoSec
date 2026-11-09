@@ -14,14 +14,14 @@
 package me.ahoo.cosec.runtime.http
 
 /**
- * The `CoSec-*` request parameters a client may send as a header or as a query parameter. Empty means not sent.
+ * The `CoSec-*` request parameters a client may send, as headers only: a scope in a URL would reach the access logs and
+ * the `Referer` of the next request. Empty means not sent.
  *
- * `SCP-4` (RFC 0008 §3.2): a parameter is sent once, or several times with one value. When its values differ, whether
- * between the header and the query or within either, the request cannot be interpreted without ambiguity and is
- * rejected with 400: the pipeline and the backend could otherwise read different scopes. A blank value next to a
- * non-blank one differs too (RC1-16): a backend that reads the blank one would be in the default space. Only values
- * that are all blank read as not sent, and blank means ASCII whitespace only: a value of Unicode spaces is a value,
- * which a backend's `trim()` keeps.
+ * `SCP-4` (RFC 0008 §3.2): a parameter is sent once, or several times with one value. When its values differ, the
+ * request cannot be interpreted without ambiguity and is rejected with 400: the pipeline and the backend could
+ * otherwise read different scopes. A blank value next to a non-blank one differs too (RC1-16): a backend that reads
+ * the blank one would be in the default space. Only values that are all blank read as not sent, and blank means ASCII
+ * whitespace only: a value of Unicode spaces is a value, which a backend's `trim()` keeps.
  */
 class CoSecParameters internal constructor(val appId: String, val spaceId: String, val deviceId: String) {
     companion object {
@@ -32,18 +32,11 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
         /** Header only: a response echoes it, and it identifies the request in audit (RFC 0006 §6.2). */
         const val REQUEST_ID = "CoSec-Request-Id"
 
-        private val NAMES = setOf(APP_ID, SPACE_ID, DEVICE_ID)
-
-        /**
-         * The parameters of [facts], or null when one of them is ambiguous. Query names match exactly, header names
-         * ignoring case. A query value of a `CoSec-*` parameter with a malformed percent-escape is ambiguous too;
-         * other query parameters are not read.
-         */
+        /** The parameters of [facts], or null when one of them is ambiguous. Header names match ignoring case. */
         fun read(facts: HttpFacts): CoSecParameters? {
-            val query = QueryParameters.values(facts.rawQuery, NAMES) ?: return null
-            val appId = single(facts.headers.values(APP_ID), query[APP_ID]) ?: return null
-            val spaceId = single(facts.headers.values(SPACE_ID), query[SPACE_ID]) ?: return null
-            val deviceId = single(facts.headers.values(DEVICE_ID), query[DEVICE_ID]) ?: return null
+            val appId = single(facts.headers.values(APP_ID)) ?: return null
+            val spaceId = single(facts.headers.values(SPACE_ID)) ?: return null
+            val deviceId = single(facts.headers.values(DEVICE_ID)) ?: return null
             return CoSecParameters(appId, spaceId, deviceId)
         }
 
@@ -51,14 +44,14 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
          * The one non-blank value, empty when every value is blank or there is none, null when two differ: two
          * non-blank ones, or a blank one beside a non-blank one. Indexed, so it allocates nothing.
          */
-        private fun single(headers: List<String>, query: List<String>?): String? {
+        private fun single(values: List<String>): String? {
             // Most requests send a parameter once, or not at all: one value can disagree with nothing.
-            if (query == null && headers.size <= 1) {
-                val only = if (headers.isEmpty()) return "" else headers[0]
+            if (values.size <= 1) {
+                val only = if (values.isEmpty()) return "" else values[0]
                 return if (isBlank(only)) "" else only
             }
-            val value = firstNonBlank(headers) ?: query?.let(::firstNonBlank) ?: return ""
-            return if (allAre(value, headers) && (query == null || allAre(value, query))) value else null
+            val value = firstNonBlank(values) ?: return ""
+            return if (allAre(value, values)) value else null
         }
 
         private fun firstNonBlank(values: List<String>): String? {

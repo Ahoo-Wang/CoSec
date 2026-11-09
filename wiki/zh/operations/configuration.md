@@ -17,8 +17,9 @@ description: "每个 cosec.* 配置项的类型、默认值以及它改变什么
 
 出现 CoSec 不读取的 `cosec.*` key 时启动失败，无论其他配置如何（包括 `cosec.enabled=false`）：否则拼错、改名或已删除的
 key 会悄无声息地不起作用。classpath 上的配置元数据（`META-INF/spring-configuration-metadata.json`）声明了的 key，或位于
-map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，对 7.x 的 key 还给出替代它的配置
-（[7.x key 对照表](./upgrading.md#removed-and-renamed-properties)）。
+map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，并链接到
+[已删除和改名的 key 对照表](./upgrading.md#removed-and-renamed-properties)。没有任何配置项能关闭这项检查：
+某个版本取代的 key 前缀如果被忽略，令牌吊销就会留在没人读取的地方。
 
 key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `local-max-age`、
 `localMaxAge` 或 `local_max_age`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`（大写、点换成下划线、去掉连字符）。
@@ -36,10 +37,6 @@ key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的�
 其余的 `COSEC_*` 变量照常检查（`COSEC_JWT_SECRT` 会使启动失败），同一个 key 出现在 `application.yaml`、系统属性或其他来源中也一样。
 CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不是未知的，所以这个豁免不会藏起 CoSec 读取的配置项。在 pod 上设置
 `enableServiceLinks: false`，则这些变量根本不会进入环境（[故障排查](./troubleshooting.md#startup-fails-on-an-unknown-property)）。
-
-| 配置项 | 类型 | 默认值 | 作用 |
-|---|---|---|---|
-| `cosec.unknown-properties` | `fail`、`warn` | `fail` | `fail` 在出现未知 `cosec.*` key 时终止启动；`warn` 以 `WARN` 记录同样的列表并照常启动。 |
 
 ## 功能开关 {#feature-switches}
 
@@ -76,7 +73,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 在同一个应用里，CoCache 拒绝创建存储 key 会与另一个缓存重叠的缓存，所以把 CoSec 的某个缓存放到应用自己的缓存之下的前缀
 会使启动失败（[故障排查](./troubleshooting.md#startup-fails-on-overlapping-cache-keys)）。
 它取代了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`：
-设置其中任何一项的环境都会启动失败，无论 `cosec.unknown-properties` 如何设置（[故障排查](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)）。
+设置其中任何一项的环境都会启动失败，和其他 CoSec 不读取的 key 一样（[故障排查](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
@@ -91,6 +88,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.pipeline.timeout` | duration | `5s` | 一个请求的整个求值过程。超过后请求得到 `503` `unavailable`。 |
 | `cosec.pipeline.authentication-timeout` | duration | `1s` | 一次 `Authenticator` 调用。超过后得到 `503`。 |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | 也从 `authorization` 查询参数读取访问令牌。默认关闭，因为 URL 会进入访问日志、浏览器历史和 `Referer` 头。 |
+| `cosec.pipeline.allow-cookie-token` | boolean | `false` | 也从 `authorization` cookie 读取访问令牌。默认关闭，因为浏览器会自动带上 cookie，跨站请求也不例外：只有自己做好 CSRF 防护时才打开（[认证](../integration/authentication.md)）。 |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | 携带 API key 的请求头。任何文档都不能读取它：宿主的每个编译器都像拒绝其他携带凭证的请求头一样拒绝对它的引用（[请求头](../policies/language.md#headers)）。 |
 | `cosec.pipeline.trace-level` | `off`、`full`、`exhaustive` | `off` | 引擎对每次求值记录多少追踪信息。决策事件以 `evaluationTrace` 携带这份追踪（`off` 时，以及请求没有到达引擎时为 null）；级别越高，每个请求花的时间越多。 |
 | `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务：启动时会以 `WARN` 提示这一点。`gateway` 模式下 `cosec.jwt.enabled` 默认为 `false`：也签发令牌的服务要设为 `true`。 |

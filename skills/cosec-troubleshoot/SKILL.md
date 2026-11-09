@@ -67,9 +67,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   bound on a lost invalidation (SNP-6), so the interval must be at least 1 second, at most 5 minutes, less than
   `lag-warn`, and, with `fail-closed.tenants`, less than `fail-closed.max-lag`. Use a value within the bounds; never
   suggest turning revalidation off.
-- **`CoSec no longer reads cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
-  `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and startup fails whatever
-  `cosec.unknown-properties` says. The message lists the families that move from where to where. Have the token
+- **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
+  `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
+  families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading#from-8-0-0-alpha-2. Have the token
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
@@ -78,11 +78,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   characters of its text, twice after a leading `**`). The control plane answers a
   `COMPILE` finding; on the data plane the stored document is installed as failed and its requests are 503.
 
-- **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by `<key> -> <replacement>` lines:
-  a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
-  `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
-  at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
-  logs the list; do not suggest it to hide a real typo. On Kubernetes, keys such as `cosec.gateway.service.host` or
+- **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by the keys: a typo or a key a
+  release renamed or removed (for example `cosec.authentication.enabled`, now `cosec.authentication.login.enabled`).
+  Rename or remove the key; the table is at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties.
+  No property turns the check off. On Kubernetes, keys such as `cosec.gateway.service.host` or
   `cosec.gateway.port` (`does not read 8 cosec.* properties`, a crash loop) are service links
   (`COSEC_GATEWAY_SERVICE_HOST`, `COSEC_GATEWAY_PORT_80_TCP_ADDR`, ... for a Service named `cosec` or `cosec-*` in the
   namespace). 8.0.0-alpha.2 and later skip exactly those variables, only from the process environment; a mistyped
@@ -222,14 +221,16 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `500`) and the log says `holds content this cache cannot read (format[1], this node writes format[2]`: the data
   alpha wrote through CoCache 6. Stop every instance and run `cosec-migrate cocache8` (dry run first). Never delete
   those keys by hand: a deleted revocation accepts its token again.
-- **Every request with one API key is 503** and the log says the key `is stored in the format before 8.0`: convert
+- **Every request with one API key is 503** and the log says `API key format [null] is not 2.` (`null`: the record has
+  no `format`, as a key written by 7.x): convert
   the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
   it again without `--dry-run`).
 
 ### Unexpected 401
 
-- Did the request carry credentials? Tokens come from `Authorization`, then the `authorization` cookie; the query
-  parameter only with `cosec.pipeline.allow-query-token=true`. API keys from `X-API-Key`
+- Did the request carry credentials? Tokens come from `Authorization`; the query parameter only with
+  `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with
+  `cosec.pipeline.allow-cookie-token=true`. API keys from `X-API-Key`
   (`cosec.pipeline.api-key-header`).
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a

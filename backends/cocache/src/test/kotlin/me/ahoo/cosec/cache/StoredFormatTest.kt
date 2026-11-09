@@ -121,12 +121,12 @@ class StoredFormatTest {
 
     /**
      * A key `main` wrote before RFC 0009 (the bytes of da58e780) is refused, never read as a key without a cap, which
-     * would give it everything its principal holds; the message names the migration.
+     * would give it everything its principal holds.
      */
     @Test
     fun `api keys before 8 are refused`() {
         val refused = assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(fixture("apiKey-before-8")) }
-        refused.message.assert().contains("cosec-migrate api-keys")
+        refused.message.assert().isEqualTo("API key format [null] is not ${ApiKeyCodec.FORMAT}.")
     }
 
     @Test

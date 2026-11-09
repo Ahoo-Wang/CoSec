@@ -30,9 +30,9 @@ import java.time.Instant
  * ```
  *
  * Every field is always written, `roles` and `expiresAt` as `null` when absent, so a missing cap is never read where a
- * field was left out. Decoding is strict: anything else fails, and the request that read it is answered 503. A key in
- * the format before 8.0 (no `format`; `policies`, `attributes`, an optional `tenantId`) is refused, never read as a key
- * without a cap, which would give it all of its principal's memberships: `cosec-migrate api-keys` converts it.
+ * field was left out. Decoding is strict: anything else fails, and the request that read it is answered 503. A record
+ * of another format is refused, never read as a key without a cap, which would give it all of its principal's
+ * memberships.
  */
 @InternalCoSecApi
 object ApiKeyCodec {
@@ -58,12 +58,10 @@ object ApiKeyCodec {
     fun decode(json: String): ApiKey {
         val node = CoSecJson.mapper.readTree(json)
         require(node is ObjectNode) { "Not a stored API key: an object is expected." }
-        require(node.has(FORMAT_FIELD)) {
-            "The API key [${node.get("id")?.asString()}] is stored in the format before 8.0, which granted roles and " +
-                "policies of its own; it is refused. Convert the keys with `cosec-migrate api-keys` (RFC 0009 §4.4)."
-        }
         val format = node.get(FORMAT_FIELD)
-        require(format.isInt && format.intValue() == FORMAT) { "API key format [$format] is not $FORMAT." }
+        require(format != null && format.isInt && format.intValue() == FORMAT) {
+            "API key format [$format] is not $FORMAT."
+        }
         require(node.propertyNames().toSet() == FIELDS) {
             "A stored API key has exactly the fields $FIELDS, not ${node.propertyNames().toSet()}."
         }

@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "CoSec-App-Id is shop in both places: one value, and the request is permitted.",
+  "description": "The query names two spaces. CoSec-* parameters are headers only, so it is neither a disagreement (400) nor a declared space, which an anonymous request cannot be in (SCP-3, 401): the anonymous request is in the default space.",
   "documents": {
     "platform": {
       "policies": [
@@ -33,10 +33,7 @@
     "result": "anonymous"
   },
   "http": {
-    "query": "CoSec-App-Id=shop",
-    "headers": {
-      "CoSec-App-Id": "shop"
-    }
+    "query": "CoSec-Space-Id=a&CoSec-Space-Id=b"
   },
   "expect": {
     "status": 200,

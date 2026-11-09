@@ -130,8 +130,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;
-     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). This pipeline
-     * reads a token from that cookie, so a backend could replay it at the gateway.
+     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). Whether or not
+     * this pipeline reads a token there (`cosec.pipeline.allow-cookie-token`), a backend might.
      */
     @InternalCoSecApi
     fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
@@ -856,12 +856,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * The token is the first non-blank one of the `Authorization` header, the query parameter when allowed, and the
-     * cookie: the header is the channel a client sets on purpose, the others are fallbacks for clients that cannot set it.
+     * cookie when allowed: the header is the channel a client sets on purpose, the others are fallbacks for clients that
+     * cannot set it.
      */
     private fun credentials(facts: HttpFacts): Credentials {
         val token = facts.headers.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
             ?: queryToken(facts)
-            ?: facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
+            ?: cookieToken(facts)
         val apiKey = facts.headers.values(options.apiKeyHeader).firstOrNull { it.isNotBlank() }
         return if (token == null && apiKey == null) NO_CREDENTIALS else Credentials(token, apiKey)
     }
@@ -875,6 +876,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             AUTHORIZATION_NAMES
         )?.get(AUTHORIZATION)?.firstOrNull { it.isNotBlank() }
     }
+
+    private fun cookieToken(facts: HttpFacts): String? =
+        if (options.allowCookieToken) facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() } else null
 
     private inline fun <T : Any> Fetched<T>.valueOr(failed: (Throwable) -> T): T = when (this) {
         is Fetched.Value -> value
