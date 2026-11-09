@@ -679,6 +679,7 @@ class ControlHttp(private val plane: ControlPlane) {
 
         constructor(type: ProblemType, detailed: Boolean) : this(type.slug, type.title, type.status, detailed)
 
+        @InternalCoSecApi
         companion object {
             fun of(status: Int): Problem = entries.firstOrNull { it.status == status } ?: INTERNAL_ERROR
         }

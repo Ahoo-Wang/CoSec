@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId

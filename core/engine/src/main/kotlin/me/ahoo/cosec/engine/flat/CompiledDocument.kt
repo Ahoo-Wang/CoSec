@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Match
@@ -43,6 +46,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * only ALLOW statements, at most [MAX_BOUNDARY_STATEMENTS], and no binding or attachment can reach it. The platform
  * names a default boundary, a tenant document may name another; the platform tenant has none.
  */
+@InternalCoSecApi
 class CompiledDocument private constructor(
     val kind: DocumentKind,
     /** The tenant id of a tenant document, the app id of an app document; empty for the platform. */
@@ -272,6 +276,7 @@ class CompiledDocument private constructor(
 
     internal fun role(role: String): Array<BoundEntry>? = roles[role]
 
+    @InternalCoSecApi
     companion object {
         private const val NOT_REPEATED = -1
         private val NO_ENTRIES = emptyArray<BoundEntry>()

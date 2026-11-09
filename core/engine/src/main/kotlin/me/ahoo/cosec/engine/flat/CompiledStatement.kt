@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
@@ -34,6 +37,7 @@ import me.ahoo.cosec.model.condition.IndexKeys
  * the statement fails unless that condition is false. The first three steps never call host code, so the candidate
  * index can skip a statement that fails one of them and the decision stays the same (I1, I2).
  */
+@InternalCoSecApi
 class CompiledStatement internal constructor(
     /** Its position in the policy. */
     val index: Int,
@@ -115,6 +119,7 @@ class CompiledStatement internal constructor(
  * provider failed or timed out, or the attribute was not in the plan. Attributes that are merely absent are not missing
  * (RFC 0005 §3.4).
  */
+@InternalCoSecApi
 enum class OnMissing {
     /**
      * The default. A DENY errs: unless another DENY matches, the decision is `Indeterminate(AttributeUnavailable)`. An
@@ -169,6 +174,7 @@ internal object HeadersRead {
  * How [CompiledPolicy] indexes its statements (RFC 0005 §6.2). The decision never depends on them (I2); only how many
  * statements are looked at does.
  */
+@InternalCoSecApi
 class IndexOptions(
     /** A policy's statements of one effect are indexed from this many on; fewer are scanned in order. */
     val minStatements: Int = 8,
@@ -187,6 +193,7 @@ class IndexOptions(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         /** RFC 0005 §4.1. */
         val DEFAULT_ATTRIBUTES: List<Attribute> = listOf(

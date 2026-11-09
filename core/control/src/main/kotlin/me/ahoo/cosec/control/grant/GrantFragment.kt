@@ -11,9 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Binding
@@ -24,14 +26,16 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.StatementRef
 
 /** Who a fragment is granted to (RFC 0007 §7.4.1). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 sealed interface Grantee {
     /** The subject of a binding, in its scope. */
+    @InternalCoSecApi
     class Bound(val binding: Binding) : Grantee {
         override fun toString(): String = "binding ${binding.id.value}"
     }
 
     /** Any authenticated principal of the tenant that attaches the policy, in `(*, *)`. */
+    @InternalCoSecApi
     object Attaching : Grantee {
         override fun toString(): String = "attachment"
     }
@@ -44,7 +48,7 @@ sealed interface Grantee {
  * A binding whose policy does not resolve is one fragment of every action and resource that is not [resolved]: what
  * it grants cannot be told, so it is never contained (RC1-32).
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class GrantFragment(
     val tenant: TenantId,
     val policy: PolicyId,
@@ -67,6 +71,7 @@ class GrantFragment(
         "${policy.value} (does not resolve) to $grantee in $scope"
     }
 
+    @InternalCoSecApi
     companion object {
         /** The fragment of [binding] of [tenant], whose policy does not resolve (RC1-32). */
         fun unresolved(tenant: TenantId, binding: Binding): GrantFragment = GrantFragment(
@@ -84,7 +89,7 @@ class GrantFragment(
 }
 
 /** Why a fragment is [GrantVerdict.Unknown]. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 enum class UnknownReason {
     /** The grantor is not in the tenant of the document. */
     CROSS_TENANT,
@@ -109,7 +114,7 @@ enum class UnknownReason {
 }
 
 /** How far the closest of the grantor's ALLOWs got, in the order the analysis checks (RFC 0007 §7.4.3). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 enum class Shortfall {
     /** The grantor holds no ALLOW at all. */
     NO_ALLOW,
@@ -130,15 +135,18 @@ enum class Shortfall {
 }
 
 /** What the analysis concluded about one fragment. Only [Unknown] needs approval (RFC 0007 §7.5). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 sealed interface GrantVerdict {
     /** The grantor holds `cosec:approve` on the document: it is the trust root, and its changes are not analyzed. */
+    @InternalCoSecApi
     object TrustRoot : GrantVerdict
 
     /** Contained in the grantor's statement [by]; `null` when the fragment can apply to no request at all. */
+    @InternalCoSecApi
     class Contained(val by: StatementRef.Policy?) : GrantVerdict
 
     /** Not proven: never "probably contained" (GRT-2). [closest] is the ALLOW that got furthest, or the DENY. */
+    @InternalCoSecApi
     class Unknown(
         val reason: UnknownReason,
         val shortfall: Shortfall?,
@@ -150,15 +158,17 @@ sealed interface GrantVerdict {
 }
 
 /** An entry whose change needs `cosec:unprotect` (RFC 0007 §7.4.4). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 sealed interface ProtectedEntry {
+    @InternalCoSecApi
     data class Policy(val id: PolicyId) : ProtectedEntry
 
+    @InternalCoSecApi
     data class Binding(val id: BindingId) : ProtectedEntry
 }
 
 /** The analysis of one change: a verdict for each fragment, and the protected entries it changes or removes. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class GrantAnalysis(val verdicts: List<Pair<GrantFragment, GrantVerdict>>, val unprotect: List<ProtectedEntry>) {
     /** Whether a platform administrator must approve the change (RFC 0007 §7.5). */
     val needsApproval: Boolean get() = verdicts.any { it.second is GrantVerdict.Unknown }

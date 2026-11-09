@@ -13,8 +13,9 @@ decision.
 ## Extension points
 
 With the starter you extend CoSec by declaring a Spring bean. Some extension points collect every bean of their type;
-the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, pass your
-implementation to the class that uses it, usually through `PipelineComponents`.
+the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, assemble a
+`Pipeline` from `PipelineComponents`, with the documents from `SuspendingSnapshotSource.of(store)`, and pass your
+implementation to the class that uses it.
 
 | Extension point | Module, package | Implement it to | The starter takes |
 |---|---|---|---|
@@ -63,7 +64,7 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: every public declaration of `cosec-testkit`, and the control plane's access and grant analysis (`AccessQuery`, `AccessEntry`, `AccessReport`, `ControlPlane.analyze`; `GrantAnalyzer`, `GrantAnalysis`, `GrantVerdict`, `GrantFragment`, `Grantee`, `ProtectedEntry`, `Shortfall`, `UnknownReason`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit`, that is `PolicyTestKit`, `PipelineFixture`, `EngineOutcome` and their exceptions. | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
@@ -87,6 +88,24 @@ breaking change and its title carries `!`
 ([`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md#3-commits-and-pull-request-titles)).
 The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
 and needs no `!`, and the pull request description says which experimental declarations it changes.
+
+### Sets that grow
+
+Exhaustive matching over a closed set stops compiling when a minor release adds a member, and an already compiled
+binary throws `NoWhenBranchMatchedException` on the new value. So every extension treats these as open: a `when` over
+one has an `else`, and a listener or store never relies on the set being complete.
+
+| Set | Grows by |
+|---|---|
+| `AuthnResult.RejectReason` | a new reason, such as a new token check |
+| `Attribute.Kind` | a new catalog attribute |
+| `ProblemType` | a new problem, such as `413` or `415` |
+| `Obligation` | a new kind of obligation |
+| `ChangeEvent.Kind` | a new kind of change event |
+
+A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot
+grow, a record with a fixed shape (`PublicApiStabilityTest` reads the reviewed list); a record that can grow is a plain
+class, so a new field is a new constructor.
 
 ## Rules every extension follows
 

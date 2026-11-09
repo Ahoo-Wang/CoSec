@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.CallLog
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.MatcherException

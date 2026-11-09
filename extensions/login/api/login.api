@@ -97,15 +97,6 @@ public final class me/ahoo/cosec/login/token/TokenSubject {
 	public static final field Companion Lme/ahoo/cosec/login/token/TokenSubject$Companion;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/lang/String;
-	public final fun component4 ()Ljava/util/Set;
-	public final fun component5 ()Ljava/util/Set;
-	public final fun component6 ()Ljava/util/Map;
-	public final fun component7 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;)Lme/ahoo/cosec/login/token/TokenSubject;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/login/token/TokenSubject;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/TokenSubject;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Map;

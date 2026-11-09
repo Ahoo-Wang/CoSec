@@ -136,7 +136,8 @@ Two artifacts are not dependencies of an application:
 - `cosec-gateway-server` is a ready-to-run gateway built from these modules: deploy it, do not depend on it (see
   [Deployment](../operations/deployment.md)).
 
-Without Spring Boot, assemble a `Pipeline` from `PipelineComponents` yourself and call it from your own transport. See
+Without Spring Boot, assemble a `Pipeline` from `PipelineComponents` and `SuspendingSnapshotSource.of(store)` yourself,
+and call it from your own transport. See
 [Extending CoSec](../architecture/extending.md).
 
 ## Where to go next

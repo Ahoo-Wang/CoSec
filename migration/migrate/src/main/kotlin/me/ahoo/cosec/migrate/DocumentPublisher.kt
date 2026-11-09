@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.CandidateDigest
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication

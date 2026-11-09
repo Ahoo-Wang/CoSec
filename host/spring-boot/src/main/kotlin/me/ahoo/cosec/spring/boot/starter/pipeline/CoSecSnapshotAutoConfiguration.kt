@@ -89,11 +89,13 @@ import java.util.concurrent.TimeUnit
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@InternalCoSecApi
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cache.snapshot.PolicySnapshotCache"])
     @ConditionalOnBean(CoCacheFactory::class)
+    @InternalCoSecApi
     class Redis {
         /**
          * The snapshot store, created through CoCache's factory like every CoSec cache: the `cocache.*` properties and
@@ -161,6 +163,7 @@ class CoSecSnapshotAutoConfiguration {
          */
         @Configuration(proxyBeanMethods = false)
         @ConditionalOnClass(name = ["org.springframework.boot.health.contributor.HealthIndicator"])
+        @InternalCoSecApi
         class EvictionHealth {
             @Bean
             @ConditionalOnMissingBean(name = ["cosecSnapshotEvictionHealthIndicator"])
@@ -180,6 +183,7 @@ class CoSecSnapshotAutoConfiguration {
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = [ReplicaReads.LETTUCE_CONNECTION_FACTORY])
+    @InternalCoSecApi
     class RedisReads {
         @Bean
         fun cosecReplicaReadCheck(
@@ -213,6 +217,7 @@ class CoSecSnapshotAutoConfiguration {
         name = ["enabled"],
         matchIfMissing = true
     )
+    @InternalCoSecApi
     class Shadow {
         @Bean
         @ConditionalOnMissingBean
@@ -283,6 +288,7 @@ class CoSecSnapshotAutoConfiguration {
             )
         }
 
+        @InternalCoSecApi
         companion object {
             const val SHADOW_LISTENER = "shadow"
 
@@ -344,6 +350,7 @@ class CoSecSnapshotAutoConfiguration {
     /** `cosecSnapshot` in the health endpoint, when the host has actuator. */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["org.springframework.boot.health.contributor.HealthIndicator"])
+    @InternalCoSecApi
     class Health {
         @Bean
         @ConditionalOnMissingBean(name = ["cosecSnapshotHealthIndicator"])
@@ -361,6 +368,7 @@ class CoSecSnapshotAutoConfiguration {
 }
 
 /** Runs [reporter] every interval from the start of the context until it closes. */
+@InternalCoSecApi
 class ShadowReporting(val reporter: ShadowReporter) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-shadow-reporter"))
 
@@ -525,13 +533,16 @@ internal object ReplicaReads {
  * on every read. One that cannot be read is down under [mode] `fail`; under `warn` the operator accepted that at startup,
  * so it is up, as `unknown`, logged once at WARN.
  */
+@InternalCoSecApi
 class EvictionPolicyMonitor internal constructor(
     private val read: () -> EvictionPolicyCheck.Reading,
     private val interval: Duration,
     private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
 ) : AutoCloseable {
     /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
+    @InternalCoSecApi
     class Status internal constructor(val down: Boolean, val detail: String?) {
+        @InternalCoSecApi
         companion object {
             val OK: Status = Status(false, null)
             val UNKNOWN: Status = Status(false, "unknown")

@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.authentication.social
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialAuthenticationProvider
@@ -52,7 +55,7 @@ import java.lang.reflect.Constructor
     RuntimeAuthorizationProperties::class,
     CoSecProperties::class,
 )
-class CoSecSocialAuthenticationAutoConfiguration(
+internal class CoSecSocialAuthenticationAutoConfiguration(
     private val socialAuthenticationProperties: SocialAuthenticationProperties
 ) {
     @Bean

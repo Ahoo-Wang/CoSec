@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -30,6 +33,7 @@ import me.ahoo.cosec.model.scope.Scope
  * [unresolved] holds what the caller could not read, such as [Cause.SourceUnavailable]: the evaluation is
  * indeterminate unless a DENY matches. It is used as given, not copied.
  */
+@InternalCoSecApi
 class SnapshotView(
     val platform: CompiledDocument,
     val app: CompiledDocument?,

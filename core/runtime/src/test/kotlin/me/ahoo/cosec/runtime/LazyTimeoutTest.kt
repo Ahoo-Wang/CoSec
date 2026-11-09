@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.CancellableContinuation
@@ -24,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated

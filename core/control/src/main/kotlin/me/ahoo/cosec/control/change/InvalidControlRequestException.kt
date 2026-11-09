@@ -22,7 +22,7 @@ package me.ahoo.cosec.control.change
  * An [IllegalArgumentException], as these checks threw before it existed. Its cause, a parse error of what the caller
  * sent, is never shown.
  */
-class InvalidControlRequestException(
+internal class InvalidControlRequestException(
     message: String,
     cause: Throwable? = null
 ) : IllegalArgumentException(message, cause)

@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.coroutines.awaitCancellation
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel

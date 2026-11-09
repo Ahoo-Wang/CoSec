@@ -53,7 +53,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @ConditionalOnEnforceMode
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
 @EnableConfigurationProperties(ApiKeyProperties::class, CoSecProperties::class)
-class CoSecApiKeyAutoConfiguration {
+internal class CoSecApiKeyAutoConfiguration {
 
     /**
      * `IDN-6`: an API key's memberships are its principal's, from the `MembershipProvider` (RFC 0009 §4.2). Without one

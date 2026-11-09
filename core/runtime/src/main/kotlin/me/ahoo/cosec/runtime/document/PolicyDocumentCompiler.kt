@@ -41,7 +41,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** A document that decodes but does not compile; it is never installed, and every request needing it fails closed. */
-class DocumentCompileException(val document: String, val errors: List<CompileError>, cause: Throwable? = null) :
+class DocumentCompileException @InternalCoSecApi constructor(
+    val document: String,
+    @InternalCoSecApi val errors: List<CompileError>,
+    cause: Throwable? = null,
+) :
     CoSecException(
         "The $document document does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" },
         cause,
@@ -73,7 +77,7 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
  * platform may change on its own, and a missing one makes the request indeterminate. [checkReferences] checks them
  * against a given platform document, as a publisher does before it writes (RFC 0004 §7.4).
  */
-class PolicyDocumentCompiler(
+class PolicyDocumentCompiler @InternalCoSecApi constructor(
     private val policies: PolicyCompiler = PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER)),
     val principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
     val roleGrantLimit: Int = RoleExpansion.DEFAULT_ROLE_GRANT_LIMIT,
@@ -82,6 +86,7 @@ class PolicyDocumentCompiler(
      * Compiles conditions against [catalog] too: the external attributes the registered `AttributeProvider`s declare
      * (RFC 0006 §5.4.1). A statement reading an `ext.` path no provider declares does not compile.
      */
+    @InternalCoSecApi
     constructor(
         catalog: AttributeCatalog,
         principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
@@ -96,6 +101,7 @@ class PolicyDocumentCompiler(
     }
 
     /** Decodes and compiles a stored document. */
+    @InternalCoSecApi
     override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
         val (kind, owner) = when (key) {
             SnapshotKey.Platform -> DocumentKind.PLATFORM to ""
@@ -110,6 +116,15 @@ class PolicyDocumentCompiler(
         return compile(PolicyDocumentCodec.decode(kind, owner, document.bodyBytes()))
     }
 
+    /**
+     * Throws [DocumentCompileException] when [document] does not compile, with every error and its JSON path. What a CI
+     * check of a document calls: the compiled form is the engine's, and no application needs it.
+     */
+    fun validate(document: PolicyDocument) {
+        compile(document)
+    }
+
+    @InternalCoSecApi
     fun compile(document: PolicyDocument): CompiledDocument {
         val name = document.describe()
         val expansion = RoleExpansion.expand(document, roleGrantLimit)
@@ -396,6 +411,11 @@ class PolicyDocumentCompiler(
             .filter { it.subject !is SubjectRef.Role && it.policy.value.startsWith(PERMISSION_PREFIX) }
             .mapNotNullTo(HashSet()) { (it.scope.app as? Match.Exactly)?.value?.value }
 
+        /** The compiler a document is validated with when [platform] is the platform document, as the control plane checks a candidate. */
+        fun forPlatform(
+            platform: PolicyDocument?
+        ): PolicyDocumentCompiler = forPlatform(platform, AttributeCatalog.NONE)
+
         /**
          * The compiler every document compiles with when [platform] is the platform document (RFC 0007 §3.1 N3): its
          * condition limits, or the defaults, and the external attributes it declares ahead of those the host's providers
@@ -403,6 +423,7 @@ class PolicyDocumentCompiler(
          * one accepts the others accept. [credentialHeaders] are the headers the host reads credentials from besides
          * the fixed ones, such as a renamed API key header (`CND-5`, RC1-21).
          */
+        @InternalCoSecApi
         fun forPlatform(
             platform: PolicyDocument?,
             providers: AttributeCatalog = AttributeCatalog.NONE,
@@ -421,6 +442,7 @@ class PolicyDocumentCompiler(
          * A compiler that checks conditions against [limits] and the external attributes of [catalog], refusing
          * [credentialHeaders] as it refuses the fixed credential headers.
          */
+        @InternalCoSecApi
         fun of(
             limits: ConditionLimits,
             catalog: AttributeCatalog,

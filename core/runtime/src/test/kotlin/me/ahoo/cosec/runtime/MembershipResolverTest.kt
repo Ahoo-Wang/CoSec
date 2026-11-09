@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId

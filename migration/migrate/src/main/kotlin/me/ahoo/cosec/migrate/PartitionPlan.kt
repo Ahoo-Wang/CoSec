@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.EntryDigest
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDocument

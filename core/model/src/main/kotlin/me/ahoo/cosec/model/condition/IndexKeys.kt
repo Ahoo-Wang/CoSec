@@ -11,18 +11,24 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The index keys of a condition for one attribute (RFC 0005 §4.1): an over-approximation of the values the attribute
  * can have when the condition is true. An index that files a statement under each of its keys, and under "any value"
  * when it is [Unconstrained], never misses a statement that can match (property A1).
  */
+@InternalCoSecApi
 sealed class IndexKeys {
     /** Whether a request whose attribute has [value] (null when absent) can satisfy the condition. */
     abstract fun admits(value: String?): Boolean
 
     /** ⊤: the condition does not constrain the attribute. */
+    @InternalCoSecApi
     object Unconstrained : IndexKeys() {
         override fun admits(value: String?): Boolean = true
 
@@ -33,6 +39,7 @@ sealed class IndexKeys {
      * The condition is true only if the attribute is present and its value is in [values], or, when [folded], its
      * ASCII-folded value is. Empty when the condition cannot be true: the statement belongs in no bucket.
      */
+    @InternalCoSecApi
     class Only internal constructor(val values: Set<String>, val folded: Boolean) : IndexKeys() {
         override fun admits(value: String?): Boolean =
             value != null && (if (folded) Ascii.lowercase(value) else value) in values
@@ -44,6 +51,7 @@ sealed class IndexKeys {
         override fun toString(): String = (if (folded) "folded" else "") + values.sortedWith { a, b -> a.compareTo(b) }
     }
 
+    @InternalCoSecApi
     companion object {
         /**
          * The keys of [condition] for the [AttributeType.STRING] attribute [attribute].

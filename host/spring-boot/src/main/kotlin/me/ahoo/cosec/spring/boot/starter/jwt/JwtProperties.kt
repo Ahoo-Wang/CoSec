@@ -35,7 +35,7 @@ class JwtProperties(
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
     }
 
-    data class TokenValidity(
+    class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
         var refresh: Duration = Duration.ofDays(7)
     )

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.audit.RevisionRef

@@ -50,7 +50,7 @@ import org.springframework.context.annotation.Configuration
     JwtProperties::class,
     RevocationProperties::class,
 )
-class CoSecJwtAutoConfiguration {
+internal class CoSecJwtAutoConfiguration {
 
     /** Startup fails on a blank secret, or one shorter than [JwtProperties.Algorithm.minSecretBytes] (RC1-24). */
     @Bean

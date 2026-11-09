@@ -17,7 +17,7 @@ package me.ahoo.cosec.social
  *
  * @author ahoo wang
  */
-data class SocialUser(
+class SocialUser(
     val id: String,
     val username: String,
     val nickname: String? = null,

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.CompletableDeferred
@@ -19,6 +21,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.runtime.PipelineFixtures.LoadingViews
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT

@@ -36,7 +36,7 @@ import org.springframework.context.annotation.Primary
 @EnableConfigurationProperties(
     LoginProperties::class,
 )
-class CoSecAuthenticationAutoConfiguration {
+internal class CoSecAuthenticationAutoConfiguration {
     /**
      * This context's own registry of its own beans (#1222). The composites depend on this bean, so `getBeansOfType`
      * leaves them out as beans in creation: a composite in the registry would dispatch to itself.

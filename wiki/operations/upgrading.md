@@ -67,6 +67,28 @@ and have to be provisioned again.
 - **Libraries export what their public classes implement** (`cocache`, `kafka`, `ip2region`, `micrometer`, `opentelemetry`):
   you may drop a dependency you added only to compile against them.
 
+- **The public API is classified** (RFC 0010 C4). What an application needs stays public; everything else is
+  `@InternalCoSecApi` (applications never opt in) or `internal`. Most of `cosec-engine`, the condition AST of
+  `cosec-model`, `cosec-runtime`'s snapshot views, shadow recording and document model, the control plane's
+  `ControlPlane`, grant and access analysis, and the starter's auto-configuration classes are internal now. If you
+  compiled against one, use what the page you found it on documents instead: the checks and listeners are still there.
+  In the test kit, only `PolicyTestKit`, `PipelineFixture`, `EngineOutcome` and their exceptions are public.
+- **`PipelineComponents` is a plain class**, as is `SnapshotOptions`; both lose `copy` and the `componentN` functions.
+  `PipelineComponents` no longer takes an `engine`. A host without Spring Boot gets its snapshots from
+  `SuspendingSnapshotSource.of(store)`.
+- **`PolicyDocumentCompiler.compile` is internal.** A CI check calls `validate`; `forPlatform(platform)` is the
+  overload for it.
+- **A public `data class` is now a value that cannot grow** (RFC 0010 C4): `Identity`, `Identity.Credential`,
+  `TokenSubject`, `SocialUser`, `ForwardedIdentity`, `Audit*Data`, `ShadowReport`, `ShadowSample`, `InstalledDocument`,
+  `InstanceStatus` and the starter's `*Properties` lost `copy` and `componentN`. `Identity`, `Identity.Credential`,
+  `TokenSubject` and the shadow records still compare by value; the others no longer define `equals`.
+- **A refresh token is refused where an access token is expected** (`IDN-13`). `JwtTokenConverter` writes
+  `cosec.token: "refresh"` on every refresh token; a token with that claim authenticates nothing. Tokens issued before
+  this version keep working until they expire.
+- **Instance statuses carry the document format level** (RFC 0010 C5): an instance reporting without `formatLevel` is
+  refused by a control plane of this version, and a shadow window reading one fails until every instance has been
+  upgraded (a status expires after a minute).
+
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference

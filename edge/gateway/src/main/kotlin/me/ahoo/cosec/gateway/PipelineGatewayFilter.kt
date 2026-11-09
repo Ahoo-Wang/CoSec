@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.gateway
 
 import me.ahoo.cosec.annotations.InternalCoSecApi

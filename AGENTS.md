@@ -119,9 +119,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
     dumps): may change in a minor release. `@CoSecSpi`: a plain marker for the interfaces applications implement.
     `cosec-api` (`api/api/`) is the thin contract module left over from 7.x (principal, token,
     `SecurityContext`, audit events).
-  - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library only:
-    `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root build leaves out the SLF4J
-    default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
+  - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library and
+    the `cosec-annotations` markers only: `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root
+    build leaves out the SLF4J default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
     engine holds the compiler, the indexes and the flat evaluator (`engine/flat/`).
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,

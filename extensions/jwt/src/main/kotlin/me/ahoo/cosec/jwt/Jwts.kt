@@ -30,6 +30,13 @@ internal object Jwts {
 
     /** The RFC 8693 actor claim. `may_act` only says who may act for the subject, and does not change it. */
     const val ACTOR_CLAIM = "act"
+
+    /**
+     * What a token is for, on a token that is not an access token: `refresh` on a refresh token. An access token has no
+     * such claim, so that a token issued by another converter with this key still reads as one (`IDN-13`).
+     */
+    const val TOKEN_USE_CLAIM = "cosec.token"
+    const val REFRESH_TOKEN = "refresh"
     private val jwtParser = JWT()
 
     fun String.removeBearerPrefix(): String =
@@ -47,9 +54,13 @@ internal object Jwts {
     /**
      * What [decodedAccessToken] says; the caller has verified its signature. A delegation token (an `act` claim) never
      * says anything: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+     * Nor does a refresh token: its `sub` is the access token's id, and a principal of that name is nobody's (`IDN-13`).
      * A token with no `sub` or `jti` is invalid.
      */
     fun toVerifiedToken(decodedAccessToken: DecodedJWT): VerifiedToken {
+        if (!decodedAccessToken.getClaim(TOKEN_USE_CLAIM).isMissing) {
+            throw TokenVerificationException("The token is not an access token.")
+        }
         if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
             throw DelegationUnsupportedException(
                 "The token delegates (it carries an `act` claim), which CoSec does not support."

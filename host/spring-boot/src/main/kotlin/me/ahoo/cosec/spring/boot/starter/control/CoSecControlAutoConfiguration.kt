@@ -102,7 +102,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-class CoSecControlAutoConfiguration {
+internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlStore(
@@ -368,7 +368,7 @@ class CoSecControlAutoConfiguration {
 private const val KAFKA_CHANGE_LISTENER = "kafka-change-audit"
 
 /** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */
-class ControlSnapshot(
+internal class ControlSnapshot(
     val source: SnapshotSource<CompiledDocument, CompiledDocument>,
     /** The clock [source] dates its entries with; confirmation compares against it. */
     val clock: Clock = Clock.systemUTC(),

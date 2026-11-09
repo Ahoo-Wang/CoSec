@@ -38,7 +38,7 @@ private const val COSID_AUTO_CONFIGURATION = "me.ahoo.cosid.spring.autoconfigure
 @ConditionalOnClass(CosIdIdGenerator::class)
 @ConditionalOnBean(CosIdRuntime::class)
 @EnableConfigurationProperties(CosIdGeneratorProperties::class)
-class CoSecCosIdAutoConfiguration {
+internal class CoSecCosIdAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(IdGenerator::class)
     fun cosecIdGenerator(runtime: CosIdRuntime, properties: CosIdGeneratorProperties): IdGenerator =

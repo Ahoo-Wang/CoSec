@@ -54,6 +54,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 
 /** A revision as `history` lists it. */
+@InternalCoSecApi
 data class RevisionSummary(val revision: Long, val digest: String, val publishedAt: Instant)
 
 /**
@@ -61,6 +62,7 @@ data class RevisionSummary(val revision: Long, val digest: String, val published
  * [policies] and [bindings] are of the expanded documents (RFC 0012 §7.4), so a role's change, and what a catalog that
  * grows gives a `"*"` role, shows as the bindings it derives; [roles] are the roles as written.
  */
+@InternalCoSecApi
 data class DocumentDiff(
     val from: Long,
     val to: Long,
@@ -74,9 +76,11 @@ data class DocumentDiff(
     val sections: Boolean,
 )
 
+@InternalCoSecApi
 data class EntryChanges(val added: List<String>, val removed: List<String>, val changed: List<String>)
 
 /** A decision on the current heads, and on a change's candidate when one was asked for (RFC 0007 §10.3). */
+@InternalCoSecApi
 data class Simulation(
     val enforced: DecisionView,
     val enforcedTrace: TraceView?,
@@ -86,10 +90,11 @@ data class Simulation(
 )
 
 /** A decision at the revisions an audit event recorded, or on the current heads. */
+@InternalCoSecApi
 data class Explanation(val version: SnapshotVersion, val decision: DecisionView, val trace: TraceView?)
 
 /** Which bindings could permit, and which DENYs could deny, [action] on [resource] in a scope of [tenant] (§10.3). */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class AccessQuery(
     val tenant: TenantId,
     val app: String?,
@@ -99,7 +104,7 @@ data class AccessQuery(
 )
 
 /** A binding whose policy has a statement matching the query; its condition, if any, is not evaluated. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class AccessEntry(
     val document: String,
     val binding: String,
@@ -116,7 +121,7 @@ data class AccessEntry(
  * [opaque] the bindings of readable documents whose policy is in one of those: their content is not shown, nor whether
  * they match.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 data class AccessReport(val allows: List<AccessEntry>, val denies: List<AccessEntry>, val hidden: Int, val opaque: Int)
 
 /**
@@ -125,6 +130,7 @@ data class AccessReport(val allows: List<AccessEntry>, val denies: List<AccessEn
  * action on each document it touches. Reads need `cosec:read`; `simulate`, `explain` and `analyze` need their own verbs
  * on the simulated tenant's document, and show what they found in other documents only to a caller who may read them.
  */
+@InternalCoSecApi
 interface ControlPlane {
     suspend fun read(operator: Operator, key: SnapshotKey, revision: Long? = null): PolicyDocument
 
@@ -171,11 +177,11 @@ interface ControlPlane {
 
     suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion? = null): Explanation
 
-    @ExperimentalCoSecApi
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport
 
     suspend fun propagation(operator: Operator, key: SnapshotKey, revision: Long): Propagation
 
+    @InternalCoSecApi
     companion object {
         const val DEFAULT_LIMIT: Int = 20
         const val MAX_LIMIT: Int = 200
@@ -420,7 +426,6 @@ class DefaultControlPlane(
         return Held(revisions.decode(key, record), null)
     }
 
-    @ExperimentalCoSecApi
     override suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport {
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)

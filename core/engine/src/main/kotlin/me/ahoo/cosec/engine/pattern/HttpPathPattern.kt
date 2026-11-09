@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A path pattern of the `http` namespace (RFC 0005 §5.2), in pure Kotlin.
@@ -32,6 +36,7 @@ package me.ahoo.cosec.engine.pattern
  * Captured values are the segments' decoded values. They only ever reach conditions as values: a value never becomes
  * part of a pattern (RFC 0005 §2 J9), so a path template is a capture compared with `eq`.
  */
+@InternalCoSecApi
 class HttpPathPattern private constructor(
     val pattern: String,
     val caseSensitive: Boolean,
@@ -226,6 +231,7 @@ class HttpPathPattern private constructor(
 
     override fun toString(): String = pattern
 
+    @InternalCoSecApi
     companion object {
         private const val NO_MATCH = -1
 
@@ -276,6 +282,7 @@ class HttpPathPattern private constructor(
 }
 
 /** What a pattern captured, by variable index. Values are never `null`: a variable that matched nothing is empty. */
+@InternalCoSecApi
 class Captures internal constructor(private val names: Array<String>, private val values: Array<String>) {
     val size: Int get() = names.size
 
@@ -299,6 +306,7 @@ class Captures internal constructor(private val names: Array<String>, private va
 
     override fun toString(): String = toMap().toString()
 
+    @InternalCoSecApi
     companion object {
         val NONE: Captures = Captures(emptyArray(), emptyArray())
     }

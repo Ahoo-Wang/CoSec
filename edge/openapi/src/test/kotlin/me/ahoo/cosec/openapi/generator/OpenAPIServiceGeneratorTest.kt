@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.openapi.generator
 
 import io.swagger.v3.core.util.Json
 import io.swagger.v3.core.util.Json31
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.PathItem
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler

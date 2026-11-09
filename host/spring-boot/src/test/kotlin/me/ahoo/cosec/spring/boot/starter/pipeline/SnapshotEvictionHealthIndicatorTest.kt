@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import ch.qos.logback.classic.Level
@@ -22,6 +24,7 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.MembershipLoader
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.spi.membership.MembershipAnswer

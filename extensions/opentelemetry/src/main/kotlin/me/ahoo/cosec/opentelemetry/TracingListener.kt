@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.opentelemetry
 
 import io.opentelemetry.api.GlobalOpenTelemetry
@@ -26,6 +28,7 @@ import io.opentelemetry.api.trace.TraceState
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.extension.kotlin.asContextElement
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.StatementRef
@@ -128,6 +131,7 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
  * element makes it current whenever the pipeline resumes, so instrumented clients in providers make child spans of
  * the request's span; the [TraceContext] puts the parent span into decision events and audit records.
  */
+@InternalCoSecApi
 object OpenTelemetryContextContributor : BridgeContextContributor {
     override fun capture(): CoroutineContext {
         val context = Context.current()

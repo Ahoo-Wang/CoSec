@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.decision.BindingRef
@@ -24,11 +27,13 @@ import me.ahoo.cosec.model.decision.BindingRef
  * and its condition (RFC 0007 §7.6, #1208). Evaluation reads no external attribute outside it (P14, `ATR-8`); one it
  * would read anyway is missing.
  */
+@InternalCoSecApi
 class AttributePlan internal constructor(val attributes: List<Attribute>) {
     val isEmpty: Boolean get() = attributes.isEmpty()
 
     override fun toString(): String = "AttributePlan$attributes"
 
+    @InternalCoSecApi
     companion object {
         val EMPTY: AttributePlan = AttributePlan(emptyList())
     }

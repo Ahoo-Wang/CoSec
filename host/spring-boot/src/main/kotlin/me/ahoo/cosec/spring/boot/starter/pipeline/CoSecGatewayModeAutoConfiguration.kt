@@ -42,7 +42,7 @@ private val log = KotlinLogging.logger {}
     // The web adapters read the host app and the trusted proxy hops from it.
     RuntimeAuthorizationProperties::class,
 )
-class CoSecGatewayModeAutoConfiguration {
+internal class CoSecGatewayModeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecIdentityGate(

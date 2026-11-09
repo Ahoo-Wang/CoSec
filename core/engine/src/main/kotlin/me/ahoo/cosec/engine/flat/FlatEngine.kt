@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
@@ -25,6 +28,7 @@ import me.ahoo.cosec.model.scope.Scope
 /**
  * The authorization decision over bindings (RFC 0004 §6): a synchronous function without I/O.
  */
+@InternalCoSecApi
 interface FlatEngine {
     /**
      * Decides [request] against [snapshot]. The decision never depends on [trace], nor on the order of the candidates.
@@ -53,6 +57,7 @@ interface FlatEngine {
  * Conditions read the request's attributes (RFC 0005 §3.2). The engine answers those it holds itself from these
  * fields; [attributes] answers the rest (`http.*`, `request.attributes.*`) and is never asked for the others.
  */
+@InternalCoSecApi
 class FlatRequest(
     val request: AuthzRequest,
     /** Resolved by `ScopeResolver`: its tenant is the principal's, its roles those in the request's space. */
@@ -68,6 +73,7 @@ class FlatRequest(
 )
 
 /** A host that has no attributes of its own: every read is absent. */
+@InternalCoSecApi
 object AbsentAttributes : ConditionInput {
     override fun string(attribute: Attribute): String? = null
 
@@ -81,9 +87,11 @@ object AbsentAttributes : ConditionInput {
 }
 
 /** [trace] is null at [TraceLevel.OFF]. */
+@InternalCoSecApi
 class FlatEvaluation(val decision: Decision, val trace: FlatTrace?)
 
 /** The default [FlatEngine]: stateless and thread-safe. */
+@InternalCoSecApi
 object CoSecFlatEngine : FlatEngine {
     internal val IMPLICIT_DENY: Decision = Decision.Deny(null)
     private val IMPLICIT_DENY_EVALUATION = FlatEvaluation(IMPLICIT_DENY, null)

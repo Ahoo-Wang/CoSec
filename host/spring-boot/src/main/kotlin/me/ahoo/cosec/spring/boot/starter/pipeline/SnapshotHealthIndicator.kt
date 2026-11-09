@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import org.springframework.boot.health.contributor.Health
@@ -22,6 +25,7 @@ import org.springframework.boot.health.contributor.HealthIndicator
  * `cosecSnapshot`: UP once the platform document and the prewarmed apps and tenants are installed ([SnapshotReadiness]
  * gates readiness on the same), DOWN before, with what is missing. Add it to the readiness group for its details.
  */
+@InternalCoSecApi
 class SnapshotHealthIndicator(private val source: SnapshotSource<*, *>) : HealthIndicator {
     override fun health(): Health {
         val platform = when (source.peek()?.policies) {

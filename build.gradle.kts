@@ -437,6 +437,8 @@ fun Project.coverageReport() {
 /** The JMH conventions (AGENTS.md "Feedback loop"): `-PjmhIncludes`, `-PjmhFork`, `-PjmhJavaVersion`, ... */
 fun Project.jmhBenchmarks() {
     apply<me.champeau.jmh.JMHPlugin>()
+    // A contract change must not leave benchmarks that no longer compile: `check` is the only gate that runs everywhere.
+    tasks.named("check") { dependsOn("compileJmhKotlin") }
     configure<me.champeau.jmh.JmhParameters> {
         val delimiter = ','
         val jmhIncludesKey = "jmhIncludes"

@@ -102,6 +102,7 @@ import java.util.function.LongSupplier
  * retries); eviction, lag reports and log lines with stack traces run on a separate housekeeping thread, so a slow log
  * appender cannot delay a timeout (#1252).
  */
+@InternalCoSecApi
 class SnapshotSource<P : Any, A : Any> internal constructor(
     private val store: SnapshotDocumentStore,
     /** The document every request needs. */

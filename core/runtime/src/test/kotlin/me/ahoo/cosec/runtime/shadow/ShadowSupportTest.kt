@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.shadow
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -206,5 +209,23 @@ class ShadowSupportTest {
         assertThrownBy<SnapshotFormatException> {
             ShadowCodec.decodeStatuses(odd.replace("app:a\\u0001b", "app:a:b").encodeToByteArray())
         }
+    }
+
+    /** RFC 0010 C5: a status says which document format level its instance reads, and one that does not is refused. */
+    @Test
+    fun `an instance status carries its document format level`() {
+        val status = InstanceStatus("a", Instant.parse("2026-11-08T00:00:00Z"), emptyMap())
+        status.formatLevel.assert().isEqualTo(1)
+        val encoded = ShadowCodec.encodeStatuses(mapOf("a" to status))
+        encoded.toString(Charsets.UTF_8).assert().contains(""""formatLevel":1""")
+        ShadowCodec.decodeStatuses(encoded)["a"]?.formatLevel.assert().isEqualTo(1)
+    }
+
+    @Test
+    fun `a status without a format level is refused`() {
+        val missing = """{"a":{"at":"2026-11-08T00:00:00Z","documents":{}}}"""
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(missing.encodeToByteArray()) }
+        val zero = """{"a":{"at":"2026-11-08T00:00:00Z","documents":{},"formatLevel":0}}"""
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(zero.encodeToByteArray()) }
     }
 }

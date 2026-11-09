@@ -35,7 +35,7 @@ class SocialAuthenticationProperties(
     }
 
     @Suppress("LongParameterList")
-    data class Provider(
+    class Provider(
         var type: AuthDefaultSource,
         var clientId: String,
         var clientSecret: String? = null,
@@ -65,6 +65,7 @@ class SocialAuthenticationProperties(
         var dingTalkExclusiveLogin: Boolean = false,
         var dingTalkExclusiveCorpId: String? = null,
     ) {
+
         fun toJustAuthConfig(): AuthConfig {
             return AuthConfig(
                 /* clientId = */

@@ -31,7 +31,7 @@ interface SecurityScope {
  * What the gateway in front of this service says about the request, in a service behind one
  * (`cosec.pipeline.mode=gateway`).
  */
-data class ForwardedIdentity(
+class ForwardedIdentity(
     /** The gateway's `CoSec-Request-Id`, to correlate this request with the gateway's audit record. */
     val gatewayRequestId: String,
     /** The id of the token or API key the caller authenticated with at the gateway, never its value. */

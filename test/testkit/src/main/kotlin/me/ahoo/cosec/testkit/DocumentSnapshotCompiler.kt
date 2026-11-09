@@ -25,16 +25,18 @@ import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.time.Instant
 
 /** The documents of a scenario, as written. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class ScenarioDocuments(val platform: JsonNode?, val apps: Map<String, JsonNode>, val tenants: Map<String, JsonNode>)
 
 /** Every document of a scenario, compiled. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class CompiledSnapshot(
     val platform: CompiledDocument,
     val apps: Map<String, CompiledDocument>,
@@ -42,7 +44,7 @@ class CompiledSnapshot(
 )
 
 /** Turns scenario documents into what the engine evaluates. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun interface SnapshotCompiler {
     /** Throws [DocumentException] when a document does not compile. */
     fun compile(documents: ScenarioDocuments): CompiledSnapshot
@@ -60,7 +62,7 @@ fun interface SnapshotCompiler {
  * [RequestFacts.host] answers by throwing [ScenarioFault]; the codec itself has no such field. [stored] leaves it out,
  * so a user's documents compile exactly as they do when published.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 object DocumentSnapshotCompiler : SnapshotCompiler {
     private val factory = JsonNodeFactory.instance
 
@@ -114,19 +116,38 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
 
     private fun decode(kind: DocumentKind, owner: String, node: JsonNode?, faults: Boolean): PolicyDocument {
         val name = name(kind, owner)
-        val body = (node?.deepCopy() ?: factory.objectNode()) as? ObjectNode
-            ?: throw ScenarioFormatException("The $name document is not an object: $node")
-        val document = factory.objectNode()
-            .put("schema", PolicyDocumentCodec.SCHEMA)
-            .put("revision", 1)
-            .put("publishedAt", PUBLISHED_AT)
-        document.setAll(body)
+        val document = withHeader(node, name)
         if (faults) {
             document.get("policies")?.values()?.forEach { faulting(it as ObjectNode) }
         }
         return guarded(
             name
         ) { PolicyDocumentCodec.decode(kind, owner, CoSecJson.mapper.writeValueAsBytes(document)) }
+    }
+
+    /**
+     * A scenario document as a [SnapshotDocument] the way the control plane publishes one: its header fields, and
+     * the bytes [PipelineFixture] installs. A document that writes its own header keeps it.
+     */
+    internal fun published(node: JsonNode?): SnapshotDocument {
+        val document = withHeader(node, "scenario")
+        return SnapshotDocument(
+            document.required("schema").intValue(),
+            document.required("revision").longValue(),
+            Instant.parse(document.required("publishedAt").text()),
+            CoSecJson.mapper.writeValueAsBytes(document),
+        )
+    }
+
+    private fun withHeader(node: JsonNode?, name: String): ObjectNode {
+        val body = (node?.deepCopy() ?: factory.objectNode()) as? ObjectNode
+            ?: throw ScenarioFormatException("The $name document is not an object: $node")
+        val document = factory.objectNode()
+            .put("schema", SCHEMA)
+            .put("revision", 1)
+            .put("publishedAt", PUBLISHED_AT)
+        document.setAll(body)
+        return document
     }
 
     private fun name(kind: DocumentKind, owner: String): String =
@@ -158,12 +179,13 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
 
     private const val FAULT_FIELD = "fault"
     private const val CONDITION = "condition"
+    private const val SCHEMA = PolicyDocumentCodec.SCHEMA
     private const val PUBLISHED_AT = "2026-10-26T00:00:00Z"
 }
 
 /** A failure injected by `"fault"`. */
 @ExperimentalCoSecApi
-class ScenarioFault(message: String) : RuntimeException(message)
+internal class ScenarioFault(message: String) : RuntimeException(message)
 
 /** The prefix of the request attribute a `"fault"` reads. */
 internal const val FAULT: String = "cosec.fault:"

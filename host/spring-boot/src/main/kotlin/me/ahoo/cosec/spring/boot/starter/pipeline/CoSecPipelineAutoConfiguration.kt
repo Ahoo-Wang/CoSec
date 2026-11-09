@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
@@ -83,6 +86,7 @@ private val log = KotlinLogging.logger {}
     RevocationProperties::class,
     ListenerProperties::class,
 )
+@InternalCoSecApi
 class CoSecPipelineAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -229,6 +233,7 @@ class CoSecPipelineAutoConfiguration {
         matchIfMissing = true
     )
     @EnableConfigurationProperties(GatewayIdentityProperties::class)
+    @InternalCoSecApi
     class GatewayIdentity {
         @Bean
         @ConditionalOnMissingBean
@@ -241,6 +246,7 @@ class CoSecPipelineAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecAuthorizationChecker(pipeline: Pipeline): AuthorizationChecker = AuthorizationChecker(pipeline)
 
+    @InternalCoSecApi
     companion object {
         /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
         private const val KAFKA_AUDIT_LISTENER = "kafka-audit"

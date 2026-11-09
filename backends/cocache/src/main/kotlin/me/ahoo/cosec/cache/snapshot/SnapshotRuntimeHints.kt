@@ -27,7 +27,7 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar
  * A missing hint can only make a document or entry fail to decode or compile (RFC 0003 §4.4 F3, F4), which fails
  * closed; it never skips a statement.
  */
-class SnapshotRuntimeHints : RuntimeHintsRegistrar {
+internal class SnapshotRuntimeHints : RuntimeHintsRegistrar {
     override fun registerHints(hints: RuntimeHints, classLoader: ClassLoader?) {
         val loader = classLoader ?: SnapshotRuntimeHints::class.java.classLoader
         SERVICES.forEach { service ->

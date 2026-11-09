@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.store
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
@@ -38,12 +41,14 @@ import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
 /** A head as the control plane works with it: decoded, with the store's digest. */
+@InternalCoSecApi
 class Head(val key: SnapshotKey, val document: PolicyDocument, val stored: StoredDocument) {
     val revision: Long get() = document.revision
     val digest: SnapshotDigest get() = stored.digest
 }
 
 /** Who and what publishes a revision (RFC 0007 §5.3); [Revisions.publish] adds the parent. */
+@InternalCoSecApi
 class Publication(
     val change: String,
     val kind: ProvenanceKind,
@@ -53,26 +58,33 @@ class Publication(
 )
 
 /** The outcome of [Revisions.publish]. */
+@InternalCoSecApi
 sealed interface PublishOutcome {
     /** The head is now [revision]. */
+    @InternalCoSecApi
     class Published(val revision: Long, val digest: SnapshotDigest) : PublishOutcome
 
     /**
      * Someone published since the base was read: nothing was overwritten, and the change must be rebased and checked
      * again (RFC 0007 §5.5). [current] is what the store holds.
      */
+    @InternalCoSecApi
     class Conflicted(val current: SnapshotDigest?) : PublishOutcome
 
     /** The candidate removes policies other documents still refer to (RFC 0007 §5.8): nothing was written. */
+    @InternalCoSecApi
     class Referenced(val referrers: Map<PolicyId, Set<SnapshotKey>>) : PublishOutcome
 }
 
 /** What [Revisions.verifyChain] found walking a head's `parent` chain. */
+@InternalCoSecApi
 sealed interface ChainCheck {
     /** Every parent down to [oldest] has its record; older ones were reclaimed or never existed. */
+    @InternalCoSecApi
     class Intact(val oldest: Long) : ChainCheck
 
     /** The record [missing] should exist and does not: a lost write (a failover) or a deleted key. */
+    @InternalCoSecApi
     class Broken(val missing: ParentRevision) : ChainCheck
 }
 
@@ -80,6 +92,7 @@ sealed interface ChainCheck {
  * What [Revisions.reclaim] did: the [records] and [orphans] it took out of the index, the records it [deleted] (those
  * and any an earlier pass could not delete), and the ones whose deletion [failed], which the next pass tries again.
  */
+@InternalCoSecApi
 class Reclaimed(
     val records: List<SnapshotDigest>,
     val orphans: List<SnapshotDigest>,
@@ -89,12 +102,14 @@ class Reclaimed(
     /** Whether it changed anything or has something left to do. */
     val any: Boolean get() = records.isNotEmpty() || orphans.isNotEmpty() || deleted.isNotEmpty() || failed.isNotEmpty()
 
+    @InternalCoSecApi
     companion object {
         val NOTHING: Reclaimed = Reclaimed(emptyList(), emptyList())
     }
 }
 
 /** How long revision records are kept (RFC 0007 §5.7). */
+@InternalCoSecApi
 class RetentionPolicy(
     /** The most recent revisions along the chain that are always kept (`cosec.control.revisions.max-count`). */
     val maxCount: Int = 50,
@@ -134,6 +149,7 @@ class RetentionPolicy(
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
  */
+@InternalCoSecApi
 class Revisions(
     private val store: ControlStore,
     private val clock: Clock = Clock.systemUTC(),
@@ -759,6 +775,7 @@ class Revisions(
         return false
     }
 
+    @InternalCoSecApi
     companion object {
         private val log = KotlinLogging.logger {}
         const val DEFAULT_MAX_ATTEMPTS: Int = 16

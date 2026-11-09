@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A request path split the way Spring's `PathContainer.parsePath` splits it (RFC 0005 §5.2), parsed once per request
@@ -22,6 +26,7 @@ package me.ahoo.cosec.engine.pattern
  * is matched by its value without `;` parameters, percent-decoded as UTF-8; otherwise by its text as written, except
  * that `%2F` reads as `/`, as in Spring.
  */
+@InternalCoSecApi
 class HttpPath private constructor(
     val value: String,
     val decodeAndParseSegments: Boolean,
@@ -46,6 +51,7 @@ class HttpPath private constructor(
 
     override fun toString(): String = value
 
+    @InternalCoSecApi
     companion object {
         const val SEPARATOR: Char = '/'
         private const val SEPARATOR_TEXT = "/"

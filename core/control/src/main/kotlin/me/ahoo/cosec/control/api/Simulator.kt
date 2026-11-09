@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicLong
  * action and resource, with which headers and request attributes. It describes the principal, so any principal of the
  * caller's reach can be simulated.
  */
+@InternalCoSecApi
 data class SimulatedRequest(
     val tenant: TenantId,
     val principal: String?,
@@ -83,9 +84,11 @@ data class SimulatedRequest(
 )
 
 /** The revisions of the documents to decide on (RFC 0006 §9.2's `snapshotVersion`): what an audit event records. */
+@InternalCoSecApi
 data class SnapshotVersion(val platform: Long, val app: Long?, val tenant: Long?)
 
 /** The documents a decision read, compiled, with their revisions: what [Simulator.evaluate] decides on. */
+@InternalCoSecApi
 class Documents(val platform: PolicyDocument?, val app: PolicyDocument?, val tenant: PolicyDocument?)
 
 /**
@@ -108,6 +111,7 @@ internal class HeldDocuments(val platform: Held?, val app: Held?, val tenant: He
  * is the data plane's `Engine.evaluate`, at full trace. A stored document is compiled once for its content, in a cache
  * `simulate`, `explain` and `analyze` share (RC1-41).
  */
+@InternalCoSecApi
 class Simulator(
     private val engine: FlatEngine = CoSecFlatEngine,
     /** The host's `AttributeProvider` catalog, which enforcement compiles against. */
@@ -308,6 +312,7 @@ class Simulator(
         Result.failure(e)
     }
 
+    @InternalCoSecApi
     companion object {
         private const val ANONYMOUS = "(0)"
         private const val REQUEST_ID = "simulated"
@@ -338,6 +343,7 @@ private fun comparable(decision: Decision): Any = when (decision) {
 private fun failure(error: Throwable): Pair<Class<*>, String?> = error.javaClass to error.message
 
 /** A statement as a decision reports it to a caller: by policy, index and the binding it applied through. */
+@InternalCoSecApi
 data class StatementView(
     val policy: String,
     val statement: Int,
@@ -351,11 +357,14 @@ data class StatementView(
  * caller may read the document that statement came through. An indeterminate decision names its cause's type, never
  * its message.
  */
+@InternalCoSecApi
 data class DecisionView(val decision: String, val by: StatementView?, val cause: String?, val redacted: Boolean)
 
 /** One trace entry, from a document the caller may read; [redacted] counts the entries left out. */
+@InternalCoSecApi
 data class TraceView(val entries: List<TraceEntryView>, val redacted: Int)
 
+@InternalCoSecApi
 data class TraceEntryView(val statement: StatementView, val effect: String, val outcome: String)
 
 /**

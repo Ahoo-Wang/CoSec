@@ -48,7 +48,7 @@ import org.springframework.util.ClassUtils
  */
 @AutoConfiguration
 @AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
-class CoSecModuleCheckAutoConfiguration {
+internal class CoSecModuleCheckAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)

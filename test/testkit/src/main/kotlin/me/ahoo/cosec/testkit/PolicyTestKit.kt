@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.junit.jupiter.api.DynamicTest
 import tools.jackson.databind.JsonNode
 import java.net.URLDecoder
@@ -107,13 +110,17 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
          * The documents in [directory]. Without a `platform.json` the platform document is empty; no other file of the
          * directory is read. Throws [DocumentException] when a document does not compile.
          */
-        fun load(directory: Path): PolicyTestKit {
+        fun load(directory: Path): PolicyTestKit =
+            PolicyTestKit(DocumentSnapshotCompiler.stored.compile(documents(directory)))
+
+        /** The documents under [directory]: see [load]. */
+        internal fun documents(directory: Path): ScenarioDocuments {
             require(directory.isDirectory()) { "No document directory at ${directory.toAbsolutePath()}" }
             val platform = directory.resolve(PLATFORM_FILE).takeIf { it.exists() }?.let(ScenarioJson::read)
-            return of(
+            return ScenarioDocuments(
                 platform,
-                documents(directory.resolve(APPS_DIRECTORY)),
-                documents(directory.resolve(TENANTS_DIRECTORY))
+                documents(directory.resolve(APPS_DIRECTORY), JSON),
+                documents(directory.resolve(TENANTS_DIRECTORY), JSON),
             )
         }
 
@@ -128,10 +135,10 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
         private fun of(platform: JsonNode?, apps: Map<String, JsonNode>, tenants: Map<String, JsonNode>): PolicyTestKit =
             PolicyTestKit(DocumentSnapshotCompiler.stored.compile(ScenarioDocuments(platform, apps, tenants)))
 
-        private fun documents(directory: Path): Map<String, JsonNode> {
+        private fun documents(directory: Path, extension: String): Map<String, JsonNode> {
             if (!directory.exists()) return emptyMap()
-            return directory.listDirectoryEntries("*.$JSON").sortedBy { it.name }.associate { file ->
-                URLDecoder.decode(file.name.removeSuffix(".$JSON"), Charsets.UTF_8) to ScenarioJson.parse(file.readText())
+            return directory.listDirectoryEntries("*.$extension").sortedBy { it.name }.associate { file ->
+                URLDecoder.decode(file.name.removeSuffix(".$extension"), Charsets.UTF_8) to ScenarioJson.parse(file.readText())
             }
         }
     }

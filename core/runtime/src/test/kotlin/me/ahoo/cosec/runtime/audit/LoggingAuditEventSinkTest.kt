@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.audit
 
 import io.github.oshai.kotlinlogging.KLogger
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditReasonCode

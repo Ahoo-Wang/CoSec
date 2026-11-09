@@ -47,6 +47,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.CoCacheMembershipProvider"])
 @ConditionalOnBean(CoCacheFactory::class, MembershipLoader::class)
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@InternalCoSecApi
 class CoSecMembershipAutoConfiguration {
     @Bean(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
     @ConditionalOnMissingBean

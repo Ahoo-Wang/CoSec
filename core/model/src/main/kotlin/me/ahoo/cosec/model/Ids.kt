@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The identifiers of the unified model (RFC 0004 §4.1). They appear on API boundaries only: compiled structures keep

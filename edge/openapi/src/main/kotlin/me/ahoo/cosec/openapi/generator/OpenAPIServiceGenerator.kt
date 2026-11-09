@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.openapi.generator
 
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.PathItem
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
@@ -31,7 +34,10 @@ import me.ahoo.cosec.runtime.route.RouteMapException
 import java.time.Instant
 
 /** An OpenAPI document the generator cannot turn into routes and actions; it names the operation. */
-class OpenAPIGenerationException(message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
+internal class OpenAPIGenerationException(
+    message: String,
+    cause: Throwable? = null
+) : IllegalArgumentException(message, cause)
 
 /**
  * Generates a service's route map and its app document from its OpenAPI document (RFC 0005 §5.3), so that policies
@@ -54,6 +60,7 @@ class OpenAPIGenerationException(message: String, cause: Throwable? = null) : Il
  * (a file, a URL, another part of the document), or operations beside the `$ref`, which the specification leaves
  * undefined. A document that dropped or guessed those operations would grant less or more than the API describes.
  */
+@InternalCoSecApi
 object OpenAPIServiceGenerator {
     const val SERVICE_EXTENSION = "x-cosec-service"
     const val ACTION_EXTENSION = "x-cosec-action"
@@ -64,6 +71,7 @@ object OpenAPIServiceGenerator {
     private val VARIABLE = Regex("""\{([^{}]+)}""")
 
     /** One operation, as generated. */
+    @InternalCoSecApi
     class GeneratedOperation(val route: Route, val operation: Operation)
 
     fun service(openAPI: OpenAPI): String =

@@ -299,7 +299,7 @@ Check the final document for:
 1. **Schema:** validate the document against `schema/cosec-snapshot-document.schema.json` (its `platformDocument`,
    `appDocument` and `tenantDocument` definitions). The schema cannot check unique ids, binding placement, attribute
    types or limits; compiling does.
-2. **Compile:** in Kotlin, `PolicyDocumentCompiler.forPlatform(platform).compile(PolicyDocumentCodec.decode(kind,
+2. **Compile:** in Kotlin, `PolicyDocumentCompiler.forPlatform(platform).validate(PolicyDocumentCodec.decode(kind,
    owner, bytes))` throws `DocumentCompileException` listing every error with its JSON path;
    `checkReferences(document, platform)` checks that bound policies exist.
 3. **Test decisions** in the service's own test suite with `cosec-testkit`

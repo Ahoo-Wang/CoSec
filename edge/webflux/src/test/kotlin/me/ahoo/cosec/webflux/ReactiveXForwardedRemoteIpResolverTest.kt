@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver.Companion.X_FORWARDED_FOR
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

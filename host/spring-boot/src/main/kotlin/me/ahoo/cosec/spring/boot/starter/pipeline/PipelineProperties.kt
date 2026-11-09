@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -252,6 +255,7 @@ class RevocationProperties {
 
     /** The local tier of the token and subject revocation caches. */
     @NestedConfigurationProperty
+    @InternalCoSecApi
     var cache: CacheConfiguration = CacheConfiguration()
 
     companion object {

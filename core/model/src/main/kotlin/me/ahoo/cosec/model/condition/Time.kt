@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The UTC offsets of one time zone, as a table: [offsets]`[i]` (seconds) holds from `transitions[i - 1]` (inclusive,
@@ -21,6 +25,7 @@ package me.ahoo.cosec.model.condition
  * (`Asia/Shanghai`) take this table from a [ZoneResolver] the host provides; the table must cover every instant the
  * policies are evaluated at. Fixed offsets need no host ([ZoneResolver.FIXED]).
  */
+@InternalCoSecApi
 class ZoneOffsets(val id: String, transitions: LongArray, offsets: IntArray) {
     private val transitions: LongArray = transitions.copyOf()
     private val offsets: IntArray = offsets.copyOf()
@@ -82,6 +87,7 @@ class ZoneOffsets(val id: String, transitions: LongArray, offsets: IntArray) {
 
     override fun toString(): String = id
 
+    @InternalCoSecApi
     companion object {
         const val MAX_OFFSET_SECONDS: Int = 18 * 3600
         internal const val MILLIS_PER_SECOND = 1000L
@@ -95,9 +101,11 @@ class ZoneOffsets(val id: String, transitions: LongArray, offsets: IntArray) {
 }
 
 /** Finds the offsets of a time zone by id, or returns null if it does not know the zone. */
+@InternalCoSecApi
 fun interface ZoneResolver {
     fun resolve(id: String): ZoneOffsets?
 
+    @InternalCoSecApi
     companion object {
         /**
          * The zones `java.time.ZoneId.of` reads without its database: `Z`, `UTC`, `GMT`, `UT`, offsets such as `+8`,

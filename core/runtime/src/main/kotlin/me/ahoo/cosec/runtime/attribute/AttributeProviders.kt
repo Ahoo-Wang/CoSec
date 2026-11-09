@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.attribute
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.AttributeStatus
 import me.ahoo.cosec.engine.flat.ExternalValues
 import me.ahoo.cosec.model.condition.Attribute
@@ -53,6 +56,7 @@ class AttributeProviders(providers: List<AttributeProvider>) {
     internal val hasStageB: Boolean
 
     /** The catalog of every declared attribute, for `PolicyDocumentCompiler(catalog)`. */
+    @InternalCoSecApi
     val catalog: AttributeCatalog
 
     val isEmpty: Boolean get() = byPath.isEmpty()

@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A condition that passed [ConditionChecker]: every attribute is in the catalog and of the right type, literals are
@@ -24,6 +28,7 @@ package me.ahoo.cosec.model.condition
  * Nodes compare by [canonical], a JSON rendering in which `in` values and CIDR blocks are sorted and literals are
  * parsed: two nodes with the same rendering decide every request the same way. It is not the document syntax.
  */
+@InternalCoSecApi
 sealed class CheckedCondition(
     /** The canonical rendering. */
     val canonical: String,
@@ -46,6 +51,7 @@ sealed class CheckedCondition(
     final override fun toString(): String = canonical
 
     /** `eq` of a [AttributeType.STRING] attribute and a literal, [value] folded when [ignoreCase]. */
+    @InternalCoSecApi
     class Eq internal constructor(val attribute: Attribute, val value: String, val ignoreCase: Boolean) :
         CheckedCondition(binary("eq", attribute, quote(value), ignoreCase), 1, 1, Weights.EQ) {
         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
@@ -56,6 +62,7 @@ sealed class CheckedCondition(
     }
 
     /** `eq` of a [AttributeType.BOOL] attribute and a literal. */
+    @InternalCoSecApi
     class BoolEq internal constructor(val attribute: Attribute, val value: Boolean) :
         CheckedCondition(binary("eq", attribute, value.toString(), false), 1, 1, Weights.EQ) {
         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
@@ -66,6 +73,7 @@ sealed class CheckedCondition(
     }
 
     /** `eq` of an [AttributeType.IP] attribute and an address. */
+    @InternalCoSecApi
     class IpEq internal constructor(val attribute: Attribute, val value: IpAddress) :
         CheckedCondition(binary("eq", attribute, quote(value.toString()), false), 1, 1, Weights.EQ) {
         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
@@ -76,6 +84,7 @@ sealed class CheckedCondition(
     }
 
     /** `eq` of two attributes of the same type: false when either is absent. */
+    @InternalCoSecApi
     class AttributeEq internal constructor(val left: Attribute, val right: Attribute, val ignoreCase: Boolean) :
         CheckedCondition(binary("eq", left, "{\"attr\":${quote(right.path)}}", ignoreCase), 1, 1, Weights.EQ) {
         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
@@ -105,6 +114,7 @@ sealed class CheckedCondition(
     }
 
     /** `in` of a [AttributeType.STRING] attribute and a set of literals. */
+    @InternalCoSecApi
     class In internal constructor(val attribute: Attribute, val values: Set<String>) :
         CheckedCondition(
             binary("in", attribute, values.sorted().joinToString(",", "[", "]", transform = { quote(it) }), false),
@@ -120,6 +130,7 @@ sealed class CheckedCondition(
     }
 
     /** `in` of a literal and a [AttributeType.STRING_SET] attribute: the set contains [value]. */
+    @InternalCoSecApi
     class Contains internal constructor(val value: String, val attribute: Attribute) :
         CheckedCondition("{\"in\":[${quote(value)},${quote(attribute.path)}]}", 1, 1, Weights.IN) {
         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
@@ -130,6 +141,7 @@ sealed class CheckedCondition(
     }
 
     /** `prefix` of a [AttributeType.STRING] attribute, [value] folded when [ignoreCase]. */
+    @InternalCoSecApi
     class Prefix internal constructor(val attribute: Attribute, val value: String, val ignoreCase: Boolean) :
         CheckedCondition(binary("prefix", attribute, quote(value), ignoreCase), 1, 1, Weights.PREFIX) {
         override fun test(input: ConditionInput, visits: IntArray?): Boolean {
@@ -143,6 +155,7 @@ sealed class CheckedCondition(
      * `prefix` of a [AttributeType.LABELS] attribute: the host's reversed labels start with [labels], whole labels
      * only and in lower case. `com.example` matches `example.com` and `api.example.com`, not `badexample.com`.
      */
+    @InternalCoSecApi
     class LabelsPrefix internal constructor(val attribute: Attribute, val labels: String) :
         CheckedCondition(binary("prefix", attribute, quote(labels), false), 1, 1, Weights.PREFIX) {
         private val host: Attribute = requireNotNull(attribute.host)
@@ -162,6 +175,7 @@ sealed class CheckedCondition(
     }
 
     /** `cidr`: the address of an [AttributeType.IP] attribute is in one of the [ranges]. */
+    @InternalCoSecApi
     class Cidr internal constructor(val attribute: Attribute, val ranges: IpRanges) :
         CheckedCondition(
             binary("cidr", attribute, ranges.blocks.joinToString(",", "[", "]") { quote(it.toString()) }, false),
@@ -182,6 +196,7 @@ sealed class CheckedCondition(
      * the week, in [zone]. A window with `from` after `to` crosses midnight, and its early-morning part belongs to the
      * day it started on.
      */
+    @InternalCoSecApi
     class Time internal constructor(
         val zone: ZoneOffsets,
         internal val notBefore: Moment?,
@@ -257,6 +272,7 @@ sealed class CheckedCondition(
     }
 
     /** `exists`: the attribute is present. For a labels attribute, its host is. */
+    @InternalCoSecApi
     class Exists internal constructor(val attribute: Attribute) :
         CheckedCondition("{\"exists\":${quote(attribute.path)}}", 1, 1, Weights.EXISTS) {
         private val read: Attribute = attribute.host ?: attribute
@@ -274,6 +290,7 @@ sealed class CheckedCondition(
         }
     }
 
+    @InternalCoSecApi
     class And internal constructor(val conditions: List<CheckedCondition>) :
         CheckedCondition(
             group("and", conditions),
@@ -294,6 +311,7 @@ sealed class CheckedCondition(
         }
     }
 
+    @InternalCoSecApi
     class Or internal constructor(val conditions: List<CheckedCondition>) :
         CheckedCondition(
             group("or", conditions),
@@ -314,6 +332,7 @@ sealed class CheckedCondition(
         }
     }
 
+    @InternalCoSecApi
     class Not internal constructor(val condition: CheckedCondition) :
         CheckedCondition(
             "{\"not\":${condition.canonical}}",
@@ -328,6 +347,7 @@ sealed class CheckedCondition(
     }
 
     /** The node weights of the cost model (RFC 0005 §3.5). */
+    @InternalCoSecApi
     object Weights {
         const val AND: Int = 1
         const val OR: Int = 1

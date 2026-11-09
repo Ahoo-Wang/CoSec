@@ -53,6 +53,7 @@ private val log = KotlinLogging.logger {}
  * finishes still leaves the open list. A failure on one document or change is logged and the pass goes on with the
  * next; the next pass tries again.
  */
+@InternalCoSecApi
 class ControlMaintenance(
     private val store: ControlStore,
     private val revisions: Revisions,
@@ -163,6 +164,7 @@ class ControlMaintenance(
         null
     }
 
+    @InternalCoSecApi
     companion object {
         const val SHADOW_LEASE = "shadow-windows"
         private const val NOT_FOUND = 404

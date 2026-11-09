@@ -124,17 +124,6 @@ public final class me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiterKt {
 	public static final field DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/cache/shadow/CoCacheCandidateStore : me/ahoo/cosec/runtime/shadow/CandidateStore {
-	public static final field Companion Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion;
-	public fun <init> (Lme/ahoo/cocache/api/Store;)V
-	public fun candidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
-public final class me/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion {
-	public final fun create (Lme/ahoo/cocache/core/CoCacheFactory;Ljava/lang/String;)Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore;
-	public static synthetic fun create$default (Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore$Companion;Lme/ahoo/cocache/core/CoCacheFactory;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/cache/shadow/CoCacheCandidateStore;
-}
-
 public final class me/ahoo/cosec/cache/shadow/CoCacheShadowReports : me/ahoo/cosec/runtime/shadow/ShadowReportReader, me/ahoo/cosec/runtime/shadow/ShadowReportSink {
 	public static final field Companion Lme/ahoo/cosec/cache/shadow/CoCacheShadowReports$Companion;
 	public fun <init> (Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Lme/ahoo/cocache/api/Store;Ljava/time/Clock;)V
@@ -185,10 +174,6 @@ public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCache : me/ahoo/co
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/cache/snapshot/PolicySnapshotCacheKt {
-	public static final fun createPolicySnapshotCache (Lme/ahoo/cocache/core/CoCacheFactory;Lme/ahoo/cocache/core/StoreSpec;)Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;
-}
-
 public final class me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore : me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore {
 	public static final field Companion Lme/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore$Companion;
 	public fun <init> (Lme/ahoo/cosec/cache/snapshot/PolicySnapshotCache;Ljava/util/concurrent/Executor;)V
@@ -204,15 +189,5 @@ public final class me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore$Compa
 	public final fun cocacheDigest (Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Lme/ahoo/cocache/api/spi/Digest;
 	public final fun digestOf (Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public final fun snapshotDigest (Lme/ahoo/cocache/api/spi/Digest;)Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
-}
-
-public final class me/ahoo/cosec/cache/snapshot/SnapshotRuntimeHints : org/springframework/aot/hint/RuntimeHintsRegistrar {
-	public static final field Companion Lme/ahoo/cosec/cache/snapshot/SnapshotRuntimeHints$Companion;
-	public fun <init> ()V
-	public fun registerHints (Lorg/springframework/aot/hint/RuntimeHints;Ljava/lang/ClassLoader;)V
-}
-
-public final class me/ahoo/cosec/cache/snapshot/SnapshotRuntimeHints$Companion {
-	public final fun getSERVICES ()Ljava/util/List;
 }
 

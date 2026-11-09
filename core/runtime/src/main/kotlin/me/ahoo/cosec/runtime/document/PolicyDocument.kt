@@ -49,28 +49,28 @@ import java.time.Instant
  *                 { "id": "r", "subject": { "role": "editor" }, "app": "order", "space": "*", "policy": "perm:order/read" } ] }
  * ```
  */
-class PolicyDocument(
+class PolicyDocument @InternalCoSecApi constructor(
     val kind: DocumentKind,
     /** The app id of an app document, the tenant id of a tenant document; empty for the platform. */
     val owner: String,
     val revision: Long,
     val publishedAt: Instant,
-    val policies: List<PolicyDefinition>,
-    val bindings: List<Binding>,
+    @InternalCoSecApi val policies: List<PolicyDefinition>,
+    @InternalCoSecApi val bindings: List<Binding>,
     /** An app document's catalog; null for the other kinds. */
-    val catalog: Catalog? = null,
+    @InternalCoSecApi val catalog: Catalog? = null,
     /**
      * The platform boundary (RFC 0007 §7.6): in the platform document, the default (`"boundaries": {"default": …}`);
      * in a tenant document, the one that holds that tenant instead (`"boundary": …`). Null for none.
      */
     val boundary: PolicyId? = null,
     /** Where the revision came from; written by the control plane, absent in documents it did not publish. */
-    val provenance: Provenance? = null,
+    @InternalCoSecApi val provenance: Provenance? = null,
     /**
      * The platform's condition limits (RFC 0007 §3.1 N3, RFC 0005 §3.5): what every document compiles against, so the
      * control plane and every instance agree. Null: [ConditionLimits.DEFAULT]. Platform only.
      */
-    val limits: ConditionLimits? = null,
+    @InternalCoSecApi val limits: ConditionLimits? = null,
     /**
      * The external attributes the platform declares (RFC 0007 §3.1 N3, RFC 0006 §5.4.1): the catalog conditions of every
      * document are checked against, with their types. Null: the instance's providers decide. Platform only.
@@ -80,12 +80,12 @@ class PolicyDocument(
      * Its rate limit rules, in order (RFC 0006 §8.1): a permit's obligations. Every kind of document may have them; the
      * rules of an app or a tenant document count in buckets of their own.
      */
-    val rateLimits: List<RateLimitSource> = emptyList(),
+    @InternalCoSecApi val rateLimits: List<RateLimitSource> = emptyList(),
     /**
      * The roles an app document (system roles) or a tenant document (custom roles) defines (RFC 0012 §5). The stored
      * short form: nothing reads them as grants except through [RoleExpansion.effective].
      */
-    val roles: List<RoleDefinition> = emptyList(),
+    @InternalCoSecApi val roles: List<RoleDefinition> = emptyList(),
 ) {
     init {
         require(revision > 0) { "Revision must be positive, was $revision." }
@@ -101,6 +101,7 @@ class PolicyDocument(
 }
 
 /** A policy as a document writes it. */
+@InternalCoSecApi
 class PolicyDefinition(
     val id: PolicyId,
     val attachable: Boolean,
@@ -115,8 +116,10 @@ class PolicyDefinition(
  * [CatalogPermission.actions] defines a permission; [RoleExpansion.effective] turns it into a policy, and evaluation
  * reads only that.
  */
+@InternalCoSecApi
 class Catalog(val groups: List<CatalogGroup>)
 
+@InternalCoSecApi
 class CatalogGroup(
     val name: String,
     val description: String? = null,
@@ -129,6 +132,7 @@ class CatalogGroup(
     val permissions: List<CatalogPermission>,
 )
 
+@InternalCoSecApi
 class CatalogPermission(
     val id: String,
     val name: String? = null,
@@ -140,11 +144,14 @@ class CatalogPermission(
 )
 
 /** What a role grants (RFC 0012 §5). */
+@InternalCoSecApi
 sealed interface RolePermissions {
     /** `"*"`: every permission the catalog defines, as it grows. Only in an app document (RFC 0012 §5.1). */
+    @InternalCoSecApi
     data object All : RolePermissions
 
     /** These permissions, by their catalog ids; possibly none. */
+    @InternalCoSecApi
     data class Listed(val ids: List<String>) : RolePermissions
 }
 
@@ -152,6 +159,7 @@ sealed interface RolePermissions {
  * A role of an app (RFC 0012 §5): which permissions it grants. A system role, in its app's document, has neither [app]
  * nor [space]; a custom role, in a tenant document, names its [app] and, optionally, the one [space] it applies in.
  */
+@InternalCoSecApi
 class RoleDefinition(
     val id: RoleId,
     val permissions: RolePermissions,

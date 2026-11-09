@@ -48,6 +48,7 @@ import me.ahoo.cosec.model.scope.ScopeResolver
  * [effective] is total on any document that decodes, and decides nothing: it derives what a document says, broken or
  * not, and [check], which only the compiler runs, says what is wrong with it.
  */
+@InternalCoSecApi
 object RoleExpansion {
     /** RFC 0012 §6.3: a short form multiplies, so a document may derive at most this many bindings. */
     const val DEFAULT_ROLE_GRANT_LIMIT: Int = 50_000

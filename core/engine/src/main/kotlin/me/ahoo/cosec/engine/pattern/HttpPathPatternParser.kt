@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * Parses an [HttpPathPattern]: its segments, the same way Spring's `InternalPathPatternParser` classifies them.

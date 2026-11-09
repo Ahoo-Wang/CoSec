@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.condition.Operand

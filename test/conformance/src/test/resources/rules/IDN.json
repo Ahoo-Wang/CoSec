@@ -157,6 +157,16 @@
         "jwt:JwtTokenVerifierTest#aReservedSubjectIsInvalid",
         "jwt:JwtTokenConverterTest#aReservedSubjectIsNotIssued"
       ]
+    },
+    {
+      "id": "IDN-13",
+      "source": "Batch RFC 0010 C4 (2026-11-08)",
+      "statement": "A refresh token (the claim cosec.token, which the converter writes as refresh) is invalid wherever an access token is expected, on every path that verifies one: signed and unexpired, it never authenticates as a principal, so a principal named after the access token's id cannot exist. A token without the claim is an access token, whoever issued it. Refreshing reads the refresh token where it belongs and is unaffected.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenVerifierTest#aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected"
+      ]
     }
   ]
 }

@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Versioned
@@ -42,6 +43,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException
 
 /** The limits of what a change may publish (RFC 0007 §6.2 V2), and how changes expire and are approved. */
+@InternalCoSecApi
 class ChangeOptions(
     /** RFC 0003 Q14. */
     val maxDocumentBytes: Int = 8 * 1024 * 1024,
@@ -73,6 +75,7 @@ class ChangeOptions(
 }
 
 /** RFC 0007 §8: a break-glass binding never lives longer than this, whatever is configured. */
+@InternalCoSecApi
 val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
 
 /**
@@ -80,6 +83,7 @@ val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
  * [minSamples] samples that compared (not `BASE_MISMATCH`); or at [maxDuration] with fewer, as insufficient evidence
  * the publisher must acknowledge; or at once when an instance cannot compile or evaluate the candidate.
  */
+@InternalCoSecApi
 class ShadowOptions(
     val minDuration: java.time.Duration = java.time.Duration.ofMinutes(15),
     val minSamples: Long = 1_000,
@@ -93,6 +97,7 @@ class ShadowOptions(
 }
 
 /** What [ChangeChecks.check] found, and the heads of the other documents it compiled the candidate with. */
+@InternalCoSecApi
 class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey, SnapshotDigest?>) {
     val clean: Boolean get() = findings.none { it.severity == Severity.ERROR }
 }
@@ -116,6 +121,7 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  * Changing the platform's limits or attributes does not recompile the other documents; it is a warning. So are the two
  * things about a tenant's role that deny nothing but surprise (RFC 0012 §7.5).
  */
+@InternalCoSecApi
 class ChangeChecks(
     private val options: ChangeOptions = ChangeOptions(),
     /** The host's `AttributeProvider` catalog: a candidate compiles against it as an instance would ([PolicyDocumentCompiler.forPlatform]). */

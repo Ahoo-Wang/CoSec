@@ -36,7 +36,7 @@ import org.springframework.util.ClassUtils
  */
 @AutoConfiguration
 @EnableConfigurationProperties(PipelineProperties::class)
-class CoSecIdentityGuardAutoConfiguration {
+internal class CoSecIdentityGuardAutoConfiguration {
     @Bean
     fun cosecPipelineModeCheck(properties: PipelineProperties): InitializingBean = InitializingBean {
         check(

@@ -73,6 +73,9 @@ class ChangeEvent(
     val note: String = "",
     val moved: List<MovedHead> = emptyList(),
 ) {
+    /**
+     * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`.
+     */
     enum class Kind {
         PROPOSED,
         CHECKED,
@@ -130,6 +133,7 @@ interface ChangeListener {
 }
 
 /** A change step a REQUIRED listener could not record: the step did not happen (503). */
+@InternalCoSecApi
 class ChangeAuditException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
 /**
@@ -141,6 +145,7 @@ class ChangeAuditException(message: String, cause: Throwable? = null) : IllegalS
  * - Every other event, and every event to a BEST_EFFORT listener, is delivered off the caller, and a failure is only
  *   logged: the revision record is already the durable record of what was published (Q21).
  */
+@InternalCoSecApi
 class ChangeListeners(
     listeners: List<ChangeListener>,
     val requiredTimeout: Duration = 5.seconds,
@@ -217,6 +222,7 @@ class ChangeListeners(
         scope.cancel()
     }
 
+    @InternalCoSecApi
     companion object {
         val NONE: ChangeListeners = ChangeListeners(emptyList())
     }
@@ -237,6 +243,7 @@ class LoggingChangeListener(override val name: String = "logging") : ChangeListe
  * A change event as JSON (RFC 0007 §10.5), as an audit sink stores it: no document content, only what the event
  * carries.
  */
+@InternalCoSecApi
 object ChangeEventJson {
     private val factory = tools.jackson.databind.node.JsonNodeFactory.instance
 

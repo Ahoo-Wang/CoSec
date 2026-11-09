@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
@@ -44,7 +47,7 @@ import org.springframework.core.Ordered
  */
 @AutoConfiguration(after = [CoSecPipelineAutoConfiguration::class, CoSecGatewayModeAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
-class CoSecPipelineWebAutoConfiguration {
+internal class CoSecPipelineWebAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     @ConditionalOnClass(name = ["me.ahoo.cosec.servlet.PipelineServletFilter"])
