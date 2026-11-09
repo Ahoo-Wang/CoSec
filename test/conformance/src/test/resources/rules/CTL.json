@@ -296,13 +296,16 @@
     },
     {
       "id": "CTL-26",
-      "source": "RFC 0007 §5.5, §6.4; #1227 (audit E2a)",
-      "statement": "A change withdraws only its own candidate: the store removes the candidate of a document only while it is still the one of that change's window, in one atomic step, so the late withdrawal of a change that is abandoned, closed, rejected or preempted never removes the candidate of the change that took its slot. A control-plane lease is released only while it is still its holder's, in one atomic step.",
+      "source": "RFC 0007 §5.5, §6.4; #1227 (audit E2a); #1236",
+      "statement": "A change withdraws only its own candidate: the store removes the candidate of a document only while it is still the one of that change's window, in one atomic step, so the late withdrawal of a change that is abandoned, closed, rejected or preempted never removes the candidate of the change that took its slot. A control-plane lease is released only while it is still its holder's, in one atomic step, and a holder that takes its own lease again holds it for the full duration from then on, as the in-memory store does, so a task never loses the lease it has just renewed.",
       "level": "control",
       "guards": [
         "control:CandidateWithdrawalRaceTest#an abandoned change's late withdrawal leaves the candidate of the change that took its slot - #1227",
         "cocache:ConditionalRemovalTest#a candidate another change staged after the withdrawal read it stays - #1227",
-        "cocache:ConditionalRemovalTest#a lease another instance took after it was read is not released - lease race"
+        "cocache:ConditionalRemovalTest#a lease another instance took after it was read is not released - lease race",
+        "cocache:ControlLeaseTest#a late release leaves the lease of the instance that took it after",
+        "cocache:ControlLeaseTest#a holder that takes its lease again keeps it for the full duration",
+        "cocache:ControlLeaseTest#a holder that takes its lease again keeps it for the full duration - in memory"
       ],
       "pending": null
     },

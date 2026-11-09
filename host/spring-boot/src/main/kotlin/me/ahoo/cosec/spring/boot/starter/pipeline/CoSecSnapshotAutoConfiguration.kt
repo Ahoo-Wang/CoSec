@@ -45,7 +45,9 @@ import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
@@ -71,6 +73,7 @@ import org.springframework.core.env.Environment
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -273,10 +276,7 @@ class CoSecSnapshotAutoConfiguration {
             stores: ObjectProvider<CandidateStore>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
-            val installed = {
-                val now = clock.instant()
-                source.entries().filter { it.revision > 0 }.associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
-            }
+            val installed = { installedDocuments(source.entries(), clock.instant()) }
             val store = (candidates as? CachingCandidateSource)?.store ?: stores.ifUnique
             return ShadowReporting(
                 ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval, candidates = store)
@@ -285,6 +285,19 @@ class CoSecSnapshotAutoConfiguration {
 
         companion object {
             const val SHADOW_LISTENER = "shadow"
+
+            /**
+             * What an instance's heartbeat reports as installed (RFC 0007 §6.5, Q29): the documents it can evaluate. One it
+             * read but could not compile has a revision, yet only fails the requests that reach it; counting it would show
+             * a rollout as complete on an instance that cannot use it. That instance still reports, so it stays among the
+             * ones the propagation query counts, without the document.
+             */
+            internal fun installedDocuments(
+                entries: List<SnapshotEntry<*>>,
+                now: Instant,
+            ): Map<SnapshotKey, InstalledDocument> = entries
+                .filter { it.revision > 0 && it.state is DocumentState.Present }
+                .associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
         }
     }
 

@@ -43,10 +43,12 @@ data class CacheConfiguration(
     /** [spec] declaring these settings. */
     fun <K : Any, V : Any> applyTo(spec: StoreSpec<K, V>): StoreSpec<K, V> = spec.toBuilder().policy {
         local = local.copy(
-            maximumSize = maximumSize ?: local.maximumSize,
             initialCapacity = initialCapacity ?: local.initialCapacity,
             expireAfterAccess = expireAfterAccess ?: local.expireAfterAccess,
         )
+        // Not through `local`: that setter records a field as declared only when it differs from CoCache's default, so a
+        // capacity equal to the default (10000) would read as unset and lose to `cocache.defaults.store.*`.
+        this@CacheConfiguration.maximumSize?.let { localMaximumSize = it }
         this@CacheConfiguration.localMaxAge?.let { localMaxAge = it }
     }.build()
 }

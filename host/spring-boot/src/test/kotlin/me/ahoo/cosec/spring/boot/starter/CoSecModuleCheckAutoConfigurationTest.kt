@@ -212,6 +212,39 @@ class CoSecModuleCheckAutoConfigurationTest {
         )
     }
 
+    /**
+     * #1223: a service behind a gateway (`cosec.pipeline.mode=gateway`) wires no snapshots, memberships, API keys or
+     * control plane, so a `cosec-cocache` still on its classpath is not used and needs no Redis.
+     */
+    @Test
+    fun `a service in gateway mode does not need Redis for an unused cosec-cocache`() {
+        // No Redis template and no CacheRuntime: nothing here uses either.
+        val gateway = ApplicationContextRunner().withConfiguration(config)
+            .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=false")
+        starts(gateway)
+    }
+
+    /** STA-1 still holds where the module is used: the data plane's modes, and JWT, which keeps its revocations in Redis. */
+    @Test
+    fun `cosec-cocache is still needed where it is used`() {
+        val noRedis = ApplicationContextRunner().withConfiguration(config).withBean(CacheRuntime::class.java, runtime)
+        fun failsNamingTemplate(runner: AbstractApplicationContextRunner<*, *, *>) = runner.run { context ->
+            val failure = context.startupFailure
+            failure.assert().isNotNull()
+            generateSequence(failure) { it.cause }.any { "ReactiveStringRedisTemplate" in it.message.orEmpty() }
+                .assert().describedAs(failure.toString()).isTrue()
+        }
+        // The default mode decides with snapshots, whether or not JWT is on.
+        failsNamingTemplate(noRedis)
+        failsNamingTemplate(noRedis.withPropertyValues("cosec.pipeline.mode=enforce", "cosec.jwt.enabled=false"))
+        // A gateway-mode service that turns JWT on issues tokens, and logout revokes them in Redis.
+        failsNamingTemplate(noRedis.withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=true"))
+        starts(
+            noRedis.withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=true")
+                .withBean(ReactiveStringRedisTemplate::class.java, redis)
+        )
+    }
+
     @Test
     fun `without cosec-cocache, or with CoSec off, no Redis template is needed`() {
         val noRedis = ApplicationContextRunner().withConfiguration(config)

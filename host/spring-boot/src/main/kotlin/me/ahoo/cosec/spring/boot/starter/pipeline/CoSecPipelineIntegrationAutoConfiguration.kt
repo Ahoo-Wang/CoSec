@@ -61,6 +61,11 @@ import org.springframework.kafka.core.KafkaOperations
     afterName = [
         "org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration",
         "org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration",
+        // `Metrics` below is `@ConditionalOnBean(MeterRegistry)`, decided once as this configuration registers its beans.
+        // Every exporter's auto-configuration runs before the composite one, so after it and the simple one
+        // (Boot's fallback) no registry Boot creates is still to come.
+        "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration",
+        "org.springframework.boot.micrometer.metrics.autoconfigure.export.simple.SimpleMetricsExportAutoConfiguration",
     ],
 )
 @ConditionalOnCoSecEnabled

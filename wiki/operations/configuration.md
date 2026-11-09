@@ -24,6 +24,12 @@ classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when i
 property. The message lists every unknown key and, for a 7.x key, what replaced it
 ([the 7.x key table](./upgrading.md#removed-and-renamed-properties)).
 
+Keys are compared as Spring's binder compares them, so every spelling it documents for a known key is known:
+`local-max-age`, `localMaxAge` or `local_max_age` in a properties file, and `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`
+as an environment variable (upper case, dots as underscores, dashes dropped). A variable that is not that spelling of a
+key CoSec reads stays unknown, a typo (`COSEC_PIPELINE_TIMEUOT`) and the legacy `COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`
+alike: the message names it as `cosec.authorization.snapshot.local.max.age`.
+
 One thing is never an unknown key: the variables Kubernetes injects for a Service named `cosec` or `cosec-*` (service
 links), which Spring reads as `cosec.*` keys (`COSEC_GATEWAY_SERVICE_HOST` as `cosec.gateway.service.host`). The check
 skips exactly their shapes, matched on the variable names and only in the process environment, where `<SVC>` is
@@ -54,7 +60,7 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 | `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients. `true` or `false` only: any other value fails startup. |
 | `cosec.audit.enabled` | boolean | `true` | the audit log listener, and the Kafka audit listener with `cosec.audit.kafka.enabled` |
 | `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`cosec-kafka` and a `KafkaOperations` bean) |
-| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean) |
+| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean, Spring Boot's own auto-configured one included) |
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
@@ -363,7 +369,8 @@ Every CoSec cache is assembled by CoCache's layers, field by field; a later step
 6. `cocache.caches.[<CacheName>].*`;
 7. CoSec's constraints, applied last, after `unlock` too.
 
-So a `cocache.caches.[<CacheName>].*` property wins over the matching `cosec.authentication.revocation.cache.*` one. CoSec
+A value CoSec declares wins over `cocache.defaults.*` whatever it is, one equal to CoCache's own default (a
+`maximum-size` of `10000`) included. So a `cocache.caches.[<CacheName>].*` property wins over the matching `cosec.authentication.revocation.cache.*` one. CoSec
 locks some fields (CoCache's `lock`): the global layers skip them, a `cocache.caches` entry that sets one fails startup
 (unless the entry lists it in `unlock`, CoCache's break glass), and a customizer that changes one throws. Some are also
 constrained (step 7), so even `unlock` cannot change them:

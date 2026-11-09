@@ -20,6 +20,11 @@ key 会悄无声息地不起作用。classpath 上的配置元数据（`META-INF
 map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，对 7.x 的 key 还给出替代它的配置
 （[7.x key 对照表](./upgrading.md#removed-and-renamed-properties)）。
 
+key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `local-max-age`、
+`localMaxAge` 或 `local_max_age`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`（大写、点换成下划线、去掉连字符）。
+不是已知 key 的这种写法的变量仍算未知：拼错的 `COSEC_PIPELINE_TIMEUOT`，以及遗留写法
+`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE` 都一样，错误信息会把它列为 `cosec.authorization.snapshot.local.max.age`。
+
 有一类变量永远不算未知 key：Kubernetes 为名为 `cosec` 或 `cosec-*` 的 Service 注入的环境变量（Service 链接），Spring 会把它们读作
 `cosec.*` key（`COSEC_GATEWAY_SERVICE_HOST` 读作 `cosec.gateway.service.host`）。检查只跳过它们的确切形状，按变量名匹配，
 并且只在进程环境变量中生效；其中 `<SVC>` 是 `COSEC` 或 `COSEC_<名字>`：
@@ -47,7 +52,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
-| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean） |
+| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean，Spring Boot 自动配置的那个也可以） |
 | `cosec.ip2region.enabled` | boolean | `true` | `ext.ip2region.*` 属性提供者（`cosec-ip2region`） |
 | `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cosec-cocache`）；见[影子窗口](#shadow-windows) |
@@ -344,6 +349,7 @@ Redis 中。
 6. `cocache.caches.[<CacheName>].*`；
 7. CoSec 的约束，最后执行，在 `unlock` 之后也执行。
 
+CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache 自身默认值相等的值（如 `10000` 的 `maximum-size`）也一样。
 因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authentication.revocation.cache.*` 配置项。CoSec 锁定部分字段
 （CoCache 的 `lock`）：全局层跳过它们，设置了它们的 `cocache.caches` 条目使启动失败（除非该条目在 `unlock` 中列出它，
 即 CoCache 的破窗开关），修改它们的定制器抛出异常。其中一些还受到约束（第 7 步），连 `unlock` 也改变不了：
