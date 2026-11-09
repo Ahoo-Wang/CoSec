@@ -100,7 +100,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
-  extension point `wiki/architecture/extending.md` lists, and on nothing else), `EnginePurityTest`,
+  extension point `wiki/architecture/extending.md` lists, and on nothing else), `ApiVariantTest` (a library's Gradle API
+  variant, usage `java-api`, carries the CoSec module whose type a public class extends or implements, and Jackson
+  where a public signature names it: a consumer cannot compile against the class otherwise), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler and the bug report template; CI picks it up from `settings.gradle.kts`

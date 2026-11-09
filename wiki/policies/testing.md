@@ -594,6 +594,11 @@ documents as JSON text.
 | `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `app`, `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
 | `expect` | `decision`: `Permit`, `Deny`, `Indeterminate` or `Rejected`, with `by` (the deciding statement; `null` for the implicit deny), `cause` or `reason`. |
 
+`http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
+`Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API
+names (the engine, JUnit's `DynamicTest` and Jackson's `JsonNode` in `evaluate(JsonNode)`): the dependency above is all
+an application declares.
+
 Only the fields `expect` names are compared: `{"decision": "Permit"}` passes whichever statement permits, and `by`
 pins one, compared whole. A misspelt field is an error, not ignored.
 
