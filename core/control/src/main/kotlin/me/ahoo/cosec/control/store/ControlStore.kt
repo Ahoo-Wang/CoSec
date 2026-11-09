@@ -143,7 +143,8 @@ interface ControlStore : CandidateStore {
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a
-     * periodic task (RFC 0007 §5.7). `false` when another holder has it.
+     * periodic task (RFC 0007 §5.7). `false` when another holder has it. [holder] taking a lease it already has renews it:
+     * it then holds it for the full [duration] from now, not for what was left of the earlier one.
      */
     suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean
 

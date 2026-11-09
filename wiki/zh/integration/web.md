@@ -346,7 +346,7 @@ cosec:
     mode: gateway
 ```
 
-在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
+在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。仍留在 classpath 上的 `cosec-cocache` 不会被使用，因此不需要 Redis template 和 CoCache starter；设置 `cosec.jwt.enabled=true` 后，它用于保存本服务所签发令牌的吊销记录，此时启动要求两者都具备（[模块](../guide/introduction.md#modules)）。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
 
 | 请求 | 回应 |
 |---|---|

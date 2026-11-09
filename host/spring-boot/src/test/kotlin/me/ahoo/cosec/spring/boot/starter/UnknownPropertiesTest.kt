@@ -20,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.context.properties.bind.Binder
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.env.YamlPropertySourceLoader
 import org.springframework.boot.support.SystemEnvironmentPropertySourceEnvironmentPostProcessor
@@ -30,6 +31,7 @@ import org.springframework.core.env.SystemEnvironmentPropertySource
 import org.springframework.core.io.ByteArrayResource
 import java.net.URLClassLoader
 import java.nio.file.Path
+import java.time.Duration
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
@@ -117,6 +119,69 @@ class UnknownPropertiesTest {
             "cosec.authentication.revocation.cache.local-max-age=10s",
             "cosec.authentication.revocation.cache.maximum-size=10",
         ).run { context -> context.startupFailure.assert().isNull() }
+    }
+
+    /**
+     * #1234: Spring binds `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE` to `cosec.authorization.snapshot.local-max-age` (dots
+     * become underscores, dashes are dropped, upper case), so a deployment that sets its keys that way made no mistake.
+     */
+    @Test
+    fun `an environment variable Spring binds to a key CoSec reads passes`() {
+        val variables = mapOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE" to "30s",
+            "COSEC_PIPELINE_ALLOWQUERYTOKEN" to "true",
+            "COSEC_PIPELINE_TIMEOUT" to "3s",
+            // A list element: the container's name is dashed in the metadata, the variable's is not.
+            "COSEC_AUTHORIZATION_SNAPSHOT_FAILCLOSED_TENANTS_0" to "acme",
+        )
+        runner.withEnvironment(variables).run { context ->
+            context.startupFailure.assert().isNull()
+            Binder.get(context.environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+                .get().assert().isEqualTo(Duration.ofSeconds(30))
+            Binder.get(context.environment).bind("cosec.pipeline.allow-query-token", Boolean::class.javaObjectType)
+                .get().assert().isTrue()
+        }
+    }
+
+    @Test
+    fun `the spellings Spring binds in application properties pass`() {
+        runner.withPropertyValues(
+            "cosec.authorization.snapshot.localMaxAge=30s",
+            "cosec.pipeline.allow_query_token=true",
+            "cosec.authorization.snapshot.failClosed.tenants[0]=acme",
+        ).run { context ->
+            context.startupFailure.assert().isNull()
+            Binder.get(context.environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+                .get().assert().isEqualTo(Duration.ofSeconds(30))
+        }
+    }
+
+    /**
+     * The relaxed spelling is no way in for a misspelling: only what Spring's documented conversion makes of a key CoSec
+     * reads is known. Spring's binder also tolerates `COSEC_..._LOCAL_MAX_AGE` for `local-max-age`, a legacy spelling its
+     * documentation does not offer; the check refuses it and names the key it read (`local.max.age`).
+     */
+    @Test
+    fun `a variable that is not the documented spelling of a key CoSec reads still fails`() {
+        val typos = mapOf(
+            "COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAG" to "30s",
+            "COSEC_PIPELINE_TIMEUOT" to "3s",
+            "COSEC_PIPELINE_ALLOWQUERYTOKENS" to "true",
+            // A known key is no container: nothing is below it.
+            "COSEC_PIPELINE_TIMEOUT_EXTRA" to "1",
+        )
+        runner.withEnvironment(typos + ("COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE" to "30s")).run { context ->
+            val message = context.startupFailure!!.messages()
+            message.assert().contains("CoSec does not read 5 cosec.* properties,")
+            message.assert().contains("cosec.authorization.snapshot.local.max.age")
+        }
+        // Spring agrees about the typos: none of them reaches the key it was meant for.
+        val environment = StandardEnvironment()
+        environment.propertySources.addFirst(
+            SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, typos)
+        )
+        Binder.get(environment).bind("cosec.authorization.snapshot.local-max-age", Duration::class.java)
+            .isBound.assert().isFalse()
     }
 
     @Test

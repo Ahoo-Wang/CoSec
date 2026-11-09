@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.starter
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
+import org.springframework.boot.context.properties.source.ConfigurationPropertyName
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
@@ -31,6 +32,9 @@ private val log = KotlinLogging.logger {}
  * stop doing what it says (`cosec.authentication.enabled: false` turning nothing off, say). Every `cosec.*` key in the
  * environment must be one of CoSec's configuration metadata (`META-INF/spring-configuration-metadata.json`), or lie
  * under a map- or list-valued one; the 7.x keys 8.0 renamed or removed are named with what replaces them ([RENAMED]).
+ * Keys are compared as Spring's binder compares them ([ConfigurationPropertyName]: case and dashes do not count), so
+ * `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`, which Spring binds to `local-max-age`, is that key. A spelling Spring does
+ * not bind to a known key (`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`, a typo) is still unknown.
  * The variables Kubernetes injects for a Service named `cosec-*` ([KubernetesServiceLinks]) are not keys: they are
  * no mistake of the application's, and refusing them would crash-loop every pod in that namespace.
  */
@@ -39,19 +43,24 @@ class UnknownProperties(
     /** Map- and list-valued properties: any key under them is theirs. */
     private val containers: Set<String>,
 ) {
+    // ConfigurationPropertyName's equality and hash code ignore case and dashes: the names Spring's binder treats as one.
+    private val knownNames: Set<ConfigurationPropertyName> = known.mapNotNullTo(HashSet(), ConfigurationPropertyName::ofIfValid)
+    private val containerNames: List<ConfigurationPropertyName> = containers.mapNotNull(ConfigurationPropertyName::ofIfValid)
+
     /** The `cosec.*` keys of [environment] that CoSec does not read, sorted. */
     fun of(environment: ConfigurableEnvironment): List<String> =
         ConfigurationPropertySources.from(environment.propertySources.map(KubernetesServiceLinks::withoutServiceLinks))
             .filterIsInstance<IterableConfigurationPropertySource>()
-            .flatMap { source -> source.map { it.toString() } }
-            .filter { it.startsWith(PREFIX) }
+            .flatMap { source -> source.toList() }
+            .filter { it.toString().startsWith(PREFIX) }
             .filterNot(::isKnown)
+            .map { it.toString() }
             .distinct()
             .sorted()
 
-    private fun isKnown(name: String): Boolean {
-        val plain = name.replace(INDEX, "")
-        return plain in known || containers.any { plain.startsWith("$it.") || name.startsWith("$it[") }
+    private fun isKnown(name: ConfigurationPropertyName): Boolean {
+        val plain = ConfigurationPropertyName.ofIfValid(name.toString().replace(INDEX, ""))
+        return plain in knownNames || containerNames.any { it.isAncestorOf(name) }
     }
 
     /** Fails startup, or with [warn] only logs, when [environment] has keys CoSec does not read. */

@@ -29,7 +29,7 @@ The listeners the starter registers:
 |---|---|---|
 | `LoggingAuditListener` (`logging-audit`) | `BEST_EFFORT` | `cosec.audit.enabled` (default `true`) |
 | `KafkaAuditListener` (`kafka-audit`) | [`cosec.audit.kafka.delivery`](./configuration.md#audit), `BEST_EFFORT` by default | `cosec-kafka`, a `KafkaOperations` bean, `cosec.audit.enabled` and `cosec.audit.kafka.enabled` (both default `true`) |
-| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `cosec-micrometer`, a `MeterRegistry` bean and `cosec.metrics.enabled` (default `true`) |
+| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `cosec-micrometer`, a `MeterRegistry` bean (Spring Boot's own auto-configured one included) and `cosec.metrics.enabled` (default `true`) |
 | `TracingListener` (`tracing`) | `BEST_EFFORT` | `cosec-opentelemetry` |
 | `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cosec-cocache` and `cosec.authorization.shadow.enabled` (default `true`) |
 
@@ -179,7 +179,9 @@ CoSec registers no meters for the documents an instance holds. To see whether in
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
 - **Propagation.** The control plane's
   `GET /documents/<doc>/revisions/<n>/propagation` answers how many of the instances that reported in the last minute
-  have revision `<n>` or later installed. Instances report only with shadow windows on
+  have revision `<n>` or later installed. An instance counts a revision as installed only while it can evaluate it: one
+  that read the revision but could not compile it still reports, so it is among those counted, but it has not installed
+  it. Instances report only with shadow windows on
   ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)).
 - **Per decision.** `snapshotVersion` in the audit event and `cosec.snapshot.version` on the span name the revisions a
   decision read.

@@ -219,12 +219,29 @@ class CoCacheControlStore internal constructor(
     override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
         deleteIf(candidates, key) { it.window == window }
 
+    /**
+     * Writes the lease where there is none (`putIfMatch` over nothing). [holder] taking its own lease again renews it for
+     * the full [duration], as `InMemoryControlStore` does: a `true` that left the old expiry would let a task that
+     * believes it holds the lease for [duration] lose it within moments. The renewal is `putIfMatch` over the lease as
+     * read, so one that expired and was taken by another holder in between is not overwritten: it is read again.
+     */
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
-        val result = leases.async().putIfMatch(name, null, holder, duration).await()
-        if (result is ConditionalPut.Written) {
-            return true
+        val async = leases.async()
+        repeat(MAX_LIST_ATTEMPTS) {
+            if (async.putIfMatch(name, null, holder, duration).await() is ConditionalPut.Written) {
+                return true
+            }
+            val (current, digest) = read(leases, name) ?: return@repeat
+            if (current != holder) {
+                return false
+            }
+            if (async.putIfMatch(name, cocacheDigest(digest), holder, duration).await() is ConditionalPut.Written) {
+                return true
+            }
         }
-        return (read(leases, name)?.first) == holder
+        throw IllegalStateException(
+            "The lease [$name] kept changing while it was taken; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
     }
 
     /**

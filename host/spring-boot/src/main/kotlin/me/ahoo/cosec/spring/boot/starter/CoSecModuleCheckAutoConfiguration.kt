@@ -18,17 +18,22 @@ import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.starter.cosid.CosIdGeneratorProperties
+import me.ahoo.cosec.spring.boot.starter.jwt.ConditionalOnJwtEnabled
+import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
+import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.ConfigurationCondition
 import org.springframework.core.Ordered
 import org.springframework.util.ClassUtils
 
@@ -136,10 +141,14 @@ class CoSecModuleCheckAutoConfiguration {
      * `cosec-cocache` keeps snapshots, revocations, rate limits and API keys in Redis: without a Redis connection the
      * rate limiter would fall back to one count per instance, and no snapshot could be read. Its caches are made by
      * CoCache's starter: without a `CacheRuntime`, snapshots would fall back to an empty store that never gets ready.
+     *
+     * Only where the module is used ([OnCoCacheUsed]): a service behind a gateway (`cosec.pipeline.mode=gateway`) with
+     * JWT off wires none of it, and a `cosec-cocache` its dependencies happen to bring needs no Redis (#1223).
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
     @ConditionalOnClass(name = [COCACHE_MARKER])
+    @Conditional(OnCoCacheUsed::class)
     class CoCacheRedis {
         @Bean
         fun cosecCoCacheRedisCheck(context: ApplicationContext): InitializingBean = InitializingBean {
@@ -180,4 +189,17 @@ class CoSecModuleCheckAutoConfiguration {
                 }
             }
     }
+}
+
+/**
+ * Whether the host uses `cosec-cocache`: it decides with policies (`enforce`, the default mode), which reads the
+ * snapshots, memberships and API keys from Redis, or JWT is on, which keeps its revocations there, as on a service
+ * behind a gateway that issues tokens. Anything else, a gateway-mode service that issues none, leaves it unused.
+ */
+internal class OnCoCacheUsed : AnyNestedCondition(ConfigurationCondition.ConfigurationPhase.PARSE_CONFIGURATION) {
+    @ConditionalOnEnforceMode
+    class Enforcing
+
+    @ConditionalOnJwtEnabled
+    class Jwt
 }
