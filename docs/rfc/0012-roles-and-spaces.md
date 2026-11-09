@@ -199,7 +199,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 
 ### 4.4 `action` 从哪里来
 
-简写权限要求请求能解析出它写的动作：路由映射、OpenAPI 生成或代码里的检查。没有路由映射的服务也可以直接写 HTTP：`"action": "http:GET", "resource": "/orders/**"`，这样不需要维护路由映射。
+简写权限要求请求能解析出它写的动作：路由映射、OpenAPI 生成或代码里的检查。没有路由映射的服务也可以直接写 HTTP：`"action": "http:GET", "resource": "http:path:/orders/**"`，这样不需要维护路由映射。
 
 `cosecServiceGenerator/app` 改为生成简写权限，不再生成策略。
 
@@ -266,6 +266,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 | `Revisions.references` | 反向引用索引 |
 | `ChangeChecks.unresolved` | 候选文档和被引用的 App 文档 |
 | `ControlPlane.diff` | 差异 |
+| `Revisions.referenced`、`ChangeAuthority.analyze`、`referringBindings`、`Narrowing`、`ControlPlane.analyze` | 删除校验、授出分析、收窄判定和访问审查 |
 
 ### 6.2 规则
 
@@ -358,7 +359,7 @@ token 和 API key 声明它们属于哪个 App，用 JWT 标准的 `aud`，8.0 �
 - 每次变更走 `propose` → `skip-shadow` → `publish`。
 - 执行者是持有 `cosec:approve`、`cosec:skip-shadow`、`cosec:publish` 的平台服务主体，即信任根（RFC 0007 §7.3）。谁能授予由来源系统判断，CoSec 记录审计。
 - `putRole` 整体替换，重放是幂等的。冲突（409）由投影重试。
-- `skip-shadow` 会抢占暂存槽，所以同一份文档不要同时有人工变更和同步。
+- 暂存槽被占用时 `skip-shadow` 返回 409，只有收窄的变更能抢占，所以同一份文档不要同时有人工变更和同步。
 
 不新增接口。
 

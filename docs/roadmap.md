@@ -271,7 +271,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | | 租约释放（CoCache 8 试用中发现） | 低 | `CoCacheControlStore.releaseLease` 先读后无条件删除，租约在两步之间过期时会删掉别的实例的租约，两个实例于是同时跑同一项维护（写入都是条件写，只是重复工作）。条件删除。#1203 合入后用 CoCache 8 的 `Store.deleteIfMatch`，与 #1227 一起在 E2a（#1268）中修复，规则 `CTL-26` |
 | E2b 控制面规模与性能（E2a 之后） | #1214（cocache） | 低（规模） | 实例心跳共享一个 key，集群读写量按实例数的平方增长。按实例分 key，与影子报告的按实例 key 同一设计；写明存储格式与滚动升级 |
 | | #1218、#1219、#1217 | 低（性能） | 一次变更的每条操作都确认同样三份文档（一次变更一批授权，结束时复核摘要，不延长缓存）；维护任务重复读 open changes、`reclaim` 按文档乘以变更扫描；摘要改用 `HexFormat`（与 #1203 的 `SnapshotDigest` 改动有冲突面） |
-| | E2a 审查 L2、L3 | 低 | `Changes.stage` 写候选失败时不撤回候选；输掉暂存槽的 stage 晚到的 `putCandidate` |
+| | E2a 审查 L2、L3 | 低 | `Changes.stage` 写候选失败时不撤回候选；输掉暂存槽的 stage 晚到的 `putCandidate`（#1290 留下的同类窗口：抢占的变更与卡在 `putCandidate` 的 stage 相撞） |
 | | #1240 的审查 L6 | 低（性能） | `explain` 在保留修订上每次调用都解码平台、租户（与 app）的头部，即使保留修订本身来自缓存。先读索引，只在修订比索引的最新一条新时才走头部；或在解码前按头部的摘要查缓存 |
 | E3 迁移、宿主与登录 | #1225（migrate） | 中 | `publish --dry-run` 静默执行真实发布：运维以为是演练，实际改了授权。按子命令声明允许的选项，建 Redis 客户端之前拒绝其他选项 |
 | | #1220（migrate） | 中 | `api-keys` 先改写 key 再写恢复报告，失败或重跑丢失迁移计划，key 失去原来的角色（fail closed，但数据丢失）。先持久化计划，重跑复用或拒绝覆盖 |
@@ -299,8 +299,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 | 批次 | 内容 |
 |---|---|
-| G1，F1 之后 | 文档格式（`roles`、目录条目的 `action`、`resource`）、展开函数、编译、schema、JMH |
-| G2 | `putRole`、`removeRole`，授权、摘要、授出分析、差异、反向引用、检查 |
+| G1（✅ #1289，与 G2 同一个 PR） | 文档格式（`roles`、目录条目的 `action`、`resource`）、展开函数、编译、schema、JMH |
+| G2（✅ #1289） | `putRole`、`removeRole`，授权、摘要、授出分析、差异、反向引用、检查 |
 | G3，与 F2 合并 | 文档、skill、OpenAPI 生成器改为简写权限 |
 
 **v6/v7 残留清理**（全仓审计的结论，维护者 2026-11-08 按建议定；目标是 GA 前达到理想架构，不为兼容 6.x、7.x 或 alpha 妥协）：
@@ -323,14 +323,14 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 | 批次 | 范围 | Issue |
 |---|---|---|
-| H1 | runtime：快照与后台任务 | #1245 #1251 #1252 #1266 #1274 #1260 |
-| H2 | control | #1235 #1243 #1253 #1263 #1265 #1275 |
+| H1（✅ #1288） | runtime：快照与后台任务 | #1245 #1251 #1252 #1266 #1274 #1260 |
+| H2（✅ #1290） | control | #1235 #1243 #1253 #1263 #1265 #1275 |
 | H3 | starter 与后端 | #1234 #1238 #1242 #1271 #1236 #1223 |
 | H4 | edge、testkit、工具 | #1249 #1257 #1261 #1262 #1276 #1258 |
 
 E3 增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270。
 
-整体顺序（已完成到 R4）：H1 → G1 + G2（同一个 PR，避免控制面能发布 `roles` 却不分析）→ H2 → R2 → H3 → R6 → R7a → R7b → R7c → H4 → F2（含 G3）→ E2b → E3 → E1b → 第二轮审查 → R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
+整体顺序（已完成到 H2）：R2 → H3 → R6 → R7a → R7b → R7c → H4 → F2（含 G3）→ E2b → E3 → E1b → 第二轮审查 → R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
