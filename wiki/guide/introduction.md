@@ -146,9 +146,10 @@ Pick the path that matches what you are doing. Every page on it ends with a link
 
 | You are | Read, in order |
 |---|---|
-| Evaluating CoSec | this page → [Concepts](./concepts.md) → [Security model](./security-model.md) → [Architecture overview](../architecture/overview.md) |
+| Evaluating CoSec | this page → [Concepts](./concepts.md) → [Model](./model.md) → [Security model](./security-model.md) → [Architecture overview](../architecture/overview.md) |
 | A developer integrating it | [Quick start](./quick-start.md) → [Web integration](../integration/web.md) → [Authentication](../integration/authentication.md) → [Checks in code](../integration/checks.md) → [Configuration](../operations/configuration.md) |
-| A policy author | [Concepts](./concepts.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
+| A policy author | [Concepts](./concepts.md) → [Model](./model.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
+| Following a worked example | [Model](./model.md) → [Simple mode](../scenarios/simple-mode.md) → [An app without spaces](../scenarios/app.md) → [System and custom roles](../scenarios/roles.md) → [Apps with spaces](../scenarios/spaces.md) → [A service account in one space](../scenarios/service-account.md) → [A tenant owner](../scenarios/tenant-owner.md) → [Roles from an external source](../scenarios/external-source.md) → [Authorizing business actions](../scenarios/route-maps.md) → [Gateway topologies](../scenarios/gateway.md) |
 | Running it in production | [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) |
 | Contributing to CoSec | [Architecture overview](../architecture/overview.md) → [Extending CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 

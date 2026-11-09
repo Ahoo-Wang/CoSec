@@ -1,0 +1,22 @@
+{
+  "description": "The tenant document is the identity system's projection: its role grants.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "role-01HQ7Z"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.ship",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

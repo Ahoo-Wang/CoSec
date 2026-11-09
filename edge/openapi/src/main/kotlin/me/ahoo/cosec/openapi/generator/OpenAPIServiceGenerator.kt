@@ -19,15 +19,11 @@ import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.PathItem
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.StatementSource
-import me.ahoo.cosec.model.Effect
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
 import me.ahoo.cosec.runtime.document.CatalogPermission
 import me.ahoo.cosec.runtime.document.DocumentCompileException
-import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.route.Route
@@ -50,8 +46,10 @@ internal class OpenAPIGenerationException(
  * - `service` is `info.title`, or `info.x-cosec-service`;
  * - each operation is one route: its `action` is `<service>:<operationId>`, or the operation's `x-cosec-action`; its
  *   `resource` is `<service>/{<last path variable>}` (`<service>` without one), or `x-cosec-resource`;
- * - the app document (app = service) holds a catalog, one group per tag, and a permission policy
- *   `perm:<service>/<verb>` per action, allowing it on any resource; role bindings are the operator's.
+ * - the app document (app = service) holds a catalog, one group per tag, whose entries are short-form permissions
+ *   (RFC 0012 §4): `<verb>` with the action, allowing it on any resource, which the compiler writes out as the policy
+ *   `perm:<service>/<verb>`. The groups are not `spaced`, so a permission applies in the default space only; an app that
+ *   uses spaces marks its groups `spaced` when it reviews the document. Roles and role bindings are the operator's.
  *
  * A path whose Path Item is a `$ref` (OpenAPI 3.1) stands for the item `#/components/pathItems/<name>` names, followed
  * through further references.
@@ -117,7 +115,7 @@ object OpenAPIServiceGenerator {
         return document
     }
 
-    /** The app document of the service: its catalog and a permission policy per action, compiled before it is returned. */
+    /** The app document of the service: its catalog of short-form permissions, compiled before it is returned. */
     fun appDocument(openAPI: OpenAPI, revision: Long = 1, publishedAt: Instant = Instant.now()): PolicyDocument {
         val service = service(openAPI)
         val operations = operations(openAPI)
@@ -135,19 +133,15 @@ object OpenAPIServiceGenerator {
             }
             permissions.putIfAbsent(verb, generated.route.action to generated.operation)
         }
-        val policies = permissions.map { (verb, value) ->
-            PolicyDefinition(
-                PolicyId(PolicyDocumentCompiler.permissionPrefix(service) + verb),
-                attachable = false,
-                condition = null,
-                statements = listOf(StatementSource(verb, Effect.ALLOW, listOf(value.first))),
-            )
-        }
         val groups = LinkedHashMap<String, MutableList<CatalogPermission>>()
         for ((verb, value) in permissions) {
             val operation = value.second
-            val permission =
-                CatalogPermission(verb, operation.summary?.ifBlank { null }, operation.description?.ifBlank { null })
+            val permission = CatalogPermission(
+                verb,
+                operation.summary?.ifBlank { null },
+                operation.description?.ifBlank { null },
+                actions = listOf(value.first),
+            )
             groups.getOrPut(operation.tags?.firstOrNull() ?: DEFAULT_GROUP) { ArrayList() } += permission
         }
         val document = PolicyDocument(
@@ -155,7 +149,7 @@ object OpenAPIServiceGenerator {
             service,
             revision,
             publishedAt,
-            policies,
+            emptyList(),
             emptyList(),
             Catalog(groups.map { (name, entries) -> CatalogGroup(name, permissions = entries) }),
         )

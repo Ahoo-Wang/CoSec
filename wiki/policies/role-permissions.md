@@ -325,10 +325,13 @@ setup from the OpenAPI document springdoc scans:
 - `cosecServiceGenerator/app`: the app document.
 
 The service is `info.x-cosec-service`, or else `info.title`. Each operation's action is `<service>:<operationId>`, or
-its `x-cosec-action`. The app document gets one permission policy `perm:<service>/<verb>` per action, allowing that
-action on any resource, and a catalog with one group per operation's first tag (`default` without one). It has no role
-bindings: add them, review the document, and publish it as above. Generation fails on an operation without an action,
-an `operationId` used twice, or two operations one request could match.
+its `x-cosec-action`. The app document is a catalog with one group per operation's first tag (`default` without one),
+and one [short-form permission](#short-form-permissions) per action, `<verb>`, allowing that action on any resource
+(the policy `perm:<service>/<verb>`); no policy is written by hand. It has no roles and no bindings: add them, review
+the document, and publish it as above. The groups are not `spaced`, so a permission applies in the default space only:
+set `"spaced": true` on the groups of an app that uses spaces
+([Apps with spaces](../scenarios/spaces.md)). Generation fails on an operation without an action, an `operationId`
+used twice, or two operations one request could match.
 
 A path whose Path Item is a `$ref` (OpenAPI 3.1) generates what the item it names generates: a reference to
 `#/components/pathItems/<name>` is followed, through further references. Generation fails, naming the path and the
@@ -336,5 +339,9 @@ reference, when the target does not exist, the references loop, the reference po
 another part of the document), or the path also has operations beside the `$ref`: the OpenAPI specification leaves such a
 combination undefined, and a route map that dropped or guessed an operation would grant less or more than the API
 describes.
+
+Worked examples of everything on this page, with documents that run: [System and custom roles](../scenarios/roles.md),
+[Apps with spaces](../scenarios/spaces.md), [A tenant owner](../scenarios/tenant-owner.md) and
+[Roles from an external source](../scenarios/external-source.md).
 
 **Next:** limit how often allowed requests may run, in [Rate limiting](./rate-limiting.md).

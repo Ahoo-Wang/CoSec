@@ -1,0 +1,16 @@
+{
+  "description": "Anyone may GET /hello, a signed-in caller or not.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/hello"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

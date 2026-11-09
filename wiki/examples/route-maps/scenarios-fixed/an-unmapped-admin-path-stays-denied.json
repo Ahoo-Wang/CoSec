@@ -1,0 +1,22 @@
+{
+  "description": "And the http DENY still covers whatever has no route.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "http:DELETE",
+    "resource": {
+      "type": "http",
+      "id": "/admin/x"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

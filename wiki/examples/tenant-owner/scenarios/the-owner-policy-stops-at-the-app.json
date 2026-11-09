@@ -1,0 +1,22 @@
+{
+  "description": "The attached policy covers wms, not the control plane.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "wms",
+    "policies": [
+      "tenant-owner"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "cosec:write",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/acme"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

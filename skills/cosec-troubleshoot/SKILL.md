@@ -260,7 +260,16 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 ### Unexpected 403 or missing allow
 
 - Which action and resource did the request get? With a route map, a mapped request is `service:verb` on
-  `type/id`; **`http:*` statements never apply to it**. Unmapped requests are `http:<METHOD>` on `http:path:<path>`.
+  `type/id`; **`http:*` statements and `http:` rate limit rules never apply to it**. Unmapped requests are
+  `http:<METHOD>` on `http:path:<path>`, and `service:verb` statements never apply to them. On a gateway every request is
+  `http:`: a permission written only on `service:verb` (an OpenAPI-generated app document) permits nothing there
+  (https://cosec.ahoo.me/scenarios/gateway).
+- A role that should grant does not: roles are read from the document as expanded bindings (`role:<roleId>@<app>:<permission>`),
+  so check, in order: the token's `aud` is the host's app (`scope-rejected` otherwise); the role is in the token as
+  `role` or, in a space, `role@space`; a custom role (tenant document) names the request's app and, if it names a `space`,
+  the request's; a permission in a group that is not `spaced` applies in the default space only (a role held in a named
+  space and a non-spaced permission never meet); the permission is in the catalog with an `action` (an entry without one
+  grants nothing); a `role:` binding id collision or more than 50,000 derived bindings fails the document at `$.roles`.
 - Is the policy bound in the right document, with the right app and space? `space: ""` is the default space only;
   roles count only in the request's space (`role@space` claims; unsuffixed roles in the default space).
 - Is the binding expired (`expiresAt`)? Is the tenant held by a boundary that does not cover the request?
@@ -276,7 +285,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 ### Request allowed unexpectedly
 
 - Find the deciding statement in the audit event or with `explain`. Any matching DENY would have won, so the expected
-  DENY did not match: check its action namespace (`http:*` vs mapped `service:verb`), resource pattern, condition
+  DENY did not match: check its action namespace (`http:*` vs mapped `service:verb`: a platform DENY on `http:*` stops
+  covering a path the moment a route map maps it, https://cosec.ahoo.me/scenarios/route-maps), resource pattern, condition
   (an absent attribute makes `eq`/`in`/`prefix`/`cidr` false), binding scope, and `onMissing: nomatch` (lapses
   while its provider fails).
 - Is the instance on the expected revision? Compare the audit event's snapshot versions with the published head.
@@ -332,6 +342,13 @@ header: anonymous. Otherwise never anonymous:
   its own hash tag (`{cosec}`) puts every counter on one slot.
 
 ### Control-plane errors
+
+A first platform document that does not let authenticated callers reach `/cosec/control/v1/**` leaves the control plane
+unreachable (403 from the pipeline, before any control check) and `cosec-migrate publish` never overwrites: add the
+`control-api` policy of https://cosec.ahoo.me/guide/quick-start to the platform document, which is only possible through
+the control plane, so a deployment without it must be re-published into an empty Redis or key prefix. A control token
+is issued for tenant `(platform)` (or the tenant) and app `cosec.control.app-id`; a token for another app is
+`scope-rejected` on a host with an app.
 
 Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
 document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);

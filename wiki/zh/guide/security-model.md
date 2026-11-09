@@ -209,6 +209,8 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`；
 - 在面向多个应用的网关上，用元数据 `cosec-app-id` 为每条路由指定它的应用（[网关](../integration/web.md#gateway)）。路由没有指定、网关也没有宿主应用时，请让各应用的路由映射和资源互不重叠，或为每个应用的前缀加一条平台 DENY，例如对 `http:path:/orders/**` 拒绝 `http:*`，条件为 `{"not": {"eq": ["scope.app", "order"]}}`。
 
+**路由映射决定哪些语句适用。**一个请求只有一个动作。匹配了服务[路由映射](../integration/web.md#route-maps)中某条路由的请求，是该路由在类型化资源上的 `service:verb`；其他请求是 `http:path:<path>` 上的 `http:<METHOD>`。`http:` 上的语句永远不匹配已映射的请求，`service:verb` 上的语句永远不匹配未映射的请求，[限流规则](../policies/rate-limiting.md#rules)的匹配方式也一样。所以映射是决策的一个输入，由拥有该服务的团队掌管：加一条路由，就把它的请求移出了 `http` 命名空间，也就移出了任何写在 `http:` 上的平台 DENY 或限流的作用范围。不论路径是否被映射都必须生效的限制，要写两次，一次针对 `http` 形式，一次针对动作（[按业务动作授权](../scenarios/route-maps.md)）。目前没有针对请求路径的条件，无法一次写完。
+
 **客户端 IP。** `max-trusted-index` 是应用前面的代理数量；默认值 `1` 假定有一个代理。CoSec 从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你的代理追加的那一条。在客户端可直接访问的宿主上，请设置为 `0`，否则客户端可以在该请求头里写入任意地址（[代理之后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 
 **请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：请求所依据的文档读取它时，请求在求值之前即为 `400`，无论语句的效果是什么，因此这个回答既不暴露 DENY，也不暴露它读取哪个请求头（[请求头](../policies/language.md#headers)、`PIP-12`）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
@@ -290,6 +292,7 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 用一条平台限流规则按租户限制控制 API（[限流](../policies/rate-limiting.md#the-control-api)）。
 - 在任何人需要 break-glass 之前注册一个 REQUIRED 决策监听器。
 - 必须始终生效的 DENY 放在没有条件的策略里，并且永远不要基于客户端写入的请求头授权。
+- 路径上的平台 DENY 或限流，既要针对 `http` 形式写，也要针对路由映射赋予该路径的每个动作写：[已映射的路由不是 `http` 请求](#trust-boundaries)。
 - 用于防滥用的限流规则，如果 Redis 故障时也不能失效，请设置 `"strictFailure": true`。
 - 只从用户无法影响的来源签发 `(platform)` 令牌。
 - 让每个 gateway 模式的服务只能从网关访问。

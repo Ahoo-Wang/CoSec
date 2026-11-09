@@ -113,8 +113,12 @@ On WebFlux and WebMvc hosts, a route map named by `cosec.authorization.routes.lo
 
 It loads all or nothing: overlapping routes for one method, a malformed route, a map with no routes, or a resource
 variable the path does not capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `cosec-openapi` and springdoc,
-`GET /actuator/cosecServiceGenerator/routes` generates the route map and `/app` the app document. Policies on `http:*`
-never cover mapped requests: tell the policy author which namespace each endpoint is in.
+`GET /actuator/cosecServiceGenerator/routes` generates the route map and `/app` the app document (short-form
+permissions: catalog entries with `action`). A request is mapped or not, never both: `http:*` statements, DENYs and
+rate limit rules never cover a mapped request, and `service:verb` ones never cover an unmapped one. Tell the policy
+author which namespace each endpoint is in. A service that needs no business names, such as a small one or one
+behind a gateway (which loads no route map), leaves the property unset and writes `http` statements; that is "simple mode"
+(https://cosec.ahoo.me/scenarios/simple-mode). More: https://cosec.ahoo.me/scenarios/route-maps.
 
 ## Publishing the first documents
 
@@ -127,7 +131,10 @@ in-memory store without it. **Until a platform document exists, every request is
   hand-written files write `{"accepted": true, "outputSha256": {"platform.json": "<sha256>"}}`). Migrating 7.x data:
   `cosec-migrate convert`, then `publish`; see https://cosec.ahoo.me/operations/upgrading.
 - Later changes go through the control plane (below). `cosec-migrate bootstrap` writes only the platform tenant's
-  document; it does not create the platform document.
+  document; it does not create the platform document. **The first platform document must let authenticated callers
+  reach `/cosec/control/v1/**`** (`http:GET`, `http:POST`, `http:DELETE` on `http:path:/cosec/control/v1/**`, condition
+  `subject.authenticated`): the control plane authorizes again per step, but a document that does not open the path can
+  no longer be changed, and `publish` never overwrites. https://cosec.ahoo.me/guide/quick-start has a document that does.
 - While no platform document is installed, the instance also reports itself not ready (Spring readiness
   `REFUSING_TRAFFIC`; liveness unaffected). With actuator, add the `cosecSnapshot` indicator to the readiness group
   (`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`); it is `DOWN` until the platform
@@ -266,6 +273,21 @@ policies. Bind the first administrator with `cosec-migrate bootstrap --to-redis 
 (a `(platform)`-tenant principal), or with a principal binding of the platform document to `cosec:platform-admin`
 in app `cosec-control`. On WebFlux, raise `spring.codec.max-in-memory-size` for large documents; on WebMvc the limit is
 `cosec.control.http.max-body-size` (16MB). Workflow: https://cosec.ahoo.me/policies/testing.
+
+The control plane's token is issued for tenant `(platform)` (an administrator) or the tenant's own, and for the app
+`cosec.control.app-id`: `TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)")`. A change is
+`POST /changes` (document, base revision, operations), then `:skip-shadow` with a `reason` (the trust root, and a
+tenant's administrator on its own document) or `:shadow`, then `:publish`. A console that edits roles sends one `putRole`
+per save; a service that mirrors an identity system's roles sends `putRole`, `removeRole` and `putCatalog` the same way
+and never writes Redis (https://cosec.ahoo.me/scenarios/roles, https://cosec.ahoo.me/scenarios/external-source).
+
+## Scenarios
+
+Worked examples with documents and settings that run: https://cosec.ahoo.me/scenarios/simple-mode (one tenant, no apps),
+`/scenarios/app` (an app without spaces), `/scenarios/spaces` (per-app and shared spaces), `/scenarios/service-account`
+(an API key limited to one space), `/scenarios/tenant-owner` (an owner by attachment), `/scenarios/gateway` (which
+action names the gateway and the service use). Tokens are issued for one app (`TokenSubject.app`): the service's
+`cosec.authorization.scope.app-id` must be the token's. The model: https://cosec.ahoo.me/guide/model.
 
 ## Optional behavior
 

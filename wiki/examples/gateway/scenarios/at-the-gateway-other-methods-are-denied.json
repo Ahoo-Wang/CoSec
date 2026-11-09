@@ -1,0 +1,22 @@
+{
+  "description": "The accountant holds invoice.read only.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "billing",
+    "roles": [
+      "accountant"
+    ]
+  },
+  "request": {
+    "hostApp": "billing",
+    "action": "http:DELETE",
+    "resource": {
+      "type": "http",
+      "id": "/billing/invoices/7"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}
