@@ -18,8 +18,17 @@ and have to be provisioned again.
 
 - **A path with an empty segment or an encoded separator is a `400`** (`PIP-14`). `//admin`, `/admin//x`, `/;x/admin`
   and `/admin%2Fx` were decided as paths of their own, so a `DENY` under `/admin` did not match them, while a backend
-  that merges slashes or decodes separators served them as `/admin/...`. Clients that join URL parts with a `/` each
-  must stop sending `//`. A trailing `/` is unchanged: `/admin/` stays its own path.
+  that merges slashes or decodes separators served them as `/admin/...`. A trailing `/` is unchanged: `/admin/` stays
+  its own path. Requests that were served before and are refused now:
+  - a `/` encoded inside a path variable, such as `/files/a%2Fb.txt` or `/repos/group%2Fproject`: send the value in the
+    query, or encode its `/` twice (`%252F`), which the pipeline decodes once, to the text `%2F`, and the application
+    decodes again;
+  - a URL whose parts were joined with a `/` each (`https://host/api/` + `/orders`): fix the client;
+  - a path parameter alone in a segment before the last (`/;jsessionid=x/orders`): URL rewriting puts it at the end of
+    the last segment (`/orders;jsessionid=x`), which is still accepted.
+
+  There is no switch to accept them: a pattern cannot say what a backend will make of these paths, so deciding them
+  would bring the bypass back.
 - **A check refuses what enforcement refuses** (`PIP-15`). `AuthorizationChecker.check` and `decide` now read a path as
   the pipeline reads a request: one the pipeline answers `400` for is a deny, as is any resource over a request path's
   length bounds. Before, `/public/../admin` could be permitted by an `ALLOW` under `/public`.
