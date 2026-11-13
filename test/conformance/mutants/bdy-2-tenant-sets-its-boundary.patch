@@ -3,16 +3,16 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index a47b8f7e..83919a64 100644
+index 1e4b23bc..afddb5e7 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -195,9 +195,6 @@ class ChangeAuthority(
+@@ -236,9 +236,6 @@ class ChangeAuthority(
       * tenant principal's to move, whatever it holds (RC1-10).
       */
-     private suspend fun boundary(operator: Operator, key: SnapshotKey) {
+     private suspend fun boundary(via: ControlAuthorizer, operator: Operator, key: SnapshotKey) {
 -        if (!operator.platform) {
 -            throw ChangeRejectedException(FORBIDDEN, "only a platform principal sets a tenant's boundary")
 -        }
-         require(operator, ControlActions.BOUNDARY, boundaryOf(key))
+         require(via, operator, ControlActions.BOUNDARY, boundaryOf(key))
      }
  

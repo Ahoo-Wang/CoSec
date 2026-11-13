@@ -3,15 +3,15 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-index 7d01c052..a6d3f740 100644
+index 05fa2991..77636e39 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-@@ -225,7 +225,7 @@ object Operations {
+@@ -237,7 +237,7 @@ internal object Operations {
              limits = limits,
              attributes = attributes,
              boundary = boundary,
 -            rateLimits = rateLimits.values.toList(),
 +            rateLimits = base?.rateLimits.orEmpty(),
+             roles = roles.values.toList(),
          )
      }
- 
