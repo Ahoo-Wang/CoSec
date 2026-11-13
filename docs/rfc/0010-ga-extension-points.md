@@ -3,6 +3,8 @@
 > 状态：已确认（2026-10-28；2026-11-03 复查已确认） · 上位文档：[RFC 0001](0001-target-architecture.md) P9；[RFC 0009](0009-identity-and-credentials.md) ·
 > 基线：`main` @ `c9553ad4`（#1132），复查 @ `e82abdee` · 交付：§3 的各项在 8.0 GA 之前合入（C4、C5 由复查加入） · 范围：`runtime/`、`core/`、`spring-boot-starter/`、`conformance/`；C4 覆盖所有发布模块
 
+> **2026-11-09 修订（#1307）**：C4 完成，公开声明的审定规则由 `PublicApiStabilityTest` 守护，可能增长的记录不再是 `data class`。C5 完成，`InstanceStatus` 带文档格式级别。`PipelineComponents` 保持公开（文档记载了不用 Spring 的装配方式）。
+
 ## 0. 原则
 
 维护者的两条要求放在一起：

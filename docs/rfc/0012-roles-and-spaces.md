@@ -4,6 +4,8 @@
 > 修订：[RFC 0004](0004-unified-model.md) §4.6、§4.9，[RFC 0007](0007-control-plane.md) §5.8、§7.1，[RFC 0009](0009-identity-and-credentials.md) ·
 > 基线：`main` @ `50e7945c` · 交付：§11 的 G1–G3，§3.5 随 R7b，都在 8.0 GA 之前合入
 
+> **2026-11-09 说明（#1306）**：OpenAPI 生成的权限组不带 `spaced`，用 Space 的 App 生成后自行设置。attachment 在授出分析里按 `(*, *)` 计，但数据面上指定 Space 的请求仍要求在该 Space 有角色。
+
 ## 0. 结论先行
 
 1. **引擎不变。** `roles` 和简写权限在编译前展开成普通的 `Binding` 和 `perm:` 策略。授出分析、影子窗口、回滚、审计都作用于展开结果。

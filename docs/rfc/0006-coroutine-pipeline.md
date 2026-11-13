@@ -19,6 +19,8 @@
 
 > **2026-11-08 修订**：`authorization` Cookie 只在 `cosec.pipeline.allow-cookie-token=true` 时读作令牌，`CoSec-*` 只读请求头（#1295）。审计记录用 `AuditVia`，`KafkaAuditListener` 关闭时在 `drain-timeout` 内等待队列（#1297）。
 
+> **2026-11-09 修订（#1304，`ATR-8`）**：属性规划沿语句索引进行，访问的语句与评估完全相同。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
