@@ -457,8 +457,9 @@ class ChangeAuthority(
 
     /**
      * What a platform or app change needs (RFC 0007 §7.4.1): the analysis reads tenant documents, so one by anyone but
-     * the trust root, or by it under four-eyes, needs a second person for whatever it puts. For an app document, the
-     * approver also sees each tenant binding the change widens (RC1-34).
+     * the trust root, or by it under four-eyes, needs a second person for whatever it puts, and for each DENY it removes
+     * ([removedDenies], `CTL-31`). For an app document, the approver also sees each tenant binding the change widens
+     * (RC1-34).
      */
     private suspend fun untenanted(
         key: SnapshotKey,
@@ -471,10 +472,38 @@ class ChangeAuthority(
         if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
             escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
         }
+        escalations += removedDenies(key, base, candidate, documents)
         if (key is SnapshotKey.App) {
             escalations += referringBindings(key, base, candidate, documents)
         }
         return escalations
+    }
+
+    /**
+     * Each DENY of platform or app [key] that [candidate] removes (RFC 0007 §7.4.4, amended on 2026-11-09; `CTL-31`).
+     * A tenant may remove its own DENY alone, since the platform's and the apps' DENYs and its boundary still hold over
+     * it; nothing holds over these, so removing one widens what every tenant may do, and needs a second person. What the
+     * DENY is judged by is [Narrowing]'s: a binding removed is a DENY removed unless its policy is shown to be ALLOWs
+     * only. A document that cannot be read is a 503: an approval must not be skipped for what could not be read.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun removedDenies(
+        key: SnapshotKey,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> {
+        base ?: return emptyList()
+        val removed = try {
+            Narrowing.removedDenies(base, candidate) { policy ->
+                policyElsewhere(key, policy) { documents.head(it)?.document }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ChangeRejectedException(UNAVAILABLE, "the DENYs [$key] removes could not be read: ${e.message}", e)
+        }
+        return removed.map { Escalation("$it of $key", NOT_ANALYZED, "it removes a DENY: only the trust root does it alone") }
     }
 
     /**
