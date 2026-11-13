@@ -655,6 +655,11 @@ for a check, `412` for an `ifMatch` that does not hold).
   `history` rebuilds the index from the chain, and a reference left behind blocks a removal at most. If the change
   itself could not be settled, the publish answers an error although the revision is in effect; publishing it again
   reports `PUBLISHED`, finishes what followed the write and records the events as the original publisher.
+- **A platform or app change that only removes entries waits in `AWAITING_APPROVAL`**, with a `NOT_ANALYZED`
+  escalation `policy <id> of <doc>` or `binding <id> of <doc>` (`it removes a DENY: only the trust root does it
+  alone`): the change takes a DENY away, which nothing above the platform or an app still holds (`CTL-31`). A role
+  removal counts for each binding the role derived, `role:<role>@<app>:<permission>`. Have a second platform principal
+  holding `cosec:approve` approve it ([Approval](../policies/testing.md#approval)).
 - **An approval no longer counts at publish**: the change is `AWAITING_APPROVAL` again, its `APPROVAL` finding saying
   `the token the approver approved with is revoked`, `the approver's tokens are revoked`, `the approver no longer
   holds cosec:approve on the document`, `only a platform principal approves a boundary change`, `under four-eyes, only

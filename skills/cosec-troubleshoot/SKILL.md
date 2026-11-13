@@ -355,6 +355,9 @@ does not refer to it is a publish of `<doc>` that indexed the reference and lost
 repair-references`); `changes between a policy and a boundary` needs `<doc>` moved off it first; `a boundary is not bound`
 is a binding of a platform boundary; `an entry's id has no [/]` needs the entry renamed.
 
+A platform or app change that only removes entries and waits in `AWAITING_APPROVAL` with `NOT_ANALYZED`
+`policy|binding <id> of <doc>` removes a DENY (`CTL-31`): a second platform principal holding `cosec:approve` approves it.
+
 Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
 document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);
 404 no such document, change or route; 409 the change's `base` revision is stale, the document is staged by another

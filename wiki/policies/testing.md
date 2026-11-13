@@ -361,7 +361,7 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
 | `ANONYMOUS` | A grant to `Anyone` in the default tenant `(0)`, where unauthenticated callers are: it reaches them too. |
 | `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known; or the app list cannot be trusted and the grant reaches every app ([Storage](../operations/storage.md#publishing-through-the-control-plane)). |
-| `NOT_ANALYZED` | A platform or app document change, or a tenant boundary change, by someone who is not the trust root. |
+| `NOT_ANALYZED` | By someone who is not the trust root: a platform or app document change that puts anything, or that removes a DENY (`CTL-31`, one per policy or binding, below), or a tenant boundary change. |
 | `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one per binding, naming only the binding and its tenant document, so the approver sees whom the change reaches. Informational: the approval is for `NOT_ANALYZED`, and a change in these entries alone never sends an approved change back to `AWAITING_APPROVAL`. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
 
@@ -393,7 +393,17 @@ The analysis reads the author's rights as enforcement does:
 Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
 whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the
 platform's policy is attachable, to the platform's policy. That is analyzed as granting the platform's policy to
-them. A platform principal holding `cosec:approve` on the document is the trust root:
+them.
+
+A tenant removes its own DENYs alone: the platform's and the apps' DENYs and its boundary still hold over it. Nothing
+holds over the platform's and the apps' documents, so a change of one that removes a DENY needs a second person
+(`CTL-31`), one `NOT_ANALYZED` escalation for each `policy <id> of <document>` that holds a DENY and each
+`binding <id> of <document>` whose policy holds one or cannot be found. The documents are read
+[expanded](./role-permissions.md#roles): removing a role, or a `putRole` that drops a permission, counts for each
+binding the role no longer derives. Revoking a break-glass binding is not such a removal: it ends an emergency, one
+person alone ([break-glass](../guide/security-model.md#break-glass)).
+
+A platform principal holding `cosec:approve` on the document is the trust root:
 its own changes are not analyzed, unless `cosec.control.approval.four-eyes` is on, in which case they are analyzed like
 anyone's and what needs approval needs another platform principal's. A tenant principal the platform gave
 `cosec:approve` on its tenant's document approves others' changes, and its own are analyzed. A tenant's boundary is the

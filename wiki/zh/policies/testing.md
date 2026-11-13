@@ -227,7 +227,7 @@ flowchart LR
 | `UNRESOLVED` | 新增或修改的绑定指向一条没有任何文档定义的策略，它授予什么无从判断。 |
 | `ANONYMOUS` | 授给默认租户 `(0)` 中的 `Anyone`：未认证的调用方都在这个租户中，授出也会作用于它们。 |
 | `UNREADABLE` | 授出触及的某个 app 文档读不到，作者在那里持有什么无从得知；或 app 列表不可信，而授出触及所有 app（[存储](../operations/storage.md#publishing-through-the-control-plane)）。 |
-| `NOT_ANALYZED` | 非信任根所做的平台或应用文档变更，或租户边界变更。 |
+| `NOT_ANALYZED` | 由非信任根所做：放入任何内容、或删除一条 DENY 的平台或应用文档变更（`CTL-31`，每条策略或绑定一项，见下文），或租户边界变更。 |
 | `TENANT_BINDING` | 与应用文档的 `NOT_ANALYZED` 一起出现：变更新增或放宽了某条权限策略的 ALLOW，租户文档中每条绑定该策略的绑定各是一项，只写出绑定 id 和它所在的租户文档，审批人由此看到变更影响到谁。仅供参考：审批针对的是 `NOT_ANALYZED`，只有这些条目变化时，已审批的变更不会退回 `AWAITING_APPROVAL`。 |
 | `BREAK_GLASS` | 新增或修改的 break-glass 绑定：总是需要第二个人。 |
 
@@ -240,7 +240,11 @@ flowchart LR
 - **租户与平台都定义的 id。** 执行时，两条策略内容不同，这样的绑定或附加才因二义而被拒绝。分析不比较内容，把每个这样的 id 都当作二义，这只会减少权利：作者经它什么也不持有；它绑定到作者的地方，按拒绝一切的 DENY 计。
 - **每一份 app 文档。** app 文档绑定角色，所以无论变更是否点名该 app，它都可能在该 app 中拒绝作者某些东西。分析读取 app 列表列出的每一份 app 文档；读不到的那份，使触及它所在 app 的每个授出成为 `UNREADABLE`。app 列表完整之前（升级后，在 [`cosec-migrate repair-references`](../operations/upgrading.md#repair-the-back-reference-index) 运行之前），覆盖所有 app 的每个授出（app 为 `*` 的绑定或附加）都是 `UNREADABLE`，经条件收窄到变更没有点名的 app 的授出也是：分析从绑定的作用域取 app，不从条件中取。
 
-删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
+删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。
+
+租户可以独自删除自己的 DENY：平台和各应用的 DENY 以及它的边界仍然约束着它。平台文档和应用文档之上没有这样的约束，所以删除其中一条 DENY 的变更需要第二个人（`CTL-31`）：每条含 DENY 的 `policy <id> of <document>`、每条所绑策略含 DENY 或找不到的 `binding <id> of <document>`，各是一项 `NOT_ANALYZED` 升级。两份文档按[展开后](./role-permissions.md#roles)的形式读取：删除角色，或用 `putRole` 去掉一项权限，按角色不再派生的每条绑定计。撤销 break-glass 绑定不算这样的删除：它结束的是一次应急，一个人即可（[break-glass](../guide/security-model.md#break-glass)）。
+
+对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
 API key 无论其主体持有什么，都不是信任根，也从不审批。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 的凭证（包括网关转发的身份所带的）也算作 API key。你自己的认证器认可的凭证，在 CoSec 看来是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
 

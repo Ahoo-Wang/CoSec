@@ -94,6 +94,12 @@ and have to be provisioned again.
   and a document that holds one has to remove it before it publishes again. An id a change puts holds no `/` (`V2`,
   `422`): a rule ending in `*` did not reach such an entry. A permission policy's `perm:<app>/<id>` may; entries that
   already hold one can stay or be removed.
+- **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
+  now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
+  that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put
+  with fewer permissions), now waits in `AWAITING_APPROVAL` with a `NOT_ANALYZED` escalation for each, as does the trust
+  root's under `four-eyes` ([Approval](../policies/testing.md#approval)). Removing ALLOWs, a tenant's own DENYs and
+  break-glass revokes are unchanged. Plan an approver for emergency removals of a platform DENY.
 - **`cosec:grant` follows what a role derives** (RFC 0012 §7.2): a `putCatalog` or `putPolicy` that makes a `"*"` role
   derive a binding it did not needs `cosec:grant` on the role's scope, as a `putRole` does.
 - **`cosec:breakglass` is enough for break-glass** (RFC 0007 §8): requesting one, publishing it once approved and
