@@ -18,12 +18,11 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -38,9 +37,9 @@ class DefaultTokenRevokerTest {
 
     @Test
     fun revoke() {
-        val tokenPrincipal = SimpleTokenPrincipal("tokenId", SimplePrincipal.ANONYMOUS)
-        val accessToken = SimpleAccessToken("accessToken")
-        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns tokenPrincipal
+        val tokenPrincipal = VerifiedToken("tokenId", "alice", null, null)
+        val accessToken = "accessToken"
+        every { tokenVerifier.verify(accessToken) } returns tokenPrincipal
         every { tokenStore.revoke("tokenId", revocationTtl) } just Runs
 
         val actual = tokenRevoker.revoke(accessToken)
@@ -51,8 +50,8 @@ class DefaultTokenRevokerTest {
 
     @Test
     fun revokeWhenTokenInvalid() {
-        val accessToken = SimpleAccessToken("invalid")
-        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } throws
+        val accessToken = "invalid"
+        every { tokenVerifier.verify(accessToken) } throws
             TokenVerificationException("Invalid token")
 
         assertThrows<TokenVerificationException> {

@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
@@ -53,8 +54,7 @@ import java.time.Instant
 /**
  * The `control` runner for the grant analysis of RFC 0007 §7.4: a grantor, the published documents its own rights
  * come from, and a candidate tenant document. The outcome is the analysis's verdict for each fragment the candidate
- * grants. Wiring the analysis into the publish flow (accept, reject, approval) comes with RFC 0007 PR-6; this runner
- * then gains the `ControlPlane` writes of RFC 0008 §3.3.
+ * grants. The publish flow (accept, reject, approval) is not run here; `ChangeRunner` runs it.
  *
  * ```jsonc
  * "documents": { "platform": {...}, "apps": {...}, "tenants": { "acme": {...} } },   // published, the engine syntax
@@ -67,7 +67,7 @@ import java.time.Instant
  * ```
  *
  * A policy may also say `"protected": true`, and a binding `"protected": true`. Documents are read here from the
- * scenario syntax; the document codec of RFC 0004 PR-4 replaces this reader. The grantor's attributes keep their JSON
+ * scenario syntax, not by the document codec. The grantor's attributes keep their JSON
  * type, as a token's claims do (RC1-2).
  */
 object GrantRunner : ScenarioRunner {

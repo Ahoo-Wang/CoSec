@@ -57,6 +57,7 @@ private val log = KotlinLogging.logger {}
  * Whether a request is sampled is decided before its event is made ([sample]); only then does the event carry the
  * [ReplayHandle] that keeps its view reachable.
  */
+@InternalCoSecApi
 class ShadowListener(
     override val name: String,
     /** The share of the requests evaluated again, from 0 to 1. */
@@ -87,7 +88,7 @@ class ShadowListener(
         for ((key, installed) in documents(replay.view)) {
             when (val candidate = candidates.candidate(key)) {
                 null -> Unit
-                is Candidate.Failed -> recorder.record(candidate.window, ShadowOutcome.CANDIDATE_ERROR, null, null)
+                is Candidate.Failed -> recorder.record(key, candidate.window, ShadowOutcome.CANDIDATE_ERROR, null, null)
                 is Candidate.Ready -> compare(replay, enforced, key, installed, candidate)
             }
         }
@@ -102,14 +103,14 @@ class ShadowListener(
         candidate: Candidate.Ready
     ) {
         if (installed == null || installed != candidate.baseRevision) {
-            recorder.record(candidate.window, ShadowOutcome.BASE_MISMATCH, installed, null)
+            recorder.record(key, candidate.window, ShadowOutcome.BASE_MISMATCH, installed, null)
             return
         }
         val decided = try {
             val view = candidateView(replay, key, candidate.document)
             if (view == null) {
                 log.debug { "The candidate of window ${candidate.window} needs an app document no view source gives." }
-                recorder.record(candidate.window, ShadowOutcome.CANDIDATE_ERROR, installed, null)
+                recorder.record(key, candidate.window, ShadowOutcome.CANDIDATE_ERROR, installed, null)
                 return
             }
             engine.evaluate(replay.request, view, TraceLevel.OFF).decision
@@ -118,6 +119,7 @@ class ShadowListener(
         } catch (e: Exception) {
             log.debug(e) { "The candidate of window ${candidate.window} failed to evaluate." }
             recorder.record(
+                key,
                 candidate.window,
                 ShadowOutcome.CANDIDATE_ERROR,
                 installed,
@@ -127,6 +129,7 @@ class ShadowListener(
         }
         val outcome = outcome(enforced, decided)
         recorder.record(
+            key,
             candidate.window,
             outcome,
             installed,

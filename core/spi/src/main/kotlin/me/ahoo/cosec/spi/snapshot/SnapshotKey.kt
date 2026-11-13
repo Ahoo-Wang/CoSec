@@ -11,8 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spi.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.scope.ScopeResolver
 
@@ -36,9 +40,9 @@ sealed interface SnapshotKey {
     data class Tenant(val tenantId: String) : SnapshotKey {
         init {
             require(isValidTenantId(tenantId)) {
-                "Tenant id [${printable(tenantId)}] must not be blank or [${Match.WILDCARD}], contain " +
-                    "'${App.APP_ID_SEPARATOR}' or a control character, or exceed ${ScopeResolver.MAX_APP_ID_LENGTH} " +
-                    "characters."
+                "Tenant id [${Identifiers.printable(tenantId)}] must not be blank or [${Match.WILDCARD}], contain " +
+                    "'${App.APP_ID_SEPARATOR}', a control character or an unpaired surrogate, or exceed " +
+                    "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             }
         }
 
@@ -49,8 +53,9 @@ sealed interface SnapshotKey {
         companion object {
             /**
              * A tenant id names exactly one Redis key: the rule of a declared app id (`ScopeResolver.isValidAppId`, #1024:
-             * not blank, not `*`, no `:`, bounded length, and no control characters, RC1-15), so no id can reach another
-             * key, a key pattern or a log line it does not own. `(platform)` and `(0)` are valid and encoded as they are.
+             * not blank, not `*`, no `:`, bounded length, no control characters, RC1-15, and no unpaired surrogate, which
+             * a Redis key holds as `?`, RC1-52), so no id can reach another key, a key pattern or a log line it does not
+             * own. `(platform)` and `(0)` are valid and encoded as they are.
              */
             fun isValidTenantId(tenantId: String): Boolean = ScopeResolver.isValidAppId(tenantId)
         }
@@ -63,9 +68,9 @@ sealed interface SnapshotKey {
     data class App(val appId: String) : SnapshotKey {
         init {
             require(isValidAppId(appId)) {
-                "App id [${printable(appId)}] must not be blank or [${Match.WILDCARD}], contain " +
-                    "'$APP_ID_SEPARATOR' or a control character, or exceed ${ScopeResolver.MAX_APP_ID_LENGTH} " +
-                    "characters."
+                "App id [${Identifiers.printable(appId)}] must not be blank or [${Match.WILDCARD}], contain " +
+                    "'$APP_ID_SEPARATOR', a control character or an unpaired surrogate, or exceed " +
+                    "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             }
         }
 
@@ -78,18 +83,14 @@ sealed interface SnapshotKey {
 
             /**
              * Whether [appId] can name an app document: the rule of an app id a request declares
-             * (`ScopeResolver.isValidAppId`: not blank, not `*`, no `:`, bounded length, no control character; RC1-15,
-             * R1-6 of #1194's review), so the control plane takes no app key the data plane could never read, and no
-             * id reaches a Redis key or a log line it does not own.
+             * (`ScopeResolver.isValidAppId`: not blank, not `*`, no `:`, bounded length, no control character, no unpaired
+             * surrogate; RC1-15, RC1-52, R1-6 of #1194's review), so the control plane takes no app key the data plane
+             * could never read, and no id reaches a Redis key or a log line it does not own.
              */
             fun isValidAppId(appId: String): Boolean = ScopeResolver.isValidAppId(appId)
         }
     }
 }
-
-/** [id] for a message: a control character as its `\uXXXX` escape, so a refused id cannot forge a log line. */
-private fun printable(id: String): String =
-    id.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }.joinToString("")
 
 /** The kind of a [SnapshotKey]: low-cardinality, so it can tag metrics where the app id cannot. */
 enum class SnapshotKind {

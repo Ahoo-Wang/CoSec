@@ -70,8 +70,7 @@
     "method": "GET",
     "path": "/orders",
     "headers": {
-      "Authorization": "token",
-      "CoSec-App-Id": "shop"
+      "Authorization": "token"
     }
   },
   "authentication": {
@@ -79,7 +78,8 @@
     "token": {
       "jti": "t1",
       "tenant": "acme",
-      "id": "alice"
+      "id": "alice",
+      "app": "shop"
     }
   },
   "expect": {

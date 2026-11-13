@@ -1,0 +1,139 @@
+{
+  "rules": [
+    "CTL-23"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RC1-40: plato simulates and explains a request without a principal that names (0): it is decided on (0)'s own document, public's permit. A request with a principal is authorized and decided on its own tenant: alice simulates bob of acme.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      },
+      "(0)": {
+        "policies": [
+          {
+            "id": "public",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "public",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "public"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "(0)",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "explain": {
+        "by": "plato",
+        "request": {
+          "tenant": "(0)",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [
+            "ops"
+          ],
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by public",
+      "Permit by public at 1/-/1",
+      "Permit by orders"
+    ],
+    "errors": {},
+    "heads": {}
+  }
+}

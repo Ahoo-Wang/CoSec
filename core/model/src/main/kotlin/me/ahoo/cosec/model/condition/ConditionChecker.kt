@@ -11,13 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+
 /**
- * The cost bounds of a condition (RFC 0005 §3.5, Q9). The defaults are the decided values, to be calibrated
- * against the converter's measurements of 7.x policies. The platform document's `limits` section sets them for every
- * document (RFC 0007 §3.1 N3), so the control plane and every instance compile against the same bounds.
+ * The cost bounds of a condition (RFC 0005 §3.5, Q9). The defaults are the values decided in Q9. The platform
+ * document's `limits` section sets them for every document (RFC 0007 §3.1 N3), so the control plane and every
+ * instance compile against the same bounds.
  */
+@InternalCoSecApi
 class ConditionLimits(
     val maxNodes: Int = 64,
     val maxDepth: Int = 8,
@@ -33,18 +38,23 @@ class ConditionLimits(
         require(limits.all { it > 0 }) { "Condition limits must be positive." }
     }
 
+    @InternalCoSecApi
     companion object {
         val DEFAULT: ConditionLimits = ConditionLimits()
     }
 }
 
 /** A reason a condition does not compile, at a JSON [path] relative to the condition, e.g. `$.and[1].eq[0]`. */
+@InternalCoSecApi
 data class ConditionError(val path: String, val message: String)
 
+@InternalCoSecApi
 sealed interface CheckResult {
+    @InternalCoSecApi
     class Valid(val condition: CheckedCondition) : CheckResult
 
     /** At least one error. */
+    @InternalCoSecApi
     class Invalid(val errors: List<ConditionError>) : CheckResult
 }
 
@@ -55,6 +65,7 @@ sealed interface CheckResult {
  * Checking never recurses deeper than [ConditionLimits.maxDepth] or looks at more than [ConditionLimits.maxNodes]
  * nodes, so a hostile document cannot exhaust the stack or the compile thread.
  */
+@InternalCoSecApi
 class ConditionChecker(
     val limits: ConditionLimits = ConditionLimits.DEFAULT,
     /** Resolves `time` zones. Region zones need the host's resolver ([ZoneResolver.withRegions]). */
@@ -380,6 +391,7 @@ class ConditionChecker(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         /**
          * Headers that carry credentials (RFC 0005 §3.2, `CND-5`). A condition on one would let a document's author

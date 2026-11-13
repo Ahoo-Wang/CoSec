@@ -24,16 +24,19 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.RoleDefinition
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.HexFormat
 
 /**
  * The digest an operation's `ifMatch` names: SHA-256 of the entry as the document encodes it, in lowercase hex. Two
  * entries with the same digest are written the same way, so they mean the same.
  */
+@InternalCoSecApi
 object EntryDigest {
     fun of(policy: PolicyDefinition): String = sha256(PolicyDocumentCodec.policyTree(policy))
 
@@ -42,16 +45,22 @@ object EntryDigest {
 
     fun of(rule: RateLimitSource): String = sha256(PolicyDocumentCodec.rateLimitTree(rule))
 
+    fun of(role: RoleDefinition): String = sha256(PolicyDocumentCodec.roleTree(role))
+
     internal fun sha256(tree: JsonNode): String = hex(CoSecJson.mapper.writeValueAsBytes(tree))
 
     internal fun hex(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        HEX.formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
+    /** Lower-case hex, a byte at a time: the fixed cost of `String.format` per byte showed in the diff of large documents. */
+    private val HEX: HexFormat = HexFormat.of()
 }
 
 /**
  * The digest of a candidate (RFC 0007 §7.5): SHA-256 of its body encoded with a fixed header, so it depends only on
  * the policies, bindings and sections a change would publish. Approvals and shadow reports name it.
  */
+@InternalCoSecApi
 object CandidateDigest {
     private val EPOCH: Instant = Instant.EPOCH
 
@@ -69,20 +78,21 @@ object CandidateDigest {
                 attributes = candidate.attributes,
                 boundary = candidate.boundary,
                 rateLimits = candidate.rateLimits,
+                roles = candidate.roles,
             ),
         ),
     )
 }
 
 /** The candidate a change's operations make of its base, or the findings that keep them from applying. */
-class Applied(val candidate: PolicyDocument?, val findings: List<Finding>)
+internal class Applied(val candidate: PolicyDocument?, val findings: List<Finding>)
 
 /**
  * Applies entry-level operations to a base document (RFC 0007 §10.1), in order. An operation whose `ifMatch` is not
  * the entry's digest is a 412; removing what is not there and a section the document's kind does not have are 422s.
  * The candidate keeps the base's order of entries: a replaced entry stays where it was, a new one goes last.
  */
-object Operations {
+internal object Operations {
     fun apply(key: SnapshotKey, base: PolicyDocument?, operations: List<Operation>): Applied {
         val draft = Draft(key, base)
         operations.forEachIndexed { i, operation -> draft.apply("operations[$i]", operation) }
@@ -96,6 +106,7 @@ object Operations {
         private val policies = LinkedHashMap<String, PolicyDefinition>()
         private val bindings = LinkedHashMap<String, Binding>()
         private val rateLimits = LinkedHashMap<String, RateLimitSource>()
+        private val roles = LinkedHashMap<String, RoleDefinition>()
         private var catalog = base?.catalog
         private var limits = base?.limits
         private var attributes = base?.attributes
@@ -109,6 +120,7 @@ object Operations {
             base?.policies?.forEach { policies[it.id.value] = it }
             base?.bindings?.forEach { bindings[it.id.value] = it }
             base?.rateLimits?.forEach { rateLimits[it.id] = it }
+            base?.roles?.forEach { roles[it.id.value] = it }
         }
 
         fun apply(path: String, operation: Operation) {
@@ -125,7 +137,19 @@ object Operations {
                     put(path, rateLimits, operation.rule.id, operation.rule, operation.ifMatch, EntryDigest::of)
                 is Operation.RemoveRateLimit ->
                     remove(path, "rate limit", rateLimits, operation.id, operation.ifMatch, EntryDigest::of)
+                is Operation.PutRole -> putRole(path, operation)
+                is Operation.RemoveRole ->
+                    remove(path, "role", roles, operation.id.value, operation.ifMatch, EntryDigest::of)
                 else -> section(path, operation)
+            }
+        }
+
+        private fun putRole(path: String, operation: Operation.PutRole) {
+            val problem = operation.role.shapeProblem(kind)
+            if (problem != null) {
+                findings += Finding("OPERATION", path, problem, UNPROCESSABLE)
+            } else {
+                put(path, roles, operation.role.id.value, operation.role, operation.ifMatch, EntryDigest::of)
             }
         }
 
@@ -214,6 +238,7 @@ object Operations {
             attributes = attributes,
             boundary = boundary,
             rateLimits = rateLimits.values.toList(),
+            roles = roles.values.toList(),
         )
     }
 
@@ -236,7 +261,15 @@ object Operations {
             if (current != EntryDigest.of(binding, kind, owner)) operations += Operation.PutBinding(binding, current)
         }
         operations += rateLimits(base, desired)
+        val roles = base?.roles?.associateBy { it.id.value }.orEmpty()
+        for (role in desired.roles) {
+            val current = roles[role.id.value]?.let(EntryDigest::of)
+            if (current != EntryDigest.of(role)) operations += Operation.PutRole(role, current)
+        }
         if (mode == ApplyMode.REPLACE) {
+            val keepRoles = desired.roles.map { it.id }.toSet()
+            base?.roles?.filter { it.id !in keepRoles }
+                ?.forEach { operations += Operation.RemoveRole(it.id, EntryDigest.of(it)) }
             val keepRateLimits = desired.rateLimits.map { it.id }.toSet()
             base?.rateLimits?.filter { it.id !in keepRateLimits }
                 ?.forEach { operations += Operation.RemoveRateLimit(it.id, EntryDigest.of(it)) }
@@ -334,6 +367,7 @@ object Operations {
 }
 
 /** How [Changes.apply] treats what the desired document leaves out (RFC 0007 §6.7). */
+@InternalCoSecApi
 enum class ApplyMode {
     /** Adds and changes only: entries and sections the desired document does not mention stay. */
     MERGE,

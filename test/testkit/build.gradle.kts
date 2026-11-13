@@ -16,7 +16,9 @@
 dependencies {
     // The documents, the compiler, the engine; MembershipResolver merges memberships as the pipeline does.
     api(project(":runtime"))
-    implementation("tools.jackson.core:jackson-databind")
+    // PolicyTestKit.evaluate(JsonNode) and check(String, JsonNode) are public: without it in the API variant a consumer
+    // cannot compile even a call of evaluate(String) (the compiler resolves the overloads).
+    api("tools.jackson.core:jackson-databind")
     api("org.junit.jupiter:junit-jupiter-api")
 }
 

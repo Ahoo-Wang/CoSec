@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.AppId
@@ -126,5 +129,6 @@ internal object GrantFixtures {
             listOf("doc/tenant/{t}/**", "scope/{t}/**"),
             eqAttr("resource.var.t", "subject.tenant"),
         ),
+        allow(listOf("cosec:skip-shadow"), listOf("doc/tenant/{t}"), eqAttr("resource.var.t", "subject.tenant")),
     )
 }

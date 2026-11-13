@@ -11,16 +11,21 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SpaceId
 
 /** A set of values of one scope dimension: every value, or finitely many. */
+@InternalCoSecApi
 sealed interface Dimension<T> {
     fun contains(value: T): Boolean
 
+    @InternalCoSecApi
     class Every<T> : Dimension<T> {
         override fun contains(value: T): Boolean = true
 
@@ -31,12 +36,14 @@ sealed interface Dimension<T> {
         override fun toString(): String = Match.WILDCARD
     }
 
+    @InternalCoSecApi
     data class Only<T>(val values: Set<T>) : Dimension<T> {
         override fun contains(value: T): Boolean = value in values
 
         override fun toString(): String = values.toString()
     }
 
+    @InternalCoSecApi
     companion object {
         fun <T> of(match: Match<T>): Dimension<T> = when (match) {
             Match.Any -> Every()
@@ -49,6 +56,7 @@ sealed interface Dimension<T> {
  * A set of `(app, space)` pairs: every app in [apps] with every space in [spaces]. Both what a fragment grants to
  * (σ_G) and where a grantor's statement applies are such products (RFC 0007 §7.4.3).
  */
+@InternalCoSecApi
 data class ScopeSet(val apps: Dimension<AppId>, val spaces: Dimension<SpaceId>) {
     val isEmpty: Boolean get() = empty(apps) || empty(spaces)
 
@@ -61,6 +69,7 @@ data class ScopeSet(val apps: Dimension<AppId>, val spaces: Dimension<SpaceId>) 
 
     override fun toString(): String = "($apps, $spaces)"
 
+    @InternalCoSecApi
     companion object {
         val EVERY: ScopeSet = ScopeSet(Dimension.Every(), Dimension.Every())
 

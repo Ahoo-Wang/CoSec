@@ -3,7 +3,7 @@
     {
       "id": "STA-1",
       "source": "RFC 0011 D2",
-      "statement": "A feature turned on by a property or by the host's classpath never runs without what it needs (its module, its REQUIRED listener, its Redis connection): startup fails and names what to add.",
+      "statement": "A feature turned on by a property or by the host's classpath never runs without what it needs (its module, its REQUIRED listener, its Redis connection): startup fails and names what to add. A module no feature uses needs nothing: a service behind a gateway (`cosec.pipeline.mode=gateway`) with JWT off, which wires no Redis data plane, starts without Redis although `cosec-cocache` is on its classpath.",
       "level": "startup",
       "pending": null,
       "guards": [
@@ -14,7 +14,10 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a required Kafka audit without cosec-kafka fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a CosId generator for CoSec's ids without cosec-cosid fails startup",
         "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
-        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup"
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a CacheRuntime fails startup naming the CoCache starter",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache is still needed where it is used",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a service in gateway mode does not need Redis for an unused cosec-cocache"
       ]
     },
     {

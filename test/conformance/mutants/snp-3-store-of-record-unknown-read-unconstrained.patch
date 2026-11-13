@@ -1,0 +1,16 @@
+# Rule: SNP-3
+# Mutant: a store of record's unknown-read is only locked, not constrained, so unlock (or a weakening layer) reads a failed Redis read as absent
+# Tests: :cocache:test --tests me.ahoo.cosec.cache.CacheTtlPolicyTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.authorization.cache.StoreOfRecordOverrideTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
+index e4056e1..ea29b08 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
+@@ -235,7 +235,6 @@ object CoSecCacheSpecs {
+                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
+                 lock(PolicyField.TTL, PolicyField.UNKNOWN_READ)
+                 constrain(PolicyField.TTL) { Ttl.Forever }
+-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                 if (cacheName == POLICY_SNAPSHOT_CACHE_NAME) {
+                     // One local max age, cosec.authorization.snapshot.local-max-age (RFC 0008 §4.4).
+                     lock(PolicyField.LOCAL_MAX_AGE)

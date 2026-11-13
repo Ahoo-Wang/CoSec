@@ -35,12 +35,13 @@ data class RateLimit(
         get() = windowSeconds * MILLIS_PER_SECOND
 
     /**
-     * Results of a sliding window counter for this quota.
+     * Results of a sliding window counter for this quota. A request is allowed while the count is below the quota, so
+     * a part of a permit left still admits one: `remaining` rounds up, to what the counter would still allow right now.
      *
      * @param estimate the weighted request count of the window, before this request was counted
      */
     fun resultOf(allowed: Boolean, estimate: Double, nowMillis: Long): RateLimitResult {
-        val remaining = if (allowed) (limitPerWindow - estimate - 1).toLong().coerceAtLeast(0) else 0
+        val remaining = if (allowed) ceil(limitPerWindow - estimate - 1).toLong().coerceAtLeast(0) else 0
         return RateLimitResult(
             allowed = allowed,
             limit = ceil(limitPerWindow).toLong(),
@@ -58,7 +59,7 @@ data class RateLimit(
  * The outcome of acquiring a permit.
  *
  * @param limit the permits of one window
- * @param remaining the permits still available in the current window
+ * @param remaining how many more requests the current window would allow right now
  * @param resetAfter when the current window ends
  */
 data class RateLimitResult(

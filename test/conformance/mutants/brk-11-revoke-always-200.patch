@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index c251c83d..63737f67 100644
+index 121a7968..cd98780b 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -290,12 +290,6 @@ class ControlHttp(private val plane: ControlPlane) {
-             val binding = BindingId(segments[0])
+@@ -368,12 +368,6 @@ class ControlHttp(private val plane: ControlPlane) {
+             val binding = field("binding", "a binding id") { BindingId(segments[0]) }
              val change = plane.breakGlass.revoke(operator, binding, reason)
              // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
 -            if (plane.breakGlass.grants(binding)) {

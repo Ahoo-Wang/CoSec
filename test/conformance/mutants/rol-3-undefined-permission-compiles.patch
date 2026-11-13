@@ -1,0 +1,17 @@
+# Rule: ROL-3
+# Mutant: a system role may name a permission nothing defines
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..a09d87ba 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -283,7 +283,7 @@ object RoleExpansion {
+                 permission.isEmpty() || permission == Match.WILDCARD ->
+                     errors += CompileError(at, "[$permission] is not a permission id")
+                 !seen.add(permission) -> errors += CompileError(at, "[$permission] is listed twice")
+-                defined != null && permission !in defined ->
++                false && permission !in defined.orEmpty() ->
+                     errors += CompileError(at, "[$permission] is not a permission app ${document.owner} defines")
+             }
+         }

@@ -15,7 +15,8 @@ package me.ahoo.cosec.spi.authn
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -23,6 +24,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 
 /**
@@ -40,9 +42,10 @@ fun interface Authenticator {
 }
 
 /**
- * The credentials of a request, read by the pipeline the way `DefaultSecurityContextParser` reads them: the token from
- * the `Authorization` header, else (when allowed) the query parameter of that name, else the cookie; the API key from
- * its own header. Null when absent.
+ * The credentials of a request, as the pipeline reads them: the token from the `Authorization` header, else (when
+ * allowed) the query parameter of that name, else (when allowed) the cookie; the API key from its own header. The
+ * header is the channel a client sets on purpose, the others are fallbacks for clients that cannot set it. Null when
+ * absent.
  */
 class Credentials(val token: String?, val apiKey: String?) {
     val isEmpty: Boolean get() = token == null && apiKey == null
@@ -72,6 +75,10 @@ sealed interface AuthnResult {
     /** A dependency the authenticator needs failed, such as the API key store: 503. */
     class Unavailable(val cause: Throwable) : AuthnResult
 
+    /**
+     * Why a credential was rejected. A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when`
+     * over it needs an `else`.
+     */
     enum class RejectReason {
         TOKEN_INVALID,
         TOKEN_EXPIRED,
@@ -114,11 +121,50 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     val issuedAt: Instant?,
     /** Set by CoSec's API key authenticator: by provenance, as [breakGlass] ([apiKey]). */
     private val apiKeyCredential: Boolean,
+    /**
+     * The app the credential declares (RFC 0012 §3.5), null when it declares none. A host with an app refuses a
+     * credential declaring another or none (`SCP-11`).
+     */
+    val app: AppId?,
 ) {
     init {
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {
             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+        }
+    }
+
+    /**
+     * RC1-52 (`IDN-10`): an id with an unpaired surrogate would share a Redis key with another id. Another authenticator
+     * that gives one throws here, from the public constructors, which the pipeline answers 503, as it answers any
+     * authenticator that throws. CoSec's own authenticators check the ids where they read them (a token's claims, an
+     * [me.ahoo.cosec.spi.apikey.ApiKey], a forwarded identity), so the constructor they use does not scan them twice
+     * on every request.
+     */
+    private fun requireWellFormed() {
+        require(wellFormed()) {
+            "Principal [${Identifiers.printable(id.value)}] of tenant [${Identifiers.printable(tenant.value)}] holds an " +
+                "id with an unpaired UTF-16 surrogate: its id, tenant, credential id or memberships."
+        }
+    }
+
+    /** Whether every id the principal holds follows the text rule of ids ([Identifiers]). */
+    private fun wellFormed(): Boolean {
+        if (!Identifiers.isWellFormed(id.value) || !Identifiers.isWellFormed(tenant.value)) {
+            return false
+        }
+        if (credential != null && !Identifiers.isWellFormed(credential.id)) {
+            return false
+        }
+        if (app != null && !Identifiers.isWellFormed(app.value)) {
+            return false
+        }
+        return when (membershipSource) {
+            is MembershipSource.Claims -> Identifiers.isWellFormed(membershipSource.memberships)
+            is MembershipSource.Provider -> membershipSource.cap.orEmpty().all { (space, roles) ->
+                Identifiers.isWellFormed(space.value) && roles.all { Identifiers.isWellFormed(it.value) }
+            }
+            is MembershipSource.Unusable -> true
         }
     }
 
@@ -130,6 +176,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         membershipSource: MembershipSource,
         attributes: Map<String, Any> = emptyMap(),
         credential: Identity.Credential? = null,
+        app: AppId? = null,
     ) : this(
         id,
         tenant,
@@ -138,8 +185,11 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         credential,
         breakGlass = false,
         issuedAt = null,
-        apiKeyCredential = false
-    )
+        apiKeyCredential = false,
+        app = app,
+    ) {
+        requireWellFormed()
+    }
 
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
@@ -152,6 +202,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         memberships: Memberships?,
         attributes: Map<String, Any> = emptyMap(),
         credential: Identity.Credential? = null,
+        app: AppId? = null,
     ) : this(
         id,
         tenant,
@@ -161,7 +212,10 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         breakGlass = false,
         issuedAt = null,
         apiKeyCredential = false,
-    )
+        app = app,
+    ) {
+        requireWellFormed()
+    }
 
     /**
      * Whether an API key proved the principal, a workload's credential: so CoSec's API key authenticator says, by
@@ -223,15 +277,18 @@ sealed interface MembershipSource {
          * The source a verified token states (RFC 0004 §4.5): no marker means its claims; the provider marker alone
          * means the provider; any other marker, or the marker together with `roles` or `policies` claims, is unusable.
          */
-        fun of(principal: CoSecPrincipal): MembershipSource {
-            val marker = MembershipClaims.markerOf(principal)
-                ?: return Claims(MembershipClaims.parse(principal.roles, principal.policies))
+        fun of(token: VerifiedToken): MembershipSource =
+            of(token.principal, token.roles, token.policies, token.membershipMarker)
+
+        /** The source of a token of [principal] with those claims, as [of] a verified token. */
+        fun of(principal: String, roles: Set<String>, policies: Set<String>, marker: String?): MembershipSource {
+            marker ?: return Claims(MembershipClaims.parse(roles, policies))
             return when {
                 marker != MembershipClaims.PROVIDER ->
-                    Unusable("The token of principal [${principal.id}] has an unknown membership marker [$marker].")
+                    Unusable("The token of principal [$principal] has an unknown membership marker [$marker].")
 
-                principal.roles.isNotEmpty() || principal.policies.isNotEmpty() -> Unusable(
-                    "The token of principal [${principal.id}] asks for a membership provider but also claims roles or policies."
+                roles.isNotEmpty() || policies.isNotEmpty() -> Unusable(
+                    "The token of principal [$principal] asks for a membership provider but also claims roles or policies."
                 )
 
                 else -> Provider.UNCAPPED

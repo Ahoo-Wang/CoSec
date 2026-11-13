@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
@@ -73,6 +76,13 @@ class HttpAttributes(
     override fun ip(attribute: Attribute): IpAddress? = null
 
     override fun time(attribute: Attribute): Long = ConditionInput.NO_TIME
+
+    /**
+     * The first header the documents of [view] read that this request holds with different values, or null: what the
+     * pipeline answers 400 for (`PIP-12`), for the control plane's simulations to answer alike.
+     */
+    @InternalCoSecApi
+    fun ambiguousHeader(view: SnapshotView): String? = ambiguousHeader(headers, view)
 
     private fun header(name: String): String? {
         val values = headers.values(name)

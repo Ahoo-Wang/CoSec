@@ -51,7 +51,7 @@
   },
   "rateLimiter": {
     "exhausted": [
-      "api"
+      "platform/api"
     ]
   },
   "http": {

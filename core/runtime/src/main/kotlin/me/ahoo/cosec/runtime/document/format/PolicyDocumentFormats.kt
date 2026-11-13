@@ -22,11 +22,11 @@ import me.ahoo.cosec.runtime.document.format.DocumentFormats.BINDING
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.CATALOG
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.DEFINITIONS
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.SNAPSHOT_DOCUMENT
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**
  * The 8.0 formats (RFC 0004 §7.1, RFC 0005 §3.1, §5.1): bindings, catalogs, and the definitions of `schema: 2`
- * platform, app and tenant documents, which [DocumentFormats] puts into `cosec-snapshot-document`. The switch hands the
- * 7.x file names (`cosec-policy`, `condition`, `action`) over to these (RFC 0007 §10.4).
+ * platform, app and tenant documents, which [DocumentFormats] puts into `cosec-snapshot-document`.
  */
 internal object PolicyDocumentFormats {
     private fun ref(file: String, definition: String? = null) = Ref("$file.schema.json", definition)
@@ -102,14 +102,21 @@ internal object PolicyDocumentFormats {
     val catalogSchema: SchemaFile = SchemaFile(
         name = CATALOG,
         title = "CoSec Catalog Schema",
-        description = "An app's permission catalog (RFC 0004 §4.9): for UIs and generators; it takes no part in evaluation.",
+        description = "An app's permission catalog (RFC 0004 §4.9, RFC 0012 §4): for UIs and generators; an entry with " +
+            "`action` also defines the permission.",
         root = ObjectType(listOf(Field("groups", ArrayType(ref(CATALOG, "group")), required = true))),
         definitions = mapOf(
             "group" to ObjectType(
                 listOf(
                     Field("name", StringType(examples = listOf("order")), required = true),
                     Field("description", StringType(examples = listOf("Orders"))),
-                    Field("spaced", BooleanType(), description = "Granted per space; informational.", default = false),
+                    Field(
+                        "spaced",
+                        BooleanType(),
+                        description = "Whether a permission written with `action` applies in any space a role holding it " +
+                            "applies in; without it, only in the default space (RFC 0012 §4.2).",
+                        default = false,
+                    ),
                     Field("permissions", ArrayType(ref(CATALOG, "permission")), required = true),
                 ),
             ),
@@ -118,9 +125,27 @@ internal object PolicyDocumentFormats {
                     Field("id", StringType(examples = listOf("read", "ship")), required = true),
                     Field("name", StringType(examples = listOf("Read"))),
                     Field("description", StringType(examples = listOf("Read orders"))),
+                    Field(
+                        "action",
+                        actionOrActions(),
+                        description = "Defines the permission `perm:<app>/<id>` here (RFC 0012 §4): no hand-written " +
+                            "policy of that id may exist.",
+                    ),
+                    Field("resource", resourceOrResources(), description = "Needs `action`. Absent: any resource."),
                 ),
             ),
         ),
+    )
+
+    private fun actionOrActions(): AnyOf = AnyOf(
+        listOf(
+            ref(SNAPSHOT_DOCUMENT, "actionPattern"),
+            ArrayType(ref(SNAPSHOT_DOCUMENT, "actionPattern"), minItems = 1)
+        ),
+    )
+
+    private fun resourceOrResources(): AnyOf = AnyOf(
+        listOf(ref(SNAPSHOT_DOCUMENT, "resource"), ArrayType(ref(SNAPSHOT_DOCUMENT, "resource"), minItems = 1)),
     )
 
     private val attributeExamples = listOf(
@@ -250,6 +275,55 @@ internal object PolicyDocumentFormats {
         rateLimits,
     )
 
+    private val roleFields = listOf(
+        Field(
+            "id",
+            StringType(
+                pattern = "^(?!\\*$)[^@]+$",
+                examples = listOf("wms.clerk", "night-shift"),
+                counterExamples = listOf("", "*", "clerk@wh-01"),
+            ),
+            required = true,
+            description = "Unique in its document. Not `*`, and without `@`, which separates a membership's role and space.",
+        ),
+        Field("name", StringType(examples = listOf("Clerk")), description = "For display only."),
+        Field("description", StringType(examples = listOf("Handles the warehouse")), description = "For display only."),
+    )
+
+    private val permissionIds = ArrayType(StringType(examples = listOf("warehouse.read", "inbound.ship")))
+
+    private val appRole = ObjectType(
+        roleFields + Field(
+            "permissions",
+            AnyOf(listOf(StringType(enum = listOf("*"), description = "Every permission the catalog defines."), permissionIds)),
+            required = true,
+            description = "Catalog ids; possibly none.",
+        ),
+        description = "A system role (RFC 0012 §5.1): it applies to every tenant, in any space a member holds it.",
+    )
+
+    private val tenantRole = ObjectType(
+        roleFields + listOf(
+            Field(
+                "app",
+                StringType(minLength = 1, examples = listOf("wms", "order-service")),
+                required = true,
+                description = "The app the role belongs to, and whose permissions it lists.",
+            ),
+            Field(
+                "space",
+                StringType(
+                    pattern = "^(?!\\*$)(?!\\().*$",
+                    examples = listOf("", "wh-01"),
+                    counterExamples = listOf("*", "(reserved)"),
+                ),
+                description = "Absent: any space a member holds the role in. Otherwise only this one; empty is the default space.",
+            ),
+            Field("permissions", permissionIds, required = true, description = "Catalog ids of the app; possibly none."),
+        ),
+        description = "A custom role (RFC 0012 §5.2): it applies to this tenant only.",
+    )
+
     val documentDefinitions: Map<String, FormatType> = mapOf(
         "platformDocument" to ObjectType(
             documentHeader + Field(
@@ -276,13 +350,17 @@ internal object PolicyDocumentFormats {
                 "boundary",
                 StringType(minLength = 1, examples = listOf("boundary-restricted")),
                 description = "The platform boundary policy that holds this tenant instead of the default; only the platform writes it.",
-            ) + documentSections,
-            description = "A tenant document (RFC 0004 §7.1): the tenant's own policies and bindings.",
+            ) + documentSections + Field("roles", ArrayType(ref(SNAPSHOT_DOCUMENT, "tenantRole"))),
+            description = "A tenant document (RFC 0004 §7.1): the tenant's own policies, bindings and custom roles.",
         ),
+        "tenantRole" to tenantRole,
+        "appRole" to appRole,
         "platformBinding" to platformBinding(),
         "appDocument" to ObjectType(
-            documentHeader + Field("catalog", ref(CATALOG)) + documentSections,
-            description = "An app document: its catalog, its permission policies `perm:<app>/<permission>` and role bindings.",
+            documentHeader + Field("catalog", ref(CATALOG)) + documentSections +
+                Field("roles", ArrayType(ref(SNAPSHOT_DOCUMENT, "appRole"))),
+            description = "An app document: its catalog, its permission policies `perm:<app>/<permission>`, its system " +
+                "roles and role bindings.",
         ),
         "provenance" to ObjectType(
             listOf(
@@ -295,11 +373,19 @@ internal object PolicyDocumentFormats {
                                 "digest",
                                 StringType(
                                     pattern = DIGEST,
-                                    examples = listOf("9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"),
-                                    counterExamples = listOf("9F2C0B1E6A6D1F2C3B4A5D6E7F8091A2B3C4D5E6", "9f2c", "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6a", ""),
+                                    examples = listOf("SHA-256:$DIGEST_HEX"),
+                                    counterExamples = listOf(
+                                        "SHA-256:${DIGEST_HEX.uppercase()}",
+                                        // 40 hex digits (a SHA-1 length), without an algorithm prefix.
+                                        "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6",
+                                        DIGEST_HEX,
+                                        "SHA-1:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6",
+                                        "SHA-256:${DIGEST_HEX}a",
+                                        "",
+                                    ),
                                 ),
                                 required = true,
-                                description = "The store's digest of the parent: the address of its revision record.",
+                                description = "The store's SHA-256 digest of the parent, with its algorithm: the address of its revision record.",
                             ),
                         ),
                     ),
@@ -482,7 +568,8 @@ internal object PolicyDocumentFormats {
     )
 }
 
-private const val DIGEST = "^[0-9a-f]{40}$"
+private const val DIGEST = SnapshotDigest.PATTERN
+private const val DIGEST_HEX = "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"
 
 private fun dateTime(vararg examples: String) = StringType(
     pattern = FormatPatterns.DATE_TIME,

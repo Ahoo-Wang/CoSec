@@ -13,20 +13,21 @@
 package me.ahoo.cosec.login
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import java.util.concurrent.ConcurrentHashMap
 
+private val log = KotlinLogging.logger {}
+
 /**
- * Default Authentication Provider .
+ * The registry of [Authentication]s. One instance per application: the starter assembles one for each Spring context,
+ * so what one context registers or closes never reaches another (#1222).
  *
  * @author ahoo wang
  */
-object DefaultAuthenticationProvider : AuthenticationProvider {
-    private val log = KotlinLogging.logger {}
+class DefaultAuthenticationProvider : AuthenticationProvider {
     private val authenticationMaps:
-        MutableMap<Class<out Credentials>, Authentication<out Credentials, CoSecPrincipal>> = ConcurrentHashMap()
+        MutableMap<Class<out Credentials>, Authentication<out Credentials>> = ConcurrentHashMap()
 
-    override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(
+    override fun <C : Credentials, A : Authentication<C>> register(
         credentialsType: Class<C>,
         authentication: A
     ) {
@@ -37,7 +38,7 @@ object DefaultAuthenticationProvider : AuthenticationProvider {
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> get(
+    override fun <C : Credentials, A : Authentication<C>> get(
         credentialsType: Class<out Credentials>
     ): A? {
         val authentication = authenticationMaps[credentialsType] as A?

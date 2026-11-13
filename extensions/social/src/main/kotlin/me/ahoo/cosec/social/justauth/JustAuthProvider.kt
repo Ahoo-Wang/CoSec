@@ -12,7 +12,8 @@
  */
 package me.ahoo.cosec.social.justauth
 
-import com.google.common.base.MoreObjects
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialCredentials
@@ -21,21 +22,27 @@ import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
-import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
 import java.security.SecureRandom
 import java.util.Base64
 
 /**
  * A [SocialAuthenticationProvider] over a JustAuth [AuthRequest].
  *
+ * JustAuth blocks: the authorize step draws the `state` from a [SecureRandom] and writes it to the state cache, and a
+ * login calls the provider over blocking HTTP. Both run on this provider's own dispatcher, of at most [parallelism]
+ * threads, so they never hold an event loop and a provider that hangs delays only its own logins.
+ *
  * @author ahoo wang
  */
 class JustAuthProvider(
     override val name: String,
     private val authRequest: AuthRequest,
+    parallelism: Int = DEFAULT_PARALLELISM,
 ) : SocialAuthenticationProvider {
+    private val blocking = Dispatchers.IO.limitedParallelism(parallelism)
+
     private companion object {
+        const val DEFAULT_PARALLELISM = 16
         const val STATE_BYTES = 16
         val random = SecureRandom()
         val encoder = Base64.getUrlEncoder().withoutPadding()
@@ -48,23 +55,19 @@ class JustAuthProvider(
         fun newState(): String = encoder.encodeToString(ByteArray(STATE_BYTES).also(random::nextBytes))
     }
 
-    override fun authorizeUrl(): String {
-        return authRequest.authorize(newState())
+    override suspend fun authorizeUrl(): String = runInterruptible(blocking) { authRequest.authorize(newState()) }
+
+    override suspend fun authenticate(credentials: SocialCredentials): SocialUser {
+        require(credentials is JustAuthCredentials)
+        return runInterruptible(blocking) { login(credentials) }.toSocialUser(name)
     }
 
-    override fun authenticate(credentials: SocialCredentials): Mono<SocialUser> {
-        require(credentials is JustAuthCredentials)
-        return Mono.defer {
-            @Suppress("UNCHECKED_CAST")
-            val authResponse: AuthResponse<AuthUser> = authRequest.login(credentials) as AuthResponse<AuthUser>
-            if (!authResponse.ok()) {
-                throw SocialAuthenticationException(
-                    MoreObjects.firstNonNull(authResponse.msg, authResponse.code.toString())
-                )
-            }
-            val authUser = authResponse.data
-            return@defer authUser.toSocialUser(name).toMono()
+    private fun login(credentials: JustAuthCredentials): AuthUser {
+        val authResponse: AuthResponse<AuthUser> = authRequest.login(credentials)
+        if (!authResponse.ok()) {
+            throw SocialAuthenticationException(authResponse.msg ?: authResponse.code.toString())
         }
+        return authResponse.data ?: throw SocialAuthenticationException("The [$name] provider returned no user.")
     }
 
     fun name(): String {

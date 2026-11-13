@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The UTC offsets of one time zone, as a table: [offsets]`[i]` (seconds) holds from `transitions[i - 1]` (inclusive,
@@ -21,6 +25,7 @@ package me.ahoo.cosec.model.condition
  * (`Asia/Shanghai`) take this table from a [ZoneResolver] the host provides; the table must cover every instant the
  * policies are evaluated at. Fixed offsets need no host ([ZoneResolver.FIXED]).
  */
+@InternalCoSecApi
 class ZoneOffsets(val id: String, transitions: LongArray, offsets: IntArray) {
     private val transitions: LongArray = transitions.copyOf()
     private val offsets: IntArray = offsets.copyOf()
@@ -82,6 +87,7 @@ class ZoneOffsets(val id: String, transitions: LongArray, offsets: IntArray) {
 
     override fun toString(): String = id
 
+    @InternalCoSecApi
     companion object {
         const val MAX_OFFSET_SECONDS: Int = 18 * 3600
         internal const val MILLIS_PER_SECOND = 1000L
@@ -95,9 +101,11 @@ class ZoneOffsets(val id: String, transitions: LongArray, offsets: IntArray) {
 }
 
 /** Finds the offsets of a time zone by id, or returns null if it does not know the zone. */
+@InternalCoSecApi
 fun interface ZoneResolver {
     fun resolve(id: String): ZoneOffsets?
 
+    @InternalCoSecApi
     companion object {
         /**
          * The zones `java.time.ZoneId.of` reads without its database: `Z`, `UTC`, `GMT`, `UT`, offsets such as `+8`,
@@ -299,15 +307,14 @@ internal object IsoTime {
     }
 }
 
-/** The days of a week, Monday first, as `java.time.DayOfWeek` names them. */
+/** The days of a week, Monday first, as documents write them. */
 internal object DaysOfWeek {
-    val NAMES: List<String> = listOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
+    val NAMES: List<String> = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
     const val ALL: Int = 0b111_1111
 
-    /** As 7.x: trimmed, case-insensitive, full name or its first three letters. The day's bit, or null. */
+    /** The bit of the day [value] names, or null: only the exact [NAMES] are days, as the schema says. */
     fun parse(value: String): Int? {
-        val upper = Ascii.uppercase(value.trim())
-        val index = NAMES.indexOfFirst { it == upper || it.take(3) == upper }
+        val index = NAMES.indexOf(value)
         return if (index < 0) null else 1 shl index
     }
 

@@ -138,14 +138,19 @@ management:
 ```
 
 `cosecSnapshot` is also part of `/actuator/health`, which therefore reports `DOWN` until the platform document is
-published.
+published. On Redis, `cosecSnapshotEviction` beside it is `DOWN` while Redis may evict the snapshot: an alert for your
+monitoring, which does not belong in the readiness group, since a change to Redis's policy would then take every
+instance out of rotation at once ([Observability](./observability.md)). Since it also turns the aggregate
+`/actuator/health` `DOWN`, a load balancer or platform health check should poll the readiness group, or a group that
+excludes it (`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`), never `/actuator/health`.
 
 ## Shutdown
 
 On shutdown, the decision listeners stop taking events and deliver what is queued to the `BEST_EFFORT` listeners (the
 audit log, Kafka, metrics) for up to
 [`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners) (5 seconds), then drop the
-rest. Keep the pod's termination grace period long enough for Spring's own graceful shutdown plus that timeout.
+rest. The Kafka audit listener then gets up to the same timeout for the sends it still holds. Keep the pod's termination
+grace period long enough for Spring's own graceful shutdown plus twice that timeout.
 
 ## Kubernetes
 

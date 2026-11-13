@@ -37,7 +37,10 @@ enum class RejectionKind(val advice: String) {
     /** A policy id starting with a prefix generated ids use (`perm:`, `g:`, `r:`, `cosec:`). */
     RESERVED_POLICY_ID("rename the policy and the attachments that name it"),
 
-    /** An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id. */
+    /**
+     * An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id, an unpaired UTF-16
+     * surrogate in any id (RC1-52).
+     */
     INVALID_ID("rename it; `*` matches any app or space in 8.0, so no app or space may be called `*`"),
 
     /** The same id twice: a policy in an export, or a permission in one app. */

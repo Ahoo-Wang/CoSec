@@ -61,7 +61,10 @@ Every document can hold rules in `rateLimits` ([fields](./language.md#rate-limit
 ```
 
 A rule matches a permitted request the way a DENY statement would: one of its action patterns, one of its resource
-patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one.
+patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one. A route in a
+service's [route map](../integration/web.md#route-maps) is not an `http` request, so a rule on `http:` and a path does
+not limit it: write the rule for the route's action too
+([Authorizing business actions](../scenarios/route-maps.md#a-request-has-one-action)).
 
 Which rules a request is held to:
 
@@ -88,8 +91,13 @@ pattern of the rule.
 | absent | One bucket shared by every request the rule matches. |
 | present | One bucket per value. Requests where the value is absent share one bucket of their own. |
 
-Rules of different documents never share buckets: a platform rule counts under its own id, an app rule under
-`app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`
+A value is its bucket as it is, `k:<value>`, which every limiter writes as UTF-8. A value with an unpaired UTF-16
+surrogate (a JSON escape such as `"\uD800"` in a token attribute) has no UTF-8 encoding: its bucket is `e:<value>`
+with each unpaired surrogate as its `\uXXXX` escape and each `\` doubled, so it never counts in the bucket of the
+value with `?` in its place (`IDN-10`). A limiter of your own gets only buckets that are well-formed text.
+
+Rules of different documents never share buckets: a rule counts under its document and its id, `platform/<id>`,
+`app:<appId>/<id>` or `tenant:<tenantId>/<id>`
 ([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
 A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
 the platform's quotas.
@@ -123,7 +131,7 @@ rule with the fewest permits left; a `429` carries those of the exhausted rule:
 | Header | Value |
 |---|---|
 | `RateLimit-Limit` | Permits per window of that rule, rounded up. |
-| `RateLimit-Remaining` | Permits left in its current window. |
+| `RateLimit-Remaining` | How many more requests its current window would allow right now, rounded up: a part of a permit left still admits one. |
 | `RateLimit-Reset` | Seconds until its current window ends, at least `1`. |
 | `Retry-After` | Only on `429`: the same as `RateLimit-Reset`. |
 
@@ -143,6 +151,46 @@ A bucket that cannot be read for any reason other than a missing external attrib
 `strictFailure`. Failure logs are throttled to one per ten seconds. Skipping a lenient rule is one of the documented
 exceptions to [fail closed](../guide/security-model.md); set `strictFailure` on rules that protect against abuse, such
 as login attempts, and leave it off on rules that only smooth load.
+
+## The control API
+
+The [control API](./testing.md#the-control-plane) is served behind the pipeline, so a platform rule limits it like any
+other path, and keyed by `scope.tenant` it gives each tenant a bucket of its own. Cover the routes that compile,
+evaluate or check: `simulate`, `explain`, `analyze` and `changes`, under `cosec.control.http.base-path` and its `/v1`:
+
+```json
+{
+  "id": "control-per-tenant",
+  "action": "http:POST",
+  "resource": [
+    "http:path:/cosec/control/v1/simulate",
+    "http:path:/cosec/control/v1/explain",
+    "http:path:/cosec/control/v1/analyze",
+    "http:path:/cosec/control/v1/changes",
+    "http:path:/cosec/control/v1/changes/*"
+  ],
+  "key": "scope.tenant",
+  "permitsPerSecond": 0.5,
+  "windowSeconds": 60
+}
+```
+
+- The rule belongs in the platform document: a tenant's own rules count in their own buckets and never relax it.
+- The bucket is the caller's tenant, counted after the pipeline permits the request and before the control plane
+  authorizes it: every principal of the tenant that the pipeline lets onto these paths spends it, administrator or not,
+  and every `(platform)` principal spends the platform's. Permit the control paths in the pipeline only to principals
+  bound to a control role, so that no other principal can hold off a tenant's administrators.
+- An exhausted bucket answers `429` before the control API does any work. The control API serves only these exact
+  paths: one with a trailing `/` or an empty segment (`//`) is a `404`, so the patterns cover every request it serves.
+- Leave the break-glass routes (`/break-glass` and below) out of it: give them a rule of their own, or none, so that
+  a spent bucket never holds off an emergency revoke. `changes/*` still covers three steps of break-glass: the
+  `:publish` that makes an approved break-glass grant take effect, the `:publish` that recovers a stalled revoke, and
+  `:abandon` of a break-glass change. Give the platform's bucket room for them, or keep the platform's principals out
+  of the rule with `"condition": {"not": {"eq": ["scope.tenant", "(platform)"]}}`.
+- `documents/{key}:apply` and `:rollback` propose changes too, and can join the rule.
+
+No such rule is published for you, by `cosec-migrate bootstrap` or otherwise: the limits depend on the deployment's
+size.
 
 ## Publishing rules
 

@@ -10,6 +10,14 @@
 > 运行时的 `AuthnResult`）留在 `runtime`。把这些模型搬进 `spi` 会让 `spi` 依赖 `engine` 与 Jackson，违反 §2；改成传字节则是新的抽象，
 > 违反 RFC 0010 Q1。`spi` 只收签名只用 `model` 与 `api` 类型的端口（§3 的表已按此改）。§5 的 `backends` 规则改为显式白名单（下文）。
 
+> **2026-11-08 修订（#1283）**：`STA-1` 增加 `CacheRuntime` 检查，模块检查最先运行。
+
+> **2026-11-08 修订（#1293）**：`STA-1` 的模块检查只在模块真正被用到时生效：网关模式且关闭 JWT 时不需要 `cosec-cocache` 的 Redis。
+
+> **2026-11-09 修订**：令牌契约按 #1302 调整，`CoSecPrincipal` 保留 `java.security.Principal`。`cosec-login`、`cosec-social` 已转 `suspend`（#1303），Reactor 只留在 edge 与 host。
+
+> **2026-11-09 修订（#1307）**：`cosec-model` 依赖 `cosec-annotations`，否则带标记的类型可以不声明 opt-in 就被使用。
+
 ## 0. 结论先行
 
 目标是让核心模型稳定、可靠、可扩展：技术的变化只发生在外圈，核心模块的公共 API 不因第三方库、宿主或存储的变化而变化。

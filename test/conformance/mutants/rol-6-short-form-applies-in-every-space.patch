@@ -1,0 +1,17 @@
+# Rule: ROL-6
+# Mutant: a permission that is not spaced carries no condition
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..a676b118 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -170,7 +170,7 @@ object RoleExpansion {
+     ) = PolicyDefinition(
+         id = PolicyId(PolicyDocumentCompiler.permissionPrefix(owner) + permission.id),
+         attachable = false,
+-        condition = if (group.spaced) null else DEFAULT_SPACE_ONLY,
++        condition = null,
+         statements = listOf(StatementSource(permission.id, Effect.ALLOW, actions, permission.resources)),
+     )
+ 

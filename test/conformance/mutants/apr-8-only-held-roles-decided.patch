@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
-index 7fd35bfe..88f1f3c9 100644
+index 5779a98f..cc73924a 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
-@@ -161,7 +161,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
+@@ -164,7 +164,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
          if (held !is Decision.Permit) {
              return held
          }
@@ -14,4 +14,4 @@ index 7fd35bfe..88f1f3c9 100644
 +        return held
      }
  
-     private suspend fun decideOn(
+     @OptIn(InternalCoSecApi::class)

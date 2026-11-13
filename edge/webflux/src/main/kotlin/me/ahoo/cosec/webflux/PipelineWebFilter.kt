@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
@@ -38,6 +41,7 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 /** Reads a WebFlux exchange into the facts the pipeline decides on (RFC 0006 §5.3.1), once, without blocking. */
+@InternalCoSecApi
 object HttpFactsReader {
     fun read(
         exchange: ServerWebExchange,
@@ -77,6 +81,7 @@ object HttpFactsReader {
  * goes on on `Dispatchers.Default` ([ResumeDispatcher]), never on a client library's I/O thread. A client that goes
  * away cancels the subscription, and so the coroutine: no outcome exists, and nothing is written.
  */
+@InternalCoSecApi
 abstract class ReactivePipelineBridge(
     val pipeline: RequestGate,
     private val contributors: List<BridgeContextContributor> = emptyList(),

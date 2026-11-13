@@ -26,13 +26,15 @@ import java.time.Instant
  * Both reads go through CoCache's async view. A local hit answers on the caller's thread without suspending (RFC 0006
  * T1); a miss reads Redis without blocking any thread and completes on CoCache's async pool, from which the pipeline
  * moves on (T2). The caches degrade a failed read, as [CoSecCacheSpecs.revokedToken] sets them to: it is a miss, so
- * the token counts as not revoked, the documented exception to failing closed.
+ * the token counts as not revoked, the documented exception to failing closed. An id that names no key (an unpaired
+ * surrogate, [RevokedTokenCache.key], RC1-52) is no failed read: it throws, before Redis is asked.
  */
 internal class CoCacheRevocationReader @JvmOverloads constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null,
 ) : RevocationReader {
-    override suspend fun isRevoked(tokenId: String): Boolean = cache.async().get(tokenId).await() == true
+    override suspend fun isRevoked(tokenId: String): Boolean =
+        cache.async().get(RevokedTokenCache.key(tokenId)).await() == true
 
     /** Null without [subjectCache]: then no principal's tokens can have been revoked through this store. */
     override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? {

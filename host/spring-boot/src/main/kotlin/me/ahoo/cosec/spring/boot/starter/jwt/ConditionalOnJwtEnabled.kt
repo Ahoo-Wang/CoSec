@@ -13,20 +13,30 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
+import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
+import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Conditional
+import org.springframework.context.annotation.ConfigurationCondition
 
 /**
- * Conditional On CoSec Enabled.
+ * On `cosec.jwt.enabled`. Unset, it follows `cosec.pipeline.mode`: on where the host verifies tokens itself, off on a
+ * service behind a gateway, which verifies none (it issues them only when it turns this on).
  *
  * @author ahoo wang
  */
-@ConditionalOnProperty(
-    value = [ConditionalOnJwtEnabled.ENABLED_KEY],
-    matchIfMissing = true,
-    havingValue = "true",
-)
+@Conditional(OnJwtEnabled::class)
 annotation class ConditionalOnJwtEnabled {
     companion object {
         const val ENABLED_KEY = JwtProperties.PREFIX + ENABLED_SUFFIX_KEY
     }
+}
+
+internal class OnJwtEnabled : AnyNestedCondition(ConfigurationCondition.ConfigurationPhase.PARSE_CONFIGURATION) {
+    @ConditionalOnProperty(value = [ConditionalOnJwtEnabled.ENABLED_KEY], havingValue = "true")
+    class TurnedOn
+
+    @ConditionalOnEnforceMode
+    @ConditionalOnProperty(value = [ConditionalOnJwtEnabled.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+    class Enforcing
 }

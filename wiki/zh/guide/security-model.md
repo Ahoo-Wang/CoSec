@@ -119,7 +119,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 
 有两项检查在其后端失败时让请求通过，因为在这两处失败即拒绝会把一次 Redis 故障变成全面故障，而换来的保护很少：
 
-- **令牌吊销的降级读取。** 吊销存储无法读取时，吊销缓存的降级读取（CoSec 为它们设置的 `read-failure: degrade`）回答“未吊销”。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。只有这种降级读取才会把令牌当作未吊销：吊销检查报告的错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。控制面在发布时以同样方式读取审批人的吊销，这时暴露窗口受审批的有效期 `cosec.control.approval.expire-after`（72 小时）限制，而不是令牌的有效期；读取以其他方式失败时，什么都不发布（`503`）（[测试策略](../policies/testing.md#approval)）。
+- **令牌吊销的降级读取。** 吊销存储无法读取时，吊销表的降级读取（CoSec 为它们声明的 `unknown-read: absent`）回答“未吊销”。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。只有这种降级读取才会把令牌当作未吊销：吊销检查报告的错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。控制面在发布时以同样方式读取审批人的吊销，这时暴露窗口受审批的有效期 `cosec.control.approval.expire-after`（72 小时）限制，而不是令牌的有效期；读取以其他方式失败时，什么都不发布（`503`）（[测试策略](../policies/testing.md#approval)）。
 - **未设置 `strictFailure` 的限流规则。** 规则无法计数时（限流器失败、超时或缺失），该规则被跳过。设置了 `"strictFailure": true` 的规则则以 `503` 拒绝请求。限流只作用于策略已经放行的请求，跳过一条规则不会授予策略没有授予的权限（[限流](../policies/rate-limiting.md)）。
 
 默认情况下没有其他失败即放行的地方。还有一种失效只在你有意写出时存在：带 `onMissing: nomatch` 的 DENY，见下文。
@@ -185,7 +185,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 |---|---|---|
 | 主体 id、属性、角色和附加策略 | 已校验令牌的声明，或你的 `MembershipProvider`。API key 只给出它的主体、租户和属性 `apiKeyId`；它的角色总是来自提供者，再按 key 的上限收窄 | 签发凭证的一方，以及运行成员关系数据源的一方 |
 | 租户 | 凭证（`tenantId` 声明、API key 必填的租户）；令牌没有时为 `(0)`。匿名请求永远在 `(0)` | 签发凭证的一方 |
-| 应用 | 有宿主应用时取它（声明不同的 `CoSec-App-Id` 会被拒绝）：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`；否则取 `CoSec-App-Id` | 你的配置，或客户端 |
+| 应用 | 凭证的应用（令牌的 `aud`、API key 的 `app`）；宿主有应用时必须是它：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`。匿名请求取宿主的应用 | 签发凭证的一方，以及你的配置 |
 | 空间 | `CoSec-Space-Id`，仅当主体在该空间有角色时接受 | 客户端，限凭证中的空间 |
 | 设备 | `CoSec-Device-Id` | 客户端 |
 | 方法、路径、查询 | HTTP 请求；路由映射把方法和路径变成动作和资源 | 客户端，限于你的路由映射 |
@@ -199,7 +199,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 - **租户。** 永远取凭证中的租户。客户端不换凭证就无法切换租户。
 - **空间。** 只有主体在声明的空间中至少有一个角色时才接受；否则拒绝请求（`SPACE_NOT_MEMBER`），绝不退回默认空间。`*` 永远不是空间。不带 `CoSec-Space-Id` 时，请求位于默认空间。匿名主体没有角色，因此只能位于默认空间。
-- **应用。** 有宿主应用时，使用宿主的应用，声明了其他应用的请求被拒绝（`APP_MISMATCH`）。宿主应用在网关上是路由元数据 `cosec-app-id`，优先于 `cosec.authorization.scope.app-id`；在其他宿主上就是这个属性。没有宿主应用时，按客户端声明的应用原样使用。不能作为应用 id 的声明（空白、`*`、含 `:` 或控制字符、或超过 128 个字符：与租户 id 的规则相同）在两种情况下都会被拒绝。应用在空间之前检查。
+- **应用。** 配置了应用的宿主只服务声明该应用的凭证；声明其他应用或未声明应用的凭证被拒绝（`APP_MISMATCH`）。宿主应用在网关上是路由元数据 `cosec-app-id`，优先于 `cosec.authorization.scope.app-id`；在其他宿主上就是这个属性。没有宿主应用时取凭证的应用，未声明应用的凭证不读取应用文档。客户端从不声明应用。凭证声明的应用不能作为应用 id（空白、`*`、含 `:` 或控制字符、或超过 128 个字符：与租户 id 的规则相同）时，在两种情况下都会被拒绝。应用在空间之前检查。
 - 匹配是精确的：不去除空白，不忽略大小写。
 
 被拒绝的作用域即为 Deny：匿名调用方返回 `401`，已认证调用方返回 `403`（`scope-rejected`）。
@@ -208,6 +208,8 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`；
 - 在面向多个应用的网关上，用元数据 `cosec-app-id` 为每条路由指定它的应用（[网关](../integration/web.md#gateway)）。路由没有指定、网关也没有宿主应用时，请让各应用的路由映射和资源互不重叠，或为每个应用的前缀加一条平台 DENY，例如对 `http:path:/orders/**` 拒绝 `http:*`，条件为 `{"not": {"eq": ["scope.app", "order"]}}`。
+
+**路由映射决定哪些语句适用。**一个请求只有一个动作。匹配了服务[路由映射](../integration/web.md#route-maps)中某条路由的请求，是该路由在类型化资源上的 `service:verb`；其他请求是 `http:path:<path>` 上的 `http:<METHOD>`。`http:` 上的语句永远不匹配已映射的请求，`service:verb` 上的语句永远不匹配未映射的请求，[限流规则](../policies/rate-limiting.md#rules)的匹配方式也一样。所以映射是决策的一个输入，由拥有该服务的团队掌管：加一条路由，就把它的请求移出了 `http` 命名空间，也就移出了任何写在 `http:` 上的平台 DENY 或限流的作用范围。不论路径是否被映射都必须生效的限制，要写两次，一次针对 `http` 形式，一次针对动作（[按业务动作授权](../scenarios/route-maps.md)）。目前没有针对请求路径的条件，无法一次写完。
 
 **客户端 IP。** `max-trusted-index` 是应用前面的代理数量；默认值 `1` 假定有一个代理。CoSec 从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你的代理追加的那一条。在客户端可直接访问的宿主上，请设置为 `0`，否则客户端可以在该请求头里写入任意地址（[代理之后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 
@@ -220,7 +222,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 - 网关在每个请求上删除客户端发来的 `CoSec-Identity`，不受它自身配置的影响，并且只在已认证主体的 Permit 上设置它。所以经过网关的请求要么带着网关验证过的身份（以及它做决策时的作用域），要么不带。
 - 其他任何能向该服务发请求的人，都可以冒充任意主体、租户和角色。让服务只能从网关访问：网络策略、私有网络或双向 TLS（[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)）。
 - 网关只把这个头发给接收身份的路由：指向已注册服务的路由（`lb://`），或元数据为 `cosec-identity: true` 的路由（[转发身份](../integration/web.md#forwarding-the-identity)）。
-- 这个头没有签名，也不指明受众：**信任边界是网关与服务之间的网络**，而不是这个头。任何能向服务发请求的人都能写出一个，收到它的服务也可以把它重放给另一个服务。服务拒绝签发时间早于 `cosec.pipeline.gateway.max-age`（60 秒）加 `cosec.authentication.revocation.skew` 的头，以及凭证已过期的头，回答 `401` `token-expired`，所以在网络内截获的头只能在这段时间内重放。读不出或出现两次的头是 `400`，从不当作匿名。没有这个头的请求是匿名的。签名或受众会是这个头的新成员，因而是它的新版本（`v`）；8.0 两者都没有。
+- 这个头没有签名，也不指明受众：**信任边界是网关与服务之间的网络**，而不是这个头。任何能向服务发请求的人都能写出一个，收到它的服务也可以把它重放给另一个服务。服务拒绝签发时间早于 `cosec.pipeline.identity.max-age`（60 秒）加 `cosec.authentication.revocation.skew` 的头，以及凭证已过期的头，回答 `401` `token-expired`，所以在网络内截获的头只能在这段时间内重放。读不出或出现两次的头是 `400`，从不当作匿名。没有这个头的请求是匿名的。签名或受众会是这个头的新成员，因而是它的新版本（`v`）；8.0 两者都没有。
 - 按策略决策的服务会在处理器看到请求之前移除客户端发来的 `CoSec-Identity`，因此它不会把这样的头转递给它调用的服务。
 - 服务看到的就是网关决策时用的内容，仅此而已：那一个作用域的角色，没有策略，只有 `cosec.gateway.identity.claims` 列出的声明。
 
@@ -283,9 +285,14 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`，客户端可直接访问的宿主设为 `0`。
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`，在面向多个应用的网关的每条路由上设置 `cosec-app-id`。
 - 在网关上，只给指向你自己服务、又不是 `lb://` 的路由标上 `cosec-identity: true`，并把 actuator 放在管理端口上。
-- 以 `maxmemory-policy noeviction` 运行 Redis（[存储](../operations/storage.md)）。
+- 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能撤销或恢复令牌。
+  通过 TLS 连接 Redis（`rediss://`，或 `spring.data.redis.ssl.enabled`），让中间网络上的任何人都无法读取或篡改实例读到的
+  内容；并给控制面和数据面实例使用[谁可以写哪些 key](../operations/storage.md#who-may-write-which-keys) 中的用户：实例只读文档。
+- 以 `maxmemory-policy noeviction` 运行 Redis，并从主节点读取（[Redis 要求](../operations/storage.md#redis-requirements)）。
+- 用一条平台限流规则按租户限制控制 API（[限流](../policies/rate-limiting.md#the-control-api)）。
 - 在任何人需要 break-glass 之前注册一个 REQUIRED 决策监听器。
 - 必须始终生效的 DENY 放在没有条件的策略里，并且永远不要基于客户端写入的请求头授权。
+- 路径上的平台 DENY 或限流，既要针对 `http` 形式写，也要针对路由映射赋予该路径的每个动作写：[已映射的路由不是 `http` 请求](#trust-boundaries)。
 - 用于防滥用的限流规则，如果 Redis 故障时也不能失效，请设置 `"strictFailure": true`。
 - 只从用户无法影响的来源签发 `(platform)` 令牌。
 - 让每个 gateway 模式的服务只能从网关访问。

@@ -14,25 +14,10 @@
 package me.ahoo.cosec.api.context
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.tenant.TenantCapable
 
-/**
- * Security context containing information about the current user/request.
- *
- * This interface provides access to:
- * - The current principal (user)
- * - The tenant information
- * - Custom attributes for passing data between components
- *
- * The security context is typically populated during authentication
- * and remains available throughout the request lifecycle.
- *
- * @see CoSecPrincipal
- * @see TenantCapable
- * @see Authorization
- */
 /** The validated scope of a request (RFC 0004 §4.6): its app, its space, and the principal's roles there. */
 interface SecurityScope {
+    /** Empty when the request is in no app. */
     val appId: String
 
     /** Empty for the default space. */
@@ -42,66 +27,38 @@ interface SecurityScope {
     val roles: List<String>
 }
 
-interface SecurityContext : TenantCapable {
-    /**
-     * Key for storing/retrieving SecurityContext from request attributes.
-     */
-    companion object {
-        const val KEY = "COSEC_SECURITY_CONTEXT"
-    }
+/**
+ * What the gateway in front of this service says about the request, in a service behind one
+ * (`cosec.pipeline.mode=gateway`).
+ */
+class ForwardedIdentity(
+    /** The gateway's `CoSec-Request-Id`, to correlate this request with the gateway's audit record. */
+    val gatewayRequestId: String,
+    /** The id of the token or API key the caller authenticated with at the gateway, never its value. */
+    val credentialId: String,
+)
 
-    /**
-     * Custom attributes for storing additional context data.
-     * These attributes can be used to pass data between different
-     * components during the authorization process.
-     */
-    val attributes: MutableMap<String, Any>
+/**
+ * Who the current request is and in what scope, as the pipeline decided it. Read-only: an application reads it, and
+ * nothing it could set reaches a decision.
+ *
+ * @see CoSecPrincipal
+ */
+interface SecurityContext {
+    /** The tenant the request is in, `(0)` for the default one. */
+    val tenantId: String
 
-    /**
-     * The current principal (user) making the request.
-     *
-     * @see CoSecPrincipal
-     */
+    /** The principal making the request. */
     val principal: CoSecPrincipal
 
-    /**
-     * The scope the request was authorized in, as `ScopeResolver` validated it (RFC 0004 X6): read it rather than the
-     * `CoSec-App-Id` and `CoSec-Space-Id` headers, which are what the client declared. Null outside the 8.0 pipeline.
-     */
-    val scope: SecurityScope? get() = null
+    /** The scope the request was authorized in, as `ScopeResolver` validated it (RFC 0004 X6). */
+    val scope: SecurityScope
 
-    /**
-     * Gets an attribute value by key.
-     *
-     * @param attributeKey The attribute key
-     * @return The attribute value, or null if not found
-     */
-    fun <V> getAttributeValue(attributeKey: String): V? {
-        @Suppress("UNCHECKED_CAST")
-        return attributes[attributeKey] as V?
-    }
+    /** Null unless this service sits behind a gateway that forwarded the caller's identity. */
+    val forwardedIdentity: ForwardedIdentity?
 
-    /**
-     * Gets a required attribute value, throwing if not found.
-     *
-     * @param attributeKey The attribute key
-     * @return The attribute value
-     * @throws IllegalArgumentException if the attribute is not found
-     */
-    fun <V> getRequiredAttributeValue(attributeKey: String): V = requireNotNull(getAttributeValue(attributeKey))
-
-    /**
-     * Sets an attribute value.
-     *
-     * @param attributeKey The attribute key
-     * @param value The value to set
-     * @return This security context for chaining
-     */
-    fun setAttributeValue(
-        attributeKey: String,
-        value: Any
-    ): SecurityContext {
-        attributes[attributeKey] = value
-        return this
+    companion object {
+        /** The request attribute an adapter stores the context under. */
+        const val KEY = "COSEC_SECURITY_CONTEXT"
     }
 }

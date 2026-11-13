@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -136,7 +137,12 @@ class ShadowWindowTest {
             PipelineComponents(
                 authenticator = Authenticator {
                     AuthnResult.Authenticated(
-                        AuthenticatedPrincipal(PrincipalId("bob"), TenantId("acme"), NO_MEMBERSHIPS),
+                        AuthenticatedPrincipal(
+                            PrincipalId("bob"),
+                            TenantId("acme"),
+                            NO_MEMBERSHIPS,
+                            app = PipelineControlAuthorizer.CONTROL_APP
+                        ),
                         "token"
                     )
                 },
@@ -368,6 +374,7 @@ class ShadowWindowTest {
         val candidate = store.candidate(StoreFixtures.ACME)!!
         store.putCandidate(
             StoreFixtures.ACME,
+            store.stagedCandidate(StoreFixtures.ACME)!!.digest,
             me.ahoo.cosec.runtime.shadow.StoredCandidate(candidate.window, 7, candidate.document)
         )
         val one = Instance("one")

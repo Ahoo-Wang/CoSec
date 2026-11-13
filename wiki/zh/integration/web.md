@@ -85,7 +85,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 ## 路由映射 {#route-maps}
 
-路由映射为服务的每条路由指定一个动作和一个类型化资源，策略因此可以说 `order/42` 上的 `order:read`，而不是 `GET /orders/42`。WebFlux 和 WebMvc 宿主加载 `cosec.authorization.routes.location` 中列出的路由映射（默认 `classpath:cosec-routes.json`；可用逗号分隔多个）：
+路由映射为服务的每条路由指定一个动作和一个类型化资源，策略因此可以说 `order/42` 上的 `order:read`，而不是 `GET /orders/42`。WebFlux 和 WebMvc 宿主加载 `cosec.authorization.routes.location` 中列出的路由映射（可用逗号分隔多个；未设置时不加载）：
 
 ```json
 {
@@ -98,13 +98,14 @@ CoSec 授权的路径是应用内的请求路径：
 ```
 
 - 路由匹配方法与其 `method` 完全相同、路径匹配其 `path` 模式的请求。资源模板中的 `{变量}` 取自路径的捕获值。
-- 没有路由匹配的请求保留动作 `http:<METHOD>` 和资源 `http:path:<path>`。针对 `service:verb` 动作的语句永远覆盖不到它：没有任何路由会退回通配符。
-- 路由映射要么整体加载，要么完全不加载。位置不存在、文件格式错误（字段未知或缺失、键重复、值类型错误）、某条路由格式错误，或两条路由可能匹配同一个请求（方法相同、路径无法证明互不相交），都会导致启动失败并给出位置。若有意不使用路由映射，把该属性设为空值。
+- 没有路由匹配的请求保留动作 `http:<METHOD>` 和资源 `http:path:<path>`。针对 `service:verb` 动作的语句永远覆盖不到它：没有任何路由会退回通配符。反过来也一样：`http:` 上的语句或限流规则永远覆盖不到已映射的请求，平台写的也不例外（[按业务动作授权](../scenarios/route-maps.md)）。
+- 路由映射要么整体加载，要么不加载。位置不存在、文件格式错误（未知或缺失的字段、重复的 key、类型错误的值）、文件没有路由、路由格式错误，或者两条路由可能匹配同一个请求（方法相同且路径不能证明互斥），都会使启动失败并指出位置。
+- 该配置项未设置时宿主不加载路由映射，除非 `classpath:cosec-routes.json` 存在：这时启动失败，直到配置项指明该文件，或设为空值以明确不使用路由映射。启动日志会写明加载的每份映射、它的服务和路由条数，或者没有映射。
 - 为空或含有 `/`（解码后的 `%2F`）的捕获值不能作为类型化资源 id 的一段：请求以 `400` `invalid-request` 拒绝，绝不会被当作另一个资源求值。
 
 Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `http` 命名空间。
 
-使用 `cosec-openapi` 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据服务的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
+使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据 springdoc 扫描到的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
 
 ## 响应与状态码 {#responses-and-status-codes}
 
@@ -153,20 +154,21 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 ## 应用与空间 {#app-and-space}
 
-客户端通过请求头或同名查询参数发送 `CoSec-*` 参数：
+客户端通过请求头发送 `CoSec-*` 参数。同名查询参数不会被读取：URL 中的作用域会进入访问日志和 `Referer` 头。
 
 | 参数 | 含义 | 条件中的读取方式 |
 |---|---|---|
-| `CoSec-App-Id` | 请求所属的应用。有宿主应用时以宿主应用为准：在网关上是路由元数据 `cosec-app-id`，否则是 `cosec.authorization.scope.app-id`；此时不同的值会被拒绝。 | `scope.app` |
 | `CoSec-Space-Id` | 应用中的空间。仅当主体在该空间有角色时接受；为空表示默认空间。 | `scope.space`（以及该空间中的角色 `scope.roles`） |
 | `CoSec-Device-Id` | 调用方的设备。除非策略或黑名单读取它，否则仅供参考。 | `environment.device` |
 | `CoSec-Request-Id` | 仅限请求头：请求 id（[响应头](#response-headers)）。 | |
 
+客户端不声明请求属于哪个应用：`scope.app` 来自凭证和宿主（[应用](./authentication.md#apps)）。
+
 读取规则：
 
-- 请求头名称匹配时忽略大小写；查询参数名称精确匹配。
-- 同一参数可以发送多次，放在请求头、查询串或两者中都可以，只要所有值都相同。所有值都为空白（空字符串，或只有 ASCII 空白字符）时，视为没有发送该参数。
-- 任何位置出现两个不同的值，请求就有歧义：管道和你的处理器可能读到不同的作用域。这样的请求以 `400` `invalid-request` 拒绝。空白值与非空白值同时出现也算不同：读到空白值的处理器会处在默认空间。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如 `%E3%80%80`，`trim()` 会保留它）是一个值。`CoSec-*` 查询值含格式错误的百分号转义时同样拒绝。
+- 请求头名称匹配时忽略大小写。
+- 同一参数可以发送多次，只要所有值都相同。所有值都为空白（空字符串，或只有 ASCII 空白字符）时，视为没有发送该参数。
+- 两个不同的值会让请求有歧义：管道和你的处理器可能读到不同的作用域。这样的请求以 `400` `invalid-request` 拒绝。空白值与非空白值同时出现也算不同：读到空白值的处理器会处在默认空间。空白只指 ASCII 空白字符，因此由 Unicode 空格组成的值（例如不换行空格，`trim()` 会保留它）是一个值。
 - 永远不读取请求体：授权过滤器不读取请求体。
 
 `ScopeResolver` 如何检查应用和空间，以及客户端因此能控制什么，见[信任边界](../guide/security-model.md#trust-boundaries)。令牌如何携带 `role@space` 见[角色与空间](./authentication.md#roles-and-spaces)，角色绑定如何限定到应用和空间见[角色权限](../policies/role-permissions.md)。请从[安全上下文](#accessing-the-security-context)读取已校验的作用域，而不是读请求头：请求头只是客户端的声明。
@@ -178,11 +180,13 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | 成员 | 内容 |
 |---|---|
 | `principal.id` | 主体；匿名调用方为 `(0)`。 |
-| `tenant.tenantId` | 作用域的租户：主体的租户，匿名调用方为 `(0)`。 |
-| `principal.roles` | 主体在请求空间中的角色。 |
-| `principal.policies` | 主体的附加策略。 |
+| `principal.authenticated` | 主体是否由凭证证明。 |
+| `tenantId` | 作用域的租户：主体的租户，匿名调用方为 `(0)`。 |
 | `principal.attributes` | 凭证的属性（令牌的 `attributes` 声明；API key 则有 `apiKeyId`）。在网关之后：转发来的 `claims`。 |
 | `scope.appId`、`scope.spaceId`、`scope.roles` | `ScopeResolver` 校验后的作用域：应用、空间（默认空间为空）以及该空间中的角色。 |
+| `forwardedIdentity` | 在网关后面时为网关的请求 id 和调用方凭证的 id；否则为 null。 |
+
+上下文是只读的：应用设置的任何内容都不会影响决策。
 
 **WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
 
@@ -252,7 +256,7 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 - 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`；
 - 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还把校验过的身份转发给接收身份的路由（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的凭证，无论它在请求头、查询参数还是 cookie 中。
 
-**路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`），没有声明的请求属于路由的应用，该应用的角色绑定（包括其中的 DENY）随之生效。只有在没有 `cosec-app-id` 的路由上、且网关没有设置 `cosec.authorization.scope.app-id` 时，客户端声明的应用才生效。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。它的值必须是字符串：数字、布尔值、列表或映射不会按其文本读取，因此名为 `2024` 的应用要写成 `cosec-app-id: "2024"`。`cosec-app-id` 不是字符串、或不是合法应用 id 时，该路由的每个请求都会失败（`500`）。
+**路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`），属于路由应用的凭证获得该应用的角色绑定和 DENY（[应用](./authentication.md#apps)）。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。它的值必须是字符串：数字、布尔值、列表或映射不会按其文本读取，因此名为 `2024` 的应用要写成 `cosec-app-id: "2024"`。`cosec-app-id` 不是字符串、或不是合法应用 id 时，该路由的每个请求都会失败（`500`）。
 
 ```yaml
 spring:
@@ -333,29 +337,27 @@ spring:
 
 **失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、布尔值或上述数字（头不能精确表示的数字、`NaN` 和无穷大都算），或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
-**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。开头的 `$Version` 键值对用 `,` 藏了令牌的头整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
+**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及（无论网关自己是否读取它，见 `cosec.pipeline.allow-cookie-token`）每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。结果开头的空白会去掉，因为字段值不能以空白开头。开头的 `$Version` 键值对用 `,` 藏了令牌的头，或保留下来的 `$Version` 键值对会被挪到开头的头，整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 
-网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`），并且除非它也签发令牌，应设置 `cosec.jwt.enabled=false`：
+网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`）。这个模式下 JWT 默认关闭；也签发令牌的服务设置 `cosec.jwt.enabled=true`：
 
 ```yaml
 cosec:
   pipeline:
     mode: gateway
-  jwt:
-    enabled: false
 ```
 
-在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
+在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。仍留在 classpath 上的 `cosec-cocache` 不会被使用，因此不需要 Redis template 和 CoCache starter；设置 `cosec.jwt.enabled=true` 后，它用于保存本服务所签发令牌的吊销记录，此时启动要求两者都具备（[模块](../guide/introduction.md#modules)）。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
 
 | 请求 | 回应 |
 |---|---|
 | 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
 | 有效的身份 | 以该主体、在该作用域中继续。 |
-| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.gateway.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
+| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.identity.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
 | 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
-| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.gateway.max-age`（60 秒） | `401` `token-expired` |
+| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.identity.max-age`（60 秒） | `401` `token-expired` |
 
 这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。
 
@@ -363,22 +365,23 @@ cosec:
 
 | 成员 | 内容 |
 |---|---|
-| `principal.id`、`tenant.tenantId` | `sub` 和 `tenant`；没有身份时两者都是 `(0)`。 |
-| `principal.roles`、`scope.roles` | `roles`。 |
-| `principal.policies` | 空。 |
+| `principal.id`、`tenantId` | `sub` 和 `tenant`；没有身份时两者都是 `(0)`。 |
+| `scope.roles` | `roles`。 |
 | `principal.attributes` | `claims`。 |
 | `scope.appId`、`scope.spaceId` | `scope.app` 和 `scope.space`。 |
-| `attributes["cosec.identity.rid"]`、`attributes["cosec.identity.jti"]` | 网关的请求 id 和凭证的 id（`auth.jti`）。 |
+| `forwardedIdentity.gatewayRequestId`、`forwardedIdentity.credentialId` | 网关的请求 id 和凭证的 id（`auth.jti`）。 |
+
+转发的身份在这里就是凭证，它的应用就是它声明的应用：配置了应用的服务会拒绝声明其他应用或未声明应用的身份（`400` `invalid-request`）。
 
 ## 控制面路由 {#control-plane-routes}
 
 启用 `cosec-control`（以及 `cosec-cocache`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
 
 - **先经过管道。** 控制请求对宿主来说是普通请求：你的文档必须放行它（例如对已认证调用方放行 `http:path:/cosec/control/v1/**` 上的 `http:POST`），否则它会像其他请求一样被拒绝。在平台文档发布之前，每个请求（包括控制路由）都是 `503`，因此第一份平台文档要通过 `cosec-migrate publish` 发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。
-- **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
+- **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`，两种栈上都在读取请求体之前。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
 - **请求体大小。** 在 WebMvc 上最多读取 `cosec.control.http.max-body-size`（默认 `16MB`）；更大的请求体返回 `400` `invalid-request`，且不会被读取。在 WebFlux 上，请求体受 Spring 的 `spring.codec.max-in-memory-size`（默认 256 KB）限制：在接收大文档的控制面宿主上请调大它。
 - **网关宿主。** 网关的全局过滤器只作用于网关路由，因此 starter 额外添加一个只作用于基础路径的 `PipelineWebFilter`。控制路由像在 WebFlux 宿主上一样被授权；网关的路由仍由网关过滤器处理。
 
-控制 API 以相同格式回应 problem，类型除上文所列外还有它自己的：`not-found`（`404`）、`conflict`（`409`）、`gone`（`410`）、`precondition-failed`（`412`）、`unprocessable`（`422`）和 `precondition-required`（`428`）。`400`、`409`、`410`、`412`、`422` 和 `428` 会在 `detail` 成员中解释调用方自己的请求；`401`、`403`、`404`、`500` 和 `503` 不带任何细节，因此拒绝永远不会透露某个文档、变更或 DENY 是否存在。
+控制 API 以相同格式回应 problem，类型除上文所列外还有它自己的：`not-found`（`404`）、`conflict`（`409`）、`gone`（`410`）、`precondition-failed`（`412`）、`unprocessable`（`422`）和 `precondition-required`（`428`）。`400`、`409`、`410`、`412`、`422` 和 `428` 会在 `detail` 成员中解释调用方自己的请求；`401`、`403`、`404`、`500` 和 `503` 不带任何细节，因此拒绝永远不会透露某个文档、变更或 DENY 是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段，从不带异常消息；存储的文档或记录解码失败是 `500`。
 
 **下一步：** 签发、刷新和吊销适配器读取的令牌，见[认证](./authentication.md)。

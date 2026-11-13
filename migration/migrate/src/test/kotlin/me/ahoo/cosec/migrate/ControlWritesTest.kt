@@ -11,10 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
+import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.migrate.Fixtures7x.policy
@@ -26,9 +33,12 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -72,6 +82,54 @@ class ControlWritesTest {
         )!!.document.bindings.map { it.id.value }.assert().containsExactly("platform-admin-alice", "platform-admin-bob")
         // Bootstrapping a principal already bound writes nothing new.
         bootstrap.run(PrincipalId("bob"), force = true).assert().isEqualTo(2)
+    }
+
+    /** A store whose calls of [timingOut] time out inside it, once armed, as a call with its own timeout does. */
+    private inner class TimingOut : ControlStore by store {
+        @Volatile
+        var indexTimesOut = false
+
+        @Volatile
+        var recordsTimeOutFor: SnapshotKey? = null
+
+        override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+            if (indexTimesOut && store.head(key) != null) withTimeout(1L) { awaitCancellation() }
+            return store.putIndex(key, expected, index)
+        }
+
+        override suspend fun putRecord(key: SnapshotKey, document: SnapshotDocument): SnapshotDigest {
+            if (key == recordsTimeOutFor) withTimeout(1L) { awaitCancellation() }
+            return store.putRecord(key, document)
+        }
+    }
+
+    private fun platformOnly() =
+        Converter().convert(source(listOf("p" to policy("p"))), ConvertOptions(publishedAt = now)).documents
+
+    @Test
+    fun `a store timeout after the head write still lists the document as written - #1263`() {
+        val timing = TimingOut().apply { indexTimesOut = true }
+
+        val result = DocumentPublisher(timing, clock = clock).publish(platformOnly())
+
+        result.written.assert().containsExactly(SnapshotKey.Platform)
+        runBlocking { store.head(SnapshotKey.Platform).assert().isNotNull() }
+    }
+
+    @Test
+    fun `a store timeout before the head write is a failed write that says what was written - #1263`() {
+        val documents = platformOnly()
+        val app = SnapshotKey.App("order")
+        val more = documents + (app to PolicyDocument(DocumentKind.APP, "order", 1, now, emptyList(), emptyList()))
+        val timing = TimingOut().apply { recordsTimeOutFor = app }
+
+        val refused = assertThrownBy<PublishException> { DocumentPublisher(timing, clock = clock).publish(more) }
+
+        refused.hasMessageContaining(app.toString())
+        runBlocking {
+            store.head(SnapshotKey.Platform).assert().isNotNull()
+            store.head(app).assert().isNull()
+        }
     }
 
     @Test

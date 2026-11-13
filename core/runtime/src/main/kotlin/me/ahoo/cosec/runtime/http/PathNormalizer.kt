@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.io.ByteArrayOutputStream
 
 /**
- * The path every request is authorized on (RFC 0006 §5.3.1): the rules of `RequestPaths` in `cosec-core`, without
- * Spring's `UriUtils`, plus the last three below, which only reject more; `RequestPaths` goes with the 7.x pipeline at the
- * switch (RFC 0008 §4.4). Every rejection is 400 `invalid-request`.
+ * The path every request is authorized on (RFC 0006 §5.3.1), by the rules below and without Spring's `UriUtils`.
+ * Every rejection is 400 `invalid-request`.
  *
  * - `;` path parameters are removed from every segment: Spring's routing and servlet containers ignore them, so
  *   `/admin;x` reaches `/admin` and `/public/..;/admin` resolves to `/admin`.
@@ -53,6 +53,15 @@ object PathNormalizer {
         val path = withoutPathParameters(rawPath)
         return if (hasLongSegment(path) || isTraversal(path)) null else path
     }
+
+    /**
+     * Whether [text] is within the bounds a request's path is held to, [MAX_PATH_LENGTH] in all and [MAX_SEGMENT_LENGTH]
+     * per segment, counted as written, path parameters included: for what the control plane decides without a request
+     * (review L5 of #1200, RC1-41), a simulated, explained or analyzed resource, whose glob segments would otherwise
+     * cost the evaluation more than any request can.
+     */
+    @InternalCoSecApi
+    fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text)
 
     private fun hasLongSegment(path: String): Boolean {
         if (path.length <= MAX_SEGMENT_LENGTH) {

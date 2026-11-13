@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -156,9 +159,8 @@ class PipelineTest {
 
     @Test
     fun hostAppMismatchIsScopeRejected() = runTest {
-        pipeline(authenticator(authenticated())).evaluate(
-            facts(headers = mapOf("CoSec-App-Id" to listOf("other")), host = HostScope(AppId("orders")))
-        ).assertProblem(ProblemType.SCOPE_REJECTED)
+        pipeline(authenticator(authenticated())).evaluate(facts(host = HostScope(AppId("orders"))))
+            .assertProblem(ProblemType.SCOPE_REJECTED)
     }
 
     @ParameterizedTest
@@ -183,22 +185,23 @@ class PipelineTest {
     fun conflictingCoSecParameterIsInvalidRequest() = runTest {
         val engine = StubEngine(PERMIT)
         pipeline(engine = engine).evaluate(
-            facts(query = "CoSec-App-Id=b", headers = mapOf("CoSec-App-Id" to listOf("a")))
+            facts(headers = mapOf("CoSec-Device-Id" to listOf("a", "b")))
         ).assertProblem(ProblemType.INVALID_REQUEST)
         engine.requests.assert().isEmpty()
 
-        pipeline(
-            engine = engine
-        ).evaluate(facts(query = "CoSec-App-Id=a", headers = mapOf("CoSec-App-Id" to listOf("a"))))
+        pipeline(engine = engine).evaluate(facts(headers = mapOf("CoSec-Device-Id" to listOf("a", "a"))))
             .proceed.assert().isTrue()
-        engine.requests.single().scope.app.value.assert().isEqualTo("a")
+        engine.requests.single().request.environment.deviceId.assert().isEqualTo("a")
     }
 
     @Test
     fun engineReadsTheNormalizedRequest() = runTest {
         val engine = StubEngine(PERMIT)
         pipeline(authenticator(authenticated(claims("" to "admin"))), engine).evaluate(
-            facts(path = "/orders;jsessionid=1/1", query = "CoSec-Device-Id=phone&CoSec-App-Id=shop")
+            facts(
+                path = "/orders;jsessionid=1/1",
+                headers = mapOf("CoSec-Device-Id" to listOf("phone"))
+            )
         )
         val request = engine.requests.single()
         request.request.resource.id.assert().isEqualTo("/orders/1")
@@ -209,7 +212,6 @@ class PipelineTest {
         request.request.environment.requestId.assert().isEqualTo(GENERATED_ID)
         request.request.subject.id.assert().isEqualTo(PRINCIPAL.value)
         request.scope.tenant.assert().isEqualTo(TENANT)
-        request.scope.app.value.assert().isEqualTo("shop")
         request.scope.roles.map { it.value }.assert().containsExactly("admin")
     }
 
@@ -221,7 +223,6 @@ class PipelineTest {
         pipeline(authenticator(authenticated()), engine, LoadingViews(views::load)).evaluate(facts())
         val request = engine.requests.single()
         request.scope.tenant.assert().isEqualTo(TENANT)
-        request.request.subject.tenantId.assert().isEqualTo(TENANT.value)
         views.loads.single().tenant.assert().isEqualTo(TENANT)
     }
 
@@ -404,8 +405,6 @@ class PipelineTest {
             it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Known(provided) })
         }.evaluate(facts())
         outcome.proceed.assert().isTrue()
-        // The key holds none of the attachments, so the security context lists none.
-        outcome.security!!.securityContext.principal.policies.assert().isEmpty()
         val request = engine.requests.single()
         request.memberships.roles.assert().isEqualTo(mapOf(SpaceId.DEFAULT to setOf(RoleId("viewer"))))
         // The attachments reach the engine for their DENYs only (RC1-1): the subject has no principal bindings.
@@ -503,31 +502,48 @@ class PipelineTest {
     }
 
     @Test
-    fun credentialsAreReadLikeTheDefaultParser() = runTest {
+    fun credentialsAreReadFromTheHeaderThenTheAllowedFallbacks() = runTest {
         val seen = ArrayList<Credentials>()
         val recording = Authenticator {
             seen += it
             AuthnResult.Anonymous
         }
-        val query = PipelineOptions(allowQueryToken = true)
+        val cookie = mapOf("authorization" to listOf("cookie"))
+        val allowed = PipelineOptions(allowQueryToken = true, allowCookieToken = true)
         pipeline(recording).evaluate(facts())
-        pipeline(recording).evaluate(
-            facts(
-                headers = mapOf("Authorization" to listOf("header")),
-                cookies = mapOf("authorization" to listOf("cookie"))
-            )
+        pipeline(recording) { it.copy(options = allowed) }.evaluate(
+            facts(headers = mapOf("Authorization" to listOf("header")), cookies = cookie)
         )
         pipeline(
             recording
-        ).evaluate(facts(query = "authorization=query", cookies = mapOf("authorization" to listOf("cookie"))))
-        pipeline(recording) { it.copy(options = query) }.evaluate(
-            facts(query = "authorization=query", cookies = mapOf("authorization" to listOf("cookie")))
-        )
+        ) { it.copy(options = allowed) }.evaluate(facts(query = "authorization=query", cookies = cookie))
+        pipeline(recording) { it.copy(options = allowed) }.evaluate(facts(cookies = cookie))
+        pipeline(recording).evaluate(facts(query = "authorization=query"))
         pipeline(recording).evaluate(facts(headers = mapOf("x-api-key" to listOf("key"))))
 
-        seen.map { it.isEmpty }.assert().containsExactly(true, false, false, false, false)
-        seen.map { it.token }.assert().containsExactly(null, "header", "cookie", "query", null)
-        seen.map { it.apiKey }.assert().containsExactly(null, null, null, null, "key")
+        seen.map { it.isEmpty }.assert().containsExactly(true, false, false, false, true, false)
+        seen.map { it.token }.assert().containsExactly(null, "header", "query", "cookie", null, null)
+        seen.map { it.apiKey }.assert().containsExactly(null, null, null, null, null, "key")
         seen[1].toString().assert().doesNotContain("header")
+    }
+
+    /** `PIP-13`: a browser sends a cookie on its own, on a cross-site request too, so it is no credential by default. */
+    @Test
+    fun theAuthorizationCookieIsReadOnlyWhenAllowed() = runTest {
+        val seen = ArrayList<Credentials>()
+        val recording = Authenticator {
+            seen += it
+            AuthnResult.Anonymous
+        }
+        val cookie = mapOf("authorization" to listOf("cookie"))
+        pipeline(recording).evaluate(facts(cookies = cookie))
+        pipeline(
+            recording
+        ) { it.copy(options = PipelineOptions(allowQueryToken = true)) }.evaluate(facts(cookies = cookie))
+        pipeline(
+            recording
+        ) { it.copy(options = PipelineOptions(allowCookieToken = true)) }.evaluate(facts(cookies = cookie))
+
+        seen.map { it.token }.assert().containsExactly(null, null, "cookie")
     }
 }

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.control
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -24,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ControlMaintenance
 import org.springframework.context.SmartLifecycle
 import java.time.Duration
@@ -40,7 +43,7 @@ private val log = KotlinLogging.logger {}
  * [ControlMaintenance.reconcileApps] runs at start, without waiting for the first reclamation pass, and again with a
  * backoff until it succeeds once (RC1-4); until then the grant analysis reconciles before it trusts the app list.
  */
-class ControlMaintenanceScheduler(
+internal class ControlMaintenanceScheduler(
     private val maintenance: ControlMaintenance,
     private val reclaimInterval: Duration,
     private val shadowInterval: Duration,

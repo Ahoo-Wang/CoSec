@@ -31,22 +31,23 @@ principals of the `(platform)` tenant.
 | Start a shadow window, publish | `cosec:publish` |
 | Skip a shadow window | `cosec:skip-shadow` |
 | Approve, reject | `cosec:approve` |
-| `simulate`, `explain`, `analyze` | `cosec:simulate`, `cosec:explain`, `cosec:analyze` on the tenant document asked about |
+| `simulate`, `explain`, `analyze` | `cosec:simulate`, `cosec:explain` on the tenant document that decides the request (`(0)`'s for one without a principal); `cosec:analyze` on the tenant document asked about |
 
 `cosec:grant` is checked on the scope of each binding, `scope/<tenant>/<app>/<space>`: `*` for a binding of any
 app or any space, and `(default)` for the default space, so a policy that limits grants in the default space names
 `scope/acme/order/(default)`. Space ids beginning with `(` are CoSec's, so `(default)` is never a space of yours.
 
 Three built-in policies can be bound to operators: `cosec:platform-admin` (every action on every document),
-`cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` on its own
-tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` and `publish`).
+`cosec:tenant-admin` (`read`, `write`, `grant`, `publish`, `simulate`, `explain`, `analyze`, `shadow-read` and
+`skip-shadow` on its own tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant`, `publish` and
+`skip-shadow`).
 
 | Method and path | Does |
 |---|---|
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
-| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions. |
+| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, of the [expanded](./role-permissions.md#roles) documents, the `roles` as written, and `sections`: whether anything else differs (the catalog, limits, attributes, boundary or rate limits), compared by their content. |
 | `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |
@@ -56,9 +57,14 @@ tenant's document) and `cosec:tenant-viewer` (the same without `write`, `grant` 
 
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
-exists. A change whose record an earlier build wrote for an app that cannot be an app id no longer reads: showing or
-abandoning it is `409` `change-unreadable` to a platform principal who may read the platform document, whose detail says
-an operator removes its record and never repeats the stored id, and what a missing change is to anyone else. The control
+exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
+not one of MERGE, REPLACE.`), never an exception's message. A request whose path, query or body holds a string with an
+unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`), anywhere, is a `400` before its route reads it (`IDN-10`):
+a Redis key would write it as `?`, naming another id. A stored document or record that does not decode, such as
+one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
+of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
+trailing `/` or an empty segment is a `404`. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
+every caller (`SCP-10`). The control
 host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
 
@@ -71,7 +77,7 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id; a platform policy takes an id a tenant document already defines or binds, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:` or a control character, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
 | `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to (a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
@@ -105,18 +111,20 @@ change's candidate too:
 
 | Field | Meaning |
 |---|---|
-| `tenant` | Required. |
-| `principal` | The principal id; leave it out for an anonymous request. |
+| `tenant` | Required: the principal's tenant, the one the request is decided in. For an anonymous request, `(0)`. |
+| `principal` | The principal id; leave it out for an anonymous request, which enforcement decides on tenant `(0)`. |
 | `roles`, `policies` | The memberships, as token claims write them: `role` or `role@space`, and attached policy ids. |
 | `app`, `space` | The declared scope; the space is checked against the roles as on the data plane. |
 | `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). |
-| `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. |
+| `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. An `http` path is normalized as a request's path is: one enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per `/` segment) is `400`, and path parameters (`;v=2`) are removed. A typed id is held to the same lengths. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
 | `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |
 
 The answer has `enforced`, `candidate` when one was asked for, and `differs`. Each decision is `Permit`, `Deny`,
 `Indeterminate` (with its `cause`) or `Rejected` (the scope was refused), with the statement that decided (`by`) and the
 full trace of candidates. Statements from documents you may not read are left out and counted as `redacted`.
+`differs` compares what the two decisions say, a failure by its kind and message, so the same compile failure on both
+sides does not differ.
 
 A simulation reads the documents enforcement reads: the platform's, the tenant's, and the app's when the request has
 roles in its app or the tenant document binds one of that app's permission policies to `Anyone` or to a principal
@@ -125,12 +133,32 @@ adds such a binding reads the app document, one that removes the last of them no
 does not compile reads as unresolved, so its bindings make the request read no app document, as on the data plane;
 a `candidate` of a document the request did not read is `400`.
 
+A simulation is authorized and decided on the tenant the request's scope resolves to, whose document decides it: the
+principal's, or `(0)` for an anonymous request, as on the data plane. An anonymous request that names any other
+`tenant` is `400`, after `cosec:simulate` on `(0)` is checked; so an administrator of `acme` cannot use an anonymous
+request to read decisions on `(0)`'s document.
+
+A request that sends a header the documents it reads read (in a condition, a boundary or a rate limit key) twice with
+different values is `400`, as enforcement refuses it before deciding (`PIP-12`); identical repeats are one value. The
+answer does not name the header. A `resource` enforcement would refuse is `400` too, and `analyze` takes its resource the
+same way.
+
 A simulation has no token attributes and fetches no external attributes: a statement that reads `ext.*` finds it
 missing and follows its `onMissing`, so it is usually Indeterminate here.
 
+The control plane decodes and compiles each stored document once for its content: a repeated `simulate`, `explain` or
+`analyze` on the same heads compiles nothing again, and a head that moves is compiled when it is next read. A
+`candidate` is compiled once per call, and so is a retained revision `explain` decides at. What is kept is bounded by
+an estimate of its heap, 64 MB: a document weighs its stored size times 4 decoded, and times 8 more for each compiled
+form (one per platform document it compiled with, at most two), so a tenant document of 1 MB stored weighs 12 MB. A
+document that would weigh more than half of that, over about 2.7 MB stored, is never kept: it is decoded and compiled
+on each call that reads it, as a candidate is, so it never pushes the other documents out. Limit the control API per
+tenant to bound what such a document costs. To bound what one caller's calls cost, limit the control API per tenant
+([Rate limiting](./rate-limiting.md#the-control-api)).
+
 ## Debugging a decision with explain
 
-`explain` takes the same `request` and, optionally, `at`: the document revisions a decision used, as its audit event
+`explain` takes the same `request`, authorized and checked as `simulate`'s, and, optionally, `at`: the document revisions a decision used, as its audit event
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
 kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
 document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
@@ -169,9 +197,11 @@ A change is a set of entry operations on one document, made on the revision you 
 | `removeBinding` | `id`, optional `ifMatch` | Removes a binding. |
 | `putRateLimit` | `rateLimit`, optional `ifMatch` | Adds the rate limit rule, or replaces the one with its id where it stands. |
 | `removeRateLimit` | `id`, optional `ifMatch` | Removes a rate limit rule. |
+| `putRole` | `role`, optional `ifMatch` | Adds the role, or replaces the one with its id as a whole. App and tenant documents. |
+| `removeRole` | `id`, optional `ifMatch` | Removes a role. |
 | `putCatalog` | `catalog` | Sets an app document's catalog; without `catalog`, removes it. |
-| `setLimits` | `limits` with all six limits | Sets the platform's limits; without `limits`, back to the defaults. |
-| `setAttributes` | `attributes` | Sets the platform's declared attributes; without `attributes`, removes them. |
+| `setLimits` | `limits` with all six limits, each a positive integer as in a document | Sets the platform's limits; without `limits`, back to the defaults. A value of another type is a `400`. |
+| `setAttributes` | `attributes`, an array as in a document | Sets the platform's declared attributes; without `attributes`, removes them. Anything but an array of attributes is a `400`. |
 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
@@ -201,7 +231,9 @@ flowchart LR
 ```
 
 A document has at most one staged change (`SHADOWING`, `AWAITING_APPROVAL` or `READY`); staging another is a `409`
-until that one is published, abandoned, rejected or expired. A change that is not finished expires
+until that one is published, abandoned, rejected or expired. A change is staged before it takes the slot, so a call
+still writing its candidate holds the slot too; one that cannot write it, or is cancelled, gives the slot back and the
+change is `CHECKED` again. A change that is not finished expires
 `cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
 read after that, and the control plane's maintenance pass reads every open change each
 `cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
@@ -253,9 +285,16 @@ fails closed on it.
 A window compares decisions, so a change that touches only [rate limit rules](./rate-limiting.md#publishing-rules)
 shows no difference there.
 
+An instance writes its report of a window every `cosec.authorization.shadow.report-interval` (10 seconds) while the
+window's candidate is staged. Once the candidate is withdrawn (the window closed, or the change was abandoned,
+rejected, published or preempted), it writes the report once more and forgets the window; the report expires 8 days
+after that last write. A change withdraws only its own candidate: when another change has taken the slot and staged
+its own meanwhile, that one stays (`CTL-26`).
+
 `POST /changes/{id}:skip-shadow` with a `reason` stages a `CHECKED` change without a window; it needs
-`cosec:skip-shadow`, and the revision records that the window was skipped. A change that only creates or revokes
-break-glass bindings has no window.
+`cosec:skip-shadow`, and the revision records that the window was skipped. `cosec:tenant-admin` holds it on its own
+tenant's document only (`CTL-27`). Skipping a window changes nothing about approval: what the analysis cannot prove the
+operator holds still waits for it. A change that only creates or revokes break-glass bindings has no window.
 
 ### Taking a busy slot
 
@@ -420,7 +459,9 @@ goes back to `AWAITING_APPROVAL` and nothing is published. If the document moved
 document's staging slot meanwhile, the change is `CONFLICTED`; if the candidate no longer compiles against the current
 documents, it is `DRAFT` with the findings. A publish whose revision was written but whose answer was lost is
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
-finishes what followed the write, and records the events as the publisher the revision names.
+finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
+the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
+publishing the change again settles it without adding a revision.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane
@@ -441,11 +482,15 @@ publish as any change. Which revisions are kept, and how long, is in [Storage](.
 ```
 
 The answer lists `allows` and `denies`: every binding (in the platform, tenant and, when `app` is given, app document)
-whose scope fits the query and whose policy has a statement matching the action and resource, with its document,
+that can apply in the tenant asked about, whose scope fits the query and whose policy has a statement matching the
+action and resource, with its document,
 subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
 not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
-`hidden`, and bindings to policies in them in `opaque`. Attachments are not listed: they depend on each principal's
-memberships.
+`hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
+app's permission policies, as enforcement does, when you may read the app's document. Attachments are not listed: they depend on each principal's
+memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
+that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
+tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.
 
 ## Policies in CI
 
@@ -462,12 +507,12 @@ val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platf
 val acme = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", File("tenant-acme.json").readBytes())
 // The platform's limits and declared attributes, as the control plane checks a candidate.
 val compiler = PolicyDocumentCompiler.forPlatform(platform)
-compiler.compile(platform)
-compiler.compile(acme)
+compiler.validate(platform)
+compiler.validate(acme)
 compiler.checkReferences(acme, platform)
 ```
 
-`decode` throws `SnapshotFormatException` and `compile` throws `DocumentCompileException`, with every error and its
+`decode` throws `SnapshotFormatException` and `validate` throws `DocumentCompileException`, with every error and its
 JSON path.
 
 ### Testing decisions
@@ -546,8 +591,13 @@ documents as JSON text.
 | `description` | Free text. |
 | `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
-| `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `app`, `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
+| `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
 | `expect` | `decision`: `Permit`, `Deny`, `Indeterminate` or `Rejected`, with `by` (the deciding statement; `null` for the implicit deny), `cause` or `reason`. |
+
+`http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
+`Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API
+names (the engine, JUnit's `DynamicTest` and Jackson's `JsonNode` in `evaluate(JsonNode)`): the dependency above is all
+an application declares.
 
 Only the fields `expect` names are compared: `{"decision": "Permit"}` passes whichever statement permits, and `by`
 pins one, compared whole. A misspelt field is an error, not ignored.
@@ -558,5 +608,43 @@ not compile in the kit, and no provider runs, so a statement that reads `ext.*` 
 `onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied.
 Decisions that depend on external values can be tried with [`simulate`](#simulating-a-request), which compiles
 against the control host's providers.
+
+### Testing your code against a real pipeline
+
+Where `PolicyTestKit` asserts what your documents decide, `PipelineFixture` runs the rest of the request around that
+decision: a real `Pipeline` over the compiler, snapshot source and engine every instance runs, from your documents. Use
+it when the code under test reads the permitted request's `SecurityContext`, or a handler's outcome depends on the
+status and problem CoSec answers. It is `@ExperimentalCoSecApi`, like the rest of the test kit.
+
+```kotlin
+@file:OptIn(ExperimentalCoSecApi::class)
+
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.testkit.PipelineFixture
+import org.junit.jupiter.api.Test
+import java.nio.file.Path
+
+class OrderPermissionsTest {
+    private val reader = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+
+    @Test
+    fun `a reader may read`() = runBlocking {
+        PipelineFixture.load(Path.of("src/test/resources/policies/documents")).use { fixture ->
+            val request = fixture.request("GET", "/orders/1", reader)
+            check(fixture.evaluate(request).status == 200)
+            // What a handler reads for the permitted request; further checks go through the same pipeline.
+            val context = fixture.securityContext(request)
+            check(AuthorizationChecker(fixture.pipeline).check(context, "http:DELETE", "/orders/1").not())
+        }
+    }
+}
+```
+
+`PipelineFixture.of(platform, apps, tenants)` takes documents as JSON text. A document that does not compile fails when
+the fixture is built. `Principal` says who a request is, as a token would: `tenant`, `roles` (`role` or `role@space`),
+`policies`, `app` and `attributes`; without one, a request is anonymous. It replaces the credential check only: the
+status codes, `SecurityContext` and decisions are the pipeline's. Close the fixture, usually one per test class.
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

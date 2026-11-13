@@ -18,8 +18,8 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 
 /**
- * The built-in authenticator (RFC 0006 §5.3.2): a request that carries an API key is judged by [apiKey] alone, as on
- * the 7.x path; any other request by [token]. A rejected key never falls back to the token, so presenting a bad key
+ * The built-in authenticator (RFC 0006 §5.3.2): a request that carries an API key is judged by [apiKey] alone; any other
+ * request by [token]. A rejected key never falls back to the token, so presenting a bad key
  * cannot be retried with another credential in the same request.
  *
  * Without [apiKey], an API key is not read and the request goes to [token].

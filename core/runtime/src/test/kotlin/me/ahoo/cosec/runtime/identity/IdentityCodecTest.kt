@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.identity
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
@@ -114,6 +117,25 @@ class IdentityCodecTest {
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
         reason(header("""{"v":1,${valid.replace("\"exp\":2", "\"exp\":253402300800")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
+    }
+
+    /**
+     * RC1-52, `IDN-10`: a JSON escape can write an unpaired surrogate (`"\uD800"`), which a Redis key would write as `?`.
+     * An identity naming one in any of its ids is malformed, never the principal or tenant with `?` in its place.
+     */
+    @Test
+    fun `an id with an unpaired surrogate is refused as malformed`() {
+        val valid = """"tenant":"acme","sub":"alice","scope":{"app":"shop","space":"team"},"roles":["clerk"],""" +
+            """"auth":{"method":"jwt","jti":"t1","exp":2},"iat":1,"rid":"r1""""
+        for (id in listOf("acme", "alice", "shop", "team", "clerk", "jwt", "t1", "r1")) {
+            for (escape in listOf("\\uD800", "\\uDC00")) {
+                reason(header("""{"v":1,${valid.replace("\"$id\"", "\"$id$escape\"")}}""")).assert().describedAs(id)
+                    .isEqualTo(IdentityFormatException.Reason.MALFORMED)
+            }
+        }
+        // A surrogate pair, escaped, is one character like any other.
+        IdentityCodec.decode(header("""{"v":1,${valid.replace("\"alice\"", "\"alice\\uD83D\\uDE00\"")}}"""))
+            .subject.assert().isEqualTo("alice\uD83D\uDE00")
     }
 
     /** RFC 0010 C3: a method this release does not know is read as it is, so a newer gateway's authenticator works. */

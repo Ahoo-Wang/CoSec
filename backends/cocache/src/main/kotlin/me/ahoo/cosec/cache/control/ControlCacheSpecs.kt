@@ -15,12 +15,10 @@
 
 package me.ahoo.cosec.cache.control
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.Codec
-import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
-import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -35,6 +33,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -60,7 +59,7 @@ internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  *
  * | Cache | Redis key |
  * |---|---|
- * | revision records | `<p>:control:revision:<docKey>:<digest>` |
+ * | revision records | `<p>:control:revision:<docKey>:SHA-256:<hex>` |
  * | revision index | `<p>:control:revisions:<docKey>` |
  * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
  * | leases | `<p>:control:lease:<name>` |
@@ -69,112 +68,94 @@ internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * | change requests | `<p>:control:change:<changeId>` |
  * | staging slots | `<p>:control:stage:<docKey>` |
  *
- * All of them are [storeOfRecord] (`ttl = null`, failed reads throw), applied last: records and indexes are not data-plane
- * policy data, but reading a failure as "absent" would let the control plane publish on a wrong base (RFC 0007 §5.2).
- * Leases expire through the lifetime of each write instead. Keys and values are encoded explicitly, without reflection.
+ * Digests in keys and values are [SnapshotDigest]'s text form, `SHA-256:<hex>`.
+ *
+ * All of them are [storeOfRecord] `Store`s, locked by [CoSecCacheSpecs.locks] (`ttl` forever, failed reads throw):
+ * records and indexes are not data-plane policy data, but reading a failure as "absent" would let the control plane
+ * publish on a wrong base (RFC 0007 §5.2). Leases expire through the lifetime of each write instead. Keys and values are
+ * encoded explicitly, without reflection.
  */
 internal object ControlCacheSpecs {
-    fun revisionRecord(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<RevisionRecordKey, SnapshotDocument> =
-        CacheSpec.builder<RevisionRecordKey, SnapshotDocument>(CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(RevisionRecordKeyEncoder)
-            .codec(SnapshotDocumentCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun revisionRecord(keyPrefix: String = CoSec.COSEC): StoreSpec<RevisionRecordKey, SnapshotDocument> =
+        storeOfRecord(
+            CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME,
+            keyPrefix,
+            RevisionRecordKeyEncoder,
+            SnapshotDocumentCodec,
+        ).build()
 
-    fun revisionIndex(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<SnapshotKey, RevisionIndex> =
-        CacheSpec.builder<SnapshotKey, RevisionIndex>(CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(RevisionIndexCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun revisionIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, RevisionIndex> =
+        storeOfRecord(
+            CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME,
+            keyPrefix,
+            SnapshotKeyEncoder,
+            RevisionIndexCodec
+        ).build()
 
-    fun referenceIndex(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<ReferenceKey, Set<SnapshotKey>> =
-        CacheSpec.builder<ReferenceKey, Set<SnapshotKey>>(CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(ReferenceKeyEncoder)
-            .codec(SnapshotKeySetCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun referenceIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<ReferenceKey, Map<SnapshotKey, Long>> =
+        storeOfRecord(
+            CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+            keyPrefix,
+            ReferenceKeyEncoder,
+            ReferrersCodec,
+        ).build()
 
-    fun changeRequest(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT,
-    ): CacheSpec<ChangeId, ChangeRequest> =
-        CacheSpec.builder<ChangeId, ChangeRequest>(CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it.value }
-            .codec(ChangeRequestCacheCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun changeRequest(keyPrefix: String = CoSec.COSEC): StoreSpec<ChangeId, ChangeRequest> =
+        storeOfRecord(
+            CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<ChangeId> { it.value },
+            ChangeRequestCacheCodec,
+        ).build()
 
-    fun stage(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<SnapshotKey, StageSlot> =
-        CacheSpec.builder<SnapshotKey, StageSlot>(CoSecCacheSpecs.STAGE_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.STAGE_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(StageSlotCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun stage(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, StageSlot> =
+        storeOfRecord(CoSecCacheSpecs.STAGE_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, StageSlotCodec).build()
 
     /** What [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read: each entry with when it was listed. */
-    fun list(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, Map<String, Instant>> =
-        CacheSpec.builder<String, Map<String, Instant>>(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(ListedCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun list(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Map<String, Instant>> =
+        storeOfRecord(
+            CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            ListedCodec
+        ).build()
 
     /** What [CoCacheControlStore.apps] reads: one value, under the key [CoCacheControlStore]'s `APP_LIST`. */
-    fun appList(
-        keyPrefix: String = CoSec.COSEC,
-        policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<String, AppList> =
-        CacheSpec.builder<String, AppList>(CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(AppListCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun appList(keyPrefix: String = CoSec.COSEC): StoreSpec<String, AppList> =
+        storeOfRecord(
+            CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            AppListCodec
+        ).build()
 
-    fun lease(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, String> =
-        CacheSpec.builder<String, String>(CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME)
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(StringCodec)
-            .policy(policy.storeOfRecord())
-            .build()
+    fun lease(keyPrefix: String = CoSec.COSEC): StoreSpec<String, String> =
+        storeOfRecord(
+            CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
+            keyPrefix,
+            KeyEncoder<String> { it },
+            StringCodec
+        ).build()
 }
 
-/** `<docKey>:<digest>`. Document keys never contain a second `:`, so the encoding is injective. */
+/**
+ * `<docKey>:<digest>`, the digest as `SHA-256:<hex>`. A document key ends before the first `:` after its kind (ids hold
+ * no `:`), so the encoding is injective.
+ */
 internal object RevisionRecordKeyEncoder : KeyEncoder<RevisionRecordKey> {
     override fun encode(key: RevisionRecordKey): String = "${SnapshotKeyEncoder.encode(key.document)}:${key.digest}"
 }
 
 /** `<docKey>:<policyId>`: the document key ends before the first `:` after its kind, so policy ids may contain `:`. */
 internal object ReferenceKeyEncoder : KeyEncoder<ReferenceKey> {
-    override fun encode(key: ReferenceKey): String = "${SnapshotKeyEncoder.encode(key.target)}:${key.policy.value}"
+    /** A policy id with an unpaired surrogate names no key: the Redis key would write it as `?` (RC1-52, `IDN-10`). */
+    override fun encode(key: ReferenceKey): String {
+        require(Identifiers.isWellFormed(key.policy.value)) {
+            "Policy [${Identifiers.printable(key.policy.value)}] names no reference key: an unpaired UTF-16 surrogate " +
+                "would share it with another policy."
+        }
+        return "${SnapshotKeyEncoder.encode(key.target)}:${key.policy.value}"
+    }
 }
 
 private val factory = JsonNodeFactory.instance
@@ -206,8 +187,8 @@ private fun JsonNode.instant(what: String): Instant = try {
 
 private fun JsonNode.digest(what: String): SnapshotDigest {
     val text = text(what)
-    if (!DIGEST.matches(text)) malformed(what, "[$text] is not a digest")
-    return SnapshotDigest(ByteArray(text.length / 2) { text.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() })
+    if (!SnapshotDigest.isDigest(text)) malformed(what, "[$text] is not a digest")
+    return SnapshotDigest.parse(text)
 }
 
 private fun JsonNode.long(what: String): Long =
@@ -228,10 +209,11 @@ private fun JsonNode.only(what: String, vararg names: String) {
     if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
 }
 
-private val DIGEST = Regex("^[0-9a-f]{40}$")
-private const val HEX = 16
-
-/** A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`. */
+/**
+ * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
+ * records are left to delete, so that an index with none carries no field a reader that does not know it would
+ * refuse: the decoders of the stored formats reject unknown fields.
+ */
 internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
 
@@ -250,12 +232,15 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
             ).put("since", it.since.toString())
         }
         root.put("floor", value.floor)
+        if (value.reclaiming.isNotEmpty()) {
+            root.putArray("reclaiming").apply { value.reclaiming.forEach { add(it.toString()) } }
+        }
         return CoSecJson.mapper.writeValueAsBytes(root)
     }
 
     override fun decode(bytes: ByteArray): RevisionIndex {
         val root = read(bytes, WHAT)
-        root.only(WHAT, "entries", "pending", "floor")
+        root.only(WHAT, "entries", "pending", "floor", "reclaiming")
         return try {
             RevisionIndex(
                 entries = root.field("entries", WHAT).items(WHAT).map { entry ->
@@ -274,6 +259,7 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
                     )
                 },
                 floor = root.field("floor", WHAT).long(WHAT),
+                reclaiming = root.get("reclaiming")?.items(WHAT)?.map { it.digest(WHAT) }.orEmpty(),
             )
         } catch (error: IllegalArgumentException) {
             throw SnapshotFormatException("The $WHAT is malformed: ${error.message}", error)
@@ -295,37 +281,30 @@ internal object StageSlotCodec : Codec<StageSlot> {
     override fun decode(bytes: ByteArray): StageSlot = ChangeRequestCodec.decodeSlot(bytes)
 }
 
-/** A set of document keys as a sorted JSON array of their encodings, so equal sets have equal bytes and digests. */
-internal object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
+/**
+ * The referrers of one policy as a JSON object of their encodings, sorted, each with the revision of it that last
+ * indexed the reference (#1207): `{"tenant:acme": 3}`. Equal referrers have equal bytes and digests.
+ */
+internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
     private const val WHAT = "back-reference set"
 
-    override fun encode(value: Set<SnapshotKey>): ByteArray {
-        val array = factory.arrayNode()
-        value.map(SnapshotKeyEncoder::encode).sorted().forEach(array::add)
-        return CoSecJson.mapper.writeValueAsBytes(array)
+    override fun encode(value: Map<SnapshotKey, Long>): ByteArray {
+        val node = factory.objectNode()
+        value.entries.map { (key, revision) -> SnapshotKeyEncoder.encode(key) to revision }.sortedBy { it.first }
+            .forEach { (key, revision) -> node.put(key, revision) }
+        return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
-    /**
-     * A member that is an app key earlier builds wrote and the app id rule now refuses is skipped, with a WARN (R3-1 of
-     * #1194's review): such a document can no longer be read or published, and so can never drop its own reference,
-     * while one such member would make every write and check of the set fail. Dropping it is safe: an extra referrer
-     * only ever blocks a deletion. Anything else that is not a document key is still malformed.
-     */
-    override fun decode(bytes: ByteArray): Set<SnapshotKey> =
-        read(bytes, WHAT).items(WHAT).mapNotNullTo(LinkedHashSet()) { item ->
-            val text = item.text(WHAT)
-            SnapshotKeyEncoder.decode(text) ?: if (SnapshotKeyText.isUnnamedApp(text)) {
-                log.warn {
-                    "A back-reference set names [${SnapshotKeyText.printable(text)}], which no document key can name " +
-                        "(SCP-7): that member is skipped."
-                }
-                null
-            } else {
-                malformed(WHAT, "[$text] is not a document key")
-            }
+    /** Anything but the object form, a member that is not a document key, or a negative revision, is malformed. */
+    override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
+        val root = read(bytes, WHAT)
+        if (!root.isObject) malformed(WHAT, "$root is not an object")
+        return root.properties().associateTo(LinkedHashMap()) { (text, revision) ->
+            val value = revision.long(WHAT)
+            if (value < 0) malformed(WHAT, "revision $value of [$text] is negative")
+            (SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")) to value
         }
-
-    private val log = KotlinLogging.logger {}
+    }
 }
 
 /**

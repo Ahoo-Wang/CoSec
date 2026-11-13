@@ -1,0 +1,17 @@
+{
+  "description": "No statement mentions /admin.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/admin"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

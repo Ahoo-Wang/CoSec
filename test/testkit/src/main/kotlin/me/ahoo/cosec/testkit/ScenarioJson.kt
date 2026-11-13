@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Path
@@ -33,7 +36,7 @@ class ScenarioFormatException(message: String) : IllegalStateException(message)
 @ExperimentalCoSecApi
 class DocumentException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 object ScenarioJson {
     private val mapper = JsonMapper.builder().build()
 
@@ -42,41 +45,41 @@ object ScenarioJson {
     fun parse(text: String): JsonNode = mapper.readTree(text)
 }
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.required(field: String): JsonNode =
     get(field) ?: throw ScenarioFormatException("Missing field '$field' in $this")
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.text(): String {
     if (!isString) throw ScenarioFormatException("Expected a string, found $this")
     return asString()
 }
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.textOrNull(): String? = if (isNull) null else text()
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.bool(): Boolean {
     if (!isBoolean) throw ScenarioFormatException("Expected a boolean, found $this")
     return asBoolean()
 }
 
 /** A string or an array of strings. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.strings(): List<String> = if (isArray) values().map { it.text() } else listOf(text())
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.fields(): Map<String, JsonNode> {
     if (!isObject) throw ScenarioFormatException("Expected an object, found $this")
     return properties().associate { it.key to it.value }
 }
 
 /** Fails on a field outside [allowed], so a misspelt field is an error rather than ignored. */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.only(vararg allowed: String) {
     val unknown = fields().keys - allowed.toSet()
     if (unknown.isNotEmpty()) throw ScenarioFormatException("Unknown fields $unknown in $this")
 }
 
-@ExperimentalCoSecApi
+@InternalCoSecApi
 fun JsonNode.instant(): Long = Instant.parse(text()).toEpochMilli()

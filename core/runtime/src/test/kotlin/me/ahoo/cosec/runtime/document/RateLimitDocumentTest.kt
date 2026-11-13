@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -62,7 +65,7 @@ class RateLimitDocumentTest {
             SnapshotKey.Tenant("acme"),
             stored(rule)
         ).rateLimits.single().id.assert().isEqualTo("tenant:acme/login")
-        compiler.compile(SnapshotKey.Platform, stored(rule)).rateLimits.single().id.assert().isEqualTo("login")
+        compiler.compile(SnapshotKey.Platform, stored(rule)).rateLimits.single().id.assert().isEqualTo("platform/login")
     }
 
     @Test

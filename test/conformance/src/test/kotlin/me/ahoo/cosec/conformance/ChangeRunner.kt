@@ -15,13 +15,19 @@
 
 package me.ahoo.cosec.conformance
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.selects.select
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.api.EntryChanges
 import me.ahoo.cosec.control.api.SimulatedRequest
 import me.ahoo.cosec.control.api.SnapshotVersion
 import me.ahoo.cosec.control.audit.ChangeEvent
@@ -37,11 +43,13 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ShadowOptions
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
@@ -51,9 +59,11 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
@@ -68,6 +78,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.testkit.ScenarioFormatException
@@ -116,11 +127,17 @@ import java.time.Instant
  *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
  *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
+ *            { "staged": "tenant:acme" },      // the change whose candidate the document stages: `staged c2`, `staged none`
  *            { "revokeBreakGlass": { "change": "c2", "by": "rita", "binding": "glass" } },  // DELETE /break-glass/glass
  *            { "revoke": "t1" },               // that token is revoked; { "revokeTokens": "pia" }: every token of pia's
  *            { "provide": { "operator": "dave", "roles": [] } },   // what the provider answers for dave from now on
- *            { "unaudited": true } ],          // later steps run on an instance without a REQUIRED change listener
- *  operations also take { "putRateLimit": { ...a rule... } }, { "removeRateLimit": "id" } and { "setBoundary": "id" | null }
+ *            { "unaudited": true },            // later steps run on an instance without a REQUIRED change listener
+ *            { "late": { "abandon": "c1" } } ], // the step runs until it withdraws a candidate, which waits until the
+ *                                              // next step has run (#1227); its result is the step's
+ *  operations also take { "putRateLimit": { ...a rule... } }, { "removeRateLimit": "id" }, { "setBoundary": "id" | null },
+ *  { "putRole": { ...a role... } }, { "removeRole": "id" } and { "putCatalog": { ...a catalog... } | null }
+ *  { "diff": { "document": "tenant:acme", "from": 1, "to": 2 } } is the diff of two revisions, as a line of what it lists:
+ *  `diff policies=[+p] bindings=[+b,-c] roles=[~r] sections=false`
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
@@ -134,6 +151,14 @@ import java.time.Instant
  * Shadow windows (RFC 0007 §6.4) close as soon as `shadowed` looks at them unless `options.shadow` sets their bounds;
  * a `report` step writes an instance's cumulative report of a change's current window, as its reporter would.
  */
+/** A `late` step: its candidate withdrawals wait for [release] (#1227). */
+private class Late : kotlin.coroutines.AbstractCoroutineContextElement(Late) {
+    val paused = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+
+    companion object Key : kotlin.coroutines.CoroutineContext.Key<Late>
+}
+
 object ChangeRunner : ScenarioRunner {
     val NOW = Instant.parse("2026-11-01T00:00:00Z")
     val NONE = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
@@ -147,7 +172,18 @@ object ChangeRunner : ScenarioRunner {
     /** One scenario's control plane, operators and steps. */
     private class Run(private val node: JsonNode) {
         private val clock = MutableClock(NOW)
-        private val store = InMemoryControlStore(clock)
+        private val memory = InMemoryControlStore(clock)
+
+        /** The store, whose candidate withdrawals inside a `late` step wait for its [Late.release]. */
+        private val store = object : ControlStore by memory {
+            override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean {
+                currentCoroutineContext()[Late]?.let { late ->
+                    late.paused.complete(Unit)
+                    late.release.await()
+                }
+                return memory.withdrawCandidate(key, window)
+            }
+        }
         val revisions = Revisions(store, clock)
 
         /** The roles the membership provider answers, by operator; a `provide` step changes them. */
@@ -277,12 +313,42 @@ object ChangeRunner : ScenarioRunner {
             node.get("documents")?.let { bootstrap(revisions, it) }
         }
 
-        suspend fun steps(): Outcome {
-            val results = node.required("steps").values().map { step ->
+        suspend fun steps(): Outcome = coroutineScope {
+            val results = ArrayList<String>()
+            var late: Pair<Late, kotlinx.coroutines.Deferred<String>>? = null
+            for (step in node.required("steps").values()) {
                 val (action, argument) = step.fields().entries.singleOrNull()
                     ?: throw ScenarioFormatException("A step is one action: $step")
-                result(action, argument)
+                if (action == "late") {
+                    if (late != null) throw ScenarioFormatException("A late step follows another: $step")
+                    val (inner, innerArgument) = argument.fields().entries.singleOrNull()
+                        ?: throw ScenarioFormatException("A late step is one action: $step")
+                    val hold = Late()
+                    val running = async(hold) { result(inner, innerArgument) }
+                    // Until it waits to withdraw a candidate, or ends without one.
+                    select {
+                        hold.paused.onAwait {}
+                        running.onAwait {}
+                    }
+                    results += ""
+                    late = hold to running
+                    continue
+                }
+                results += result(action, argument)
+                late?.let { (hold, running) ->
+                    hold.release.complete(Unit)
+                    results[results.size - 2] = running.await()
+                }
+                late = null
             }
+            late?.let { (hold, running) ->
+                hold.release.complete(Unit)
+                results[results.size - 1] = running.await()
+            }
+            outcome(results)
+        }
+
+        private suspend fun outcome(results: List<String>): Outcome {
             val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
             val escalations = named.keys.associateWith { id -> changes.get(ChangeId(id)).escalations.map { it.reason } }
                 .filterValues { it.isNotEmpty() }
@@ -298,15 +364,44 @@ object ChangeRunner : ScenarioRunner {
             "explain" -> explain(argument)
             in CREDENTIAL_STEPS -> credentials(action, argument)
             "revokeBreakGlass" -> revoke(argument)
-            "rateLimits" -> {
-                val head = revisions.head(documentKey(argument.text()))
-                "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
-            }
+            "diff", "staged", "rateLimits" -> read(action, argument)
             else -> try {
                 step(action, argument).also { named[it.id.value] = it }.state.name
             } catch (error: ChangeRejectedException) {
                 "refused ${error.status}"
+            } catch (_: SnapshotFormatException) {
+                "malformed"
             }
+        }
+
+        /** What a step reads of the documents, without changing them. */
+        private suspend fun read(action: String, argument: JsonNode): String = when (action) {
+            "diff" -> diff(argument)
+            "staged" -> "staged " + (memory.candidate(documentKey(argument.text()))?.window?.substringBefore('@') ?: "none")
+            else -> {
+                val head = revisions.head(documentKey(argument.text()))
+                "rateLimits " + head?.document?.rateLimits.orEmpty().joinToString(",", "[", "]") { it.id }
+            }
+        }
+
+        private suspend fun diff(argument: JsonNode): String {
+            argument.only("document", "from", "to")
+            val plane = DefaultControlPlane(
+                changes,
+                revisions,
+                ChangeAuthority(ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }),
+            )
+            val found = plane.diff(
+                PLATFORM,
+                documentKey(argument.required("document").text()),
+                argument.required("from").longValue(),
+                argument.required("to").longValue(),
+            )
+            fun line(entries: EntryChanges): String = (
+                entries.added.map { "+$it" } + entries.removed.map { "-$it" } + entries.changed.map { "~$it" }
+                ).joinToString(",", "[", "]")
+            return "diff policies=${line(found.policies)} bindings=${line(found.bindings)} " +
+                "roles=${line(found.roles)} sections=${found.sections}"
         }
 
         /** What happens around the control plane between steps: time passes, an instance vanishes, an outage. */
@@ -618,8 +713,17 @@ object ChangeRunner : ScenarioRunner {
             "putRateLimit" -> Operation.PutRateLimit(PolicyDocumentCodec.decodeRateLimit(value))
             "removeRateLimit" -> Operation.RemoveRateLimit(value.text())
             "setBoundary" -> Operation.SetBoundary(if (value.isNull) null else PolicyId(value.text()))
-            else -> throw ScenarioFormatException("Unknown operation $name")
+            else -> otherOperation(key, kind, name, value)
         }
+    }
+
+    private fun otherOperation(key: SnapshotKey, kind: DocumentKind, name: String, value: JsonNode): Operation = when (name) {
+        // As the control API's request bodies write it: what it refuses is the step's `malformed` (CTL-28).
+        "wire" -> ChangeRequestCodec.operation(key, value)
+        "putRole" -> Operation.PutRole(PolicyDocumentCodec.decodeRole(value, kind))
+        "removeRole" -> Operation.RemoveRole(RoleId(value.text()))
+        "putCatalog" -> Operation.PutCatalog(if (value.isNull) null else PolicyDocumentCodec.decodeCatalog(value))
+        else -> throw ScenarioFormatException("Unknown operation $name")
     }
 
     fun documentKey(text: String): SnapshotKey = when {

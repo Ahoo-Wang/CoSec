@@ -39,4 +39,21 @@ class RateLimitTest {
         result.limit.assert().isEqualTo(1)
         result.remaining.assert().isZero()
     }
+
+    private fun remaining(permitsPerSecond: Double, estimate: Double, allowed: Boolean = true): Long =
+        RateLimit(permitsPerSecond).resultOf(allowed, estimate, nowMillis = 0).remaining
+
+    /** #1260: the next request is allowed while the count is below the quota, so a part of a permit left is a permit. */
+    @Test
+    fun remainingCountsAPartOfAPermitAsAPermit() {
+        remaining(permitsPerSecond = 2.5, estimate = 0.0).assert().isEqualTo(2)
+        remaining(permitsPerSecond = 2.0, estimate = 0.5).assert().isEqualTo(1)
+    }
+
+    @Test
+    fun remainingIsZeroOnceTheQuotaIsSpent() {
+        remaining(permitsPerSecond = 2.0, estimate = 1.0).assert().isZero()
+        remaining(permitsPerSecond = 2.0, estimate = 1.5).assert().isZero()
+        remaining(permitsPerSecond = 2.0, estimate = 2.0, allowed = false).assert().isZero()
+    }
 }

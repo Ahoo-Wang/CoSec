@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.CallLog
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.MatcherException
@@ -43,7 +46,6 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -271,16 +273,16 @@ fun flatRequest(
         attachments.map(::PolicyId),
     )
     val resolution = ScopeResolver.resolve(
-        ScopeSubject(TenantId(tenant), authenticated, memberships),
-        DeclaredScope(app, space),
+        ScopeSubject(TenantId(tenant), authenticated, memberships, app.ifEmpty { null }),
+        space,
         HostScope(null),
     )
     val scope = (resolution as ScopeResolution.Resolved).scope
     val base = request(blocked = blocked)
     val subject =
-        Subject(principal, tenant, authenticated, emptySet(), emptySet(), emptyMap(), false, principalBindings, breakGlass)
+        Subject(principal, authenticated, emptyMap(), principalBindings, breakGlass)
     val resource = Resource("http", path, emptyMap())
-    val authz = AuthzRequest(subject, base.scope, base.action, resource, base.environment)
+    val authz = AuthzRequest(subject, base.action, resource, base.environment)
     return FlatRequest(authz, scope, memberships, time, Probes)
 }
 

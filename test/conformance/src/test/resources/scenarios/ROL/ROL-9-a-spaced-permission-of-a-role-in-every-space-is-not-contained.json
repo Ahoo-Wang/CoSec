@@ -1,0 +1,113 @@
+{
+  "rules": [
+    "ROL-9"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A role without a space grants ship in every space; a role alice holds in one space cannot cover that.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "held",
+            "permissions": [
+              "ship"
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "held@wh-01"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRole": {
+              "id": "helper",
+              "app": "wms",
+              "permissions": [
+                "ship"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_COVERED"
+      ]
+    }
+  }
+}

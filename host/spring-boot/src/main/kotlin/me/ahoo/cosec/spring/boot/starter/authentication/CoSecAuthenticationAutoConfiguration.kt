@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
@@ -37,18 +36,23 @@ import org.springframework.context.annotation.Primary
 @EnableConfigurationProperties(
     LoginProperties::class,
 )
-class CoSecAuthenticationAutoConfiguration {
+internal class CoSecAuthenticationAutoConfiguration {
+    /**
+     * This context's own registry of its own beans (#1222). The composites depend on this bean, so `getBeansOfType`
+     * leaves them out as beans in creation: a composite in the registry would dispatch to itself.
+     */
     @Bean
     @ConditionalOnMissingBean
     fun authenticationProvider(
         applicationContext: ApplicationContext
     ): AuthenticationProvider {
+        val authenticationProvider = DefaultAuthenticationProvider()
         applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
             @Suppress("UNCHECKED_CAST")
-            it as Authentication<Credentials, CoSecPrincipal>
-            DefaultAuthenticationProvider.register(it)
+            it as Authentication<Credentials>
+            authenticationProvider.register(it)
         }
-        return DefaultAuthenticationProvider
+        return authenticationProvider
     }
 
     @Bean

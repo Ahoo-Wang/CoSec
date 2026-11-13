@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Match
@@ -33,7 +36,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * Compiling checks only what the index relies on: unique ids, which subjects each kind of document binds, the shape of
  * break-glass bindings, that every binding can apply to some request, and references a platform document cannot leave
  * open. The checks between documents (tenant isolation, the principal binding limit) belong to the snapshot compiler
- * (`PolicyDocumentCompiler` in `cosec-core`). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
+ * (`PolicyDocumentCompiler` in `cosec-runtime`). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
  * platform update never recompiles them (§3 I5), and a policy the platform no longer has makes the request
  * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2). For the same reason a tenant policy whose id the
  * platform also defines is found per request, and makes it [me.ahoo.cosec.model.decision.Cause.AmbiguousPolicy]
@@ -43,6 +46,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * only ALLOW statements, at most [MAX_BOUNDARY_STATEMENTS], and no binding or attachment can reach it. The platform
  * names a default boundary, a tenant document may name another; the platform tenant has none.
  */
+@InternalCoSecApi
 class CompiledDocument private constructor(
     val kind: DocumentKind,
     /** The tenant id of a tenant document, the app id of an app document; empty for the platform. */
@@ -86,7 +90,7 @@ class CompiledDocument private constructor(
     /** Tenant id → principal id → the other principal bindings, by binding id. */
     private val principals: Map<String, Map<String, Array<BoundEntry>>>
 
-    /** Role id → role bindings, in document order (the 7.x grant order). */
+    /** Role id → role bindings, in document (grant) order. */
     private val roles: Map<String, Array<BoundEntry>>
 
     /** The ids of the break-glass bindings. */
@@ -107,35 +111,45 @@ class CompiledDocument private constructor(
         require(boundary == null || kind != DocumentKind.PLATFORM || boundary in boundaries) {
             "The default boundary $boundary is not a boundary policy of the platform document"
         }
-        val anyone = ArrayList<BoundEntry>()
-        val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
-        val principals = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
-        val roles = LinkedHashMap<String, ArrayList<BoundEntry>>()
-        val ruleIds = HashSet<String>()
-        for (rule in rateLimits) {
-            require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
-        }
-        val slots = repeatSlots(bindings)
-        val ids = HashSet<String>()
-        for (binding in bindings) {
-            require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
-            val entry = entry(binding, slots[binding.policy.value] ?: NOT_REPEATED)
-            when (val subject = binding.subject) {
-                SubjectRef.Anyone -> anyone += entry
-                is SubjectRef.Principal -> {
-                    val index = if (binding.breakGlass) breakGlass else principals
-                    index.getOrPut(subject.tenant.value, ::HashMap).getOrPut(subject.id.value, ::ArrayList) += entry
-                }
-
-                is SubjectRef.Role -> roles.getOrPut(subject.id.value, ::ArrayList) += entry
+        if (bindings.isEmpty() && rateLimits.isEmpty()) {
+            // Nothing published for the tenant or app: a view builds one of these per request, so it holds no collections.
+            this.anyone = NO_ENTRIES
+            this.breakGlass = emptyMap()
+            this.principals = emptyMap()
+            this.roles = emptyMap()
+            this.breakGlassIds = emptySet()
+            this.repeats = 0
+        } else {
+            val anyone = ArrayList<BoundEntry>()
+            val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
+            val principals = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
+            val roles = LinkedHashMap<String, ArrayList<BoundEntry>>()
+            val ruleIds = HashSet<String>()
+            for (rule in rateLimits) {
+                require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
             }
+            val slots = repeatSlots(bindings)
+            val ids = HashSet<String>()
+            for (binding in bindings) {
+                require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
+                val entry = entry(binding, slots[binding.policy.value] ?: NOT_REPEATED)
+                when (val subject = binding.subject) {
+                    SubjectRef.Anyone -> anyone += entry
+                    is SubjectRef.Principal -> {
+                        val index = if (binding.breakGlass) breakGlass else principals
+                        index.getOrPut(subject.tenant.value, ::HashMap).getOrPut(subject.id.value, ::ArrayList) += entry
+                    }
+
+                    is SubjectRef.Role -> roles.getOrPut(subject.id.value, ::ArrayList) += entry
+                }
+            }
+            this.anyone = anyone.sortedWith(BY_POLICY_THEN_ID).toTypedArray()
+            this.breakGlass = breakGlass.sortedById()
+            this.principals = principals.sortedById()
+            this.roles = roles.mapValues { it.value.toTypedArray() }
+            this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
+            this.repeats = slots.size
         }
-        this.anyone = anyone.sortedWith(BY_POLICY_THEN_ID).toTypedArray()
-        this.breakGlass = breakGlass.sortedById()
-        this.principals = principals.sortedById()
-        this.roles = roles.mapValues { it.value.toTypedArray() }
-        this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
-        this.repeats = slots.size
     }
 
     /**
@@ -262,8 +276,10 @@ class CompiledDocument private constructor(
 
     internal fun role(role: String): Array<BoundEntry>? = roles[role]
 
+    @InternalCoSecApi
     companion object {
         private const val NOT_REPEATED = -1
+        private val NO_ENTRIES = emptyArray<BoundEntry>()
 
         // Plain comparators: kotlin.comparisons is not among the packages the engine may use (EnginePurityTest).
         private val BY_ID = Comparator<BoundEntry> { a, b -> a.via.id.value.compareTo(b.via.id.value) }
@@ -344,7 +360,7 @@ class CompiledDocument private constructor(
         const val MAX_GLOB_UNITS: Int = 2048
 
         /**
-         * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.
+         * The platform document: `Anyone` bindings (policies of every principal, anonymous ones included), break-glass bindings and the shared policies.
          * The blacklist rule and the root policy are added, and so are the control-plane policies (RFC 0007 §7.3), which
          * the platform's and the tenants' bindings may name; every binding must name a policy defined here.
          * [boundaries] are its boundary policies and [defaultBoundary] the one a tenant gets unless it names another.
@@ -383,7 +399,7 @@ class CompiledDocument private constructor(
             )
         }
 
-        /** The document of [app]: its permission policies and role bindings (7.x app permissions and grants). */
+        /** The document of [app]: its permission policies and the role bindings that grant them. */
         fun app(
             app: AppId,
             policies: List<CompiledPolicy>,
@@ -393,7 +409,7 @@ class CompiledDocument private constructor(
             CompiledDocument(
                 DocumentKind.APP,
                 app.value,
-                index(DocumentKind.APP, policies),
+                if (policies.isEmpty()) emptyMap() else index(DocumentKind.APP, policies),
                 bindings,
                 rateLimits = rateLimits
             )
@@ -415,7 +431,7 @@ class CompiledDocument private constructor(
             CompiledDocument(
                 DocumentKind.TENANT,
                 tenant.value,
-                index(DocumentKind.TENANT, policies),
+                if (policies.isEmpty()) emptyMap() else index(DocumentKind.TENANT, policies),
                 bindings,
                 boundary = boundary,
                 rateLimits = rateLimits,

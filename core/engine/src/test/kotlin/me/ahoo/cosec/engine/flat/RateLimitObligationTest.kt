@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Effect
@@ -75,9 +78,9 @@ class RateLimitObligationTest {
         )
         obligations(SnapshotView(platform, null, tenant())).assert().isEqualTo(
             listOf(
-                Obligation.RateLimit("shared", "global", limit, false),
-                Obligation.RateLimit("by-ip", "g:127.0.0.1", limit, false),
-                Obligation.RateLimit("by-order", "g:1", limit, false),
+                Obligation.RateLimit("platform/shared", "global", limit, false),
+                Obligation.RateLimit("platform/by-ip", "k:127.0.0.1", limit, false),
+                Obligation.RateLimit("platform/by-order", "k:1", limit, false),
             )
         )
     }
@@ -86,7 +89,32 @@ class RateLimitObligationTest {
     fun `an absent key value is the empty bucket`() {
         val platform = permitting(rule("by-tier", key = "subject.attributes.tier"))
         obligations(SnapshotView(platform, null, tenant())).single()
-            .assert().isEqualTo(Obligation.RateLimit("by-tier", "g:", limit, false))
+            .assert().isEqualTo(Obligation.RateLimit("platform/by-tier", "k:", limit, false))
+    }
+
+    /**
+     * RC1-52 (`IDN-10`): a limiter writes its counters' keys as UTF-8, which holds `?` for an unpaired surrogate. A value
+     * with one gets an escaped bucket of its own, well formed; every other value keeps the bucket 7.x names.
+     */
+    @Test
+    fun `a key value with an unpaired surrogate counts in a well formed bucket of its own`() {
+        val platform = permitting(rule("by-order", key = "resource.var.id", resource = "http:path:/orders/{id}"))
+        val view = SnapshotView(platform, null, tenant())
+        fun bucket(id: String) = (
+            obligations(
+                view,
+                flatRequest(path = "/orders/$id")
+            ).single() as Obligation.RateLimit
+            ).bucket!!
+        val values = listOf("x\uD800", "x?", "x\\uD800", "x\\\\uD800", "x\uDC00", "x\uD83D\uDE00", "\\")
+        val buckets = values.map(::bucket)
+        buckets.toSet().assert().describedAs("one bucket per value").hasSize(values.size)
+        buckets.forEach { it.encodeToByteArray().decodeToString().assert().describedAs("well formed").isEqualTo(it) }
+        bucket("x?").assert().isEqualTo("k:x?")
+        bucket("x\uD83D\uDE00").assert().isEqualTo("k:x\uD83D\uDE00")
+        bucket("x\uD800").assert().isEqualTo("e:x\\uD800")
+        bucket("x\\uD800").assert().isEqualTo("k:x\\uD800")
+        CompiledRateLimit.keyedBucket("\\\uDC00").assert().isEqualTo("e:\\\\\\uDC00")
     }
 
     /** P15: a deny spends nothing, so it carries no obligation. */
@@ -118,7 +146,7 @@ class RateLimitObligationTest {
         )
         val request = flatRequest(roles = listOf("viewer"))
         obligations(SnapshotView(platform, app, acme), request).map { (it as Obligation.RateLimit).ruleId }
-            .assert().containsExactly("r", "app:app/r", "tenant:acme/r")
+            .assert().containsExactly("platform/r", "app:app/r", "tenant:acme/r")
     }
 
     @Test
@@ -131,8 +159,8 @@ class RateLimitObligationTest {
         )
         obligations(SnapshotView(platform, null, tenant())).assert().isEqualTo(
             listOf(
-                Obligation.RateLimit("by-zone", null, limit, true),
-                Obligation.RateLimit("in-zone", null, limit, false),
+                Obligation.RateLimit("platform/by-zone", null, limit, true),
+                Obligation.RateLimit("platform/in-zone", null, limit, false),
             )
         )
         val fetched = flatRequest().let {
@@ -147,9 +175,9 @@ class RateLimitObligationTest {
         }
         obligations(SnapshotView(platform, null, tenant()), fetched).assert().isEqualTo(
             listOf(
-                Obligation.RateLimit("by-zone", "g:eu", limit, true),
-                Obligation.RateLimit("in-zone", "global", limit, false),
-                Obligation.RateLimit("skipped", "global", limit, false),
+                Obligation.RateLimit("platform/by-zone", "k:eu", limit, true),
+                Obligation.RateLimit("platform/in-zone", "global", limit, false),
+                Obligation.RateLimit("platform/skipped", "global", limit, false),
             )
         )
         // The plan fetches what the rules read.

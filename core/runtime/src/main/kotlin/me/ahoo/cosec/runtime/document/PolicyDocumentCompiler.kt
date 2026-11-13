@@ -41,7 +41,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** A document that decodes but does not compile; it is never installed, and every request needing it fails closed. */
-class DocumentCompileException(val document: String, val errors: List<CompileError>, cause: Throwable? = null) :
+class DocumentCompileException @InternalCoSecApi constructor(
+    val document: String,
+    @InternalCoSecApi val errors: List<CompileError>,
+    cause: Throwable? = null,
+) :
     CoSecException(
         "The $document document does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" },
         cause,
@@ -60,6 +64,8 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
  *   or tenant's permissions, and an app document's change cannot leave a tenant reference dangling.
  * - A document binds at most [principalBindingLimit] principals (RFC 0004 §4.4, Q2): user-level grants belong in
  *   tokens or a membership provider, not in a snapshot.
+ * - Roles and short-form permissions (RFC 0012): what compiles is [RoleExpansion.effective] of the document, which
+ *   derives at most [roleGrantLimit] bindings; [RoleExpansion.check] says what is wrong with what it was derived from.
  * - What [CompiledDocument] checks: unique ids, which subjects each document binds, reachable binding shapes, the
  *   break-glass rules and the built-in policies (`BND-3`, `BND-8`, `BRK-2`, `BRK-4`).
  * - Platform boundaries (RFC 0007 §7.6, Q11): boundary policies only in the platform document, only ALLOW statements, at
@@ -71,14 +77,16 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
  * platform may change on its own, and a missing one makes the request indeterminate. [checkReferences] checks them
  * against a given platform document, as a publisher does before it writes (RFC 0004 §7.4).
  */
-class PolicyDocumentCompiler(
+class PolicyDocumentCompiler @InternalCoSecApi constructor(
     private val policies: PolicyCompiler = PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER)),
     val principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+    val roleGrantLimit: Int = RoleExpansion.DEFAULT_ROLE_GRANT_LIMIT,
 ) : SnapshotCompiler<CompiledDocument> {
     /**
      * Compiles conditions against [catalog] too: the external attributes the registered `AttributeProvider`s declare
      * (RFC 0006 §5.4.1). A statement reading an `ext.` path no provider declares does not compile.
      */
+    @InternalCoSecApi
     constructor(
         catalog: AttributeCatalog,
         principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
@@ -89,9 +97,11 @@ class PolicyDocumentCompiler(
 
     init {
         require(principalBindingLimit >= 0) { "The principal binding limit must not be negative." }
+        require(roleGrantLimit >= 0) { "The role grant limit must not be negative." }
     }
 
     /** Decodes and compiles a stored document. */
+    @InternalCoSecApi
     override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
         val (kind, owner) = when (key) {
             SnapshotKey.Platform -> DocumentKind.PLATFORM to ""
@@ -106,14 +116,26 @@ class PolicyDocumentCompiler(
         return compile(PolicyDocumentCodec.decode(kind, owner, document.bodyBytes()))
     }
 
+    /**
+     * Throws [DocumentCompileException] when [document] does not compile, with every error and its JSON path. What a CI
+     * check of a document calls: the compiled form is the engine's, and no application needs it.
+     */
+    fun validate(document: PolicyDocument) {
+        compile(document)
+    }
+
+    @InternalCoSecApi
     fun compile(document: PolicyDocument): CompiledDocument {
-        val name = describe(document)
-        val errors = ArrayList<CompileError>()
-        val compiled = document.policies.mapIndexedNotNull { i, policy ->
+        val name = document.describe()
+        val expansion = RoleExpansion.expand(document, roleGrantLimit)
+        val effective = expansion.document
+        val errors = ArrayList(RoleExpansion.check(document))
+        val compiled = effective.policies.mapIndexedNotNull { i, policy ->
             policy(
-                document,
+                effective,
                 policy,
-                "$.policies[$i]",
+                expansion,
+                i,
                 errors
             )
         }
@@ -125,38 +147,48 @@ class PolicyDocumentCompiler(
                 errors
             )
         }
-        checkBindings(document, errors)
+        checkBindings(document, effective, errors)
         checkBoundaries(document, errors)
         checkAttributes(document, errors)
         if (errors.isNotEmpty()) {
             throw DocumentCompileException(name, errors)
         }
-        val boundaryIds = document.policies.filter { it.boundary }.mapTo(HashSet()) { it.id.value }
-        val (boundaries, policies) = compiled.partition { it.policyId.value in boundaryIds }
         return try {
-            when (document.kind) {
-                DocumentKind.PLATFORM ->
-                    CompiledDocument.platform(
-                        policies,
-                        document.bindings,
-                        rateLimits,
-                        boundaries,
-                        document.boundary?.value
-                    )
-
-                DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, document.bindings, rateLimits)
-                DocumentKind.TENANT ->
-                    CompiledDocument.tenant(
-                        TenantId(document.owner),
-                        compiled,
-                        document.bindings,
-                        rateLimits,
-                        document.boundary?.value,
-                        boundApps(document),
-                    )
-            }
+            assemble(document, effective, compiled, rateLimits)
         } catch (error: IllegalArgumentException) {
             throw DocumentCompileException(name, listOf(CompileError("$", error.message ?: "invalid")), error)
+        }
+    }
+
+    /** The engine's document of [document], from what compiled. */
+    private fun assemble(
+        document: PolicyDocument,
+        effective: PolicyDocument,
+        compiled: List<CompiledPolicy>,
+        rateLimits: List<CompiledRateLimit>,
+    ): CompiledDocument {
+        val boundaryIds = document.policies.filter { it.boundary }.mapTo(HashSet()) { it.id.value }
+        val (boundaries, policies) = compiled.partition { it.policyId.value in boundaryIds }
+        return when (document.kind) {
+            DocumentKind.PLATFORM ->
+                CompiledDocument.platform(
+                    policies,
+                    effective.bindings,
+                    rateLimits,
+                    boundaries,
+                    document.boundary?.value
+                )
+
+            DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, effective.bindings, rateLimits)
+            DocumentKind.TENANT ->
+                CompiledDocument.tenant(
+                    TenantId(document.owner),
+                    compiled,
+                    effective.bindings,
+                    rateLimits,
+                    document.boundary?.value,
+                    boundApps(document),
+                )
         }
     }
 
@@ -169,27 +201,31 @@ class PolicyDocumentCompiler(
         if (document.kind == DocumentKind.PLATFORM) {
             return
         }
-        val defined = document.policies.mapTo(HashSet()) { it.id.value } + platform.policies.map { it.id.value } +
+        val expansion = RoleExpansion.expand(document, roleGrantLimit)
+        val effective = expansion.document
+        val defined = effective.policies.mapTo(HashSet()) { it.id.value } + platform.policies.map { it.id.value } +
             BuiltinPolicies.ROOT.value + BuiltinPolicies.CONTROL.keys.map { it.value }
-        val errors = document.bindings.withIndex()
+        val errors = effective.bindings.withIndex()
             .filter { (_, binding) -> binding.policy.value !in defined && !binding.policy.value.startsWith(PERMISSION_PREFIX) }
             .map { (i, binding) ->
                 CompileError(
-                    "$.bindings[$i].policy",
+                    "${expansion.bindingPath(i)}.policy",
                     "[${binding.policy.value}] is defined neither here nor in the platform"
                 )
             }
         if (errors.isNotEmpty()) {
-            throw DocumentCompileException(describe(document), errors)
+            throw DocumentCompileException(document.describe(), errors)
         }
     }
 
     private fun policy(
         document: PolicyDocument,
         policy: PolicyDefinition,
-        path: String,
+        expansion: Expansion,
+        index: Int,
         errors: MutableList<CompileError>,
     ): CompiledPolicy? {
+        val path = expansion.policyPath(index)
         val id = policy.id.value
         val permission = id.startsWith(PERMISSION_PREFIX)
         when (document.kind) {
@@ -210,7 +246,9 @@ class PolicyDocumentCompiler(
             // A DENY may lapse while its provider fails only with the control plane's confirmation (RFC 0007 §9.5, N6).
             policies.compile(policy.id, policy.condition, policy.statements, policy.attachable)
         } catch (error: CompileException) {
-            error.errors.forEach { errors += CompileError(path + it.path.removePrefix("$"), it.message) }
+            // A derived policy's one statement is what its catalog entry writes: the entry is where it is wrong.
+            val written = if (expansion.derivedPolicy(index)) ".statements[0]" else ""
+            error.errors.forEach { errors += CompileError(path + it.path.removePrefix("$").removePrefix(written), it.message) }
             null
         }
     }
@@ -223,6 +261,7 @@ class PolicyDocumentCompiler(
     private fun permissionError(
         document: PolicyDocument,
         binding: me.ahoo.cosec.model.Binding,
+        defined: Set<String>,
         path: String
     ): CompileError? {
         val id = binding.policy.value
@@ -239,7 +278,7 @@ class PolicyDocumentCompiler(
                 path,
                 "[$id] is another app's permission policy; only that app's document binds it"
             )
-            ownsIt && document.policies.none { it.id.value == id } -> CompileError(
+            ownsIt && id !in defined -> CompileError(
                 path,
                 "[$id] is not defined in this document"
             )
@@ -260,13 +299,19 @@ class PolicyDocumentCompiler(
         null
     }
 
-    private fun checkBindings(document: PolicyDocument, errors: MutableList<CompileError>) {
+    /**
+     * The hand-written bindings of [document], against what its [effective] form defines. A derived binding is the
+     * compiler's by construction ([RoleExpansion.check]): its subject is a role, and its space and permission are
+     * checked where the role writes them.
+     */
+    private fun checkBindings(document: PolicyDocument, effective: PolicyDocument, errors: MutableList<CompileError>) {
+        val defined = effective.policies.mapTo(HashSet()) { it.id.value }
         var principals = 0
         for ((i, binding) in document.bindings.withIndex()) {
             if (binding.subject is SubjectRef.Principal) {
                 principals++
             }
-            permissionError(document, binding, "$.bindings[$i].policy")?.let { errors += it }
+            permissionError(document, binding, defined, "$.bindings[$i].policy")?.let { errors += it }
             (binding.scope.space as? Match.Exactly)?.value?.value?.takeIf(ScopeResolver::isReservedSpaceId)?.let {
                 errors += CompileError(
                     "$.bindings[$i].space",
@@ -353,12 +398,6 @@ class PolicyDocumentCompiler(
         }
     }
 
-    private fun describe(document: PolicyDocument): String = when (document.kind) {
-        DocumentKind.PLATFORM -> "platform"
-        DocumentKind.APP -> "app ${document.owner}"
-        DocumentKind.TENANT -> "tenant ${document.owner}"
-    }
-
     companion object {
         /**
          * The apps whose permission policies a tenant [document] binds to `Anyone` or to a principal: a request in one of
@@ -372,6 +411,11 @@ class PolicyDocumentCompiler(
             .filter { it.subject !is SubjectRef.Role && it.policy.value.startsWith(PERMISSION_PREFIX) }
             .mapNotNullTo(HashSet()) { (it.scope.app as? Match.Exactly)?.value?.value }
 
+        /** The compiler a document is validated with when [platform] is the platform document, as the control plane checks a candidate. */
+        fun forPlatform(
+            platform: PolicyDocument?
+        ): PolicyDocumentCompiler = forPlatform(platform, AttributeCatalog.NONE)
+
         /**
          * The compiler every document compiles with when [platform] is the platform document (RFC 0007 §3.1 N3): its
          * condition limits, or the defaults, and the external attributes it declares ahead of those the host's providers
@@ -379,28 +423,32 @@ class PolicyDocumentCompiler(
          * one accepts the others accept. [credentialHeaders] are the headers the host reads credentials from besides
          * the fixed ones, such as a renamed API key header (`CND-5`, RC1-21).
          */
+        @InternalCoSecApi
         fun forPlatform(
             platform: PolicyDocument?,
             providers: AttributeCatalog = AttributeCatalog.NONE,
             principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
             credentialHeaders: Set<String> = emptySet(),
+            roleGrantLimit: Int = RoleExpansion.DEFAULT_ROLE_GRANT_LIMIT,
         ): PolicyDocumentCompiler {
             val limits = platform?.limits ?: ConditionLimits.DEFAULT
             // A platform that declares a path twice does not compile; until it does, the first declaration counts.
             val declared = platform?.attributes.orEmpty().distinctBy { it.path }.associateBy { it.path }
             val catalog = AttributeCatalog { path -> declared[path] ?: providers.external(path) }
-            return of(limits, catalog, principalBindingLimit, credentialHeaders)
+            return of(limits, catalog, principalBindingLimit, credentialHeaders, roleGrantLimit)
         }
 
         /**
          * A compiler that checks conditions against [limits] and the external attributes of [catalog], refusing
          * [credentialHeaders] as it refuses the fixed credential headers.
          */
+        @InternalCoSecApi
         fun of(
             limits: ConditionLimits,
             catalog: AttributeCatalog,
             principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
             credentialHeaders: Set<String> = emptySet(),
+            roleGrantLimit: Int = RoleExpansion.DEFAULT_ROLE_GRANT_LIMIT,
         ): PolicyDocumentCompiler = PolicyDocumentCompiler(
             PolicyCompiler(
                 ConditionChecker(
@@ -411,6 +459,7 @@ class PolicyDocumentCompiler(
                 )
             ),
             principalBindingLimit,
+            roleGrantLimit,
         )
 
         /** RFC 0004 Q2. */

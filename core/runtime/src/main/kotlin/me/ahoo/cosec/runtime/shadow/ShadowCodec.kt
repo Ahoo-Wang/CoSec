@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.shadow
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -34,6 +33,7 @@ import java.time.Instant
  * Candidates, shadow reports and instance statuses as JSON (RFC 0007 §6.4, §6.5), for every store of them. Reading is
  * strict: anything else is a [SnapshotFormatException], never a value read as absent.
  */
+@InternalCoSecApi
 object ShadowCodec {
     private val factory = JsonNodeFactory.instance
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -69,7 +69,7 @@ object ShadowCodec {
     fun encodeStatuses(statuses: Map<String, InstanceStatus>): ByteArray = write(
         factory.objectNode().apply {
             statuses.toSortedMap().forEach { (instance, status) ->
-                val node = putObject(instance).put("at", status.at.toString())
+                val node = putObject(instance).put("at", status.at.toString()).put("formatLevel", status.formatLevel)
                 val documents = node.putObject("documents")
                 status.documents.forEach { (key, installed) ->
                     documents.putObject(
@@ -82,15 +82,19 @@ object ShadowCodec {
 
     fun decodeStatuses(bytes: ByteArray): Map<String, InstanceStatus> = guarded {
         read(bytes).properties().associate { (instance, node) ->
-            node.only("at", "documents")
+            node.only("at", "documents", "formatLevel")
             instance to InstanceStatus(
                 instance,
                 Instant.parse(node.need("at").text()),
-                node.need("documents").properties().filterNot { (key, _) -> unnamed(instance, key) }
-                    .associate { (key, document) ->
-                        document.only("revision", "lagMillis")
-                        documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
-                    },
+                node.need("documents").properties().associate { (key, document) ->
+                    document.only("revision", "lagMillis")
+                    documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
+                },
+                // Required (RFC 0010 C5): a status that does not say which format its instance reads is refused, so a
+                // later version can gate a publish on it (a later field added to a status is refused as an unknown one).
+                node.need("formatLevel").long().takeIf {
+                    it in 1..Int.MAX_VALUE
+                }?.toInt() ?: malformed("formatLevel is not a positive integer"),
             )
         }
     }
@@ -153,26 +157,8 @@ object ShadowCodec {
         )
     }
 
-    /**
-     * Whether [key], a document [instance] reported installed, is an app an earlier build named (any id without `:`)
-     * that the app id rule now refuses (R2-1 of #1194's review). No change can be of it, so that entry alone is
-     * skipped, with a WARN; the rest of the instance's status is kept.
-     */
-    private fun unnamed(instance: String, key: String): Boolean {
-        val unnamed = SnapshotKeyText.isUnnamedApp(key)
-        if (unnamed) {
-            log.warn {
-                "Instance [${printable(instance)}] reports [${printable(key)}] installed, which no document key can " +
-                    "name (SCP-7): that entry is skipped."
-            }
-        }
-        return unnamed
-    }
-
     /** [text], stored content quoted in a message or a log line, with its control characters escaped (RC1-15). */
     private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
-
-    private val log = KotlinLogging.logger {}
 
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform

@@ -1,0 +1,23 @@
+{
+  "description": "store-1 is a space of wms and of pos: the wms token holds a wms role there.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "wms.clerk@store-1"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.read",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    },
+    "space": "store-1"
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

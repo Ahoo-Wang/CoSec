@@ -179,11 +179,48 @@ class ControlAuthorizationTest {
         val change = changes.propose(alice, TENANT, 1, grant("team-a"), "viewers")
         change.state.assert().isEqualTo(ChangeState.CHECKED)
         change.escalations.assert().isEmpty()
-        // tenant-admin holds neither skip-shadow nor approve.
-        refused { changes.skipShadow(alice, change.id, "hurry") }.assert().isEqualTo(403)
         windowClosed(change).state.assert().isEqualTo(ChangeState.READY)
         changes.publish(alice, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         revisions.head(TENANT)!!.document.provenance!!.publishedBy.assert().isEqualTo(alice.actor)
+    }
+
+    /** `CTL-27` (U10): its own tenant's document, the reason recorded. */
+    @Test
+    fun `a tenant admin skips the window of its own tenant's document`() = runBlocking<Unit> {
+        val change = changes.propose(alice, TENANT, 1, grant("team-a"), "viewers")
+        changes.skipShadow(alice, change.id, "hurry").state.assert().isEqualTo(ChangeState.READY)
+        changes.publish(alice, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        revisions.head(TENANT)!!.document.provenance!!.shadow!!.skipped.assert().isTrue()
+    }
+
+    /** `CTL-27` (U10): the window is evidence; skipping it changes nothing about who has to approve what it grants. */
+    @Test
+    fun `a tenant admin who skips the window still waits for approval of what the analysis cannot prove`() = runBlocking<Unit> {
+        val change = changes.propose(alice, TENANT, 1, grant(null), "viewers everywhere")
+        change.escalations.map { it.reason }.assert().containsExactly("NOT_COVERED")
+        changes.skipShadow(alice, change.id, "hurry").state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        refused { changes.publish(alice, change.id) }.assert().isEqualTo(409)
+        head().assert().isEqualTo(1L)
+    }
+
+    /**
+     * `CTL-27` (U10): a platform principal passes the hard rule on any tenant's document, so only the statement's own
+     * tenant condition keeps `cosec:tenant-admin` bound to it from skipping another tenant's window.
+     */
+    @Test
+    fun `tenant admin held by a platform principal does not skip a tenant's window`() = runBlocking<Unit> {
+        val principal = SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("tia"))
+        bootstrap(
+            SnapshotKey.Platform,
+            listOf(allow("acme-reader", action = "cosec:read", resource = "doc/tenant/acme")),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control("tia", principal, BuiltinPolicies.TENANT_ADMIN) +
+                control("tia-reads-acme", principal, PolicyId("acme-reader")),
+        )
+        val tia = engine.operator(TenantId.PLATFORM, "tia")
+        val change = changes.propose(alice, TENANT, 1, grant("team-a"), "viewers")
+        refused { changes.skipShadow(tia, change.id, "hurry") }.assert().isEqualTo(403)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.CHECKED)
     }
 
     @Test

@@ -26,7 +26,7 @@ object DependencyRules {
     val ALLOWED: Map<String, Set<String>> = mapOf(
         "annotations" to emptySet(),
         "api" to emptySet(),
-        "model" to setOf("api"),
+        "model" to setOf("api", "annotations"),
         "engine" to setOf("model", "api"),
         "spi" to setOf("model", "api", "annotations"),
         "runtime" to setOf("engine", "spi", "model", "api", "annotations"),

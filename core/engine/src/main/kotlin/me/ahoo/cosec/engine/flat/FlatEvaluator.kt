@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.EvaluationScratch
 import me.ahoo.cosec.engine.pattern.HttpPath
@@ -34,6 +37,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
+import java.util.IdentityHashMap
 
 /**
  * One evaluation over bindings: the flat algorithm of RFC 0004 §6.1 over compiled statements (RFC 0005 §6).
@@ -85,11 +89,17 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var missing: MutableSet<PolicyId>? = null
     private var ambiguous: MutableSet<PolicyId>? = null
 
-    // Policy conditions evaluated so far, by identity, and their results; allocated on the first condition.
+    // Policy conditions evaluated so far, by identity, and their results; allocated on the first condition. Up to
+    // SCAN_GUARDS they are found by scanning these arrays, which allocates nothing and costs less than hashing for the few
+    // a request usually reaches. A request that reaches more moves them all to [guardMap], so that finding one never
+    // costs more than a hash lookup however many it reaches: a scan would make P conditions cost P² steps (#1212).
     private var guards: Array<CheckedCondition?>? = null
     private var guardResults: IntArray? = null
     private var guardErrors: Array<Throwable?>? = null
     private var guardCount = 0
+
+    /** Each condition's result, a small `Int`, or its error: the same facts as the arrays, once there are too many. */
+    private var guardMap: IdentityHashMap<CheckedCondition, Any>? = null
 
     /** The error of the condition [guard] returned [GUARD_ERROR] for last. */
     private var guardError: Throwable? = null
@@ -182,7 +192,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             null
         }
         val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
-        CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty()
+        CompiledRateLimit.keyedBucket(value.orEmpty())
     } catch (error: Throwable) {
         if (!catches(error)) {
             throw error
@@ -660,6 +670,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
                     return guardResults!![i]
                 }
             }
+        } else {
+            // Only once there are more conditions than SCAN_GUARDS: the arrays are gone.
+            val remembered = recalled(guard)
+            if (remembered != NOT_REMEMBERED) {
+                return remembered
+            }
         }
         var error: Throwable? = null
         val result = try {
@@ -676,13 +692,37 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         return result
     }
 
+    /** The result [guard] had in this evaluation, with [guardError] set, or [NOT_REMEMBERED]; for the map. */
+    private fun recalled(guard: CheckedCondition): Int =
+        when (val outcome = guardMap?.get(guard)) {
+            null -> NOT_REMEMBERED
+            is Throwable -> {
+                guardError = outcome
+                GUARD_ERROR
+            }
+
+            else -> {
+                guardError = null
+                outcome as Int
+            }
+        }
+
     private fun remember(guard: CheckedCondition, result: Int, error: Throwable?) {
         var guards = guards
         var results = guardResults
         if (guards == null || results == null) {
+            val map = guardMap
+            if (map != null) {
+                map[guard] = error ?: result
+                return
+            }
             guards = arrayOfNulls(INITIAL_GUARDS)
             results = IntArray(INITIAL_GUARDS)
         } else if (guardCount == guards.size) {
+            if (guardCount == SCAN_GUARDS) {
+                moveGuardsToMap(guard, error ?: result)
+                return
+            }
             guards = guards.copyOf(guardCount * 2)
             results = results.copyOf(guardCount * 2)
             guardErrors = guardErrors?.copyOf(guardCount * 2)
@@ -696,6 +736,19 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         guards[guardCount] = guard
         results[guardCount] = result
         guardCount++
+    }
+
+    /** Remembers the [SCAN_GUARDS] conditions of the arrays and [guard] in a map, and drops the arrays. */
+    private fun moveGuardsToMap(guard: CheckedCondition, outcome: Any) {
+        val map = IdentityHashMap<CheckedCondition, Any>(MAP_GUARDS)
+        for (i in 0 until guardCount) {
+            map[guards!![i]] = guardErrors?.get(i) ?: guardResults!![i]
+        }
+        map[guard] = outcome
+        guardMap = map
+        guards = null
+        guardResults = null
+        guardErrors = null
     }
 
     /** Whether an error thrown while evaluating is that statement's error rather than the evaluation's. */
@@ -766,6 +819,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         private const val GUARD_MISSED = 2
         private const val GUARD_ERROR = 3
         private const val INITIAL_GUARDS = 4
+        private const val SCAN_GUARDS = 32
+        private const val MAP_GUARDS = 128
+        private const val NOT_REMEMBERED = 0
         private const val INITIAL_LISTS = 8
 
         private const val WORD_BITS = 64

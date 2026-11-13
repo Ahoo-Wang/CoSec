@@ -1,0 +1,19 @@
+{
+  "document": "tenant:acme",
+  "base": 7,
+  "note": "role-01HQ7Z changed in the identity system (event 5521)",
+  "operations": [
+    {
+      "op": "putRole",
+      "role": {
+        "id": "role-01HQ7Z",
+        "app": "wms",
+        "name": "Receiving",
+        "permissions": [
+          "warehouse.read",
+          "inbound.ship"
+        ]
+      }
+    }
+  ]
+}

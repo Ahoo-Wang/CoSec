@@ -11,10 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**
  * Where a published document came from (RFC 0007 §5.3): its parent revision, the change that published it, how, and
@@ -23,7 +27,7 @@ import me.ahoo.cosec.model.TenantId
  *
  * ```jsonc
  * "provenance": {
- *   "parent": { "revision": 42, "digest": "9f2c…" },     // absent for the first revision
+ *   "parent": { "revision": 42, "digest": "SHA-256:9f2c…" },     // absent for the first revision
  *   "change": "0QH8K3…",
  *   "kind": "PUBLISH",
  *   "publishedBy": { "tenant": "acme", "principal": "alice" },
@@ -32,6 +36,7 @@ import me.ahoo.cosec.model.TenantId
  * }
  * ```
  */
+@InternalCoSecApi
 data class Provenance(
     /** The head this revision replaced; `null` for the first revision of a document. */
     val parent: ParentRevision?,
@@ -50,16 +55,18 @@ data class Provenance(
 
 /**
  * The previous head: its revision and its digest, which is also the address of its revision record (RFC 0007 §5.2).
- * The digest is the store's, written as 40 lowercase hex digits.
+ * The digest is the store's, in [SnapshotDigest]'s text form: `SHA-256:` and 64 lowercase hex digits.
  */
+@InternalCoSecApi
 data class ParentRevision(val revision: Long, val digest: String) {
     init {
         require(revision > 0) { "A parent revision is positive, was $revision." }
-        require(DIGEST.matches(digest)) { "A parent digest is 40 lowercase hex digits, was [$digest]." }
+        require(DIGEST.matches(digest)) { "A parent digest is `SHA-256:` and 64 lowercase hex digits, was [$digest]." }
     }
 
+    @InternalCoSecApi
     companion object {
-        val DIGEST: Regex = Regex("^[0-9a-f]{40}$")
+        val DIGEST: Regex = Regex(SnapshotDigest.PATTERN)
     }
 }
 
@@ -83,6 +90,7 @@ data class Actor(val tenant: TenantId, val principal: PrincipalId) {
 }
 
 /** The shadow window of the change: its id, or that it was skipped (`cosec:skip-shadow`, RFC 0007 §6.4). */
+@InternalCoSecApi
 data class ShadowWindow(val window: String?, val skipped: Boolean) {
     init {
         require(window == null || window.isNotEmpty()) { "A shadow window id is not empty." }

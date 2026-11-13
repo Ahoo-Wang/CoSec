@@ -1,0 +1,17 @@
+# Rule: CTL-8
+# Mutant: the end confirmation of a change's decisions does not compare the versions, so a document that moved during them is not noticed
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangeBatchAuthorizationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt
+index 1aace3bb..d242c3a0 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt
+@@ -267,7 +267,7 @@ class PipelineControlAuthorizer(
+                 log.warn(e) { "Confirming the control documents again failed - indeterminate." }
+                 throw ChangeRejectedException(UNAVAILABLE, "the control documents could not be confirmed again", e)
+             }
+-            return lock.withLock { first.all { (key, version) -> now[key] == version } }
++            return lock.withLock { first.all { (key, _) -> key in now } }
+         }
+     }
+ 

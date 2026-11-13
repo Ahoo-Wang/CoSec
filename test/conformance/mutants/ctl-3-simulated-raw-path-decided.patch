@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: a simulated http path is checked against enforcement's normalization, then decided as given
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index d9db8190..aad42999 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -369,7 +369,7 @@ class DefaultControlPlane(
+      */
+     private fun enforceable(resource: Resource): Resource {
+         val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+-            PathNormalizer.normalize(resource.id)
++            PathNormalizer.normalize(resource.id)?.let { resource.id }
+         } else {
+             resource.id.takeIf { PathNormalizer.withinBounds(it) }
+         }

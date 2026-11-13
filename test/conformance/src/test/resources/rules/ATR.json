@@ -80,14 +80,16 @@
     },
     {
       "id": "ATR-8",
-      "source": "RFC 0006 §5.4.2, P14; #1208, #1209",
-      "statement": "An evaluation is decided on the external attributes it reads as their providers answer them, never refused because one was not fetched: the attribute plan holds every one it can read (the candidate statements' and their policies' conditions, the rate limit rules', and those of the boundary that holds the request's tenant, its statements' and its policy condition's), and the pipeline asks for each planned attribute the provider that declares it. A check (AuthorizationChecker) plans its own action and resource and asks stage-A and stage-B providers alike, whether or not a stage-B provider is registered. A boundary that does not hold the request is not planned.",
+      "source": "RFC 0006 §5.4.2, P14; #1208, #1209, #1211",
+      "statement": "An evaluation is decided on the external attributes it reads as their providers answer them, never refused because one was not fetched: the attribute plan holds every one it can read (the candidate statements' that the statement index gives, so a path no statement can match plans nothing, and their policies' conditions, the rate limit rules', and those of the boundary that holds the request's tenant, its statements' and its policy condition's), and the pipeline asks for each planned attribute the provider that declares it. A check (AuthorizationChecker) plans its own action and resource and asks stage-A and stage-B providers alike, whether or not a stage-B provider is registered. A boundary that does not hold the request is not planned.",
       "level": "pipeline",
       "properties": [
         "engine:ExternalAttributesPropertyTest#unavailableAttributesNeverPermitAndThePlanIsComplete"
       ],
       "guards": [
         "engine:BoundaryAttributePlanTest",
+        "engine:ExternalAttributesTest#thePlanSkipsWhatTheIndexRulesOut",
+        "runtime:ExternalAttributesPipelineTest#anAttributeOfAStatementThePathRulesOutIsNotFetched",
         "runtime:BoundaryAttributesPipelineTest",
         "runtime:CheckAttributesTest"
       ],

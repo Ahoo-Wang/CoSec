@@ -11,9 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourceContainment
@@ -66,7 +68,7 @@ import me.ahoo.cosec.model.decision.StatementRef
  * Conditions come as written. Both sides are checked with the same [zones], within limits twice the document's
  * ([limits]): a statement's condition and its policy's are combined.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionLimits = ConditionLimits.DEFAULT) {
     private val checker = ConditionChecker(
         ConditionLimits(
@@ -110,7 +112,9 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         val before = snapshot.tenant(change.tenant)
         val after = change.candidate
         val fragments = ArrayList<GrantFragment>()
-        val changed = after.bindings.filter { binding -> before.bindings.none { same(it, binding) } }
+        // By id: a few roles can derive as many bindings as a whole document can hold written out.
+        val previous = before.bindings.groupBy { it.id }
+        val changed = after.bindings.filter { binding -> previous[binding.id].orEmpty().none { same(it, binding) } }
         for (binding in changed) {
             val policy = resolve(snapshot, after, binding)
             if (policy == null) {

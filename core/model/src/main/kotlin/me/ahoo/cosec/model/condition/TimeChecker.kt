@@ -11,9 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
 
-/** Checks `time` as the 7.x `TimeConditionMatcher` validates its configuration, reporting errors to [error]. */
+import me.ahoo.cosec.annotations.InternalCoSecApi
+
+/** Checks the configuration of a `time` condition (RFC 0005 §2 J5), reporting errors to [error]. */
 internal class TimeChecker(
     private val path: String,
     private val limits: ConditionLimits,

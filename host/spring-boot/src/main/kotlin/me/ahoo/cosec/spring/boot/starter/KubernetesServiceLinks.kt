@@ -26,7 +26,7 @@ import org.springframework.core.env.SystemEnvironmentPropertySource
  *
  * Matching is on the raw variable names, as `pkg/kubelet/envvars` writes them (upper case, `-` as `_`), never on the
  * relaxed property names. No CoSec property has such a name, and a known key is never unknown whatever its source, so
- * a real property cannot be hidden by this; the variables stay in the environment and bind as before.
+ * a real property cannot be hidden by this; the variables stay in the environment and bind as usual.
  */
 internal object KubernetesServiceLinks {
     /** The variable prefix of a Service named `cosec` or `cosec-*`. */

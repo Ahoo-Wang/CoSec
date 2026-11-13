@@ -19,22 +19,22 @@ import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.codec.ByteArrayCodec
-import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.api.spi.InvalidationChannel
 import me.ahoo.cocache.api.spi.InvalidationListener
+import me.ahoo.cocache.api.spi.Keyspace
 import me.ahoo.cocache.api.spi.NodeId
 import me.ahoo.cocache.api.spi.Subscription
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
-import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.CoCacheFactory
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.CoSecTestCaches
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -46,6 +46,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The real Redis deployments the snapshot tests run against (AGENTS.md: real Redis, never mocks).
@@ -123,8 +124,9 @@ class SnapshotNode(
     localMaxAge: Duration = CoSecCacheSpecs.DEFAULT_SNAPSHOT_LOCAL_MAX_AGE,
 ) : AutoCloseable {
     val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
+    val factory: CoCacheFactory = CoCacheFactory(runtime)
     val cache: PolicySnapshotCache =
-        runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix, localMaxAge = localMaxAge))
+        factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix, localMaxAge = localMaxAge))
     val store = RedisSnapshotDocumentStore(cache)
     val writer = DocumentWriter(cache, store)
 
@@ -136,14 +138,15 @@ class SnapshotNode(
 /** Writes any bytes as a snapshot document's value, as a buggy or foreign writer would; its own runtime. */
 class RawSnapshotWriter(backend: CoherenceBackend, keyPrefix: String) : AutoCloseable {
     private val runtime = CacheRuntime.builder().backend(backend).build()
-    val cache: Cache<SnapshotKey, ByteArray> = runtime.create(
-        CacheSpec.builder<SnapshotKey, ByteArray>("RawSnapshot")
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
-            .keyPrefix("")
-            .keyEncoder(SnapshotKeyEncoder)
-            .codec(RawCodec)
-            .policy(CachePolicy.DEFAULT.storeOfRecord())
-            .build()
+    val cache: Store<SnapshotKey, ByteArray> = runtime.create(
+        CoSecCacheSpecs.layout(keyPrefix, CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME).let { layout ->
+            StoreSpec.builder<SnapshotKey, ByteArray>("RawSnapshot")
+                .keyPrefix(layout.keyPrefix)
+                .namespace(layout.namespace)
+                .keyEncoder(SnapshotKeyEncoder)
+                .codec(RawCodec)
+                .build()
+        }
     )
 
     fun put(key: SnapshotKey, value: String) = cache.put(key, value.encodeToByteArray())
@@ -166,31 +169,42 @@ object RawCodec : Codec<ByteArray> {
  */
 class SilentChannelBackend(private val delegate: CoherenceBackend) : CoherenceBackend by delegate {
     override val channel: InvalidationChannel = object : InvalidationChannel by delegate.channel {
-        override fun subscribe(namespace: String, listener: InvalidationListener): Subscription = Subscription {}
+        override fun subscribe(keyspace: Keyspace, listener: InvalidationListener): Subscription = Subscription {}
     }
 
     override fun close() = Unit
 }
 
 /**
- * A backend that calls the listeners of a namespace in the reverse order of their subscriptions, so a listener added
- * after a cache was created hears of a change before that cache's engine drops its local copy (RFC 0003 §6 F9).
- * Closing it ends its subscriptions and leaves the wrapped backend open.
+ * A backend that calls the listeners of a keyspace in the reverse order of their subscriptions, so a listener added
+ * after a cache was created hears of a change before that cache's engine drops its local copy (RFC 0003 §6 F9), against
+ * CoCache's channel contract. Closing it ends its subscriptions and leaves the wrapped backend open.
  */
 class ReversingChannelBackend(private val delegate: CoherenceBackend) : CoherenceBackend by delegate {
-    private val listeners = ConcurrentHashMap<String, CopyOnWriteArrayList<InvalidationListener>>()
-    private val subscriptions = ConcurrentHashMap<String, Subscription>()
+    private val listeners = ConcurrentHashMap<Keyspace, CopyOnWriteArrayList<InvalidationListener>>()
+    private val subscriptions = ConcurrentHashMap<Keyspace, Subscription>()
+
+    /**
+     * How many invalidations that name a key have been passed to all the listeners, the last of which, the engine of
+     * the cache, has then dropped its copy: a test that fills a local copy waits for the invalidations of its own
+     * writes first, or one that arrives late drops the copy it just filled.
+     */
+    val dispatched = AtomicInteger()
 
     override val channel: InvalidationChannel = object : InvalidationChannel by delegate.channel {
-        override fun subscribe(namespace: String, listener: InvalidationListener): Subscription {
-            val namespaceListeners = listeners.computeIfAbsent(namespace) { CopyOnWriteArrayList() }
+        override fun subscribe(keyspace: Keyspace, listener: InvalidationListener): Subscription {
+            val namespaceListeners = listeners.computeIfAbsent(keyspace) { CopyOnWriteArrayList() }
             namespaceListeners.add(listener)
-            subscriptions.computeIfAbsent(namespace) {
+            subscriptions.computeIfAbsent(keyspace) {
                 delegate.channel.subscribe(
-                    namespace,
+                    keyspace,
                     object : InvalidationListener {
                         override fun onInvalidated(keys: List<String>, origin: NodeId) {
                             namespaceListeners.reversed().forEach { it.onInvalidated(keys, origin) }
+                            // An empty frame is the channel probe of a store being created.
+                            if (keys.isNotEmpty()) {
+                                dispatched.incrementAndGet()
+                            }
                         }
 
                         override fun onReset() {
@@ -203,9 +217,9 @@ class ReversingChannelBackend(private val delegate: CoherenceBackend) : Coherenc
         }
     }
 
-    /** Tells the listeners of [namespace] that notifications may have been lost, as a re-established subscription does. */
-    fun reset(namespace: String) {
-        listeners[namespace].orEmpty().reversed().forEach { it.onReset() }
+    /** Tells the listeners of [keyspace] that notifications may have been lost, as a re-established subscription does. */
+    fun reset(keyspace: Keyspace) {
+        listeners[keyspace].orEmpty().reversed().forEach { it.onReset() }
     }
 
     override fun close() {

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.scope
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
@@ -34,15 +37,15 @@ class ScopeResolverPropertyTest {
     private val declaredSpaces = spaces + listOf("*", "team-c", "team-a​")
     private val hostApps = listOf("order", "billing", "a@b")
     private val apps = listOf(
-        "", "order", "ORDER", " order", "billing", "*", "a:b", "a@b", " ", "x".repeat(129), "ｏrder", "order ",
+        null, "", "order", "ORDER", " order", "billing", "*", "a:b", "a@b", " ", "x".repeat(129), "ｏrder", "order ",
     )
     private val roles = listOf("admin", "editor", "viewer")
 
-    private class Case(val subject: ScopeSubject, val declared: DeclaredScope, val host: HostScope) {
+    private class Case(val subject: ScopeSubject, val space: String, val host: HostScope) {
         fun describe(): String {
             val roles = subject.memberships.roles.map { (space, roles) -> space.value to roles.map { it.value } }
             return "tenant=${subject.tenant.value} authenticated=${subject.authenticated} roles=$roles " +
-                "declared=(${declared.app}, ${declared.space}) host=${host.app?.value}"
+                "app=${subject.app} space=$space host=${host.app?.value}"
         }
     }
 
@@ -54,9 +57,10 @@ class ScopeResolverPropertyTest {
             TenantId(listOf("acme", "(platform)", "(0)").random(this)),
             nextBoolean(),
             Memberships(Memberships.Source.entries.random(this), memberships, emptyList()),
+            apps.random(this),
         )
         val host = HostScope(if (nextBoolean()) null else AppId(hostApps.random(this)))
-        return Case(subject, DeclaredScope(apps.random(this), declaredSpaces.random(this)), host)
+        return Case(subject, declaredSpaces.random(this), host)
     }
 
     private fun forEachCase(seed: Int, block: (Case, ScopeResolution) -> Unit) {
@@ -64,7 +68,7 @@ class ScopeResolverPropertyTest {
         repeat(iterations) { iteration ->
             val case = random.case()
             try {
-                block(case, ScopeResolver.resolve(case.subject, case.declared, case.host))
+                block(case, ScopeResolver.resolve(case.subject, case.space, case.host))
             } catch (e: AssertionError) {
                 throw AssertionError("Case $iteration (seed $seed): ${case.describe()}", e)
             }
@@ -76,35 +80,41 @@ class ScopeResolverPropertyTest {
     fun `P11 a resolved scope only narrows`() {
         forEachCase(seed = 20261025) { case, resolution ->
             val granted = if (case.subject.authenticated) case.subject.memberships.roles else emptyMap()
-            val member = case.declared.space != Match.WILDCARD &&
-                granted[SpaceId(case.declared.space)].orEmpty().isNotEmpty()
-            if (case.declared.space.isNotEmpty() && !member) {
+            val member = case.space != Match.WILDCARD &&
+                granted[SpaceId(case.space)].orEmpty().isNotEmpty()
+            if (case.space.isNotEmpty() && !member) {
                 resolution.assert().isInstanceOf(ScopeResolution.Rejected::class.java)
             }
             if (resolution is ScopeResolution.Resolved) {
                 val scope = resolution.scope
                 granted[scope.space].orEmpty().containsAll(scope.roles).assert().isTrue()
-                scope.space.value.assert().isEqualTo(case.declared.space)
+                scope.space.value.assert().isEqualTo(case.space)
             }
         }
     }
 
-    /** The host app wins over the declared one, malformed apps are rejected, and the tenant comes from the credential. */
+    /**
+     * RFC 0012 §3.5: an authenticated subject is only ever in the app its credential declares, a host with an app refuses
+     * any other or none, malformed apps are rejected, and the tenant comes from the credential.
+     */
     @Test
     fun `the app and tenant follow the host and the credential`() {
         forEachCase(seed = 7) { case, resolution ->
             val hostApp = case.host.app
-            val declared = case.declared.app
-            val invalid = declared.isNotEmpty() &&
-                (declared.isBlank() || declared == "*" || ':' in declared || declared.length > 128)
-            val mismatch = invalid || hostApp != null && declared.isNotEmpty() && declared != hostApp.value
+            val declared = case.subject.app
+            val invalid = declared != null && (declared.isBlank() || declared == "*" || ':' in declared || declared.length > 128)
+            val mismatch = invalid || case.subject.authenticated && hostApp != null && declared != hostApp.value
             if (mismatch) {
                 (resolution as ScopeResolution.Rejected).reason.assert()
                     .isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
             }
             if (resolution is ScopeResolution.Resolved) {
                 val scope = resolution.scope
-                scope.app.assert().isEqualTo(hostApp ?: AppId(case.declared.app))
+                if (case.subject.authenticated) {
+                    scope.app.value.assert().isEqualTo(declared.orEmpty())
+                } else {
+                    scope.app.value.assert().isEqualTo(hostApp?.value.orEmpty())
+                }
                 scope.tenant.assert()
                     .isEqualTo(if (case.subject.authenticated) case.subject.tenant else TenantId.DEFAULT)
             }

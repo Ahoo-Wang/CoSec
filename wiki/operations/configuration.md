@@ -21,8 +21,15 @@ enum values are case-insensitive. Properties that 7.x had and 8.0 does not are l
 Startup fails on a `cosec.*` key CoSec does not read, whatever else is configured (`cosec.enabled=false` included): a
 misspelled, renamed or removed key would otherwise do nothing. A key is known when the configuration metadata on the
 classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when it lies under a map- or list-valued
-property. The message lists every unknown key and, for a 7.x key, what replaced it
-([the 7.x key table](./upgrading.md#removed-and-renamed-properties)).
+property. The message lists every unknown key and links
+[the table of removed and renamed keys](./upgrading.md#removed-and-renamed-properties). No property turns this check
+off: a key prefix a release replaced, had it been ignored, would leave token revocations where nothing reads them.
+
+Keys are compared as Spring's binder compares them, so every spelling it documents for a known key is known:
+`local-max-age`, `localMaxAge` or `local_max_age` in a properties file, and `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`
+as an environment variable (upper case, dots as underscores, dashes dropped). A variable that is not that spelling of a
+key CoSec reads stays unknown, a typo (`COSEC_PIPELINE_TIMEUOT`) and the legacy `COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE`
+alike: the message names it as `cosec.authorization.snapshot.local.max.age`.
 
 One thing is never an unknown key: the variables Kubernetes injects for a Service named `cosec` or `cosec-*` (service
 links), which Spring reads as `cosec.*` keys (`COSEC_GATEWAY_SERVICE_HOST` as `cosec.gateway.service.host`). The check
@@ -39,10 +46,6 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 `enableServiceLinks: false` on the pod keeps the variables out of the environment altogether
 ([Troubleshooting](./troubleshooting.md#startup-fails-on-an-unknown-property)).
 
-| Property | Type | Default | Effect |
-|---|---|---|---|
-| `cosec.unknown-properties` | `fail`, `warn` | `fail` | `fail` stops startup on an unknown `cosec.*` key; `warn` logs the same list at `WARN` and starts. |
-
 ## Feature switches
 
 | Property | Type | Default | Turns on |
@@ -50,11 +53,11 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 | `cosec.enabled` | boolean | `true` | every CoSec auto-configuration |
 | `cosec.authentication.login.enabled` | boolean | `true` | the login beans, which turn credentials into a token: `CompositeAuthentication` over your `Authentication` beans, `TokenCompositeAuthentication` with JWT, and social login. Authenticating requests in the pipeline does not depend on it |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | social login (`cosec-social`; needs `cosec.authentication.login.enabled`) |
-| `cosec.jwt.enabled` | boolean | `true` | issuing, verifying and revoking JWTs. Off, the pipeline rejects every token (`token-invalid`) and treats a request without one as anonymous |
+| `cosec.jwt.enabled` | boolean | `true`; `false` with `cosec.pipeline.mode=gateway` | issuing, verifying and revoking JWTs. Off, the pipeline rejects every token (`token-invalid`) and treats a request without one as anonymous |
 | `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients. `true` or `false` only: any other value fails startup. |
 | `cosec.audit.enabled` | boolean | `true` | the audit log listener, and the Kafka audit listener with `cosec.audit.kafka.enabled` |
 | `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`cosec-kafka` and a `KafkaOperations` bean) |
-| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean) |
+| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean, Spring Boot's own auto-configured one included) |
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
@@ -68,7 +71,7 @@ These have no switch:
 - **The rate limiter** is always there: on Redis when a `ReactiveStringRedisTemplate` bean exists (`cosec-cocache`),
   otherwise counted per instance ([Rate limiting](#rate-limiting)).
 - **Token revocation** is always on with JWT ([Startup](./troubleshooting.md#startup-fails-without-a-token-store)).
-- **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi` and Spring Boot Actuator are;
+- **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi`, springdoc and Spring Boot Actuator are;
   expose it like any actuator endpoint.
 
 ## Key prefix
@@ -76,9 +79,12 @@ These have no switch:
 Every key a deployment writes to Redis lives under one prefix (`SNP-9`): snapshot documents, control-plane records,
 shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states
 ([Redis keys](./storage.md#redis-keys)). Two deployments on one Redis that use different prefixes share nothing.
+Within one application, CoCache refuses to create a cache whose storage keys would overlap another's, so a prefix that
+puts a CoSec cache under one of the application's own caches fails startup
+([Troubleshooting](./troubleshooting.md#startup-fails-on-overlapping-cache-keys)).
 It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` and
-`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, whatever `cosec.unknown-properties`
-says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
+`cosec.api-key.key-prefix`: an environment that sets one of them fails startup, as any key CoSec does not read does
+([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
@@ -93,11 +99,12 @@ says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-pref
 | `cosec.pipeline.timeout` | duration | `5s` | The whole evaluation of one request. Past it the request is answered `503` `unavailable`. |
 | `cosec.pipeline.authentication-timeout` | duration | `1s` | One call of the `Authenticator`. Past it, `503`. |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | Also read the access token from the `authorization` query parameter. Off because URLs end up in access logs, browser history and `Referer` headers. |
+| `cosec.pipeline.allow-cookie-token` | boolean | `false` | Also read the access token from the `authorization` cookie. Off because a browser sends a cookie on its own, on a cross-site request too: turn it on only with your own CSRF defense ([Authentication](../integration/authentication.md)). |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | The request header an API key comes in. No document may read it: every compiler of the host refuses a reference to it, as to the other credential headers ([Headers](../policies/language.md#headers)). |
 | `cosec.pipeline.trace-level` | `off`, `full`, `exhaustive` | `off` | How much of each evaluation the engine traces. Decision events carry the trace as `evaluationTrace` (null at `off`, and when the request did not reach the engine); a higher level costs time on every request. |
-| `cosec.pipeline.mode` | `enforce`, `gateway` | `enforce` | `enforce`: the host decides with policies. `gateway`: a service behind a CoSec gateway reads the caller from the `CoSec-Identity` header the gateway forwards, and wires no authenticator, API keys, snapshot, policies, control plane or Redis of its own ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)). Any other value fails startup, and so does `gateway` on a Spring Cloud Gateway host. In `gateway` mode only the gateway may be able to reach the service: startup logs a `WARN` saying so. JWT is not limited to `enforce` mode: a service that issues no tokens sets `cosec.jwt.enabled=false`, or startup asks for a secret and a token store. |
-| `cosec.pipeline.gateway.max-age` | duration | `60s` | In `gateway` mode, an identity issued longer ago than this, plus `cosec.authentication.revocation.skew`, is refused: `401` `token-expired`. |
-| `cosec.pipeline.gateway.max-size` | data size | `8KB` | In `gateway` mode, a larger `CoSec-Identity` header is refused: `400` `invalid-request`. |
+| `cosec.pipeline.mode` | `enforce`, `gateway` | `enforce` | `enforce`: the host decides with policies. `gateway`: a service behind a CoSec gateway reads the caller from the `CoSec-Identity` header the gateway forwards, and wires no authenticator, API keys, snapshot, policies, control plane or Redis of its own ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)). Any other value fails startup, and so does `gateway` on a Spring Cloud Gateway host. In `gateway` mode only the gateway may be able to reach the service: startup logs a `WARN` saying so. In `gateway` mode `cosec.jwt.enabled` defaults to `false`: a service that also issues tokens sets it to `true`. |
+| `cosec.pipeline.identity.max-age` | duration | `60s` | In `gateway` mode, an identity issued longer ago than this, plus `cosec.authentication.revocation.skew`, is refused: `401` `token-expired`. |
+| `cosec.pipeline.identity.max-size` | data size | `8KB` | In `gateway` mode, a larger `CoSec-Identity` header is refused: `400` `invalid-request`. |
 
 ## Authorization
 
@@ -105,11 +112,11 @@ says ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-removed-key-pref
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A request that declares another app with `CoSec-App-Id` is rejected (`403` `scope-rejected`, `401` for an anonymous caller). Unset, requests declare their app ([Trust boundaries](../guide/security-model.md#trust-boundaries)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
+| `cosec.authorization.scope.app-id` | string | none | The app this host serves. A credential that declares another app, or none, is rejected (`403` `scope-rejected`). Unset, the credential's app applies ([Apps](../integration/authentication.md#apps)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
-| `cosec.authorization.routes.location` | comma-separated resource locations | `classpath:cosec-routes.json` | The route maps a WebFlux or WebMvc host loads at startup. A location that does not exist, or a map that does not parse, fails startup. Set it empty to run without a route map: every request is then authorized in the `http` namespace. A Spring Cloud Gateway host ignores it and loads no route map. |
+| `cosec.authorization.routes.location` | comma-separated resource locations | unset | The route maps a WebFlux or WebMvc host loads at startup, each logged with its service and route count. A location that does not exist, a map that does not parse, or a map with no routes fails startup. Unset, no route map is loaded and every request is authorized in the `http` namespace, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is set empty. Empty runs without a route map on purpose. A Spring Cloud Gateway host ignores it and loads no route map. |
 
 ## Gateway
 
@@ -157,7 +164,7 @@ of your own replaces both.
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | How long CoCache's local copy of a document may serve a cold load before Redis is asked again. It applies whatever a cache customizer or `cocache.*` property sets. |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often a pass starts that confirms every installed document against Redis with a conditional read; while a pass is still in flight, the next starts as soon as it ends, never overlapped. A change whose invalidation message was lost is installed by the first pass that reaches its document after the change is readable (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis CPU in proportion to the documents' size ([Storage](./storage.md#what-revalidation-costs-redis)). |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often a pass starts that confirms every installed document against Redis with a conditional read; while a pass is still in flight, the next starts as soon as it ends, never overlapped. A change whose invalidation message was lost is installed by the first pass that reaches its document after the change is readable (`SNP-6`). At least `1s`, at most `5m`, less than `lag-warn` and, with `fail-closed.tenants`, less than `fail-closed.max-lag`; anything else fails startup. Each pass costs Redis a few microseconds per document, whatever its size ([Storage](./storage.md#what-revalidation-costs-redis)). |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |
@@ -168,7 +175,7 @@ of your own replaces both.
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. |
-| `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. |
+| `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. Either way the instance reads the policy again every `revalidate-interval`, and the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict; a policy it cannot read is `DOWN` under `fail` and `UP` with `eviction: unknown` under `warn` ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). |
 
 ## Shadow windows
 
@@ -217,6 +224,7 @@ application does not start (`IDN-6`, [API keys](../integration/authentication.md
 | `hash` | string | none | **Required.** SHA-256 of the key, 64 lowercase hex characters. Never configure the key itself. |
 | `principal-id` | string | none | **Required.** The principal the key authenticates as. |
 | `tenant-id` | string | none | **Required.** Tenant of the principal. |
+| `app` | string | none | The app the key belongs to ([Apps](../integration/authentication.md#apps)). Left out, it declares none, and a host with an app refuses it. |
 | `roles` | set | none | The cap: the key holds only these of its principal's roles (`role`, `role@space`), and no attached policy or principal binding; `[]` leaves only what `Anyone` bindings give. Set this or `uncapped`. |
 | `uncapped` | boolean | `false` | `true` for a key that holds everything its principal holds. Exactly one of `roles` and `uncapped: true` is set, or the application does not start. |
 | `expires-at` | instant | none | After this instant the key is rejected. |
@@ -224,12 +232,12 @@ application does not start (`IDN-6`, [API keys](../integration/authentication.md
 
 ## Cache
 
-`cosec.authorization.cache.*`: the revoked token and revoked subject caches, created with JWT and `cosec-cocache`.
+`cosec.authentication.revocation.cache.*`: the revoked token and revoked subject caches, created with JWT and `cosec-cocache`.
 Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authorization.cache.token.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
+| `cosec.authentication.revocation.cache.*` | [local cache settings](#local-cache-settings) | `local-max-age: 30s`, `maximum-size: 100000` | Local copy of revocation lookups (`RevokedTokenCache` and `RevokedSubjectCache`). |
 
 ### Local cache settings
 
@@ -246,19 +254,19 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.audit.required.timeout` | duration | `1s` | How long one `REQUIRED` decision listener may take. A failure or timeout turns a permit into `503` ([Decision listeners](./observability.md#decision-listeners)). |
 | `cosec.audit.kafka.topic` | string | `cosec-audit` | Kafka topic of the audit events. |
 | `cosec.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | How the Kafka audit listener is delivered. `required` waits for the broker's acknowledgement, so a permit that cannot be audited is a `503`; configure the producer with `acks=all`. Startup fails when it is `required` without `cosec-kafka` ([STA-1](./troubleshooting.md#startup-fails-on-a-missing-module)). |
 
 ## Decision listeners
 
-`cosec.observability.listener.*`: the queues of the `BEST_EFFORT` decision listeners
+`cosec.observability.listener.*`: the time a `REQUIRED` decision listener has, and the queues of the `BEST_EFFORT` ones
 ([Decision listeners](./observability.md#decision-listeners)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
+| `cosec.observability.listener.required-timeout` | duration | `1s` | How long one `REQUIRED` decision listener may take. A failure or timeout turns a permit into `503`. |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | Events one `BEST_EFFORT` listener may have waiting. A full queue drops the next event and counts it (`cosec.listener.dropped`). |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. |
+| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. The Kafka audit listener gets as long again for the sends it still holds. |
 
 ## Control plane
 
@@ -272,7 +280,7 @@ credential is ever revoked.
 |---|---|---|---|
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
 | `cosec.control.http.base-path` | string | `/cosec/control` | Where the control API is served. Its routes are under `{base-path}/v1`, so moving the API keeps the version. |
-| `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread; a request without a permitted principal has no body read at all (`401`). On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. |
+| `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread. On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. On either stack, a request without a permitted principal has no body read at all (`401`). |
 | `cosec.control.revisions.max-count` | int | `50` | Revisions always kept per document; older ones are reclaimed once also older than `min-age`. Revisions an open change rests on are kept. |
 | `cosec.control.revisions.min-age` | duration | `7d` | Revisions younger than this are always kept. |
 | `cosec.control.revisions.orphan-age` | duration | `1h` | Records of conflicted publishes are removed once this old. |
@@ -325,39 +333,53 @@ Redis through a `StringRedisTemplate`.
 
 ## CoCache properties that affect CoSec
 
-With `cosec-cocache`, CoSec creates its caches on CoCache's runtime. The full list of CoCache properties is in
-[CoCache's documentation](https://cocache.ahoo.me).
+With `cosec-cocache`, CoSec creates its caches through CoCache 8's `CoCacheFactory`, so CoCache's configuration layers
+reach them like any other cache. The full list of CoCache properties is in [CoCache's documentation](https://cocache.ahoo.me/guide/configuration).
+Every CoCache duration needs a unit (`2s`, `10m`); a bare number fails startup.
 
 | Property | Effect on CoSec |
 |---|---|
-| `cocache.backend` | `redis` (default) or `memory`. With `memory` nothing is shared between instances, the eviction check passes, and every instance starts with no documents: local development and tests only. |
-| `cocache.defaults.*` | The policy of every CoCache cache, CoSec's `PolicySnapshotCache`, `RevokedTokenCache` and `RevokedSubjectCache` included, except for what CoSec fixes ([Precedence](#precedence)). |
-| `cocache.caches.<CacheName>.*` | The policy of one cache, by the names above. |
+| `cocache.backend` | `redis` (default) or `memory`. With `memory` nothing is shared between instances, the eviction checks pass, and every instance starts with no documents: local development and tests only. |
+| `cocache.defaults.cache.*`, `cocache.defaults.store.*` | Fill only what a cache's declaration leaves unwritten. CoSec's caches declare what they depend on, so these change little: `MembershipCache` is a `cache`, every other CoSec cache a `store` ([Precedence](#precedence)). |
+| `cocache.overrides.cache.*`, `cocache.overrides.store.*` | Tighten staleness bounds (`local-max-age`, `absent-ttl`) and `read-failure` over every cache, except for the fields CoSec locks. |
+| `cocache.caches.[<CacheName>].*` | The policy of one cache, by the names above. Setting a field CoSec locks fails startup ([Precedence](#precedence)). So does a key CoCache does not know or that does not apply to that cache, usually a typo, unless `cocache.caches-validation: warn` ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)). CoSec publishes the name of every cache it may create, so an entry for one this instance does not create (a control-plane cache on a service without the control plane, `MembershipCache` without a `MembershipLoader`, a revocation table with JWT off) starts. |
+| `cocache.key-prefix` | None: CoSec locks its own prefix, [`cosec.key-prefix`](#key-prefix). |
 | `cocache.redis.command-timeout` | How long one Redis command may take (`2s` by default). A snapshot read that times out is a failed read ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `cocache.redis.channel-mode` | `pubsub` or `sharded` invalidation. Every instance, and the control plane, must agree. |
-| `cocache.redis.assume-maxmemory-policy`, `cocache.redis.set-cache-eviction-check` | None: they belong to CoCache's own check for `SetCache`s, and CoSec has none. CoSec's startup check is `cosec.authorization.snapshot.eviction-check` ([Snapshot](#snapshot)). |
+| `cocache.redis.assume-maxmemory-policy` | The policy CoCache's own eviction check assumes when `INFO memory` cannot be read. CoCache refuses to start with `allkeys-*`, or with an unreadable policy and this unset, because CoSec's documents and records are `Store`s; `cosec.authorization.snapshot.eviction-check=warn` does not change that ([Redis requirements](./storage.md#redis-requirements)). |
+| `cocache.redis.store-eviction-check` | What CoCache does with a `volatile-*` policy and a `Store` whose policy has a finite `ttl` (the shadow caches): `warn` (default), `fail` or `off`. It counts the revocation tables too, whose entries carry a lifetime of their own, but only once the instance has written or read one, so not at startup; CoSec's own check refuses every policy but `noeviction` from the start ([Redis requirements](./storage.md#redis-requirements)). |
+| `cocache.redis.store-eviction-check-interval` | How often CoCache reads the policy again, for its log and its `storeEviction` health detail. CoSec reads it again every `revalidate-interval` on its own, for `cosecSnapshotEviction`. |
 | `spring.data.redis.*` | The Redis CoCache connects to, and the one the rate limiter and the Redis API key store use. |
 
-The control plane's caches and the shadow caches are created from CoSec's own specs, with their policies fixed.
+The control plane's caches and the shadow caches are created with the same locks as the snapshot store, so the same
+configuration rules apply to them.
 
 ## Precedence
 
-For `PolicySnapshotCache`, `RevokedTokenCache` and `RevokedSubjectCache`, the cache policy is assembled in this order;
-a later step wins over an earlier one:
+Every CoSec cache is assembled by CoCache's layers, field by field; a later step wins over an earlier one:
 
-1. CoSec's default for the cache: `cosec.authorization.snapshot.local-max-age` for the snapshot cache,
-   `cosec.authorization.cache.token.*` and `read-failure: degrade` for the revocation caches (a failed read answers
-   "not revoked"; `read-failure: throw` in a later step makes the revocation check fail closed with `503` instead);
-2. the application's CoCache `CacheSpecCustomizer` beans;
-3. `cocache.defaults.*`, then `cocache.caches.<CacheName>.*`;
-4. CoSec's fixed settings, applied last and impossible to override.
+1. CoCache's type default (`store`: no `ttl`, `local-max-age` 30 s; `cache`: `ttl` 1 h);
+2. `cocache.defaults.cache.*` or `cocache.defaults.store.*`, for the fields CoSec's declaration leaves unwritten;
+3. CoSec's declaration: `cosec.authorization.snapshot.local-max-age` for the snapshot store,
+   `cosec.authentication.revocation.cache.*` and `unknown-read: absent` for the revocation tables (a failed read answers
+   "not revoked"; `unknown-read: throw` in step 6 makes the revocation check fail closed with `503` instead);
+4. the application's CoCache `CacheSpecCustomizer` beans;
+5. `cocache.overrides.*`, which only tighten;
+6. `cocache.caches.[<CacheName>].*`;
+7. CoSec's constraints, applied last, after `unlock` too.
 
-So a `cocache.*` property wins over the matching `cosec.authorization.cache.token.*` one. The fixed settings of step 4:
+A value CoSec declares wins over `cocache.defaults.*` whatever it is, one equal to CoCache's own default (a
+`maximum-size` of `10000`) included. So a `cocache.caches.[<CacheName>].*` property wins over the matching `cosec.authentication.revocation.cache.*` one. CoSec
+locks some fields (CoCache's `lock`): the global layers skip them, a `cocache.caches` entry that sets one fails startup
+(unless the entry lists it in `unlock`, CoCache's break glass), and a customizer that changes one throws. Some are also
+constrained (step 7), so even `unlock` cannot change them:
 
-| Cache | Fixed | Why |
-|---|---|---|
-| `PolicySnapshotCache` | `ttl` none, `read-failure: throw`, `invalidate-failure: throw`, `foreign-format: fail`; no loader (a customizer that sets one fails startup); `local-max-age` from `cosec.authorization.snapshot.local-max-age` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry, a degraded read or a reclaim would silently drop a document, and with it its DENY statements; a failed delete retried later could delete a newer write. |
-| `RevokedTokenCache`, `RevokedSubjectCache` | `foreign-format: fail` | Reclaiming an unreadable revocation would make its tokens valid again. |
-| every CoSec cache | key prefix, namespace and key encoder | The storage layout is CoSec's. A `key-prefix` from a customizer or `cocache.*` is ignored. |
+| Cache | Locked | Constrained | Why |
+|---|---|---|---|
+| `PolicySnapshotCache` and the control plane's and shadow window's stores of record (`RevisionRecordCache`, `RevisionIndexCache`, `ReferenceIndexCache`, `ControlLeaseCache`, `ControlListCache`, `ControlAppListCache`, `ChangeRequestCache`, `StageCache`, `CandidateCache`) | `ttl`, `unknown-read`; the snapshot store also `local-max-age` | `ttl` never expires, `unknown-read: throw` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry or a failed read taken for "absent" would silently drop a document, and with it its DENY statements. As CoCache `Store`s, they never reclaim content they cannot read, and a failed delete throws instead of being retried later, when it could delete a newer write. |
+| `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache`, `InstanceIndexCache` | `unknown-read`, `ttl` | `unknown-read: throw`; `ttl` the declared 8 days (reports, reporters) or 2 minutes (statuses; the list of instances keeps the 8 days) | An outage must not read as "no samples" or "no instance", and an instance's samples must not expire from a window it reported in. |
+| `MembershipCache` | `read-failure`, `unknown-read` | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s`, `read-failure` and `unknown-read: throw` | A failed read must never become "no memberships", and a lost invalidation must expire. |
+| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout` | `read-timeout`: the store's command timeout | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A read that times out reads "not revoked" (`unknown-read: absent`), so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. |
+| every CoSec cache | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
 
 **Next:** where the documents live and how instances read them, in [Storage and caching](./storage.md).

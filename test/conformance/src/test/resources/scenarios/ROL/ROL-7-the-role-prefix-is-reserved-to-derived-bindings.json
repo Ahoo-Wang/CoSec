@@ -1,0 +1,84 @@
+{
+  "rules": [
+    "ROL-7"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A change may not put a binding of a derived binding's form.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "role:x@wms:read",
+              "subject": {
+                "role": "x"
+              },
+              "app": "wms",
+              "space": "*",
+              "policy": "perm:wms/read"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

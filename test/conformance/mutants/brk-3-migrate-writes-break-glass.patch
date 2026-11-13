@@ -3,14 +3,14 @@
 # Tests: :migrate:test
 
 diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
-index 6e2c766f..f0c580fa 100644
+index 6c8d8a8..bae30b7 100644
 --- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
 +++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
-@@ -84,7 +84,6 @@ class DocumentPublisher(
-             compiler.compile(document)
-             compiler.checkReferences(document, platform)
+@@ -142,7 +142,6 @@ class DocumentPublisher(
+                 compiler.compile(document)
+                 compiler.checkReferences(document, platform)
+             }
+-            refusedBreakGlass(documents.values)?.let { throw PublishException(it, emptyList()) }
          }
--        refuseBreakGlass(documents.values)
-         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
-         val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
-         checkExisting(existing, documents, resume)
+ 
+         /** `cosec.control.break-glass.max-duration` by default (RFC 0007 §8). */

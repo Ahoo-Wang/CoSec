@@ -53,17 +53,20 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.node.ObjectNode
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -388,6 +391,7 @@ class ControlRoundTwoFixesTest {
             pia.actor.principal,
             pia.actor.tenant,
             me.ahoo.cosec.spi.authn.MembershipSource.Provider.UNCAPPED,
+            app = PipelineControlAuthorizer.CONTROL_APP,
         )
         val approve = me.ahoo.cosec.control.authz.ControlActions.APPROVE
         val document = me.ahoo.cosec.control.authz.ControlResources.document(SnapshotKey.Platform)
@@ -482,11 +486,48 @@ class ControlRoundTwoFixesTest {
         val capped = approval.copy(principalBindings = false)
         authority.approverProblem(change.copy(approval = capped), needed, walt)
             .assert().isEqualTo("the approver no longer holds cosec:approve on the document")
-        // Stored only when false, so an approval made with a token keeps its bytes.
         val stored = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = capped))).approval!!
         stored.principalBindings.assert().isFalse()
         stored.breakGlass.assert().isTrue()
-        String(ChangeRequestCodec.encode(change.copy(approval = approval))).assert().doesNotContain("principalBindings")
+    }
+
+    /** One shape: every field of a stored approval is written, and reading one that lacks it is a format error. */
+    @Test
+    fun `a stored approval always has its fields, null where its credential did not say`() = runBlocking<Unit> {
+        val change = changes.propose(
+            pia,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("more"))),
+            "x"
+        )
+        val approval = Approval(
+            pia.actor,
+            clock.now,
+            "c",
+            emptyList(),
+            pia.memberships,
+            credentialId = "token-pia",
+            issuedAt = clock.now,
+        )
+        val written = ChangeRequestCodec.encode(change.copy(approval = approval))
+        // As written, the issue time included: publish checks the approver's revocations against it (RC1-11).
+        val readBack = ChangeRequestCodec.decode(written).approval!!
+        readBack.issuedAt.assert().isEqualTo(approval.issuedAt)
+        readBack.credentialId.assert().isEqualTo(approval.credentialId)
+        val fields = listOf("memberships", "attributes", "principalBindings", "breakGlass", "credentialId", "issuedAt")
+        val root = CoSecJson.mapper.readTree(written)
+        fields.forEach { root.get("approval").has(it).assert().describedAs(it).isTrue() }
+        for (field in fields) {
+            val without = CoSecJson.mapper.readTree(written).apply { (get("approval") as ObjectNode).remove(field) }
+            assertThrownBy<SnapshotFormatException> {
+                ChangeRequestCodec.decode(CoSecJson.mapper.writeValueAsBytes(without))
+            }.describedAs(field).hasMessageContaining(field)
+        }
+        // A credential that has no id, as a custom authenticator's: written as null, and it reads back as null.
+        val anonymous = approval.copy(memberships = null, credentialId = null, issuedAt = null)
+        val read = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = anonymous))).approval
+        read.assert().isEqualTo(anonymous)
     }
 
     @Test

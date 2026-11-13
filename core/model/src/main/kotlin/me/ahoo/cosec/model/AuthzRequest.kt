@@ -11,16 +11,20 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * Everything one evaluation reads. Immutable.
  *
  * Neither this class nor its parts are data classes: nothing needs `copy` or `componentN`, and only tests compare them.
  */
+@InternalCoSecApi
 class AuthzRequest(
     val subject: Subject,
-    val scope: Scope,
     val action: Action,
     val resource: Resource,
     val environment: Environment,
@@ -28,14 +32,8 @@ class AuthzRequest(
 
 class Subject(
     val id: String,
-    val tenantId: String,
     val authenticated: Boolean,
-    /** The roles as given, possibly with an `@space` suffix. The adapter scopes them. */
-    val roles: Set<String>,
-    val policies: Set<String>,
     val attributes: Map<String, Any>,
-    /** Decided beforehand by `RootPrincipalMatcher` (RFC 0002 stages 2–3); a break-glass binding replaces it later. */
-    val root: Boolean,
     /**
      * Whether what is bound to the principal by name (its attachments, and the principal bindings of the platform and
      * the tenant) grants it anything. False for a credential with a role cap (RFC 0009 §4.2): a cap means "only these
@@ -52,22 +50,6 @@ class Subject(
     val breakGlass: Boolean,
 )
 
-/**
- * The scope a request is made in.
- *
- * It can only be [declared]: it comes from client headers or query parameters (`CoSec-App-Id`, `CoSec-Space-Id`) and
- * nobody has checked membership. Checked scopes are `me.ahoo.cosec.model.scope.Scope`, which only `ScopeResolver`
- * constructs (RFC 0004 §4.6).
- */
-class Scope private constructor(val tenantId: String, val appId: String, val spaceId: String, val source: Source) {
-    enum class Source { DECLARED, RESOLVED }
-
-    companion object {
-        fun declared(tenantId: String, appId: String, spaceId: String): Scope =
-            Scope(tenantId, appId, spaceId, Source.DECLARED)
-    }
-}
-
 /** For HTTP, `namespace` is `http` and `verb` the method. */
 class Action(val namespace: String, val verb: String)
 
@@ -78,6 +60,6 @@ class Environment(
     val remoteIp: String,
     val requestId: String,
     val deviceId: String,
-    /** Decided beforehand by `BlacklistChecker` (RFC 0002 stages 2–3); an attribute provider supplies it later. */
+    /** Whether the principal, IP or device is blacklisted (RFC 0006 §5.4.4): the built-in DENY of the blacklist rule reads it. */
     val blocked: Boolean,
 )

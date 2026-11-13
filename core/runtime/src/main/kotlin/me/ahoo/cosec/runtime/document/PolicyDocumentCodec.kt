@@ -61,7 +61,7 @@ import java.time.Instant
  * document, where it means any tenant. A platform principal names its tenant.
  */
 object PolicyDocumentCodec {
-    /** The format of platform, app and tenant documents. RFC 0003's 7.0-shaped documents are schema 1. */
+    /** The format of platform, app and tenant documents: the `schema` they declare. */
     const val SCHEMA: Int = SnapshotDocument.DOCUMENT_SCHEMA
     const val WILDCARD: String = Match.WILDCARD
 
@@ -97,6 +97,8 @@ object PolicyDocumentCodec {
     private val CONFIRMATION_FIELDS = arrayOf("by", "change")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
+    private val APP_ROLE_FIELDS = arrayOf("id", "name", "description", "permissions")
+    private val TENANT_ROLE_FIELDS = APP_ROLE_FIELDS + arrayOf("app", "space")
 
     /** Decodes the document of [kind] stored under [owner] (the app or tenant id; empty for the platform). */
     fun decode(kind: DocumentKind, owner: String, bytes: ByteArray): PolicyDocument {
@@ -112,9 +114,9 @@ object PolicyDocumentCodec {
     fun decode(kind: DocumentKind, owner: String, tree: JsonNode): PolicyDocument {
         val root = DocumentNode(tree, ROOT)
         val fields = when (kind) {
-            DocumentKind.APP -> DOCUMENT_FIELDS + "catalog"
+            DocumentKind.APP -> DOCUMENT_FIELDS + "catalog" + "roles"
             DocumentKind.PLATFORM -> DOCUMENT_FIELDS + PLATFORM_FIELDS + "boundaries"
-            DocumentKind.TENANT -> DOCUMENT_FIELDS + "boundary"
+            DocumentKind.TENANT -> DOCUMENT_FIELDS + "boundary" + "roles"
         }
         root.requireObject(*fields)
         val schema = root.required("schema").long()
@@ -146,7 +148,44 @@ object PolicyDocumentCodec {
             limits = root.field("limits")?.let(::limits),
             attributes = root.field("attributes")?.let(::attributes),
             rateLimits = root.field("rateLimits")?.elements()?.map(::rateLimit).orEmpty(),
+            roles = root.field("roles")?.elements()?.map { role(it, kind) }.orEmpty(),
         )
+    }
+
+    /**
+     * A role (RFC 0012 §5.3). What each kind of document may write is checked here; what makes a value valid (an id
+     * without `@`, an app id, a space that is not reserved) is the compiler's, at the same path.
+     */
+    private fun role(node: DocumentNode, kind: DocumentKind): RoleDefinition {
+        node.requireObject(*(if (kind == DocumentKind.TENANT) TENANT_ROLE_FIELDS else APP_ROLE_FIELDS))
+        val id = node.required("id").text()
+        return try {
+            RoleDefinition(
+                id = RoleId(id),
+                permissions = rolePermissions(node.required("permissions"), kind),
+                name = node.field("name")?.text(),
+                description = node.field("description")?.text(),
+                app = if (kind == DocumentKind.TENANT) AppId(node.required("app").nonEmpty()) else null,
+                space = node.field("space")?.let { SpaceId(it.text()) },
+            )
+        } catch (error: IllegalArgumentException) {
+            throw SnapshotFormatException("${node.path}: role [$id]: ${error.message}", error)
+        }
+    }
+
+    /** A list of permission ids, or `"*"` in an app document. */
+    private fun rolePermissions(node: DocumentNode, kind: DocumentKind): RolePermissions {
+        if (node.json.isString) {
+            if (kind == DocumentKind.APP && node.text() == WILDCARD) return RolePermissions.All
+            node.fail(
+                if (kind == DocumentKind.APP) {
+                    "permissions is a list of permission ids or $WILDCARD"
+                } else {
+                    "a tenant's role lists its permissions: $WILDCARD is only for a system role"
+                }
+            )
+        }
+        return RolePermissions.Listed(node.elements().map { it.text() })
     }
 
     /** `{"id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure"}`. */
@@ -221,7 +260,7 @@ object PolicyDocumentCodec {
                 val digest = parent.required("digest")
                 ParentRevision(
                     revision.long().takeIf { it > 0 } ?: revision.fail("must be positive"),
-                    digest.text().takeIf { ParentRevision.DIGEST.matches(it) } ?: digest.fail("is 40 lowercase hex digits"),
+                    digest.text().takeIf { ParentRevision.DIGEST.matches(it) } ?: digest.fail("is `SHA-256:` and 64 lowercase hex digits"),
                 )
             },
             change = node.required("change").nonEmpty(),
@@ -372,11 +411,13 @@ object PolicyDocumentCodec {
                     description = group.field("description")?.text(),
                     spaced = group.field("spaced")?.bool() ?: false,
                     permissions = group.required("permissions").elements().map { permission ->
-                        permission.requireObject("id", "name", "description")
+                        permission.requireObject("id", "name", "description", "action", "resource")
                         CatalogPermission(
                             id = permission.required("id").text(),
                             name = permission.field("name")?.text(),
                             description = permission.field("description")?.text(),
+                            actions = permission.field("action")?.strings(),
+                            resources = permission.field("resource")?.let(::resources).orEmpty(),
                         )
                     },
                 )
@@ -408,6 +449,14 @@ object PolicyDocumentCodec {
     fun catalogTree(catalog: Catalog): ObjectNode = catalog(catalog)
 
     @InternalCoSecApi
+    fun roleTree(role: RoleDefinition): ObjectNode = role(role)
+
+    /** A role of a [kind] document, which decides the fields it may write. */
+    @InternalCoSecApi
+    fun decodeRole(tree: JsonNode, kind: DocumentKind, path: String = ROOT): RoleDefinition =
+        role(DocumentNode(tree, path), kind)
+
+    @InternalCoSecApi
     fun rateLimitTree(rule: RateLimitSource): ObjectNode = rateLimit(rule)
 
     @InternalCoSecApi
@@ -415,6 +464,12 @@ object PolicyDocumentCodec {
 
     @InternalCoSecApi
     fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
+
+    @InternalCoSecApi
+    fun decodeLimits(tree: JsonNode, path: String = ROOT): ConditionLimits = limits(DocumentNode(tree, path))
+
+    @InternalCoSecApi
+    fun decodeAttributes(tree: JsonNode, path: String = ROOT): List<Attribute> = attributes(DocumentNode(tree, path))
 
     fun encode(document: PolicyDocument): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(document))
 
@@ -443,16 +498,24 @@ object PolicyDocumentCodec {
                 array.addObject().put("path", attribute.path).put("type", type)
             }
         }
+        putEntries(root, document)
+        return root
+    }
+
+    private fun putEntries(root: ObjectNode, document: PolicyDocument) {
         document.catalog?.let { root.set("catalog", catalog(it)) }
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(policy(it)) }
         val bindings = root.putArray("bindings")
         document.bindings.forEach { bindings.add(binding(it, document.kind, document.owner)) }
+        if (document.roles.isNotEmpty()) {
+            val roles = root.putArray("roles")
+            document.roles.forEach { roles.add(role(it)) }
+        }
         if (document.rateLimits.isNotEmpty()) {
             val rules = root.putArray("rateLimits")
             document.rateLimits.forEach { rules.add(rateLimit(it)) }
         }
-        return root
     }
 
     private fun rateLimit(rule: RateLimitSource): ObjectNode {
@@ -505,18 +568,7 @@ object PolicyDocumentCodec {
         if (statement.name.isNotEmpty()) item.put("name", statement.name)
         item.put("effect", if (statement.effect == Effect.DENY) "deny" else "allow")
         item.putArray("action").also { actions -> statement.actions.forEach(actions::add) }
-        if (statement.resources.isNotEmpty()) {
-            val resources = item.putArray("resource")
-            for (resource in statement.resources) {
-                if (resource.hasOptions()) {
-                    resources.addObject().put("pattern", resource.pattern)
-                        .put("caseSensitive", resource.caseSensitive)
-                        .put("decodeAndParseSegments", resource.decodeAndParseSegments)
-                } else {
-                    resources.add(resource.pattern)
-                }
-            }
-        }
+        putResources(item, statement.resources)
         statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
         statement.onMissing?.let {
             item.put(
@@ -530,6 +582,35 @@ object PolicyDocumentCodec {
                 .set("by", actor(Actor(TenantId(it.tenant), PrincipalId(it.principal))))
         }
         return item
+    }
+
+    private fun putResources(item: ObjectNode, written: List<ResourceSource>) {
+        if (written.isEmpty()) {
+            return
+        }
+        val resources = item.putArray("resource")
+        for (resource in written) {
+            if (resource.hasOptions()) {
+                resources.addObject().put("pattern", resource.pattern)
+                    .put("caseSensitive", resource.caseSensitive)
+                    .put("decodeAndParseSegments", resource.decodeAndParseSegments)
+            } else {
+                resources.add(resource.pattern)
+            }
+        }
+    }
+
+    private fun role(role: RoleDefinition): ObjectNode {
+        val node = factory.objectNode().put("id", role.id.value)
+        role.app?.let { node.put("app", it.value) }
+        role.space?.let { node.put("space", it.value) }
+        role.name?.let { node.put("name", it) }
+        role.description?.let { node.put("description", it) }
+        when (val permissions = role.permissions) {
+            RolePermissions.All -> node.put("permissions", WILDCARD)
+            is RolePermissions.Listed -> node.putArray("permissions").also { ids -> permissions.ids.forEach(ids::add) }
+        }
+        return node
     }
 
     private fun binding(binding: Binding, kind: DocumentKind, owner: String): ObjectNode {
@@ -571,6 +652,12 @@ object PolicyDocumentCodec {
                 val entry = permissions.addObject().put("id", permission.id)
                 permission.name?.let { entry.put("name", it) }
                 permission.description?.let { entry.put("description", it) }
+                permission.actions?.let { actions ->
+                    entry.putArray(
+                        "action"
+                    ).also { array -> actions.forEach(array::add) }
+                }
+                putResources(entry, permission.resources)
             }
         }
         return node

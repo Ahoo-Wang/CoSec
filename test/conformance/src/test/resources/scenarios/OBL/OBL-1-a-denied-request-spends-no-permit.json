@@ -57,7 +57,7 @@
   },
   "rateLimiter": {
     "exhausted": [
-      "orders"
+      "platform/orders"
     ]
   },
   "http": {

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Instant
 import java.time.ZoneId
 

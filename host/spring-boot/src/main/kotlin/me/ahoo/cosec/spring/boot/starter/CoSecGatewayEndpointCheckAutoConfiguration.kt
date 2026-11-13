@@ -45,7 +45,7 @@ import org.springframework.context.annotation.Bean
     ]
 )
 @EnableConfigurationProperties(GatewayProperties::class)
-class CoSecGatewayEndpointCheckAutoConfiguration {
+internal class CoSecGatewayEndpointCheckAutoConfiguration {
     /** After every singleton: the endpoints are known only once their beans exist. */
     @Bean
     fun cosecGatewayEndpointCheck(

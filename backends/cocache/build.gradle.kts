@@ -22,10 +22,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     // CoCacheControlStore implements the control plane's ControlStore (RFC 0007 §5.1). Compile-only, so an application
     // that reads snapshots without the control plane does not pull it in; the control plane brings it with it.
-    compileOnly(project(":control"))
+    compileOnlyApi(project(":control"))
     // The shadow stores implement runtime's shadow ports (RFC 0007 §6.4), and the stored formats are written with
     // runtime's one mapper (CoSecJson, RFC 0011 D3), which cocache calls at run time: implementation, not compile-only.
-    implementation(project(":runtime"))
+    api(project(":runtime"))
     testImplementation(project(":control"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.

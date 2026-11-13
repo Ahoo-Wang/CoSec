@@ -19,77 +19,73 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-/** `SCP-4` (RFC 0008 §3.2): one `CoSec-*` parameter, one value, wherever it is sent. */
+/** `SCP-4` (RFC 0008 §3.2): one `CoSec-*` header, one value; the query is not read. */
 class CoSecParametersTest {
     private fun read(query: String? = null, vararg headers: Pair<String, List<String>>): CoSecParameters? =
         CoSecParameters.read(
             HttpFacts("GET", "/", query, Headers.of(headers.toMap()), Cookies.EMPTY, "10.0.0.1", HostScope(null))
         )
 
+    private fun CoSecParameters.all() = listOf(spaceId, deviceId)
+
     @Test
     fun absentParametersAreEmpty() {
         val parameters = read()!!
-        parameters.appId.assert().isEmpty()
         parameters.spaceId.assert().isEmpty()
         parameters.deviceId.assert().isEmpty()
     }
 
     @Test
-    fun headerOrQueryAlone() {
-        read(null, "cosec-app-id" to listOf("shop"))!!.appId.assert().isEqualTo("shop")
-        read("CoSec-Space-Id=team+a&x=1")!!.spaceId.assert().isEqualTo("team a")
-        read("%43oSec-Device-Id=phone")!!.deviceId.assert().isEqualTo("phone")
+    fun headersAreReadIgnoringCase() {
+        read(null, "CoSec-Space-Id" to listOf("team a"))!!.spaceId.assert().isEqualTo("team a")
+        read(null, "COSEC-DEVICE-ID" to listOf("phone"))!!.deviceId.assert().isEqualTo("phone")
+    }
+
+    /** A scope in a URL would reach the access logs, so what the query says is neither a value nor a disagreement. */
+    @ParameterizedTest
+    @ValueSource(strings = ["CoSec-Space-Id", "CoSec-Device-Id"])
+    fun theQueryIsNotRead(name: String) {
+        read("$name=other")!!.all().assert().containsOnly("")
+        read("$name=a&$name=b")!!.all().assert().containsOnly("")
+        read("$name=%zz")!!.all().assert().containsOnly("")
+        read("$name=other", name to listOf("a"))!!.all().assert().contains("a").doesNotContain("other")
     }
 
     @Test
-    fun sameValueInBothPlacesIsOneValue() {
-        val parameters = read("CoSec-App-Id=shop&CoSec-App-Id=shop", "CoSec-App-Id" to listOf("shop", "shop"))!!
-        parameters.appId.assert().isEqualTo("shop")
+    fun aRepeatedValueIsOneValue() {
+        read(null, "CoSec-Device-Id" to listOf("shop", "shop"))!!.deviceId.assert().isEqualTo("shop")
     }
 
     @Test
     fun onlyBlankValuesAreNotValues() {
-        read("CoSec-App-Id=&CoSec-App-Id=%20%09", "CoSec-App-Id" to listOf(" ", ""))!!.appId.assert().isEmpty()
+        read(null, "CoSec-Device-Id" to listOf(" ", ""))!!.deviceId.assert().isEmpty()
+        read(null, "CoSec-Device-Id" to listOf("\t"))!!.deviceId.assert().isEmpty()
     }
 
     /** RC1-16: a backend that reads the blank one would be in another space than CoSec checked. */
     @ParameterizedTest
-    @ValueSource(strings = ["CoSec-App-Id", "CoSec-Space-Id", "CoSec-Device-Id"])
+    @ValueSource(strings = ["CoSec-Space-Id", "CoSec-Device-Id"])
     fun aBlankValueBesideAValueIsAmbiguous(name: String) {
-        read("$name=", name to listOf("s1")).assert().isNull()
-        read("$name=s1&$name=%20").assert().isNull()
         read(null, name to listOf(" ", "s1")).assert().isNull()
-        read("$name=s1", name to listOf("")).assert().isNull()
+        read(null, name to listOf("s1", "")).assert().isNull()
     }
 
     /** RC1-16: blank is ASCII whitespace only; Unicode spaces survive a backend's `trim()`, so they are a value. */
     @Test
     fun unicodeSpacesAreAValue() {
-        read("CoSec-Space-Id=%E3%80%80")!!.spaceId.assert().isEqualTo("\u3000")
-        read("CoSec-Space-Id=%C2%A0", "CoSec-Space-Id" to listOf("s1")).assert().isNull()
-        read("CoSec-Space-Id=%E3%80%80", "CoSec-Space-Id" to listOf("s1")).assert().isNull()
+        read(null, "CoSec-Space-Id" to listOf("\u00A0"))!!.spaceId.assert().isEqualTo("\u00A0")
+        read(null, "CoSec-Space-Id" to listOf("\u00A0", "s1")).assert().isNull()
+        read(null, "CoSec-Space-Id" to listOf("\u3000", "s1")).assert().isNull()
         CoSecParameters.isBlank(" \t\n\u000C\r").assert().isTrue()
         CoSecParameters.isBlank("\u000B").assert().isFalse()
         CoSecParameters.isBlank("\u00A0").assert().isFalse()
     }
 
     @ParameterizedTest
-    @ValueSource(strings = ["CoSec-App-Id", "CoSec-Space-Id", "CoSec-Device-Id"])
-    fun differentHeaderAndQueryValuesAreAmbiguous(name: String) {
-        read("$name=b", name to listOf("a")).assert().isNull()
-        read("$name=a&$name=b").assert().isNull()
+    @ValueSource(strings = ["CoSec-Space-Id", "CoSec-Device-Id"])
+    fun differentHeaderValuesAreAmbiguous(name: String) {
         read(null, name to listOf("a", "b")).assert().isNull()
-        read("%43oSec-${name.removePrefix("CoSec-")}=b", name to listOf("a")).assert().isNull()
-    }
-
-    @Test
-    fun malformedValueOfACoSecParameterIsAmbiguous() {
-        read("CoSec-App-Id=%zz").assert().isNull()
-    }
-
-    @Test
-    fun otherQueryParametersAreNotRead() {
-        read("other=%zz&%zz=1&CoSec-Request-Id=x")!!.appId.assert().isEmpty()
+        read(null, name to listOf("a"), name.lowercase() to listOf("b")).assert().isNull()
     }
 
     @Test

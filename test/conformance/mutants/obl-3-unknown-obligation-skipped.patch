@@ -1,6 +1,6 @@
 # Rule: OBL-3
 # Mutant: the pipeline skips an obligation kind it does not handle instead of dispatching exhaustively
-# Tests: :architecture:test --tests me.ahoo.cosec.runtime.ObligationDispatchTest
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.ObligationDispatchTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 index aaa9996d..925fcd4b 100644

@@ -17,7 +17,6 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -48,15 +47,33 @@ import java.time.Instant
  * Change requests and staging slots as JSON, for every [me.ahoo.cosec.control.store.ControlStore]. Entries inside
  * operations are written as the document format writes them ([PolicyDocumentCodec]), so a stored change reads back
  * with the same entries, digests included. Reading is strict: anything else is a [SnapshotFormatException], whose
- * message escapes control characters, except a change whose own document is an app no key can name, which earlier builds
- * wrote: that is an [UnnamedDocumentException], a format error of that record alone, which a store lists and a reader
- * skips (`ControlStore.openChanges`). A head it was checked with of such an app is dropped from `checkedWith`.
+ * message escapes control characters, a document key of an app no key can name included (SCP-10).
  */
 object ChangeRequestCodec {
+    private val SHOWN_APPROVAL_FIELDS = listOf("approver", "at", "candidate", "covers")
+    private val LIMIT_FIELDS = listOf(
+        "maxNodes",
+        "maxDepth",
+        "maxInValues",
+        "maxCidrBlocks",
+        "maxLiteralBytes",
+        "maxCost"
+    )
     private val factory = JsonNodeFactory.instance
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     fun encode(change: ChangeRequest): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(change))
+
+    /**
+     * [change] as the control API shows it: the approval names its approver, when and what for, never what the approver
+     * held, its token's attributes, which token it was or what that credential could reach (reviews D5, N2). Only the
+     * change's record in the store keeps them; a change event carries none of them.
+     */
+    internal fun encodeShown(change: ChangeRequest): ByteArray {
+        val root = tree(change)
+        (root.get("approval") as? ObjectNode)?.retain(SHOWN_APPROVAL_FIELDS)
+        return CoSecJson.mapper.writeValueAsBytes(root)
+    }
 
     fun decode(bytes: ByteArray): ChangeRequest = guarded { change(read(bytes)) }
 
@@ -123,33 +140,31 @@ object ChangeRequestCodec {
         change.approval?.let { approvalTree(root.putObject("approval"), it) }
     }
 
-    /** The approver's credential (RC1-11): written only when the credential said, so older approvals keep their bytes. */
-    private fun credentialTree(node: ObjectNode, approval: Approval) {
-        approval.credentialId?.let { node.put("credentialId", it) }
-        approval.issuedAt?.let { node.put("issuedAt", it.toString()) }
-    }
-
+    /** Every field, always: `null` where the approver held no memberships or its credential did not say (RC1-11). */
     private fun approvalTree(node: ObjectNode, approval: Approval) {
         node.set("approver", actorTree(approval.approver))
         node.put("at", approval.at.toString()).put("candidate", approval.candidate)
         node.putArray("covers").apply { approval.covers.forEach { add(it) } }
-        approval.memberships?.let { memberships ->
-            val written = node.putObject("memberships")
-            val roles = written.putObject("roles")
-            memberships.roles.forEach { (space, spaceRoles) ->
-                roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
-            }
-            written.putArray("attachments").apply { memberships.attachments.forEach { add(it.value) } }
-            written.put("source", memberships.source.name)
+        membershipsTree(node, approval.memberships)
+        val attributes = node.putObject("attributes")
+        approval.attributes.forEach { (name, value) -> attributes.set(name, attributeTree(value)) }
+        node.put("principalBindings", approval.principalBindings).put("breakGlass", approval.breakGlass)
+        node.set("credentialId", approval.credentialId?.let(factory::stringNode) ?: factory.nullNode())
+        node.set("issuedAt", approval.issuedAt?.let { factory.stringNode(it.toString()) } ?: factory.nullNode())
+    }
+
+    private fun membershipsTree(node: ObjectNode, memberships: Memberships?) {
+        if (memberships == null) {
+            node.putNull("memberships")
+            return
         }
-        if (approval.attributes.isNotEmpty()) {
-            val attributes = node.putObject("attributes")
-            approval.attributes.forEach { (name, value) -> attributes.set(name, attributeTree(value)) }
+        val written = node.putObject("memberships")
+        val roles = written.putObject("roles")
+        memberships.roles.forEach { (space, spaceRoles) ->
+            roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
         }
-        // Written only when false, so an approval made with a token keeps the bytes it had (RFC 0009 §4.2).
-        if (!approval.principalBindings) node.put("principalBindings", false)
-        if (!approval.breakGlass) node.put("breakGlass", false)
-        credentialTree(node, approval)
+        written.putArray("attachments").apply { memberships.attachments.forEach { add(it.value) } }
+        written.put("source", memberships.source.name)
     }
 
     /**
@@ -271,6 +286,8 @@ object ChangeRequestCodec {
                 .set("rateLimit", PolicyDocumentCodec.rateLimitTree(operation.rule))
 
             is Operation.RemoveRateLimit -> item.put("op", "removeRateLimit").put("id", operation.id)
+            is Operation.PutRole -> item.put("op", "putRole").set("role", PolicyDocumentCodec.roleTree(operation.role))
+            is Operation.RemoveRole -> item.put("op", "removeRole").put("id", operation.id.value)
             is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes, is Operation.SetBoundary ->
                 sectionTree(item, operation)
         }
@@ -304,6 +321,8 @@ object ChangeRequestCodec {
         is Operation.RemoveBinding -> operation.ifMatch
         is Operation.PutRateLimit -> operation.ifMatch
         is Operation.RemoveRateLimit -> operation.ifMatch
+        is Operation.PutRole -> operation.ifMatch
+        is Operation.RemoveRole -> operation.ifMatch
         else -> null
     }
 
@@ -325,10 +344,7 @@ object ChangeRequestCodec {
             "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
             "checkedApps",
         )
-        val key = node.need("key").text().let { text ->
-            if (SnapshotKeyText.isUnnamedApp(text)) throw UnnamedDocumentException(SnapshotKeyText.printable(text))
-            documentKey(text)
-        }
+        val key = documentKey(node.need("key").text())
         val (kind, owner) = Revisions.ownerOf(key)
         val base = node.need("base").also { it.only("revision", "digest") }
         return ChangeRequest(
@@ -351,10 +367,7 @@ object ChangeRequestCodec {
                 )
             },
             candidate = node.get("candidate")?.text(),
-            // A head read of an app no key can name now cannot move: that document can no longer be written (R2-1).
-            checkedWith = node.need(
-                "checkedWith"
-            ).properties().filterNot { (name, _) -> SnapshotKeyText.isUnnamedApp(name) }
+            checkedWith = node.need("checkedWith").properties()
                 .associate { (name, value) -> documentKey(name) to (if (value.isNull) null else digest(value.text())) },
             createdAt = Instant.parse(node.need("createdAt").text()),
             updatedAt = Instant.parse(node.need("updatedAt").text()),
@@ -392,29 +405,29 @@ object ChangeRequestCodec {
             Instant.parse(node.need("at").text()),
             node.need("candidate").text(),
             node.need("covers").values().map { covered -> covered.text() },
-            node.get("memberships")?.let(::memberships),
-            node.get("attributes")?.properties()?.mapNotNull { (name, value) ->
+            node.need("memberships").takeUnless { it.isNull }?.let(::memberships),
+            node.need("attributes").members().mapNotNull { (name, value) ->
                 attribute(value)?.let { read -> name to read }
-            }?.toMap().orEmpty(),
-            principalBindings = onlyFalse(node, "principalBindings"),
-            breakGlass = onlyFalse(node, "breakGlass"),
-            credentialId = node.get("credentialId")?.text(),
-            issuedAt = node.get("issuedAt")?.let { Instant.parse(it.text()) },
+            }.toMap(),
+            principalBindings = node.need("principalBindings").flag(),
+            breakGlass = node.need("breakGlass").flag(),
+            credentialId = node.need("credentialId").textOrNull(),
+            issuedAt = node.need("issuedAt").textOrNull()?.let(Instant::parse),
         )
     }
 
-    /** A flag written only when false: absent is true, and anything but `false` is not a stored approval. */
-    private fun onlyFalse(node: JsonNode, field: String): Boolean {
-        val value = node.get(field) ?: return true
-        require(value.isBoolean && !value.booleanValue()) { "approval.$field is false when present, not $value." }
-        return false
-    }
+    private fun JsonNode.members() = if (isObject) properties() else malformed("$this is not an object")
+
+    private fun JsonNode.flag(): Boolean = if (isBoolean) booleanValue() else malformed("$this is not a boolean")
+
+    private fun JsonNode.textOrNull(): String? = if (isNull) null else text()
 
     /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */
-    internal fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
+    @InternalCoSecApi
+    fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
         val (kind, owner) = Revisions.ownerOf(key)
         node.only(
-            "op", "policy", "id", "binding", "rateLimit", "catalog", "limits", "attributes", "boundary", "ifMatch",
+            "op", "policy", "id", "binding", "rateLimit", "role", "catalog", "limits", "attributes", "boundary", "ifMatch",
         )
         operation(node, kind, owner)
     }
@@ -437,6 +450,8 @@ object ChangeRequestCodec {
                 ifMatch
             )
             "removeRateLimit" -> Operation.RemoveRateLimit(node.need("id").text(), ifMatch)
+            "putRole" -> Operation.PutRole(PolicyDocumentCodec.decodeRole(node.need("role"), kind), ifMatch)
+            "removeRole" -> Operation.RemoveRole(RoleId(node.need("id").text()), ifMatch)
             else -> section(node, op)
         }
     }
@@ -445,30 +460,20 @@ object ChangeRequestCodec {
     private fun section(node: JsonNode, op: String): Operation {
         return when (op) {
             "putCatalog" -> Operation.PutCatalog(node.get("catalog")?.let { PolicyDocumentCodec.decodeCatalog(it) })
-            "setLimits" -> Operation.SetLimits(
-                node.get("limits")?.let {
-                    ConditionLimits(
-                        it.need("maxNodes").asInt(),
-                        it.need("maxDepth").asInt(),
-                        it.need("maxInValues").asInt(),
-                        it.need("maxCidrBlocks").asInt(),
-                        it.need("maxLiteralBytes").asInt(),
-                        it.need("maxCost").asInt(),
-                    )
-                },
-            )
-
+            "setLimits" -> Operation.SetLimits(node.get("limits")?.let(::limits))
             "setBoundary" -> Operation.SetBoundary(node.get("boundary")?.let { PolicyId(it.text()) })
+            // The document format's rules, so a section never reads a value its document would refuse (#1275).
             "setAttributes" -> Operation.SetAttributes(
-                node.get("attributes")?.values()?.map {
-                    val type = PolicyDocumentCodec.ATTRIBUTE_TYPES[it.need("type").text()]
-                        ?: malformed("unknown attribute type ${it.get("type")}")
-                    Attribute.external(it.need("path").text(), type)
-                },
+                node.get("attributes")?.let { PolicyDocumentCodec.decodeAttributes(it, "\$.attributes") }
             )
 
             else -> malformed("unknown operation [$op]")
         }
+    }
+
+    /** Limits as the document format reads them, with none left to its default: an operation states all six. */
+    private fun limits(node: JsonNode): ConditionLimits = PolicyDocumentCodec.decodeLimits(node, "\$.limits").also {
+        LIMIT_FIELDS.forEach { field -> node.need(field) }
     }
 
     private fun documentKey(text: String): SnapshotKey = when {
@@ -479,8 +484,8 @@ object ChangeRequestCodec {
     }
 
     private fun digest(text: String): SnapshotDigest {
-        if (!DIGEST.matches(text)) malformed("[$text] is not a digest")
-        return SnapshotDigest(ByteArray(text.length / 2) { text.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() })
+        if (!SnapshotDigest.isDigest(text)) malformed("[$text] is not a digest")
+        return SnapshotDigest.parse(text)
     }
 
     private fun read(bytes: ByteArray): JsonNode = try {
@@ -516,7 +521,4 @@ object ChangeRequestCodec {
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
         "A change request is malformed: ${printable(reason)}."
     )
-
-    private val DIGEST = Regex("^[0-9a-f]{40}$")
-    private const val HEX = 16
 }

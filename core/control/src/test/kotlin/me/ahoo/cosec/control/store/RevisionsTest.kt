@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.store
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.binding
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
@@ -318,7 +321,7 @@ class RevisionsTest {
                 SnapshotKey.Platform,
                 shared,
                 memory.referrers(SnapshotKey.Platform, shared)!!.digest,
-                emptySet()
+                emptyMap()
             )
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
             revisions.repairReferences(ACME).assert().isEqualTo(1)

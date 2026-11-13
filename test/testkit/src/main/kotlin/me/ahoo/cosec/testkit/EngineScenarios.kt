@@ -11,12 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.testkit
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -39,7 +41,6 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -49,12 +50,10 @@ import me.ahoo.cosec.runtime.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import tools.jackson.databind.JsonNode
 import java.time.Instant
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /** What evaluating an engine scenario produced, compared with its `expect` by [EngineExpectations]. */
 @ExperimentalCoSecApi
@@ -97,7 +96,7 @@ sealed interface EngineOutcome {
  *                 "device": "...", "blocked": false, "headers": {}, "attributes": {} }
  * ```
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class EngineScenarios(
     private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
     private val engine: FlatEngine = CoSecFlatEngine,
@@ -135,10 +134,10 @@ class EngineScenarios(
             return EngineOutcome.Decided(Decision.Indeterminate(Cause.MembershipUnavailable(error)))
         }
         val request = node.get("request") ?: EMPTY
-        request.only("app", "space", "hostApp", "action", "resource", "time", "ip", "device", "blocked", "headers", "attributes")
+        request.only("space", "hostApp", "action", "resource", "time", "ip", "device", "blocked", "headers", "attributes")
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(credential.tenant, credential.authenticated, memberships),
-            DeclaredScope(request.get("app")?.text().orEmpty(), request.get("space")?.text().orEmpty()),
+            ScopeSubject(credential.tenant, credential.authenticated, memberships, credential.app),
+            request.get("space")?.text().orEmpty(),
             HostScope(request.get("hostApp")?.textOrNull()?.let(::AppId)),
         )
         val scope = when (resolution) {
@@ -161,16 +160,15 @@ class EngineScenarios(
             return MembershipClaims.parse(credential.roles, credential.policies)
         }
         val resolver = MembershipResolver(provider?.let { provider(credential, it) })
-        val principal = credential.principal()
         val resolved = runBlocking {
             resolver.resolve(
                 credential.tenant,
-                PrincipalId(principal.id),
-                MembershipSource.of(principal)
+                PrincipalId(credential.id),
+                MembershipSource.of(credential.id, credential.roles, credential.policies, credential.marker)
             )
         }
         // The scenario's provider always knows its credential's principal, so only a pipeline scenario is refused.
-        return checkNotNull(resolved) { "The scenario's membership provider does not know [${principal.id}]." }
+        return checkNotNull(resolved) { "The scenario's membership provider does not know [${credential.id}]." }
     }
 
     private fun provider(credential: Credential, node: JsonNode): MembershipProvider {
@@ -220,16 +218,11 @@ class EngineScenarios(
         val authz = AuthzRequest(
             subject = Subject(
                 id = credential.id,
-                tenantId = scope.tenant.value,
                 authenticated = credential.authenticated,
-                roles = emptySet(),
-                policies = emptySet(),
                 attributes = credential.attributes,
-                root = false,
                 principalBindings = credential.principalBindings,
                 breakGlass = credential.breakGlass,
             ),
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = action,
             resource = resource,
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),
@@ -267,7 +260,7 @@ class EngineScenarios(
     private class Credential(node: JsonNode) {
         init {
             node.only(
-                "anonymous", "tenant", "id", "roles", "policies", "membership", "attributes", "principalBindings", "breakGlass",
+                "anonymous", "tenant", "app", "id", "roles", "policies", "membership", "attributes", "principalBindings", "breakGlass",
             )
         }
 
@@ -275,6 +268,9 @@ class EngineScenarios(
         val tenant: TenantId = TenantId(
             node.get("tenant")?.text() ?: if (authenticated) "acme" else TenantId.DEFAULT.value
         )
+
+        /** The app the credential declares (RFC 0012 §3.5); absent, none. */
+        val app: String? = node.get("app")?.text()
         val id: String = node.get("id")?.text() ?: if (authenticated) "alice" else CoSecPrincipal.ANONYMOUS_ID
         val roles: Set<String> = node.get("roles")?.strings().orEmpty().toCollection(LinkedHashSet())
         val policies: Set<String> = node.get("policies")?.strings().orEmpty().toCollection(LinkedHashSet())
@@ -286,11 +282,6 @@ class EngineScenarios(
 
         /** False for an API key (RFC 0009 §4.2). */
         val breakGlass: Boolean = node.get("breakGlass")?.bool() ?: true
-
-        fun principal(): CoSecPrincipal {
-            val principal = SimplePrincipal(id, policies, roles, attributes)
-            return marker?.let { MembershipMarkedPrincipal(principal, it) } ?: principal
-        }
     }
 
     private companion object {

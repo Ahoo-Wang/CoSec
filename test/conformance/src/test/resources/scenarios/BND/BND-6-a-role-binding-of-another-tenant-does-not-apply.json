@@ -37,11 +37,10 @@
   "credential": {
     "roles": [
       "editor"
-    ]
-  },
-  "request": {
+    ],
     "app": "order-service"
   },
+  "request": {},
   "expect": {
     "decision": "Deny",
     "by": null

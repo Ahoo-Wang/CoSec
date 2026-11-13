@@ -1,0 +1,17 @@
+{
+  "service": "wms",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/warehouses/{id}",
+      "action": "wms:warehouse.read",
+      "resource": "warehouse/{id}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/admin/warehouses/{id}",
+      "action": "wms:warehouse.purge",
+      "resource": "warehouse/{id}"
+    }
+  ]
+}

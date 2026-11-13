@@ -1,0 +1,19 @@
+# Rule: CTL-25
+# Mutant: a revision's removal of a reference it dropped removes it whatever revision indexed it, so a late removal takes back what a later revision indexed again
+# Tests: :control:test --tests me.ahoo.cosec.control.store.ReferrerCleanupRaceTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 65da6263..83c603ed 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -384,8 +384,8 @@ class Revisions(
+      * and so does one of a revision whose publish lost its race, a superset that blocks a deletion at most.
+      */
+     private fun dropped(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+-        val current = referrers[key] ?: return referrers
+-        return if (current <= revision) referrers - key else referrers
++        referrers[key] ?: return referrers
++        return referrers - key
+     }
+ 
+     /**

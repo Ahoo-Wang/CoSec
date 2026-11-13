@@ -78,7 +78,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 通过 OAuth 社交登录 | `cosec-social` | |
 | 每次决策一个追踪 span | `cosec-opentelemetry` | |
 | 按结果统计的每次决策计时器 | `cosec-micrometer` | `io.micrometer:micrometer-core` |
-| 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-common` |
+| 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-webflux-api` 或 `-webmvc-api` |
 | 把决策事件（以及可选的控制面变更）发送到 Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
 | 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
@@ -96,7 +96,7 @@ starter 始终引入 `cosec-runtime`（协程请求 Pipeline、策略文档、�
 - `cosec-migrate` 是命令行工具：把 7.x 的数据转换为 8.0 文档并发布，并为控制面绑定第一位平台管理员（`bootstrap`）。见[升级](../operations/upgrading.md)。
 - `cosec-gateway-server` 是由这些模块构建的、开箱即用的网关：直接部署它，不要依赖它（见[部署](../operations/deployment.md)）。
 
-不使用 Spring Boot 时，自己用 `PipelineComponents` 组装一个 `Pipeline`，在你自己的传输层中调用它。见[扩展 CoSec](../architecture/extending.md)。
+不使用 Spring Boot 时，自己用 `PipelineComponents` 和 `SuspendingSnapshotSource.of(store)` 组装一个 `Pipeline`，在你自己的传输层中调用它。见[扩展 CoSec](../architecture/extending.md)。
 
 ## 下一步 {#where-to-go-next}
 
@@ -104,9 +104,10 @@ starter 始终引入 `cosec-runtime`（协程请求 Pipeline、策略文档、�
 
 | 你是 | 按顺序阅读 |
 |---|---|
-| 评估 CoSec 的人 | 本页 → [核心概念](./concepts.md) → [安全模型](./security-model.md) → [架构概览](../architecture/overview.md) |
+| 评估 CoSec 的人 | 本页 → [核心概念](./concepts.md) → [模型](./model.md) → [安全模型](./security-model.md) → [架构概览](../architecture/overview.md) |
 | 接入 CoSec 的开发者 | [快速开始](./quick-start.md) → [Web 集成](../integration/web.md) → [认证](../integration/authentication.md) → [代码中的权限检查](../integration/checks.md) → [配置](../operations/configuration.md) |
-| 策略作者 | [核心概念](./concepts.md) → [策略语言](../policies/language.md) → [角色权限](../policies/role-permissions.md) → [限流](../policies/rate-limiting.md) → [测试策略](../policies/testing.md) |
+| 策略作者 | [核心概念](./concepts.md) → [模型](./model.md) → [策略语言](../policies/language.md) → [角色权限](../policies/role-permissions.md) → [限流](../policies/rate-limiting.md) → [测试策略](../policies/testing.md) |
+| 跟着完整示例走 | [模型](./model.md) → [简单模式](../scenarios/simple-mode.md) → [不使用空间的应用](../scenarios/app.md) → [系统角色与自定义角色](../scenarios/roles.md) → [使用空间的应用](../scenarios/spaces.md) → [限定在一个空间的服务账号](../scenarios/service-account.md) → [租户所有者](../scenarios/tenant-owner.md) → [外部事实源同步角色](../scenarios/external-source.md) → [按业务动作授权](../scenarios/route-maps.md) → [网关拓扑](../scenarios/gateway.md) |
 | 在生产环境运行 CoSec 的人 | [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) |
 | CoSec 的贡献者 | [架构概览](../architecture/overview.md) → [扩展 CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 

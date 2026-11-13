@@ -1,0 +1,22 @@
+{
+  "description": "The system role manager applies in any tenant.",
+  "credential": {
+    "tenant": "globex",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "manager"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.edit",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

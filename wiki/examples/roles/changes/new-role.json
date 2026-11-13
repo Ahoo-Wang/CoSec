@@ -1,0 +1,16 @@
+{
+  "document": "tenant:acme",
+  "base": 1,
+  "note": "New role: Receiver",
+  "operations": [
+    {
+      "op": "putRole",
+      "role": {
+        "id": "receiver",
+        "app": "wms",
+        "name": "Receiver",
+        "permissions": []
+      }
+    }
+  ]
+}

@@ -105,7 +105,7 @@ record for policy snapshots and revoked tokens.
 | Social login through OAuth | `cosec-social` | |
 | A tracing span per decision | `cosec-opentelemetry` | |
 | A timer per decision, by result | `cosec-micrometer` | `io.micrometer:micrometer-core` |
-| Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
+| Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
 | Decision events, and optionally control-plane changes, sent to Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | The client's region as an external attribute | `cosec-ip2region` | |
 | Request, token and change ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
@@ -136,7 +136,8 @@ Two artifacts are not dependencies of an application:
 - `cosec-gateway-server` is a ready-to-run gateway built from these modules: deploy it, do not depend on it (see
   [Deployment](../operations/deployment.md)).
 
-Without Spring Boot, assemble a `Pipeline` from `PipelineComponents` yourself and call it from your own transport. See
+Without Spring Boot, assemble a `Pipeline` from `PipelineComponents` and `SuspendingSnapshotSource.of(store)` yourself,
+and call it from your own transport. See
 [Extending CoSec](../architecture/extending.md).
 
 ## Where to go next
@@ -145,9 +146,10 @@ Pick the path that matches what you are doing. Every page on it ends with a link
 
 | You are | Read, in order |
 |---|---|
-| Evaluating CoSec | this page → [Concepts](./concepts.md) → [Security model](./security-model.md) → [Architecture overview](../architecture/overview.md) |
+| Evaluating CoSec | this page → [Concepts](./concepts.md) → [Model](./model.md) → [Security model](./security-model.md) → [Architecture overview](../architecture/overview.md) |
 | A developer integrating it | [Quick start](./quick-start.md) → [Web integration](../integration/web.md) → [Authentication](../integration/authentication.md) → [Checks in code](../integration/checks.md) → [Configuration](../operations/configuration.md) |
-| A policy author | [Concepts](./concepts.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
+| A policy author | [Concepts](./concepts.md) → [Model](./model.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
+| Following a worked example | [Model](./model.md) → [Simple mode](../scenarios/simple-mode.md) → [An app without spaces](../scenarios/app.md) → [System and custom roles](../scenarios/roles.md) → [Apps with spaces](../scenarios/spaces.md) → [A service account in one space](../scenarios/service-account.md) → [A tenant owner](../scenarios/tenant-owner.md) → [Roles from an external source](../scenarios/external-source.md) → [Authorizing business actions](../scenarios/route-maps.md) → [Gateway topologies](../scenarios/gateway.md) |
 | Running it in production | [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) |
 | Contributing to CoSec | [Architecture overview](../architecture/overview.md) → [Extending CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 

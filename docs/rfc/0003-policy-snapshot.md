@@ -15,6 +15,10 @@
 > `read-failure: degrade`，customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）；降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
 > `SNP-3` 的淘汰检查经 CoCache 读 `INFO memory`（不再是 `CONFIG GET`），Redis 账号需要 `+info`。
 
+> **2026-11-08 修订（#1295）**：`cosec.unknown-properties` 已删除，未知的 `cosec.*` 键一律启动失败，旧前缀也不例外。
+
+> **2026-11-09 修订（#1304，`SNP-6`）**：周期轮询不等待超过 `storeReadTimeout` 的在途加载，加载结束时再确认文档。
+
 ## 0. 结论先行
 
 本阶段只做一件事：**授权读取的策略数据全部来自内存中一份不可变、带版本号的快照，评估途中不再有任何策略 I/O。**
@@ -319,6 +323,14 @@ internal sealed interface DocumentState<out T> {
 
 ## 4. 分发：CoCache 6.x
 
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：本节按 CoCache 6 写成；自 #1203 起 CoSec 运行在 CoCache 8.0.0 上，以下几处与正文不同，其余设计不变。
+> - **缓存是 CoCache 8 的 `Store`**（快照、九个控制面缓存、三个影子缓存、两个吊销表；成员关系是带 `externallySourced()` 的 `Cache`），全部经 `CoCacheFactory` 用 `CoSecCacheSpecs.locks(name)` 创建：布局字段一律 lock；权威存储再 lock 加 constrain，把 `ttl` 固定为永不过期、`unknown-read` 固定为 `throw`；快照缓存还固定 `local-max-age`；影子缓存固定声明的 `ttl`；吊销表的 `read-timeout` 固定为命令超时，全局默认值改不动它（否则会扩大 `PIP-7` 的降级）。这些约束在 `cocache.caches.[name].unlock` 之后施加，所以"打破玻璃"也不能让策略过期，或让失败的读读成"不存在"。不经 starter 创建的快照缓存同样被固定（`SNP-3`）。
+> - **存储 key 与 CoCache 6 时逐字节相同**（`CoSecCacheSpecsTest#storageKeys`）：每个存储路径在最后一个 `:` 处拆成 `keyPrefix` 与 namespace，全部在 `cosec.key-prefix` 下（`SNP-9`）；失效通道为 `{keyPrefix}inv:{namespace}`。CoCache 8 交给监听器的是已编码的 key，`PolicySnapshotCache.snapshotKeyOf` 据此还原。
+> - **条件读只比较存储的摘要**（§4.5）：每次重新校验在 Redis 上约 7–13 µs，与文档大小无关（CoCache 6 在 4 MiB 时约 11.7 ms）。摘要是 SHA-256（`SnapshotDigest`，带算法名），持久化处写作 `SHA-256:<64 位十六进制>`。
+> - **读不懂的值 fail closed**：CoCache 8 读到 CoCache 6 写的值抛 `ForeignFormatException`：快照文档 503，吊销该令牌或主体 503（从不读成"没有吊销"），控制面记录 500。升级用 `cosec-migrate cocache8`，所有实例停机时运行（`upgrading.md`）。
+> - **淘汰策略**：CoCache 8 自带启动检查，CoSec 的检查（`SNP-3`、`cosecSnapshotEviction`）读的是保存快照的那个 Redis（`CoCacheFactory.runtime.backend`），两者并存。
+> - 文首 2026-11-02 关于 CoCache 6.9、6.10 失败模式的说明只适用于 CoCache 6。
+
 ### 4.1 存储
 
 ```kotlin
@@ -351,6 +363,7 @@ CacheSpec.builder<SnapshotKey, SnapshotDocument>("PolicySnapshotCache")
 > - **一个前缀（`SNP-9`，RC1-46）。** `cosec.key-prefix`（默认 `cosec`）取代 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 与 `cosec.api-key.key-prefix`。一个部署写进 Redis 的每个 key 都在它下面：快照文档、控制面记录、候选、影子报告、吊销、成员关系、API Key（`<p>:api-key`）、限流计数（`<p>:rate-limiter`，原为固定值）与社交登录的 OAuth state（`<p>:oauth:state`，原为固定值）。默认配置下 key 的字节不变。
 > - **旧前缀让启动失败。** 环境里还设着三个旧前缀之一时，不论 `cosec.unknown-properties` 怎么设，启动都失败。错误信息列出要搬的数据族，并说明吊销与 API Key 要先复制，否则按旧前缀吊销的 token 会重新被接受。`cosec.key-prefix` 未设时，按快照文档的前缀计算要搬的数据族（第 2 轮审查 M1）。
 > - **不经 starter 的缓存也被固定（`SNP-3` 修订，RC1-45）。** `createPolicySnapshotCache` 对任何 spec 施加 `storeOfRecord()`、快照的编解码器与 key 编码器，并去掉 key 过滤器、按条目的 TTL、版本化写入与加载器；`CoSecCacheAssembler.assemble` 在 customizer 之后恢复每个 spec 的编解码器、加载器、key 过滤器与 TTL 函数。
+> - **运行时的淘汰策略与主节点读（2026-11-07，#1240，RC1-47）。** `SNP-3` 仍是启动规则。启动之后，淘汰策略每 `revalidate-interval` 在探针路径之外定时重读一次，由单独的指示器 `cosecSnapshotEviction` 报告：可能淘汰时 DOWN；`eviction-check: warn` 下读不到时 UP 并带 `eviction: unknown`，`fail` 下读不到时 DOWN。它是告警信号，不属于就绪组；`cosecSnapshot` 只报告安装状态。请求路径不变：丢失的文档在见过它的实例上本来就 fail closed。CoSec 可能注入的 Redis 模板必须从主节点读（Lettuce 的 `ReadFrom` 是 upstream），否则启动失败并点名模板；CoCache 自己的客户端不设 `ReadFrom`，从主节点读。
 
 ### 4.2 两层接口
 

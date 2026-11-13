@@ -10,66 +10,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.api.principal
 
 import me.ahoo.cosec.api.CoSec
 import java.security.Principal
 
 /**
- * Core principal interface representing a user or automated agent.
- *
- * A Principal is the entity that is being authenticated and authorized.
- * It contains the user's identity, roles, policies, and attributes.
- *
- * CoSecPrincipal extends [java.security.Principal] and adds:
- * - Unique identifier
- * - Role assignments
- * - Policy assignments
- * - Custom attributes
- * - Authentication state
- *
- * @see RoleCapable
- * @see PolicyCapable
- * @see TenantPrincipal
+ * Who the current request is, as an application reads it from a `SecurityContext`: a read-only view of what the
+ * pipeline decided on. The roles effective for the request are in `SecurityContext.scope`. A [Principal], as WebFlux's
+ * `ServerWebExchange.getPrincipal` hands it to the application.
  */
-interface CoSecPrincipal :
-    Principal,
-    PolicyCapable,
-    RoleCapable {
-    //endregion
-
-    /** Unique identifier for this principal */
+interface CoSecPrincipal : Principal {
+    /** The principal's id; [ANONYMOUS_ID] for a request without a valid credential. */
     val id: String
 
-    /**
-     * Returns the name of this principal, which is the same as [id].
-     */
     override fun getName(): String = id
 
-    /**
-     * Custom attributes associated with this principal.
-     * These can be used to store additional user information.
-     */
-    val attributes: Map<String, Any>
-
-    /**
-     * Whether this principal is anonymous (unauthenticated).
-     *
-     * An anonymous principal has [id] equal to [ANONYMOUS_ID].
-     */
-    val anonymous: Boolean
-        get() = ANONYMOUS_ID == id
-
-    /**
-     * Whether this principal is authenticated.
-     * Inverse of [anonymous].
-     */
+    /** Whether a credential proved this principal. Stated by the pipeline, never read off [id]. */
     val authenticated: Boolean
-        get() = !anonymous
+
+    /** What the credential says about the principal: a token's `attributes` claim, for example. */
+    val attributes: Map<String, Any>
 
     companion object {
         /**
-         * The anonymous user ID used for unauthenticated requests.
+         * The id of an anonymous principal. No credential can claim it: an id beginning with `(` is CoSec's, and a token
+         * with such a subject is invalid (`IDN-12`).
          */
         const val ANONYMOUS_ID = CoSec.DEFAULT
     }

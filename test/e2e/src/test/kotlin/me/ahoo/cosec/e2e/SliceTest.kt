@@ -169,6 +169,21 @@ class SliceTest {
         }
     }
 
+    /**
+     * An id whose UTF-8 form loses a character, an unpaired surrogate (UTF-8 writes `?` for it), would share its Redis
+     * key with the id that has `?` in its place: `beta\uD800` would read the document of `beta?`, which allows
+     * everything. CoSec refuses such an id where it enters (`IDN-10`), and CoCache 8 would refuse the key below that:
+     * through the assembled path on real Redis, it is never decided on another's document.
+     */
+    @Test
+    fun `an id Redis cannot key losslessly is never decided on another's document`() {
+        slice.publish(SnapshotKey.Tenant("beta?"), beta)
+        evaluate("GET", "/admin", "bob@beta?").proceed.assert().isTrue()
+        evaluate("GET", "/admin", "bob@beta\uD800").proceed.assert().isFalse()
+        evaluate("GET", "/orders/1", "alice@acme:clerk", app = "order\uDC00").proceed.assert().isFalse()
+        evaluate("DELETE", "/orders/1", "bob@beta\uD800").proceed.assert().isFalse()
+    }
+
     @Test
     fun `problems are written as problem+json with the request id`() {
         val outcome = evaluate("DELETE", "/orders/1", "alice@acme:clerk")

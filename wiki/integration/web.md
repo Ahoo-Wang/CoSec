@@ -114,7 +114,7 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
 
 A route map gives each route of a service an action and a typed resource, so policies speak of `order:read` on
 `order/42` rather than `GET /orders/42`. WebFlux and WebMvc hosts load the route maps listed in
-`cosec.authorization.routes.location` (default `classpath:cosec-routes.json`; a comma-separated list):
+`cosec.authorization.routes.location`, a comma-separated list; unset, a host loads none:
 
 ```json
 {
@@ -129,18 +129,22 @@ A route map gives each route of a service an action and a typed resource, so pol
 - A route matches a request with exactly its `method` whose path matches its `path` pattern. The resource template's
   `{variables}` are captures of the path.
 - A request no route matches keeps the action `http:<METHOD>` on the resource `http:path:<path>`. A statement on a
-  `service:verb` action never covers it: no route falls back to a wildcard.
+  `service:verb` action never covers it: no route falls back to a wildcard. The reverse holds too: a statement or a
+  rate limit rule on `http:` never covers a mapped request, the platform's included
+  ([Authorizing business actions](../scenarios/route-maps.md)).
 - A route map loads whole or not at all. A location that does not exist, a malformed file (an unknown or missing
-  field, a repeated key, a value of the wrong type), a malformed route, or two routes one request could match (same
-  method, paths not provably disjoint) fails startup and names the location. Set the property to an empty value to
-  run without a route map on purpose.
+  field, a repeated key, a value of the wrong type), a file with no routes, a malformed route, or two routes one
+  request could match (same method, paths not provably disjoint) fails startup and names the location.
+- With the property unset the host loads no route map, unless `classpath:cosec-routes.json` exists: then startup
+  fails until the property names that file or is set to an empty value, which runs without a route map on purpose.
+  The startup log names each map loaded, its service and its route count, or says there is none.
 - A captured value that is empty or holds a `/` (a decoded `%2F`) cannot be a segment of a typed resource id: the
   request is refused with `400` `invalid-request`, never evaluated as another resource.
 
 A Spring Cloud Gateway host loads no route map: every gateway request is in the `http` namespace.
 
-With `cosec-openapi` and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a route map
-from the service's OpenAPI document, and `cosecServiceGenerator/app` the matching app document to publish through
+With `cosec-openapi`, springdoc and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a
+route map from the OpenAPI document springdoc scans, and `cosecServiceGenerator/app` the matching app document to publish through
 the control plane ([Role permissions](../policies/role-permissions.md)).
 
 ## Responses and status codes
@@ -203,25 +207,27 @@ request id is escaped. The vocabulary is also published as `schema/problem.schem
 
 ## App and space
 
-The client sends the `CoSec-*` parameters as headers or as query parameters of the same name:
+The client sends the `CoSec-*` parameters as headers. A query parameter of the same name is not read: a scope in a URL
+would reach access logs and `Referer` headers.
 
 | Parameter | Meaning | Conditions read it as |
 |---|---|---|
-| `CoSec-App-Id` | The app the request is for. Ignored in favour of the host's app when there is one: on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`; a different value is then rejected. | `scope.app` |
 | `CoSec-Space-Id` | The space within the app. Accepted only when the principal has a role in it; empty means the default space. | `scope.space` (and `scope.roles`, the roles there) |
 | `CoSec-Device-Id` | The caller's device. Informational unless a policy or the blacklist reads it. | `environment.device` |
 | `CoSec-Request-Id` | Header only: the request id ([Response headers](#response-headers)). | |
 
+The client does not say which app a request is for: `scope.app` comes from the credential and the host
+([Apps](./authentication.md#apps)).
+
 Rules for reading them:
 
-- Header names match ignoring case; query parameter names match exactly.
-- A parameter may be sent several times, in the header, in the query or both, as long as every value is the same.
-  When every value is blank (empty, or ASCII whitespace only), the parameter is not sent.
-- Two different values, anywhere, make the request ambiguous: the pipeline and your handler could read different
-  scopes. It is refused with `400` `invalid-request`. A blank value beside a non-blank one is different too: a handler
-  that read the blank one would be in the default space. Blank means ASCII whitespace only, so a value of Unicode
-  spaces, such as `%E3%80%80`, which `trim()` keeps, is a value. A `CoSec-*` query value with a malformed
-  percent-escape is refused the same way.
+- Header names match ignoring case.
+- A parameter may be sent several times, as long as every value is the same. When every value is blank (empty, or
+  ASCII whitespace only), the parameter is not sent.
+- Two different values make the request ambiguous: the pipeline and your handler could read different scopes. It is
+  refused with `400` `invalid-request`. A blank value beside a non-blank one is different too: a handler that read the
+  blank one would be in the default space. Blank means ASCII whitespace only, so a value of Unicode spaces, such as a
+  no-break space, which `trim()` keeps, is a value.
 - A request body is never read: an authorization filter does not read request bodies.
 
 How `ScopeResolver` checks the app and space, and what the client therefore controls, is in
@@ -239,11 +245,13 @@ pipeline's outcome. A refused request never reaches your handler.
 | Member | Content |
 |---|---|
 | `principal.id` | The principal; `(0)` for an anonymous caller. |
-| `tenant.tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
-| `principal.roles` | The principal's roles in the request's space. |
-| `principal.policies` | The principal's attached policies. |
+| `principal.authenticated` | Whether a credential proved the principal. |
+| `tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
 | `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
-| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the roles there. |
+| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there. |
+| `forwardedIdentity` | Behind a gateway, the gateway's request id and the id of the caller's credential; otherwise null. |
+
+The context is read-only: nothing an application could set reaches a decision.
 
 **WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. The exchange
 principal is also set, so `exchange.getPrincipal()` returns the CoSec principal.
@@ -339,10 +347,9 @@ from the WebFlux filter in three ways:
   whether in a header, the query or a cookie, unless `cosec.gateway.identity.forward-authorization=true`.
 
 **The app of a route.** A route's metadata `cosec-app-id` names the app of its requests, ahead of
-`cosec.authorization.scope.app-id`: on that route, a request that declares another app with `CoSec-App-Id` is
-rejected (`403` `scope-rejected`), and one that declares none is in the route's app, whose role bindings, and DENYs,
-apply. A client's declared app applies only on a route without `cosec-app-id`, on a gateway without
-`cosec.authorization.scope.app-id`. When one gateway fronts several apps, give each route its app; why is in
+`cosec.authorization.scope.app-id`: on that route, a credential that declares another app, or none, is
+rejected (`403` `scope-rejected`), and one of the route's app gets its role bindings and DENYs
+([Apps](./authentication.md#apps)). When one gateway fronts several apps, give each route its app; why is in
 [Trust boundaries](../guide/security-model.md#trust-boundaries). The value must be a string: a number, a boolean, a
 list or a map is not read as its text, so write `cosec-app-id: "2024"` for an app named `2024`. A `cosec-app-id` that
 is not a string, or cannot be an app id, fails every request of its route (`500`).
@@ -464,13 +471,15 @@ without `expires-at`): a service could not bound such an identity.
 
 **Credentials.** The gateway forwards none of the client's credentials, no header, query parameter or cookie: from
 every request it forwards it removes the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`,
-under whatever name that gives it), the `authorization` query parameter, and the `authorization` cookie from each
-`Cookie` header, its name matched ignoring case (a header left with no cookie is not sent), and from the cookies a
+under whatever name that gives it), the `authorization` query parameter, and, whether or not the gateway itself reads
+it (`cosec.pipeline.allow-cookie-token`), the `authorization` cookie from each `Cookie` header, its name matched
+ignoring case (a header left with no cookie is not sent), and from the cookies a
 later filter or a `forward:` route's handler reads. A compromised service so never sees a token or a key it could
 replay at the gateway. Other cookies go downstream as they came, each pair byte for byte; the token's pair goes with
-one `;`, so no empty pair is left, and a header left with only empty pairs is not sent. A header whose leading
-`$Version` pair hides the token behind a `,` goes whole, with the cookies read from it, since its other pairs would
-read differently. Set
+one `;`, so no empty pair is left, and a header left with only empty pairs is not sent. Only the whitespace at the
+head of the result goes, since a field value cannot start with it. A header whose leading `$Version` pair hides the
+token behind a `,`, or in which a kept `$Version` pair would come to the head, goes whole, with the cookies read from
+it, since its other pairs would read differently. Set
 `cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or call
 other APIs on the user's behalf: the credentials then go to the routes that would receive the identity (a `lb://`
 route, or one marked `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` forwards it, and to no
@@ -479,20 +488,20 @@ other.
 ### Services behind the gateway
 
 A service behind the gateway sets `cosec.pipeline.mode=gateway` (the default is `enforce`). It needs only its web
-adapter (`cosec-webflux` or `cosec-webmvc`), and should set `cosec.jwt.enabled=false` unless it also issues
-tokens:
+adapter (`cosec-webflux` or `cosec-webmvc`). JWT is off in this mode; a service that also issues tokens sets
+`cosec.jwt.enabled=true`:
 
 ```yaml
 cosec:
   pipeline:
     mode: gateway
-  jwt:
-    enabled: false
 ```
 
 In this mode the adapter reads the forwarded identity through `IdentityGate`, and the starter wires no authenticator,
-snapshot, route map, rate limits, control plane, `AuthorizationChecker` or Redis. The service decides nothing with
-policies: the gateway decided. It believes any `CoSec-Identity` it receives, so **only the gateway may be able to
+snapshot, route map, rate limits, control plane, `AuthorizationChecker` or Redis. A `cosec-cocache` that stays on the
+classpath is not used, so it needs no Redis template and no CoCache starter; with `cosec.jwt.enabled=true` it is used
+for the revocations of the tokens the service issues, and startup then requires both
+([Modules](../guide/introduction.md#modules)). The service decides nothing with policies: the gateway decided. It believes any `CoSec-Identity` it receives, so **only the gateway may be able to
 reach it**: how to enforce that, and the startup checks, are in
 [Services behind the gateway](../operations/deployment.md#services-behind-the-gateway) of the deployment guide.
 
@@ -500,9 +509,9 @@ reach it**: how to enforce that, and the startup checks, are in
 |---|---|
 | No `CoSec-Identity` | Proceeds as the anonymous principal `(0)`; your code decides what it may see. |
 | A valid identity | Proceeds as that principal, in that scope. |
-| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.gateway.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
+| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.identity.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
 | An unknown version, an `iat` in the future, or no `auth.exp` | `401` `token-invalid` |
-| `auth.exp` passed, or `iat` older than `cosec.pipeline.gateway.max-age` (60 seconds) | `401` `token-expired` |
+| `auth.exp` passed, or `iat` older than `cosec.pipeline.identity.max-age` (60 seconds) | `401` `token-expired` |
 
 The time checks allow `cosec.authentication.revocation.skew` (5 seconds) for the gateway's clock. The maximum age
 limits replaying a captured header inside the network: revocation is checked at the gateway only. The response
@@ -512,12 +521,14 @@ The [security context](#accessing-the-security-context) of a request that procee
 
 | Member | Content |
 |---|---|
-| `principal.id`, `tenant.tenantId` | `sub` and `tenant`; `(0)` for both without an identity. |
-| `principal.roles`, `scope.roles` | `roles`. |
-| `principal.policies` | Empty. |
+| `principal.id`, `tenantId` | `sub` and `tenant`; `(0)` for both without an identity. |
+| `scope.roles` | `roles`. |
 | `principal.attributes` | `claims`. |
 | `scope.appId`, `scope.spaceId` | `scope.app` and `scope.space`. |
-| `attributes["cosec.identity.rid"]`, `attributes["cosec.identity.jti"]` | The gateway's request id and the credential's id (`auth.jti`). |
+| `forwardedIdentity.gatewayRequestId`, `forwardedIdentity.credentialId` | The gateway's request id and the credential's id (`auth.jti`). |
+
+The forwarded identity is the credential here, and its app is what it declares: on a service with an app, an identity
+that names another app, or none, is refused (`400` `invalid-request`).
 
 ## Control-plane routes
 
@@ -533,7 +544,7 @@ What the API does is in [Testing policies](../policies/testing.md) and
   ([Quick start](../guide/quick-start.md#publish-the-platform-document)).
 - **Then the control plane's own check.** Every call is authorized again as the request's principal, in the app
   `cosec.control.app-id` (default `cosec-control`) and its default space, on documents confirmed current. An
-  anonymous request is `401`. Tenant isolation comes first and is not a policy: a tenant's principal acts only on
+  anonymous request is `401`, on both stacks before any of its body is read. Tenant isolation comes first and is not a policy: a tenant's principal acts only on
   its own tenant's document.
 - **Body size.** On WebMvc at most `cosec.control.http.max-body-size` (default `16MB`) is read; a larger body is
   `400` `invalid-request`, unread. On WebFlux the body is bounded by Spring's `spring.codec.max-in-memory-size`
@@ -546,6 +557,7 @@ The control API answers problems in the same format, with the types above plus i
 `conflict` (`409`), `gone` (`410`), `precondition-failed` (`412`), `unprocessable` (`422`) and
 `precondition-required` (`428`). A `400`, `409`, `410`, `412`, `422` or `428` explains the caller's own request in a
 `detail` member; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a
-document, a change or a DENY exists.
+document, a change or a DENY exists. A `400`'s `detail` is one of the control plane's own checks, or names the field
+that does not parse, never an exception's message; a stored document or record that does not decode is a `500`.
 
 **Next:** issue, refresh and revoke the tokens the adapter reads, in [Authentication](./authentication.md).

@@ -81,7 +81,8 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   `http:POST`, ..., and `http:*`.
 - Resource: a typed pattern `type/segment/...` where a segment is a literal, `*` (one non-empty segment), `{name}`
   (one segment, captured) or a final `**`; or `http:path:<pattern>` (Spring-like: literals, `?`, `*`, `{name}`,
-  `**` and `{*name}` at the start or end; no `{name:regex}`). An object form adds `caseSensitive` and
+  `**` and `{*name}` at the start or end; no `{name:regex}`, and no half of a surrogate pair without the other: write
+  an emoji whole). An object form adds `caseSensitive` and
   `decodeAndParseSegments` (both default `true`) to an `http:path:` pattern.
 - Pattern bounds (DOC-4; over one, the document does not compile): an `http:path:` pattern is at most 2,048
   characters; a segment that mixes `*`, `?` or `{name}` with text (`report-*.pdf`) has at most 16 parts, consecutive
@@ -108,7 +109,7 @@ One object with exactly one operator. Literals keep their JSON type: `"true"` is
 | `in` | `{"in": [attr, [values]]}` or `{"in": ["literal", setAttr]}` | value is one of them; or the set contains the literal |
 | `prefix` | `{"prefix": [attr, "text"]}`, optional `ignoreCase` | strings; on `*.host.labels` a prefix of whole labels (`com.example`) |
 | `cidr` | `{"cidr": [ipAttr, ["10.0.0.0/8", ...]]}` | IPv4 and IPv6 blocks |
-| `time` | `{"time": {...}}` | at least one of `notBefore` (inclusive), `notAfter` (exclusive), `daysOfWeek` (`MON`..`SUN`), `from`/`to` (`HH:mm`, may cross midnight); `zone` default `UTC` |
+| `time` | `{"time": {...}}` | at least one of `notBefore` (inclusive), `notAfter` (exclusive), `daysOfWeek` (exactly `MON`..`SUN`), `from`/`to` (`HH:mm`, may cross midnight); `zone` default `UTC` |
 | `exists` | `{"exists": attr}` | the attribute has a value (the empty string counts) |
 | `and`, `or` | `{"and": [c, ...]}` | at least one; left to right, short-circuit |
 | `not` | `{"not": c}` | |
@@ -191,24 +192,41 @@ such an id is ambiguous and requests that need it fail closed.
 
 ## App documents and catalogs
 
+Write a permission as a catalog entry with `action` (and optional `resource`), and grant it through `roles`: no policy and
+no binding per permission.
+
 ```json
 {
   "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
-  "catalog": { "groups": [ { "name": "order", "description": "Orders", "permissions": [
-    { "id": "read", "name": "Read" }, { "id": "ship", "name": "Ship" } ] } ] },
-  "policies": [
-    { "id": "perm:order-service/read", "statements": [ { "effect": "allow", "action": "order:read", "resource": "order/**" } ] }
-  ],
-  "bindings": [
-    { "id": "viewer-read", "subject": { "role": "viewer" }, "app": "order-service", "space": "*", "policy": "perm:order-service/read" }
-  ]
+  "catalog": { "groups": [
+    { "name": "Orders", "permissions": [
+      { "id": "order.read", "name": "Read orders", "action": "order:read" } ] },
+    { "name": "Shipping", "spaced": true, "permissions": [
+      { "id": "order.ship", "name": "Ship orders", "action": "order:ship", "resource": "order/{orderId}" } ] } ] },
+  "roles": [
+    { "id": "viewer", "name": "Viewer", "permissions": ["order.read"] },
+    { "id": "clerk", "name": "Clerk", "permissions": ["order.read", "order.ship"] },
+    { "id": "admin", "name": "Administrator", "permissions": "*" } ]
 }
 ```
 
-Policies of an app document are named `perm:<appId>/<permission>` and cannot be attachable. The catalog is for UIs and
-generators only; it takes no part in evaluation (`spaced` is informational). The OpenAPI feature generates a route map and
-an app document (`GET /actuator/cosecServiceGenerator/routes` and `/app`). Role grant semantics:
-https://cosec.ahoo.me/policies/role-permissions.
+An entry with `action` is the policy `perm:<appId>/<id>` (one ALLOW statement, never attachable); in a group that is not
+`spaced` it applies only in the default space, in a `spaced` one in any space a role holding it applies in. An entry
+with `action` may not coexist with a hand-written policy of its id: write a policy (`perm:<appId>/<id>`, no `catalog`
+action) only for a condition, a DENY or several statements. An entry with neither is for UIs only and no role can list
+it. A system role (app document) names no `app` or `space`, applies to every tenant, and may list `"*"`; a custom role
+(tenant document) names its `app` (required), optionally one `space`, lists permissions only, and applies to that
+tenant. Roles are expanded into bindings (`role:<roleId>@<app>:<permission>`) before anything reads them; hand-written
+`bindings` still work, with `{"role": …}` subjects, and the two may both grant a role. Without spaces write nothing about
+them: no `spaced`, no `space`, no `@` in the token's roles, no `CoSec-Space-Id`.
+
+The OpenAPI feature generates a route map and an app document of short-form permissions
+(`GET /actuator/cosecServiceGenerator/routes` and `/app`); its groups are not `spaced`, so set `"spaced": true` on the
+groups of an app that uses spaces. Reference: https://cosec.ahoo.me/policies/role-permissions. Worked examples with
+documents that run (an app with and without spaces, system and custom roles, a service account in one space, a tenant
+owner by attachment, an external source of truth, route maps, a gateway):
+https://cosec.ahoo.me/scenarios/simple-mode and the pages that follow it; the model and what each document may hold:
+https://cosec.ahoo.me/guide/model.
 
 ## Rate limit rules
 
@@ -222,8 +240,8 @@ and `Retry-After`.
   "key": "environment.ip", "permitsPerSecond": 0.1, "windowSeconds": 60, "strictFailure": true }
 ```
 
-`id` is `[A-Za-z0-9_.-]+`, unique per document. Each document counts in its own buckets (a platform rule under its
-id, others under `app:<app>/<id>` and `tenant:<tenant>/<id>`), and rules add up: a tenant rule never replaces or
+`id` is `[A-Za-z0-9_.-]+`, unique per document. Each document counts in its own buckets (`platform/<id>`,
+`app:<app>/<id>` and `tenant:<tenant>/<id>`), and rules add up: a tenant rule never replaces or
 relaxes a platform or app rule, even with the same id. `action` is
 required; `resource`, `condition` as in a statement, matched as a DENY is (so a bare resource type does not compile).
 `key` names a string or IP attribute (one bucket per value; absent key = one shared bucket; absent value = the empty
@@ -265,11 +283,12 @@ https://cosec.ahoo.me/guide/security-model.
 Check the final document for:
 
 - broad `subject: "*"` ALLOWs that grant more than intended (`*` includes anonymous callers);
-- `http:*` DENYs on a service that uses a route map (they never apply to mapped requests);
+- `http:*` DENYs and `http:` rate limit rules on a path that a route map also maps (they never apply to mapped requests):
+  write the statement for the mapped action too (https://cosec.ahoo.me/scenarios/route-maps);
 - ALLOWs built on `not`, or on attributes that can be absent (headers, `request.attributes.*`);
 - missing method constraints (`http:*` where only `http:GET` was meant) on state-changing endpoints;
 - `space: "*"` where one space was meant (`""` is the default space only);
-- tenant-supplied facts trusted as identity: `CoSec-App-Id`/`CoSec-Space-Id` are client input (a space needs a role
+- tenant-supplied facts trusted as identity: `CoSec-Space-Id` is client input (a space needs a role
   there, and a host with `cosec.authorization.scope.app-id` rejects another app);
 - `environment.ip` behind proxies (it depends on `cosec.authorization.remote-ip.max-trusted-index`);
 - a DENY with `onMissing: nomatch` (it lapses during a provider outage);
@@ -280,7 +299,7 @@ Check the final document for:
 1. **Schema:** validate the document against `schema/cosec-snapshot-document.schema.json` (its `platformDocument`,
    `appDocument` and `tenantDocument` definitions). The schema cannot check unique ids, binding placement, attribute
    types or limits; compiling does.
-2. **Compile:** in Kotlin, `PolicyDocumentCompiler.forPlatform(platform).compile(PolicyDocumentCodec.decode(kind,
+2. **Compile:** in Kotlin, `PolicyDocumentCompiler.forPlatform(platform).validate(PolicyDocumentCodec.decode(kind,
    owner, bytes))` throws `DocumentCompileException` listing every error with its JSON path;
    `checkReferences(document, platform)` checks that bound policies exist.
 3. **Test decisions** in the service's own test suite with `cosec-testkit`
@@ -296,7 +315,9 @@ Check the final document for:
    `POST /cosec/control/v1/simulate` with
    `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42"}, "candidate": "<changeId>"}`
    compares a staged change with the enforced documents; `POST /explain` shows the deciding statement. External
-   attributes are not fetched in a simulation, so a statement reading one is Indeterminate there.
+   attributes are not fetched in a simulation, so a statement reading one is Indeterminate there. A request without a
+   `principal` is decided on tenant `(0)`: give it `"tenant": "(0)"` (another tenant is 400), as an operator who may
+   simulate there.
 5. **Publish** through the control plane: `POST /documents/{key}:apply` (`mode` `MERGE` or `REPLACE`) or
    `POST /changes`, optionally a shadow window before publishing. A compile error is 422, a stale base revision 409,
    a `nomatch` DENY without confirmation 428. See https://cosec.ahoo.me/policies/testing. The first documents (and

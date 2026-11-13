@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.CoroutineDispatcher
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.CoroutineContext
@@ -27,7 +30,9 @@ import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
  * request starts on the event loop without a dispatch and never goes on with CPU work on a client library's I/O thread.
  * The WebMvc adapter puts none: the continuation goes back through `runBlocking`'s interceptor to the request thread.
  */
+@InternalCoSecApi
 class ResumeDispatcher(val dispatcher: CoroutineDispatcher) : AbstractCoroutineContextElement(Key) {
+    @InternalCoSecApi
     companion object Key : CoroutineContext.Key<ResumeDispatcher>
 
     override fun toString(): String = "ResumeDispatcher($dispatcher)"
@@ -49,11 +54,9 @@ internal suspend fun <T> resumeOffIo(block: suspend () -> T): T = suspendCorouti
         override val context: CoroutineContext get() = caller.context
 
         override fun resumeWith(result: Result<T>) {
-            if (resume == null) {
-                caller.intercepted().resumeWith(result)
-            } else {
-                resume.dispatch(caller.context) { caller.resumeWith(result) }
-            }
+            // The dispatcher's own continuation, not a bare Runnable: only it installs the context's thread context
+            // elements (the trace, the MDC) on the thread that resumes, and gives that thread its own back after (#1274).
+            (resume?.interceptContinuation(caller) ?: caller.intercepted()).resumeWith(result)
         }
     }
     block.startCoroutineUninterceptedOrReturn(completion)

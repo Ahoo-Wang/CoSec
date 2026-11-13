@@ -45,6 +45,9 @@ val testSources = rootProject.subprojects.filter { it != project }.map { it.layo
 
 tasks.named<Test>("test") {
     systemProperty("cosec.projects", projectDirectories)
+    // DocumentationExamplesTest reads the samples of the wiki's scenario pages.
+    systemProperty("cosec.repository.root", repositoryRoot.asFile.absolutePath)
+    inputs.dir(repositoryRoot.dir("wiki/examples")).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 /*
@@ -68,7 +71,7 @@ val verifyRuleCoverage = tasks.register<JavaExec>("verifyRuleCoverage") {
 
 /*
  * RFC 0008 §3.7: applies each patch of test/conformance/mutants to HEAD in a temporary git worktree and asserts that at
- * least one of the tests it names fails. Manual (each mutant rebuilds), run before S1: -Pmutants=a,b runs only those.
+ * least one of the tests it names fails. Manual (each mutant rebuilds): -Pmutants=a,b runs only those.
  */
 tasks.register<JavaExec>("mutationCheck") {
     group = "verification"

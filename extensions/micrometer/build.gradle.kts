@@ -13,7 +13,7 @@
 
 dependencies {
     // MetricsListener (RFC 0006 §9.5.2) observes the coroutine pipeline's decision events.
-    implementation(project(":runtime"))
+    api(project(":runtime"))
     implementation("io.micrometer:micrometer-core")
     testImplementation("io.projectreactor:reactor-test")
 }

@@ -11,9 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.StoreSpec
+import me.ahoo.cocache.core.codec.StringCodec
+import me.ahoo.cocache.core.policy.DefaultPolicies
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.context.properties.bind.Binder
@@ -21,21 +27,22 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import java.time.Duration
 
 class CacheConfigurationTest {
+    private val spec = StoreSpec.builder<String, String>("Revocations").codec(StringCodec).build()
 
     @Test
     fun nullsKeepCoCacheDefaults() {
-        CacheConfiguration(localMaxAge = null, maximumSize = null).toCachePolicy(CachePolicy.DEFAULT).toString()
-            .assert().isEqualTo(CachePolicy.DEFAULT.toString())
+        CacheConfiguration(localMaxAge = null, maximumSize = null).applyTo(spec).policy.toString()
+            .assert().isEqualTo(DefaultPolicies.STORE.toString())
     }
 
     @Test
-    fun toCachePolicyWithAllOptions() {
+    fun applyToWithAllOptions() {
         val policy = CacheConfiguration(
             initialCapacity = 16,
             maximumSize = 100,
             localMaxAge = Duration.ofMinutes(10),
             expireAfterAccess = Duration.ofMinutes(5),
-        ).toCachePolicy(CachePolicy.DEFAULT)
+        ).applyTo(spec).policy
         policy.local.initialCapacity.assert().isEqualTo(16)
         policy.local.maximumSize.assert().isEqualTo(100L)
         policy.local.expireAfterAccess.assert().isEqualTo(Duration.ofMinutes(5))
@@ -44,7 +51,7 @@ class CacheConfigurationTest {
 
     @Test
     fun tokenDefaults() {
-        val policy = CacheProperties().token.toCachePolicy(CachePolicy.DEFAULT)
+        val policy = RevocationProperties().cache.applyTo(spec).policy
         policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
         policy.local.maximumSize.assert().isEqualTo(100_000L)
     }
@@ -54,22 +61,24 @@ class CacheConfigurationTest {
     fun bareNumbersAreSeconds() {
         val source = MapConfigurationPropertySource(
             mapOf(
-                "cosec.authorization.cache.token.local-max-age" to "10",
-                "cosec.authorization.cache.token.expire-after-access" to "5",
-                "cosec.authorization.cache.token.maximum-size" to "7",
+                "cosec.authentication.revocation.cache.local-max-age" to "10",
+                "cosec.authentication.revocation.cache.expire-after-access" to "5",
+                "cosec.authentication.revocation.cache.maximum-size" to "7",
             )
         )
-        val token = Binder(source).bind(CacheProperties.PREFIX, CacheProperties::class.java).get().token
+        val token = Binder(source).bind(RevocationProperties.PREFIX, RevocationProperties::class.java).get().cache
         token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(10))
         token.expireAfterAccess.assert().isEqualTo(Duration.ofSeconds(5))
         token.maximumSize.assert().isEqualTo(7L)
     }
 
-    /** Constructor binding builds the token settings from their own defaults once any key is set. */
+    /** One key set must leave the other settings at their defaults. */
     @Test
     fun oneKeyKeepsTheOtherDefaults() {
-        val source = MapConfigurationPropertySource(mapOf("cosec.authorization.cache.token.maximum-size" to "500"))
-        val token = Binder(source).bind(CacheProperties.PREFIX, CacheProperties::class.java).get().token
+        val source = MapConfigurationPropertySource(
+            mapOf("cosec.authentication.revocation.cache.maximum-size" to "500")
+        )
+        val token = Binder(source).bind(RevocationProperties.PREFIX, RevocationProperties::class.java).get().cache
         token.maximumSize.assert().isEqualTo(500L)
         token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
     }

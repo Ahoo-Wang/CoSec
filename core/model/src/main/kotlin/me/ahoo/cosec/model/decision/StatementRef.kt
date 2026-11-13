@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.decision
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.TenantId
@@ -47,7 +50,7 @@ sealed interface BindingRef {
     /** Through binding [id] of a [document]. */
     data class Bound(val id: BindingId, val document: DocumentKind) : BindingRef
 
-    /** Attached by the principal's memberships (RFC 0004 §4.4), as 7.x `principal.policies`. */
+    /** Attached by the principal's memberships (RFC 0004 §4.4). */
     data class Attached(val policy: PolicyId) : BindingRef
 
     /** Part of every snapshot: the blacklist rule (RFC 0004 §4.7). */

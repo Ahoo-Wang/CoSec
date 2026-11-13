@@ -11,11 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -49,6 +56,26 @@ class HttpAttributesTest {
         string(Kind.HTTP_REFERER_HOST).assert().isEqualTo("www.example.com")
         string(Kind.REQUEST_ATTRIBUTE, "cosec.audit.routeId").assert().isEqualTo("orders")
         string(Kind.SUBJECT_ID).assert().isNull()
+    }
+
+    /**
+     * `PIP-12` for the control plane's simulations (D2): a header the view's documents read, sent with different values,
+     * is the request's ambiguous header, whichever statement reads it; identical repeats and unread headers are not.
+     */
+    @Test
+    fun aRepeatedHeaderTheViewReadsIsAmbiguous() {
+        val platform = PolicyDocumentCodec.decode(
+            DocumentKind.PLATFORM,
+            "",
+            (
+                """{"schema":2,"revision":1,"publishedAt":"2026-10-27T00:00:00Z","policies":[{"id":"p","statements":""" +
+                    """[{"effect":"allow","action":"order:read","condition":{"eq":["http.header.x-twice","a"]}}]}]}"""
+                ).encodeToByteArray(),
+        )
+        val view = SnapshotView(PolicyDocumentCompiler.forPlatform(platform).compile(platform), null, null)
+        attributes.ambiguousHeader(view).assert().isEqualTo("x-twice")
+        HttpAttributes(Headers.of(mapOf("X-Twice" to listOf("a", "a")))).ambiguousHeader(view).assert().isNull()
+        HttpAttributes(Headers.of(mapOf("X-Other" to listOf("a", "b")))).ambiguousHeader(view).assert().isNull()
     }
 
     /** RC1-21: the host's API key header never reads, even through a document a compiler was not told about. */

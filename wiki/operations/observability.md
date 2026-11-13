@@ -20,7 +20,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
-| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.audit.required.timeout`](./configuration.md#audit) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
+| `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
 | `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
 
 The listeners the starter registers:
@@ -29,12 +29,12 @@ The listeners the starter registers:
 |---|---|---|
 | `LoggingAuditListener` (`logging-audit`) | `BEST_EFFORT` | `cosec.audit.enabled` (default `true`) |
 | `KafkaAuditListener` (`kafka-audit`) | [`cosec.audit.kafka.delivery`](./configuration.md#audit), `BEST_EFFORT` by default | `cosec-kafka`, a `KafkaOperations` bean, `cosec.audit.enabled` and `cosec.audit.kafka.enabled` (both default `true`) |
-| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `cosec-micrometer`, a `MeterRegistry` bean and `cosec.metrics.enabled` (default `true`) |
+| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `cosec-micrometer`, a `MeterRegistry` bean (Spring Boot's own auto-configured one included) and `cosec.metrics.enabled` (default `true`) |
 | `TracingListener` (`tracing`) | `BEST_EFFORT` | `cosec-opentelemetry` |
 | `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cosec-cocache` and `cosec.authorization.shadow.enabled` (default `true`) |
 
 Any `DecisionListener` bean of yours joins them; names must be unique, or startup fails
-([Extending](../architecture/extending.md)). An `AuditEventSink` bean, such as one written for 7.x, joins them too: the
+([Extending](../architecture/extending.md)). An `AuditEventSink` bean joins them too: the
 starter wraps it as a `BEST_EFFORT` listener named after the bean (`AuditListener.of(sink, beanName)`), in its
 `@Order` among the listeners. It is always `BEST_EFFORT`, because `AuditEventSink.publish` cannot acknowledge a write.
 A bean that is both is registered once, as the `DecisionListener` it is.
@@ -47,7 +47,10 @@ A bean that is both is registered once, as the `DecisionListener` it is.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
 - **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
   [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). What is left then is dropped, with
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`.
+  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`. The Kafka
+  audit listener then gets up to the same timeout for the sends it still holds and the broker's answers to them, before
+  the producer is closed. At that bound its queued sends are dropped and a send in progress is interrupted, with
+  `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...` at `WARN`.
 - **The evaluation trace.** A `DecisionEvent` carries `evaluationTrace`, what the engine looked at, to the depth of
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline): `off` (the default, no trace and no cost), `full`
   (every rule of each layer the decision reaches, including those after the deciding one) or `exhaustive` (also the
@@ -66,13 +69,13 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 |---|---|
 | `eventId`, `timestamp`, `tenantId` | the event; `tenantId` is the principal's tenant |
 | `kind` | `DECIDED`, `BAD_REQUEST` (`400`), `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR` (`500`) |
-| `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope); `policies` is always empty |
+| `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope) |
 | `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `device.id` |
 | `authorization.decision`, `authorization.reasonCode` | see the table below |
 | `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
-| `authorization.source` | `type`, and the deciding `policy` (`id`, `type`, `statement.index`, `statement.name`) |
-| `binding` | how the deciding statement applied: a binding id, `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
+| `authorization.source` | what decided: `via`, `document`, `policy` (its id) and `statement` (`index`, `name`); see the second table below |
+| `binding` | how the deciding statement applied: a binding id (a role's derived binding is `role:<roleId>@<app>:<permission>`), `attached:<policyId>`, `builtin` (the blacklist) or `boundary:<tenantId>` |
 | `snapshotVersion` | the revisions the decision read: `platform`, and `app` and `tenant` when it read them |
 | `breakGlass` | whether the permit came through a break-glass binding |
 | `trace` | `traceId` and `spanId` of the request's span, when tracing is active |
@@ -91,10 +94,15 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |
 | `500` | `ERROR` | `ERROR` |
 
-`authorization.source.type` says where the deciding statement came from: `BLACKLIST` (the built-in blacklist),
-`ROOT` (a break-glass binding of `cosec:root`), `ROLE_PERMISSION` (a binding of an app document),
-`PRINCIPAL_POLICY` (an attached policy), `GLOBAL_POLICY` (a binding of the platform or a tenant document, or a
-boundary), or `NONE` when no statement decided.
+`authorization.source.via` says how what decided came to apply, and `document` which snapshot document holds it:
+
+| `via` | `document` | Meaning |
+|---|---|---|
+| `BINDING` | `PLATFORM`, `APP` or `TENANT` | a binding of that document, a role's derived binding included; `binding` is its id. A break-glass permit is a binding of `cosec:root`, with `breakGlass: true` |
+| `ATTACHMENT` | `null` | a policy attached through the principal's memberships |
+| `BUILTIN` | `null` | the built-in blacklist |
+| `BOUNDARY` | `PLATFORM` | the tenant's platform boundary refused a permit. `policy` is the boundary and `statement` is `null`, since none of its statements matched |
+| `NONE` | `null` | no statement decided: nothing allowed the request, its scope was rejected, or no decision was made. `policy` and `statement` are `null` |
 
 ### Audit log and Kafka
 
@@ -164,6 +172,14 @@ CoSec registers no meters for the documents an instance holds. To see whether in
   every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `failed`, `absent`
   or `loading`) and `prewarmed`. Readiness follows the same condition
   ([Readiness](./deployment.md#readiness)).
+- **Eviction.** On Redis, the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict the snapshot,
+  with an `eviction` detail that says why. It reports what the instance read last: every node's `maxmemory-policy`,
+  read every `revalidate-interval` on a thread of its own, never by a probe. A policy it cannot read is `DOWN` under
+  `eviction-check: fail`, and `UP` with `eviction: unknown` under `warn`. It is an alert, not a readiness signal: keep
+  it out of the readiness group, where one change to Redis would take every instance out of rotation while requests
+  are still decided ([Redis requirements](./storage.md#redis-requirements)). It also turns the aggregate
+  `/actuator/health` `DOWN`, as every indicator does: point load balancers and platform health checks at the readiness
+  group, or leave it out of the group they poll (`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`).
 - **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
   than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
@@ -171,7 +187,9 @@ CoSec registers no meters for the documents an instance holds. To see whether in
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
 - **Propagation.** The control plane's
   `GET /documents/<doc>/revisions/<n>/propagation` answers how many of the instances that reported in the last minute
-  have revision `<n>` or later installed. Instances report only with shadow windows on
+  have revision `<n>` or later installed. An instance counts a revision as installed only while it can evaluate it: one
+  that read the revision but could not compile it still reports, so it is among those counted, but it has not installed
+  it. Instances report only with shadow windows on
   ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)).
 - **Per decision.** `snapshotVersion` in the audit event and `cosec.snapshot.version` on the span name the revisions a
   decision read.

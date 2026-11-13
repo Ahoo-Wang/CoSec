@@ -11,15 +11,19 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Condition
 import tools.jackson.databind.JsonNode
 import java.time.DayOfWeek
 
 /**
  * The 7.x `time` condition (RFC 0005 §7.1): the same configuration, read against `environment.time` (§2 J5). Days of
- * the week are written in full, after 7.x's reading of them (trimmed, any case, full name or first three letters).
+ * the week are written `MON`...`SUN`, the only spelling 8.0 accepts, after 7.x's reading of them (trimmed, any case,
+ * full name or first three letters).
  */
 internal object TimeTranslation {
     private val FIELDS = setOf("notBefore", "notAfter", "zone", "daysOfWeek", "from", "to", ConditionTranslator.NEGATE)
@@ -40,7 +44,7 @@ internal object TimeTranslation {
         val days = config.get("daysOfWeek")?.let { node ->
             node.values().map { day ->
                 val upper = day.asString().trim().uppercase()
-                DayOfWeek.entries.firstOrNull { it.name == upper || it.name.take(3) == upper }?.name ?: run {
+                DayOfWeek.entries.firstOrNull { it.name == upper || it.name.take(3) == upper }?.name?.take(3) ?: run {
                     reject(RejectionKind.UNDECODABLE, location, "[${day.asString()}] is not a day of the week")
                     return null
                 }

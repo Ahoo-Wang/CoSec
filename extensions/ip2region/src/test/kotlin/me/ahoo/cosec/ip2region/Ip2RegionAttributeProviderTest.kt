@@ -11,12 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.ip2region
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.spi.attribute.AttributeRequest
@@ -33,7 +37,8 @@ class Ip2RegionAttributeProviderTest {
     )
 
     private fun request(remoteIp: String) = AttributeRequest(
-        Subject("anonymous", "", false, emptySet(), emptySet(), emptyMap(), false, false, false),
+        TenantId.DEFAULT,
+        Subject("anonymous", false, emptyMap(), false, false),
         null,
         Action("http", "GET"),
         Resource("http", "/", emptyMap()),

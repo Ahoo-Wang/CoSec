@@ -11,13 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.servlet
 
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
 
+@InternalCoSecApi
 class ServletXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
     XForwardedRemoteIpResolver<HttpServletRequest>(ServletRemoteIpResolver) {
+    @InternalCoSecApi
     companion object {
         val TRUST_ALL = ServletXForwardedRemoteIpResolver(Int.MAX_VALUE)
     }

@@ -26,7 +26,7 @@ import java.time.Instant
  * so revocation is shared across instances.
  *
  * Local hits cost no network; cross-instance propagation is bounded by the
- * local cache TTL (default 30 seconds, `cosec.authorization.cache.token.*`).
+ * local cache TTL (default 30 seconds, `cosec.authentication.revocation.cache.*`).
  *
  * Revoking all tokens of a principal ([revokeSubject]) needs [subjectCache]; without it, it throws.
  *
@@ -50,14 +50,14 @@ class CoCacheTokenStore @JvmOverloads constructor(
      */
     override fun revoke(tokenId: String, ttl: Duration) {
         // the extra second keeps the entry past the token's natural expiry (CoCache needs a positive lifetime)
-        cache.put(tokenId, true, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
+        cache.put(RevokedTokenCache.key(tokenId), true, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
     }
 
     /**
      * @param tokenId the token id (jti) to check
      * @return true if the token has been revoked; false on a miss
      */
-    override fun isRevoked(tokenId: String): Boolean = cache.get(tokenId) == true
+    override fun isRevoked(tokenId: String): Boolean = cache.get(RevokedTokenCache.key(tokenId)) == true
 
     /**
      * Keeps the later of the existing and the new `issuedBefore`, so that a second revocation never shortens the

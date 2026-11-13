@@ -20,6 +20,7 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -45,6 +46,7 @@ import java.util.concurrent.CompletableFuture
  *   unresolved when the oldest document of its view was confirmed longer ago than `failClosedMaxLag`
  *   ([SnapshotSource.checkFresh]); other tenants are never checked.
  */
+@InternalCoSecApi
 class DocumentSnapshotViews(
     private val source: SnapshotSource<CompiledDocument, CompiledDocument>,
     private val platformRequired: Boolean = false,
@@ -69,7 +71,9 @@ class DocumentSnapshotViews(
             if (SnapshotKey.Tenant.isValidTenantId(tenant.value)) {
                 documents += SnapshotKey.Tenant(tenant.value)
             } else {
-                val error = IllegalArgumentException("Tenant id [${tenant.value}] cannot name a snapshot document.")
+                val error = IllegalArgumentException(
+                    "Tenant id [${Identifiers.printable(tenant.value)}] cannot name a snapshot document."
+                )
                 invalidTenant = Cause.SourceUnavailable(DocumentKind.TENANT, error)
             }
         }
@@ -140,4 +144,5 @@ class DocumentSnapshotViews(
 }
 
 /** No platform document is published where one is required ([DocumentSnapshotViews.platformRequired]). */
+@InternalCoSecApi
 class MissingPlatformException : IllegalStateException("No platform document is published; requests fail closed.")

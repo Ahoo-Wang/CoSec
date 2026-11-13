@@ -11,11 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.store
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -25,9 +29,11 @@ import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.Provenance
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.runtime.document.ShadowWindow
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
@@ -35,12 +41,14 @@ import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
 /** A head as the control plane works with it: decoded, with the store's digest. */
+@InternalCoSecApi
 class Head(val key: SnapshotKey, val document: PolicyDocument, val stored: StoredDocument) {
     val revision: Long get() = document.revision
     val digest: SnapshotDigest get() = stored.digest
 }
 
 /** Who and what publishes a revision (RFC 0007 §5.3); [Revisions.publish] adds the parent. */
+@InternalCoSecApi
 class Publication(
     val change: String,
     val kind: ProvenanceKind,
@@ -50,37 +58,58 @@ class Publication(
 )
 
 /** The outcome of [Revisions.publish]. */
+@InternalCoSecApi
 sealed interface PublishOutcome {
     /** The head is now [revision]. */
+    @InternalCoSecApi
     class Published(val revision: Long, val digest: SnapshotDigest) : PublishOutcome
 
     /**
      * Someone published since the base was read: nothing was overwritten, and the change must be rebased and checked
      * again (RFC 0007 §5.5). [current] is what the store holds.
      */
+    @InternalCoSecApi
     class Conflicted(val current: SnapshotDigest?) : PublishOutcome
 
     /** The candidate removes policies other documents still refer to (RFC 0007 §5.8): nothing was written. */
+    @InternalCoSecApi
     class Referenced(val referrers: Map<PolicyId, Set<SnapshotKey>>) : PublishOutcome
 }
 
 /** What [Revisions.verifyChain] found walking a head's `parent` chain. */
+@InternalCoSecApi
 sealed interface ChainCheck {
     /** Every parent down to [oldest] has its record; older ones were reclaimed or never existed. */
+    @InternalCoSecApi
     class Intact(val oldest: Long) : ChainCheck
 
     /** The record [missing] should exist and does not: a lost write (a failover) or a deleted key. */
+    @InternalCoSecApi
     class Broken(val missing: ParentRevision) : ChainCheck
 }
 
-/** What [Revisions.reclaim] removed. */
-class Reclaimed(val records: List<SnapshotDigest>, val orphans: List<SnapshotDigest>) {
+/**
+ * What [Revisions.reclaim] did: the [records] and [orphans] it took out of the index, the records it [deleted] (those
+ * and any an earlier pass could not delete), and the ones whose deletion [failed], which the next pass tries again.
+ */
+@InternalCoSecApi
+class Reclaimed(
+    val records: List<SnapshotDigest>,
+    val orphans: List<SnapshotDigest>,
+    val deleted: List<SnapshotDigest> = records + orphans,
+    val failed: List<SnapshotDigest> = emptyList(),
+) {
+    /** Whether it changed anything or has something left to do. */
+    val any: Boolean get() = records.isNotEmpty() || orphans.isNotEmpty() || deleted.isNotEmpty() || failed.isNotEmpty()
+
+    @InternalCoSecApi
     companion object {
         val NOTHING: Reclaimed = Reclaimed(emptyList(), emptyList())
     }
 }
 
 /** How long revision records are kept (RFC 0007 §5.7). */
+@InternalCoSecApi
 class RetentionPolicy(
     /** The most recent revisions along the chain that are always kept (`cosec.control.revisions.max-count`). */
     val maxCount: Int = 50,
@@ -105,19 +134,22 @@ class RetentionPolicy(
  * [publish] writes in the order that never loses content and never lets the data plane see anything but the old or
  * the new head:
  * 1. the record is registered as pending in the index, then written, create-only (`putIfMatch(expected = null)`);
- * 2. the back-references the candidate adds are added (the index stays a superset of the true references), and an app
- *    document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
+ * 2. the back-references the candidate adds are added, each with the candidate's revision (the index stays a superset
+ *    of the true references), and an app document is listed among the apps ([ControlStore.apps], RC1-4) if it is not;
  * 3. the caller's precondition is read, and the head is replaced with `putIfMatch(expected = base digest)`: one key,
  *    one atomic step (P7). A conflict leaves the head as someone else wrote it and is reported, never retried on the
  *    new content (RFC 0007 §5.5);
- * 4. the index gains the revision, and back-references only the base had are removed; the platform's first revision
- *    marks the app list complete when it names every app document the store lists.
+ * 4. the index gains the revision, and back-references only the base had are removed, unless a later revision has
+ *    indexed them again since (#1207); the platform's first revision marks the app list complete when it names every
+ *    app document the store lists.
  *
- * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged.
+ * Steps 3 and 4 run to the end even when the caller is cancelled, and a failure in step 4 is only logged, a store's
+ * own timeout among them (#1263): the head write is the commit point.
  *
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
  */
+@InternalCoSecApi
 class Revisions(
     private val store: ControlStore,
     private val clock: Clock = Clock.systemUTC(),
@@ -170,7 +202,7 @@ class Revisions(
         val before = base?.let { references(it.document) }.orEmpty()
         val after = references(document)
         for ((target, policy) in after - before) {
-            check(updateReferrers(target, policy) { it + key }) {
+            check(updateReferrers(target, policy) { indexed(it, key, revision) }) {
                 "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
             }
         }
@@ -210,13 +242,15 @@ class Revisions(
         }
     }
 
-    /** [published], after the head write: a failure is only logged ([publish] says why that is safe). */
+    /**
+     * [published], after the head write: a failure is only logged ([publish] says why that is safe). So is a
+     * [CancellationException]: this runs without responding to the caller's cancellation, so one that reaches here is a
+     * store's own timeout (#1263); the caller's stays pending and takes effect when [publish] returns.
+     */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
         try {
             published(key, entry, dropped)
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             log.warn(e) {
                 "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
@@ -231,7 +265,7 @@ class Revisions(
      * `repair-references` leaves it: a platform head that was lost and is published again may find app documents a
      * rebuilt list does not name. A listed app without a head is one whose first publish stopped before its head
      * write; it does not count, since an app lists itself before its head is written. The head is written whatever this
-     * does, so a failure is only logged.
+     * does, so a failure is only logged, a store's own timeout among them, as in [settle].
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun completeOnNewStore() {
@@ -253,8 +287,6 @@ class Revisions(
                 }
             }
             warn("The app list kept changing and was not marked complete; grants over every app wait for approval")
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             log.warn(e) { "The app list could not be marked complete; grants over every app wait for approval." }
         }
@@ -332,6 +364,7 @@ class Revisions(
         attributes = candidate.attributes,
         boundary = candidate.boundary,
         rateLimits = candidate.rateLimits,
+        roles = candidate.roles,
         provenance = Provenance(
             parent = base?.let { ParentRevision(it.revision, it.digest.toString()) },
             change = publication.change,
@@ -346,45 +379,77 @@ class Revisions(
     private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
         updateIndex(key) { index ->
             index.copy(
-                entries = index.entries.filter { it.revision < entry.revision } + entry,
+                // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
+                // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
+                entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
                 pending = index.pending.filter { it.digest != entry.digest },
             )
         } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
         for ((target, policy) in dropped) {
-            updateReferrers(target, policy) { it - key } ||
+            updateReferrers(target, policy) { dropped(it, key, entry.revision) } ||
                 warn("[$key] no longer refers to [$policy] of [$target], which stays indexed")
         }
     }
 
     /**
-     * The retained revisions of [key], oldest first. When the index is behind the head (a publish that failed after
-     * its head write, or a lost index), the missing entries are found along the head's `parent` chain and added.
+     * [referrers] with [key] at [revision]: a reference [publish] indexes before its head write. One already indexed
+     * by [revision] or a later revision (a publish that lost its race) stays as it is.
+     */
+    private fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+        val current = referrers[key]
+        return if (current != null && current >= revision) referrers else referrers + (key to revision)
+    }
+
+    /**
+     * [referrers] without [key], if [revision], which no longer refers, or an earlier revision indexed it. The removal
+     * runs after the head write, so a later revision may have indexed the reference again meanwhile (#1207): it stays,
+     * and so does one of a revision whose publish lost its race, a superset that blocks a deletion at most.
+     */
+    private fun dropped(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+        val current = referrers[key] ?: return referrers
+        return if (current <= revision) referrers - key else referrers
+    }
+
+    /**
+     * The retained revisions of [key], oldest first, none above its head. When the index is behind the head (a publish
+     * that failed after its head write, or a lost index), the missing entries are found along the head's `parent` chain
+     * and added.
      */
     suspend fun history(key: SnapshotKey): List<RevisionEntry> {
-        val head = head(key) ?: return store.index(key)?.value?.entries.orEmpty()
+        // The head as stored: its envelope says its revision, and it is decoded only when the chain has to be walked
+        // from it, not for every listing and every explain at a revision (L6 of #1240, up to 8 MB a call).
+        val stored = store.head(requireDocumentKey(key)) ?: return store.index(key)?.value?.entries.orEmpty()
         val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
-        val latest = indexed.latest?.revision ?: 0
-        if (head.revision <= latest) {
-            return indexed.entries
+        // Nothing above the head: what a head that moved back (a partial loss of data) left in the index is not on the
+        // chain. A revision published after the head was read is left out of this read alone, and what reclamation
+        // removes comes from this list, so it is never taken for one to remove.
+        val entries = indexed.entries.filter { it.revision <= stored.document.revision }
+        val latest = entries.lastOrNull()?.revision ?: 0
+        if (stored.document.revision <= latest) {
+            return entries
         }
+        val head = Head(key, decode(key, stored.document), stored)
         val missing = ArrayList<RevisionEntry>()
         var document: PolicyDocument? = head.document
         var digest: SnapshotDigest? = head.digest
         while (document != null && digest != null && document.revision > latest) {
             missing += RevisionEntry(document.revision, digest, document.publishedAt)
             val parent = document.provenance?.parent ?: break
-            digest = SnapshotDigest(hex(parent.digest))
+            digest = SnapshotDigest.parse(parent.digest)
             document = store.record(key, digest)?.let { decode(key, it) }
         }
         val repaired = missing.sortedBy { it.revision }
         updateIndex(key) { index ->
             val known = index.entries.map { it.revision }.toSet()
+            // Against the index as it is at this attempt: reclamation may have taken some out since the chain was walked,
+            // and below its floor nothing comes back (#1265).
+            val retained = repaired.filter { it.revision >= index.floor }
             index.copy(
-                entries = (index.entries + repaired.filter { it.revision !in known }).sortedBy { it.revision },
-                pending = index.pending.filter { pending -> repaired.none { it.digest == pending.digest } },
+                entries = (index.entries + retained.filter { it.revision !in known }).sortedBy { it.revision },
+                pending = index.pending.filter { pending -> retained.none { it.digest == pending.digest } },
             )
         } || warn("[$key]: the rebuilt history could not be written back to the index")
-        return (indexed.entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
+        return (entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
     }
 
     /**
@@ -396,7 +461,7 @@ class Revisions(
         var current = head(key) ?: return null
         while (current.revision > revision) {
             val parent = current.document.provenance?.parent ?: return null
-            val digest = SnapshotDigest(hex(parent.digest))
+            val digest = SnapshotDigest.parse(parent.digest)
             val record = store.record(key, digest) ?: return null
             current = Head(key, decode(key, record), StoredDocument(record, digest))
         }
@@ -419,8 +484,6 @@ class Revisions(
                     pending = index.pending.filter { it.digest != entry.digest },
                 )
             } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             log.warn(e) { "[$key] revision ${entry.revision} is published; its index entry could not be written." }
         }
@@ -456,7 +519,7 @@ class Revisions(
         var document = head.document
         while (true) {
             val parent = document.provenance?.parent ?: return ChainCheck.Intact(document.revision)
-            val record = store.record(key, SnapshotDigest(hex(parent.digest)))
+            val record = store.record(key, SnapshotDigest.parse(parent.digest))
             if (record == null) {
                 return if (parent.revision >= floor) ChainCheck.Broken(parent) else ChainCheck.Intact(document.revision)
             }
@@ -472,6 +535,11 @@ class Revisions(
      * most recent revisions and older than [RetentionPolicy.minAge], unless [keep] names them (the bases and rollback
      * targets of changes still open), and the orphans older than [RetentionPolicy.orphanAge]. One instance at a time:
      * without the lease it removes nothing.
+     *
+     * The index is written first, so a listed revision never misses its record; what it takes out goes to
+     * [RevisionIndex.reclaiming] in that same write, and is dropped from there once deleted (#1226). A deletion that fails
+     * is tried again by the next pass; one of a record that became the head, a listed revision or a kept one since is
+     * not tried at all.
      */
     suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed {
         if (!store.acquireLease("reclaim:$key", holder, retention.leaseDuration)) {
@@ -486,16 +554,23 @@ class Revisions(
                 entry.publishedAt.isBefore(now.minus(retention.minAge))
         }
         var orphans: List<SnapshotDigest> = emptyList()
+        var reclaiming: List<SnapshotDigest> = emptyList()
         val updated = updateIndex(key) { index ->
             val chain = index.entries.map { it.digest }.toSet()
             orphans = index.pending.filter { pending ->
                 pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
                     pending.since.isBefore(now.minus(retention.orphanAge))
             }.map { it.digest }
+            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
+            val pending = index.pending.filter { it.digest !in orphans }
+            val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head)
+            // What an earlier pass could not delete, unless it is live again; then what this pass takes out.
+            reclaiming = (index.reclaiming + removed.map { it.digest } + orphans).distinct().filter { it !in live }
             index.copy(
-                entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } },
-                pending = index.pending.filter { it.digest !in orphans },
+                entries = entries,
+                pending = pending,
                 floor = maxOf(index.floor, (removed.maxOfOrNull { it.revision } ?: 0) + 1),
+                reclaiming = reclaiming,
             )
         }
         if (!updated) {
@@ -503,13 +578,29 @@ class Revisions(
             return Reclaimed.NOTHING
         }
         // The index no longer lists them, so a failure here leaves unlisted records behind, never a listed one missing.
-        (removed.map { it.digest } + orphans).forEach { store.removeRecord(key, it) }
-        return Reclaimed(removed.map { it.digest }, orphans)
+        val (deleted, failed) = reclaiming.partition { delete(key, it) }
+        if (deleted.isNotEmpty()) {
+            updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
+                warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
+        }
+        return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
+    }
+
+    /** Deletes the record of [key] at [digest]; `false` when that failed, which the next pass tries again. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun delete(key: SnapshotKey, digest: SnapshotDigest): Boolean = try {
+        store.removeRecord(key, digest)
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "[$key]: the record $digest could not be deleted; the next pass tries again." }
+        false
     }
 
     /** The documents indexed as referring to [policy] of [target] (RFC 0007 §5.8). */
     suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =
-        store.referrers(target, policy)?.value.orEmpty()
+        store.referrers(target, policy)?.value?.keys.orEmpty()
 
     /**
      * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
@@ -520,11 +611,11 @@ class Revisions(
         val head = head(key) ?: return 0
         var added = 0
         for ((target, policy) in references(head.document)) {
-            if (store.referrers(target, policy)?.value?.contains(key) == true) {
+            if (store.referrers(target, policy)?.value?.containsKey(key) == true) {
                 continue
             }
             check(
-                updateReferrers(target, policy) { it + key }
+                updateReferrers(target, policy) { indexed(it, key, head.revision) }
             ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
             added++
         }
@@ -543,8 +634,9 @@ class Revisions(
         if (base == null || key is SnapshotKey.Tenant) {
             return null
         }
-        val kept = candidate.policies.map { it.id }.toSet()
-        val blocked = base.document.policies.map { it.id }.filter { it !in kept }
+        // What a short form derives is a policy like any other: tenants' roles may refer to it (RFC 0012 §7.5).
+        val kept = RoleExpansion.effective(candidate).policies.map { it.id }.toSet()
+        val blocked = RoleExpansion.effective(base.document).policies.map { it.id }.filter { it !in kept }
             .associateWith { policy ->
                 val referrers = referrers(key, policy) - key
                 referrers.filterNotTo(HashSet()) { definesItself(it, policy) }
@@ -577,23 +669,31 @@ class Revisions(
      *
      * A tenant's own policy ids are indexed as uses of the platform's id too (RC1-9), so that the platform cannot add
      * a policy of an id a tenant already defines; readers tell the two apart by the tenant's head.
+     *
+     * The index is of what a document grants, so it reads the [expanded][RoleExpansion.effective] document (RFC 0012
+     * §7.5): an app must not remove a permission a tenant's role lists.
      */
-    private fun references(document: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
-        if (document.kind == DocumentKind.PLATFORM) {
+    private fun references(stored: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
+        if (stored.kind == DocumentKind.PLATFORM) {
             return emptySet()
         }
+        val document = RoleExpansion.effective(stored)
         val own = document.policies.map { it.id }.toSet()
         val references = LinkedHashSet<Pair<SnapshotKey, PolicyId>>()
         if (document.kind == DocumentKind.TENANT) {
             own.forEach { references += SnapshotKey.Platform to it }
         }
         for (binding in document.bindings) {
+            val app = (binding.scope.app as? Match.Exactly)?.value?.value
+            if (app != null && !SnapshotKey.App.isValidAppId(app)) {
+                throw SnapshotFormatException(
+                    "A document holds binding [${Identifiers.printable(binding.id.value)}] in app " +
+                        "[${Identifiers.printable(app)}], which no document key can name (SCP-10)."
+                )
+            }
             if (binding.policy in own) continue
             references += SnapshotKey.Platform to binding.policy
-            val app = (binding.scope.app as? Match.Exactly)?.value?.value
-            // An app no key can name has no document to refer to (R2-1 of #1194's review): earlier builds stored such
-            // bindings, and the head that holds one must still publish the change that drops it.
-            if (document.kind == DocumentKind.TENANT && app != null && SnapshotKey.App.isValidAppId(app)) {
+            if (document.kind == DocumentKind.TENANT && app != null) {
                 references += SnapshotKey.App(app) to binding.policy
             }
         }
@@ -626,11 +726,15 @@ class Revisions(
         return false
     }
 
-    private suspend fun updateReferrers(target: SnapshotKey, policy: PolicyId, change: (Set<SnapshotKey>) -> Set<SnapshotKey>): Boolean {
+    private suspend fun updateReferrers(
+        target: SnapshotKey,
+        policy: PolicyId,
+        change: (Map<SnapshotKey, Long>) -> Map<SnapshotKey, Long>,
+    ): Boolean {
         repeat(maxAttempts) {
             val current = store.referrers(target, policy)
             val next = change(current?.value.orEmpty())
-            if (current != null && next == current.value) {
+            if (next == (current?.value ?: emptyMap<SnapshotKey, Long>())) {
                 return true
             }
             if (store.putReferrers(target, policy, current?.digest, next)) {
@@ -640,16 +744,38 @@ class Revisions(
         return false
     }
 
-    private fun decode(key: SnapshotKey, document: SnapshotDocument): PolicyDocument {
+    /**
+     * [document], a stored one of [key], decoded. One that does not decode (a newer version's, during a rolling
+     * upgrade) names its key, so that the control API logs which one: its answer is a 500 without detail (RC1-39).
+     */
+    internal fun decode(key: SnapshotKey, document: SnapshotDocument): PolicyDocument {
         val (kind, owner) = ownerOf(key)
-        return PolicyDocumentCodec.decode(kind, owner, document.bodyBytes())
+        return try {
+            PolicyDocumentCodec.decode(kind, owner, document.bodyBytes())
+        } catch (e: SnapshotFormatException) {
+            throw SnapshotFormatException(
+                "The stored document [$key] revision ${document.revision} does not decode: ${e.message}",
+                e
+            )
+        }
     }
+
+    /** The head of [key] as stored, not decoded: its digest names its content (RC1-41). */
+    internal suspend fun stored(key: SnapshotKey): StoredDocument? = store.head(requireDocumentKey(key))
+
+    /** The digest [key] had at [revision], if its record is retained: what [revision] reads, before reading it. */
+    internal suspend fun retainedDigest(key: SnapshotKey, revision: Long): SnapshotDigest? =
+        history(key).firstOrNull { it.revision == revision }?.digest
+
+    /** The record of [key] with [digest], if retained. */
+    internal suspend fun record(key: SnapshotKey, digest: SnapshotDigest): SnapshotDocument? = store.record(key, digest)
 
     private fun warn(message: String): Boolean {
         log.warn { message }
         return false
     }
 
+    @InternalCoSecApi
     companion object {
         private val log = KotlinLogging.logger {}
         const val DEFAULT_MAX_ATTEMPTS: Int = 16
@@ -662,11 +788,5 @@ class Revisions(
         }
 
         private fun requireDocumentKey(key: SnapshotKey): SnapshotKey = key.also { ownerOf(it) }
-
-        private fun hex(text: String): ByteArray = ByteArray(
-            text.length / 2
-        ) { text.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() }
-
-        private const val HEX = 16
     }
 }

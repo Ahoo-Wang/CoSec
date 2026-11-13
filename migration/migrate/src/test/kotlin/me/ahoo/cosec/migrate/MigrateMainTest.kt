@@ -18,6 +18,7 @@ package me.ahoo.cosec.migrate
 import io.lettuce.core.RedisURI
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -194,8 +195,9 @@ class MigrateMainTest {
     private fun <T> controlStore(keyPrefix: String, block: suspend (CoCacheControlStore) -> T): T =
         RedisBackend.standalone(RedisURI.create(REDIS)).use { backend ->
             CacheRuntime.builder().backend(backend).build().use { runtime ->
-                val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                runBlocking { block(CoCacheControlStore.create(runtime, heads, keyPrefix)) }
+                val factory = CoCacheFactory(runtime)
+                val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                runBlocking { block(CoCacheControlStore.create(factory, heads, keyPrefix)) }
             }
         }
 
@@ -238,15 +240,15 @@ class MigrateMainTest {
             revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared", "own")), publication)
             // As published before the upgrade: acme's own id is not in the index.
             val indexed = store.referrers(SnapshotKey.Platform, own)!!
-            store.putReferrers(SnapshotKey.Platform, own, indexed.digest, emptySet()).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, own, indexed.digest, emptyMap()).assert().isTrue()
         }
         val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"
         val (code, output) = run(args)
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
         output.assert().contains("Visited 2 document(s); added 1 reference(s).")
         controlStore(keyPrefix) { store ->
-            store.referrers(SnapshotKey.Platform, own)!!.value.assert().containsExactly(acme)
-            store.referrers(SnapshotKey.Platform, PolicyId("shared"))!!.value.assert().containsExactly(acme)
+            store.referrers(SnapshotKey.Platform, own)!!.value.assert().isEqualTo(mapOf(acme to 1L))
+            store.referrers(SnapshotKey.Platform, PolicyId("shared"))!!.value.assert().isEqualTo(mapOf(acme to 1L))
         }
         run(args).let { (again, out) ->
             again.assert().describedAs(out).isEqualTo(MigrateMain.OK)

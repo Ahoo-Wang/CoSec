@@ -1,0 +1,19 @@
+{
+  "document": "tenant:acme",
+  "base": 2,
+  "note": "Save night-shift as night-shift-2",
+  "operations": [
+    {
+      "op": "putRole",
+      "role": {
+        "id": "night-shift-2",
+        "app": "wms",
+        "name": "Night shift (copy)",
+        "description": "Watches the dock",
+        "permissions": [
+          "warehouse.read"
+        ]
+      }
+    }
+  ]
+}

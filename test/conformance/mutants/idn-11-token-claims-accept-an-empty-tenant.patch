@@ -1,0 +1,16 @@
+# Rule: IDN-11
+# Mutant: a verified token may name an empty tenant, whichever verifier read it
+# Tests: :spi:test --tests me.ahoo.cosec.spi.token.VerifiedTokenTest :conformance:test
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+index 2d817e49..4f2e7101 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+@@ -70,7 +70,6 @@ class VerifiedToken(
+             id.isEmpty() -> invalid("has no id")
+             principal.isEmpty() -> invalid("has no subject")
+             Identifiers.isReserved(principal) -> invalid("names a subject reserved for CoSec")
+-            tenant != null && tenant.isEmpty() -> invalid("names an empty tenant")
+             app != null && !ScopeResolver.isValidAppId(app) -> invalid("declares an app that cannot be an app id")
+             !wellFormed() -> invalid("claims an id with an unpaired UTF-16 surrogate")
+         }

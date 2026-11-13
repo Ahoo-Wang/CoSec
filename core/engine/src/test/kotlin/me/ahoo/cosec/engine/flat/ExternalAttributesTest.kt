@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -30,6 +33,11 @@ import org.junit.jupiter.api.assertThrows
 
 /** RFC 0006 §5.4.2, §5.4.3: external attributes, `onMissing`, and the attribute plan. */
 class ExternalAttributesTest {
+    private companion object {
+        /** More statements of one effect than `IndexOptions.minStatements`. */
+        const val INDEXED = 12
+    }
+
     private val inFence = Attribute.external("ext.geo.inFence", AttributeType.BOOL)
     private val country = Attribute.external("ext.geo.country", AttributeType.STRING)
     private val compiler = PolicyCompiler(ConditionChecker(catalog = AttributeCatalog.of(listOf(inFence, country))))
@@ -192,6 +200,35 @@ class ExternalAttributesTest {
             ),
         )
         CoSecFlatEngine.plan(base, notACandidate).isEmpty.assert().isTrue()
+    }
+
+    /** #1211: the planner walks the statements the policy's index gives, so a path no statement can match plans nothing. */
+    @Test
+    fun thePlanSkipsWhatTheIndexRulesOut() {
+        fun indexed(condition: Condition? = null) = compiler.compile(
+            PolicyId("p"),
+            condition,
+            (0 until INDEXED).map {
+                StatementSource(
+                    "s$it",
+                    Effect.ALLOW,
+                    listOf("*"),
+                    listOf(ResourceSource("http:path:/private$it/**")),
+                    inFence(true),
+                )
+            },
+        )
+        val view = view(indexed())
+        // Eight statements or more: the evaluation looks them up in the index, so does the plan.
+        CoSecFlatEngine.plan(flatRequest(path = "/outside"), view).isEmpty.assert().isTrue()
+        CoSecFlatEngine.plan(flatRequest(path = "/private3/x"), view).attributes.assert().containsExactly(inFence)
+        decision(view, present(true)).assert().isEqualTo(Decision.Deny(null))
+
+        // A policy condition is read only through a statement that is a candidate, which the path decides.
+        val guarded = view(indexed(Condition.Eq("ext.geo.country", Literal.Str("x"))))
+        CoSecFlatEngine.plan(flatRequest(path = "/outside"), guarded).isEmpty.assert().isTrue()
+        CoSecFlatEngine.plan(flatRequest(path = "/private3/x"), guarded).attributes.assert()
+            .containsExactlyInAnyOrder(inFence, country)
     }
 
     @Test

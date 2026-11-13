@@ -1,0 +1,54 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Warehouse",
+        "permissions": [
+          {
+            "id": "warehouse.read",
+            "name": "Read warehouses",
+            "action": "wms:warehouse.read"
+          },
+          {
+            "id": "warehouse.edit",
+            "name": "Edit warehouses",
+            "action": "wms:warehouse.edit"
+          },
+          {
+            "id": "inbound.ship",
+            "name": "Ship inbound orders",
+            "action": "wms:inbound.ship",
+            "resource": "inbound/{id}"
+          }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "clerk",
+      "name": "Clerk",
+      "description": "Looks things up",
+      "permissions": [
+        "warehouse.read"
+      ]
+    },
+    {
+      "id": "manager",
+      "name": "Manager",
+      "permissions": [
+        "warehouse.read",
+        "warehouse.edit",
+        "inbound.ship"
+      ]
+    },
+    {
+      "id": "admin",
+      "name": "Administrator",
+      "permissions": "*"
+    }
+  ]
+}

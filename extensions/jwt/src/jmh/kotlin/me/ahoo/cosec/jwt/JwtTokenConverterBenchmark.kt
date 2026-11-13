@@ -14,9 +14,9 @@ package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.token.VerifiedToken
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Scope
 import org.openjdk.jmh.annotations.Setup
@@ -61,11 +61,11 @@ open class JwtTokenConverterBenchmark {
         algorithm = Algorithm.HMAC256("jwt-benchmark-secret")
         jwtTokenConverter = JwtTokenConverter(RandomIdGenerator, algorithm)
         jwtTokenVerifier = JwtTokenVerifier(algorithm)
-        token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        token = jwtTokenConverter.toToken(TokenSubject("alice", null))
     }
 
     @Benchmark
-    fun asPrincipalWithVerify(): TokenTenantPrincipal {
-        return jwtTokenVerifier.verify(token)
+    fun asPrincipalWithVerify(): VerifiedToken {
+        return jwtTokenVerifier.verify(token.accessToken)
     }
 }

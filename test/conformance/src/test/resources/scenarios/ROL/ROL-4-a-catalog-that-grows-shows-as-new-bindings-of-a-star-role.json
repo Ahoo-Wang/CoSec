@@ -1,0 +1,124 @@
+{
+  "rules": [
+    "ROL-4"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The catalog gains count: a star role's new binding is in the diff, where an approver sees it.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "admin",
+            "permissions": "*"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:wms",
+        "operations": [
+          {
+            "putCatalog": {
+              "groups": [
+                {
+                  "name": "ops",
+                  "permissions": [
+                    {
+                      "id": "read",
+                      "action": "wms:read"
+                    },
+                    {
+                      "id": "edit",
+                      "action": "wms:edit"
+                    },
+                    {
+                      "id": "label"
+                    },
+                    {
+                      "id": "count",
+                      "action": "wms:count"
+                    }
+                  ]
+                },
+                {
+                  "name": "inbound",
+                  "spaced": true,
+                  "permissions": [
+                    {
+                      "id": "ship",
+                      "action": "wms:ship"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "diff": {
+        "document": "app:wms",
+        "from": 1,
+        "to": 2
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "diff policies=[+perm:wms/count] bindings=[+role:admin@wms:count] roles=[] sections=true"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "app:wms": 2
+    }
+  }
+}

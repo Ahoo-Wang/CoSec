@@ -17,7 +17,7 @@ The response body says only what the client can act on. The detail is in the aud
 1. Take the `CoSec-Request-Id` response header, which is also the `requestId` of the problem body.
 2. Find its audit event. The audit log writes denials, `429`s, `503`s and errors to the logger `me.ahoo.cosec.audit` at
    `WARN` and `ERROR`. Read `authorization.reasonCode` and `authorization.reason`, the deciding statement in
-   `authorization.source.policy`, the `binding` it applied through, and the `snapshotVersion` it read
+   `authorization.source`, the `binding` it applied through, and the `snapshotVersion` it read
    ([Audit events](./observability.md#audit-events)).
 3. For every statement a decision checked and why each matched or not, explain the request through the control plane
    ([Explaining a decision](../integration/checks.md)). With `cosec-opentelemetry` the deciding statement is also on
@@ -46,10 +46,8 @@ The request cannot be read without ambiguity, so it is refused before authentica
 `BAD_REQUEST`. Causes:
 
 - the path has `.` or `..` segments, or a malformed percent-escape;
-- a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different values, between the header
-  and the query string or within either, a blank one beside a non-blank one included (`?CoSec-Space-Id=` with the
-  header `CoSec-Space-Id: s1`), or its query value has a malformed percent-escape. Send each parameter once, or leave
-  it out;
+- a `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
+  a non-blank one included. Send each header once, or leave it out;
 - a route map captures a value that would change the resource id's segments;
 - a header was sent more than once with different values, and a document the request is decided on reads it, in a
   condition, a boundary or a rate limit rule, whichever the statement's effect and whether it applies to this request
@@ -69,9 +67,9 @@ Fix the client ([Web integration](../integration/web.md)). On the control API, a
 The caller is anonymous, and the request was denied: no credential was sent, or no statement allows anonymous callers
 to do this. A scope rejection of an anonymous caller is also `unauthorized`.
 
-1. **Was a credential sent where CoSec reads it?** A token in the `Authorization` header or an `authorization` cookie,
-   or the `authorization` query parameter with
-   [`cosec.pipeline.allow-query-token=true`](./configuration.md#pipeline); an API key in the
+1. **Was a credential sent where CoSec reads it?** A token in the `Authorization` header, the
+   `authorization` query parameter with [`cosec.pipeline.allow-query-token=true`](./configuration.md#pipeline), or the
+   `authorization` cookie with [`cosec.pipeline.allow-cookie-token=true`](./configuration.md#pipeline); an API key in the
    [`cosec.pipeline.api-key-header`](./configuration.md#pipeline) header with `cosec.api-key.enabled=true`.
 2. **Should anonymous callers be allowed here?** Then bind a statement that allows them; otherwise send a credential.
 
@@ -82,10 +80,16 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 
 - **Token:** the issuer and this service must share [`cosec.jwt.secret` and `cosec.jwt.algorithm`](./configuration.md#jwt).
   With `cosec.jwt.enabled=false` every token is rejected.
-- **Claims CoSec refuses:** a `tenantId` claim that is not a string (a number, `null`, an object), a `roles` or
+- **Claims CoSec refuses:** a `tenantId` claim that is empty or not a string (a number, `null`, an object), a `roles` or
   `policies` claim that is not an array of strings, an `attributes` claim that is not an object, or one that names
-  `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a string, and
+  `apiKeyId`, which CoSec sets for API keys only. Issue the tenant as a non-empty string, or no claim for the default
+tenant, and
   rename the attribute ([Authentication](../integration/authentication.md#tokens)).
+- **An id with an unpaired surrogate:** the token's `sub`, `tenantId`, `jti`, `roles` or `policies` holds an unpaired
+  UTF-16 surrogate, which JSON writes as an escape such as `"beta\uD800"` (`IDN-10`). A Redis key holds `?` in its
+  place, so the token would read the documents, memberships and revocations of `beta?`: it is refused before any of
+  them is read. CoSec's own issuer refuses to sign one: login fails with `Principal [alice\uD800] holds an unpaired
+  UTF-16 surrogate ...`. Fix the issuer, or the user store it reads: an id is Unicode text.
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
@@ -136,11 +140,12 @@ deciding statement, then explain the request ([Find out what decided](#find-out-
 
 ### `scope-rejected` {#scope-rejected}
 
-The scope the request declares cannot be granted to this caller:
+The scope cannot be granted to this caller:
 
-- `CoSec-App-Id` names an app other than the host's: on a gateway, the route's metadata `cosec-app-id`, else
-  [`cosec.authorization.scope.app-id`](./configuration.md#authorization); or an id that cannot be an app id (blank,
-  `*`, with `:` or a control character, or longer than 128 characters);
+- the credential declares an app other than the host's, or none: on a gateway, the route's metadata `cosec-app-id`,
+  else [`cosec.authorization.scope.app-id`](./configuration.md#authorization). Issue the token for this app (its `aud`,
+  [Apps](../integration/authentication.md#apps)). A credential's app that cannot be an app id (blank, `*`, with `:` or a
+  control character, or longer than 128 characters) is refused too;
 - `CoSec-Space-Id` names a space where the principal has no role.
 
 Send the host's app, or none, and a space the principal is a member of
@@ -173,8 +178,10 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, on every request | No platform document is published: a new deployment, or a Redis that lost it. `cosec-migrate bootstrap` writes only the platform tenant's document. Until a platform document exists every request is `503`, the control API included. On a new deployment, readiness refuses traffic until the first one is installed ([Instance is not ready](#instance-is-not-ready)). Readiness latches once it accepts: a document lost later does not make it refuse again, so every request fails closed with `503`, and only the `cosecSnapshot` health indicator goes DOWN. That turns readiness DOWN only if you add `cosecSnapshot` to the readiness group, which during a Redis outage turns 503s into connection failures. | Publish one with `cosec-migrate publish` ([The first documents](./storage.md#the-first-documents)). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`, for some tenants only | The tenant is in [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot), and the oldest document its requests read was last confirmed longer ago than `fail-closed.max-lag` (`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`). | Restore Redis; see [Decisions use an old revision](#decisions-use-an-old-revision). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | A document the request needs could not be read in time (Redis down or slow on a cold load), cannot be decoded or compiled, or disappeared from Redis after it was seen. A failed load and a lost document are logged with the document's name: `Loading snapshot document [<doc>] failed.`, `Snapshot document [<doc>] disappeared from the store; failing closed.` | Restore Redis, or publish a readable revision of the document ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable` after upgrading from 8.0.0-alpha, with `401`s of revoked tokens turned `503` and the control API `500` | The data 8.0.0-alpha wrote through CoCache 6, which CoCache 8 does not read: `Cache[<name>] - key[<key>] holds content this cache cannot read (format[1], this node writes format[2]: not written in this node's format)`. It fails closed; nothing reads it as absent. | Stop every instance and run `cosec-migrate cocache8` ([Upgrading](./upgrading.md#data-written-through-cocache-6)). Do not delete these keys by hand, as the message suggests for a value that can be dropped: a deleted revocation accepts its token again, a deleted document leaves its tenant without its DENYs. |
 | `INDETERMINATE: MissingPolicies`, `AmbiguousPolicy` / `missing_policies` | A binding or an attachment names a policy the documents do not define, or a policy id both the tenant and the platform define. | Fix the document through the control plane. |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). With `CoCacheMembershipProvider`, a `MembershipLoader` that does not answer within that time fails its load (`The membership loader did not answer within ...`), and the next request tries again. | Fix the provider or its store. |
+| `INDETERMINATE: MembershipUnavailable` / `membership`, for some principals only | The `MembershipProvider` answered a space, role or policy id with an unpaired UTF-16 surrogate (`The membership provider answered an id with an unpaired UTF-16 surrogate for principal [<id>].`, `IDN-10`): such an id would share a Redis key with another, so the answer is not used. | Fix the provider's store: an id is Unicode text. |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | A statement needs an external attribute whose provider failed or timed out (`<provider> failed to fetch [...]` at `WARN`). | Fix the provider, or raise [`cosec.authorization.attributes.timeout`](./configuration.md#authorization). |
 | `INDETERMINATE: MatcherFailed` / `matcher` | A DENY statement's condition, or the condition of its policy, could not be evaluated. That includes a DENY on `http.header.<name>` when the request sent that header more than once with different values (`Header [<name>] arrived with different values; a condition on it cannot decide.`); the same header repeated with one value reads as that value. A failing ALLOW never makes a request `503`: an ALLOW on such a header does not match. | Fix the condition, or the client that sends the header twice. |
 | `INDETERMINATE: BoundaryUnavailable` / `boundary` | A statement of the tenant's boundary could not be evaluated for a permitted request, for example because the provider of an external attribute it reads failed or timed out. | Fix the boundary or the provider. |
@@ -182,7 +189,8 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in the format before 8.0, which is refused when read (`The API key [<id>] is stored in the format before 8.0 ... Convert the keys with cosec-migrate api-keys`). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the requests of some principals or keys | The authenticator gave a principal whose id, tenant, credential id or claimed roles hold an unpaired UTF-16 surrogate (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`), or an API key's stored record names one (`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`, `IDN-10`). Such an id would share a Redis key with another, so the request fails closed instead. | Fix the authenticator, or the key's record: an id is Unicode text. |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in another format, which is refused when read (`API key format [null] is not 2.`; `null` means the record has no `format`, as a key written by 7.x). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
 A DENY still decides: if a DENY matches, the request is `401` or `403` even when a document is unavailable.
@@ -217,7 +225,7 @@ is a <type>, not a string: ...`: quote the value, and give one app.
    condition. Add a deny, or narrow the allow.
 3. **A deny that does not match.** Its action, its resource and its condition must all match. Explain the request to
    see where the deny missed.
-4. **Break-glass.** `breakGlass: true` and `source.type` `ROOT` mean a break-glass binding of `cosec:root` permitted
+4. **Break-glass.** `breakGlass: true` and `source.policy` `cosec:root` mean a break-glass binding of `cosec:root` permitted
    the request; such bindings expire on their own and can be revoked through the control plane.
 5. **An old revision.** `snapshotVersion` names the revisions the decision read. If they are older than what was
    published, see [Decisions use an old revision](#decisions-use-an-old-revision).
@@ -249,9 +257,9 @@ read as anonymous:
 
 | Status | Cause | Fix |
 |---|---|---|
-| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, is larger than [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
-| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
+| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 
@@ -276,6 +284,29 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
 `prewarmed`. Add it to the readiness group to see it in the probe:
 `management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`.
 
+### `cosecSnapshotEviction` is DOWN {#cosecsnapshoteviction-is-down}
+
+```text
+Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, not noeviction: an instance that loads an app or tenant document Redis evicted reads it as absent, and its DENY statements silently stop applying. Set maxmemory-policy to noeviction.
+```
+
+Each instance reads every Redis node's `maxmemory-policy` every [`revalidate-interval`](./configuration.md#snapshot),
+on a thread of its own, and logs this at `ERROR` from
+`me.ahoo.cosec.spring.boot.starter.pipeline.EvictionPolicyMonitor` when a node starts to allow eviction: someone ran
+`CONFIG SET maxmemory-policy`, Redis failed over to a node set up otherwise, or a node restarted with another
+configuration. The `cosecSnapshotEviction` health indicator is then `DOWN`, with the same text in its `eviction`
+detail. Requests are still decided; an app or tenant document Redis evicts is read as absent by the next instance that
+loads it. Set `noeviction` on every node again; the indicator is `UP` after the next reading, and the instance logs
+`Redis no longer evicts CoSec's policy snapshot.` at `INFO`.
+
+`Cannot tell whether Redis may evict ...` in the detail means the policy could not be read (`INFO` denied, failing or
+timing out, or no node to ask) under `eviction-check=fail`: allow `INFO` (`+info`), or, when you have set
+`noeviction` yourself, set [`eviction-check=warn`](./configuration.md#snapshot), under which an unreadable policy is
+`UP` with `eviction: unknown` and logged once at `WARN` ([Redis requirements](./storage.md#redis-requirements)).
+
+The indicator is an alert: keep it out of the readiness group, which `cosecSnapshot` alone serves. In it, one change to
+Redis would take every instance out of rotation at once.
+
 ## A condition does not compile
 
 - `` `<path>` is a credential header, which no attribute reference may read ``: a condition or a rate limit `key`
@@ -287,6 +318,9 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
   a character outside ASCII letters, digits and ``!#$%&'*+-.^_`|~``, such as a space or a look-alike letter.
 - A condition on an `ext.*` attribute the platform document does not declare and no attribute provider of the host
   serves. A change is compiled against the attribute providers of the control host.
+- `` is not a day of the week: `<value>` ``: `daysOfWeek` takes exactly `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT` and
+  `SUN`, not `MONDAY`, `mon` or ` Fri ` ([Policy language](../policies/language.md)). On the data plane a stored
+  document that spells a day another way is installed as failed, and the requests that read it answer `503`.
 - A path pattern over a cost bound (`DOC-4`, [Policy language](../policies/language.md#path-pattern-bounds)):
   `the pattern is <n> characters, more than 2048`; `segment [<s>] has <n> parts (*, ?, {name} and the text between
   them), more than 16`, where consecutive `*` count once; or, at `$`, `The document's path pattern segments that mix
@@ -309,13 +343,13 @@ change is shadowed ([Testing changes](../policies/testing.md)).
 
 ```text
 CoSec does not read <n> cosec.* properties, which would do nothing:
-  cosec.authentication.enabled -> cosec.authentication.login.enabled
-Remove or rename them; cosec.unknown-properties=warn only logs this.
+  cosec.authentication.enabled
+Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties
 ```
 
-A `cosec.*` key that no CoSec module reads: a typo, or a 7.x key, whose replacement follows `->`
-([7.x keys](./upgrading.md#removed-and-renamed-properties)). Rename or remove it.
-[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) only logs the list.
+A `cosec.*` key that no CoSec module reads: a typo, or a key a release renamed or removed
+([the table](./upgrading.md#removed-and-renamed-properties)). Rename or remove it; no property
+[turns the check off](./configuration.md#unknown-properties).
 
 On Kubernetes, with 8.0.0-alpha.1, keys such as `cosec.gateway.service.host` and `cosec.gateway.port` came from service
 links, and every pod of the namespace crash-looped on `CoSec does not read 8 cosec.* properties`. For every Service
@@ -349,14 +383,14 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `A WebFlux host needs cosec-webflux` | `cosec-webflux` |
 | `A Spring Cloud Gateway host needs cosec-gateway` | `cosec-gateway`; checked even with `cosec.enabled=false`, since its filter strips a client's `CoSec-Identity` header |
 | `cosec.api-key.store=redis needs cosec-cocache` | `cosec-cocache` with what it needs ([Modules](../guide/introduction.md#modules)), or use `store=memory` |
+| `cosec-cocache needs a CacheRuntime bean` | `me.ahoo.cocache:cocache-spring-boot-starter` ([Modules](../guide/introduction.md#modules)) |
 | `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` with `spring-boot-starter-kafka`, or set [`delivery`](./configuration.md#audit) to `best-effort` |
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | The module is there but the listener is not: a `KafkaOperations` bean (`spring-boot-starter-kafka` and its `spring.kafka.*` settings), `cosec.audit.enabled=true` and `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`, with `cosid-spring-boot-starter` 5.x and its `cosid.*` generators, or remove the key to keep CoSec's own ids |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
-check, as it needs `cosec-gateway` instead. An application that moved from 7.x's capabilities adds the modules
-themselves ([Modules, artifacts and packages](./upgrading.md#modules-artifacts-and-packages)).
+check, as it needs `cosec-gateway` instead.
 
 ### Startup fails on an exposed actuator endpoint
 
@@ -386,13 +420,83 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (INFO memory failed 
 
 The first: a Redis node is not `noeviction`. Set `maxmemory-policy noeviction` on every node. The second: the instance
 could not read the policy, usually because the Redis user may not run `INFO`, or a managed Redis denies it; it
-also names a CoCache backend the check cannot read (a wrapper or a custom backend). Allow `INFO` (`+info`), or, when
+also names a CoCache backend the check cannot read (a wrapper or a custom backend), and a cluster connection that
+knows no node to ask (`no Redis node answered INFO memory`). Allow `INFO` (`+info`), or, when
 you have set `noeviction` yourself, set
 [`cosec.authorization.snapshot.eviction-check=warn`](./configuration.md#snapshot) ([Redis requirements](./storage.md#redis-requirements)).
 
 With `warn` the instance starts and logs the same text at `WARN`, starting with `!!!` and ending with
 `Starting anyway (eviction-check=warn).` and what eviction would do. That line is expected with `warn`; if Redis really
 evicts, an app or tenant document loaded after it was evicted is read as absent, and its DENY statements stop applying.
+
+CoCache 8 checks its `Store`s too, and `eviction-check=warn` does not reach that check:
+
+```text
+Cannot read maxmemory-policy (INFO memory) to check that the authoritative caches [...] keep their only copy in Redis. Grant the Redis user +info, or set cocache.redis.assume-maxmemory-policy to the policy of your deployment.
+Authoritative caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them when memory is full. Use noeviction, or a volatile-* policy when they have no ttl.
+```
+
+The first: allow `INFO`, or set `cocache.redis.assume-maxmemory-policy: noeviction` once you have set `noeviction`
+yourself. The second: an `allkeys-*` policy, which no setting accepts; set `noeviction`
+([Redis requirements](./storage.md#redis-requirements)).
+
+### Startup fails on a locked cache setting
+
+```text
+Cache[PolicySnapshotCache] - ... locked by cosec ...
+```
+
+A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
+the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
+([Precedence](./configuration.md#precedence)).
+
+```text
+cocache.caches sets unknown keys [cocache.caches.[PolicySnapshotCache].ttl-forever]: misspelled, or not a per-cache key.
+```
+
+CoCache's own check: the entry sets a key CoCache does not define, or one that does not apply to that cache. Fix the
+key; `cocache.caches-validation: warn` logs it instead. An entry that sets a locked field fails whatever that says.
+
+```text
+cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches: [...]
+```
+
+The entry names a cache no one creates, usually a misspelled name. CoSec publishes the name of every cache it may
+create, so an entry for a CoSec cache this instance does not create (a control-plane cache on a service without the
+control plane) starts; fix the name.
+
+### Startup fails on overlapping cache keys
+
+```text
+Cache[PolicySnapshotCache] - its storage keys (cosec:snapshot:…) overlap those of Cache[<other>] (cosec:…): one prefix starts the other, ...
+```
+
+Two caches of one application would write the same Redis keys: one storage prefix (`{key prefix}{namespace}:`) is, or
+starts, the other. CoSec's own caches never overlap each other, so the other cache is the application's: a CoCache cache
+under CoSec's [`cosec.key-prefix`](./configuration.md#key-prefix), or a `cosec.key-prefix` such as `cocache` that puts
+CoSec's caches under the application's. Give the application's cache another prefix or namespace: `cosec.key-prefix`
+is where every instance, the control plane and `cosec-migrate` find CoSec's data, so it changes only for all of them
+at once ([Redis keys](./storage.md#redis-keys)).
+
+### Startup fails on a channel permission
+
+A Redis ACL that denies a cache's invalidation channel fails its creation with an `IllegalStateException` naming the
+pattern to allow, such as `[&cosec:control:inv:*]`. Allow the channels under CoSec's prefixes, and CoCache's probe in
+`pubsub` mode ([Redis requirements](./storage.md#redis-requirements)).
+
+### Startup fails because Redis is read from replicas {#startup-fails-because-redis-is-read-from-replicas}
+
+```text
+CoSec's Redis template [stringRedisTemplate] reads from replicas (ReadFromReplicaPreferred): a replica lags the primary, and CoSec reads Redis as its store of record. ...
+```
+
+The Lettuce client behind the Redis template CoSec injects, the one the message names, reads from replicas. CoSec
+injects the only `StringRedisTemplate` and `ReactiveStringRedisTemplate`, or the `@Primary` one of each. Remove
+`spring.data.redis.lettuce.read-from`, set it to `upstream`, or remove the `ReadFrom` your
+`LettuceClientConfigurationBuilderCustomizer` sets on that template's factory. To read other data from replicas, give
+it a template and connection factory of its own that is not the one CoSec injects (not `@Primary`)
+([Redis requirements](./storage.md#redis-requirements)).
 
 ### Startup fails on the revalidation interval
 
@@ -404,26 +508,24 @@ The periodic revalidation is the only bound on a document change whose invalidat
 cannot be off or unbounded. The message says which bound the value breaks: at least 1 second (each pass reads every
 installed document from Redis), at most 5 minutes, less than `lag-warn`, and with `fail-closed.tenants` less than
 `fail-closed.max-lag`
-([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on large documents, raise it within those
+([Configuration](./configuration.md#snapshot)). To spend less Redis CPU on many documents, raise it within those
 bounds ([Storage](./storage.md#what-revalidation-costs-redis)).
 
 ### Startup fails on a removed key prefix
 
 ```text
-CoSec no longer reads cosec.authorization.snapshot.key-prefix: every key a deployment writes lives under cosec.key-prefix. With cosec.key-prefix set to b, the snapshot documents' prefix, as it must be, these families move:
-  token revocations and memberships: cosec: -> b: (the memberships of a membership cache the application made itself are under its own prefix)
-  API keys: cosec:api-key -> b:api-key
-  ...
+CoSec does not read 1 cosec.* property, which would do nothing:
+  cosec.authorization.snapshot.key-prefix
+Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties
 ```
 
 The environment still sets `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cache.key-prefix` or
-`cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). Startup fails
-whatever [`cosec.unknown-properties`](./configuration.md#unknown-properties) says: the old layout may keep token revocations and API
-keys under another prefix than the one now read, and a revocation nobody reads lets the token it revoked through
-again. The message lists the families that would move, computed from the old values and the
-`cosec.key-prefix` to set: the current one, or, while it is unset, the snapshot documents' prefix. Copy the token revocations and the API keys to their new keys first (`COPY`, or `RENAME`, which
-keeps their expiry), set `cosec.key-prefix` to where the snapshot documents are, then remove the old properties
-([Upgrading](./upgrading.md#from-8-0-0-alpha-2)).
+`cosec.api-key.key-prefix`, which [`cosec.key-prefix`](./configuration.md#key-prefix) replaced (`SNP-9`). It fails like
+any [unknown key](./configuration.md#unknown-properties), but renaming it is not enough: the old layout may keep token
+revocations and API keys under another prefix than the one now read, and a revocation nobody reads lets the token it
+revoked through again. Work out [which families move](./upgrading.md#from-8-0-0-alpha-2), copy the token revocations and
+the API keys to their new keys first (`COPY`, or `RENAME`, which keeps their expiry), set `cosec.key-prefix` to where
+the snapshot documents are, then remove the old properties.
 
 ### Startup fails without a token store
 
@@ -448,11 +550,20 @@ secret on the issuer and on every service that verifies its tokens; the tokens s
 
 ### Startup fails on the route map
 
+`classpath:cosec-routes.json exists but cosec.authorization.routes.location is not set, so it is not loaded: set it to classpath:cosec-routes.json, or to empty to run without a route map.`
+A route map is loaded only when [`cosec.authorization.routes.location`](./configuration.md#authorization) names it, so a
+file at the default location with the property unset would be left out without a word. Set the property to that
+location, or to empty to authorize every request in the `http` namespace.
+
 `The route map [<location>] (cosec.authorization.routes.location) does not exist; set the property empty to run without one.`
-A WebFlux or WebMvc host loads `classpath:cosec-routes.json` by default, and fails when it is missing. Add the route
-map (the `cosecServiceGenerator/routes` actuator endpoint generates one from the OpenAPI document), point
-[`cosec.authorization.routes.location`](./configuration.md#authorization) at it, or set the property empty to authorize
-every request in the `http` namespace. A route map that does not parse fails startup too, naming its location.
+The property names a location with nothing there. Add the route map (the `cosecServiceGenerator/routes` actuator
+endpoint generates one from the OpenAPI document springdoc scans), or correct the property.
+
+A route map that does not parse, or has no routes (`<location> $.routes: has no routes`), fails startup too, naming its
+location.
+
+The startup log says what a host loaded: `Route map [<location>]: service [<service>], <n> routes.` for each map, or
+`No route map: requests are authorized as http:<METHOD> on http:path:<path>.`
 
 ### Startup fails on the shadow instance id
 
@@ -482,7 +593,7 @@ random one.
 | Message | Fix |
 |---|---|
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
-| `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | A `CacheSpecCustomizer` sets a loader on every cache; exclude `PolicySnapshotCache`. |
+| `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |
@@ -493,7 +604,7 @@ random one.
 ## Control-plane errors
 
 The request to the control API goes through the host's pipeline first, like any request, so the pipeline's own
-`401`, `403` and `503` apply to it. Then the control plane authorizes each action again as that principal, in the app
+`401`, `403`, `429` ([per-tenant limits](../policies/rate-limiting.md#the-control-api)) and `503` apply to it. Then the control plane authorizes each action again as that principal, in the app
 [`cosec.control.app-id`](./configuration.md#control-plane). Its problem bodies use the same `type` prefix, and a
 `400`, `409`, `410`, `412`, `422` or `428` explains the request in `detail`; a `401`, `403`, `404`, `500` or `503` never
 does, so a refusal does not tell whether a document, a change or a DENY exists. The reason of a refused step is in the
@@ -504,16 +615,18 @@ principal sets a tenant's boundary`.
 
 | Status | Cause | Fix |
 |---|---|---|
-| `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
-| `403` | The operator may not take this action on this document, or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
-| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type, or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). | Fix the request; `detail` names the problem. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
-| `404` | No such route, document or change, or one the operator may not see. | |
+| `401` | No principal the pipeline permitted stands behind the request: anonymous, or the route is not served behind the pipeline. Nothing of its body is read. | Send a credential. The documents must permit the HTTP request to `cosec.control.http.base-path` for this principal. |
+| `403` | The operator may not take this action on this document (for `simulate` and `explain`, on the tenant the request is decided in: `(0)` for one without a `principal`), or the hard rules forbid it: the author approving their own change, someone else rebasing it, or anyone but its author abandoning a revoke of a live break-glass binding (`BRK-10`). | Bind the operator a control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, ...) for that document ([Testing changes](../policies/testing.md)). |
+| `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
+| `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
-| `409` `change-unreadable` | The change's record was written by an earlier build for an app that cannot be an app id (blank, `*`, a control character, over 128 characters); the control host logs `Change [<id>] is skipped: it is of [<key>], which no document key can name` on every maintenance pass. It can be neither shown nor abandoned. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading.md#from-8-0-0-alpha-2) says. |
+| `503` on one change, or `Could not read the open changes; no revision is reclaimed this pass.` at every maintenance pass | The change's record does not decode: it is of an app that cannot be an app id (blank, `*`, a control character, over 128 characters, `SCP-10`), or an alpha wrote it in a shape this version no longer reads, such as an approval without `principalBindings`. It can be neither shown nor abandoned, and until it is removed nothing is reclaimed. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading.md#from-8-0-0-alpha-3) says. |
+| A publish, or `cosec-migrate repair-references`, fails with `The back-reference set is malformed` | The set is the JSON array of keys 8.0.0-alpha.3 wrote, or names an app that cannot be an app id. `repair-references` reads a set before it writes it, so it cannot get past one. | Stop the control plane, delete the set (`<p>:control:refs:<doc>:<policyId>`), run `cosec-migrate repair-references`, and start it again ([Upgrading](./upgrading.md#from-8-0-0-alpha-3)). |
+| A publish, or `cosec-migrate repair-references`, fails with `A document holds binding [<id>] in app [<app>], which no document key can name` | The document's head, written by an earlier build, holds a binding in an app that cannot be an app id. No change can publish over it. | Remove the binding before you upgrade ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)). |
 | `410` | The revision asked for is not kept. | |
 | `428` | Publishing needs an acknowledgement of the shadow window's counts. | Publish again with the `ack` of that window. |
 | `503` | The authorization of the action could not be decided (no platform document, Redis unavailable), the store could not be read, an approver's revocations could not be read on publish (`the revocations of the approver could not be read` in the log; the change keeps its approval), or a `REQUIRED` change listener did not record a gated step. Break-glass without a `REQUIRED` change listener: `break-glass needs a REQUIRED change listener, and none is configured`. | Restore Redis or the listener's store ([Control-plane change log](./observability.md#control-plane-change-log)). |
-| `500` | A defect: `Control API <method> <path> failed (request <requestId>).` at `ERROR`. | |
+| `500` | A stored document or record does not decode, such as one a newer version wrote during a rolling upgrade: `Control API <method> <path> (request <requestId>): a stored value does not decode.` at `ERROR`, the exception naming the document's key (`The stored document [<key>] revision <n> does not decode: ...`). Otherwise a defect: `Control API <method> <path> failed (request <requestId>).` at `ERROR`. | Finish the upgrade, so that every control-plane instance reads what the newest one writes. |
 
 A change whose checks fail is not an error response: it stays `DRAFT` with its `findings`, each with a status (`422`
 for a check, `412` for an `ifMatch` that does not hold).
@@ -522,6 +635,11 @@ for a check, `412` for an `ifMatch` that does not hold).
   a policy of that id, and the platform's would make it ambiguous there. Give the platform policy another id, or have
   the tenant remove or rename its own first. With `, or whose document could not be read` (`503`), a tenant document
   the index names could not be read; retry once Redis answers.
+- **`[<id>] is a platform policy's id, and this policy is not an exact copy of it`** (`V2`) on a tenant change: the
+  tenant's policy has the id of a platform policy and different content, which the engine would refuse as ambiguous. A
+  tenant may hold only an exact copy ([Partition plan](./upgrading.md#partition-plan)); give the policy another id, or
+  make it identical to the platform's. The same rule holds the platform's policy still while a tenant holds a copy:
+  **`[<id>] is copied by [tenant:...]: change it only after their copies are removed`** (`V2`) on a platform change.
 - **A `REVIEW_NEEDED` change event** after a publish: another document the change was checked with moved before its
   write, and the analysis on the current heads finds an escalation nobody approved. The change is published; review it
   as [What a publish compares](./storage.md#what-a-publish-compares) describes. With the escalation reason
@@ -580,12 +698,19 @@ for a check, `412` for an `ifMatch` that does not hold).
   that names no app document`, and, from the reclamation pass, `The app list misses the app documents [...]; it is
   incomplete again` (an older instance or `cosec-migrate` published an app) need `repair-references` too.
 
-## Form POST body is empty after CoSec on Spring MVC
+## A log line names an id with `\u` escapes {#a-log-line-names-an-id-with-u-escapes}
 
-A 7.x symptom: its WebMvc adapter read query parameters through `HttpServletRequest.getParameter`, which made the
-servlet container parse an `application/x-www-form-urlencoded` body inside CoSec's filter, so the application found
-the body empty and a form field could set `CoSec-App-Id` or `CoSec-Space-Id`. 8.0 reads only the URL query string and
-never touches the body. Send the `CoSec-*` parameters as headers or query parameters ([Upgrading](./upgrading.md)).
+CoSec writes a control character or an unpaired UTF-16 surrogate of an id as its `\uXXXX` escape in log lines and
+error messages: `Tenant id [beta\uD800] ...`, never `beta?`, which is another id. A `\uXXXX` in a line is either such an
+escape or the id's own characters (a backslash, `u` and four hex digits, which an id may hold): the line that refuses an
+id says why, so read the reason rather than the id.
+A control character would forge a line (RC1-15); a surrogate would be written as `?`, naming another, healthy tenant
+or principal (RC1-52). Such an id is refused where it enters (`IDN-10`: [`token-invalid`](#token-invalid),
+[`unavailable`](#unavailable), [Control-plane errors](#control-plane-errors)), so it appears only in the line that
+refuses it. Find what sent it: a token issuer, a user store, a membership provider or a script calling the control API.
+
+A rate limit `key` whose value holds an unpaired surrogate counts in a bucket of its own, written escaped
+(`e:<value>`, `\` doubled): never in the bucket of the value with `?` in its place.
 
 ## Audit events are missing
 

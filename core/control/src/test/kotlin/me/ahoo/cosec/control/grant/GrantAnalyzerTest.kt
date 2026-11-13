@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.GrantFixtures.ACME
 import me.ahoo.cosec.control.grant.GrantFixtures.TENANT_ADMIN
 import me.ahoo.cosec.control.grant.GrantFixtures.allow
@@ -258,7 +259,7 @@ class GrantAnalyzerTest {
             bindings = published.bindings + bind("ops2", role("ops2"), "cosec:tenant-admin", app = "cosec-control", space = ""),
         )
         val verdicts = verdicts(grantor(roles = mapOf("" to listOf("admin"))), snapshot(platform, published), candidate)
-        verdicts.size.assert().isEqualTo(16)
+        verdicts.size.assert().isEqualTo(17)
         verdicts.assertContained()
     }
 

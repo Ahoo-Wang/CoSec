@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: a simulated request that repeats a header its view reads is evaluated instead of refused
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest --tests me.ahoo.cosec.control.api.SimulatorTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
+index 8f5b8768..6f5cc924 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt
+@@ -177,7 +177,7 @@ class Simulator(
+         )
+         val view = view(scope, documents)
+         val http = HttpAttributes(Headers.of(request.headers), request.requestAttributes)
+-        if (http.ambiguousHeader(view) != null) {
++        if (http.ambiguousHeader(view) == "never") {
+             throw ChangeRejectedException(BAD_REQUEST, AMBIGUOUS_HEADER)
+         }
+         val evaluation = engine.evaluate(

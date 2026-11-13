@@ -85,7 +85,8 @@ request; nothing else can construct one. Where these checks draw the line is in
 
 What the request does and to what. Without a route map, an HTTP request is the action `http:<METHOD>` (such as
 `http:GET`) on the resource `http:path:<path>`. A [route map](../architecture/extending.md#route-maps) can give a
-service's routes their own actions and typed resources, such as `order:read` on `order/42`.
+service's routes their own actions and typed resources, such as `order:read` on `order/42`. A request is one or the
+other, never both, which decides [which statements apply](../scenarios/route-maps.md#a-request-has-one-action).
 
 ## Documents and policies
 
@@ -204,4 +205,4 @@ everything), with an expiry. It is created only through the control plane, with 
 request it permits must be written to a REQUIRED audit listener. Its policy is evaluated like any other, so a matching
 DENY still wins; it is reported as the reason for a permit only when nothing else permits the request.
 
-**Next:** the guarantees every decision keeps, in [Security model](./security-model.md); or, to write rules, [Policy language](../policies/language.md).
+**Next:** how these terms relate, as a diagram, in [Model](./model.md).

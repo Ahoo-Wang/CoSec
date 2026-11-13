@@ -13,21 +13,16 @@
 
 package me.ahoo.cosec.social
 
+import kotlinx.coroutines.test.runTest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import reactor.kotlin.test.test
 
 internal class DirectSocialUserPrincipalConverterTest {
 
     @Test
-    fun convert() {
+    fun convert() = runTest {
         val authUser = SocialUser(id = "id", username = "username", provider = "provider")
-        DirectSocialUserPrincipalConverter.convert("clientId", authUser)
-            .test()
-            .consumeNextWith {
-                it.id.assert().isEqualTo("id@clientId")
-            }
-            .verifyComplete()
+        DirectSocialUserPrincipalConverter(null).convert("clientId", authUser).id.assert().isEqualTo("id@clientId")
     }
 
     /**
@@ -35,7 +30,7 @@ internal class DirectSocialUserPrincipalConverterTest {
      * user edits, the raw user info and names CoSec sets for other credentials never do, and the input is left alone.
      */
     @Test
-    fun onlyProviderOwnedFieldsBecomeAttributes() {
+    fun onlyProviderOwnedFieldsBecomeAttributes() = runTest {
         val rawInfo = mutableMapOf<String, Any>(
             "login" to "octocat",
             "company" to "Acme",
@@ -51,19 +46,15 @@ internal class DirectSocialUserPrincipalConverterTest {
             rawInfo = rawInfo,
             provider = "github",
         )
-        DirectSocialUserPrincipalConverter.convert("github", authUser)
-            .test()
-            .consumeNextWith {
-                it.attributes.assert().isEqualTo(
-                    mapOf(
-                        SocialUserPrincipalConverter.OAUTH_PROVIDER to "github",
-                        SocialUserPrincipalConverter.OAUTH_USER_ID to "583231",
-                    )
-                )
-                it.roles.assert().isEmpty()
-                it.policies.assert().isEmpty()
-            }
-            .verifyComplete()
+        val subject = DirectSocialUserPrincipalConverter(null).convert("github", authUser)
+        subject.attributes.assert().isEqualTo(
+            mapOf(
+                SocialUserPrincipalConverter.OAUTH_PROVIDER to "github",
+                SocialUserPrincipalConverter.OAUTH_USER_ID to "583231",
+            )
+        )
+        subject.roles.assert().isEmpty()
+        subject.policies.assert().isEmpty()
         rawInfo.keys.assert().doesNotContain(SocialUserPrincipalConverter.OAUTH_PROVIDER)
     }
 }

@@ -1,0 +1,22 @@
+{
+  "description": "Without a route for it, DELETE /admin/x is http:DELETE on http:path:/admin/x: the platform DENY matches.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "wms",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "http:DELETE",
+    "resource": {
+      "type": "http",
+      "id": "/admin/x"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

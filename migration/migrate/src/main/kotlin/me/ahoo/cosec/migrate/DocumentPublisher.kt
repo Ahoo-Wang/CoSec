@@ -11,9 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.CandidateDigest
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
@@ -79,20 +84,11 @@ class DocumentPublisher(
 
     /** Publishes [documents], the platform document first. */
     fun publish(documents: Map<SnapshotKey, PolicyDocument>, resume: Boolean = false): PublishResult = runBlocking {
-        val platform = requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
-        documents.values.forEach { document ->
-            compiler.compile(document)
-            compiler.checkReferences(document, platform)
-        }
-        refuseBreakGlass(documents.values)
+        check(documents, compiler)
         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
         val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
         checkExisting(existing, documents, resume)
         PublishResult(write(ordered.filterNot { it in existing }, documents), existing.keys.toList())
-    }
-
-    private fun refuseBreakGlass(documents: Collection<PolicyDocument>) {
-        refusedBreakGlass(documents)?.let { throw PublishException(it, emptyList()) }
     }
 
     private fun checkExisting(existing: Map<SnapshotKey, PolicyDocument>, converted: Map<SnapshotKey, PolicyDocument>, resume: Boolean) {
@@ -129,7 +125,9 @@ class DocumentPublisher(
     ): PublishOutcome = try {
         revisions.publish(key, null, document, PUBLICATION)
     } catch (error: CancellationException) {
-        throw error
+        // The caller's own cancellation stays that; otherwise a store's own timeout, a failed write like any other (#1263).
+        currentCoroutineContext().ensureActive()
+        throw PublishException("Writing $key timed out: ${error.message}.", written.toList(), error)
     } catch (error: Exception) {
         throw PublishException("Writing $key failed: ${error.message}.", written.toList(), error)
     }
@@ -141,6 +139,23 @@ class DocumentPublisher(
     }
 
     companion object {
+        /**
+         * What [publish] checks before it writes anything, throwing what it would refuse: a platform document, every
+         * document compiling, every app document's references resolving against it, and no break-glass binding.
+         */
+        fun check(
+            documents: Map<SnapshotKey, PolicyDocument>,
+            compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()
+        ) {
+            val platform =
+                requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
+            documents.values.forEach { document ->
+                compiler.compile(document)
+                compiler.checkReferences(document, platform)
+            }
+            refusedBreakGlass(documents.values)?.let { throw PublishException(it, emptyList()) }
+        }
+
         /** `cosec.control.break-glass.max-duration` by default (RFC 0007 §8). */
 
         /** Who writes what `cosec-migrate` writes: recorded in each revision's provenance. */

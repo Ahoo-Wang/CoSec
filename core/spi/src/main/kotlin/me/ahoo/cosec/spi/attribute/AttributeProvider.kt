@@ -17,6 +17,7 @@ import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.scope.Scope
 import kotlin.time.Duration
@@ -65,7 +66,9 @@ class AttributeDeclaration(val path: String, val type: AttributeType, val stage:
  * providers do not depend on each other.
  */
 class AttributeRequest(
-    /** The principal, or the anonymous one; its tenant is the request's. */
+    /** The principal's tenant, the default one for an anonymous request: it is settled before the scope, for stage A. */
+    val tenant: TenantId,
+    /** The principal, or the anonymous one. */
     val subject: Subject,
     /** The resolved scope; null in stage A, which runs before it is resolved. */
     val scope: Scope?,

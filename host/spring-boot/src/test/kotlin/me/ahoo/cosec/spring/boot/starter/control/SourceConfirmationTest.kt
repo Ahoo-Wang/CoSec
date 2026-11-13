@@ -92,6 +92,26 @@ class SourceConfirmationTest {
         }
     }
 
+    /** #1218: a batch of decisions compares what two confirmations answer, so an unchanged document must answer alike. */
+    @Test
+    fun `a document answers the same version until it is published again`() {
+        publish(1)
+        val app = SnapshotKey.App("cosec-control")
+        source.use {
+            val confirmation = SourceConfirmation(source, clock)
+            val keys = setOf(SnapshotKey.Platform, app)
+            val first = runBlocking { confirmation.confirm(keys) }
+            // A forced reload makes a new entry, and the version is still the same.
+            runBlocking { confirmation.confirm(keys) }.assert().isEqualTo(first)
+            first.getValue(SnapshotKey.Platform).assert().isEqualTo(1L)
+            first.getValue(app).assert().isEqualTo(0L)
+            publish(2)
+            val second = runBlocking { confirmation.confirm(keys) }
+            second.getValue(SnapshotKey.Platform).assert().isEqualTo(2L)
+            second.getValue(app).assert().isEqualTo(0L)
+        }
+    }
+
     @Test
     fun `a document that cannot be compiled is indeterminate`() {
         publish(1)

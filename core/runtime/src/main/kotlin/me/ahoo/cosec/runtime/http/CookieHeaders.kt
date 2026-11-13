@@ -23,11 +23,14 @@ internal object CookieHeaders {
      *
      * Each pair that goes takes one `;` with it, and the pairs kept go on byte for byte, joined by `;` as they were
      * (R2-6, R3-2 of #1194's review): no empty pair is made, which RFC 6265 has none of and Python's `SimpleCookie` stops
-     * at, and each kept pair decodes as it did. Netty reads a header that starts with `$Version` from just after its first
-     * `;`, so two corrections keep its reading: a leading `$Version` pair left alone keeps its `;`, and a kept pair that
-     * starts with `$Version` and comes to the head gets a space before it. A header whose leading `$Version` pair goes
-     * (it hid [name] behind a `,`) goes whole: no rewrite keeps how Netty reads the rest. Null then, and when only empty
-     * pairs, of whitespace and `,` alone, are left (R3-6); [header] itself when no pair goes.
+     * at, and each kept pair decodes as it did. Only the whitespace at the head of the result goes: a field value cannot
+     * start with it (RFC 9110 §5.5), and Netty refuses to send one that does, so the request would fail.
+     *
+     * Netty reads a header that starts with `$Version` from just after its first `;`. So a leading `$Version` pair left
+     * alone keeps its `;`, and a header goes whole when no rewrite keeps how Netty reads the rest: when its leading
+     * `$Version` pair goes (it hid [name] behind a `,`), or when a kept `$Version` pair would come to the head of a header
+     * that did not start with one. Only a crafted header has `$Version` anywhere but first, and removing too much is safe.
+     * Null then, and when only empty pairs, of whitespace and `,` alone, are left (R3-6); [header] itself when no pair goes.
      */
     fun without(header: String, name: String): String? {
         if (!names(header, name)) {
@@ -48,10 +51,10 @@ internal object CookieHeaders {
             return null
         }
         val kept = pairs.filterIndexed { i, _ -> !named[i] }
-        val written = kept.joinToString(";")
+        val written = kept.joinToString(";").trimStart(' ', '\t')
         return when {
+            !rfc2965 && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> null
             rfc2965 && kept.size == 1 -> "$written;"
-            named.first() && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> " $written"
             else -> written
         }
     }

@@ -121,13 +121,17 @@ management:
           include: readinessState,cosecSnapshot
 ```
 
-`cosecSnapshot` 也是 `/actuator/health` 的一部分，因此在平台文档发布之前它报告 `DOWN`。
+`cosecSnapshot` 也是 `/actuator/health` 的一部分，因此在平台文档发布之前它报告 `DOWN`。在 Redis 上，它旁边的
+`cosecSnapshotEviction` 在 Redis 可能驱逐快照时为 `DOWN`：这是给监控用的告警，不属于就绪组，否则 Redis 策略的一次改动会让
+所有实例同时退出轮转（[可观测性](./observability.md)）。它也会让聚合的 `/actuator/health` 变为 `DOWN`，因此负载均衡器或平台的
+健康检查应探测就绪组，或者一个排除了它的组（`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`），而不是
+`/actuator/health`。
 
 ## 关闭 {#shutdown}
 
 关闭时，决策监听器停止接收事件，把队列中的事件投递给 `BEST_EFFORT` 监听器（审计日志、Kafka、指标），最多
-[`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners)（5 秒），然后丢弃剩下的。让 pod 的
-终止宽限期足够容纳 Spring 自身的优雅关闭加上这段时间。
+[`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners)（5 秒），然后丢弃剩下的。随后 Kafka
+审计监听器最多再用同样长的时间等待它手中的发送。让 pod 的终止宽限期足够容纳 Spring 自身的优雅关闭加上两倍这段时间。
 
 ## Kubernetes {#kubernetes}
 

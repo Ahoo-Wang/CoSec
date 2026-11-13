@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -22,6 +25,7 @@ import java.time.Instant
  * The shadow windows of staged changes (RFC 0007 §6.4) and the propagation of published revisions (§6.5), from what the
  * instances report through [reports].
  */
+@InternalCoSecApi
 class ShadowWindows(private val reports: ShadowReportReader, private val options: ShadowOptions = ShadowOptions()) {
     /**
      * The summary of [state] at [now] when the window may close, or null while it stays open: an instance could not
@@ -80,7 +84,9 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
 }
 
 /** Every instance that has reported on a window so far, and its [summary] once it may close. */
+@InternalCoSecApi
 class ShadowLook(val reporters: Set<String>, val summary: ShadowSummary?)
 
 /** How many of the [recent] instances report [revision] of a document installed. */
+@InternalCoSecApi
 data class Propagation(val revision: Long, val installed: Int, val recent: Int)

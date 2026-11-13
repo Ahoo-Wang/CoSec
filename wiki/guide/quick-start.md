@@ -62,27 +62,9 @@ Every other setting has a working default; all of them are listed in
 [Configuration](../operations/configuration.md). Two of the defaults matter for this guide:
 
 - the policy documents are read from Redis under the key prefix `cosec`, the one `cosec-migrate` writes to;
-- the route map is read from `classpath:cosec-routes.json`, and a missing file fails startup. You add it next.
-
-## Map routes to actions
-
-A route map turns a request's method and path into an action and a resource, so policies can say `order:delete`
-instead of repeating paths. `src/main/resources/cosec-routes.json`:
-
-```json
-{
-  "service": "order",
-  "routes": [
-    { "method": "GET",    "path": "/orders/{orderId}", "action": "order:read",   "resource": "order/{orderId}" },
-    { "method": "DELETE", "path": "/orders/{orderId}", "action": "order:delete", "resource": "order/{orderId}" }
-  ]
-}
-```
-
-`GET /orders/42` is now the action `order:read` on the resource `order/42`. A request that no route matches keeps
-the action `http:<METHOD>` on its path: `GET /hello` is `http:GET` on `http:path:/hello`. To run without a route
-map, set `cosec.authorization.routes.location` to an empty value; every request is then in the `http` namespace.
-The format and its rules are in [Route maps](../integration/web.md#route-maps).
+- no route map is loaded until a property names one, so a request is `http:<METHOD>` on its path, and the policy below
+  is written that way. Route maps, which name routes with business actions, are in
+  [Authorizing business actions](../scenarios/route-maps.md).
 
 ## Write a first policy
 
@@ -90,50 +72,23 @@ CoSec decides from **documents**: one platform document that applies to every te
 documents. Each holds policies and the bindings that say to whom they apply. Create a directory `documents` with
 `documents/platform.json`:
 
-```json
-{
-  "schema": 2,
-  "revision": 1,
-  "publishedAt": "2026-01-01T00:00:00Z",
-  "policies": [
-    {
-      "id": "public",
-      "statements": [
-        { "name": "hello-and-token", "effect": "allow", "action": "http:GET",
-          "resource": ["http:path:/hello", "http:path:/token"] }
-      ]
-    },
-    {
-      "id": "members",
-      "statements": [
-        { "name": "orders", "effect": "allow", "action": "order:*",
-          "condition": { "eq": ["subject.authenticated", true] } }
-      ]
-    },
-    {
-      "id": "no-delete",
-      "statements": [
-        { "name": "no-delete", "effect": "deny", "action": "order:delete" }
-      ]
-    }
-  ],
-  "bindings": [
-    { "id": "public",    "subject": "*", "app": "*", "space": "*", "policy": "public" },
-    { "id": "members",   "subject": "*", "app": "*", "space": "*", "policy": "members" },
-    { "id": "no-delete", "subject": "*", "app": "*", "space": "*", "policy": "no-delete" }
-  ]
-}
-```
+<<< @/examples/quick-start/documents/platform.json [documents/platform.json]
 
-The three bindings apply each policy to anyone (`"subject": "*"`), in any app and space. Together they say:
+The four bindings apply each policy to anyone (`"subject": "*"`), in any app and space. Together they say:
 
 - anyone may `GET /hello` and `/token`;
-- authenticated callers may perform any `order:` action;
-- nobody may `order:delete`. This statement wins over `members`, because a matching DENY always wins.
+- authenticated callers may make any request under `/orders/`;
+- nobody may `DELETE` under `/orders/`. This statement wins over `members`, because a matching DENY always wins;
+- authenticated callers may reach the control API's paths. This opens a path, not a permission: the control plane
+  authorizes every step again as the caller, and it is what lets you change this document later without starting over
+  ([Change a document later](#change-a-document-later)).
 
 Everything else, such as `GET /admin`, matches nothing and is denied. The fields are in
 [Policy language](../policies/language.md); why a DENY wins and what is denied by default is in the
-[Security model](./security-model.md#evaluation-order).
+[Security model](./security-model.md#evaluation-order). The scenarios in
+[`wiki/examples/quick-start`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/quick-start/scenarios) check
+every sentence above against these documents on every build. Roles come in
+[Simple mode](../scenarios/simple-mode.md).
 
 ## Publish the platform document
 
@@ -184,12 +139,12 @@ class DemoController(private val tokenConverter: TokenConverter) {
     // Demo only: issues a token for any user id, without checking a password.
     @GetMapping("/token")
     fun token(@RequestParam user: String): CompositeToken =
-        tokenConverter.toToken(SimplePrincipal(id = user))
+        tokenConverter.toToken(TokenSubject(id = user, app = null))
 }
 ```
 
-The starter configures `TokenConverter` (`me.ahoo.cosec.login.token`) from `cosec.jwt`. `SimplePrincipal` is in
-`me.ahoo.cosec.api.principal`, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
+The starter configures `TokenConverter` (`me.ahoo.cosec.login.token`) from `cosec.jwt`. `TokenSubject` is in the
+same package, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
 `accessToken` and a `refreshToken`. A real login endpoint checks credentials before it issues a token; see
 [Logging in](../integration/authentication.md#logging-in).
 
@@ -245,8 +200,63 @@ The same token on `/hello` still gets `200`.
 Every response carries a `CoSec-Request-Id` header, the same id as the body's `requestId`. All statuses and
 problem types are listed in [Responses and status codes](../integration/web.md#responses-and-status-codes).
 
+## Change a document later
+
+`cosec-migrate publish` writes only the first revision and never overwrites. Every later change goes through the
+control plane, which checks and compiles a change before it publishes, so adding a policy is a few calls. The platform
+document above already lets signed-in callers reach the control API; without that, the only way back is to empty Redis.
+
+1. **Add the control plane.** It comes in a module and needs `cosec-cocache`, which you have:
+
+   ```kotlin
+   implementation("me.ahoo.cosec:cosec-control")
+   ```
+
+2. **Name the first administrator.** This binds one principal of the `(platform)` tenant to the built-in
+   `cosec:platform-admin` policy:
+
+   ```bash
+   cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin alice
+   ```
+
+3. **Issue her a token for the control plane.** Control-plane tokens are for the tenant `(platform)` and the app
+   `cosec-control` (`cosec.control.app-id`). For this guide, print one at startup; a real deployment issues
+   `(platform)` tokens only from a source users cannot influence:
+
+   ```kotlin
+   @Bean
+   fun platformToken(tokenConverter: TokenConverter) = ApplicationRunner {
+       // Demo only: anyone who can run this can administer the deployment.
+       val token = tokenConverter.toToken(TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)"))
+       println("platform token: ${token.accessToken}")
+   }
+   ```
+
+4. **Propose, skip the shadow window, publish.** A change is based on a revision you have seen (here `1`, the
+   first), so that it cannot overwrite a newer one. This one lets signed-in callers read `/reports/`:
+
+   <<< @/examples/quick-start/changes/add-reports.json [add-reports.json]
+
+   ```bash
+   CONTROL=http://localhost:8080/cosec/control/v1
+   AUTH="Authorization: Bearer $PLATFORM_TOKEN"
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
+   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ```
+
+   A shadow window would compare the change with live traffic first, which a guide without traffic cannot wait for;
+   the administrator is the trust root and may skip it. `GET $CONTROL/documents/platform` now returns revision `2`, and
+   `GET /reports/1` with Alice's ordinary token is permitted (the route has no handler here, so it answers `404`, not
+   `403`).
+
+The workflow, its checks, shadow windows and approvals are in [Testing policies](../policies/testing.md). Document
+changes by tenants and roles follow the same steps: [System and custom roles](../scenarios/roles.md).
+
 ## Next steps
 
+- See what you can leave out, then grow: [Simple mode](../scenarios/simple-mode.md), and the scenarios from
+  [An app without spaces](../scenarios/app.md) to [Gateway topologies](../scenarios/gateway.md).
 - Grant access by role, per app and space: [Role permissions](../policies/role-permissions.md).
 - Change documents safely through the control plane, with simulation and shadow windows: [Testing policies](../policies/testing.md).
 - Replace the demo `/token` endpoint with a real login, refresh and logout: [Authentication](../integration/authentication.md).

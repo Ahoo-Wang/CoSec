@@ -17,8 +17,14 @@ description: "每个 cosec.* 配置项的类型、默认值以及它改变什么
 
 出现 CoSec 不读取的 `cosec.*` key 时启动失败，无论其他配置如何（包括 `cosec.enabled=false`）：否则拼错、改名或已删除的
 key 会悄无声息地不起作用。classpath 上的配置元数据（`META-INF/spring-configuration-metadata.json`）声明了的 key，或位于
-map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，对 7.x 的 key 还给出替代它的配置
-（[7.x key 对照表](./upgrading.md#removed-and-renamed-properties)）。
+map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，并链接到
+[已删除和改名的 key 对照表](./upgrading.md#removed-and-renamed-properties)。没有任何配置项能关闭这项检查：
+某个版本取代的 key 前缀如果被忽略，令牌吊销就会留在没人读取的地方。
+
+key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `local-max-age`、
+`localMaxAge` 或 `local_max_age`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`（大写、点换成下划线、去掉连字符）。
+不是已知 key 的这种写法的变量仍算未知：拼错的 `COSEC_PIPELINE_TIMEUOT`，以及遗留写法
+`COSEC_AUTHORIZATION_SNAPSHOT_LOCAL_MAX_AGE` 都一样，错误信息会把它列为 `cosec.authorization.snapshot.local.max.age`。
 
 有一类变量永远不算未知 key：Kubernetes 为名为 `cosec` 或 `cosec-*` 的 Service 注入的环境变量（Service 链接），Spring 会把它们读作
 `cosec.*` key（`COSEC_GATEWAY_SERVICE_HOST` 读作 `cosec.gateway.service.host`）。检查只跳过它们的确切形状，按变量名匹配，
@@ -32,10 +38,6 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不是未知的，所以这个豁免不会藏起 CoSec 读取的配置项。在 pod 上设置
 `enableServiceLinks: false`，则这些变量根本不会进入环境（[故障排查](./troubleshooting.md#startup-fails-on-an-unknown-property)）。
 
-| 配置项 | 类型 | 默认值 | 作用 |
-|---|---|---|---|
-| `cosec.unknown-properties` | `fail`、`warn` | `fail` | `fail` 在出现未知 `cosec.*` key 时终止启动；`warn` 以 `WARN` 记录同样的列表并照常启动。 |
-
 ## 功能开关 {#feature-switches}
 
 | 配置项 | 类型 | 默认值 | 打开 |
@@ -43,11 +45,11 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.enabled` | boolean | `true` | CoSec 的全部自动配置 |
 | `cosec.authentication.login.enabled` | boolean | `true` | 把凭证换成令牌的登录 bean：基于你的 `Authentication` bean 的 `CompositeAuthentication`、启用 JWT 时的 `TokenCompositeAuthentication`，以及社交登录。管道中对请求的认证不依赖它 |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`cosec-social`；需要 `cosec.authentication.login.enabled`） |
-| `cosec.jwt.enabled` | boolean | `true` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
+| `cosec.jwt.enabled` | boolean | `true`；`cosec.pipeline.mode=gateway` 时为 `false` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
 | `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
-| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean） |
+| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean，Spring Boot 自动配置的那个也可以） |
 | `cosec.ip2region.enabled` | boolean | `true` | `ext.ip2region.*` 属性提供者（`cosec-ip2region`） |
 | `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cosec-cocache`）；见[影子窗口](#shadow-windows) |
@@ -61,15 +63,17 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 - **限流器**：始终存在。有 `ReactiveStringRedisTemplate` bean 时（`cosec-cocache`）基于 Redis，否则按实例计数
   （[限流](#rate-limiting)）。
 - **令牌吊销**：启用 JWT 时始终开启（[启动](./troubleshooting.md#startup-fails-without-a-token-store)）。
-- **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi` 和 Spring Boot Actuator 就存在；像其他 actuator
+- **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi`、springdoc 和 Spring Boot Actuator 就存在；像其他 actuator
   端点一样决定是否暴露它。
 
 ## Key 前缀 {#key-prefix}
 
 一个部署写入 Redis 的每个 key 都在同一个前缀之下（`SNP-9`）：快照文档、控制面记录、影子报告、吊销、成员关系、API key、
 限流计数器和 OAuth 状态（[Redis key](./storage.md#redis-keys)）。同一个 Redis 上前缀不同的两个部署不共享任何 key。
+在同一个应用里，CoCache 拒绝创建存储 key 会与另一个缓存重叠的缓存，所以把 CoSec 的某个缓存放到应用自己的缓存之下的前缀
+会使启动失败（[故障排查](./troubleshooting.md#startup-fails-on-overlapping-cache-keys)）。
 它取代了 `cosec.authorization.snapshot.key-prefix`、`cosec.authorization.cache.key-prefix` 和 `cosec.api-key.key-prefix`：
-设置其中任何一项的环境都会启动失败，无论 `cosec.unknown-properties` 如何设置（[故障排查](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)）。
+设置其中任何一项的环境都会启动失败，和其他 CoSec 不读取的 key 一样（[故障排查](./troubleshooting.md#startup-fails-on-a-removed-key-prefix)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
@@ -84,11 +88,12 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.pipeline.timeout` | duration | `5s` | 一个请求的整个求值过程。超过后请求得到 `503` `unavailable`。 |
 | `cosec.pipeline.authentication-timeout` | duration | `1s` | 一次 `Authenticator` 调用。超过后得到 `503`。 |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | 也从 `authorization` 查询参数读取访问令牌。默认关闭，因为 URL 会进入访问日志、浏览器历史和 `Referer` 头。 |
+| `cosec.pipeline.allow-cookie-token` | boolean | `false` | 也从 `authorization` cookie 读取访问令牌。默认关闭，因为浏览器会自动带上 cookie，跨站请求也不例外：只有自己做好 CSRF 防护时才打开（[认证](../integration/authentication.md)）。 |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | 携带 API key 的请求头。任何文档都不能读取它：宿主的每个编译器都像拒绝其他携带凭证的请求头一样拒绝对它的引用（[请求头](../policies/language.md#headers)）。 |
 | `cosec.pipeline.trace-level` | `off`、`full`、`exhaustive` | `off` | 引擎对每次求值记录多少追踪信息。决策事件以 `evaluationTrace` 携带这份追踪（`off` 时，以及请求没有到达引擎时为 null）；级别越高，每个请求花的时间越多。 |
-| `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务：启动时会以 `WARN` 提示这一点。JWT 不限于 `enforce` 模式：不签发令牌的服务应设置 `cosec.jwt.enabled=false`，否则启动时需要密钥和令牌存储。 |
-| `cosec.pipeline.gateway.max-age` | duration | `60s` | `gateway` 模式下，签发时间早于这个时长（再加 `cosec.authentication.revocation.skew`）的身份被拒绝：`401` `token-expired`。 |
-| `cosec.pipeline.gateway.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。 |
+| `cosec.pipeline.mode` | `enforce`、`gateway` | `enforce` | `enforce`：宿主用策略决策。`gateway`：位于 CoSec 网关之后的服务从网关转发的 `CoSec-Identity` 头读取调用方，不装配自己的认证器、API key、快照、策略、控制面或 Redis（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。其他值使启动失败；在 Spring Cloud Gateway 宿主上设为 `gateway` 也使启动失败。`gateway` 模式下只有网关可以访问到该服务：启动时会以 `WARN` 提示这一点。`gateway` 模式下 `cosec.jwt.enabled` 默认为 `false`：也签发令牌的服务要设为 `true`。 |
+| `cosec.pipeline.identity.max-age` | duration | `60s` | `gateway` 模式下，签发时间早于这个时长（再加 `cosec.authentication.revocation.skew`）的身份被拒绝：`401` `token-expired`。 |
+| `cosec.pipeline.identity.max-size` | data size | `8KB` | `gateway` 模式下，更大的 `CoSec-Identity` 头被拒绝：`400` `invalid-request`。 |
 
 ## 授权 {#authorization}
 
@@ -96,11 +101,11 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。用 `CoSec-App-Id` 声明了其他应用的请求被拒绝（`403` `scope-rejected`，匿名调用方为 `401`）。不设置时由请求声明它的应用（[信任边界](../guide/security-model.md#trust-boundaries)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
+| `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`）。不设置时取凭证的应用（[应用](../integration/authentication.md#apps)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。 |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
-| `cosec.authorization.routes.location` | 逗号分隔的资源位置 | `classpath:cosec-routes.json` | WebFlux 或 WebMvc 宿主在启动时加载的路由映射。位置不存在，或映射无法解析，启动失败。设置为空表示不使用路由映射：每个请求都在 `http` 命名空间中授权。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
+| `cosec.authorization.routes.location` | 逗号分隔的资源位置 | 未设置 | WebFlux 或 WebMvc 宿主在启动时加载的路由映射，日志会写明每份映射的服务和路由条数。位置不存在、映射无法解析或映射没有路由，启动失败。未设置时不加载路由映射，每个请求都在 `http` 命名空间中授权；但 `classpath:cosec-routes.json` 存在时启动失败，直到配置项指明它或设为空。设置为空表示明确不使用路由映射。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
 
 ## 网关 {#gateway}
 
@@ -145,7 +150,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authorization.snapshot.local-max-age` | duration | `30s` | CoCache 中文档的本地副本可以为冷加载提供多久，之后重新询问 Redis。无论缓存定制器或 `cocache.*` 配置项设置了什么，都以它为准。 |
-| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。每一轮在 Redis 上花费的 CPU 与文档大小成正比（[存储](./storage.md#what-revalidation-costs-redis)）。 |
+| `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | 多久开始一轮，用条件读向 Redis 确认每个已装入的文档；上一轮还在进行时，下一轮在它结束后立即开始，两轮从不重叠。失效消息丢失的变化，由它可读之后第一个到达该文档的一轮装上（`SNP-6`）。至少为 `1s`、不超过 `5m`、小于 `lag-warn`，配置了 `fail-closed.tenants` 时还要小于 `fail-closed.max-lag`；否则启动失败。每一轮在 Redis 上每份文档只花几微秒，与文档大小无关（[存储](./storage.md#what-revalidation-costs-redis)）。 |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | 文档超过这个时长未被确认时，以 `WARN` 记录。不得超过 `lag-escalate`。 |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | 文档超过这个时长未被确认时，以 `ERROR` 记录为陈旧。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。其他租户继续基于已装入的文档决策。 |
@@ -156,7 +161,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。 |
-| `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。 |
+| `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。无论哪种，实例都会每个 `revalidate-interval` 再次读取该策略，Redis 可能驱逐时 `cosecSnapshotEviction` 健康指示器为 `DOWN`；读不到策略时，`fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。 |
 
 ## 影子窗口 {#shadow-windows}
 
@@ -203,6 +208,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。 |
 | `principal-id` | string | 无 | **必填。** key 认证成的主体。 |
 | `tenant-id` | string | 无 | **必填。** 主体所在的租户。 |
+| `app` | string | 无 | key 所属的应用（[应用](../integration/authentication.md#apps)）。省略时不声明应用，配置了应用的宿主会拒绝它。 |
 | `roles` | set | 无 | 上限：key 只拥有其主体角色中的这些（`role`、`role@space`），没有附加的策略或主体绑定；`[]` 只留下 `Anyone` 绑定给予的。设置它或 `uncapped`。 |
 | `uncapped` | boolean | `false` | `true` 表示 key 拥有其主体拥有的一切。`roles` 与 `uncapped: true` 必须恰好设置其一，否则应用无法启动。 |
 | `expires-at` | instant | 无 | 过了这个时刻 key 被拒绝。 |
@@ -210,12 +216,12 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 缓存 {#cache}
 
-`cosec.authorization.cache.*`：已吊销令牌和已吊销主体的缓存，在启用 JWT 且有 `cosec-cocache` 时创建。快照文档有自己的
+`cosec.authentication.revocation.cache.*`：已吊销令牌和已吊销主体的缓存，在启用 JWT 且有 `cosec-cocache` 时创建。快照文档有自己的
 配置项（[快照](#snapshot)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.authorization.cache.token.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
+| `cosec.authentication.revocation.cache.*` | [本地缓存设置](#local-cache-settings) | `local-max-age: 30s`、`maximum-size: 100000` | 吊销查询的本地副本（`RevokedTokenCache` 和 `RevokedSubjectCache`）。 |
 
 ### 本地缓存设置 {#local-cache-settings}
 
@@ -232,18 +238,18 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.audit.required.timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`（[决策监听器](./observability.md#decision-listeners)）。 |
 | `cosec.audit.kafka.topic` | string | `cosec-audit` | 审计事件的 Kafka topic。 |
 | `cosec.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | Kafka 审计监听器的投递方式。`required` 等待 broker 的确认，因此无法审计的放行会得到 `503`；生产者请配置 `acks=all`。为 `required` 而缺少 `cosec-kafka` 时启动失败（[STA-1](./troubleshooting.md#startup-fails-on-a-missing-module)）。 |
 
 ## 决策监听器 {#decision-listeners}
 
-`cosec.observability.listener.*`：`BEST_EFFORT` 决策监听器的队列（[决策监听器](./observability.md#decision-listeners)）。
+`cosec.observability.listener.*`：`REQUIRED` 决策监听器的时限，以及 `BEST_EFFORT` 决策监听器的队列（[决策监听器](./observability.md#decision-listeners)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
+| `cosec.observability.listener.required-timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`。 |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | 一个 `BEST_EFFORT` 监听器最多可以有多少个待处理的事件。队列满时丢弃下一个事件并计数（`cosec.listener.dropped`）。 |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | 关闭时，排队的事件还能继续发出多久；之后剩下的被丢弃。 |
+| `cosec.observability.listener.drain-timeout` | duration | `5s` | 关闭时，排队的事件还能继续发出多久；之后剩下的被丢弃。Kafka 审计监听器还会再用同样长的时间等待它手中的发送。 |
 
 ## 控制面 {#control-plane}
 
@@ -255,7 +261,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.control.app-id` | string | `cosec-control` | 控制面动作在哪个应用中授权。 |
 | `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
-| `cosec.control.http.max-body-size` | data size | `16MB` | WebMvc 宿主上控制 API 读取的最大请求体。更大的请求体不被读取，得到 `400` `invalid-request`；没有已放行主体的请求根本不读请求体（`401`）。WebFlux 上由 `spring.codec.max-in-memory-size`（默认 256 KB）限定请求体。 |
+| `cosec.control.http.max-body-size` | data size | `16MB` | WebMvc 宿主上控制 API 读取的最大请求体。更大的请求体不被读取，得到 `400` `invalid-request`。WebFlux 上由 `spring.codec.max-in-memory-size`（默认 256 KB）限定请求体。两种栈上，没有已放行主体的请求都根本不读请求体（`401`）。 |
 | `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |
 | `cosec.control.revisions.orphan-age` | duration | `1h` | 冲突发布留下的记录到这个年龄后删除。 |
@@ -308,38 +314,51 @@ Redis 中。
 
 ## 影响 CoSec 的 CoCache 配置项 {#cocache-properties-that-affect-cosec}
 
-有 `cosec-cocache` 时，CoSec 在 CoCache 的运行时上创建它的缓存。CoCache 配置项的完整列表见
-[CoCache 文档](https://cocache.ahoo.me)。
+有 `cosec-cocache` 时，CoSec 经 CoCache 8 的 `CoCacheFactory` 创建它的缓存，所以 CoCache 的配置分层像作用于其他缓存
+一样作用于它们。CoCache 配置项的完整列表见 [CoCache 文档](https://cocache.ahoo.me/guide/configuration)。CoCache 的每个
+时长都要带单位（`2s`、`10m`），只写数字会使启动失败。
 
 | 配置项 | 对 CoSec 的影响 |
 |---|---|
 | `cocache.backend` | `redis`（默认）或 `memory`。使用 `memory` 时实例之间不共享任何内容，驱逐检查总是通过，每个实例启动时都没有文档：仅用于本地开发和测试。 |
-| `cocache.defaults.*` | 每个 CoCache 缓存的策略，包括 CoSec 的 `PolicySnapshotCache`、`RevokedTokenCache` 和 `RevokedSubjectCache`，但 CoSec 固定的部分除外（[优先级](#precedence)）。 |
-| `cocache.caches.<CacheName>.*` | 按上面的名字设置单个缓存的策略。 |
+| `cocache.defaults.cache.*`、`cocache.defaults.store.*` | 只填补缓存的声明没有写出的字段。CoSec 的缓存声明了它们依赖的字段，所以这些配置影响不大：`MembershipCache` 属于 `cache`，其余 CoSec 缓存都属于 `store`（[优先级](#precedence)）。 |
+| `cocache.overrides.cache.*`、`cocache.overrides.store.*` | 收紧所有缓存的陈旧界限（`local-max-age`、`absent-ttl`）与 `read-failure`，CoSec 锁定的字段除外。 |
+| `cocache.caches.[<CacheName>].*` | 按上面的名字设置单个缓存的策略。设置 CoSec 锁定的字段会使启动失败（[优先级](#precedence)）。设置 CoCache 不认识的键或不适用于该缓存的键（通常是拼写错误）同样启动失败，除非 `cocache.caches-validation: warn`（[故障排查](./troubleshooting.md#startup-fails-on-a-locked-cache-setting)）。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的条目（没有运行控制面的服务上的控制面缓存、没有 `MembershipLoader` 时的 `MembershipCache`、关闭 JWT 时的吊销表）照常启动。 |
+| `cocache.key-prefix` | 无：CoSec 锁定自己的前缀 [`cosec.key-prefix`](#key-prefix)。 |
 | `cocache.redis.command-timeout` | 一条 Redis 命令最多用多久（默认 `2s`）。超时的快照读取算作读取失败（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `cocache.redis.channel-mode` | `pubsub` 或 `sharded` 失效。所有实例以及控制面必须一致。 |
-| `cocache.redis.assume-maxmemory-policy`、`cocache.redis.set-cache-eviction-check` | 无：它们属于 CoCache 自己针对 `SetCache` 的检查，而 CoSec 没有 `SetCache`。CoSec 的启动检查是 `cosec.authorization.snapshot.eviction-check`（[快照](#snapshot)）。 |
+| `cocache.redis.assume-maxmemory-policy` | 读不到 `INFO memory` 时 CoCache 自己的驱逐检查假定的策略。CoSec 的文档和记录是 `Store`，所以 `allkeys-*`、或读不到策略又没有设置此项时，CoCache 拒绝启动；`cosec.authorization.snapshot.eviction-check=warn` 改变不了这一点（[Redis 要求](./storage.md#redis-requirements)）。 |
+| `cocache.redis.store-eviction-check` | `volatile-*` 策略遇到策略中 `ttl` 有限的 `Store`（影子缓存）时 CoCache 怎么做：`warn`（默认）、`fail` 或 `off`。吊销表的条目各带自己的寿命，它也会计入，但要等实例写入或读到过一个这样的条目，所以启动时不计入；CoSec 自己的检查从启动起就只接受 `noeviction`（[Redis 要求](./storage.md#redis-requirements)）。 |
+| `cocache.redis.store-eviction-check-interval` | CoCache 多久重读一次策略，用于它的日志与 `storeEviction` 健康详情。CoSec 自己每个 `revalidate-interval` 重读一次，用于 `cosecSnapshotEviction`。 |
 | `spring.data.redis.*` | CoCache 连接的 Redis，也是限流器和 Redis API key 存储使用的 Redis。 |
 
-控制面的缓存和影子缓存由 CoSec 自己的定义创建，它们的策略是固定的。
+控制面的缓存和影子缓存以与快照存储相同的锁定创建，同样的配置规则也适用于它们。
 
 ## 优先级 {#precedence}
 
-`PolicySnapshotCache`、`RevokedTokenCache` 和 `RevokedSubjectCache` 的缓存策略按以下顺序组装；后一步覆盖前一步：
+每个 CoSec 缓存都由 CoCache 的分层逐字段组装；后一步覆盖前一步：
 
-1. CoSec 对该缓存的默认值：快照缓存取 `cosec.authorization.snapshot.local-max-age`，吊销缓存取
-   `cosec.authorization.cache.token.*` 和 `read-failure: degrade`（读取失败时回答“未吊销”；在后面的步骤中设置
-   `read-failure: throw`，吊销检查就改为以 `503` 失败即拒绝）；
-2. 应用的 CoCache `CacheSpecCustomizer` bean；
-3. `cocache.defaults.*`，然后是 `cocache.caches.<CacheName>.*`；
-4. CoSec 的固定设置，最后应用，无法覆盖。
+1. CoCache 的类型默认值（`store`：没有 `ttl`，`local-max-age` 30 s；`cache`：`ttl` 1 h）；
+2. `cocache.defaults.cache.*` 或 `cocache.defaults.store.*`，只作用于 CoSec 的声明没有写出的字段；
+3. CoSec 的声明：快照存储取 `cosec.authorization.snapshot.local-max-age`，吊销表取
+   `cosec.authentication.revocation.cache.*` 和 `unknown-read: absent`（读取失败时回答“未吊销”；在第 6 步设置
+   `unknown-read: throw`，吊销检查就改为以 `503` 失败即拒绝）；
+4. 应用的 CoCache `CacheSpecCustomizer` bean；
+5. `cocache.overrides.*`，只能收紧；
+6. `cocache.caches.[<CacheName>].*`；
+7. CoSec 的约束，最后执行，在 `unlock` 之后也执行。
 
-因此 `cocache.*` 配置项优先于对应的 `cosec.authorization.cache.token.*` 配置项。第 4 步的固定设置：
+CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache 自身默认值相等的值（如 `10000` 的 `maximum-size`）也一样。
+因此 `cocache.caches.[<CacheName>].*` 配置项优先于对应的 `cosec.authentication.revocation.cache.*` 配置项。CoSec 锁定部分字段
+（CoCache 的 `lock`）：全局层跳过它们，设置了它们的 `cocache.caches` 条目使启动失败（除非该条目在 `unlock` 中列出它，
+即 CoCache 的破窗开关），修改它们的定制器抛出异常。其中一些还受到约束（第 7 步），连 `unlock` 也改变不了：
 
-| 缓存 | 固定 | 原因 |
-|---|---|---|
-| `PolicySnapshotCache` | `ttl` 无、`read-failure: throw`、`invalidate-failure: throw`、`foreign-format: fail`；没有 loader（定制器设置了 loader 时启动失败）；`local-max-age` 取自 `cosec.authorization.snapshot.local-max-age` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、降级读取或回收都会悄悄丢掉一个文档，连同它的 DENY 语句；失败的删除若稍后重试，可能删掉更新的写入。 |
-| `RevokedTokenCache`、`RevokedSubjectCache` | `foreign-format: fail` | 回收一条读不懂的吊销记录会让它的令牌重新有效。 |
-| 每个 CoSec 缓存 | key 前缀、命名空间和 key 编码器 | 存储布局由 CoSec 决定。定制器或 `cocache.*` 中的 `key-prefix` 被忽略。 |
+| 缓存 | 锁定 | 约束 | 原因 |
+|---|---|---|---|
+| `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ReferenceIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
+| `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
+| `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
+| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout` | `read-timeout`：存储的命令超时 | 作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。超时的读取会读成“未吊销”（`unknown-read: absent`），所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。 |
+| 每个 CoSec 缓存 | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |
 
 **下一步：** 文档存在哪里、实例如何读取它们，见[存储与缓存](./storage.md)。

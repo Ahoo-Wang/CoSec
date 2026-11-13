@@ -11,10 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -39,12 +43,14 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * Fails closed: [resolve] throws [MembershipUnavailableException], never answers empty memberships, when the source is
  * [MembershipSource.Unusable] (`MEM-1`), or the credential asks for a provider and there is none, or the provider throws,
- * answers memberships whose source is not [Memberships.Source.PROVIDER], or does not answer within [timeout] (`MEM-2`).
+ * answers memberships whose source is not [Memberships.Source.PROVIDER], or a space, role or policy id with an unpaired
+ * UTF-16 surrogate (RC1-52, `IDN-10`), or does not answer within [timeout] (`MEM-2`).
  * The pipeline turns that into `Indeterminate(MembershipUnavailable)`, answered 503.
  *
  * The provider is called through [resumeOffIo], so an answer that completes on a client library's thread does not
  * continue the request there (RFC 0006 §7.2). An external cancellation propagates.
  */
+@InternalCoSecApi
 class MembershipResolver(
     private val provider: MembershipProvider?,
     /** `cosec.authorization.membership.timeout` (RFC 0004 §4.5.2, RFC 0006 Q25). */
@@ -106,13 +112,15 @@ class MembershipResolver(
             MembershipAnswer.Unknown -> return null
             is MembershipAnswer.Known -> answer.memberships
         }
-        if (memberships.source != Memberships.Source.PROVIDER) {
-            throw MembershipUnavailableException(
-                "The membership provider answered memberships from [${memberships.source}] for principal " +
-                    "[${principal.value}]."
-            )
+        val unusable = when {
+            memberships.source != Memberships.Source.PROVIDER -> "memberships from [${memberships.source}]"
+            // RC1-52 (`IDN-10`): a space, role or policy id with an unpaired surrogate is no id.
+            !Identifiers.isWellFormed(memberships) -> "an id with an unpaired UTF-16 surrogate"
+            else -> return memberships.takeIf { it.active }
         }
-        return memberships.takeIf { it.active }
+        throw MembershipUnavailableException(
+            "The membership provider answered $unusable for principal [${principal.value}]."
+        )
     }
 
     /**
@@ -142,6 +150,7 @@ class MembershipResolver(
     private fun failure(principal: PrincipalId, error: Throwable) =
         MembershipUnavailableException("The membership provider failed for principal [${principal.value}].", error)
 
+    @InternalCoSecApi
     companion object {
         val DEFAULT_TIMEOUT: Duration = 500.milliseconds
 

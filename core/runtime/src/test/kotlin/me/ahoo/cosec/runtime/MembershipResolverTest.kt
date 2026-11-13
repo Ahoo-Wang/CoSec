@@ -11,26 +11,26 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -44,7 +44,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class MembershipResolverTest {
     private val tenant = TenantId("tenant")
-    private val alice = SimplePrincipal("alice")
+    private val alice = VerifiedToken("jti", "alice", null, null)
     private val provider = InMemoryMembershipProvider()
     private val providerMemberships = Memberships(
         Memberships.Source.PROVIDER,
@@ -56,15 +56,23 @@ class MembershipResolverTest {
         provider.put(tenant, PrincipalId("alice"), providerMemberships)
     }
 
-    private fun marked(marker: String = MembershipClaims.PROVIDER, principal: CoSecPrincipal = alice) =
-        SimpleTokenPrincipal("jti", MembershipMarkedPrincipal(principal, marker))
+    private fun marked(marker: String = MembershipClaims.PROVIDER, principal: VerifiedToken = alice) = VerifiedToken(
+        principal.id,
+        principal.principal,
+        principal.tenant,
+        principal.app,
+        principal.roles,
+        principal.policies,
+        principal.attributes,
+        membershipMarker = marker,
+    )
 
     private suspend fun MembershipResolver.resolve(
-        principal: CoSecPrincipal,
+        principal: VerifiedToken,
         tenant: TenantId = this@MembershipResolverTest.tenant,
-    ): Memberships? = resolve(tenant, PrincipalId(principal.id), MembershipSource.of(principal))
+    ): Memberships? = resolve(tenant, PrincipalId(principal.principal), MembershipSource.of(principal))
 
-    private suspend fun MembershipResolver.failure(principal: CoSecPrincipal = marked()): MembershipUnavailableException =
+    private suspend fun MembershipResolver.failure(principal: VerifiedToken = marked()): MembershipUnavailableException =
         try {
             resolve(principal)
             throw AssertionError("The resolution did not fail.")
@@ -75,7 +83,7 @@ class MembershipResolverTest {
     @Test
     fun claimsWithoutMarker() = runTest {
         val memberships = MembershipResolver(null)
-            .resolve(SimplePrincipal("alice", policies = setOf("p1"), roles = setOf("admin")))!!
+            .resolve(VerifiedToken("jti", "alice", null, null, roles = setOf("admin"), policies = setOf("p1")))!!
 
         memberships.source.assert().isEqualTo(Memberships.Source.CLAIMS)
         memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("admin"))
@@ -90,7 +98,9 @@ class MembershipResolverTest {
     /** `IDN-3`: a principal the provider does not know has no memberships to resolve, so its credential is refused. */
     @Test
     fun anUnknownPrincipalIsRefused() = runTest {
-        MembershipResolver(provider).resolve(marked(principal = SimplePrincipal("bob"))).assert().isNull()
+        MembershipResolver(
+            provider
+        ).resolve(marked(principal = VerifiedToken("jti", "bob", null, null))).assert().isNull()
     }
 
     @Test
@@ -99,6 +109,31 @@ class MembershipResolverTest {
         MembershipResolver(
             MembershipProvider { _, _ -> MembershipAnswer.Known(inactive) }
         ).resolve(marked()).assert().isNull()
+    }
+
+    /**
+     * RC1-52, `IDN-10`: a provider that answers a space, role or policy id with an unpaired surrogate gave no usable
+     * answer: the resolution fails (503), as for any answer the resolver cannot use, never resolving to fewer roles.
+     */
+    @Test
+    fun anAnswerWithAnIdHoldingAnUnpairedSurrogateFails() = runTest {
+        val answers = listOf(
+            Memberships(
+                Memberships.Source.PROVIDER,
+                mapOf(SpaceId("team\uD800") to setOf(RoleId("editor"))),
+                emptyList()
+            ),
+            Memberships(
+                Memberships.Source.PROVIDER,
+                mapOf(SpaceId.DEFAULT to setOf(RoleId("editor\uDC00"))),
+                emptyList()
+            ),
+            Memberships(Memberships.Source.PROVIDER, emptyMap(), listOf(PolicyId("p\uD800"))),
+        )
+        for (answer in answers) {
+            MembershipResolver(MembershipProvider { _, _ -> MembershipAnswer.Known(answer) }).failure()
+                .message.assert().contains("unpaired UTF-16 surrogate")
+        }
     }
 
     @Test
@@ -163,13 +198,17 @@ class MembershipResolverTest {
 
     @Test
     fun markerWithClaimedRolesIsAmbiguous() = runTest {
-        MembershipResolver(provider).failure(marked(principal = SimplePrincipal("alice", roles = setOf("admin"))))
+        MembershipResolver(
+            provider
+        ).failure(marked(principal = VerifiedToken("jti", "alice", null, null, roles = setOf("admin"))))
             .message.assert().contains("also claims roles or policies")
     }
 
     @Test
     fun markerWithClaimedPoliciesIsAmbiguous() = runTest {
-        MembershipResolver(provider).failure(marked(principal = SimplePrincipal("alice", policies = setOf("p"))))
+        MembershipResolver(
+            provider
+        ).failure(marked(principal = VerifiedToken("jti", "alice", null, null, policies = setOf("p"))))
             .message.assert().contains("also claims roles or policies")
     }
 

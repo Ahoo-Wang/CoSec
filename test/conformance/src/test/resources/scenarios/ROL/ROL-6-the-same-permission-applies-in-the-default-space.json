@@ -1,0 +1,75 @@
+{
+  "rules": [
+    "ROL-6"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Held in the default space, it applies.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "read",
+              "ship"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/read",
+      "statement": 0,
+      "name": "read",
+      "via": {
+        "binding": "role:clerk@wms:read",
+        "document": "app"
+      }
+    }
+  }
+}

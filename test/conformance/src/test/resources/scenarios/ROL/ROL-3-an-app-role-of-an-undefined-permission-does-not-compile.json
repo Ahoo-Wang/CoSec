@@ -1,0 +1,66 @@
+{
+  "rules": [
+    "ROL-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A system role lists a permission the catalog does not define.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "ghost"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "[ghost] is not a permission app wms defines"
+  }
+}

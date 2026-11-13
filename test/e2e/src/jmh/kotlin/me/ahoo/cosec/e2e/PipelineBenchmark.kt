@@ -60,14 +60,16 @@ import kotlin.coroutines.startCoroutine
  * `blocked`, the same request from a blocked address (403). With one BEST_EFFORT decision listener that does nothing
  * (RFC 0006 §9.3): `listener`, the `global` request, so the cost is the event and its queue. `apikey`: the `role`
  * request with an API key instead of a token (RFC 0009 §4.2), whose memberships the starter's `CoCacheMembershipProvider`
- * answers from its local cache, narrowed to the key's cap; compare it with `role`. `rate-limited` joins with PR-5.
+ * answers from its local cache, narrowed to the key's cap; compare it with `role`. `short-form`: the same permit by a
+ * role with `*`, the permissions written with `action` in a catalog group that is not `spaced` (RFC 0012), so each carries
+ * the `scope.space` condition; compare it with `role`. `rate-limited` joins with PR-5.
  *
  * Each operation starts the request as an adapter would and finishes it on the calling thread: a warm request never
  * suspends (`SliceBlockHoundTest`); one that did would be waited for, and counted.
  */
 @State(Scope.Benchmark)
 open class PipelineBenchmark {
-    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener", "apikey")
+    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener", "apikey", "short-form")
     lateinit var scenario: String
 
     private lateinit var slice: Slice
@@ -88,7 +90,7 @@ open class PipelineBenchmark {
         val listeners = if (scenario == "listener") DecisionListeners(listOf(NoOpListener)) else DecisionListeners.NONE
         val key = ApiKeys.generate()
         slice = if (scenario == "apikey") {
-            val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", setOf("viewer", "admin")))
+            val keys = mapOf(ApiKeys.hash(key) to ApiKey("k1", "user", "acme", "app", setOf("viewer", "admin")))
             // The token's memberships, now the principal's: the cap keeps both roles and drops the attachments.
             val loader = MembershipLoader { _, _ ->
                 MembershipAnswer.Known(Memberships(
@@ -106,12 +108,12 @@ open class PipelineBenchmark {
             Slice(options = SnapshotOptions(), attributes = attributes, listeners = listeners)
         }
         slice.publish(SnapshotKey.Platform, platform())
-        slice.publish(SnapshotKey.App("app"), app())
+        slice.publish(SnapshotKey.App("app"), if (scenario == "short-form") shortFormApp() else app())
         slice.publish(SnapshotKey.Tenant("acme"), "")
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
             "global", "anonymous", "blacklist", "blocked", "listener" -> "/public/resource3/page"
-            "role", "apikey" -> "/orders/op49/detail"
+            "role", "apikey", "short-form" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
             else -> error("Unknown scenario $scenario")
         }
@@ -162,6 +164,13 @@ open class PipelineBenchmark {
         val bindings = viewer.map { """{"id":"viewer/$it","subject":{"role":"viewer"},"app":"app","space":"*","policy":"perm:app/$it"}""" } +
             """{"id":"admin/*","subject":{"role":"admin"},"app":"app","space":"*","policy":"perm:app/*"}"""
         return ""","policies":[${policies.joinToString(",")}],"bindings":[${bindings.joinToString(",")}]"""
+    }
+
+    /** [app]'s permissions as short forms, granted by one system role with `*`. */
+    private fun shortFormApp(): String {
+        val permissions = (1..PERMISSIONS).joinToString(",") { """{"id":"p$it","action":"http:*","resource":"http:path:/orders/op$it/**"}""" }
+        val catalog = """"catalog":{"groups":[{"name":"orders","permissions":[$permissions]}]}"""
+        return """,$catalog,"roles":[{"id":"admin","permissions":"*"}]"""
     }
 
     /** Takes every event and does nothing with it: what remains is the pipeline's own cost of events. */

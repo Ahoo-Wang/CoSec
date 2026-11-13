@@ -22,8 +22,23 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: '简介', link: '/zh/guide/introduction' },
       { text: '快速开始', link: '/zh/guide/quick-start' },
       { text: '核心概念', link: '/zh/guide/concepts' },
+      { text: '模型', link: '/zh/guide/model' },
       { text: '安全模型', link: '/zh/guide/security-model' },
       { text: '路线图', link: '/zh/guide/roadmap' },
+    ],
+  },
+  {
+    text: '场景',
+    items: [
+      { text: '简单模式', link: '/zh/scenarios/simple-mode' },
+      { text: '不使用空间的应用', link: '/zh/scenarios/app' },
+      { text: '系统角色与自定义角色', link: '/zh/scenarios/roles' },
+      { text: '使用空间的应用', link: '/zh/scenarios/spaces' },
+      { text: '限定在一个空间的服务账号', link: '/zh/scenarios/service-account' },
+      { text: '租户所有者', link: '/zh/scenarios/tenant-owner' },
+      { text: '外部事实源同步角色', link: '/zh/scenarios/external-source' },
+      { text: '按业务动作授权', link: '/zh/scenarios/route-maps' },
+      { text: '网关拓扑', link: '/zh/scenarios/gateway' },
     ],
   },
   {

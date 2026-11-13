@@ -121,7 +121,7 @@ class PolicyDocumentCodecTest {
     /** RFC 0007 §5.3: the control plane's provenance reads and writes back the same, and decides nothing. */
     @Test
     fun `a provenance reads and writes back the same`() {
-        val digest = "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"
+        val digest = "SHA-256:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"
         val document = decode(
             ""","provenance":{"parent":{"revision":2,"digest":"$digest"},"change":"0QH8K3","kind":"ROLLBACK",""" +
                 """"publishedBy":{"tenant":"acme","principal":"alice"},"approvedBy":[{"tenant":"(platform)","principal":"ops-1"}],""" +
@@ -165,8 +165,9 @@ class PolicyDocumentCodecTest {
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t"}}|$.provenance.publishedBy: [principal] is required""",
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":""}}|$.provenance.publishedBy.principal: must not be empty""",
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"},"by":1}|$.provenance: unknown field by""",
-            """{"parent":{"revision":0,"digest":"9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.revision: must be positive""",
-            """{"parent":{"revision":1,"digest":"9F2C"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.digest: is 40 lowercase hex digits""",
+            """{"parent":{"revision":0,"digest":"SHA-256:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.revision: must be positive""",
+            """{"parent":{"revision":1,"digest":"9F2C"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.digest: is `SHA-256:` and 64 lowercase hex digits""",
+            """{"parent":{"revision":1,"digest":"9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.digest: is `SHA-256:` and 64 lowercase hex digits""",
             """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"},"shadow":{"window":"w"}}|$.provenance.shadow: [skipped] is required""",
         ],
     )

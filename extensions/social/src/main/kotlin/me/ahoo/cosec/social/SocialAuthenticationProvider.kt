@@ -12,26 +12,25 @@
  */
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.api.Named
-import reactor.core.publisher.Mono
-
 /**
  * Social Provider .
  *
- * Both calls block the calling thread: [authorizeUrl] draws the OAuth `state` from a `SecureRandom` and writes it to
- * the state cache, and [authenticate] calls the provider over blocking HTTP (JustAuth). Call them off an event loop,
- * on `Schedulers.boundedElastic()` in WebFlux.
+ * Both calls may run on an event loop, so an implementation over a blocking client moves the work to its own bounded
+ * dispatcher, as `JustAuthProvider` does.
  *
  * @author ahoo wang
  */
-interface SocialAuthenticationProvider : Named {
+interface SocialAuthenticationProvider {
+    /** The provider's registration name: the `provider` of a [SocialCredentials]. */
+    val name: String
+
     /**
      * Generate authorize Url.
      *
      * @return authorize Url
      */
-    fun authorizeUrl(): String
+    suspend fun authorizeUrl(): String
 
     @Throws(SocialAuthenticationException::class)
-    fun authenticate(credentials: SocialCredentials): Mono<SocialUser>
+    suspend fun authenticate(credentials: SocialCredentials): SocialUser
 }

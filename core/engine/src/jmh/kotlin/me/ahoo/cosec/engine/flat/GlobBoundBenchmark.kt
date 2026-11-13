@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
@@ -25,14 +28,12 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -57,15 +58,19 @@ import org.openjdk.jmh.annotations.State
  * - `captures`: `*{a}*{c}*{d}*{e}*{f}*{g}*{h}x{v}` against `xa…a`, which matches and is captured. Its only literal
  *   sits at the start, which made the backtracking this replaced give up every end of every run: 232 ms per request.
  * - `bindings`: `captures`, its policy bound 64 times (review M1): each pass evaluates it once (`ALG-9`).
+ * - `pairs`: `{v}?*?*?*?*?*?*?*?`, sixteen tokens and no literal, against 128 surrogate pairs (review L6 of #1200), which
+ *   matches and is captured. A value with a pair takes the row of code point boundaries, and every `?` row a second
+ *   pass that reads two characters at each pair. The slowest of these inputs: about 0.5 ms and 107 KB per request on a
+ *   CI runner where `literal` takes 0.33 ms (run 42348708014).
  *
  * The conditions read `resource.var.v` and are false, or, for `literal`, read the device id and are false. These inputs
- * are the worst in time; they allocate at most about 45 KB. In allocation the worst is the smallest capturing glob,
+ * are the worst in time; they allocate at most about 107 KB (`pairs`). In allocation the worst is the smallest capturing glob,
  * `{v}a`, at three units: about 0.25 MB per request with ASCII values and about 0.6 MB with values outside Latin-1, the
  * captured values (review round 2 of #1200), in at most about `literal`'s time.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class GlobBoundBenchmark {
-    @Param("literal", "capture-literal", "alternating", "captures", "bindings")
+    @Param("literal", "capture-literal", "alternating", "captures", "bindings", "pairs")
     lateinit var scenario: String
 
     private lateinit var request: FlatRequest
@@ -81,6 +86,7 @@ open class GlobBoundBenchmark {
             "capture-literal" -> "/{v}ab*" to "/$a"
             "alternating" -> "/{v}a*a*a*a*a*a*a*b" to "/" + a.drop(1) + "b"
             "captures", "bindings" -> "/*{a}*{c}*{d}*{e}*{f}*{g}*{h}x{v}" to "/x" + a.drop(1)
+            "pairs" -> "/{v}" + "?*".repeat(PAIR_RUNS) + "?" to "/" + PAIR.repeat(SEGMENT_LENGTH / PAIR.length)
             else -> error("Unknown scenario $scenario")
         }
         val units = HttpPathPattern.compile(pattern).globUnits
@@ -114,20 +120,15 @@ open class GlobBoundBenchmark {
     private fun request(path: String): FlatRequest {
         val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), HostScope(null))
+        val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
         val authz = AuthzRequest(
             subject = Subject(
                 "user",
-                "acme",
                 true,
-                emptySet(),
-                emptySet(),
                 emptyMap(),
-                root = false,
                 principalBindings = true,
                 breakGlass = true,
             ),
-            scope = Scope.declared("acme", "", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),
@@ -138,5 +139,9 @@ open class GlobBoundBenchmark {
     private companion object {
         const val SEGMENT_LENGTH = 256
         const val BINDINGS = 64
+        const val PAIR = "\uD83D\uDE00"
+
+        /** `?*` seven times between `{v}` and a final `?`: sixteen tokens, the bound. */
+        const val PAIR_RUNS = 7
     }
 }

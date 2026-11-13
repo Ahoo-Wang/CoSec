@@ -144,7 +144,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 | `tenant` | 必填。主体所在的租户。 |
 | `principal` | 主体 id；省略则为匿名主体。 |
 | `roles`、`policies` | 成员关系声明，写法与令牌中相同（`role`、`role@space`；[角色与空间](./authentication.md#roles-and-spaces)）。 |
-| `app`、`space` | 声明的应用和空间，相当于 `CoSec-App-Id` 和 `CoSec-Space-Id`；不适用宿主应用。 |
+| `app`、`space` | 模拟的凭证声明的应用（在该应用的宿主上）和它选择的空间（`CoSec-Space-Id`）。 |
 | `action` | 必填。`service:verb`。 |
 | `resource` | 必填。`type/id`，或以 `/` 开头的路径。 |
 | `remoteIp` | 客户端 IP。 |

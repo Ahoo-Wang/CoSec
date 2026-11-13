@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -23,6 +26,7 @@ import java.time.Clock
  * families, each bounded by [SnapshotOptions.maxApps] and [SnapshotOptions.maxTenants]. All three compile with
  * [compiler], whose result the engine composes into one view per evaluation.
  */
+@InternalCoSecApi
 object DocumentSnapshots {
     fun <T : Any> source(
         store: SnapshotDocumentStore,

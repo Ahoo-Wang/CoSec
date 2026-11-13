@@ -18,8 +18,8 @@ package me.ahoo.cosec.cache
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.control.ChangeRequestCacheCodec
 import me.ahoo.cosec.cache.control.ListedCodec
+import me.ahoo.cosec.cache.control.ReferrersCodec
 import me.ahoo.cosec.cache.control.RevisionIndexCodec
-import me.ahoo.cosec.cache.control.SnapshotKeySetCodec
 import me.ahoo.cosec.cache.control.StageSlotCodec
 import me.ahoo.cosec.cache.shadow.ReportersCodec
 import me.ahoo.cosec.cache.shadow.ShadowReportCodec
@@ -63,7 +63,7 @@ import java.time.Instant
  */
 class StoredFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
-    private val digest = SnapshotDigest(ByteArray(20) { it.toByte() })
+    private val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
     private val document = SnapshotDocument(
         2,
         5,
@@ -75,7 +75,9 @@ class StoredFormatTest {
      * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline (except
      * `apiKey`, `apiKey-uncapped`, `apiKey-empty-cap` and `memberships-inactive`, the formats of RFC 0009 PR-3): each was
      * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
-     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780.
+     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780. `revisionIndex` is
+     * the exception: its digests became CoCache 8's SHA-256 with the algorithm (`SHA-256:<hex>`), which replaced the
+     * SHA-1 hex digests of CoCache 6. `referrers` is new with #1207: each referrer with the revision that indexed it.
      */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
@@ -89,7 +91,7 @@ class StoredFormatTest {
     /** RFC 0009 §4.1: written by this format's [ApiKeyCodec], not by `main` before it. */
     @Test
     fun `api keys`() {
-        val capped = ApiKey("k1", "alice", "acme", linkedSetOf("admin", "viewer@sales"), at, true)
+        val capped = ApiKey("k1", "alice", "acme", "order", linkedSetOf("admin", "viewer@sales"), at, true)
         pinned(
             "apiKey",
             capped,
@@ -97,7 +99,7 @@ class StoredFormatTest {
             { ApiKeyCodec.decode(it.decodeToString()) },
             fixture("apiKey")
         )
-        val uncapped = ApiKey("k2", "svc", "acme", null, null, false)
+        val uncapped = ApiKey("k2", "svc", "acme", null, null, null, false)
         pinned(
             "apiKey-uncapped",
             uncapped,
@@ -109,7 +111,7 @@ class StoredFormatTest {
         // IDN-2: an empty cap is written and read as empty, never as absent.
         pinned(
             "apiKey-empty-cap",
-            ApiKey("k3", "svc", "acme", emptySet(), null, true),
+            ApiKey("k3", "svc", "acme", null, emptySet(), null, true),
             { ApiKeyCodec.encode(it).encodeToByteArray() },
             { ApiKeyCodec.decode(it.decodeToString()) },
             fixture("apiKey-empty-cap"),
@@ -119,19 +121,26 @@ class StoredFormatTest {
 
     /**
      * A key `main` wrote before RFC 0009 (the bytes of da58e780) is refused, never read as a key without a cap, which
-     * would give it everything its principal holds; the message names the migration.
+     * would give it everything its principal holds.
      */
     @Test
     fun `api keys before 8 are refused`() {
         val refused = assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(fixture("apiKey-before-8")) }
-        refused.message.assert().contains("cosec-migrate api-keys")
+        refused.message.assert().isEqualTo("API key format [null] is not ${ApiKeyCodec.FORMAT}.")
     }
 
     @Test
     fun `a stored api key has exactly its fields`() {
-        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null))
-        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":2", "\"format\":3")) }
+        val written = ApiKeyCodec.encode(ApiKey("k1", "alice", "acme", null, null))
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"format\":3", "\"format\":2")) }
         assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"roles\":null,", "")) }
+        // RFC 0012 §3.5: a record without `app` is another format, never read as a key declaring none.
+        assertThrows<IllegalArgumentException> { ApiKeyCodec.decode(written.replace("\"app\":null,", "")) }
+        assertThrows<IllegalArgumentException> {
+            ApiKeyCodec.decode(
+                written.replace("\"app\":null,", "\"app\":\"*\",")
+            )
+        }
         assertThrows<IllegalArgumentException> {
             ApiKeyCodec.decode(written.replace("\"enabled\":true", "\"enabled\":true,\"policies\":[\"p1\"]"))
         }
@@ -189,6 +198,19 @@ class StoredFormatTest {
         assertThrows<JacksonException> { ReportersCodec.decode("""[{"a":1,"a":2}]""".encodeToByteArray()) }
     }
 
+    /**
+     * The revocation tables are the only CoSec caches whose values CoCache's `JacksonCodec` writes, with [CoSecJson]'s
+     * mapper, for the declared `Boolean` and `Long`: CoCache 8.0.0-alpha.6 encodes by the declared type (#873), which
+     * for these final types writes what it always did.
+     */
+    @Test
+    fun `revocations`() {
+        val token = CoSecCacheSpecs.revokedToken().codec
+        pinned("revokedToken", true, token::encode, token::decode, "true")
+        val subject = CoSecCacheSpecs.revokedSubject().codec
+        pinned("revokedSubject", 1_761_955_200_000L, subject::encode, subject::decode, "1761955200000")
+    }
+
     @Test
     fun `snapshot documents`() {
         pinned(
@@ -239,13 +261,13 @@ class StoredFormatTest {
             StageSlotCodec::decode,
             fixture("stageSlot")
         )
-        val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
+        // #1207: each referrer with the revision of it that last indexed the reference.
         pinned(
-            "keys",
-            keys,
-            SnapshotKeySetCodec::encode,
-            SnapshotKeySetCodec::decode,
-            fixture("keys")
+            "referrers",
+            mapOf(SnapshotKey.Tenant("b") to 7L, SnapshotKey.Platform to 0L, SnapshotKey.App("order") to 2L),
+            ReferrersCodec::encode,
+            ReferrersCodec::decode,
+            fixture("referrers")
         )
         pinned(
             "listed",

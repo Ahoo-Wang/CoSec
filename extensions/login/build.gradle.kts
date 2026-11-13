@@ -11,10 +11,8 @@
  * limitations under the License.
  */
 
-// RFC 0011 §3: login and token issuing, the one module that keeps Reactor in its API (7.x login contracts).
+// Login and token issuing: suspending contracts, with coroutines from `runtime`. Reactor stays at the web bridges.
 dependencies {
     api(project(":runtime"))
-    api("io.projectreactor:reactor-core")
-    api("io.projectreactor.kotlin:reactor-kotlin-extensions")
-    testImplementation("io.projectreactor:reactor-test")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }

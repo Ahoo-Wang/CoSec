@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.event
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -30,6 +32,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.resumeOffIo
 import me.ahoo.cosec.runtime.withLazyTimeoutOrNull
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -61,7 +64,7 @@ private val log = KotlinLogging.logger {}
  */
 class DecisionListeners(
     listeners: List<DecisionListener>,
-    /** `cosec.audit.required.timeout`: how long one REQUIRED listener may take. */
+    /** `cosec.observability.listener.required-timeout`: how long one REQUIRED listener may take. */
     val requiredTimeout: Duration = 1.seconds,
     /** `cosec.observability.listener.queue-capacity`: the events one BEST_EFFORT listener may have waiting. */
     queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.CallLog
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.MatcherException
@@ -187,6 +190,34 @@ class FlatEngineTest {
         fixture.log.clear()
         decide(flatRequest(), platform).assert().isEqualTo(Decision.Permit(ref("y", 0, bound("g-y"))))
         fixture.log.calls.count { it.startsWith("guard:") }.assert().isEqualTo(3 * 11)
+    }
+
+    /** #1212: past the conditions the cache scans, one is still found by identity, with its result and its error. */
+    @Test
+    fun `a condition runs once however many others the evaluation reached`() {
+        val failing = fixture.guard("failing", GuardBehavior.THROW)
+        val shared = fixture.guard("shared")
+        val policies = (0 until 40).map {
+            fixture.policy("p$it", allow(RuleBehavior.CONDITION_MISS), guard = fixture.guard("c$it"))
+        }
+        // Both reach the same conditions again, past the 40 before them.
+        val again = listOf("q", "r").map { fixture.policy(it, allow(RuleBehavior.CONDITION_MISS), guard = failing) } +
+            listOf("s", "t").map { fixture.policy(it, allow(RuleBehavior.CONDITION_MISS), guard = shared) }
+        val all = policies + again + fixture.policy("y", allow())
+        val platform = CompiledDocument.platform(all, all.map { anyone("g-${it.id}", it.id) })
+        fixture.log.clear()
+        val evaluation = CoSecFlatEngine.evaluate(
+            flatRequest(),
+            SnapshotView(platform, null, emptyTenant),
+            TraceLevel.FULL
+        )
+        evaluation.decision.assert().isEqualTo(Decision.Permit(ref("y", 0, bound("g-y"))))
+        fixture.log.calls.count { it.startsWith("guard:") }.assert().isEqualTo(40 + 2)
+        // The error of a condition is replayed to every policy that reaches it.
+        val errors = evaluation.trace!!.candidates.filter { it.outcome == CandidateOutcome.GUARD_ERROR }
+        errors.map { it.ref.policy.value }.assert().containsExactly("q", "r")
+        errors.map { it.error }.assert().containsOnly(failing.error)
+        decide(flatRequest(), platform).assert().isEqualTo(Decision.Permit(ref("y", 0, bound("g-y"))))
     }
 
     @Test

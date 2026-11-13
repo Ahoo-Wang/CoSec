@@ -32,18 +32,23 @@ import java.time.Instant
  * An entry that fails to compile should be recorded in the result (RFC 0003 §3.4 `Broken`) so that only the evaluations
  * reading it fail. Throwing fails the whole document closed.
  */
+@InternalCoSecApi
 fun interface SnapshotCompiler<out T : Any> {
     fun compile(key: SnapshotKey, document: SnapshotDocument): T
 }
 
 /** The state of one document in a [SnapshotSource] (RFC 0003 §3.4). */
+@InternalCoSecApi
 sealed interface DocumentState<out T : Any> {
+    @InternalCoSecApi
     data class Present<out T : Any>(val compiled: T) : DocumentState<T>
 
     /** No document is stored, and none has been seen under this key since the source started. */
+    @InternalCoSecApi
     data object Absent : DocumentState<Nothing>
 
     /** The document cannot be used. Every layer it feeds is unavailable, so evaluation reaching it fails closed. */
+    @InternalCoSecApi
     data class Failed(val error: Throwable) : DocumentState<Nothing>
 }
 
@@ -51,6 +56,7 @@ sealed interface DocumentState<out T : Any> {
  * One document as a [SnapshotSource] holds it. Immutable except for [confirmedAt], which revalidation moves forward
  * when the store confirms the same digest.
  */
+@InternalCoSecApi
 class SnapshotEntry<out T : Any> internal constructor(
     val key: SnapshotKey,
     val state: DocumentState<T>,
@@ -107,6 +113,7 @@ internal enum class EntryOrigin {
  * The documents one evaluation reads: the shared [policies] document and, when the request needs it, one [app]
  * document. Every entry is immutable, so an evaluation sees exactly one revision of each document (RFC 0003 §8.4 P7).
  */
+@InternalCoSecApi
 class Snapshot<out P : Any, out A : Any> internal constructor(
     val policiesEntry: SnapshotEntry<P>,
     /** Null when the request needs no app document. */

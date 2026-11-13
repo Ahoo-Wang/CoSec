@@ -15,11 +15,12 @@ package me.ahoo.cosec.social
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * SocialProviderManager .
+ * The registry of [SocialAuthenticationProvider]s. One instance per application: the starter assembles one for each
+ * Spring context, so one context's registrations never reach another (#1222).
  *
  * @author ahoo wang
  */
-object SocialProviderManager {
+class SocialProviderManager {
     private val providers: ConcurrentHashMap<String, SocialAuthenticationProvider> = ConcurrentHashMap()
 
     operator fun get(provider: String): SocialAuthenticationProvider? {

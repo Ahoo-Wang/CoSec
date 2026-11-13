@@ -15,10 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.jwt
 
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
-import me.ahoo.cocache.spring.boot.CoCacheProperties
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -27,9 +24,8 @@ import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
-import org.springframework.beans.factory.ObjectProvider
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
+import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -48,13 +44,13 @@ import org.springframework.context.annotation.Bean
 @ConditionalOnCoSecEnabled
 @ConditionalOnJwtEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.RevokedTokenCache"])
-@ConditionalOnBean(CacheRuntime::class)
+@ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(
-    CacheProperties::class,
+    RevocationProperties::class,
     CoSecProperties::class,
 )
-class CoSecTokenRevocationCacheAutoConfiguration(
-    private val cacheProperties: CacheProperties,
+internal class CoSecTokenRevocationCacheAutoConfiguration(
+    private val revocationProperties: RevocationProperties,
     private val cosecProperties: CoSecProperties,
 ) {
 
@@ -73,21 +69,16 @@ class CoSecTokenRevocationCacheAutoConfiguration(
     }
 
     /**
-     * The local tier comes from `cosec.authorization.cache.token.*`; "not revoked" lookups are cached locally for
+     * The local tier comes from `cosec.authentication.revocation.cache.*`; "not revoked" lookups are cached locally for
      * [RevokedTokenCache.MISSING_TTL_SECONDS].
      */
     @Bean(REVOKED_TOKEN_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean
-    fun revokedTokenCache(
-        runtime: CacheRuntime,
-        customizers: ObjectProvider<CacheSpecCustomizer>,
-        cocacheProperties: ObjectProvider<CoCacheProperties>,
-    ): RevokedTokenCache {
+    fun revokedTokenCache(factory: CoCacheFactory): RevokedTokenCache {
         val spec = CoSecCacheSpecs.revokedToken(
-            cosecProperties.keyPrefix,
-            cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
+            cosecProperties.keyPrefix
         )
-        return cosecCacheAssembler(runtime, customizers, cocacheProperties).create(RevokedTokenCache::class.java, spec)
+        return factory.createCoSecCache(RevokedTokenCache::class.java, revocationProperties.cache.applyTo(spec))
     }
 
     /**
@@ -95,19 +86,10 @@ class CoSecTokenRevocationCacheAutoConfiguration(
      */
     @Bean(REVOKED_SUBJECT_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean
-    fun revokedSubjectCache(
-        runtime: CacheRuntime,
-        customizers: ObjectProvider<CacheSpecCustomizer>,
-        cocacheProperties: ObjectProvider<CoCacheProperties>,
-    ): RevokedSubjectCache {
+    fun revokedSubjectCache(factory: CoCacheFactory): RevokedSubjectCache {
         val spec = CoSecCacheSpecs.revokedSubject(
-            cosecProperties.keyPrefix,
-            cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
+            cosecProperties.keyPrefix
         )
-        return cosecCacheAssembler(
-            runtime,
-            customizers,
-            cocacheProperties
-        ).create(RevokedSubjectCache::class.java, spec)
+        return factory.createCoSecCache(RevokedSubjectCache::class.java, revocationProperties.cache.applyTo(spec))
     }
 }

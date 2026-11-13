@@ -1,0 +1,17 @@
+# Rule: ROL-5
+# Mutant: a permission may be defined by an action and a policy
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+index cf613126..d28fb645 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+@@ -232,7 +232,7 @@ object RoleExpansion {
+                 }
+                 when {
+                     permission.id.isEmpty() -> errors += CompileError("$path.id", "a permission with an action has an id")
+-                    prefix + permission.id in written -> errors += CompileError(
++                    false && prefix + permission.id in written -> errors += CompileError(
+                         "$path.action",
+                         "[${permission.id}] has an action and a hand-written policy; a permission has one definition",
+                     )

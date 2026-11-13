@@ -1,0 +1,47 @@
+{
+  "rules": [
+    "SCP-4"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "CoSec-Device-Id is sent twice with the same value: one value, and the request is permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "http": {
+    "headers": {
+      "CoSec-Device-Id": [
+        "shop",
+        "shop"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "description": "Without the role, nothing permits /admin.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/admin/users"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

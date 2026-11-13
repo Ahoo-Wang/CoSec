@@ -14,8 +14,8 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | 文档 | 键 | 每个……一份 | 包含 |
 |---|---|---|---|
 | 平台文档 | `platform` | 部署 | 所有租户共享的策略、面向任何人（`*`）和指定主体的绑定、break-glass 绑定、限流规则，以及只有平台能设置的 `limits`、`attributes`、`boundaries`。 |
-| 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、角色绑定、限流规则。 |
-| 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、限流规则。 |
+| 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、系统[角色](#roles)、角色绑定、限流规则。 |
+| 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、自定义[角色](#roles)、限流规则。 |
 
 键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
@@ -68,6 +68,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 |---|---|---|---|
 | `policies`、`bindings`、`rateLimits` | 是 | 是 | 是 |
 | `catalog` | | 是 | |
+| `roles` | | 是 | 是 |
 | `limits`、`attributes` | 是 | | |
 | `boundaries` | 是 | | |
 | `boundary` | | | 是 |
@@ -138,7 +139,7 @@ DENY 不能写裸资源类型，例如 `order`：它只覆盖 id 为空的那个
 }
 ```
 
-`path` 是 [HTTP 路径模式](#http-paths)。`resource` 是类型化资源，其片段是字面量或 `path` 中的变量。路由映射要么整体加载，要么不加载：有格式错误的路由，或同一方法下两条可能匹配同一请求的路由，都会让启动失败。包含 `/`（解码后的 `%2F`）的捕获值会改变资源 id 的片段，因此这样的请求会以 `400` 被拒绝。网关不加载路由映射：它的请求留在 `http` 命名空间。`cosecServiceGenerator/routes` 可以从服务的 OpenAPI 文档生成路由映射（[角色权限](./role-permissions.md#generating-a-catalog-from-openapi)）。
+`path` 是 [HTTP 路径模式](#http-paths)。`resource` 是类型化资源，其片段是字面量或 `path` 中的变量。路由映射要么整体加载，要么不加载：没有路由的映射、有格式错误的路由，或同一方法下两条可能匹配同一请求的路由，都会让启动失败。包含 `/`（解码后的 `%2F`）的捕获值会改变资源 id 的片段，因此这样的请求会以 `400` 被拒绝。网关不加载路由映射：它的请求留在 `http` 命名空间。`cosecServiceGenerator/routes` 可以从服务的 OpenAPI 文档生成路由映射（[角色权限](./role-permissions.md#generating-a-catalog-from-openapi)）。
 
 ## 资源 {#resources}
 
@@ -178,7 +179,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `{name}` | 一个片段，并捕获 |
 | `**` 或 `{*name}` | 任意数量的片段，`{*name}` 把路径余下部分捕获下来；只能在开头或结尾，每个模式至多一个。`/admin/**` 也匹配 `/admin`。 |
 
-以下写法无法编译：`{name:regex}`、空模式、除单独的 `*` 之外可能匹配空值的片段（例如 `{a}{b}` 或 `*{a}`），以及 `{}` 和 `{*}`。
+以下写法无法编译：`{name:regex}`、空模式、除单独的 `*` 之外可能匹配空值的片段（例如 `{a}{b}` 或 `*{a}`）、`{}` 和 `{*}`，以及只含代理对的一半、缺另一半的文本（基本多文种平面之外的字符，例如 emoji，要完整写出）。
 
 资源可以写成带选项的模式对象，仅限 `http:path:` 模式：
 
@@ -204,7 +205,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 字面量片段、整段的 `*` 或 `{name}`、`**` 和 `{*name}` 不计开销：只有把它们与文本混在一起的片段需要搜索匹配，而其中的文本可能在请求片段的每个位置上都被比较一次，所以一个字符与一个部分的开销相同。前导 `**` 之后的片段会与两个片段比较，以捕获变量为 `key` 的规则先匹配再捕获：因此它们计两次。这些上界在 8.0 中是固定的。在数据面上，超出上界的已存储文档会被装入为失败，读取它的请求失败即拒绝。
 
-无论有多少条绑定生效，每个策略在每一遍中对每个绑定它的文档最多求值一次，另加附加策略的一次求值（`ALG-9`）。因此预算限定了匹配一个文档的模式给一个请求带来的开销：一个文档把全部预算都用在对每条路径都是候选的模式上时，对管道接受的最长路径片段（256 个字符），最坏情况下每个请求约 0.45 ms，其策略同时被附加时约为两倍（`GlobBoundBenchmark` 的最坏输入，在 CI 运行器上）。它分配所捕获的值：ASCII 值时每个请求约 0.25 MB，Latin-1 以外的值时约 0.6 MB。影子窗口还会求值它的候选文档，候选文档有自己的预算。
+无论有多少条绑定生效，每个策略在每一遍中对每个绑定它的文档最多求值一次，另加附加策略的一次求值（`ALG-9`）。因此预算限定了匹配一个文档的模式给一个请求带来的开销：一个文档把全部预算都用在对每条路径都是候选的模式上时，对管道接受的最长路径片段（256 个字符），最坏情况下每个请求约 0.5 ms，其策略同时被附加时约为两倍（`GlobBoundBenchmark` 的最坏输入，在 CI 运行器上）。最坏的是由代理对（例如 emoji）组成、对着 `?` 和 `*` 匹配的片段；ASCII 时约 0.33 ms。它分配所捕获的值：ASCII 值时每个请求约 0.25 MB，Latin-1 以外的值时约 0.6 MB。影子窗口还会求值它的候选文档，候选文档有自己的预算。
 
 ## 路径变量 {#path-variables}
 
@@ -271,7 +272,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `scope.roles` | Set | 主体在请求空间中的角色。 |
 | `action.service`、`action.verb` | String | 动作的两部分。 |
 | `resource.type`、`resource.id` | String | 资源的两部分。 |
-| `resource.attributes.<name>` | String | 代码在检查时传入的资源属性。请求管道不设置任何值。 |
+| `resource.attributes.<name>` | String | 资源的属性。请求管道和文档中列出的检查都不设置；对象级规则把事实写进资源 id（[对象级规则](../integration/checks.md#object-level-rules)）。 |
 | `resource.var.<name>` | String | [路径变量](#path-variables)。 |
 | `environment.ip` | Ip | 客户端地址（[Web 集成](../integration/web.md)）。 |
 | `environment.time` | Instant | 请求时间；只有 `time` 读取它。 |
@@ -327,7 +328,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `notBefore` | ISO 日期时间；在它之前条件为假。不带偏移量时按 `zone` 解读。 |
 | `notAfter` | ISO 日期时间；从它开始条件为假。必须晚于 `notBefore`。 |
 | `zone` | 时区 id：`UTC`（默认）、偏移量如 `+08:00` 或 `UTC+8`，或地区如 `Asia/Shanghai`。 |
-| `daysOfWeek` | 非空数组，元素为 `MON` … `SUN`。 |
+| `daysOfWeek` | 非空数组，元素为 `MON` … `SUN`，拼写必须完全一致：其他大小写或名称无法编译。 |
 | `from`、`to` | 一天中的时间，`HH:mm`、`HH:mm:ss` 或 `HH:mm:ss.fff`；要么都写要么都不写，且不能相等。窗口为 `[from, to)`。`from` 晚于 `to` 时窗口跨越午夜，凌晨部分属于窗口开始的那一天。 |
 
 `notBefore`、`notAfter`、`daysOfWeek` 或 `from`/`to` 至少写一个。
@@ -401,19 +402,35 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ## 目录 {#catalogs}
 
-应用文档的 `catalog` 列出应用提供的权限，供控制台和生成器使用。它不参与求值。
+应用文档的 `catalog` 列出应用提供的权限，供控制台和生成器使用。写了 `action` 的条目同时定义这个权限：策略 `perm:<appId>/<id>`，一条 ALLOW 语句。其他条目不参与求值。
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
 | `groups` | 数组，必填 | 权限分组。 |
 | `groups[].name` | 字符串，必填 | |
 | `groups[].description` | 字符串 | |
-| `groups[].spaced` | 布尔，默认 `false` | 该组权限是否打算按空间授予；仅作提示。 |
+| `groups[].spaced` | 布尔，默认 `false` | 用 `action` 写的权限在哪里生效：持有它的角色生效的任何空间；不写时只在默认空间，靠条件 `{ "eq": ["scope.space", ""] }`。 |
 | `groups[].permissions` | 数组，必填 | |
 | `groups[].permissions[].id` | 字符串，必填 | 权限 id；其策略为 `perm:<appId>/<id>`。 |
 | `groups[].permissions[].name`、`.description` | 字符串 | |
+| `groups[].permissions[].action` | 动作模式或非空数组 | 定义这个权限。写了 `action` 的条目和同 id 的策略不能同时存在；id 不能重复。 |
+| `groups[].permissions[].resource` | 同语句的 `resource`；需要 `action` | 不写表示任何资源。 |
 
-没有任何检查确保目录条目有对应的策略，反之亦然。见[角色权限](./role-permissions.md)。
+没有任何检查确保没有 `action` 的条目有对应的策略，反之亦然；这样的条目只用于显示，角色不能列出它。见[角色权限](./role-permissions.md#short-form-permissions)。
+
+## 角色 {#roles}
+
+应用文档（系统角色）和租户文档（自定义角色）可以有 `roles`：谁得到哪些权限，只写一次。概念和示例见[角色权限](./role-permissions.md#roles)。
+
+| 字段 | 文档 | 类型 | 含义 |
+|---|---|---|---|
+| `id` | 两种 | 字符串，必填 | 文档内唯一；不是 `*`，不含 `@`。 |
+| `app` | 租户 | 字符串，必填 | 角色所属的应用；合法的应用 id。 |
+| `space` | 租户 | 字符串 | 不写：任何空间。否则只在那个空间，`""` 是默认空间；不能是保留 id。 |
+| `name`、`description` | 两种 | 字符串 | 用于显示。 |
+| `permissions` | 两种 | id 数组，应用文档也可以写 `"*"` | 角色的权限，可以为空。 |
+
+角色为每个权限派生一条绑定 `role:<roleId>@<app>:<permission>`，策略是 `perm:<app>/<permission>`，主体是该角色（应用文档里不限租户，租户文档里是本租户），`app` 是角色的应用，`space` 是角色的空间或 `*`，排在手写绑定之后。与手写绑定相撞无法编译；`role:` 保留给这些绑定，变更不能写入。一份文档最多派生 50,000 条。
 
 ## 限流规则 {#rate-limit-rules}
 
@@ -501,7 +518,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 | 字段 | 含义 |
 |---|---|
-| `parent` | 被本修订替换的头修订的 `{"revision", "digest"}`（`digest`：40 位小写十六进制）；第一个修订没有。 |
+| `parent` | 被本修订替换的头修订的 `{"revision", "digest"}`（`digest`：`SHA-256:` 加 64 位小写十六进制，即存储的摘要）；第一个修订没有。 |
 | `change` | 发布它的变更。 |
 | `kind` | `PUBLISH`、`ROLLBACK`、`BREAK_GLASS`、`EXPIRE`、`MIGRATE` 或 `BOOTSTRAP`。 |
 | `publishedBy` | `{"tenant", "principal"}`。 |

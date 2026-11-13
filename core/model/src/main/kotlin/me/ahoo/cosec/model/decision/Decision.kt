@@ -88,7 +88,11 @@ sealed interface Cause {
     data class RateLimiterUnavailable(val ruleId: String) : Cause
 }
 
-/** What a permit obliges the pipeline to do before the request proceeds (RFC 0006 §8.2). */
+/**
+ * What a permit obliges the pipeline to do before the request proceeds (RFC 0006 §8.2).
+ * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`, and an
+ * implementation of a listener or a store never matches it exhaustively.
+ */
 sealed interface Obligation {
     /**
      * Spend one permit of [limit] from [bucket] of rule [ruleId]. [bucket] is null when the rule's key could not be read

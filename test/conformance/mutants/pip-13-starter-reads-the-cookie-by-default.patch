@@ -1,0 +1,17 @@
+# Rule: PIP-13
+# Mutant: the starter turns the cookie token on unless told otherwise
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties.kt
+index d8db3325..aafb19b8 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/PipelineProperties.kt
+@@ -41,7 +41,7 @@ class PipelineProperties {
+      * Whether a token may come in the `authorization` cookie; off, since a browser sends a cookie on its own, on a
+      * cross-site request too. Turn it on only with your own CSRF defense.
+      */
+-    var allowCookieToken: Boolean = false
++    var allowCookieToken: Boolean = true
+ 
+     /** The header an API key comes in. No document may read it (`CND-5`, [credentialHeaders]). */
+     var apiKeyHeader: String = DEFAULT_API_KEY_HEADER

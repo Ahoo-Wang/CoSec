@@ -30,8 +30,6 @@ interface EnabledCapable {
 @ConfigurationProperties(prefix = CoSec.COSEC)
 class CoSecProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
-    /** `fail` (the default) stops startup on a `cosec.*` key CoSec does not read; `warn` only logs it. */
-    @DefaultValue("fail") var unknownProperties: UnknownPropertiesMode = UnknownPropertiesMode.FAIL,
     /**
      * The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane
      * records, shadow reports, token revocations, memberships (`<p>:snapshot:…`, `<p>:control:…`, `<p>:token:…`, …),
@@ -43,5 +41,3 @@ class CoSecProperties(
     /** The prefix of one family of this deployment's keys: `<keyPrefix>:<family>`. */
     fun keysOf(family: String): String = "${keyPrefix.trimEnd(':')}:$family"
 }
-
-enum class UnknownPropertiesMode { FAIL, WARN }

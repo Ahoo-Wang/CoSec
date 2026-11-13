@@ -1,0 +1,17 @@
+# Rule: CTL-23
+# Mutant: simulate and explain are authorized on the tenant the request names, not the one that decides it
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+index 0f98c085..69324857 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
+@@ -349,7 +349,7 @@ class DefaultControlPlane(
+     private suspend fun decidable(operator: Operator, request: SimulatedRequest, action: Action): Decidable {
+         val tenant = simulator.tenantOf(request)
+         val key = SnapshotKey.Tenant(tenant.value)
+-        authority.require(operator, key, action)
++        authority.require(operator, SnapshotKey.Tenant(request.tenant.value), action)
+         if (tenant != request.tenant) {
+             throw ChangeRejectedException(
+                 BAD_REQUEST,

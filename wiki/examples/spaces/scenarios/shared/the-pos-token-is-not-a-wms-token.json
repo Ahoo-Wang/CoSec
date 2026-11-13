@@ -1,0 +1,24 @@
+{
+  "description": "One space, two apps: each app has its own token.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "app": "pos",
+    "roles": [
+      "pos.cashier@store-1"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:inbound.read",
+    "resource": {
+      "type": "inbound",
+      "id": "42"
+    },
+    "space": "store-1"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  }
+}

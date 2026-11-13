@@ -33,6 +33,7 @@ import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.control.grant.ProtectedEntry
+import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -43,6 +44,8 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.RoleDefinition
+import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
@@ -63,7 +66,7 @@ import kotlin.time.TimeSource
  *
  * 1. the hard rule ([TenantIsolation]): a 403 that no policy can lift;
  * 2. each target with the [authorizer]: `cosec:write` on each entry an operation touches, `cosec:grant` on the scope
- *    of each binding it puts, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
+ *    of each binding it puts and of each role that derives a binding it did not, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
  *    document. A deny is a 403, an indeterminate decision or an error a 503;
  * 3. for a candidate that checks clean, the grant analysis ([GrantAnalyzer]) of what it grants, as the operator, against
  *    the current heads. What it cannot prove contained is an [Escalation]: approval, never "probably fine" (GRT-2).
@@ -123,55 +126,81 @@ class ChangeAuthority(
         operations: List<Operation>,
         kind: ProvenanceKind = ProvenanceKind.PUBLISH,
         breakGlass: Boolean = kind == ProvenanceKind.BREAK_GLASS,
+        /** The document the operations apply to, which says what a role already derives. */
+        base: PolicyDocument? = null,
     ) {
         isolate(operator, key)
-        if (kind == ProvenanceKind.BREAK_GLASS) {
-            // RFC 0007 §8: requesting and revoking break-glass is the platform's, by cosec:breakglass alone. Such a
-            // change carries break-glass bindings only, or it never checks clean (BreakGlassRules).
-            require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
-            return
-        }
-        if (breakGlass) {
-            require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
-        }
-        for (operation in operations) {
-            when (operation) {
-                is Operation.PutPolicy -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, POLICY, operation.policy.id.value)
-                )
-                is Operation.RemovePolicy -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, POLICY, operation.id.value)
-                )
-                is Operation.PutBinding -> {
-                    require(operator, ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
-                    require(operator, ControlActions.GRANT, scopeOf(key, operation.binding))
-                }
-
-                is Operation.RemoveBinding -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, BINDING, operation.id.value)
-                )
-                is Operation.PutRateLimit -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, RATE_LIMIT, operation.rule.id)
-                )
-                is Operation.RemoveRateLimit -> require(
-                    operator,
-                    ControlActions.WRITE,
-                    entry(key, RATE_LIMIT, operation.id)
-                )
-                is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
-                is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
-                is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
-                is Operation.SetBoundary -> boundary(operator, key)
+        // One confirmation of the control documents for all the decisions of this change, not one for each (#1218).
+        authorizer.batch { via ->
+            if (kind == ProvenanceKind.BREAK_GLASS) {
+                // RFC 0007 §8: requesting and revoking break-glass is the platform's, by cosec:breakglass alone. Such a
+                // change carries break-glass bindings only, or it never checks clean (BreakGlassRules).
+                require(via, operator, ControlActions.BREAKGLASS, ControlResources.document(key))
+                return@batch
+            }
+            if (breakGlass) {
+                require(via, operator, ControlActions.BREAKGLASS, ControlResources.document(key))
+            }
+            for (operation in operations) {
+                authorizeOperation(via, operator, key, operation, base)
             }
         }
+    }
+
+    private suspend fun authorizeOperation(
+        via: ControlAuthorizer,
+        operator: Operator,
+        key: SnapshotKey,
+        operation: Operation,
+        base: PolicyDocument?
+    ) {
+        suspend fun need(action: Action, resource: Resource) = require(via, operator, action, resource)
+        when (operation) {
+            is Operation.PutPolicy -> need(ControlActions.WRITE, entry(key, POLICY, operation.policy.id.value))
+            is Operation.RemovePolicy -> need(ControlActions.WRITE, entry(key, POLICY, operation.id.value))
+            is Operation.PutBinding -> {
+                need(ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
+                need(ControlActions.GRANT, scopeOf(key, operation.binding))
+            }
+
+            is Operation.RemoveBinding -> need(ControlActions.WRITE, entry(key, BINDING, operation.id.value))
+            is Operation.PutRateLimit -> need(ControlActions.WRITE, entry(key, RATE_LIMIT, operation.rule.id))
+            is Operation.RemoveRateLimit -> need(ControlActions.WRITE, entry(key, RATE_LIMIT, operation.id))
+            is Operation.PutRole -> authorizeRole(via, operator, key, operation, base)
+            is Operation.RemoveRole -> need(ControlActions.WRITE, entry(key, ROLE, operation.id.value))
+            is Operation.PutCatalog -> need(ControlActions.WRITE, section(key, "catalog"))
+            is Operation.SetLimits -> need(ControlActions.WRITE, section(key, "limits"))
+            is Operation.SetAttributes -> need(ControlActions.WRITE, section(key, "attributes"))
+            is Operation.SetBoundary -> boundary(via, operator, key)
+        }
+    }
+
+    /** `cosec:write` on the role, and `cosec:grant` on the scope of a binding it derives that [base] does not. */
+    private suspend fun authorizeRole(
+        via: ControlAuthorizer,
+        operator: Operator,
+        key: SnapshotKey,
+        operation: Operation.PutRole,
+        base: PolicyDocument?,
+    ) {
+        require(via, operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
+        newBinding(key, operation.role, base)?.let {
+            require(via, operator, ControlActions.GRANT, scopeOf(key, it))
+        }
+    }
+
+    /**
+     * A binding [role] would derive that [base]'s role of its id does not, or `null` when it only narrows (RFC 0012
+     * §7.2). A role has one scope, so one is enough to check `cosec:grant` on it. A binding of the same id in another
+     * space is a new binding: the space is what `cosec:grant` is about.
+     */
+    private fun newBinding(key: SnapshotKey, role: RoleDefinition, base: PolicyDocument?): Binding? {
+        val (kind, owner) = Revisions.ownerOf(key)
+        val catalog = RoleExpansion.definedInCatalog(base)
+        val before = base?.roles?.firstOrNull { it.id == role.id }
+            ?.let { RoleExpansion.bindings(kind, owner, it, catalog) }.orEmpty()
+            .mapTo(HashSet()) { it.id to it.scope.space }
+        return RoleExpansion.bindings(kind, owner, role, catalog).firstOrNull { (it.id to it.scope.space) !in before }
     }
 
     /**
@@ -210,11 +239,11 @@ class ChangeAuthority(
      * `cosec:boundary` on [key]'s boundary. A tenant's boundary is the platform's ceiling on it (RFC 0007 §9.1): never a
      * tenant principal's to move, whatever it holds (RC1-10).
      */
-    private suspend fun boundary(operator: Operator, key: SnapshotKey) {
+    private suspend fun boundary(via: ControlAuthorizer, operator: Operator, key: SnapshotKey) {
         if (!operator.platform) {
             throw ChangeRejectedException(FORBIDDEN, "only a platform principal sets a tenant's boundary")
         }
-        require(operator, ControlActions.BOUNDARY, boundaryOf(key))
+        require(via, operator, ControlActions.BOUNDARY, boundaryOf(key))
     }
 
     /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
@@ -297,12 +326,14 @@ class ChangeAuthority(
             escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
         }
         val analysis = analyze(operator, key, base, candidate, documents, now)
-        for (entry in analysis.unprotect) {
-            val resource = when (entry) {
-                is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
-                is ProtectedEntry.Binding -> entry(key, BINDING, entry.id.value)
+        authorizer.batch { via ->
+            for (entry in analysis.unprotect) {
+                val resource = when (entry) {
+                    is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
+                    is ProtectedEntry.Binding -> entry(key, BINDING, entry.id.value)
+                }
+                require(via, operator, ControlActions.UNPROTECT, resource)
             }
-            require(operator, ControlActions.UNPROTECT, resource)
         }
         analysis.verdicts.forEach { (fragment, verdict) ->
             if (verdict is GrantVerdict.Unknown) {
@@ -330,9 +361,9 @@ class ChangeAuthority(
         now: Instant,
     ): GrantAnalysis = try {
         val tenant = TenantId(key.tenantId)
-        // An app no key can name has no document, and no request is ever in it: it holds nothing (R2-1 of #1194's review).
-        val named = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp)
-            .filterTo(LinkedHashSet()) { SnapshotKey.App.isValidAppId(it.value) }
+        val granted = GrantDocuments.of(candidate)
+        val named = (granted.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp)
+            .toCollection(LinkedHashSet())
         var listed = listedApps(documents)
         val apps = LinkedHashMap<AppId, PolicyDocument?>()
         val unread = HashSet<AppId>()
@@ -358,7 +389,7 @@ class ChangeAuthority(
             operator.attributes,
             operator.principalBindings,
         )
-        analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
+        analyzer.analyze(grantor, snapshot, GrantChange(tenant, granted), trustRoot = false)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -367,10 +398,8 @@ class ChangeAuthority(
 
     /**
      * Every app document there is, from the app list; `null`, every app unknown, when the list is not there, is not
-     * complete, cannot be read, or has an entry that never named an app document (RC1-4). Such an entry is never
-     * dropped: one the analysis cannot read could be an app document it would miss. An entry earlier builds listed and
-     * the app id rule now refuses (blank, a control character, too long; R2-1 of #1194's review) is: no key names its
-     * document, and no request is ever in that app, so the analysis misses nothing by it.
+     * complete, cannot be read, or has an entry that names no app document (RC1-4, SCP-10). Such an entry is never
+     * dropped: one the analysis cannot read could be an app document it would miss.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun listedApps(documents: ChangeChecks.Context): Set<AppId>? = try {
@@ -383,14 +412,14 @@ class ChangeAuthority(
                 }
             }
 
-            list.entries.any { !wasAppId(it) } -> null.also {
+            list.entries.any { !isAppId(it) } -> null.also {
                 untrusted {
-                    "The app list has an entry that names no app document: run cosec-migrate repair-references; until " +
-                        "then every app a grant reaches is unknown."
+                    "The app list has an entry that names no app document: delete the list and run cosec-migrate " +
+                        "repair-references; until then every app a grant reaches is unknown."
                 }
             }
 
-            else -> list.entries.filter(::isAppId).mapTo(LinkedHashSet(), ::AppId)
+            else -> list.entries.mapTo(LinkedHashSet(), ::AppId)
         }
     } catch (e: CancellationException) {
         throw e
@@ -404,9 +433,6 @@ class ChangeAuthority(
 
     /** Whether [entry] names an app document: a valid [SnapshotKey.App] id, which the wildcard never is. */
     private fun isAppId(entry: String): Boolean = SnapshotKey.App.isValidAppId(entry)
-
-    /** Whether [entry] named an app document under the rule of earlier builds: any id but `*` without `:`. */
-    private fun wasAppId(entry: String): Boolean = entry.isNotEmpty() && ':' !in entry && entry != Match.WILDCARD
 
     /**
      * A WARN that the app list is not to be trusted, at most once per [UNTRUSTED_WARN_INTERVAL]: until
@@ -446,7 +472,7 @@ class ChangeAuthority(
         documents: ChangeChecks.Context,
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
-        if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
+        if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
             escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
         }
         if (key is SnapshotKey.App) {
@@ -475,7 +501,9 @@ class ChangeAuthority(
             val referrers = documents.referrers(key, policy)
             val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
             for (tenant in tenants) {
-                val bindings = documents.head(tenant)?.document?.bindings.orEmpty().filter {
+                val bindings = documents.head(
+                    tenant
+                )?.document?.let(RoleExpansion::effective)?.bindings.orEmpty().filter {
                     it.policy == policy && it.scope.app == Match.Exactly(app)
                 }
                 for (binding in bindings) {
@@ -539,9 +567,7 @@ class ChangeAuthority(
         if (!memberships.active) {
             return "the approver is deactivated"
         }
-        // Only an approval this version recorded names its credential: one from before the upgrade, or from an older
-        // instance, which took tenant approvers for the trust root and API keys for approvers, counts no more; nor
-        // does one by a credential without an id, whose revocation could not be checked.
+        // An approval by a credential without an id counts for nothing: whether it was revoked cannot be checked.
         approval.credentialId ?: return "the approval does not say what credential its approver approved with"
         if (approval.approver.tenant != TenantId.PLATFORM) {
             approverTenantProblem(change)?.let { return it }
@@ -571,6 +597,8 @@ class ChangeAuthority(
             breakGlass = approval.breakGlass,
             issuedAt = approval.issuedAt,
             apiKeyCredential = false,
+            // An approval is recorded only for a credential of the control plane's app: `decideAs` decides in that app.
+            app = null,
         )
         val approver = Operator(approval.approver, memberships, approval.attributes)
         val permitted = TenantIsolation.allows(approver, change.key) &&
@@ -597,8 +625,16 @@ class ChangeAuthority(
         ControlDecision.INDETERMINATE
     }
 
-    private suspend fun require(operator: Operator, action: Action, resource: Resource) {
-        when (decide(operator, action, resource)) {
+    private suspend fun require(operator: Operator, action: Action, resource: Resource) =
+        require(authorizer, operator, action, resource)
+
+    private suspend fun require(
+        via: ControlAuthorizer,
+        operator: Operator,
+        action: Action,
+        resource: Resource
+    ) {
+        when (decide(via, operator, action, resource)) {
             ControlDecision.PERMIT -> Unit
             ControlDecision.DENY -> throw ChangeRejectedException(
                 FORBIDDEN,
@@ -612,9 +648,17 @@ class ChangeAuthority(
         }
     }
 
+    private suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision =
+        decide(authorizer, operator, action, resource)
+
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision = try {
-        authorizer.decide(operator, action, resource)
+    private suspend fun decide(
+        via: ControlAuthorizer,
+        operator: Operator,
+        action: Action,
+        resource: Resource
+    ): ControlDecision = try {
+        via.decide(operator, action, resource)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -674,6 +718,7 @@ class ChangeAuthority(
         const val POLICY = "policy"
         const val BINDING = "binding"
         const val RATE_LIMIT = "rateLimit"
+        const val ROLE = "role"
         const val NOT_ANALYZED = "NOT_ANALYZED"
         const val BREAK_GLASS = "BREAK_GLASS"
 

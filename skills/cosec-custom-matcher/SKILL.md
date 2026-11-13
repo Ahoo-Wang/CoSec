@@ -29,6 +29,10 @@ before writing code.
   `Dispatchers.IO` inside the pipeline.
 - **Report failure by throwing**, never by returning a default. CoSec turns a failure into the safe outcome (503 or the
   statement's `onMissing`); a made-up "not blocked" or "no roles" answer can let a request through.
+- **Give ids that are text.** A principal, tenant, credential, role, space or policy id with an unpaired UTF-16
+  surrogate would share a Redis key with another id (written `?`), so `AuthenticatedPrincipal` and `ApiKey` refuse one
+  when made and a `MembershipProvider` answer holding one fails: each is a 503 (IDN-10). Check with
+  `Identifiers.isWellFormed` (`me.ahoo.cosec.model`) where your source can hold one.
 - **Do not change the decision.** Extensions supply facts or observe outcomes; only documents decide.
 - Do not change the SPI interfaces; ask first if one seems insufficient.
 
@@ -44,7 +48,7 @@ The starter collects these beans:
 | `RateLimiter` | `me.ahoo.cosec.spi.ratelimit` | one; yours replaces the Redis or local limiter | counts rate-limit permits |
 | `Authenticator` | `me.ahoo.cosec.spi.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
 | `BlacklistSource` | `me.ahoo.cosec.runtime.attribute` | one; the starter wraps it in `BlacklistAttributeProvider` | says who and what is blocked |
-| `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | 7.x-style audit events |
+| `AuditEventSink` | `me.ahoo.cosec.spi.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | the flat audit record of each decision |
 | `ControlStore` | `me.ahoo.cosec.control.store` | one, with `cosec-control`; replaces `CoCacheControlStore` | where the control plane keeps its records |
 | `IdGenerator` | `me.ahoo.cosec.spi.id` | one; replaces `RandomIdGenerator` | request, decision event, token (`jti`) and change ids |
 
@@ -81,7 +85,7 @@ fun riskAttributeProvider(risk: RiskClient): AttributeProvider = RiskAttributePr
 - A value left out is **absent** (comparisons with it are false). A thrown exception, a timeout, or a value of the
   wrong type makes every attribute asked for **unavailable**: each statement reading one follows its `onMissing`
   (`indeterminate`, the default, answers 503 unless a DENY matches; `nomatch` treats the statement as not matching).
-- `AttributeRequest` carries only settled facts: subject, resolved scope (null in stage A), action, resource, remote IP,
+- `AttributeRequest` carries only settled facts: tenant, subject, resolved scope (null in stage A), action, resource, remote IP,
   request id, device id. It never carries another attribute's value.
 - `AttributeDeclaration(..., stage = Stage.A)` fetches on every request before the scope is resolved; keep it for
   what decides what to load (the blacklist). The default, stage B, fetches only what the request's statements read.
@@ -146,14 +150,14 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
 ```
 
 - `BEST_EFFORT` (default): queued off the request path into a bounded queue; a full queue drops the event.
-- `Delivery.REQUIRED`: runs before the response, within `cosec.audit.required.timeout` (1s); a failure or timeout turns
+- `Delivery.REQUIRED`: runs before the response, within `cosec.observability.listener.required-timeout` (1s); a failure or timeout turns
   a permit into 503. Make it idempotent by `event.id`. Use it only for an audit that must not be lost.
 - Events carry the decision, deciding statement (`by`) and binding (`via`), break-glass flag, snapshot revisions,
   subject, scope, action, resource, request summary, attribute statuses (never values), trace ids. They carry no
   token, header or external attribute value. `event.evaluationTrace` holds the engine's trace at
   `cosec.pipeline.trace-level` (null at `off`, the default).
 - Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`cosec-kafka`), Micrometer, OpenTelemetry,
-  shadow. A 7.x `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
+  shadow. An `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
 - BEST_EFFORT queues hold `cosec.observability.listener.queue-capacity` (1024) events each; on shutdown they drain for
   up to `cosec.observability.listener.drain-timeout` (5s). A service in gateway mode registers no listeners.
 
@@ -179,7 +183,7 @@ fun interface Authenticator {
 }
 ```
 
-`Credentials` holds the bearer token (`Authorization` header, cookie, or query when allowed) and the API key header.
+`Credentials` holds the bearer token (`Authorization` header, or the query or the cookie when allowed) and the API key header.
 Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), "method")`,
 `Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from
@@ -195,8 +199,11 @@ answers 500 rather than forward an identity that never expires.
 
 Replace `CoCacheControlStore` only to keep control-plane records outside Redis. Besides keyed, conditional reads and
 writes, implement `documents()` (every document with indexed revisions; may name more, never fewer),
-`openChanges()` (changes that may still be open; may name more, never fewer) and `acquireLease` / `releaseLease`
-(release only while the holder still has it). A failed read throws; never answer "absent". Start from
+`openChanges()` (the non-terminal change requests as stored now, each read once), `acquireLease` / `releaseLease`
+(release only while the holder still has it, checked and removed in one atomic step), `withdrawCandidate(key, window)`
+(remove the candidate only while it is still that window's, in one atomic step), `stagedCandidate` and `putCandidate`
+with the digest it read (write only over the candidate read), referrers with the revision that
+indexed each, and `RevisionIndex.reclaiming` kept with the index. A failed read throws; never answer "absent". Start from
 `InMemoryControlStore` and the KDoc of `core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
 
 ## IdGenerator: CoSec's ids

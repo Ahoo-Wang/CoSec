@@ -22,7 +22,7 @@ import java.time.Duration
  * Tuning of a [SnapshotSource]. Defaults are the values RFC 0003 §12 decided (Q7, Q18, Q19); the ones marked there as
  * "confirmed after measurement" may change once §4.8 has real numbers.
  */
-data class SnapshotOptions(
+class SnapshotOptions(
     /**
      * How often a pass starts that revalidates every installed document with a conditional read; while the previous
      * pass is still in flight, the next starts as soon as it ends (#1215). A change whose invalidation was lost, or whose
@@ -63,6 +63,7 @@ data class SnapshotOptions(
     /** How long a reload waits before it retries after the compile queue was full. */
     val rejectedReloadRetry: Duration = Duration.ofMillis(200),
 ) {
+
     init {
         revalidateIntervalProblem(revalidateInterval, lagWarn, failClosedTenants, failClosedMaxLag)?.let {
             throw IllegalArgumentException("revalidateInterval $it.")

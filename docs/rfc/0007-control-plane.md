@@ -129,6 +129,18 @@
 >   - `UnnamedDocumentException` 的类型公开，构造器是 `@InternalCoSecApi`；`ControlStore.openChanges` 的实现必须继续列出这种变更。
 > - **规则：** 修订 `CTL-3`、`SCP-7`、`TNT-4`；见 [RFC 0008](0008-conformance-and-direct-build.md) §3.2 的说明。
 
+> **2026-11-08 修订（#1283，`CTL-27`）**：内置的 `cosec:tenant-admin` 增加本租户文档 `doc/tenant/{t}` 上的 `cosec:skip-shadow`。
+
+> **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。 公开的 `409 change-unreadable` 和 `UnnamedDocumentException` 已删除；确认摘要只有一种形状，没有策略条件时也带 `policyCondition: null`。
+
+> **2026-11-08 修订（#1290）**：头写入是发布的提交点，之后的维护失败只记日志，不把已写入的修订报告为失败（`CTL-2`）。暂存时变更先离开 `CHECKED` 再占槽，一次条件写决定两个调用的胜负（`CTL-6`）。章节操作的字段按文档格式的读取器校验（`CTL-28`）。
+
+> **2026-11-08 修订**：传播查询只统计实例能评估的修订（#1293）。租户策略只有作为平台策略的精确副本才能用同一 id，副本存在期间平台策略冻结（#1298，#1224 选项 A）。
+
+> **2026-11-09 修订（#1301）**：`ControlStore.openChanges` 返回读到的变更，候选写入是条件写（`CTL-6`）；实例状态按实例分 key（§6.5）；一次变更只确认一次控制文档，结束时按修订号复核，文档变化则整批重做（`CTL-8`）。
+
+> **2026-11-09 决定（维护者“要审批”，尚未实现）**：§7.4.4 的“删除不授出权限”只适用于租户文档。平台或 App 层删除含 DENY 的策略或绑定，按 `NOT_ANALYZED` 走审批。
+
 ## 0. 结论先行
 
 第 5 阶段结束时，数据面已经是"读快照 → 纯函数决策 → 义务与监听器"，但写入一侧还停在第 3 阶段：任何拿到 `SnapshotPublisher` 的代码都能改策略，
@@ -316,6 +328,8 @@ cosec-cocache（CoCacheControlStore）──────────┘      cos
 
 ### 5.2 数据
 
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`ControlStore` 的 Redis 实现（`CoCacheControlStore`）现在基于 CoCache 8.0.0 的 `Store`：条件写（原文的 `putIfMatch`）是 CoCache 8 的条件写，仍只对一个 key 做比较并交换；新增的条件删除 `Store.deleteIfMatch` 让候选的撤回与租约的释放只删自己写的那一个（审计批次 E2a，#1268，规则 `CTL-26`）。摘要是 SHA-256，写作 `SHA-256:<64 位十六进制>`：修订记录的 key、修订索引、`provenance.parent.digest`、变更的 `base.digest` 与 `checkedWith`。CoCache 6 写的控制面记录读出即 500，由 `cosec-migrate cocache8` 删除，历史从重新发布的文档重新开始。
+
 | 数据 | CoCache 缓存 | Redis key（`<p>` 是 key 前缀） | 写入 | 读者 | 丢失的后果 |
 |---|---|---|---|---|---|
 | **头**：已发布的快照文档 | `PolicySnapshotCache`（RFC 0003 §4.1，不变） | `<p>:snapshot:platform`、`…:app:<a>`、`…:tenant:<t>`（RFC 0004 §7.1） | 只有控制面（以及 `cosec-migrate`）；`putIfMatch(expected = 基准摘要)` | 数据面、控制面 | 与现在相同（F2a，失败即拒绝） |
@@ -371,7 +385,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
        Conflict    → c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
        结果未知     → getIfChanged(key, digest(d))：Unchanged 即已写入，否则按 Conflict 处理（与 RedisSnapshotPublisher 相同）
   5. revisions:<key> 追加 (修订号, digest(d))                 CAS 循环；失败只记告警，索引可以重建
-  6. 从反向索引中删除 b 有而 d 没有的引用
+  6. 从反向索引中删除 b 有而 d 没有的引用，除非更晚的修订又索引了它
   7. c → PUBLISHED（CAS）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）
 ```
 
@@ -427,7 +441,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 
 - 体积不作为删除条件：按体积删除会让最近几天的修订突然不可解释。每份文档的记录总字节数作为指标 `cosec.control.revisions.bytes` 暴露，超过
   `cosec.control.revisions.warn-bytes`（默认 256 MB）告警。M13 的问题由数量和时间约束，大文档的部署调小 `max-count`。
-- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除经 CoCache 的 `evict`。
+- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除用 CoCache 的 `delete`、`deleteIfMatch`。
 - 数据面的 `explain` 需要的是决策时的修订：审计保留期比 7 天长的部署要么调大 `min-age`，要么接受较早的决策只能在当前快照上解释（`explain` 返回 410，§10.2）。
 
 ### 5.8 跨文档引用：反向引用索引
@@ -461,6 +475,8 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 ---
 
 > **实现说明（2026-10-27，#1087）**：`bootstrap` 写入的绑定 id 是 `platform-admin-<principal>`；`publish` 经 `ControlStore` 写修订（`kind = MIGRATE`），拒绝期限超过 `--break-glass-max-duration` 的 break-glass 绑定。
+
+> **实现说明（2026-11-08，#1268）**：反向索引的每个引用方带上最后索引它的修订，发布后只删除不高于自身修订的条目（`CTL-25`，#1207），所以并发发布同一引用方时“超集”仍然成立。索引条目写在更晚的修订旁边，`history` 不读头之上的条目。回收把从索引取出的内容记入 `RevisionIndex.reclaiming`，失败的删除会重试（#1226），租约用 `deleteIfMatch` 释放。候选只有在仍是该变更的窗口时才撤回，在一次原子操作里完成（`CTL-26`，#1227，§5.5、§6.4）；实例在候选撤回且最后一份报告写入后停止上报（#1210）。
 
 ## 6. 发布流程
 
@@ -919,6 +935,8 @@ RFC 0004 §5.2 方案 A 把 7.x 的数据全部放进平台层；控制面让运
 同名角色跨租户（RFC 0004 §5.4）用同一套方法：在 `Tenant(T)` 中加 `Role(T, admin) → perm:a/…`（N1），再从 `App(a)` 中删除 `Role(null, admin)`。每一步都是普通发布，
 都有影子窗口和修订，回滚就是回滚。`cosec-migrate partition plan` 只生成变更请求，不写头。
 
+> **决定（2026-11-07，维护者"按你推荐"，审计 issue #1224）**：N2 与本节的第 1 步原先互相矛盾：N2 让控制面拒绝租户文档使用平台已有的策略 id（V2 照此实现），第 1 步却要经 `apply` 在租户文档里放入平台策略的完全相同的副本，于是 `partition plan → apply` 第一步就被 V2 拒绝。按本节原本的设计解决（选项 A）：V2 只接受与平台策略**编译结果完全相同**的副本；平台的那条还在时，拒绝对这份副本的任何修改，所以控制面进不了"两层同名但内容不同"的 fail closed 状态；平台删除自己那条时，租户里的副本就是绑定重新解析到的目标，按新授予分析（内容相同即没有新授予）。其他情形下 N2 不变。另一个选项（8.0 不提供分区流程，迁移一开始就用 `--partition by-owner`）没有采用：它收回一项已文档化的迁移路径。由审计批次 E3 实现。
+
 ### 9.5 DENY 上的 `onMissing: nomatch`
 
 - 写这样一条 DENY，变更必须带确认：`confirmations: [{ "policy": "...", "statement": 3, "kind": "deny-nomatch", "digest": "<语句的摘要>" }]`。语句内容变了，确认就不再匹配。
@@ -1029,6 +1047,13 @@ JSON 结构与上面的类型一一对应；`docKey` 在路径中写作 `platfor
 - 现在的 `cosecExplain` actuator 端点删除（N8）：它能解释任意主体，却只受 actuator 暴露配置保护。
 
 > **实现说明（2026-10-27，#1091）**：`Simulator` 用执法流程自己的部件（`ScopeResolver`、数据面的 `PolicyDocumentCompiler` 配平台的 `limits` 与 `attributes`、`CoSecFlatEngine.evaluate` 的 `FULL` trace），没有第二个求值器（`CTL-3`）。`explain` 在 `SnapshotVersion` 上决策，已不保留的修订为 410；`analyze` 列出在作用域内有语句匹配动作与资源的绑定，分 ALLOW 与 DENY，条件只标记不求值。**脱敏**：决策与 trace 只在调用者能读该文档时点名语句，否则决策为 `redacted`，trace 条目被略去并计数；`analyze` 只列可读文档，并统计隐藏的文档数，以及策略位于隐藏文档中的绑定数（不透明）。`simulate` 只看到调用者给出的属性：请求不带外部属性，读外部属性的语句在模拟中是 Indeterminate，与影子窗口相同。
+
+> **实现说明（2026-11-07，#1240，RC 修复批次 D2）**：
+> - **授权在决定所用的租户上（`CTL-23`，RC1-40）。** `simulate` 与 `explain` 的 `cosec:simulate`、`cosec:explain` 在被模拟的作用域实际解析到的租户上授权，即其文档决定这个请求的租户，不在请求只是点名的租户上；当前头、带候选的模拟与 explain 旧修订都如此。没有主体的请求按执法在 `(0)` 上判定，所以点名其他租户的匿名请求在 `(0)` 上授权之后答 400。
+> - **与执法一致（`CTL-3` 修订）。** 被模拟、explain 或分析的 `http` 资源经同一个 `PathNormalizer.normalize`，执法答 400 的路径这里也答 400；带类型的 id 受同样的长度上限。请求把视图中某份文档读的头以不同的值重复发送时答 400（`PIP-12`）。
+> - **编译缓存（RC1-41）。** 编译后的文档按 key 与存储摘要缓存，每个编译形态再按平台文档的摘要区分：至多 64 份、64 MB 的估计堆（存储字节 × 4 为解码、每个编译形态 × 8），`simulate`、`explain` 与 `analyze` 共用；候选在一次调用里只编译一次。explain 在保留修订上的文档、以及超过上界一半的文档，每次调用按需编译，不进缓存。平台文档的任何改动都产生新的编译形态，与 `SNP-4` 的语义相同。
+> - **错误体（`CTL-24`，RC1-39）。** 400 的 `detail` 只带控制面自己的请求校验消息，或点名解析失败的字段，从不带异常消息或类名；解析失败的时间（含超出毫秒范围的）是 400。存储的文档或记录解码失败（含分析读不懂的存储模式）是不带 detail 的 500，按 key 记 ERROR。
+> - **路由。** 控制路由只服务确切的路径：末尾的 `/`、空段、叶子路由之后多出的段都答 404，所以按精确路径写的限流规则成立（`rate-limiting.md` 的控制 API 一节：平台规则按 `scope.tenant` 分桶，break-glass 的撤销路径不在其中）。没有放行主体的请求在读请求体之前答 401。
 
 ### 10.4 从格式描述生成 JSON schema
 

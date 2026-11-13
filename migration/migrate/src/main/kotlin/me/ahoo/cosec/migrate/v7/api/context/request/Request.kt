@@ -13,8 +13,6 @@
 
 package me.ahoo.cosec.migrate.v7.api.context.request
 
-import me.ahoo.cosec.api.context.request.SpaceId
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.migrate.v7.api.context.Attributes
 import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable.Companion.APP_ID_KEY
 import me.ahoo.cosec.migrate.v7.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY

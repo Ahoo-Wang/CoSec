@@ -11,8 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import io.mockk.mockk
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.identity.IdentityGate
@@ -51,8 +56,7 @@ class PipelineModeTest {
             .withConfiguration(configurations)
             .withPropertyValues(
                 "cosec.pipeline.mode=gateway",
-                "cosec.pipeline.gateway.max-age=30s",
-                "${JwtProperties.PREFIX}.enabled=false",
+                "cosec.pipeline.identity.max-age=30s",
             )
             .run { context ->
                 context.startupFailure.assert().isNull()
@@ -65,6 +69,34 @@ class PipelineModeTest {
                 val filter = registration.filter as PipelineServletFilter
                 ReflectionTestUtils.getField(filter, "pipeline").assert().isSameAs(gate)
             }
+    }
+
+    /** U9: nothing there verifies a token, so nothing asks for a secret or a token store unless the service issues. */
+    @Test
+    fun `behind a gateway JWT is off unless turned on`() {
+        val gateway = WebApplicationContextRunner().withConfiguration(configurations)
+            .withPropertyValues("cosec.pipeline.mode=gateway")
+        gateway.run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBeansOfType(TokenConverter::class.java).assert().isEmpty()
+        }
+        gateway.withPropertyValues(
+            "${JwtProperties.PREFIX}.enabled=true",
+            "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+        ).withBean(TokenStore::class.java, { mockk<TokenStore>() }).run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBeansOfType(TokenConverter::class.java).assert().hasSize(1)
+        }
+    }
+
+    @Test
+    fun `an enforcing host has JWT on unless turned off`() {
+        enforcing.run { context ->
+            context.getBeansOfType(TokenConverter::class.java).assert().hasSize(1)
+        }
+        enforcing.withPropertyValues("${JwtProperties.PREFIX}.enabled=false").run { context ->
+            context.getBeansOfType(TokenConverter::class.java).assert().isEmpty()
+        }
     }
 
     private val enforcing = ApplicationContextRunner()

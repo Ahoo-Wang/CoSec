@@ -20,18 +20,18 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | 开启影子窗口、发布 | `cosec:publish` |
 | 跳过影子窗口 | `cosec:skip-shadow` |
 | 审批、驳回 | `cosec:approve` |
-| `simulate`、`explain`、`analyze` | 针对所查询租户的文档分别需要 `cosec:simulate`、`cosec:explain`、`cosec:analyze` |
+| `simulate`、`explain`、`analyze` | 在决定该请求的租户文档上分别需要 `cosec:simulate`、`cosec:explain`（没有主体的请求是 `(0)` 的文档）；在所查询租户的文档上需要 `cosec:analyze` |
 
 `cosec:grant` 在每条绑定的作用域 `scope/<tenant>/<app>/<space>` 上检查：绑定任意 app 或任意空间时那一段为 `*`，默认空间为 `(default)`，所以限制在默认空间中授出的策略写 `scope/acme/order/(default)`。以 `(` 开头的空间 id 归 CoSec 所有，`(default)` 因而不会是你的空间。
 
-可以把三个内置策略绑定给运维人员：`cosec:platform-admin`（对所有文档的所有动作）、`cosec:tenant-admin`（对自己租户文档的 `read`、`write`、`grant`、`publish`、`simulate`、`explain`、`analyze`、`shadow-read`）和 `cosec:tenant-viewer`（同上，但没有 `write`、`grant` 和 `publish`）。
+可以把三个内置策略绑定给运维人员：`cosec:platform-admin`（对所有文档的所有动作）、`cosec:tenant-admin`（对自己租户文档的 `read`、`write`、`grant`、`publish`、`simulate`、`explain`、`analyze`、`shadow-read` 和 `skip-shadow`）和 `cosec:tenant-viewer`（同上，但没有 `write`、`grant`、`publish` 和 `skip-shadow`）。
 
 | 方法和路径 | 作用 |
 |---|---|
 | `GET /documents/{key}` | 当前修订。`{key}` 为 `platform`、`app:<appId>` 或 `tenant:<tenantId>`。 |
 | `GET /documents/{key}/revisions?before=&limit=` | 修订历史，最新的在前（`limit` 为 1 到 200，默认 20）。 |
 | `GET /documents/{key}/revisions/{revision}` | 某个保留的修订；已不再保留时返回 `410`。 |
-| `GET /documents/{key}/diff?from=&to=` | 两个修订之间新增、删除和修改的策略与绑定。 |
+| `GET /documents/{key}/diff?from=&to=` | 两个修订之间（[展开后](./role-permissions.md#roles)的文档）新增、删除和修改的策略与绑定，按原样的 `roles`，以及 `sections`：其余部分（目录、限制、属性、边界或限流规则）是否不同，按其内容比较。 |
 | `GET /documents/{key}/revisions/{revision}/propagation` | 最近上报的实例中有多少已安装该修订。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
@@ -39,7 +39,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
-错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。之前的构建为不能作为应用 id 的应用写入的变更记录不再可读：对可以读取平台文档的平台主体，查看或放弃它是 `409` `change-unreadable`，其详情说明由运维人员移除它的记录，且从不重复存储的 id；对其他任何人，则与不存在的变更相同。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
+错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息。路径、查询或请求体中任何位置的字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就是 `400`（`IDN-10`）：Redis key 会把它写成 `?`，指向另一个 id。存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 或含空段的路径是 `404`。记录解码失败的变更（包括属于不能作为应用 id 的应用的变更），对每个调用方都是不带详情的 `503`（`SCP-10`）。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
 
 ## 校验策略 {#validating-policies}
 
@@ -48,7 +48,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | 检查 | 状态码 | 发现 |
 |---|---|---|
 | `V1` | 400 | 候选无法读回为文档。 |
-| `V2` | 400、422、503 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；租户策略复用了平台策略的 id；平台策略使用了某个租户文档已经定义或绑定的 id，发现中列出这些文档（这类租户的文档读不到时为 `503`）；候选中任何位置的绑定所在的应用不能作为应用 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符；位于 `$.bindings[i].app` 的 `400`：仍含有这种绑定的文档必须移除它，只移除它的变更是合法的）。 |
+| `V2` | 400、422、503 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；租户策略复用了平台策略的 id 但不是它的完全相同的副本（完全相同的副本是[分区流程](../operations/upgrading.md#partition-plan)的第一步）；平台策略使用了某个租户文档已经定义或绑定的 id，或在某个租户文档持有它的副本时被修改，发现中列出这些文档（这类租户的文档读不到时为 `503`）；候选中任何位置的绑定所在的应用不能作为应用 id（空白、`*`、含 `:`、控制字符或落单的代理项、超过 128 个字符；位于 `$.bindings[i].app` 的 `400`：仍含有这种绑定的文档必须移除它，只移除它的变更是合法的）。 |
 | `COMPILE` | 422 | 某个策略、条件、模式、绑定或规则无法用平台的限制、平台声明的属性以及控制面主机的属性提供者声明的属性编译。 |
 | `REFERENCES` | 422 | 绑定指向的策略无处可解析；平台变更删除了其他文档引用的策略（自己定义了同 id 策略的租户不算）；租户的 `boundary` 不是平台边界。 |
 | `OPERATION` | 422 | 操作删除了不存在的内容，或设置了该文档没有的字段。 |
@@ -79,24 +79,37 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 | 字段 | 含义 |
 |---|---|
-| `tenant` | 必填。 |
-| `principal` | 主体 id；匿名请求时省略。 |
+| `tenant` | 必填：主体的租户，即请求在其中决策的租户。匿名请求为 `(0)`。 |
+| `principal` | 主体 id；匿名请求时省略，执法在租户 `(0)` 上决策它。 |
 | `roles`、`policies` | 成员关系，按令牌声明的写法：`role` 或 `role@space`，以及附加策略的 id。 |
 | `app`、`space` | 声明的作用域；空间按数据面的方式与角色核对。 |
 | `action` | 必填，`service:verb`（未映射的 HTTP 请求为 `http:GET`）。 |
-| `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。 |
+| `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。`http` 路径与请求路径经同一个规范化：执法拒绝的路径（点号段、格式错误的转义、超过 2,048 个字符或每个 `/` 段 256 个）是 `400`，路径参数（`;v=2`）被去掉。类型化 id 受同样的长度限制。 |
 | `remoteIp`、`time` | 客户端地址，以及 ISO 时刻（默认：当前）。 |
 | `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`：此时附加的策略和主体绑定不授予任何东西，它们的 DENY 照样生效。只接受布尔值。 |
 
-响应包含 `enforced`、要求时的 `candidate`，以及 `differs`。每个决策为 `Permit`、`Deny`、`Indeterminate`（带 `cause`）或 `Rejected`（作用域被拒绝），并给出做出决策的语句（`by`）和完整的候选追踪。来自你无权读取的文档的语句会被省略，并计入 `redacted`。
+响应包含 `enforced`、要求时的 `candidate`，以及 `differs`。每个决策为 `Permit`、`Deny`、`Indeterminate`（带 `cause`）或 `Rejected`（作用域被拒绝），并给出做出决策的语句（`by`）和完整的候选追踪。来自你无权读取的文档的语句会被省略，并计入 `redacted`。`differs` 比较两个决策的内容，失败按其类型和消息比较，所以两侧相同的编译失败不算不同。
 
 模拟读取执行时读取的文档：平台文档、租户文档，以及在请求在其应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时的应用文档（[策略语言](./language.md)）。对租户文档的变更，由候选决定这一点：添加了这种绑定的变更会读取应用文档，移除了最后一个这种绑定的变更则不再读取。无法编译的租户文档按未解析处理，因此与数据面一样，它的绑定不会让请求读取应用文档；对请求没有读取的文档给出 `candidate` 时为 `400`。
 
+模拟在请求作用域实际解析到的租户上授权并决策，也就是决定它的那份文档的租户：主体的租户，匿名请求则与数据面一样是 `(0)`。
+匿名请求指定其他任何 `tenant` 都是 `400`，这在检查 `(0)` 上的 `cosec:simulate` 之后；因此 `acme` 的管理员无法用匿名请求
+读取 `(0)` 文档上的决策。
+
+以不同的值两次发送它所读文档（条件、边界或限流 key 中）读取的某个头的请求是 `400`，与执法在决策前拒绝它一样（`PIP-12`）；
+相同的重复算一个值。回答不点名是哪个头。执法会拒绝的 `resource` 也是 `400`，`analyze` 的资源也一样处理。
+
 模拟没有令牌属性，也不获取外部属性：读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理，因此在这里通常为 Indeterminate。
+
+控制面对每份存储的文档按其内容只解码、编译一次：在同样的头上重复 `simulate`、`explain` 或 `analyze` 不会再次编译，头
+移动之后，在下次读到时编译。`candidate` 每次调用编译一次，explain 在保留修订上的文档也是。保留的内容按估计的堆限定在 64 MB：一份文档解码后计其存储大小的
+4 倍，每个编译形态（按编译时的平台文档，至多两个）再计 8 倍，所以存储为 1 MB 的租户文档计 12 MB。估计超过其一半的文档（存储超过约 2.7 MB）从不保留：每次读它的调用都解码、编译一次，与候选一样，
+因此它永远不会把其他文档挤出去。按租户限制控制 API，以限定这种文档的开销。要限制一个调用者的调用开销，请按租户限制控制 API
+（[限流](./rate-limiting.md#the-control-api)）。
 
 ## 用 explain 调试决策 {#debugging-a-decision-with-explain}
 
-`explain` 接受同样的 `request`，以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app`。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
+`explain` 接受同样的 `request`（与 `simulate` 一样授权和检查），以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app`。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
 
 ## 变更 {#changes}
 
@@ -128,11 +141,13 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `removePolicy` | `id`，可选 `ifMatch` | 删除策略。 |
 | `putBinding` | `binding`，可选 `ifMatch` | 新增绑定，或替换同 id 的绑定。 |
 | `removeBinding` | `id`，可选 `ifMatch` | 删除绑定。 |
+| `putRole` | `role`，可选 `ifMatch` | 新增角色，或整体替换同 id 的角色。适用于应用和租户文档。 |
+| `removeRole` | `id`，可选 `ifMatch` | 删除角色。 |
 | `putRateLimit` | `rateLimit`，可选 `ifMatch` | 添加限流规则，或在原位置替换同 id 的规则。 |
 | `removeRateLimit` | `id`，可选 `ifMatch` | 删除限流规则。 |
 | `putCatalog` | `catalog` | 设置应用文档的目录；没有 `catalog` 时删除目录。 |
-| `setLimits` | 包含全部六个限制的 `limits` | 设置平台的限制；没有 `limits` 时恢复默认值。 |
-| `setAttributes` | `attributes` | 设置平台声明的属性；没有 `attributes` 时删除该字段。 |
+| `setLimits` | 包含全部六个限制的 `limits`，每个都是与文档中相同的正整数 | 设置平台的限制；没有 `limits` 时恢复默认值。其他类型的值返回 `400`。 |
+| `setAttributes` | `attributes`，与文档中相同的数组 | 设置平台声明的属性；没有 `attributes` 时删除该字段。不是属性数组时返回 `400`。 |
 
 `ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。设置租户的 `boundary` 或平台的默认边界请使用 `apply`。租户的边界属于平台：租户主体的 `REPLACE` 或回滚如果会删除或改变平台设定的边界，返回 `403`。限流规则变更如何授权和审批见[限流](./rate-limiting.md#publishing-rules)。
 
@@ -154,7 +169,7 @@ flowchart LR
     X -->|rebase| D
 ```
 
-一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，撤销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
+一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，撤销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
 
 ## 在影子模式中试运行变更 {#trying-changes-in-shadow-mode}
 
@@ -183,7 +198,9 @@ flowchart LR
 
 窗口比较的是决策，所以只涉及[限流规则](./rate-limiting.md#publishing-rules)的变更在窗口中显示不出差异。
 
-`POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。只创建或吊销 break-glass 绑定的变更没有窗口。
+窗口的候选暂存期间，实例每隔 `cosec.authorization.shadow.report-interval`（10 秒）写一次它对该窗口的报告。候选撤回之后（窗口关闭，或变更被放弃、驳回、发布或抢占），实例再写一次报告，然后忘掉这个窗口；报告在这最后一次写入 8 天后过期。变更只撤回自己的候选：期间另一个变更已占用暂存槽并暂存了自己的候选时，那个候选保留（`CTL-26`）。
+
+`POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。`cosec:tenant-admin` 只在自己租户的文档上持有它（`CTL-27`）。跳过窗口不改变审批：分析无法证明操作者已持有的授出仍要等待审批。只创建或吊销 break-glass 绑定的变更没有窗口。
 
 ### 抢占被占用的暂存槽 {#taking-a-busy-slot}
 
@@ -243,7 +260,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }
 ```
 
-窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。随后发布会以发布者身份在当前文档上重新检查一切：发布者对每个条目的权限、授权分析，以及审批。审批必须覆盖此时发现的升级、未过期、针对此候选、既不来自作者也不来自发布者，且审批人仍持有 `cosec:approve`。审批人按其审批时所用的凭证重新检查：用带上限的 key 给出的审批，在发布时不计入审批人自己绑定中的 ALLOW；不是用 CoSec 自己的令牌给出的审批，不计入其 break-glass 绑定。审批不再成立时，变更回到 `AWAITING_APPROVAL`，不发布任何内容。文档已变化，或其间另一个变更取走了该文档的暂存槽时，变更为 `CONFLICTED`；候选无法针对当前文档编译时，变更为带有检查结果的 `DRAFT`。修订已写入但答复丢失的发布，重试时为 `PUBLISHED`：控制面在修订链上找到这个变更自己的修订（即使其上已有后来的修订），补做写入之后的步骤，并以修订记录的发布人身份记录事件。
+窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。随后发布会以发布者身份在当前文档上重新检查一切：发布者对每个条目的权限、授权分析，以及审批。审批必须覆盖此时发现的升级、未过期、针对此候选、既不来自作者也不来自发布者，且审批人仍持有 `cosec:approve`。审批人按其审批时所用的凭证重新检查：用带上限的 key 给出的审批，在发布时不计入审批人自己绑定中的 ALLOW；不是用 CoSec 自己的令牌给出的审批，不计入其 break-glass 绑定。审批不再成立时，变更回到 `AWAITING_APPROVAL`，不发布任何内容。文档已变化，或其间另一个变更取走了该文档的暂存槽时，变更为 `CONFLICTED`；候选无法针对当前文档编译时，变更为带有检查结果的 `DRAFT`。修订已写入但答复丢失的发布，重试时为 `PUBLISHED`：控制面在修订链上找到这个变更自己的修订（即使其上已有后来的修订），补做写入之后的步骤，并以修订记录的发布人身份记录事件。写入头之后无法完成后续步骤的发布（存储失败或超时）返回 `503`：修订已经生效，再发布一次这个变更即可结算，不会增加修订。
 
 写入时只比较该文档自己的头。检查读过的其他文档（例如同一时刻落地的平台变更）可能在发布的最后一次检查与写入之间变化；这时控制面重新分析这次变更，记 `HEADS_MOVED`，分析发现了无人审批的升级项时记 `REVIEW_NEEDED`。变更保持已发布：为什么这是安全的、如何复核这类事件，见[一次发布比较什么](../operations/storage.md#what-a-publish-compares)。
 
@@ -257,7 +274,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 { "query": { "tenant": "acme", "app": "order", "space": "team-a", "action": "order:read", "resource": "order/42" } }
 ```
 
-响应列出 `allows` 和 `denies`：平台文档、租户文档以及（给出 `app` 时）应用文档中，作用域符合查询、且其策略有语句匹配该动作和资源的每个绑定，包括其文档、主体、应用、空间、策略和语句序号。`conditional` 标记带有条件的语句或策略，条件不会被求值。省略 `app` 和 `space` 时匹配任意应用或空间的绑定。你无权读取的文档计入 `hidden`，指向这些文档中策略的绑定计入 `opaque`。附加策略不会列出：它们取决于每个主体的成员关系。
+响应列出 `allows` 和 `denies`：平台文档、租户文档以及（给出 `app` 时）应用文档中，能在所查询租户生效、作用域符合查询、且其策略有语句匹配该动作和资源的每个绑定，包括其文档、主体、应用、空间、策略和语句序号。`conditional` 标记带有条件的语句或策略，条件不会被求值。省略 `app` 和 `space` 时匹配任意应用或空间的绑定。你无权读取的文档计入 `hidden`，指向这些文档中策略的绑定计入 `opaque`。作用域为所查询应用的租户绑定，在你可以读取该应用文档时，会解析到该应用的权限策略，与执行时一样。附加策略不会列出：它们取决于每个主体的成员关系。绑定是否在该租户生效，按引擎查找它的方式判断：主体绑定只对该租户的主体生效，指定了租户的角色绑定只在该租户生效，未指定租户的角色绑定和 `Anyone` 在每个租户生效。所以平台中给 `principal:globex/bob` 的绑定不会列在 `acme` 下。
 
 ## CI 中的策略 {#policies-in-ci}
 
@@ -273,12 +290,12 @@ val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platf
 val acme = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", File("tenant-acme.json").readBytes())
 // The platform's limits and declared attributes, as the control plane checks a candidate.
 val compiler = PolicyDocumentCompiler.forPlatform(platform)
-compiler.compile(platform)
-compiler.compile(acme)
+compiler.validate(platform)
+compiler.validate(acme)
 compiler.checkReferences(acme, platform)
 ```
 
-`decode` 抛出 `SnapshotFormatException`，`compile` 抛出 `DocumentCompileException`，其中包含每个错误及其 JSON 路径。
+`decode` 抛出 `SnapshotFormatException`，`validate` 抛出 `DocumentCompileException`，其中包含每个错误及其 JSON 路径。
 
 ### 测试决策 {#testing-decisions}
 
@@ -352,11 +369,45 @@ class PolicyTest {
 | `description` | 自由文本。 |
 | `credential` | 主体：`tenant`（默认 `acme`）、`id`（默认 `alice`）、`roles`（`role` 或 `role@space`）、`policies`（附加策略）、`attributes`；匿名调用方用 `"anonymous": true`。 |
 | `membershipProvider` | `MembershipProvider` 返回的成员关系，按管道的方式与凭证中的合并：按空间分组的 `roles`（`{"": ["reader"]}`）和 `attachments`；或 `{"fails": "message"}`。 |
-| `request` | `action`（默认 `order:read`）、`resource`（`type`、`id`、`attributes`；默认 `order/1`）、`app`、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
+| `request` | `action`（默认 `order:read`）、`resource`（`type`、`id`、`attributes`；默认 `order/1`）、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
 | `expect` | `decision`：`Permit`、`Deny`、`Indeterminate` 或 `Rejected`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause` 或 `reason`。 |
+
+`http.origin.host` 和 `http.referer.host` 读取 `headers` 的方式与实例一致：取 `Origin` 或 `Referer` URL 的主机并折叠为 ASCII 小写，`https://EXAMPLE.com` 即 `example.com`。`cosec-testkit` 会带上其 API 用到的依赖（引擎、JUnit 的 `DynamicTest`，以及 `evaluate(JsonNode)` 中 Jackson 的 `JsonNode`）：应用只需声明上面那一条依赖。
 
 只比较 `expect` 写出的字段：`{"decision": "Permit"}` 不论哪条语句允许都通过，写上 `by` 则固定为某条语句，并整体比较。拼错的字段是错误，不会被忽略。
 
 测试工具只评估决策。文档的编译方式与实例相同：使用平台文档的 `limits` 和它声明的 `ext.*` 属性。只由宿主的 `AttributeProvider` 声明的属性在测试工具中无法编译，而且不运行任何提供者，所以读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理。限流规则不运行；请求直接给出动作和资源，不经过路由映射。依赖外部属性值的决策可用 [`simulate`](#simulating-a-request) 试验，它按控制面主机的提供者编译。
+
+### 用真实管道测试代码 {#testing-your-code-against-a-real-pipeline}
+
+`PolicyTestKit` 断言文档的决策，`PipelineFixture` 则运行决策前后的其余部分：用你的文档，构建基于每个实例运行的编译器、快照源和引擎的真实 `Pipeline`。当被测代码读取已放行请求的 `SecurityContext`，或处理函数的结果取决于 CoSec 回答的状态码和 problem 时使用它。它是 `@ExperimentalCoSecApi`，与测试工具的其余部分相同。
+
+```kotlin
+@file:OptIn(ExperimentalCoSecApi::class)
+
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.testkit.PipelineFixture
+import org.junit.jupiter.api.Test
+import java.nio.file.Path
+
+class OrderPermissionsTest {
+    private val reader = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+
+    @Test
+    fun `a reader may read`() = runBlocking {
+        PipelineFixture.load(Path.of("src/test/resources/policies/documents")).use { fixture ->
+            val request = fixture.request("GET", "/orders/1", reader)
+            check(fixture.evaluate(request).status == 200)
+            // 处理函数为已放行的请求读取到的上下文；进一步的检查经过同一个管道。
+            val context = fixture.securityContext(request)
+            check(AuthorizationChecker(fixture.pipeline).check(context, "http:DELETE", "/orders/1").not())
+        }
+    }
+}
+```
+
+`PipelineFixture.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。文档无法编译时，构建夹具就会失败。`Principal` 说明请求是谁，如同令牌一样：`tenant`、`roles`（`role` 或 `role@space`）、`policies`、`app` 和 `attributes`；不提供时请求是匿名的。它只替换凭证检查：状态码、`SecurityContext` 和决策都来自管道。用完关闭夹具，通常一个测试类一个。
 
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。

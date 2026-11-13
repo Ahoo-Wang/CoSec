@@ -28,7 +28,7 @@ fun interface RateLimiter {
     suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult
 
     companion object {
-        /** [limit] as the 7.x sliding window computes it, so both limiters answer alike. */
+        /** [limit] as the sliding window takes it; both limiters build their window here, so they answer alike. */
         fun window(limit: RateLimitSpec): RateLimit = RateLimit(limit.permitsPerSecond, limit.windowSeconds)
     }
 }

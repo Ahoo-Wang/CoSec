@@ -84,7 +84,7 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
             }
             val value = when (kind) {
                 BlacklistKind.PRINCIPAL -> request.subject.takeIf { it.authenticated }
-                    ?.let { BlacklistKind.principal(it.tenantId, it.id) }
+                    ?.let { BlacklistKind.principal(request.tenant.value, it.id) }
                 BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }
                 BlacklistKind.DEVICE -> request.deviceId.takeIf { it.isNotEmpty() }
             } ?: continue

@@ -10,6 +10,14 @@
 > RFC 0005 的 AST，不再有"绑定模型 + 7.x 匹配器"的中间格式，也不做 `UnifiedAuthorization`；PR-5 不做 `verify`（RFC 0008 §4.1、§6 Q3）。
 > §5.3 的 C1–C6 不再是差异类别，而是登记在一致性套件中的规则；P1′、P8–P12 作为规范性质保留（RFC 0008 §3.5）。下文保留原样以便追溯。
 
+> **2026-11-08 修订（#1284，`IDN-11`）**：§4.5.1 的租户声明：缺失是默认租户，空字符串让令牌无效（401）。
+
+> **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。
+
+> **2026-11-08 修订（#1297）**：审计记录用 `AuditVia` 与 `AuditDocument`，正文提到的 `AuditSourceType` 已删除。
+
+> **2026-11-09 修订（#1302）**：§4.6 的“声明的 app”路径已删除，App 来自宿主或凭证（RFC 0012 §3.5，`SCP-11`）。
+
 ## 0. 结论先行
 
 第 4 阶段把 CoSec 现在的三套挂载方式（全局策略、主体直接引用的策略、角色权限）统一成**一种数据**：
@@ -206,6 +214,7 @@ class Scope internal constructor(
 - **`*` 是保留值（第一轮审查，2026-10-26）**：文档用 `*` 表示 `Match.Any`（§7.1），所以 `AppId`、`SpaceId` 和 `Match.Exactly` 都不接受 `*`
   （`Match.WILDCARD`），否则一条授予给字面空间 `*` 的数据解码回来就成了"所有空间"。`ScopeResolver` 把声明为 `*` 的应用按 `APP_MISMATCH`、
   空间按 `SPACE_NOT_MEMBER` 拒绝。
+- **id 不含落单的 UTF-16 代理项（2026-11-07，#1254，RC1-52，`IDN-10`）**：每种 id 的文本规则都由 `me.ahoo.cosec.model.Identifiers` 判定：落单的高位或低位代理项不是字符，含它的 id 在进入 CoSec 处被拒绝。原因是 Redis 的 key 按 UTF-8 写，落单的代理项被写成 `?`，于是 `beta\uD800` 与 `beta?` 共用一个 key。成对的代理项照常。`ScopeResolver.isValidAppId` 在同一个循环里检查它与控制字符（RC1-15），所以 app、租户 id 与 `SnapshotKey` 都遵守它。
 
 ### 4.2 `Binding`
 
@@ -324,6 +333,8 @@ interface MembershipProvider {
 
 > **实现说明（2026-11-02，#1188）**：CoCache 6.9 起，没有加载器的缓存读失败默认抛出，所以降级读改由 CoSec 在两个吊销缓存上显式设为
 > `read-failure: degrade`；customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）。降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
+>
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：两个吊销表是 CoCache 8 的 `Store`，读失败按 `unknown-read: absent` 读作"没有吊销"（仍是 `PIP-7` 文档化的例外），但只在 Redis 读失败时：CoCache 6 写的值（包括缓存缺失标记）抛出格式错误，答 503，从不读成"没有吊销"（`CoCache6ValuesTest`）。吊销表的 `read-timeout` 固定为命令超时，`cocache.defaults.store.read-timeout` 一类的全局默认值不能把它缩短，否则更多的读会超时并读作"没有吊销"。
 
 ### 4.6 `ScopeResolver`
 

@@ -1,31 +1,31 @@
 # Rule: IDN-4
-# Mutant: refresh builds the principal without the act check, so a delegation token refreshes into a token for its subject
+# Mutant: refreshing a delegation token works, though verifying it does not: the actor gets a plain token of the party it acts for
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index 6d751927..b2c67391 100644
+index f46b86d3..37d9e167 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -75,7 +75,7 @@ class JwtTokenVerifier(
+@@ -76,7 +76,7 @@ class JwtTokenVerifier(
          if (decodedRefreshToken.subject != decodedAccessToken.id) {
              throw RefreshTokenMismatchException()
          }
--        return Jwts.toPrincipal(decodedAccessToken)
-+        return Jwts.toPrincipal(decodedAccessToken, refusingDelegation = false)
+-        return Jwts.toVerifiedToken(decodedAccessToken)
++        return Jwts.toVerifiedToken(decodedAccessToken, refusingDelegation = false)
      }
  
      @Suppress("TooGenericExceptionCaught")
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-index 7574b067..3dafed53 100644
+index 81bd0e40..e98290f1 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-@@ -55,8 +55,8 @@ internal object Jwts {
-      * [decodedAccessToken] as a principal; the caller has verified its signature. A delegation token (an `act` claim)
-      * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+@@ -49,8 +49,8 @@ internal object Jwts {
+      * says anything: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+      * A token with no `sub` or `jti` is invalid.
       */
--    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
+-    fun toVerifiedToken(decodedAccessToken: DecodedJWT): VerifiedToken {
 -        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
-+    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT, refusingDelegation: Boolean = true): T {
++    fun toVerifiedToken(decodedAccessToken: DecodedJWT, refusingDelegation: Boolean = true): VerifiedToken {
 +        if (refusingDelegation && !decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
              throw DelegationUnsupportedException(
                  "The token delegates (it carries an `act` claim), which CoSec does not support."

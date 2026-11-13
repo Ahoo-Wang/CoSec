@@ -48,6 +48,7 @@ import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import java.io.InputStream
+import java.net.URLDecoder
 import org.springframework.web.reactive.function.server.RequestPredicates as ReactivePredicates
 import org.springframework.web.reactive.function.server.RouterFunction as ReactiveRouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions as ReactiveRouterFunctions
@@ -60,12 +61,13 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 /**
  * The control API as functional routes under `cosec.control.http.base-path` (RFC 0007 §10.2). The pipeline has
  * already authenticated and permitted the request; [ControlHttp] authorizes each control-plane action again as the
- * principal of that request, and answers 401 when no permitted request stands behind it.
+ * principal of that request, and answers 401 when no permitted request stands behind it, on either stack before any of
+ * the body is read (RC1-41).
  */
 @AutoConfiguration(after = [CoSecControlAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnBean(ControlHttp::class)
-class CoSecControlRoutesAutoConfiguration {
+internal class CoSecControlRoutesAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
     @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.ServerWebExchanges"])
@@ -78,14 +80,21 @@ class CoSecControlRoutesAutoConfiguration {
             val base = apiRootOf(properties)
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
                 val security = RequestSecurity.of(request.exchange().getSecurityContext())
-                request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY).flatMap { body ->
+                // Nothing is read for a request no permitted principal stands behind, an anonymous permit included:
+                // ControlHttp answers it 401 (RC1-41, review L1 of #1240).
+                val body = if (security?.principal == null) {
+                    Mono.just(EMPTY)
+                } else {
+                    request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY)
+                }
+                body.flatMap { bytes ->
                     mono(Dispatchers.Default) {
                         http.handle(
                             ControlHttpRequest(
                                 request.method().name(),
                                 relative(request.path(), base),
                                 request.queryParams().toSingleValueMap(),
-                                body
+                                bytes
                             ),
                             security,
                         )
@@ -113,15 +122,17 @@ class CoSecControlRoutesAutoConfiguration {
             return ServletRouterFunctions.route(ServletPredicates.path("$base/**")) { request ->
                 val servlet = request.servletRequest()
                 val security = RequestSecurity.of(servlet.getSecurityContext())
-                // Nothing is read for a request no permitted principal stands behind (ControlHttp answers 401), and
-                // never more than max-body-size: the body is read before ControlHttp authorizes the action.
-                val body = if (security == null) {
+                // Nothing is read for a request no permitted principal stands behind, an anonymous permit included
+                // (ControlHttp answers 401), and never more than max-body-size: the body is read before ControlHttp
+                // authorizes the action. The query comes from the query string alone: the request's parameters would
+                // read a form body (review L1 of #1240).
+                val body = if (security?.principal == null) {
                     EMPTY
                 } else {
                     readBody(servlet.inputStream, maxBodySize)
                         ?: return@route tooLarge(maxBodySize)
                 }
-                val query = request.params().toSingleValueMap()
+                val query = queryOf(servlet.queryString)
                 // A servlet thread is the caller's own: waiting on it blocks no event loop.
                 val response: ControlHttpResponse = runBlocking(Dispatchers.Default) {
                     http.handle(
@@ -140,7 +151,7 @@ class CoSecControlRoutesAutoConfiguration {
      * On a Spring Cloud Gateway host the gateway's global filter runs on its routes only, so the control routes would
      * never pass the pipeline and every call would be 401. A [PipelineWebFilter] limited to the control base path
      * authorizes them as on a WebFlux host; the gateway's own routes keep the gateway filter, and actuator endpoints
-     * stay outside CoSec, as before.
+     * stay outside CoSec.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
@@ -189,6 +200,28 @@ class CoSecControlRoutesAutoConfiguration {
 
         fun basePathOf(properties: ControlProperties): String = "/" + properties.http.basePath.trim('/')
 
+        /** The parameters of [queryString], decoded as a servlet decodes them, the first value of each name. */
+        fun queryOf(queryString: String?): Map<String, String> {
+            if (queryString.isNullOrEmpty()) {
+                return emptyMap()
+            }
+            val query = LinkedHashMap<String, String>()
+            for (pair in queryString.split('&')) {
+                if (pair.isEmpty()) continue
+                val separator = pair.indexOf('=')
+                val name = if (separator < 0) pair else pair.substring(0, separator)
+                val value = if (separator < 0) "" else pair.substring(separator + 1)
+                // A pair that does not decode is left out, as a servlet container leaves it out of the parameters.
+                val decoded = try {
+                    URLDecoder.decode(name, Charsets.UTF_8) to URLDecoder.decode(value, Charsets.UTF_8)
+                } catch (_: IllegalArgumentException) {
+                    continue
+                }
+                query.putIfAbsent(decoded.first, decoded.second)
+            }
+            return query
+        }
+
         /**
          * Where this version of the API is served: `{base-path}/v1`. The version is fixed here, not part of
          * `base-path`, so moving the API never drops it.
@@ -202,7 +235,7 @@ class CoSecControlRoutesAutoConfiguration {
 }
 
 /** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
-class ControlRoutesWebFilter(
+internal class ControlRoutesWebFilter(
     private val delegate: PipelineWebFilter,
     private val basePath: String
 ) : WebFilter, Ordered {

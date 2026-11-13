@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * What a condition reads (RFC 0005 §3.3). The host builds one per request from `AuthzRequest`.
@@ -24,6 +28,7 @@ package me.ahoo.cosec.model.condition
  * Each method is called only with attributes of its type. [AttributeType.LABELS] attributes are never read: conditions
  * derive them from the host attribute they belong to.
  */
+@InternalCoSecApi
 interface ConditionInput {
     /** A [AttributeType.STRING] attribute. Header names arrive in ASCII lower case. */
     fun string(attribute: Attribute): String?
@@ -40,6 +45,7 @@ interface ConditionInput {
     /** An [AttributeType.INSTANT] attribute in epoch milliseconds, or [NO_TIME]. */
     fun time(attribute: Attribute): Long
 
+    @InternalCoSecApi
     companion object {
         /** The value of an absent [AttributeType.INSTANT] attribute. */
         const val NO_TIME: Long = Long.MIN_VALUE

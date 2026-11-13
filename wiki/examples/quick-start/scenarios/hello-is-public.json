@@ -1,0 +1,16 @@
+{
+  "description": "GET /hello needs no token.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/hello"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -1,0 +1,17 @@
+# Rule: SCP-11
+# Mutant: an API key's app is not read, so every key declares none and a service with an app refuses them all
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
+index 7dc9b467..827d98bf 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/ApiKeyAuthenticator.kt
+@@ -75,7 +75,7 @@ class ApiKeyAuthenticator(
+             breakGlass = false,
+             issuedAt = null,
+             apiKeyCredential = true,
+-            app = apiKey.app?.let(::AppId),
++            app = null,
+         )
+         return AuthnResult.Authenticated(principal, method)
+     }

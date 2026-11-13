@@ -8,6 +8,12 @@
 > RFC 0007 PR-6 的分析部分提前作为单独的 PR 开工（§4.5）；RC 前提增加 AOT 冒烟、RC 安全审查与示例（§3.9）；新增过程规则（§4.7）。
 > 各处就地标注"2026-10-26 修订（路线图审查）"，被取代的原文保留。
 
+> **2026-11-08 修订（#1283，U11）**：三组属性改名：`cosec.pipeline.gateway.*` → `cosec.pipeline.identity.*`；`cosec.audit.required.timeout` → `cosec.observability.listener.required-timeout`；`cosec.authorization.cache.token.*` → `cosec.authentication.revocation.cache.*`。
+
+> **2026-11-08 修订（#1286）**：规则 `SCP-7` 标记为被 `SCP-10` 取代。
+
+> **2026-11-08 修订（#1295）**：`SCP-4` 只判断重复的请求头，不再有查询参数；审计记录的 `AuditSourceType` 由 `AuditVia` 取代（#1297）。
+
 ## 0. 结论先行
 
 到今天为止，RFC 0002–0007 的每个阶段都以"与 7.x 或与上一阶段等价"为切换门槛，用真实部署导出数据的离线回放来证明。
@@ -222,6 +228,16 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 > - 新增 `OBL-4`（Redis 限流器把一个桶的两个窗口放在同一个 Cluster slot，`build` 级，由性质测试守护）。
 > - 修订 `SNP-6`：一次一轮，变更由可读之后第一个到达其文档的一轮装上，停住的一轮按单调时间判定、有读在途时从不放弃；新增四个守护。
 > - 新增变异体 10 个（`atr-8-*` 3 个，`obl-4-*` 3 个，`snp-6-*` 4 个），全部被杀死；`snp-4-*` 与 `pip-9-*` 的补丁随代码刷新。
+
+> **实现说明（2026-11-07，#1240，RC 修复批次 D2）**：登记表的变动：
+> - 新增 `CTL-23`（`simulate`、`explain` 在作用域解析到的租户上授权；点名其他租户的匿名请求答 400），一个正例与一个反例场景。
+> - 新增 `CTL-24`（控制 API 的错误体只带控制面自己的消息；存储值解码失败是 500，`build` 级，由 `ControlHttpTest` 守护）。
+> - 修订 `CTL-3`：被模拟的 `http` 资源与执法经同一个路径规范化，重复的请求头答 400（`PIP-12` 的一致性）；新增场景。`DOC-4` 新增一个场景与前导 `**` 收窄的计数守护。
+> - 新增的变异体（`ctl-23-*`、`ctl-24-*`、`ctl-3-*`、`doc-4-*`）全部被杀死，其中 `ctl-3-simulated-raw-path-decided` 来自审查者存活的探针。
+
+> **实现说明（2026-11-07，#1254，RC1-52）**：登记表新增 `IDN-10`（`pipeline` 级）：含落单 UTF-16 代理项的 id 在进入处被拒绝，两个不同的 id 从不共用一个存储的 key。两个正例、一个反例场景（成对的代理项照常），12 个变异体全部被杀死；`idn-3-inactive-principal-accepted`、`scp-7-control-characters-accepted`、`scp-7-app-keys-take-any-id` 随代码重新生成。#1254 的审查确认：`main` 上自 #1240 起有 6 个变异体不再能应用，由 E2a 重新生成。
+
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`PIP-7` 新增两个守护：`cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout`（吊销表的 `read-timeout` 固定为命令超时）与 `cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked`（CoCache 6 写的吊销从不读成"没有吊销"）；`SNP-3` 的守护随 lock 加 constrain 改写，新增变异体 `snp-3-store-of-record-unknown-read-unconstrained`、`pip-7-revocation-read-timeout-unconstrained`，`snp-3-cache-outside-starter-unpinned` 与 `brk-3-migrate-writes-break-glass` 随代码重新生成。#1203 的 `mutationCheck` 31 个全部被杀死。
 
 ### 3.3 场景语料
 
@@ -518,7 +534,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 | `SnapshotSource`（单飞、有序安装、条件读重新校验、陈旧度、LRU、预热）、`SnapshotDocumentStore`、`InMemorySnapshotDocumentStore`、`SnapshotDocument`、`SnapshotOptions`、`SnapshotMetrics`、快照异常 | `core/core/src/main/kotlin/me/ahoo/cosec/snapshot/` | RFC 0004 §7.4 只换 key 与文档类型；RFC 0006 的挂起包装 |
 | `RedisSnapshotDocumentStore`、`PolicySnapshotCache`、`SnapshotRuntimeHints` | `backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/` | 数据面读取；控制面的头 |
 | `RedisSnapshotPublisher` 的条件写入（`putIfMatch`、冲突时重新读取、不加 `WAIT`） | 同上 | RFC 0007 PR-4 的 `CoCacheControlStore`；`SnapshotPublisher` 接口本身随切换删除（RFC 0007 Q25） |
-| CoCache 6.7 的条件写入与条件读 | `gradle/libs.versions.toml` | 不变 |
+| CoCache 6.7 的条件写入与条件读（2026-11-08 起为 CoCache 8.0.0，#1203） | `gradle/libs.versions.toml` | 不变 |
 | 扁平引擎、绑定索引、候选顺序、扁平 trace | `core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/` | 目标引擎；RFC 0005 PR-4 换掉 7.x 匹配器的适配 |
 | 租户、绑定、成员关系、`ScopeResolver`、条件 AST、索引键、`implies` | `core/model/src/main/kotlin/me/ahoo/cosec/model/` | 目标模型 |
 | 成员关系解析与按主体吊销 | `core/core/src/main/kotlin/me/ahoo/cosec/membership/`、`core/.../token/` | RFC 0006 PR-3 改为挂起 |
@@ -795,10 +811,10 @@ RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
 | L17 | 没有使用者的版本目录条目 | `gradle/libs.versions.toml`：`testcontainers` 版本与 `testcontainers-bom`（没有任何构建脚本引用）；插件别名 `kotlin-kapt`（模块用 `kotlin("kapt")` 应用） | 遗留条目 | 清理 PR；不依赖切换，可以提前做（§4.6.3） | G3 |
-| L18 | `ognl` 的版本与约束 | `gradle/libs.versions.toml`；`bom/dependencies/build.gradle.kts` 的 `constraints` | RFC 0005 PR-9 删除 OGNL，但清单里没有版本目录和约束 | 切换 PR | G3 |
+| L18 | `ognl` 的版本与约束 | `gradle/libs.versions.toml`；`bom/dependencies/build.gradle.kts` 的 `constraints`（2026-11-08 移除，见 Q12） | RFC 0005 PR-9 删除 OGNL，但清单里没有版本目录和约束 | 切换 PR | G3 |
 | L19 | `hamcrest` | 根 `build.gradle.kts` 的 `testImplementation`、`cosec-dependencies` 的约束、版本目录；61 个测试文件在用 | AGENTS.md 约定用 FluentAssert（已有 195 个测试文件在用），hamcrest 是早期的写法 | 清理 PR：切换后剩下的测试改用 FluentAssert，再删除依赖（§6 Q12） | G3 |
 | L20 | 默认的 `guava` 依赖 | 根 `build.gradle.kts` 给每个非纯模块加 `implementation("com.google.guava:guava")`。`main` 中只有 `core/.../limiter/LocalRateLimiter.kt`、`core/.../policy/action/PathActionMatcher.kt`（切换时删除）和 `social/.../justauth/JustAuthProvider.kt`（`MoreObjects`）用到它 | 早期的全局默认 | 清理 PR：只在用到的模块里显式声明（§6 Q12） | G3 |
-| L21 | 回放用的日志配置 | `config/logback-parity.xml`；`core/core/build.gradle.kts`、`backends/cocache/build.gradle.kts` 中引用它的 `jvmArgs` | 只给 §4.2 的回放与比较任务使用 | 切换 PR | 删除即守护 |
+| L21 | 回放用的日志配置 | `config/logback-parity.xml`（2026-11-08 改名 `logback-property-stress.xml`，只留给 `propertyStress`）；`core/core/build.gradle.kts`、`backends/cocache/build.gradle.kts` 中引用它的 `jvmArgs` | 只给 §4.2 的回放与比较任务使用 | 切换 PR | 删除即守护 |
 | L22 | `cosec-gateway-server` 的遗留构建配置 | `platform/gateway-server/build.gradle.kts`：应用了 `kotlin("kapt")`，但没有任何 `kapt` 依赖；`-Dspring.cloud.bootstrap.enabled=true` 加上 `src/main/resources/bootstrap.yaml`、`src/dist/config/bootstrap.yaml`，而 bootstrap 里只有 `spring.application.name` | kapt 什么也不做；bootstrap 上下文是 Spring Cloud 2020 起不再推荐的旧机制 | 清理 PR：删除 kapt；bootstrap 的内容并入 `application.yaml`，`k8s/cosec-gateway-config.yaml` 同步修改 | — |
 
 **(f) 文档与 skills**
@@ -924,7 +940,7 @@ RFC 0002–0007 中"并入 RFC 0008 的切换 PR"的标注不逐一改写，它�
 | Q9 | **`cosec-api` 的去留**（§4.6 L10、L11；AGENTS.md 要求先问） | **已决定**：保留模块，作为 8.0 的薄契约层（主体、token、认证、`SecurityContext`、审计事件、租户）。PR-5 删除切换之后在 `cosec-api` 之外没有 `main` 引用的类型，包括现在就没有引用的 `InternalIds`；并入 `model/` 留到 8.0 之后再议 | RFC 0006 Q5 已决定不改名、不合并现有模块。剩下的契约有外部实现者（token、认证），搬家只会多一次破坏性变更，换不来收益 |
 | Q10 | **切换租户认证**（§4.6 L12） | **已决定**：保留切换租户的认证，前提是有测试。RFC 0008 PR-5 为 `AbstractSwitchTenantAuthentication` 与 `SwitchTenantCredentials` 补上测试；没有测试，它就不能留到 RC | 它是写进文档的扩展点，但 `main` 和测试里都没有使用者，等于没人验证过。8.0 的租户与成员关系（RFC 0004 §4.5）改变了它的前提 |
 | Q11 | **`PolicyTestKit` 的 8.0 形态**（§4.6 L15） | **已决定**：在切换 PR 中基于 8.0 文档重写，复用一致性套件的场景格式（§3.3）与 `engine` runner；7.x 的形式与 `cosec-policy-test/` 删除；暂不单独建 `cosec-testkit` 模块 | 用户的策略测试与规范场景是同一件事，两种格式只会分叉；RFC 0001 §4 的 `cosec-testkit` 是否拆成模块，可以等 runner 稳定之后再定 |
-| Q12 | **依赖变更**（§4.6 L17–L20；AGENTS.md 要求先问） | **已决定**：全部删除：`testcontainers` 的版本与 BOM、`kotlin-kapt` 插件别名、`ognl`（随切换）、`hamcrest`（剩下的测试改用 FluentAssert 之后）；`guava` 不再作为每个模块的默认依赖，只在用到的模块里显式声明 | 都没有使用者，或者只有遗留的使用者；只删不加，版本不变 |
+| Q12 | **依赖变更**（§4.6 L17–L20；AGENTS.md 要求先问） | **已决定**：全部删除：`testcontainers` 的版本与 BOM、`kotlin-kapt` 插件别名、`ognl`（随切换；版本目录保留给 `cosec-migrate`，2026-11-08 起不再发布约束）、`hamcrest`（剩下的测试改用 FluentAssert 之后）；`guava` 不再作为每个模块的默认依赖，只在用到的模块里显式声明 | 都没有使用者，或者只有遗留的使用者；只删不加，版本不变 |
 | Q13 | **`main` 的版本号**（§4.6 L30） | **已决定**（维护者 2026-10-26 更正）：PR-5 把 `gradle.properties` 改为 `8.0.0-alpha.1`。这只是版本字符串，不发布任何版本（RFC 0001 §6 不变）；RC 的版本号仍由发布 PR 按 CONTRIBUTING.md §7 设置 | `main` 是 8.0 线，`version=7.0.0` 会让本地构建与文档示例看起来像 7.0 |
 | Q14 | **`cosec-social`**（§4.6 L39） | **已决定**：保留，8.0 不改造：它在登录时用 OAuth 换取 token，不在请求路径上，RFC 0006 的 `Authenticator` 不涉及它。PR-5 只清理注释 | RFC 0001 §4 把它列为 `cosec-authn-social`，所以它属于目标架构。但如果维护者不打算继续维护 JustAuth 集成，8.0 是删除它的唯一窗口 |
 | Q15 | **守护的实现方式**（§4.6.2） | **已决定**：不引入新依赖：G1、G7 用 ArchUnit（已有），放在 `conformance/`；G2 用 detekt 内置的 `ForbiddenComment`；G3、G6 用根项目的 Gradle 任务；G4 用 `wiki/scripts/` 下的 Node 脚本 | 都是几十行的检查，现有工具链已经够用；版本目录检查插件之类的工具是新依赖，收益不抵维护成本 |

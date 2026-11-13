@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.grant
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.engine.pattern.ActionPattern
@@ -21,6 +24,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.runtime.document.RoleExpansion
 
 /**
  * The grant analysis's view of snapshot documents (RFC 0004 §7.1): what [GrantAnalyzer] reads from the documents the
@@ -30,15 +34,18 @@ import me.ahoo.cosec.runtime.document.PolicyDocument
  * - Break-glass bindings are left out: they let their principal act in an emergency, never grant (a check that only
  *   break-glass permits is refused as well, RFC 0006 §9.4.3). Leaving out a grantor's binding only takes rights away.
  * - The document format has no `protected` flag yet; no entry is protected until it does (RFC 0007 §7.4.4).
+ * - Roles and short-form permissions are read expanded (RFC 0012 §6.1), the one document that is enforced: fragments
+ *   are split by permission, on both sides of a change.
  */
-object GrantDocuments {
+internal object GrantDocuments {
     fun of(document: PolicyDocument?): GrantDocument {
         if (document == null) {
             return GrantDocument.EMPTY
         }
+        val effective = RoleExpansion.effective(document)
         return GrantDocument(
-            policies = document.policies.map(::policy),
-            bindings = document.bindings.filterNot { it.breakGlass },
+            policies = effective.policies.map(::policy),
+            bindings = effective.bindings.filterNot { it.breakGlass },
         )
     }
 

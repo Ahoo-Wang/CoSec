@@ -15,6 +15,12 @@
 > 改为 RFC 9457 的 `application/problem+json`，只带客户端能据以行动的区分；显式拒绝与隐式拒绝在响应中合并为 `unauthorized`/`forbidden`。改动处：§5.7、
 > §6.1（`type`/`code` 列取代 `reason`）、§6.2（重写）、§6.3、§9.5.3、§10.2、§14 X5、§15.2 的 PR-2 与 PR-7、§15.3、§16 Q22 与新增的 Q27。
 
+> **2026-11-08 修订**：`required` 监听器的超时属性是 `cosec.observability.listener.required-timeout`（#1283）；`decideAs` 与 `decide(security, app, …)` 是内部 API（#1283）。限流计数器 id 统一为 `platform/<id>`、`app:<app>/<id>`、`tenant:<tenant>/<id>`，键控桶前缀是 `k:`（#1284）。
+
+> **2026-11-08 修订**：`authorization` Cookie 只在 `cosec.pipeline.allow-cookie-token=true` 时读作令牌，`CoSec-*` 只读请求头（#1295）。审计记录用 `AuditVia`，`KafkaAuditListener` 关闭时在 `drain-timeout` 内等待队列（#1297）。
+
+> **2026-11-09 修订（#1304，`ATR-8`）**：属性规划沿语句索引进行，访问的语句与评估完全相同。
+
 ## 0. 结论先行
 
 第 4 阶段结束时，引擎已经是同步纯函数，策略数据都在内存快照里。剩下的问题在引擎**外面**：`SecurityPipeline` 是一条 Reactor 链，
@@ -177,6 +183,8 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 | `cosec-opentelemetry` | `cosec-runtime`、`opentelemetry-extension-kotlin` | `TracingListener`、OTel 的 `BridgeContextContributor` | — |
 | `cosec-micrometer`、`cosec-kafka` | `cosec-runtime` | `MetricsListener`、`KafkaAuditListener` | — |
 | `cosec-cocache` | `cosec-runtime`（新增）、CoCache 6.7（含 `cocache-coroutines`） | `CoCacheMembershipProvider`、挂起的吊销检查、非阻塞的 `RedisRateLimiter` | SPI 签名中出现 Reactor 类型 |
+
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`cosec-cocache` 现在基于 CoCache 8.0.0（缓存为 `Store`，经 `CoCacheFactory` 创建），见 RFC 0003 §4 的说明；上表的 CoCache 6.7 只适用于当时。
 
 - 新依赖（Q7，AGENTS.md 要求先问）：`org.jetbrains.kotlinx:kotlinx-coroutines-core`、`-reactor`（只给 WebFlux / Gateway）、`-slf4j`（starter，MDC）、
   `-test` 与 `-debug`（测试；`-debug` 自带 BlockHound 集成，把 `Dispatchers.Default` 的工作线程标为不可阻塞）；`io.opentelemetry:opentelemetry-extension-kotlin`。
@@ -805,6 +813,8 @@ fun interface RateLimiter {
 ---
 
 > **实现说明（2026-11-07，#1231，审计 issue #1229，`OBL-4`）**：Redis 限流器的计数 key 改为 `<prefix>:rate-limiter:{<rule>:<bucket>}:<window>`。脚本原子地读写一个桶的当前与前一个窗口，两个 key 带同一个 hash tag，所以在 Redis Cluster 上落在同一个 slot；此前两者跨槽（CROSSSLOT），Cluster 上没有 `strictFailure` 的规则全被跳过，有 `strictFailure` 的规则让每个放行请求 503。不同的桶仍分散到各个 slot，除非 key 前缀自带 hash tag。使 tag 为空的两种输入被拒绝：第一个 `{` 紧跟 `}` 的前缀（构造限流器时，即启动失败），以 `}` 开头的规则 id（计数时，按限流器失败处理；引擎从不产生这样的 id）。上文"滚动升级时新旧实例共享同一组桶"不再成立：从 alpha.2 或 7.x 滚动升级时，新旧版本的实例同时服务期间，以及最后一个旧实例停止后的至多两个窗口内，一条规则至多放行两倍的上限（`upgrading.md`）。
+
+> **实现说明（2026-11-07，#1254，RC1-52，`IDN-10`）**：按 key 计数的限流桶命名为 `g:<值>`；值里有落单的 UTF-16 代理项时为 `e:<转义后的值>`（`\` 加倍，每个落单的代理项写成 `\uXXXX`）。这种命名是单射，且结果是良构的 UTF-16，所以这样的值不会与别的值共用一个桶。不按限流器失败处理：没有 `strictFailure` 时失败会跳过规则，能把代理项放进 key 值的调用方就完全不被计数。转义在引擎里做（`CompiledRateLimit.keyedBucket`），所以自定义的 `RateLimiter` 也只收到良构的桶。
 
 ## 9. 观察：`DecisionEvent` 与监听器
 

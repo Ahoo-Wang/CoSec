@@ -11,19 +11,19 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.openapi.generator
 
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
-import me.ahoo.cosec.engine.flat.StatementSource
-import me.ahoo.cosec.model.Effect
-import me.ahoo.cosec.model.PolicyId
+import io.swagger.v3.oas.models.PathItem
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
 import me.ahoo.cosec.runtime.document.CatalogPermission
 import me.ahoo.cosec.runtime.document.DocumentCompileException
-import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.route.Route
@@ -34,7 +34,10 @@ import me.ahoo.cosec.runtime.route.RouteMapException
 import java.time.Instant
 
 /** An OpenAPI document the generator cannot turn into routes and actions; it names the operation. */
-class OpenAPIGenerationException(message: String, cause: Throwable? = null) : IllegalArgumentException(message, cause)
+internal class OpenAPIGenerationException(
+    message: String,
+    cause: Throwable? = null
+) : IllegalArgumentException(message, cause)
 
 /**
  * Generates a service's route map and its app document from its OpenAPI document (RFC 0005 §5.3), so that policies
@@ -43,20 +46,32 @@ class OpenAPIGenerationException(message: String, cause: Throwable? = null) : Il
  * - `service` is `info.title`, or `info.x-cosec-service`;
  * - each operation is one route: its `action` is `<service>:<operationId>`, or the operation's `x-cosec-action`; its
  *   `resource` is `<service>/{<last path variable>}` (`<service>` without one), or `x-cosec-resource`;
- * - the app document (app = service) holds a catalog, one group per tag, and a permission policy
- *   `perm:<service>/<verb>` per action, allowing it on any resource; role bindings are the operator's.
+ * - the app document (app = service) holds a catalog, one group per tag, whose entries are short-form permissions
+ *   (RFC 0012 §4): `<verb>` with the action, allowing it on any resource, which the compiler writes out as the policy
+ *   `perm:<service>/<verb>`. The groups are not `spaced`, so a permission applies in the default space only; an app that
+ *   uses spaces marks its groups `spaced` when it reviews the document. Roles and role bindings are the operator's.
+ *
+ * A path whose Path Item is a `$ref` (OpenAPI 3.1) stands for the item `#/components/pathItems/<name>` names, followed
+ * through further references.
  *
  * Generation fails ([OpenAPIGenerationException]) on an operation without an action, an `operationId` used twice,
- * or a route map that would not load (two operations one request could match; see [RouteMap]).
+ * a route map that would not load (two operations one request could match; see [RouteMap]), and on a Path Item `$ref`
+ * it cannot resolve: a target that does not exist, a loop, a reference to anything but a path item of this document
+ * (a file, a URL, another part of the document), or operations beside the `$ref`, which the specification leaves
+ * undefined. A document that dropped or guessed those operations would grant less or more than the API describes.
  */
+@InternalCoSecApi
 object OpenAPIServiceGenerator {
     const val SERVICE_EXTENSION = "x-cosec-service"
     const val ACTION_EXTENSION = "x-cosec-action"
     const val RESOURCE_EXTENSION = "x-cosec-resource"
     const val DEFAULT_GROUP = "default"
+    private const val PATH_ITEM_REFERENCE = "#/components/pathItems/"
+    private val PATH_ITEM_NAME = Regex("""[A-Za-z0-9._-]+""")
     private val VARIABLE = Regex("""\{([^{}]+)}""")
 
     /** One operation, as generated. */
+    @InternalCoSecApi
     class GeneratedOperation(val route: Route, val operation: Operation)
 
     fun service(openAPI: OpenAPI): String =
@@ -68,7 +83,7 @@ object OpenAPIServiceGenerator {
         val service = service(openAPI)
         val operationIds = HashSet<String>()
         return openAPI.paths.orEmpty().flatMap { (path, item) ->
-            item.readOperationsMap().map { (method, operation) ->
+            resolve(openAPI, path, item).readOperationsMap().map { (method, operation) ->
                 val where = "${method.name} $path"
                 operation.operationId?.let { id ->
                     if (!operationIds.add(
@@ -100,7 +115,7 @@ object OpenAPIServiceGenerator {
         return document
     }
 
-    /** The app document of the service: its catalog and a permission policy per action, compiled before it is returned. */
+    /** The app document of the service: its catalog of short-form permissions, compiled before it is returned. */
     fun appDocument(openAPI: OpenAPI, revision: Long = 1, publishedAt: Instant = Instant.now()): PolicyDocument {
         val service = service(openAPI)
         val operations = operations(openAPI)
@@ -118,19 +133,15 @@ object OpenAPIServiceGenerator {
             }
             permissions.putIfAbsent(verb, generated.route.action to generated.operation)
         }
-        val policies = permissions.map { (verb, value) ->
-            PolicyDefinition(
-                PolicyId(PolicyDocumentCompiler.permissionPrefix(service) + verb),
-                attachable = false,
-                condition = null,
-                statements = listOf(StatementSource(verb, Effect.ALLOW, listOf(value.first))),
-            )
-        }
         val groups = LinkedHashMap<String, MutableList<CatalogPermission>>()
         for ((verb, value) in permissions) {
             val operation = value.second
-            val permission =
-                CatalogPermission(verb, operation.summary?.ifBlank { null }, operation.description?.ifBlank { null })
+            val permission = CatalogPermission(
+                verb,
+                operation.summary?.ifBlank { null },
+                operation.description?.ifBlank { null },
+                actions = listOf(value.first),
+            )
             groups.getOrPut(operation.tags?.firstOrNull() ?: DEFAULT_GROUP) { ArrayList() } += permission
         }
         val document = PolicyDocument(
@@ -138,7 +149,7 @@ object OpenAPIServiceGenerator {
             service,
             revision,
             publishedAt,
-            policies,
+            emptyList(),
             emptyList(),
             Catalog(groups.map { (name, entries) -> CatalogGroup(name, permissions = entries) }),
         )
@@ -149,6 +160,40 @@ object OpenAPIServiceGenerator {
         }
         return document
     }
+
+    /** The item [path] stands for: [item], or the component its `$ref` names, through further references. */
+    private fun resolve(openAPI: OpenAPI, path: String, item: PathItem): PathItem {
+        val original = item.`$ref` ?: return item
+        val followed = LinkedHashSet<String>()
+        var current = item
+        var reference = original
+        while (true) {
+            if (current.readOperationsMap().isNotEmpty()) {
+                reject(
+                    path,
+                    "[$reference] has operations beside it; the OpenAPI specification leaves that undefined, so none " +
+                        "is guessed: put them in the referenced item, or inline it",
+                )
+            }
+            val name = reference.removePrefix(PATH_ITEM_REFERENCE)
+            if (!reference.startsWith(PATH_ITEM_REFERENCE) || !PATH_ITEM_NAME.matches(name)) {
+                reject(
+                    path,
+                    "[$reference] is not supported: only a path item of this document, ${PATH_ITEM_REFERENCE}<name>, " +
+                        "is resolved; resolve other references before generating",
+                )
+            }
+            if (!followed.add(name)) {
+                reject(path, "[$original] refers to itself through ${followed.joinToString(" -> ")} -> $name")
+            }
+            current = openAPI.components?.pathItems?.get(name)
+                ?: reject(path, "[$reference] names no such path item in components.pathItems")
+            reference = current.`$ref` ?: return current
+        }
+    }
+
+    private fun reject(path: String, message: String): Nothing =
+        throw OpenAPIGenerationException("$path: $message")
 
     private fun extension(operation: Operation, name: String): String? =
         (operation.extensions?.get(name) as? String)?.takeIf { it.isNotBlank() }

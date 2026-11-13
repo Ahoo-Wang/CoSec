@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The normal form of a checked condition (RFC 0005 §4.2 step 1): nested `and`s and `or`s are flattened, duplicates
@@ -22,7 +26,7 @@ package me.ahoo.cosec.model.condition
  * stays within the limits it was checked against. Two conditions that differ only in operand order or nesting have
  * the same normal form.
  */
-object ConditionNormalizer {
+internal object ConditionNormalizer {
     fun normalize(condition: CheckedCondition): CheckedCondition = when (condition) {
         is CheckedCondition.And -> group(condition.conditions, isAnd = true)
         is CheckedCondition.Or -> group(condition.conditions, isAnd = false)

@@ -14,9 +14,7 @@
 package me.ahoo.cosec.spi.token
 
 import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 
 /**
  * Verifier for validating access and refresh tokens.
@@ -30,25 +28,23 @@ import me.ahoo.cosec.api.token.TokenPrincipal
 @CoSecSpi
 interface TokenVerifier {
     /**
-     * Verifies an access token and returns the principal.
+     * Verifies an access token and returns what it says.
      *
-     * @param T The type of token principal
      * @param accessToken The access token to verify
-     * @return The verified token principal
+     * @return What the token says
      * @throws TokenVerificationException if verification fails; [DelegationUnsupportedException] for a token that
      *   delegates (an `act` claim), which must never become a principal (`IDN-4`)
      */
     @Throws(TokenVerificationException::class)
-    fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
+    fun verify(accessToken: String): VerifiedToken
 
     /**
      * Refreshes tokens using a refresh token.
      *
-     * @param T The type of token principal
      * @param token The composite token containing refresh token
-     * @return New token principal with new tokens
+     * @return What the access token of [token] says, for the new token to say again
      * @throws TokenVerificationException if refresh fails
      */
     @Throws(TokenVerificationException::class)
-    fun <T : TokenPrincipal> refresh(token: CompositeToken): T
+    fun refresh(token: CompositeToken): VerifiedToken
 }

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -29,6 +31,7 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
@@ -39,7 +42,6 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -74,7 +76,6 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
 
@@ -130,8 +131,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
     /**
      * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;
-     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). This pipeline
-     * reads a token from that cookie, so a backend could replay it at the gateway.
+     * null when no cookie is left, and [cookieHeader] itself when it has none (R1-4 of #1194's review). Whether or not
+     * this pipeline reads a token there (`cosec.pipeline.allow-cookie-token`), a backend might.
      */
     @InternalCoSecApi
     fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
@@ -261,7 +262,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
                 Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
-        val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
+        val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
         // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
         // fetched now, from stage A as from stage B (#1209).
@@ -341,8 +342,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         val route = "The cosec-app-id of route [$routeId]"
         error(
             if (app is String) {
-                "$route cannot be an app id: blank, *, with ':' or a control character, or longer than " +
-                    "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+                "$route cannot be an app id: blank, *, with ':', a control character or an unpaired surrogate, or " +
+                    "longer than ${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             } else {
                 "$route is a ${app.javaClass.name}, not a string: an app id is a string. Quote it in the route's " +
                     "metadata (cosec-app-id: \"<app id>\"), as a single value."
@@ -350,9 +351,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         )
     }
 
-    /** [value] for a log line: control characters escaped, so no configured value can forge one. */
-    private fun printable(value: String?): String =
-        value?.map { if (it.isISOControl()) "\\u%04X".format(it.code) else it.toString() }?.joinToString("").orEmpty()
+    /** [value] for a log line: control characters and unpaired surrogates escaped, so no configured value can forge one. */
+    private fun printable(value: String?): String = Identifiers.printable(value.orEmpty())
 
     /**
      * The rest of [decide], for the request as [authn] authenticated it. A credential whose principal the membership
@@ -379,12 +379,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         val principal = (authn as? AuthnResult.Authenticated)?.principal
 
         val tenant = principal?.tenant ?: TenantId.DEFAULT
-        val authzSubject = subject(principal, tenant)
+        val authzSubject = subject(principal)
 
+        val deviceId = parameters.deviceId
         val stageA = if (fetched == null || attributes.stageA.isEmpty()) {
             null
         } else {
-            AttributeRequest(authzSubject, null, action, resource, facts.remoteAddress, requestId, parameters.deviceId)
+            AttributeRequest(tenant, authzSubject, null, action, resource, facts.remoteAddress, requestId, deviceId)
         }
         val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
             ?: return authorize(
@@ -394,9 +395,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             return unavailable(requestId, traceId, Cause.MembershipUnavailable(it))
         }
 
-        val subject = ScopeSubject(tenant, principal != null, memberships)
-        val declared = DeclaredScope(parameters.appId, parameters.spaceId)
-        val scope = when (val resolution = ScopeResolver.resolve(subject, declared, facts.host)) {
+        val subject = ScopeSubject(tenant, principal != null, memberships, principal?.app?.value)
+        val scope = when (val resolution = ScopeResolver.resolve(subject, parameters.spaceId, facts.host)) {
             is ScopeResolution.Resolved -> resolution.scope
             is ScopeResolution.Rejected -> {
                 val denied = Decision.Deny(StatementRef.ScopeRejected(resolution.reason))
@@ -419,13 +419,12 @@ class Pipeline(components: PipelineComponents) : RequestGate {
 
         val authz = AuthzRequest(
             subject = authzSubject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = action,
             resource = resource,
             environment = Environment(
                 remoteIp = facts.remoteAddress,
                 requestId = requestId,
-                deviceId = parameters.deviceId,
+                deviceId = deviceId,
                 blocked = blacklist.blocked,
             ),
         )
@@ -450,8 +449,8 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     /**
-     * Runs a permit's obligations in order (RFC 0006 §8.3), as 7.x `RateLimitingAuthorization` does: the first exhausted
-     * rule is a 429 and the later rules spend nothing; earlier rules keep what they spent; the response reports the rule
+     * Runs a permit's obligations in order (RFC 0006 §8.3): the first exhausted rule is a 429 and the later rules
+     * spend nothing, since the request is refused already; earlier rules keep what they spent; the response reports the rule
      * with the fewest permits left. A rule that cannot be counted (its limiter failed, timed out or is missing, or its
      * bucket could not be read) refuses the request (503) when it is strict, and is skipped otherwise.
      */
@@ -596,14 +595,10 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      * The request's subject in the engine's request (`AuthzRequest`): the engine takes the tenant from the scope and
      * reads the subject's id, whether it is authenticated, and whether its principal and break-glass bindings apply.
      */
-    private fun subject(principal: AuthenticatedPrincipal?, tenant: TenantId): Subject = Subject(
+    private fun subject(principal: AuthenticatedPrincipal?): Subject = Subject(
         id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
-        tenantId = tenant.value,
         authenticated = principal != null,
-        roles = emptySet(),
-        policies = emptySet(),
         attributes = principal?.attributes.orEmpty(),
-        root = false,
         principalBindings = principal?.principalBindings ?: true,
         breakGlass = principal?.breakGlass ?: true,
     )
@@ -726,6 +721,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     private fun attributeRequest(request: FlatRequest, scope: Scope?) = AttributeRequest(
+        request.scope.tenant,
         request.request.subject,
         scope,
         request.request.action,
@@ -859,11 +855,15 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return given ?: idGenerator.generate()
     }
 
-    /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */
+    /**
+     * The token is the first non-blank one of the `Authorization` header, the query parameter when allowed, and the
+     * cookie when allowed: the header is the channel a client sets on purpose, the others are fallbacks for clients that
+     * cannot set it.
+     */
     private fun credentials(facts: HttpFacts): Credentials {
         val token = facts.headers.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
             ?: queryToken(facts)
-            ?: facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
+            ?: cookieToken(facts)
         val apiKey = facts.headers.values(options.apiKeyHeader).firstOrNull { it.isNotBlank() }
         return if (token == null && apiKey == null) NO_CREDENTIALS else Credentials(token, apiKey)
     }
@@ -877,6 +877,9 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             AUTHORIZATION_NAMES
         )?.get(AUTHORIZATION)?.firstOrNull { it.isNotBlank() }
     }
+
+    private fun cookieToken(facts: HttpFacts): String? =
+        if (options.allowCookieToken) facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() } else null
 
     private inline fun <T : Any> Fetched<T>.valueOr(failed: (Throwable) -> T): T = when (this) {
         is Fetched.Value -> value

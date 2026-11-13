@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
@@ -304,6 +307,110 @@ class HttpPathPatternTest {
         match("/{*p}/a/*", "/x/y/a/b").assert().isEqualTo(mapOf("p" to "/x/y"))
     }
 
+    /**
+     * Review L3 of #1200: after a leading `**` or `{*name}`, the evaluation's walk decides a glob segment at most at the
+     * two starts that can fit, however many segments the path has (`DOC-4`). Every segment of these paths would match the
+     * glob, so trying any other start would decide it again.
+     */
+    @Test
+    fun `a glob after a leading rest is decided at most twice`() {
+        for (pattern in listOf("/**/x*y/a", "/{*rest}/x*y/a", "/**/x*y", "/**/x*y/*")) {
+            val compiled = HttpPathPattern.compile(pattern)
+            for (end in listOf("/a", "/b", "", "/")) {
+                val path = HttpPath.parse("/x1y".repeat(SEGMENTS) + end)
+                val scratch = CountingScratch()
+                val matched = compiled.matches(path, scratch)
+                scratch.decided.assert().describedAs("$pattern on ...$end, matched=$matched").isLessThanOrEqualTo(2)
+                val capturing = CountingScratch()
+                (compiled.match(path, capturing) != null).assert().isEqualTo(matched)
+                capturing.decided.assert().describedAs("$pattern on ...$end, captured").isLessThanOrEqualTo(2)
+                // As the walk without a table decides.
+                compiled.matches(path).assert().describedAs("$pattern on ...$end").isEqualTo(matched)
+            }
+        }
+    }
+
+    /**
+     * Review L3 of #1200: the two copies of the walk, without a table ([HttpPathPattern.matches], the public one) and
+     * with the evaluation's, decide and capture alike, for random patterns of every element kind and paths shaped like
+     * them.
+     */
+    @Test
+    fun `the walk with a table decides as the walk without one`() {
+        val random = Random(13)
+        val scratch = EvaluationScratch()
+        var compared = 0
+        var matched = 0
+        repeat(CASES) {
+            val segments = List(1 + random.nextInt(4)) { index -> walkSegment(random, index) }
+            val text = "/" + segments.joinToString("/")
+            val pattern = try {
+                HttpPathPattern.compile(text, caseSensitive = random.nextBoolean())
+            } catch (_: InvalidPatternException) {
+                return@repeat
+            }
+            val path = HttpPath.parse("/" + List(random.nextInt(6)) { walkValue(random) }.joinToString("/"))
+            val plain = pattern.matches(path)
+            pattern.matches(path, scratch).assert().describedAs("$text on $path").isEqualTo(plain)
+            pattern.match(path, scratch)?.toMap().assert().describedAs("$text on $path")
+                .isEqualTo(pattern.match(path, null)?.toMap())
+            (pattern.match(path, null) != null).assert().describedAs("$text on $path").isEqualTo(plain)
+            compared++
+            if (plain) matched++
+        }
+        compared.assert().isGreaterThan(CASES / 2)
+        matched.assert().isGreaterThan(compared / 20)
+    }
+
+    private fun walkSegment(random: Random, index: Int): String = when (random.nextInt(9)) {
+        0 -> if (index == 0) "**" else "*"
+        1 -> if (index == 0) "{*rest}" else "x"
+        2 -> "*"
+        3 -> "{v$index}"
+        4 -> "x?"
+        5 -> "x*"
+        6 -> "{w$index}x*"
+        7 -> "?\uD83D\uDE00*"
+        else -> "x"
+    }
+
+    private fun walkValue(random: Random): String = when (random.nextInt(7)) {
+        0 -> "x"
+        1 -> "xy"
+        2 -> "x\uD83D\uDE00"
+        3 -> "a\uD83D\uDE00b"
+        4 -> ""
+        5 -> "X"
+        else -> "xxx"
+    }
+
+    /** Review L4 of #1200: a pattern literal holds whole characters; half a surrogate pair is no character at all. */
+    @ParameterizedTest
+    @ValueSource(
+        strings = ["/a\uD83D", "/\uDE00", "/a\uDE00b*", "/{v}\uD83D?", "/\uD83D\uD83D\uDE00", "/x/\uDE00\uDE00"]
+    )
+    fun `a lone surrogate half in a literal does not compile`(pattern: String) {
+        assertThrownBy<InvalidPatternException> { HttpPathPattern.compile(pattern) }
+            .hasMessageContaining("lone surrogate")
+    }
+
+    @Test
+    fun `a surrogate pair in a literal compiles`() {
+        HttpPathPattern.compile("/\uD83D\uDE00").matches(HttpPath.parse("/\uD83D\uDE00")).assert().isTrue()
+        HttpPathPattern.compile("/a\uD83D\uDE00*").matches(HttpPath.parse("/a\uD83D\uDE00b")).assert().isTrue()
+        HttpPathPattern.compile("/?\uD83D\uDE00").matches(HttpPath.parse("/a\uD83D\uDE00")).assert().isTrue()
+    }
+
+    /** Counts the glob segments a walk decides: one table per decision ([SegmentGlob.table]). */
+    private class CountingScratch : EvaluationScratch() {
+        var decided = 0
+
+        override fun words(size: Int): LongArray {
+            decided++
+            return super.words(size)
+        }
+    }
+
     /** RC1-8: `.*.*` matches what `.*` matches, so consecutive `*` within a segment are one token, as in Spring. */
     @Test
     fun `consecutive stars in a segment count once`() {
@@ -435,5 +542,6 @@ class HttpPathPatternTest {
 
     private companion object {
         const val CASES = 50_000
+        const val SEGMENTS = 40
     }
 }

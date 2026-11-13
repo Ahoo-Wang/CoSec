@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.shadow
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -47,16 +50,20 @@ fun interface CandidateStore {
 }
 
 /** A candidate as an instance holds it: compiled, or why it could not be. */
+@InternalCoSecApi
 sealed interface Candidate {
     val window: String
 
+    @InternalCoSecApi
     class Ready(override val window: String, val baseRevision: Long, val document: CompiledDocument) : Candidate
 
     /** The candidate does not compile on this instance: `CANDIDATE_ERROR`. */
+    @InternalCoSecApi
     class Failed(override val window: String, val error: Throwable) : Candidate
 }
 
 /** The candidates the shadow listener compares against (RFC 0007 §6.4). Asked off the request's thread only. */
+@InternalCoSecApi
 fun interface CandidateSource {
     /** The candidate of [key], or null when none is staged or it cannot be read now. */
     suspend fun candidate(key: SnapshotKey): Candidate?
@@ -68,8 +75,10 @@ fun interface CandidateSource {
  * old, compiled with [compile], the instance's own compiler. It takes no part in readiness, and a read that fails only
  * counts ([failures]) and answers no candidate: the shadow window misses samples, the enforced decision never notices.
  */
+@InternalCoSecApi
 class CachingCandidateSource(
-    private val store: CandidateStore,
+    /** The store of record it reads: what a [ShadowReporter] asks whether a window's candidate is still staged. */
+    val store: CandidateStore,
     private val compile: (SnapshotKey, SnapshotDocument) -> CompiledDocument,
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
     private val refreshAfter: Duration = Duration.ofSeconds(10),
@@ -121,6 +130,7 @@ class CachingCandidateSource(
         Candidate.Failed(stored.window, e)
     }
 
+    @InternalCoSecApi
     companion object {
         const val DEFAULT_MAX_ENTRIES: Int = 16
         private const val LOAD_FACTOR = 0.75f
