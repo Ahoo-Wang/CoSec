@@ -305,7 +305,7 @@ Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请�
 在 `roles` 与 `policies` 序列化后超过 `cosec.jwt.membership-claim-limit`（默认 4 KB，RFC 0001 §7.1）时，不写这两个声明，改写
 `cosec.membership: "provider"`。第三方签发方可以照做。
 
-**撤销延迟**：等于 access token 的寿命。默认 10 分钟（[`JwtProperties`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt)），
+**撤销延迟**：等于 access token 的寿命。默认 10 分钟（[`JwtProperties`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/JwtProperties.kt)），
 满足 RFC 0001 §7.1 的"不超过 15 分钟"。`wiki/integration/authentication.md` 和 `wiki/operations/configuration.md` 写明这个上限。
 
 #### 4.5.2 `MembershipProvider`
