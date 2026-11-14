@@ -16,6 +16,12 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A generated route map sits at the `servers` path, and its resources name every path variable** (round 2 L4). The
+  `cosecServiceGenerator` endpoint dropped a server path (`/api/v1`), so its routes matched no request and every
+  request was in the `http` namespace; and `/users/{id}/avatar/{size}` was the resource `user/{size}`, one resource for
+  every user. Routes now start with the server path, without the context path, and the resource is `user/{id}/{size}`:
+  generate the route map again, and rewrite the resources a policy names after a generated one. Servers with different
+  paths, or a server variable in the path, fail generation.
 - **ip2region: what it cannot locate is unavailable** (round 2 M5). An IPv6 client, with only the bundled IPv4
   database, had no country, so a geo-block DENY written as `country in [...]` let it through; it is now unavailable, so
   that DENY makes the request `503` (or lets it through with `onMissing: nomatch`). Load an IPv6 database with

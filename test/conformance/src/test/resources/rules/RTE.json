@@ -32,6 +32,19 @@
         "runtime:RouteMapTest#a route map with no routes does not load"
       ],
       "pending": null
+    },
+    {
+      "id": "RTE-4",
+      "source": "RFC 0005 §5.3; round-2 review L4",
+      "statement": "A route map generated from an OpenAPI document places each route at the document's servers path, without the host's context path, and names every path variable of the route, in order, in its resource unless x-cosec-resource says otherwise; servers with different paths, or a server path holding a variable, fail generation.",
+      "level": "build",
+      "guards": [
+        "openapi:OpenAPIServiceGeneratorTest#the servers path prefixes every route",
+        "openapi:OpenAPIServiceGeneratorTest#servers whose path cannot be told fail generation",
+        "openapi:OpenAPIServiceGeneratorTest#a path with several variables names all of them in its resource, in order",
+        "spring-boot:CoSecServiceGeneratorEndpointTest#the routes sit at the servers path within the application"
+      ],
+      "pending": null
     }
   ]
 }

@@ -29,6 +29,7 @@ import org.springframework.boot.actuate.endpoint.annotation.Selector
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
+import org.springframework.core.env.Environment
 import org.springframework.util.ReflectionUtils
 import tools.jackson.databind.JsonNode
 import java.lang.reflect.Method
@@ -43,11 +44,14 @@ import java.util.Locale
  * operation, there is nothing to generate, and an empty route map deployed by mistake drops every `service:verb` DENY.
  */
 @Endpoint(id = CoSecServiceGeneratorEndpoint.ID)
-internal class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvider<AbstractOpenApiResource>) {
+internal class CoSecServiceGeneratorEndpoint(
+    private val springDoc: ObjectProvider<AbstractOpenApiResource>,
+    private val environment: Environment,
+) {
     @ReadOperation
     fun generate(@Selector part: String): JsonNode? {
         val bytes = when (part) {
-            ROUTES -> RouteMapCodec.encode(OpenAPIServiceGenerator.routeMap(scanned()))
+            ROUTES -> RouteMapCodec.encode(OpenAPIServiceGenerator.routeMap(scanned(), contextPath()))
             APP -> PolicyDocumentCodec.encode(OpenAPIServiceGenerator.appDocument(scanned()))
             else -> return null
         }
@@ -70,6 +74,10 @@ internal class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvid
         return openAPI
     }
 
+    /** What springdoc writes into its server URL but the host does not authorize (round 2 L4). */
+    private fun contextPath(): String =
+        environment.getProperty("server.servlet.context-path") ?: environment.getProperty("spring.webflux.base-path").orEmpty()
+
     companion object {
         const val ID = "cosecServiceGenerator"
         const val ROUTES = "routes"
@@ -89,7 +97,8 @@ internal class CoSecServiceGeneratorEndpoint(private val springDoc: ObjectProvid
 internal class CoSecServiceGeneratorEndpointAutoConfiguration {
     @Bean
     fun cosecServiceGeneratorEndpoint(
-        springDoc: ObjectProvider<AbstractOpenApiResource>
+        springDoc: ObjectProvider<AbstractOpenApiResource>,
+        environment: Environment,
     ): CoSecServiceGeneratorEndpoint =
-        CoSecServiceGeneratorEndpoint(springDoc)
+        CoSecServiceGeneratorEndpoint(springDoc, environment)
 }

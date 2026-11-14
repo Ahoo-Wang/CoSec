@@ -1,0 +1,17 @@
+# Rule: RTE-4
+# Mutant: the generated routes drop the servers path
+# Tests: :openapi:test --tests me.ahoo.cosec.openapi.generator.OpenAPIServiceGeneratorTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.actuate.CoSecServiceGeneratorEndpointTest
+
+diff --git a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
+index 46850511..64981f25 100644
+--- a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
++++ b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
+@@ -90,7 +90,7 @@ object OpenAPIServiceGenerator {
+         val prefix = withoutContextPath(serverPath(openAPI), contextPath.trimEnd('/'))
+         val operationIds = HashSet<String>()
+         return openAPI.paths.orEmpty().flatMap { (relative, item) ->
+-            val path = prefix + relative
++            val path = relative.also { prefix.length }
+             resolve(openAPI, path, item).readOperationsMap().map { (method, operation) ->
+                 val where = "${method.name} $path"
+                 operation.operationId?.let { id ->

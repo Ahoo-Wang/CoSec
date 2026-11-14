@@ -263,7 +263,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 - `cosecServiceGenerator/routes`：[路由映射](./language.md#route-maps)。
 - `cosecServiceGenerator/app`：应用文档。
 
-服务名取 `info.x-cosec-service`，否则取 `info.title`。每个操作的动作是 `<service>:<operationId>`，或它的 `x-cosec-action`。应用文档是一个目录，按操作的第一个标签分组（没有标签时为 `default`），每个动作有一个[简写权限](#short-form-permissions) `<verb>`，允许该动作作用于任意资源（即策略 `perm:<service>/<verb>`），不需要手写策略。生成的文档没有角色，也没有绑定：添加角色或绑定、评审文档，然后按上文发布。分组不是 `spaced`，所以权限只在默认空间生效：使用空间的应用要在分组上设置 `"spaced": true`（[使用空间的应用](../scenarios/spaces.md)）。操作缺少动作、`operationId` 重复，或两个操作可能匹配同一请求时，生成失败。
+服务名取 `info.x-cosec-service`，否则取 `info.title`。每个操作的动作是 `<service>:<operationId>`，或它的 `x-cosec-action`。它的资源是 `<service>/{<variable>}/...`，按顺序包含路径的每个变量（`/users/{id}/avatar/{size}` 是 `user/{id}/{size}`；没有变量时为 `<service>`），或它的 `x-cosec-resource`。它的路径是文档 `servers` 的路径加上操作的路径，不含上下文路径（`server.servlet.context-path`、`spring.webflux.base-path`），与 CoSec 判定请求时一致：服务器 `https://api.example.com/api/v1` 加路径 `/orders/{id}` 是路由 `/api/v1/orders/{id}`。多个服务器路径不同，或服务器路径含服务器变量时，生成失败：无法判断宿主服务的是哪一个。应用文档是一个目录，按操作的第一个标签分组（没有标签时为 `default`），每个动作有一个[简写权限](#short-form-permissions) `<verb>`，允许该动作作用于任意资源（即策略 `perm:<service>/<verb>`），不需要手写策略。生成的文档没有角色，也没有绑定：添加角色或绑定、评审文档，然后按上文发布。分组不是 `spaced`，所以权限只在默认空间生效：使用空间的应用要在分组上设置 `"spaced": true`（[使用空间的应用](../scenarios/spaces.md)）。操作缺少动作、`operationId` 重复，或两个操作可能匹配同一请求时，生成失败。
 
 路径的 Path Item 是 `$ref`（OpenAPI 3.1）时，生成结果与它所指的 Path Item 相同：指向 `#/components/pathItems/<name>` 的引用会被解析，引用链也会被跟随。目标不存在、引用成环、引用指向别处（另一个文件、URL、文档的其他位置），或该路径在 `$ref` 之外还有自己的操作时，生成失败，并指出路径和引用：OpenAPI 规范没有定义这种组合，丢掉或猜测某个操作的路由映射，授予的权限会比 API 描述的更少或更多。
 
