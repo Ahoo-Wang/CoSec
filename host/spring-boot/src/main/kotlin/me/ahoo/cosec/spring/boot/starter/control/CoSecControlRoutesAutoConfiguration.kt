@@ -30,15 +30,16 @@ import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.starter.pipeline.ReactiveClientIp
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
-import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
+import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.Ordered
@@ -163,11 +164,12 @@ internal class CoSecControlRoutesAutoConfiguration {
             contributors: ObjectProvider<BridgeContextContributor>,
             authorization: RuntimeAuthorizationProperties,
             properties: ControlProperties,
+            context: ApplicationContext,
         ): ControlRoutesWebFilter = ControlRoutesWebFilter(
             PipelineWebFilter(
                 pipeline,
                 contributors.orderedStream().toList(),
-                ReactiveXForwardedRemoteIpResolver(authorization.remoteIp.maxTrustedIndex),
+                ReactiveClientIp.of(CoSecPipelineWebAutoConfiguration.clientIpOf(context, authorization)),
                 CoSecPipelineWebAutoConfiguration.hostOf(authorization),
             ),
             basePathOf(properties),

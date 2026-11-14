@@ -412,6 +412,32 @@ application port unless `management.server.port` names another. The first messag
 The second message: `gateway` changes routes, so it is never accepted there; serve it on a management port, or not
 at all ([Actuator on a gateway](../integration/web.md#actuator-on-a-gateway)).
 
+### Startup fails on the client address
+
+```text
+server.forward-headers-strategy=framework: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For entry, which the client writes, the remote address ... (https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address).
+cosec.authorization.remote-ip.max-trusted-index is set, but Tomcat's RemoteIpValve resolves the client address on this host ...
+cosec.authorization.remote-ip.max-trusted-index=0 reads the connection's peer, but with the native forward-headers strategy ... the peer cannot be read. ...
+The native forward-headers strategy is on (configured or inferred from the cloud platform), but CoSec cannot tell how this host's server resolves the client address ...
+```
+
+CoSec reads the client address once, from one party it trusts (`PIP-16`), and refuses to start where it cannot tell
+which. The native strategy may be on without your setting it: Spring Boot turns it on by itself on Kubernetes and the
+other cloud platforms it detects. Per message:
+
+- `framework`, or a `ForwardedHeaderFilter` or `ForwardedHeaderTransformer` bean that rewrites the request: use
+  `server.forward-headers-strategy=native` and configure the proxies on the server, or `none` and set
+  `cosec.authorization.remote-ip.max-trusted-index`. A filter that only removes the headers (`removeOnly`) is accepted.
+- Tomcat with `native`: remove `max-trusted-index`; Tomcat's `server.tomcat.remoteip.internal-proxies` and
+  `trusted-proxies` say which proxies it trusts. Or set `server.forward-headers-strategy=none` to have CoSec read
+  `X-Forwarded-For` itself.
+- Reactor Netty or Jetty with `native` and `max-trusted-index: 0`: set the index to the number of proxies in front of
+  the host, or `server.forward-headers-strategy=none` on a host clients reach directly.
+- A server CoSec cannot tell, such as a war in an external container: set `server.forward-headers-strategy=none` and the
+  index.
+
+The table is in [Client IP behind proxies](../integration/web.md#client-ip-behind-proxies).
+
 ### Startup fails on the eviction check
 
 ```text

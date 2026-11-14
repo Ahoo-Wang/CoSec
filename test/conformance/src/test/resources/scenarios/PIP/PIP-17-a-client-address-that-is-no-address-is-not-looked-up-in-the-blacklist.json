@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "PIP-17"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A client address that is no address cannot be looked up in the blacklist: unavailable, so 503 unless a DENY matches, never not blocked.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "remoteAddress": "unknown"
+  },
+  "blacklist": {
+    "blocks": [
+      "device"
+    ]
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

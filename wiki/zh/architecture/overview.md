@@ -106,7 +106,7 @@ sequenceDiagram
     P-)L: BEST_EFFORT listeners, off the request path
 ```
 
-- **读取。** 适配器一次性读出方法、原始路径、查询串、请求头、Cookie、客户端地址（按配置的 `X-Forwarded-For` 深度）和 host，然后启动 Pipeline（第 1 步）。在 WebFlux 和 Gateway 上，请求在事件循环上启动、不做调度；真正挂起之后在 `Dispatchers.Default` 上继续，绝不在客户端库的 I/O 线程上继续。在 WebMvc 上，桥接是 Servlet 线程上的 `runBlocking`。
+- **读取。** 适配器一次性读出方法、原始路径、查询串、请求头、Cookie、客户端地址（只读取一次，按服务器的转发头策略取自服务器或 `X-Forwarded-For`，`PIP-16`）和 host，然后启动 Pipeline（第 1 步）。在 WebFlux 和 Gateway 上，请求在事件循环上启动、不做调度；真正挂起之后在 `Dispatchers.Default` 上继续，绝不在客户端库的 I/O 线程上继续。在 WebMvc 上，桥接是 Servlet 线程上的 `runBlocking`。
 - **路由。** 无法规范化的路径或有歧义的 `CoSec-*` 参数得到 `400`（第 2 步）。[路由映射](./extending.md#route-maps)把匹配到的请求变成作用于类型化资源的 `service:verb` 动作；其他请求则是作用于 `http:path:<path>` 的 `http:<METHOD>`。
 - **认证。** `Authenticator` 把令牌或 API key 变成主体（第 3 步）。被拒绝的凭证按匿名主体求值；认证器失败或超时得到 `503`。
 - **成员关系与 A 阶段。** A 阶段属性（决定要加载什么的属性，例如黑名单）与成员关系一起获取（第 4、5 步）。成员关系来自令牌的声明；对 API key，以及带有 provider 标记的令牌，来自 `MembershipProvider`，并按 key 的上限收窄。提供者不认识或认为已停用的主体，其凭证被拒绝，请求按匿名决策。成员关系来源失败、超时或返回错误类型的成员关系时得到 `503`，绝不当作“没有角色”。

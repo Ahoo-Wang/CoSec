@@ -218,9 +218,25 @@ val securityContext = httpServletRequest.getSecurityContext()
 
 ## 代理后的客户端 IP {#client-ip-behind-proxies}
 
-策略、限流键、黑名单和审计事件看到的客户端 IP 是 `environment.ip`。把 `cosec.authorization.remote-ip.max-trusted-index` 设为应用前面的代理数量（默认 `1`）。CoSec 随后从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你最外层代理追加的那一条，因此客户端写在该请求头左侧的值永远不会被使用。条目数少于该值时，使用最左侧的条目。
+策略、限流键、黑名单和审计事件看到的客户端 IP 是 `environment.ip`。CoSec 只读取它一次，且只从它信任的一方读取（`PIP-16`）；
+读取方式取决于服务器是否已经解析了转发头：`server.forward-headers-strategy`，Spring Boot 在 Kubernetes、Cloud Foundry、Heroku
+以及它识别出的其他云平台上会自行设为 `native`。启动日志中以 `(PIP-16)` 结尾的一行说明了采用的读取方式。
 
-`0` 表示忽略 `X-Forwarded-For`，使用 socket 地址：在客户端可直接访问的宿主上请设为 `0`，否则客户端可以声称任意地址。没有 `X-Forwarded-For`，或有多个这样的请求头时，同样使用 socket 地址。IP 永远不会通过反向 DNS 解析。
+| 服务器与策略 | 客户端 IP 的来源 | `cosec.authorization.remote-ip.max-trusted-index` |
+|---|---|---|
+| 任意服务器，没有策略（`none`，云平台之外的默认值） | `X-Forwarded-For` 右侧数起该位置的条目；没有该请求头时用连接的对端 | 宿主前面的代理数量（默认 `1`）；`0` 只读取对端 |
+| Tomcat，`native`（设置了 `server.tomcat.remoteip.remote-ip-header` 或 `protocol-header` 时也是） | Tomcat 的 `RemoteIpValve` 解析出的地址；CoSec 不再读取该请求头 | 不要设置：Tomcat 信任的代理由 `server.tomcat.remoteip.internal-proxies` 和 `trusted-proxies` 配置。设置它会导致启动失败 |
+| Reactor Netty 或 Jetty，`native` | `X-Forwarded-For` 右侧数起该位置的条目，绝不使用服务器从客户端可写的请求头里取出的地址；没有该请求头时地址未知 | 至少为 `1`；`0` 会导致启动失败 |
+| `framework`，或会改写请求的 `ForwardedHeaderFilter`、`ForwardedHeaderTransformer` bean | 启动失败：Spring 的过滤器把客户端所写的最左侧条目作为远端地址 | |
+| CoSec 无法判断的服务器上的 `native`，例如部署在外部容器中的 war | 启动失败：设置 `server.forward-headers-strategy=none` 和该索引 | |
+
+从右侧数起的那一条是你最外层代理追加的，因此客户端写在该请求头左侧的值永远不会被使用。条目数少于该值时，使用最左侧的条目。
+多行 `X-Forwarded-For` 按收到的顺序视为一个列表，因此客户端自己写的那一行位于你的代理那一行的左侧。没有该请求头的请求使用连接的对端；在 `native` 下的 Reactor Netty 或 Jetty 上则没有地址。
+带端口、方括号或 zone 的条目（`192.0.2.1:8080`、`[2001:db8::1]:443`、`fe80::1%en0`）按其中的地址读取。不是地址的条目（`unknown`）使 `environment.ip` 取不到：读取它的 DENY 返回 `503`，黑名单也无法为它查询（`PIP-17`）。IP 永远不会通过反向 DNS 解析。
+
+CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追加，或覆盖它；只写 `Forwarded`（RFC 7239）、却把客户端的
+`X-Forwarded-For` 原样转发的代理，会让客户端自选地址，所以要把它配置为覆盖或删除 `X-Forwarded-For`。在客户端可直接访问的宿主上，
+请把该索引设为 `0`（且不设策略），否则客户端可以在该请求头里写入任意地址。
 
 ## 请求属性 {#request-attributes}
 

@@ -11,76 +11,80 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.http
 
-import io.mockk.mockk
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 class XForwardedRemoteIpResolverTest {
-    private val defaultRemoteIpResolver: RemoteIpResolver<Any> = RemoteIpResolver { "default" }
-
-    @Test
-    fun resolveWhenMultiValues() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
-                return listOf("", "")
-            }
-        }
-        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    /** A request is its `X-Forwarded-For` lines; its peer is always `192.0.2.1`. */
+    private class Resolver(maxTrustedIndex: Int, peerIsConnection: Boolean = true) :
+        XForwardedRemoteIpResolver<List<String>?>(RemoteIpResolver { PEER }, maxTrustedIndex, peerIsConnection) {
+        override fun extractXForwardedHeaderValues(request: List<String>?): List<String>? = request
     }
 
     @Test
-    fun resolveWhenNull() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
-                return null
-            }
-        }
-        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    fun theEntryOfTheOutermostTrustedProxyIsTheClient() {
+        Resolver(1).resolve(listOf("203.0.113.9, 198.51.100.2, 203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        Resolver(2).resolve(listOf("203.0.113.9, 198.51.100.2, 203.0.113.7")).assert().isEqualTo("198.51.100.2")
     }
 
     @Test
-    fun resolve() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
-                return listOf("ipAddress")
-            }
-        }
-        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress")
+    fun withFewerEntriesTheLeftmostIsRead() {
+        Resolver(3).resolve(listOf("198.51.100.2, 203.0.113.7")).assert().isEqualTo("198.51.100.2")
     }
 
     @Test
-    fun resolveMulti() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
-            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
-                return listOf("ipAddress0, ipAddress1, ipAddress2")
-            }
-        }
-        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress0")
+    fun indexZeroReadsThePeerOnly() {
+        Resolver(0).resolve(listOf("203.0.113.7")).assert().isEqualTo(PEER)
     }
 
     @Test
-    fun resolveWhenMaxTrustedIndexZero() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
-            override val maxTrustedIndex: Int get() = 0
-            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
-                return listOf("ipAddress")
-            }
-        }
-        // maxTrustedIndex = 0 means: do not trust X-Forwarded-For at all.
-        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    fun withoutAHeaderThePeerIsTheClient() {
+        Resolver(1).resolve(null).assert().isEqualTo(PEER)
+        Resolver(1).resolve(listOf(" , ")).assert().isEqualTo(PEER)
+    }
+
+    /** PIP-16: where the host's address is a client's claim (Netty's, Jetty's forwarded handling), it is never read. */
+    @Test
+    fun withoutTheConnectionsPeerAnAddressComesFromTheHeaderOnly() {
+        val resolver = Resolver(1, peerIsConnection = false)
+        resolver.resolve(listOf("10.6.6.6, 203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        resolver.resolve(null).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
+        resolver.resolve(listOf(" ")).assert().isEqualTo(XForwardedRemoteIpResolver.UNKNOWN)
     }
 
     @Test
-    fun resolveWhenMaxTrustedIndexOne() {
-        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Any>(defaultRemoteIpResolver) {
-            override val maxTrustedIndex: Int get() = 1
-            override fun extractXForwardedHeaderValues(request: Any): List<String>? {
-                return listOf("ipAddress0, ipAddress1, ipAddress2")
-            }
-        }
-        // Trust exactly one hop: the rightmost entry is the one appended by the closest proxy.
-        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress2")
+    fun withoutThePeerTheHeaderMustBeTrusted() {
+        assertThrownBy<IllegalArgumentException> { Resolver(0, peerIsConnection = false) }
+        assertThrownBy<IllegalArgumentException> { Resolver(-1) }
+    }
+
+    /** Several lines are one list, in order (RFC 9110 §5.3): a client's own line goes left of the proxy's. */
+    @Test
+    fun severalLinesAreOneList() {
+        Resolver(1).resolve(listOf("10.6.6.6", "198.51.100.2, 203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        Resolver(1).resolve(listOf("10.6.6.6", "203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        Resolver(2).resolve(listOf("10.6.6.6", "203.0.113.7")).assert().isEqualTo("10.6.6.6")
+    }
+
+    /** PIP-17: an entry is read as the address it writes; one that is no address stays as it is. */
+    @Test
+    fun anEntryIsReadAsItsAddress() {
+        Resolver(1).resolve(listOf("203.0.113.7:8080")).assert().isEqualTo("203.0.113.7")
+        Resolver(1).resolve(listOf("[2001:db8::1]:443")).assert().isEqualTo("2001:db8::1")
+        Resolver(1).resolve(listOf("[2001:db8::1]")).assert().isEqualTo("2001:db8::1")
+        Resolver(1).resolve(listOf("fe80::1%en0")).assert().isEqualTo("fe80::1")
+        Resolver(1).resolve(listOf("2001:db8::1")).assert().isEqualTo("2001:db8::1")
+        Resolver(1).resolve(listOf("unknown")).assert().isEqualTo("unknown")
+        Resolver(1).resolve(listOf("_hidden")).assert().isEqualTo("_hidden")
+    }
+
+    private companion object {
+        const val PEER = "192.0.2.1"
     }
 }

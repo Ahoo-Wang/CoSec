@@ -1,0 +1,17 @@
+# Rule: PIP-16
+# Mutant: without X-Forwarded-For, the address Reactor Netty or Jetty took from a client's header is read
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolverTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
+index cb1d877e..eb1efa15 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
+@@ -82,7 +82,7 @@ abstract class XForwardedRemoteIpResolver<R>(
+     }
+ 
+     /** Without a usable header: the peer, or [UNKNOWN] when the host's address is not the peer's. */
+-    private fun fallback(request: R): String = if (peerIsConnection) peer.resolve(request) else UNKNOWN
++    private fun fallback(request: R): String = peer.resolve(request)
+ 
+     abstract fun extractXForwardedHeaderValues(request: R): List<String>?
+ }
