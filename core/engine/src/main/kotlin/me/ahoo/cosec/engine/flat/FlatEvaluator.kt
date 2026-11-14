@@ -741,6 +741,13 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             remoteIp = IpAddress.parse(authz.environment.remoteIp)
             remoteIpParsed = true
         }
+        // The host reported something that is no address (`unknown`, a proxy's obfuscated identifier): the client's
+        // address could not be read, so it is unavailable, as a missing external attribute is (PIP-17), never absent,
+        // which a DENY would read as "no match". An empty one is absent: nothing was reported, as in a check or a
+        // simulation that names no address.
+        if (remoteIp == null && authz.environment.remoteIp.isNotEmpty()) {
+            throw AttributeMissing(Attribute.Kind.ENVIRONMENT_IP.path)
+        }
         return remoteIp
     }
 

@@ -336,7 +336,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `resource.type`, `resource.id` | String | The two parts of the resource. |
 | `resource.attributes.<name>` | String | Attributes of the resource. Neither the request pipeline nor the documented checks set any: an object-level rule puts its facts in the resource id ([Object-level rules](../integration/checks.md#object-level-rules)). |
 | `resource.var.<name>` | String | A [path variable](#path-variables). |
-| `environment.ip` | Ip | The client address ([Web integration](../integration/web.md)). |
+| `environment.ip` | Ip | The client address ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)). Absent when the host reported none. When it reported something that is no address (a proxy wrote `unknown`), it is unavailable, never absent: a statement that reads it is decided as one whose external attribute is missing under `onMissing: indeterminate`, so a DENY on it is `503` (`PIP-17`). |
 | `environment.time` | Instant | The request time; only `time` reads it. |
 | `environment.device` | String | The `CoSec-Device-Id` parameter; absent when empty. |
 | `environment.blocked` | Bool | Whether the blacklist blocks the request. |

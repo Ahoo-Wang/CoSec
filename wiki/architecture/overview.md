@@ -194,8 +194,8 @@ sequenceDiagram
     P-)L: BEST_EFFORT listeners, off the request path
 ```
 
-- **Read.** The adapter reads the method, raw path, query, headers, cookies, client address (through the configured
-  `X-Forwarded-For` depth) and host once, and starts the pipeline (step 1). On WebFlux and Gateway the request starts on
+- **Read.** The adapter reads the method, raw path, query, headers, cookies, client address (read once, from the
+  server or `X-Forwarded-For` as the server's forward-headers strategy decides, `PIP-16`) and host once, and starts the pipeline (step 1). On WebFlux and Gateway the request starts on
   the event loop without a dispatch; after a real suspension it continues on `Dispatchers.Default`, never on a client
   library's I/O thread. On WebMvc the bridge is `runBlocking` on the servlet thread.
 - **Route.** A path that does not normalize, or an ambiguous `CoSec-*` parameter, is a `400` (step 2). A

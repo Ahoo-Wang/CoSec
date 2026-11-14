@@ -276,7 +276,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `resource.type`、`resource.id` | String | 资源的两部分。 |
 | `resource.attributes.<name>` | String | 资源的属性。请求管道和文档中列出的检查都不设置；对象级规则把事实写进资源 id（[对象级规则](../integration/checks.md#object-level-rules)）。 |
 | `resource.var.<name>` | String | [路径变量](#path-variables)。 |
-| `environment.ip` | Ip | 客户端地址（[Web 集成](../integration/web.md)）。 |
+| `environment.ip` | Ip | 客户端地址（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。宿主没有报告地址时缺失（absent）。报告的内容不是地址时（代理写了 `unknown`），它是“取不到”（unavailable），而不是缺失：读取它的语句按 `onMissing: indeterminate` 下外部属性取不到的情形判定，所以针对它的 DENY 是 `503`（`PIP-17`）。 |
 | `environment.time` | Instant | 请求时间；只有 `time` 读取它。 |
 | `environment.device` | String | `CoSec-Device-Id` 参数；为空时缺失。 |
 | `environment.blocked` | Bool | 黑名单是否拦截该请求。 |

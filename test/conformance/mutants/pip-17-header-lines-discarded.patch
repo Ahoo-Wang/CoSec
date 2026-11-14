@@ -1,0 +1,16 @@
+# Rule: PIP-17
+# Mutant: several X-Forwarded-For lines are discarded for the peer, which a client's second line chooses
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolverTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
+index 9b4383c9..35354988 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver.kt
+@@ -64,6 +64,7 @@ abstract class XForwardedRemoteIpResolver<R>(
+         // Several header lines are one list, in the order received (RFC 9110 §5.3): a proxy that adds its own line
+         // appends as surely as one that extends the last. Reading the peer instead would let a client that sends a
+         // second line of its own step around a block on its own address.
++        if (extractXForwardedHeaderValues(request).orEmpty().size > 1) return fallback(request)
+         val entries = ArrayList<String>()
+         for (line in extractXForwardedHeaderValues(request).orEmpty()) {
+             for (entry in line.split(DELIMITER)) {

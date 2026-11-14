@@ -79,11 +79,11 @@ class ExternalValues internal constructor(
 enum class AttributeStatus { PRESENT, ABSENT, UNAVAILABLE }
 
 /**
- * An external attribute a condition read is missing. A statement's error, like any exception of a condition, but one
- * that [OnMissing] decides. Carries no stack trace: it is an expected outcome, not a defect.
+ * An external attribute a condition read is missing, or `environment.ip` when the host reported something that is no
+ * address (`PIP-17`). A statement's error, like any exception of a condition, but one that [OnMissing] decides. Carries no stack trace: it is an expected outcome, not a defect.
  */
 internal class AttributeMissing(val path: String) : RuntimeException(
-    "External attribute $path is unavailable",
+    "Attribute $path is unavailable",
     null,
     false,
     false
