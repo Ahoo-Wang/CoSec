@@ -102,7 +102,7 @@ The path CoSec authorizes is the request path within the application:
 
 | Adapter | Path |
 |---|---|
-| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is authorized as `/api/admin/users`. |
+| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is authorized as `/api/admin/users`. The context path is removed segment by segment, however the client wrote it (`/%61pp/orders` with the context path `/app` is `/orders`); a URI that does not start with it is `400` (`PIP-20`). |
 | WebFlux, Gateway | The path within the application, without `spring.webflux.base-path`. |
 
 Before anything else, `PathNormalizer` checks it. On every adapter the path is:

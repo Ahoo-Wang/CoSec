@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.servlet
 
 import jakarta.servlet.Filter
@@ -21,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletRequestWrapper
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
@@ -28,6 +31,7 @@ import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemEncoder
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
+import me.ahoo.cosec.runtime.http.ApplicationPaths
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -51,8 +55,8 @@ internal object ServletHttpFactsReader {
         val cookies = request.cookies.orEmpty().groupBy({ it.name }, { it.value })
         return HttpFacts(
             method = request.method,
-            // Encoded, and within the application: the context path is not the app's to authorize.
-            rawPath = request.requestURI.removePrefix(request.contextPath),
+            // Encoded, and within the application: the context path is not the app's to authorize (PIP-20).
+            rawPath = ApplicationPaths.within(request.requestURI, request.contextPath),
             rawQuery = request.queryString,
             headers = Headers.of(headers),
             cookies = Cookies.of(cookies),

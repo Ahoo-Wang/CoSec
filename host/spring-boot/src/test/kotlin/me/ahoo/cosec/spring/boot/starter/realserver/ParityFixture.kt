@@ -42,9 +42,9 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /**
- * The pipeline the real-server suites run, with documents written for them: public pages, a role's orders with DELETE
- * denied, an exhausted rate limit, and a path open only to the internal network (`10.0.0.0/8`). `Authorization:
- * Bearer <who>@<tenant>:<role>,...` authenticates; every id is `parity-request`, so the stacks' answers compare byte
+ * The pipeline the real-server suites run, with documents written for them: public pages; orders, which `clerk` may do
+ * anything to and `staff` anything anywhere, but neither may DELETE; an exhausted rate limit; a path open only to the
+ * internal network (`10.0.0.0/8`). `Authorization: Bearer <who>@<tenant>:<role>,...` authenticates; every id is `parity-request`, so the stacks' answers compare byte
  * for byte.
  */
 internal class ParityFixture : AutoCloseable {
@@ -68,8 +68,10 @@ internal class ParityFixture : AutoCloseable {
 
     private val tenant: CompiledDocument = compile(
         SnapshotKey.Tenant("acme"),
-        ""","policies":[{"id":"orders","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/orders/**"}]}],
-          "bindings":[{"id":"r:clerk","subject":{"role":"clerk"},"app":"*","space":"*","policy":"orders"}]""",
+        ""","policies":[{"id":"orders","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/orders/**"}]},
+            {"id":"everything","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/**"}]}],
+          "bindings":[{"id":"r:clerk","subject":{"role":"clerk"},"app":"*","space":"*","policy":"orders"},
+                      {"id":"r:staff","subject":{"role":"staff"},"app":"*","space":"*","policy":"everything"}]""",
     )
 
     private val views = object : SnapshotViews {

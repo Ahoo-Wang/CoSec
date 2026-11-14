@@ -16,6 +16,9 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **The context path is removed segment by segment** (`PIP-20`). On Jetty, which writes the context path canonically
+  while the URI keeps the client's form, `/%61pp/orders/1` with the context path `/app` was decided as `/app/orders/1`,
+  past every statement on `/orders`; it is now `/orders/1`. A URI that does not start with the context path is `400`.
 - **The Spring MVC filter runs at `-9999`**, right after Spring Boot's hidden-method filter (`-10000`), instead of
   `HIGHEST_PRECEDENCE + 100`. With `spring.mvc.hiddenmethod.filter.enabled`, a `POST` with `_method=DELETE` was
   authorized as a POST and executed as a DELETE; WebFlux already authorized the DELETE. A filter of yours that must run

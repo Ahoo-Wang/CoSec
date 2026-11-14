@@ -229,6 +229,18 @@
         "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on WebFlux"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-20",
+      "source": "RFC 0006 §5.3.1; round-2 review M3",
+      "statement": "The path an adapter hands the pipeline is the request URI without the context path, removed segment by segment: the URI's leading segments, without path parameters and decoded once, must be the context path's, taken the same way, whichever way the server writes the context path; otherwise the request is 400 `invalid-request`. No adapter derives the path otherwise.",
+      "level": "build",
+      "guards": [
+        "runtime:ApplicationPathsTest#aContextPathWrittenOtherwiseIsRemovedSegmentBySegment",
+        "runtime:ApplicationPathsTest#aUriThatDoesNotAgreeWithTheContextPathIsUnreadable",
+        "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written"
+      ],
+      "pending": null
     }
   ]
 }

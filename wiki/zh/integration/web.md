@@ -76,7 +76,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 | 适配器 | 路径 |
 |---|---|
-| Spring MVC | 去掉 Servlet context path（`server.servlet.context-path`）后的请求 URI。它保留 `DispatcherServlet` 的映射前缀：设置 `spring.mvc.servlet.path=/api` 时，`/api/admin/users` 按 `/api/admin/users` 授权。 |
+| Spring MVC | 去掉 Servlet context path（`server.servlet.context-path`）后的请求 URI。它保留 `DispatcherServlet` 的映射前缀：设置 `spring.mvc.servlet.path=/api` 时，`/api/admin/users` 按 `/api/admin/users` 授权。context path 按段去掉，不论客户端怎么写它（context path 为 `/app` 时，`/%61pp/orders` 是 `/orders`）；不以它开头的 URI 是 `400`（`PIP-20`）。 |
 | WebFlux、Gateway | 应用内的路径，不含 `spring.webflux.base-path`。 |
 
 在其他一切之前，`PathNormalizer` 会检查它。在所有适配器上，路径：

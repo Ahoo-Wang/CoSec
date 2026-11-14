@@ -24,6 +24,9 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "runtime:ApplicationPathsTest#aContextPathWrittenOtherwiseIsRemovedSegmentBySegment",
+            "runtime:ApplicationPathsTest#aUriThatDoesNotAgreeWithTheContextPathIsUnreadable",
+            "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written",
             "runtime:PolicyDocumentCodecTest#the wildcard is only ever Any",
             "architecture:OneDecisionPathTest#onlyStatusMappingConstructsOutcomes",
             "architecture:OneDecisionPathTest#adaptersNeverSeeDecisions",
