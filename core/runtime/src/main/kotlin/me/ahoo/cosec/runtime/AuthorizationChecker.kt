@@ -60,7 +60,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
 
     /**
      * The decision that [check] answers for the same arguments. A context the pipeline did not make, an action
-     * without `:`, or a resource enforcement would not decide ([enforceable], `PIP-15`) is an implicit deny
+     * without `:`, or a resource enforcement would not decide ([PathNormalizer.enforceable], `PIP-15`) is an implicit deny
      * (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
      * of a permit, rate limits, did not run.
      *
@@ -91,29 +91,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         decide(security, action, resource) is Decision.Permit
 
     /** As [decide], with the action and resource given as the engine reads them. */
-    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
-        val decidable = enforceable(resource) ?: return Decision.Deny(null)
-        return decided(security, action, decidable)
-    }
-
-    /**
-     * [resource] as enforcement reads it (`PIP-15`), or null when enforcement would refuse it, so that a check never
-     * permits what no request could be permitted for: an `http` path goes through what every request's path does
-     * ([PathNormalizer.normalize]), since the engine does not resolve a dot segment and a wildcard under `/public` would
-     * match `/public/../admin`; a typed id, which no request carries as written, is held to the same length bounds.
-     */
     @OptIn(InternalCoSecApi::class)
-    private fun enforceable(resource: Resource): Resource? {
-        val id = if (resource.type == HTTP) {
-            PathNormalizer.normalize(resource.id)
-        } else {
-            resource.id.takeIf(PathNormalizer::withinBounds)
-        }
-        return when (id) {
-            null -> null
-            resource.id -> resource
-            else -> Resource(resource.type, id, resource.attributes)
-        }
+    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
+        val decidable = PathNormalizer.enforceable(resource) ?: return Decision.Deny(null)
+        return decided(security, action, decidable)
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -135,6 +116,11 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * tenant: how the control plane checks its own actions, in `(cosec.control.app-id, default space)` (RFC 0007 §7.2).
      * Three-valued, so that the caller can tell a deny from an outage; it fails closed like [check]. An anonymous
      * request is denied.
+     *
+     * [resource] is not put through [PathNormalizer.enforceable], nor is it in [decideAs]: these check the control
+     * plane's own actions on resources the server builds from ids it has validated (a document, a change), never a path
+     * a client sent, and their bounds are those of the ids, not of a request path. The control plane decides a resource
+     * a client names (simulate, explain) through [PathNormalizer.enforceable] before it gets here.
      */
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {

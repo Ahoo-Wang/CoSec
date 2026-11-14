@@ -161,7 +161,7 @@
     {
       "id": "PIP-14",
       "source": "RFC 0006 §5.3.1; round-2 review M1",
-      "statement": "A path with an empty segment before its end (`//`, also as removing a path parameter leaves it, and with `\\` as a separator) or with an encoded separator (`%2F`, in either case) is answered 400 before authentication: a pattern reads them as segments of their own, so a DENY would not match what a backend that merges slashes or decodes separators serves. A trailing `/` is read as written.",
+      "statement": "A path with an empty segment before its end (`//`, also as removing a path parameter leaves it), an encoded separator (`%2F`, in either case) or a backslash (`\\`, or `%5C` in either case) is answered 400 before authentication: a pattern reads them as segments of their own or as part of one, so a DENY would not match what a backend that merges slashes, decodes separators or reads a backslash as a separator serves. A trailing `/` is read as written, and a double-encoded separator (`%252F`, `%255C`) decodes to text.",
       "level": "pipeline",
       "guards": [
         "runtime:PathNormalizerTest#emptySegmentsAndEncodedSeparatorsAreRejected",

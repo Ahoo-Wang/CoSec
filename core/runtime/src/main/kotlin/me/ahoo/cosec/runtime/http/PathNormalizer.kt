@@ -14,6 +14,8 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.model.Resource
 import java.io.ByteArrayOutputStream
 
 /**
@@ -26,13 +28,13 @@ import java.io.ByteArrayOutputStream
  *   segments, so an encoded `..` would otherwise be authorized under a public wildcard and resolved by the container.
  * - A malformed percent-escape is rejected.
  * - A decoded segment is also a dot segment when its part before `;` is, as `..%3Bx` decodes to `..;x`.
- * - A `\` (also `%5C`) separates segments for this check, as some containers treat it as `/`; so `..\` is a traversal
- *   too.
- * - An empty segment before the end of the path (`//`, or what removing a path parameter leaves, as in `/;x/a`) and an
- *   encoded separator (`%2F`, in either case) are rejected (`PIP-14`). A pattern reads them as segments of their own, so
- *   a DENY on the segments under `/admin` does not match `//admin/1` or `/admin%2F1`, which a backend that merges
- *   slashes or decodes separators serves as `/admin/1`. A trailing `/` is kept: it is one more thing a pattern says or
- *   does not, and no merging turns it into another path.
+ * - An empty segment before the end of the path (`//`, or what removing a path parameter leaves, as in `/;x/a`), an
+ *   encoded separator (`%2F`, in either case) and a `\` (also `%5C`, in either case) are rejected (`PIP-14`). A pattern
+ *   reads each of them as part of a segment, or as a segment of its own, so a DENY on the segments under `/admin` does
+ *   not match `//admin/1`, `/admin%2F1` or `/admin\1`, which a backend that merges slashes, decodes separators or reads
+ *   `\` as `/` (as some containers and every browser do) serves as `/admin/1`. A trailing `/` is kept: it is one more
+ *   thing a pattern says or does not, and no merging turns it into another path. A double-encoded separator (`%252F`,
+ *   `%255C`) decodes to text and is kept, as `%252e` is.
  * - A path longer than [MAX_PATH_LENGTH] characters, or with a segment longer than [MAX_SEGMENT_LENGTH] after removing
  *   path parameters, is rejected (both counted encoded, which bounds the decoded length). Wildcard matching in the
  *   engine costs about the square of a segment's length: an 8 KB segment takes hundreds of milliseconds per statement,
@@ -70,6 +72,28 @@ object PathNormalizer {
     @InternalCoSecApi
     fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text)
 
+    /**
+     * [resource] as enforcement reads it, or null when enforcement would refuse it: the one judgement behind what a check
+     * by host code decides (`AuthorizationChecker`, `PIP-15`) and what the control plane simulates or explains (`CTL-3`),
+     * so that neither decides what no request could be decided on. An `http` path goes through [normalize], since the
+     * engine does not resolve a dot segment and a wildcard under `/public` would match `/public/../admin`; a typed id,
+     * which no request carries as written, is held to [withinBounds], since its globs would otherwise cost more than any
+     * request's.
+     */
+    @InternalCoSecApi
+    fun enforceable(resource: Resource): Resource? {
+        val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+            normalize(resource.id)
+        } else {
+            resource.id.takeIf(::withinBounds)
+        }
+        return when (id) {
+            null -> null
+            resource.id -> resource
+            else -> Resource(resource.type, id, resource.attributes)
+        }
+    }
+
     private fun hasLongSegment(path: String): Boolean {
         if (path.length <= MAX_SEGMENT_LENGTH) {
             return false
@@ -101,7 +125,10 @@ object PathNormalizer {
         }
         // fail-closed: a malformed percent-escape is never a traversal-free path.
         val decoded = PercentDecoder.decode(path, plusIsSpace = false) ?: return true
-        val segments = decoded.split('/', '\\')
+        if ('\\' in decoded) {
+            return true
+        }
+        val segments = decoded.split('/')
         for (index in segments.indices) {
             // An encoded `;` (`..%3Bx`) is a dot segment to whatever decodes before it strips path parameters.
             val segment = segments[index].substringBefore(';')

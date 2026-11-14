@@ -34,7 +34,6 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding
@@ -383,27 +382,15 @@ class DefaultControlPlane(
         return Decidable(key, request.copy(resource = enforceable(request.resource)))
     }
 
-    /**
-     * [resource] as enforcement would decide it (RC1-41, review L5 of #1200): an `http` path goes through the
-     * normalization every request's path does ([PathNormalizer.normalize]), which a path enforcement answers 400 for (a
-     * dot segment after decoding, a malformed escape, over the length bounds) fails here too, and its path parameters
-     * are removed as there. A typed id, which no request carries as written, is held to the same length bounds: what no
-     * request path can be is not decided either, as its globs would cost more than any request's.
-     */
-    private fun enforceable(resource: Resource): Resource {
-        val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
-            PathNormalizer.normalize(resource.id)
-        } else {
-            resource.id.takeIf { PathNormalizer.withinBounds(it) }
-        }
-        id ?: throw ChangeRejectedException(
+    /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
+    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
+        ?: throw ChangeRejectedException(
             BAD_REQUEST,
-            "The resource is not one enforcement decides: an http path is refused for a dot segment, a malformed " +
-                "escape or its length, as a request's is, and any resource is at most " +
-                "${PathNormalizer.MAX_PATH_LENGTH} characters, ${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
+            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
+                "an empty segment, an encoded separator, a backslash, a malformed escape or its length), and any " +
+                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
+                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
         )
-        return if (id == resource.id) resource else Resource(resource.type, id, resource.attributes)
-    }
 
     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
     private suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }
