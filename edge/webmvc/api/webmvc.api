@@ -24,7 +24,3 @@ public final class me/ahoo/cosec/webmvc/ServletRequests {
 	public final fun getSecurityContext (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
-public final class me/ahoo/cosec/webmvc/SuspendingHandlerHolderInterceptor$Companion {
-	public final fun restored ()Z
-}
-

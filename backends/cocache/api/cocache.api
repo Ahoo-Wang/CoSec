@@ -78,25 +78,17 @@ public final class me/ahoo/cosec/cocache/limiter/ReactiveRedisRateLimiter : me/a
 }
 
 public final class me/ahoo/cosec/cocache/shadow/CoCacheShadowReports : me/ahoo/cosec/runtime/shadow/ShadowReportReader, me/ahoo/cosec/runtime/shadow/ShadowReportSink {
-	public static final field Companion Lme/ahoo/cosec/cocache/shadow/CoCacheShadowReports$Companion;
 	public fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun write (Lme/ahoo/cosec/runtime/shadow/InstanceStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun write (Lme/ahoo/cosec/runtime/shadow/ShadowReport;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/cocache/shadow/CoCacheShadowReports$Companion {
-}
-
 public final class me/ahoo/cosec/cocache/snapshot/RedisSnapshotDocumentStore : me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore {
-	public static final field Companion Lme/ahoo/cosec/cocache/snapshot/RedisSnapshotDocumentStore$Companion;
 	public fun getLocalCopyMaxAge ()Ljava/time/Duration;
 	public final fun notifyChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)V
 	public fun read (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;)Ljava/util/concurrent/CompletableFuture;
 	public fun readIfChanged (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Ljava/util/concurrent/CompletableFuture;
 	public fun subscribe (Lme/ahoo/cosec/spi/snapshot/SnapshotChangeListener;)Ljava/lang/AutoCloseable;
-}
-
-public final class me/ahoo/cosec/cocache/snapshot/RedisSnapshotDocumentStore$Companion {
 }
 
