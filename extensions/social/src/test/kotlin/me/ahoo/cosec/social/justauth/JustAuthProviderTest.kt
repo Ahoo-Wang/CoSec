@@ -17,6 +17,7 @@ import com.alibaba.fastjson.JSONObject
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -25,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.test.asserts.assert
@@ -37,6 +39,9 @@ import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.time.Duration
 import java.util.Base64
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -44,6 +49,76 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class JustAuthProviderTest {
+    private val states = InMemorySocialStateStore()
+
+    /** The callback of a sign-in started for this browser: a state [states] holds, and the browser's binding. */
+    private fun issued(provider: String, binding: String = "binding-${System.nanoTime()}"): JustAuthCredentials {
+        val state = Base64.getUrlEncoder().withoutPadding().encodeToString(
+            ByteArray(16).also(SecureRandom()::nextBytes)
+        )
+        states.put(state, sha256(binding), Duration.ofMinutes(3))
+        return JustAuthCredentials(provider, binding).apply { this.state = state }
+    }
+
+    private fun sha256(text: String): String = Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(MessageDigest.getInstance("SHA-256").digest(text.toByteArray()))
+
+    /** The states the last [succeeding] request was authorized with, in order. */
+    private val authorized = mutableListOf<String>()
+
+    private fun succeeding(): AuthRequest = mockk {
+        every { authorize(any()) } answers {
+            authorized += firstArg<String>()
+            "authorizeUrl"
+        }
+        every { login(any()) } returns mockk<AuthResponse<AuthUser>> {
+            every { ok() } returns true
+            every { data } returns AuthUser.builder().uuid("u1").build()
+        }
+    }
+
+    /** M4: the authorize step's state signs in once: a second callback holding it is refused before JustAuth sees it. */
+    @Test
+    fun `a state is used once`() = runTest {
+        val authRequest = succeeding()
+        val provider = JustAuthProvider("github", authRequest, states)
+        val started = provider.authorize()
+        val callback = callback(authorized.single(), started.binding)
+
+        provider.authenticate(callback).id.assert().isEqualTo("u1")
+        assertThrows<SocialAuthenticationException> { provider.authenticate(callback) }
+            .message.assert().contains("already used")
+        verify(exactly = 1) { authRequest.login(any()) }
+    }
+
+    /**
+     * M4: a state is bound to the browser that started the sign-in. An attacker's callback URL, opened in a victim's
+     * browser, carries the attacker's state but the victim's binding (or none): refused, and the state is spent.
+     */
+    @Test
+    fun `another browser's state is refused`() = runTest {
+        val authRequest = succeeding()
+        val provider = JustAuthProvider("github", authRequest, states)
+        val attackers = provider.authorize()
+        val victims = provider.authorize()
+
+        val (attackersState, victimsState) = authorized
+        assertThrows<SocialAuthenticationException> { provider.authenticate(callback(attackersState, victims.binding)) }
+            .message.assert().contains("another browser")
+        assertThrows<SocialAuthenticationException> { provider.authenticate(callback(victimsState, "")) }
+        assertThrows<SocialAuthenticationException> {
+            provider.authenticate(JustAuthCredentials("github", attackers.binding).apply { state = "made-up" })
+        }.message.assert().contains("no state")
+        verify(exactly = 0) { authRequest.login(any()) }
+    }
+
+    /** The provider's callback for [state], from a browser whose binding cookie is [binding]. */
+    private fun callback(state: String, binding: String): JustAuthCredentials =
+        JustAuthCredentials("github", binding).apply {
+            this.state = state
+            code = "code"
+        }
+
     /** A real blocking [AuthRequest] for the tests of threads and cancellation, which a mock's own locks would disturb. */
     private class BlockingAuthRequest(private val blockingCall: () -> Unit) : AuthRequest {
         override fun getAccessToken(authCallback: AuthCallback): AuthToken = AuthToken()
@@ -69,37 +144,40 @@ internal class JustAuthProviderTest {
         val authRequest = mockk<AuthRequest> {
             every { authorize(any()) } returns "authorizeUrl"
         }
-        val authClient = JustAuthProvider("clientId", authRequest)
+        val authClient = JustAuthProvider("clientId", authRequest, states)
         authClient.name.assert().isEqualTo("clientId")
-        authClient.authorizeUrl().assert().isEqualTo("authorizeUrl")
+        authClient.authorize().url.assert().isEqualTo("authorizeUrl")
     }
 
     /** The state guards the callback against CSRF: 128 secure random bits each time, never an application id. */
     @Test
     fun `every state is 128 fresh random bits`() = runTest {
-        val states = mutableListOf<String>()
+        val issued = mutableListOf<String>()
         val state = slot<String>()
         val authRequest = mockk<AuthRequest> {
             every { authorize(capture(state)) } answers {
-                states += state.captured
+                issued += state.captured
                 "authorizeUrl"
             }
         }
-        val authClient = JustAuthProvider("clientId", authRequest)
-        repeat(1_000) { authClient.authorizeUrl() }
-        states.toSet().assert().hasSize(1_000)
-        states.map { Base64.getUrlDecoder().decode(it).size }.toSet().assert().containsExactly(16)
-        states.filterNot { Regex("[A-Za-z0-9_-]{22}").matches(it) }.assert().isEmpty()
+        val authClient = JustAuthProvider("clientId", authRequest, states)
+        val bindings = List(1_000) { authClient.authorize().binding }
+        for (values in listOf(issued, bindings)) {
+            values.toSet().assert().hasSize(1_000)
+            values.map { Base64.getUrlDecoder().decode(it).size }.toSet().assert().containsExactly(16)
+            values.filterNot { Regex("[A-Za-z0-9_-]{22}").matches(it) }.assert().isEmpty()
+        }
+        issued.intersect(bindings.toSet()).assert().isEmpty()
     }
 
     /** RC1-14: JustAuth blocks, and the caller may be an event loop. */
     @Test
     fun `both blocking calls run off the caller's thread`(): Unit = runBlocking {
         val threads = CopyOnWriteArrayList<Thread>()
-        val authClient = JustAuthProvider("clientId", BlockingAuthRequest { threads += Thread.currentThread() })
+        val authClient = JustAuthProvider("clientId", BlockingAuthRequest { threads += Thread.currentThread() }, states)
 
-        authClient.authorizeUrl().assert().isEqualTo("authorizeUrl")
-        authClient.authenticate(JustAuthCredentials("clientId")).id.assert().isEqualTo("u1")
+        authClient.authorize().url.assert().isEqualTo("authorizeUrl")
+        authClient.authenticate(issued("clientId")).id.assert().isEqualTo("u1")
 
         threads.assert().hasSize(2).doesNotContain(Thread.currentThread())
     }
@@ -115,10 +193,11 @@ internal class JustAuthProviderTest {
                 Thread.sleep(20)
                 running.decrementAndGet()
             },
+            states,
             parallelism = 2,
         )
 
-        List(8) { async(Dispatchers.Default) { authClient.authenticate(JustAuthCredentials("clientId")) } }.awaitAll()
+        List(8) { async(Dispatchers.Default) { authClient.authenticate(issued("clientId")) } }.awaitAll()
 
         peak.get().assert().isBetween(1, 2)
     }
@@ -132,10 +211,11 @@ internal class JustAuthProviderTest {
                 started.countDown()
                 whileBlocked()
             },
+            states,
         )
         val user = AtomicBoolean()
         val login = launch(Dispatchers.Default) {
-            authClient.authenticate(JustAuthCredentials("clientId")).also { _: SocialUser -> user.set(true) }
+            authClient.authenticate(issued("clientId")).also { _: SocialUser -> user.set(true) }
         }
         runInterruptible(Dispatchers.IO) { started.await() }
 
@@ -175,7 +255,7 @@ internal class JustAuthProviderTest {
 
     @Test
     fun authenticateFail() = runTest {
-        val oAuthCredentials = JustAuthCredentials("clientId")
+        val oAuthCredentials = issued("clientId")
         val authRequest = mockk<AuthRequest> {
             every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns false
@@ -183,7 +263,7 @@ internal class JustAuthProviderTest {
                 every { code } returns -1
             }
         }
-        val authClient = JustAuthProvider("clientId", authRequest)
+        val authClient = JustAuthProvider("clientId", authRequest, states)
 
         assertThrows<SocialAuthenticationException> { authClient.authenticate(oAuthCredentials) }
             .message.assert().isEqualTo("msg")
@@ -191,7 +271,7 @@ internal class JustAuthProviderTest {
 
     @Test
     fun authenticateFailWithoutMessage() = runTest {
-        val oAuthCredentials = JustAuthCredentials("clientId")
+        val oAuthCredentials = issued("clientId")
         val authRequest = mockk<AuthRequest> {
             every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns false
@@ -201,13 +281,13 @@ internal class JustAuthProviderTest {
         }
 
         assertThrows<SocialAuthenticationException> {
-            JustAuthProvider("clientId", authRequest).authenticate(oAuthCredentials)
+            JustAuthProvider("clientId", authRequest, states).authenticate(oAuthCredentials)
         }.message.assert().isEqualTo("-1")
     }
 
     @Test
     fun authenticateSuccess() = runTest {
-        val oAuthCredentials = JustAuthCredentials("clientId")
+        val oAuthCredentials = issued("clientId")
         val authUser = AuthUser()
         authUser.uuid = "uuid"
         authUser.username = "username"
@@ -220,7 +300,7 @@ internal class JustAuthProviderTest {
                 every { data } returns authUser
             }
         }
-        val authClient = JustAuthProvider("clientId", authRequest)
+        val authClient = JustAuthProvider("clientId", authRequest, states)
         val user = authClient.authenticate(oAuthCredentials)
         user.id.assert().isEqualTo("uuid")
         user.username.assert().isEqualTo("username")
@@ -229,21 +309,21 @@ internal class JustAuthProviderTest {
     /** A success response whose user has none of the optional profile fields still logs in (#1249). */
     @Test
     fun authenticateSuccessWithoutOptionalFields() = runTest {
-        val oAuthCredentials = JustAuthCredentials("clientId")
+        val oAuthCredentials = issued("clientId")
         val authRequest = mockk<AuthRequest> {
             every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns true
                 every { data } returns AuthUser.builder().uuid("u1").build()
             }
         }
-        val user = JustAuthProvider("figma", authRequest).authenticate(oAuthCredentials)
+        val user = JustAuthProvider("figma", authRequest, states).authenticate(oAuthCredentials)
         user.id.assert().isEqualTo("u1")
         user.provider.assert().isEqualTo("figma")
     }
 
     @Test
     fun authenticateSuccessWithoutUser() = runTest {
-        val oAuthCredentials = JustAuthCredentials("clientId")
+        val oAuthCredentials = issued("clientId")
         val authRequest = mockk<AuthRequest> {
             every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns true
@@ -251,7 +331,7 @@ internal class JustAuthProviderTest {
             }
         }
         assertThrows<SocialAuthenticationException> {
-            JustAuthProvider("clientId", authRequest).authenticate(oAuthCredentials)
+            JustAuthProvider("clientId", authRequest, states).authenticate(oAuthCredentials)
         }
     }
 }

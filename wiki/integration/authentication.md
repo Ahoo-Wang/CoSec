@@ -452,11 +452,22 @@ With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](ht
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 
-1. Send the user to `socialAuthentication.authorizeUrl("<name>")`, a suspending function. The URL carries a fresh OAuth `state`, 128
-   random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since the state must be
-   unpredictable and those ids need not be. The state is kept in Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
+1. Start the sign-in with `socialAuthentication.authorize("<name>")`, a suspending function. It answers a
+   `SocialAuthorization`: the provider's `url`, which carries a fresh OAuth `state`, and a fresh `binding`. Both are 128
+   random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since they must be unpredictable
+   and those ids need not be. Set the binding as a cookie on the browser, `Set-Cookie: <authorization.setCookie(path)>`
+   (`cosec_oauth_binding`, `HttpOnly; Secure; SameSite=Lax`, for the 3 minutes the state lives, scoped to your callback
+   path), then redirect the browser to `url`. CoSec keeps the state in Redis for 3 minutes with the SHA-256 of the
+   binding, never the binding itself, so social login needs a `StringRedisTemplate` (or your own `SocialStateStore`
+   and JustAuth `AuthStateCache` beans).
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
-   `JustAuthCredentials("<name>")`, and pass it to `TokenCompositeAuthentication.authenticateAsToken`.
+   `JustAuthCredentials("<name>", <the binding cookie, or "">)`, and pass it to
+   `TokenCompositeAuthentication.authenticateAsToken`. The callback is accepted only when its `state` is one CoSec
+   issued, has not expired and has not been used (it is taken from Redis at once, `GETDEL`, before the provider is
+   called), and the browser's binding hashes to the one recorded with it, compared in constant time. A state sent from
+   another browser, sent twice, or made up is a `SocialAuthenticationException`. This is what stops login CSRF: a
+   callback URL an attacker obtained for their own account, opened in a victim's browser, carries the attacker's state
+   but not the attacker's cookie. `ignore-check-state: true` on a registration fails startup.
 3. A `SocialUserPrincipalConverter` turns the provider's user into your principal. The default,
    `DirectSocialUserPrincipalConverter`, makes its token for `cosec.authorization.scope.app-id`, the app of the host the
    user signs in to, or none without one, and a principal with the id `<provider user id>@<name>`, two attributes,
@@ -469,7 +480,7 @@ providers. Configure each provider under `cosec.authentication.login.social.regi
    the user id, `gender` to `UNKNOWN` and `rawInfo` empty. A success response without a user id, or without a user, is
    refused with a `SocialAuthenticationException`.
 
-JustAuth blocks: `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache, and the callback
+JustAuth blocks: `authorize` writes the state to Redis, and the callback
 calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, of at most 16 threads, so
 you can call them from any thread, an event loop included. A provider that hangs delays only its own logins, and
 cancelling a request interrupts its call.

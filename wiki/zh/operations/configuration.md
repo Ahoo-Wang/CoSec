@@ -309,8 +309,8 @@ cosec:
 `domain-prefix`、`http-config`、`ignore-check-state`、`scopes`、`device-id`、`client-os-type`、`pack-id`、`pkce`、
 `auth-server-id`、`ignore-check-redirect-uri`、`tenant-id`、`kid`、`team-id`、`login-type`（默认 `CorpApp`）、`lang`
 （默认 `zh`）、`ding-talk-org-type`、`ding-talk-corp-id`、`ding-talk-exclusive-login` 和
-`ding-talk-exclusive-corp-id`。布尔值默认 `false`，其余默认无。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在
-Redis 中。
+`ding-talk-exclusive-corp-id`。布尔值默认 `false`，其余默认无；`ignore-check-state: true` 会让启动失败，因为 state
+正是挡住伪造回调的东西。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在 Redis 中。
 
 ## 影响 CoSec 的 CoCache 配置项 {#cocache-properties-that-affect-cosec}
 

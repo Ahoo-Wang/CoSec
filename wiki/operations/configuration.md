@@ -328,8 +328,9 @@ cosec:
 `usertype`, `domain-prefix`, `http-config`, `ignore-check-state`, `scopes`, `device-id`, `client-os-type`, `pack-id`,
 `pkce`, `auth-server-id`, `ignore-check-redirect-uri`, `tenant-id`, `kid`, `team-id`, `login-type` (default
 `CorpApp`), `lang` (default `zh`), `ding-talk-org-type`, `ding-talk-corp-id`, `ding-talk-exclusive-login` and
-`ding-talk-exclusive-corp-id`. Booleans default to `false`, the others to none. Social login keeps its OAuth state in
-Redis through a `StringRedisTemplate`.
+`ding-talk-exclusive-corp-id`. Booleans default to `false`, the others to none; `ignore-check-state: true` fails
+startup, since the state is what keeps a forged callback out. Social login keeps its OAuth states in Redis through a
+`StringRedisTemplate`.
 
 ## CoCache properties that affect CoSec
 

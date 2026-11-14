@@ -57,4 +57,21 @@ internal class RedisAuthStateCacheTest {
         Thread.sleep(150)
         redisAuthStateCache.containsKey(key).assert().isEqualTo(false)
     }
+
+    /** M4: JustAuth may read a state that is not there; that is an empty value, never an exception. */
+    @Test
+    fun aMissingStateIsEmpty() {
+        redisAuthStateCache.get(RandomIdGenerator.generate()).assert().isEmpty()
+    }
+
+    /** M4: a state CoSec issued is taken once, by GETDEL, whichever instance receives its callback. */
+    @Test
+    fun aStateIsTakenOnce() {
+        val store = RedisSocialStateStore(stringRedisTemplate, "cosec:test:oauth:binding:")
+        val state = RandomIdGenerator.generate()
+        store.put(state, "hash", java.time.Duration.ofMinutes(1))
+        store.take(state).assert().isEqualTo("hash")
+        store.take(state).assert().isNull()
+        store.take(RandomIdGenerator.generate()).assert().isNull()
+    }
 }

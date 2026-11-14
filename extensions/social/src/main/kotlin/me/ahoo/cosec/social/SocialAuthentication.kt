@@ -30,13 +30,13 @@ class SocialAuthentication(
         }
 
     /**
-     * 生成授权地址.
+     * Starts a sign-in with [provider]: its authorize URL, and the binding to set as a cookie on the browser
+     * ([SocialAuthorization.setCookie]).
      *
      * @param provider OAuth Provider id
-     * @return Authorize Url
      */
-    suspend fun authorizeUrl(provider: String): String {
-        return providers.getRequired(provider).authorizeUrl()
+    suspend fun authorize(provider: String): SocialAuthorization {
+        return providers.getRequired(provider).authorize()
     }
 
     override suspend fun authenticate(credentials: SocialCredentials): TokenSubject {

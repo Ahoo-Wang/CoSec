@@ -3,11 +3,17 @@ public final class me/ahoo/cosec/social/DirectSocialUserPrincipalConverter : me/
 	public fun convert (Ljava/lang/String;Lme/ahoo/cosec/social/SocialUser;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
+public final class me/ahoo/cosec/social/InMemorySocialStateStore : me/ahoo/cosec/social/SocialStateStore {
+	public fun <init> ()V
+	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
+	public fun take (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/social/SocialAuthentication : me/ahoo/cosec/login/Authentication {
 	public fun <init> (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;Lme/ahoo/cosec/social/SocialProviderManager;)V
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun authorizeUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun authorize (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getSupportCredentials ()Ljava/lang/Class;
 }
 
@@ -20,11 +26,27 @@ public final class me/ahoo/cosec/social/SocialAuthenticationException : me/ahoo/
 
 public abstract interface class me/ahoo/cosec/social/SocialAuthenticationProvider {
 	public abstract fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun authorizeUrl (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun authorize (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun getName ()Ljava/lang/String;
 }
 
+public final class me/ahoo/cosec/social/SocialAuthorization {
+	public static final field BINDING_COOKIE Ljava/lang/String;
+	public static final field Companion Lme/ahoo/cosec/social/SocialAuthorization$Companion;
+	public static final field STATE_LIFETIME_SECONDS J
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getBinding ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public final fun setCookie (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun setCookie$default (Lme/ahoo/cosec/social/SocialAuthorization;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/SocialAuthorization$Companion {
+}
+
 public abstract interface class me/ahoo/cosec/social/SocialCredentials : me/ahoo/cosec/login/Credentials {
+	public abstract fun getBinding ()Ljava/lang/String;
 	public abstract fun getProvider ()Ljava/lang/String;
 }
 
@@ -34,6 +56,11 @@ public final class me/ahoo/cosec/social/SocialProviderManager {
 	public final fun getRequired (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
 	public final fun register (Ljava/lang/String;Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
 	public final fun register (Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
+}
+
+public abstract interface class me/ahoo/cosec/social/SocialStateStore {
+	public abstract fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
+	public abstract fun take (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/social/SocialUser {
@@ -72,16 +99,23 @@ public final class me/ahoo/cosec/social/SocialUserPrincipalConverter$Companion {
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/oauth/model/AuthCallback, me/ahoo/cosec/social/SocialCredentials {
-	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun getBinding ()Ljava/lang/String;
 	public fun getProvider ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;I)V
-	public synthetic fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosec/social/SocialStateStore;I)V
+	public synthetic fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosec/social/SocialStateStore;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun authorizeUrl (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun authorize (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getName ()Ljava/lang/String;
 	public final fun name ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/social/justauth/RedisSocialStateStore : me/ahoo/cosec/social/SocialStateStore {
+	public fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;)V
+	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
+	public fun take (Ljava/lang/String;)Ljava/lang/String;
 }
 
