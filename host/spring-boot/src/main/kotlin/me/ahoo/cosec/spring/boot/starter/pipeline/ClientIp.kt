@@ -194,8 +194,12 @@ internal object ClientIpReadings {
         val type = ClassUtils.forName(TRANSFORMER, loader)
         val names = beans.getBeanNamesForType(type, true, false)
         if (names.isEmpty()) return null
-        val removeOnly = ReflectionUtils.findMethod(type, TRANSFORMER_REMOVE_ONLY)
-            ?: throw unknownSpring("ForwardedHeaderTransformer", names.first(), "method $TRANSFORMER_REMOVE_ONLY()")
+        val removeOnly = reflected(
+            ReflectionUtils.findMethod(type, TRANSFORMER_REMOVE_ONLY),
+            "ForwardedHeaderTransformer",
+            names.first(),
+            "method $TRANSFORMER_REMOVE_ONLY()",
+        )
         return names.firstOrNull { !(removeOnly.invoke(beans.getBean(it)) as Boolean) }
             ?.let { "The ForwardedHeaderTransformer bean [$it]" }
     }
@@ -213,25 +217,33 @@ internal object ClientIpReadings {
                 ?: (beans as? ConfigurableApplicationContext)?.beanFactory
             for (name in beans.getBeanNamesForType(registration, true, false)) {
                 if (creating?.isCurrentlyInCreation(name) == true) continue
-                filterOf ?: throw unknownSpring("FilterRegistrationBean", name, "method $REGISTRATION_FILTER()")
-                filterOf.invoke(beans.getBean(name))?.let { filters[name] = it }
+                reflected(filterOf, "FilterRegistrationBean", name, "method $REGISTRATION_FILTER()")
+                    .invoke(beans.getBean(name))?.let { filters[name] = it }
             }
         }
         val forwarded = filters.entries.filter { (_, filter) -> type.isInstance(filter) }
         if (forwarded.isEmpty()) return null
-        val removeOnly = ReflectionUtils.findField(type, FILTER_REMOVE_ONLY)
-            ?.also { ReflectionUtils.makeAccessible(it) }
-            ?: throw unknownSpring("ForwardedHeaderFilter", forwarded.first().key, "field $FILTER_REMOVE_ONLY")
+        val removeOnly = reflected(
+            ReflectionUtils.findField(type, FILTER_REMOVE_ONLY),
+            "ForwardedHeaderFilter",
+            forwarded.first().key,
+            "field $FILTER_REMOVE_ONLY",
+        ).also { ReflectionUtils.makeAccessible(it) }
         return forwarded.firstOrNull { (_, filter) -> !(removeOnly.get(filter) as Boolean) }
             ?.let { "The ForwardedHeaderFilter bean [${it.key}]" }
     }
 
     /**
-     * Spring no longer has the [member] of [type] CoSec reads to tell whether bean [name] only removes forwarded
-     * headers: whether it rewrites the request is unknown, so startup fails, naming why (the names are pinned by
-     * `ClientIpReadingsTest`).
+     * [found], the [member] of [type] CoSec reads to tell whether bean [name] only removes forwarded headers. Without
+     * it, on a Spring version that renamed it, whether the bean rewrites the request is unknown: startup fails, naming
+     * why (the names are pinned by `ClientIpReadingsTest`).
      */
-    private fun unknownSpring(type: String, name: String, member: String) = ClientIpConfigurationException(
+    internal fun <T : Any> reflected(
+        found: T?,
+        type: String,
+        name: String,
+        member: String
+    ): T = found ?: throw ClientIpConfigurationException(
         "CoSec cannot tell whether the $type bean [$name] rewrites the request on this Spring version: it has no $member, " +
             "which CoSec reads to tell one that only removes forwarded headers. Remove the bean, or use a CoSec release " +
             "for this Spring version ($TROUBLESHOOTING).",

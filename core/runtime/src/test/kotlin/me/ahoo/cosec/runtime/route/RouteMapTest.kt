@@ -62,6 +62,20 @@ class RouteMapTest {
         mapped("GET", "/orders/a%20b").resource.id.assert().isEqualTo("a b")
     }
 
+    /** PIP-18: HEAD takes a HEAD route, and without one GET's, as servers serve HEAD with the GET handler. */
+    @Test
+    fun `HEAD takes its own route, else GET's`() {
+        mapped("HEAD", "/orders/42").action.verb.assert().isEqualTo("read")
+        routes.resolve("HEAD", "/orders/42/cancel").assert().isEqualTo(RouteResolution.Unmapped)
+        val withHead = load(
+            file(
+                route("GET", "/orders/{orderId}", "order:read", "order/{orderId}"),
+                route("HEAD", "/orders/{orderId}", "order:exists", "order/{orderId}"),
+            ),
+        )
+        (withHead.resolve("HEAD", "/orders/42") as RouteResolution.Mapped).action.verb.assert().isEqualTo("exists")
+    }
+
     @ParameterizedTest
     @CsvSource("DELETE,/orders/42", "GET,/orders", "GET,/orders/42/cancel", "get,/orders/42", "GET,/customers/7")
     fun `a request no route matches stays unmapped, never a wildcard`(method: String, path: String) {
