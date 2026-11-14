@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory
 import org.springframework.boot.cloud.CloudPlatform

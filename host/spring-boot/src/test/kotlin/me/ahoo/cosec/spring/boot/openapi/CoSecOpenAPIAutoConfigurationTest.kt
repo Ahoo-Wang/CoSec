@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.openapi
 
 import io.swagger.v3.oas.models.OpenAPI
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springdoc.core.customizers.OpenApiCustomizer

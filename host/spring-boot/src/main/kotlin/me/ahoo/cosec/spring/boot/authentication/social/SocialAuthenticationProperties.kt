@@ -13,6 +13,7 @@
 package me.ahoo.cosec.spring.boot.authentication.social
 
 import com.xkcoding.http.config.HttpConfig
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import me.ahoo.cosec.spring.boot.authentication.LoginProperties
 import me.zhyd.oauth.config.AuthConfig
@@ -25,15 +26,18 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * `pkce` or `scopes` would otherwise leave the provider configured otherwise than its author meant, without a word.
  */
 @ConfigurationProperties(prefix = SocialAuthenticationProperties.PREFIX, ignoreUnknownFields = false)
+@InternalCoSecApi
 class SocialAuthenticationProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     val registration: Map<String, Provider> = emptyMap()
 ) : EnabledCapable {
+    @InternalCoSecApi
     companion object {
         const val PREFIX = LoginProperties.PREFIX + ".social"
     }
 
     @Suppress("LongParameterList")
+    @InternalCoSecApi
     class Provider(
         var type: AuthDefaultSource,
         var clientId: String,

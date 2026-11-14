@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.cosid
 
 import com.auth0.jwt.JWT
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cosid.CosIdIdGenerator
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject

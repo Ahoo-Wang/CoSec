@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
 /**
@@ -20,4 +23,4 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
  * attribute providers and listeners, API keys. A service behind a gateway (`gateway`) wires none of them.
  */
 @ConditionalOnProperty(value = [PipelineProperties.MODE_KEY], havingValue = "enforce", matchIfMissing = true)
-annotation class ConditionalOnEnforceMode
+internal annotation class ConditionalOnEnforceMode

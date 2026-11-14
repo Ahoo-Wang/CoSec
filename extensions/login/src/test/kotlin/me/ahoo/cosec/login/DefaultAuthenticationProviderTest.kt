@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.login
 
 import io.mockk.mockk
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.runtime.token.TokenFamilies
@@ -78,7 +81,7 @@ internal class DefaultAuthenticationProviderTest {
             TokenFamilies(InMemoryTokenFamilyStore()),
         )
         val social = object : Authentication<OtherCredentials> {
-            override val supportCredentials: Class<OtherCredentials> = OtherCredentials::class.java
+            override val credentialsType: Class<OtherCredentials> = OtherCredentials::class.java
 
             override suspend fun authenticate(credentials: OtherCredentials) = throw UnsupportedOperationException()
         }
@@ -86,15 +89,15 @@ internal class DefaultAuthenticationProviderTest {
         authenticationProvider.register(social)
 
         assertThrows(IllegalStateException::class.java) {
-            authenticationProvider.get<Credentials, Authentication<Credentials>>(BothCredentials::class.java)
+            authenticationProvider.get<LoginCredentials, Authentication<LoginCredentials>>(BothCredentials::class.java)
         }
         // Registered for the type itself, it is chosen.
         authenticationProvider.register(BothCredentials::class.java, refresh as Authentication<BothCredentials>)
-        authenticationProvider.get<Credentials, Authentication<Credentials>>(BothCredentials::class.java)
+        authenticationProvider.get<LoginCredentials, Authentication<LoginCredentials>>(BothCredentials::class.java)
             .assert().isSameAs(refresh)
     }
 
-    interface OtherCredentials : Credentials
+    interface OtherCredentials : LoginCredentials
 
     class BothCredentials(override val accessToken: String, override val refreshToken: String) :
         RefreshTokenCredentials, OtherCredentials

@@ -36,6 +36,7 @@ import reactor.core.publisher.Hooks
  *
  * The starter registers it last of the interceptors, so the others see the holder as the filter bound it.
  */
+@InternalCoSecApi
 class SuspendingHandlerHolderInterceptor : HandlerInterceptor {
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         if (handler is HandlerMethod && KotlinDetector.isSuspendingFunction(handler.method) && !restored()) {

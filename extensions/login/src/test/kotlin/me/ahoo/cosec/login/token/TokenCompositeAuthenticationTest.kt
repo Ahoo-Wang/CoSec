@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.login.token
 
 import io.mockk.coEvery
@@ -24,10 +26,11 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
+import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
@@ -40,7 +43,7 @@ class TokenCompositeAuthenticationTest {
     private val tokenConverter = mockk<TokenConverter> {
         every { toToken(any()) } returns compositeToken
     }
-    private val credentials = mockk<Credentials>()
+    private val credentials = mockk<LoginCredentials>()
     private val store = InMemoryTokenFamilyStore()
     private val families = TokenFamilies(store)
 
@@ -60,7 +63,7 @@ class TokenCompositeAuthenticationTest {
         family.expiresAt.assert().isEqualTo(session.authTime.plus(families.lifetime))
     }
 
-    private fun tokensBy(authentication: Authentication<Credentials>): TokenCompositeAuthentication {
+    private fun tokensBy(authentication: Authentication<LoginCredentials>): TokenCompositeAuthentication {
         val authenticationProvider = DefaultAuthenticationProvider()
         authenticationProvider.register(credentials.javaClass, authentication)
         return TokenCompositeAuthentication(CompositeAuthentication(authenticationProvider), tokenConverter, families)
@@ -73,7 +76,7 @@ class TokenCompositeAuthenticationTest {
                 coEvery { authenticate(any()) } returns TokenSubject("alice", null)
             }
         )
-        tokens.supportCredentials.assert().isEqualTo(Credentials::class.java)
+        tokens.credentialsType.assert().isEqualTo(LoginCredentials::class.java)
 
         tokens.authenticateAsToken(credentials).assert().isEqualTo(compositeToken)
     }
@@ -96,10 +99,12 @@ class TokenCompositeAuthenticationTest {
         runTest {
             val started = CompletableDeferred<Unit>()
             val tokens = tokensBy(
-                object : Authentication<Credentials> {
-                    override val supportCredentials = Credentials::class.java
+                object : Authentication<LoginCredentials> {
+                    override val credentialsType = LoginCredentials::class.java
 
-                    override suspend fun authenticate(credentials: Credentials): TokenSubject = authenticate(started)
+                    override suspend fun authenticate(credentials: LoginCredentials): TokenSubject = authenticate(
+                        started
+                    )
                 }
             )
             var issued = false

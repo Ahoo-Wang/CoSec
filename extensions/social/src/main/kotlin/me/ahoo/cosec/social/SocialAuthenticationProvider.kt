@@ -11,6 +11,7 @@
  * limitations under the License.
  */
 package me.ahoo.cosec.social
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * Social Provider .
@@ -20,6 +21,7 @@ package me.ahoo.cosec.social
  *
  * @author ahoo wang
  */
+@InternalCoSecApi
 interface SocialAuthenticationProvider {
     /** The provider's registration name: the `provider` of a [SocialCredentials]. */
     val name: String
