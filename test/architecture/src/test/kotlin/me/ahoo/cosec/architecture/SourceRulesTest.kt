@@ -57,7 +57,7 @@ class SourceRulesTest {
 
         /**
          * What `cocache` and `kafka` may use of `runtime` and `control` (#1140): package of the using class to the
-         * classes or packages it may reach. The mapper is in `cosec-document`, outside both (RFC 0013 §3).
+         * classes or packages it may reach.
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
             "me.ahoo.cosec.cocache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
@@ -91,6 +91,13 @@ class SourceRulesTest {
 
         fun projectOf(javaClass: JavaClass): String? = Projects.projectOfPackage(javaClass.packageName)
     }
+
+    /**
+     * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats. A
+     * backend stores bytes (`SnapshotDocument`) and never reads what a document grants, so the codecs, the compiler and
+     * `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
+     */
+    private val BACKEND_DOCUMENT_REACH = listOf("me.ahoo.cosec.document.json.CoSecJson")
 
     /** A package (ending in `.`) reaches what is in it; a class reaches itself and its nested classes. */
     private fun reach(target: String, allowed: String): Boolean =
@@ -128,14 +135,17 @@ class SourceRulesTest {
     }
 
     @Test
-    fun `backends reach into runtime and control only through the listed ports`() {
+    fun `backends reach into runtime and control only through the listed ports, and into document only the mapper`() {
         violations { project, target ->
-            Projects.groupOf(project) == "backends" &&
-                (target.startsWith("me.ahoo.cosec.runtime.") || target.startsWith("me.ahoo.cosec.control."))
+            Projects.groupOf(project) == "backends" && listOf(
+                "me.ahoo.cosec.runtime.",
+                "me.ahoo.cosec.control.",
+                "me.ahoo.cosec.document.",
+            ).any { target.startsWith(it) }
         }.filterNot { violation ->
             val origin = violation.substringBefore(" -> ")
             val target = violation.substringAfter(" -> ")
-            BACKEND_REACH.any { (from, to) ->
+            BACKEND_DOCUMENT_REACH.any { reach(target, it) } || BACKEND_REACH.any { (from, to) ->
                 origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
             }
         }.assert().isEmpty()
