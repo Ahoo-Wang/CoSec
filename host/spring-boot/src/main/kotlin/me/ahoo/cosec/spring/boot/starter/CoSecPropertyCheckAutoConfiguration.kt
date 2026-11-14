@@ -11,18 +11,21 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
-import org.springframework.beans.factory.InitializingBean
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 import org.springframework.core.env.ConfigurableEnvironment
 
 /** Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured. */
 @AutoConfiguration
+@Import(StartupCheckExclusion::class)
 internal class CoSecPropertyCheckAutoConfiguration {
     @Bean
-    fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): InitializingBean = InitializingBean {
-        UnknownProperties.load(javaClass.classLoader).check(environment)
-    }
+    fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): StartupCheck =
+        StartupCheck.OnCreation { UnknownProperties.load(javaClass.classLoader).check(environment) }
 }

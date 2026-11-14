@@ -24,9 +24,10 @@ import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.StartupCheck
+import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
-import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -35,6 +36,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.StringRedisTemplate
 
@@ -53,6 +55,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @ConditionalOnEnforceMode
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
 @EnableConfigurationProperties(ApiKeyProperties::class, CoSecProperties::class)
+@Import(StartupCheckExclusion::class)
 internal class CoSecApiKeyAutoConfiguration {
 
     /**
@@ -60,7 +63,7 @@ internal class CoSecApiKeyAutoConfiguration {
      * every key would be a 503, so startup fails instead.
      */
     @Bean
-    fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+    fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): StartupCheck = StartupCheck.OnCreation {
         check(context.getBeanNamesForType(MembershipProvider::class.java).isNotEmpty()) {
             "${ApiKeyProperties.ENABLED_KEY}=true needs a MembershipProvider bean: an API key's memberships are its " +
                 "principal's (RFC 0009 §4.2). Add cosec-cocache and a MembershipLoader bean, which configures " +
@@ -75,6 +78,9 @@ internal class CoSecApiKeyAutoConfiguration {
         val keys = apiKeyProperties.keys.map { it.hash to it.toApiKey() }
         val duplicates = keys.groupBy { it.second.id }.filterValues { it.size > 1 }.keys
         require(duplicates.isEmpty()) { "Duplicate API key ids: $duplicates." }
+        // One secret is one key: two entries with its hash would leave the key with whichever came last (round 2 L5).
+        val shared = keys.groupBy({ it.first }, { it.second.id }).values.filter { it.size > 1 }
+        require(shared.isEmpty()) { "API keys ${shared.joinToString()} have the same hash: one key, configured twice." }
         return InMemoryApiKeyStore(keys.toMap())
     }
 

@@ -21,6 +21,8 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 [已删除和改名的 key 对照表](./upgrading.md#removed-and-renamed-properties)。没有任何配置项能关闭这项检查：
 某个版本取代的 key 前缀如果被忽略，令牌吊销就会留在没人读取的地方。
 
+这项检查以及 starter 的其他启动检查（缺少模块、网关上暴露的 actuator 端点、Redis 的逐出策略、从副本读取、没有 `MembershipProvider` 的 API key），在设置 `spring.main.lazy-initialization=true` 时同样运行（`STA-3`）：没有 bean 依赖这些检查，延迟初始化的应用否则会把它们全部跳过。
+
 key 的比较方式与 Spring 的 binder 一致，所以 Spring 文档给出的各种写法对已知 key 都算已知：properties 文件里的 `local-max-age`、
 `localMaxAge` 或 `local_max_age`，以及环境变量 `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`（大写、点换成下划线、去掉连字符）。
 不是已知 key 的这种写法的变量仍算未知：拼错的 `COSEC_PIPELINE_TIMEUOT`，以及遗留写法
@@ -209,7 +211,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 字段 | 类型 | 默认值 | 含义 |
 |---|---|---|---|
 | `id` | string | 无 | **必填。** key 的 id；id 必须唯一。 |
-| `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。 |
+| `hash` | string | 无 | **必填。** key 的 SHA-256，64 个小写十六进制字符。绝不要配置 key 本身。两项的哈希相同会使启动失败：它们是同一个 key。 |
 | `principal-id` | string | 无 | **必填。** key 认证成的主体。 |
 | `tenant-id` | string | 无 | **必填。** 主体所在的租户。 |
 | `app` | string | 无 | key 所属的应用（[应用](../integration/authentication.md#apps)）。省略时不声明应用，配置了应用的宿主会拒绝它。 |
@@ -289,7 +291,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.cosid.generator` | string | `default` | CoSec 取用其 id 的 CosId 生成器，连同它的编解码器：请求 id、决策事件 id、令牌 id 和变更 id。生成的 id 不是 1 到 64 个 `A-Z a-z 0-9 . _ -` 字符的生成器会导致启动失败。设置了它却没有 `cosec-cosid` 时，启动失败并给出这个制品（[故障排查](./troubleshooting.md#startup-fails-on-a-missing-module)）。 |
+| `cosec.cosid.generator` | string | `default` | CoSec 取用其 id 的 CosId 生成器，连同它的编解码器：请求 id、决策事件 id、令牌 id 和变更 id。生成的 id 不是 1 到 64 个 `A-Z a-z 0-9 . _ -` 字符的生成器会导致启动失败。设置了它却没有 `cosec-cosid` 时，启动失败并给出这个制品（[故障排查](./troubleshooting.md#startup-fails-on-a-missing-module)）；设置了它而 CoSec 的 id 并不来自它（没有 `CosIdRuntime` bean，或应用自己有 `IdGenerator` bean）时，启动也失败。 |
 
 ## 社交登录 {#social-login}
 
@@ -314,7 +316,7 @@ cosec:
 `auth-server-id`、`ignore-check-redirect-uri`、`tenant-id`、`kid`、`team-id`、`login-type`（默认 `CorpApp`）、`lang`
 （默认 `zh`）、`ding-talk-org-type`、`ding-talk-corp-id`、`ding-talk-exclusive-login` 和
 `ding-talk-exclusive-corp-id`。布尔值默认 `false`，其余默认无；`ignore-check-state: true` 会让启动失败，因为 state
-正是挡住伪造回调的东西。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在 Redis 中。
+正是挡住伪造回调的东西；任何其他字段（例如拼错的 `pcke`）也会让启动失败。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在 Redis 中。
 
 ## 影响 CoSec 的 CoCache 配置项 {#cocache-properties-that-affect-cosec}
 

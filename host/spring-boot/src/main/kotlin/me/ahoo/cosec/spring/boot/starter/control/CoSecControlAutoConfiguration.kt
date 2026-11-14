@@ -66,6 +66,8 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.StartupCheck
+import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
@@ -74,6 +76,7 @@ import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.credentialHeaders
 import me.ahoo.cosec.spring.boot.starter.pipeline.toOptions
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -83,6 +86,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
@@ -103,6 +107,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
+@Import(StartupCheckExclusion::class)
 internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -334,7 +339,32 @@ internal class CoSecControlAutoConfiguration {
     @Bean
     fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
 
+    /**
+     * The beans above that are not replaceable are the only ones of their types (round 2 L6): a second one that is
+     * `@Primary`, or named as an injection point's parameter, would be injected in their place without a word. A second
+     * one without either already fails as ambiguous when the first of them is injected.
+     */
+    @Bean
+    fun cosecControlAuthorizationCheck(beans: ListableBeanFactory): StartupCheck = StartupCheck.AfterSingletons {
+        for ((type, own) in NOT_REPLACEABLE) {
+            val names = beans.getBeanNamesForType(type, true, false).toList()
+            check(names == listOf(own)) {
+                "The control plane's ${type.simpleName} is CoSec's own [$own], never an application bean: remove " +
+                    "${(names - own).ifEmpty { names }} (RFC 0011 D4)."
+            }
+        }
+    }
+
     internal companion object {
+        /** The control plane's own authorization, by type and the name of CoSec's bean (see [cosecControlAuthorizationCheck]). */
+        private val NOT_REPLACEABLE = listOf(
+            ControlAuthorizer::class.java to "cosecControlAuthorizer",
+            ChangeAuthority::class.java to "cosecChangeAuthority",
+            Changes::class.java to "cosecChanges",
+            ControlPlane::class.java to "cosecControlPlane",
+            ControlHttp::class.java to "cosecControlHttp",
+        )
+
         /**
          * The revocations an approver is checked against at publish (RC1-11), as the pipeline reads them: a
          * [RevocationReader] bean, else the CoCache token store's. With neither, startup fails, also when CoSec's tokens

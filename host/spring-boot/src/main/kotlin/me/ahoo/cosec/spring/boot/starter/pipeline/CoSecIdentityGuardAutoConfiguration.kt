@@ -11,17 +11,22 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
-import org.springframework.beans.factory.InitializingBean
+import me.ahoo.cosec.spring.boot.starter.StartupCheck
+import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.util.ClassUtils
 
 /**
@@ -36,9 +41,10 @@ import org.springframework.util.ClassUtils
  */
 @AutoConfiguration
 @EnableConfigurationProperties(PipelineProperties::class)
+@Import(StartupCheckExclusion::class)
 internal class CoSecIdentityGuardAutoConfiguration {
     @Bean
-    fun cosecPipelineModeCheck(properties: PipelineProperties): InitializingBean = InitializingBean {
+    fun cosecPipelineModeCheck(properties: PipelineProperties): StartupCheck = StartupCheck.OnCreation {
         check(
             properties.mode != PipelineProperties.Mode.GATEWAY || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)
         ) {

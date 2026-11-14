@@ -196,4 +196,11 @@ class CoSecGatewayEndpointCheckAutoConfigurationTest {
         starts(exposed.withPropertyValues("cosec.pipeline.mode=gateway"))
         starts(exposed.withPropertyValues("cosec.enabled=false"))
     }
+
+    /** `STA-3`: under lazy initialization the endpoints are checked all the same. */
+    @Test
+    fun `the gateway endpoint on the application port fails startup lazily too`() {
+        failure(gateway.withPropertyValues("management.endpoints.web.exposure.include=health,gateway").lazily())
+            .assert().contains("Actuator endpoints [gateway] are exposed over HTTP on the gateway's application port")
+    }
 }

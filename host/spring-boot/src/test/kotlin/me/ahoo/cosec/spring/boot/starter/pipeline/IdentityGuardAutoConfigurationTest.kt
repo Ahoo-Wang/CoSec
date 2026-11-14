@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -56,6 +57,17 @@ class IdentityGuardAutoConfigurationTest {
         }
         runner.withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER)).run { context ->
             context.getBeansOfType(IdentityStripFilter::class.java).assert().isEmpty()
+        }
+    }
+
+    /** `STA-3`: under lazy initialization the mode is checked all the same; the gateway would otherwise check nothing. */
+    @Test
+    fun `gateway mode on a gateway host, or an unknown mode, fails startup lazily too`() {
+        runner.withPropertyValues("cosec.pipeline.mode=gateway").lazily().run { context ->
+            context.startupFailure!!.messages().assert().contains("Spring Cloud Gateway host")
+        }
+        runner.withPropertyValues("cosec.pipeline.mode=gatway").lazily().run { context ->
+            context.startupFailure!!.messages().assert().contains("gatway")
         }
     }
 }

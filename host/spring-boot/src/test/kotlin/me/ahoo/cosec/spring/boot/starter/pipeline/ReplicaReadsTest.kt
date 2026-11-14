@@ -26,6 +26,7 @@ import me.ahoo.cosec.spring.boot.starter.NoTokenStore
 import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -155,5 +156,14 @@ class ReplicaReadsTest {
                 ) { it.cause }.mapNotNull { it.message }.joinToString()
                 message.assert().contains("[replicaTemplate] (ReadFromReplicaPreferred) reads from replicas")
             }
+    }
+
+    /** `STA-3`: under lazy initialization the templates are checked all the same. */
+    @Test
+    fun `replica reads fail startup lazily too`() {
+        runner.withPropertyValues("spring.data.redis.lettuce.read-from=replicaPreferred").lazily().run { context ->
+            val message = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+            message.assert().contains("reads from replicas")
+        }
     }
 }

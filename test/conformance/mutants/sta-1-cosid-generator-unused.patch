@@ -1,0 +1,17 @@
+# Rule: STA-1
+# Mutant: cosec.cosid.generator set without a CosIdRuntime, or beside the application's own IdGenerator, starts and does nothing
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.cosid.CoSecCosIdAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+index 2b8dae8b..66dcb840 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+@@ -147,7 +147,7 @@ internal class CoSecModuleCheckAutoConfiguration {
+             )
+             return StartupCheck.OnCreation {
+                 module.afterPropertiesSet()
+-                check(context.containsBean(CosIdGeneratorProperties.ID_GENERATOR_BEAN)) {
++                check(true) {
+                     "${CosIdGeneratorProperties.GENERATOR_KEY} is set, but CoSec's ids do not come from CosId: there is no " +
+                         "CosIdRuntime bean (configure CosId, me.ahoo.cosid:cosid-spring-boot-starter), or an IdGenerator " +
+                         "bean of the application's own gives them. Configure CosId, or remove the property (STA-1)."
