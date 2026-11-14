@@ -860,7 +860,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit`（`cosec-spi`） | `RateLimit`、`RateLimitResult`、`RateLimiter`（[见下文](#removed-and-replaced-apis)） |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model`（`cosec-model`） | `CoSecException` |
 
-8.0 的 SPI 也在这些地方：`MembershipProvider` 和 `MembershipClaims` 在 `me.ahoo.cosec.spi.membership`，`SnapshotDocumentStore` 和 `InMemorySnapshotDocumentStore` 在 `me.ahoo.cosec.spi.snapshot`，`AttributeProvider` 在 `me.ahoo.cosec.spi.attribute`，`Authenticator` 在 `me.ahoo.cosec.spi.authn`；`SnapshotSource` 在 `me.ahoo.cosec.runtime.snapshot`，文档编解码器和编译器在 `me.ahoo.cosec.runtime.document`，路由映射在 `me.ahoo.cosec.runtime.route`（[扩展 CoSec](../architecture/extending.md#extension-points)）。
+8.0 的 SPI 也在这些地方：`MembershipProvider` 和 `MembershipClaims` 在 `me.ahoo.cosec.spi.membership`，`SnapshotDocumentStore` 和 `InMemorySnapshotDocumentStore` 在 `me.ahoo.cosec.spi.snapshot`，`AttributeProvider` 在 `me.ahoo.cosec.spi.attribute`，`Authenticator` 在 `me.ahoo.cosec.spi.authn`；`SnapshotSource` 在 `me.ahoo.cosec.runtime.snapshot`，文档编解码器和编译器在 `me.ahoo.cosec.document`（`cosec-document`），路由映射在 `me.ahoo.cosec.document.route`（[扩展 CoSec](../architecture/extending.md#extension-points)）。
 
 **`CoSecJsonSerializer` 已删除。** CoSec 的 Jackson mapper 是 CoSec 内部的，核心模块的公共签名中不出现 Jackson 类型。用你自己的 mapper 序列化你自己的类型；用 `PolicyDocumentCodec` 读写策略文档。mapper 的配置没有变化，所以已存放在 Redis 中或已发送到 Kafka 的文档、令牌和记录照常可读。标注了 `@InternalCoSecApi` 的声明之所以公开，只是为了让 CoSec 的模块互相调用：它没有兼容性承诺，任何版本都可能改变，而且不显式 opt in 编译器就拒绝调用它。不要在应用中 opt in。
 

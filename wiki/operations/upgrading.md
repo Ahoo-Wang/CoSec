@@ -1665,8 +1665,8 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
 `SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
 `me.ahoo.cosec.spi.attribute`, `Authenticator` in `me.ahoo.cosec.spi.authn`; `SnapshotSource` is in
-`me.ahoo.cosec.runtime.snapshot`, the document codec and compiler in `me.ahoo.cosec.runtime.document` and route maps
-in `me.ahoo.cosec.runtime.route` ([Extending](../architecture/extending.md#extension-points)).
+`me.ahoo.cosec.runtime.snapshot`, the document codec and compiler in `me.ahoo.cosec.document` (`cosec-document`) and
+route maps in `me.ahoo.cosec.document.route` ([Extending](../architecture/extending.md#extension-points)).
 
 **`CoSecJsonSerializer` is gone.** CoSec's Jackson mapper is internal to CoSec, and no public signature of the core modules
 carries a Jackson type. Serialize your own types with your own mapper; read and write policy documents with

@@ -90,7 +90,7 @@ class PublicApiStabilityTest {
                 "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, and its two " +
                     "verdicts: a new outcome is a new key of the counts, not a new field.",
             ).map { (name, reason) -> "control.$name" to reason } + listOf(
-                "runtime.document.Actor" to "Who acted on a control-plane change: an id and a tenant. Delegation is a value " +
+                "document.Actor" to "Who acted on a control-plane change: an id and a tenant. Delegation is a value " +
                     "of its own beside it (RFC 0009 §7), not a field.",
             )
         }.associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
