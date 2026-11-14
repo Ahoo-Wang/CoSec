@@ -22,6 +22,13 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.shadow.CandidateStore
+import me.ahoo.cosec.spi.shadow.InstalledDocument
+import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReport
+import me.ahoo.cosec.spi.shadow.ShadowReportSink
+import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration

@@ -37,7 +37,6 @@ import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
-import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -46,6 +45,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert

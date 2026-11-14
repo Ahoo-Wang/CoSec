@@ -56,11 +56,10 @@ class SourceRulesTest {
         private val NOT_IN_CORE = listOf("jakarta.servlet.", "io.lettuce.", "redis.clients.", "org.springframework.")
 
         /**
-         * What `cocache` and `kafka` may use of `runtime` and `control` (#1140): package of the using class to the
-         * classes or packages it may reach.
+         * What `cocache` may use of `control` (#1140): package of the using class to the classes or packages it may
+         * reach. Nothing of `runtime` (RFC 0013 §3): the shadow ports are `cosec-spi`'s, the formats `cosec-document`'s.
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
-            "me.ahoo.cosec.cocache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
             // The ControlStore port's package, and the change values its signatures carry, with their codec.
             "me.ahoo.cosec.cocache.control" to listOf(
                 "me.ahoo.cosec.control.store.",
@@ -69,21 +68,27 @@ class SourceRulesTest {
                 "me.ahoo.cosec.control.change.ChangeRequestCodec",
                 "me.ahoo.cosec.control.change.ChangeState",
                 "me.ahoo.cosec.control.change.StageSlot",
-                "me.ahoo.cosec.runtime.shadow.StoredCandidate",
-            ),
-            "me.ahoo.cosec.kafka" to listOf(
-                "me.ahoo.cosec.runtime.event.",
-                "me.ahoo.cosec.runtime.audit.AuditEvents",
-                "me.ahoo.cosec.control.audit.",
             ),
         )
 
         /**
-         * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats. A
-         * backend stores bytes (`SnapshotDocument`) and never reads what a document grants, so the codecs, the compiler
-         * and `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
+         * What an extension may use of `control`, which only `cosec-kafka` depends on (`DependencyRules.EXCEPTIONS`):
+         * the change listener port and its events. Extensions use `runtime` as any outer module does.
          */
-        val BACKEND_DOCUMENT_REACH: List<String> = listOf("me.ahoo.cosec.document.json.CoSecJson")
+        val EXTENSION_REACH: Map<String, List<String>> = mapOf(
+            "me.ahoo.cosec.kafka" to listOf("me.ahoo.cosec.control.audit."),
+        )
+
+        /**
+         * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats, and
+         * the codec of a format it stores (`ShadowCodec`, the shadow window's candidates and reports). A backend stores
+         * bytes (`SnapshotDocument`) and never reads what a document grants, so the document codec, the compiler and
+         * `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
+         */
+        val BACKEND_DOCUMENT_REACH: List<String> = listOf(
+            "me.ahoo.cosec.document.json.CoSecJson",
+            "me.ahoo.cosec.document.shadow.ShadowCodec",
+        )
 
         /** The main source files of [project], by extension. */
         fun mainSources(project: String, extensions: Set<String> = setOf("kt", "java")): List<Path> {
@@ -135,7 +140,7 @@ class SourceRulesTest {
     }
 
     @Test
-    fun `backends reach into runtime and control only through the listed ports, and into document only the mapper`() {
+    fun `backends never reach into runtime, and into control and document only through what is listed`() {
         violations { project, target ->
             Projects.groupOf(project) == "backends" && listOf(
                 "me.ahoo.cosec.runtime.",
@@ -146,6 +151,19 @@ class SourceRulesTest {
             val origin = violation.substringBefore(" -> ")
             val target = violation.substringAfter(" -> ")
             BACKEND_DOCUMENT_REACH.any { reach(target, it) } || BACKEND_REACH.any { (from, to) ->
+                origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
+            }
+        }.assert().isEmpty()
+    }
+
+    @Test
+    fun `extensions reach into control only through the listed ports`() {
+        violations { project, target ->
+            Projects.groupOf(project) == "extensions" && target.startsWith("me.ahoo.cosec.control.")
+        }.filterNot { violation ->
+            val origin = violation.substringBefore(" -> ")
+            val target = violation.substringAfter(" -> ")
+            EXTENSION_REACH.any { (from, to) ->
                 origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
             }
         }.assert().isEmpty()

@@ -37,8 +37,8 @@ import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.model.condition.AttributeCatalog
-import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
-import me.ahoo.cosec.runtime.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException

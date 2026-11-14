@@ -57,9 +57,6 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
-import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
-import me.ahoo.cosec.runtime.shadow.InstalledDocument
-import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -68,6 +65,10 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
+import me.ahoo.cosec.spi.shadow.InstalledDocument
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -376,7 +377,7 @@ class ShadowWindowTest {
         store.putCandidate(
             StoreFixtures.ACME,
             store.stagedCandidate(StoreFixtures.ACME)!!.digest,
-            me.ahoo.cosec.runtime.shadow.StoredCandidate(candidate.window, 7, candidate.document)
+            me.ahoo.cosec.spi.shadow.StoredCandidate(candidate.window, 7, candidate.document)
         )
         val one = Instance("one")
         one.get("/orders/1")

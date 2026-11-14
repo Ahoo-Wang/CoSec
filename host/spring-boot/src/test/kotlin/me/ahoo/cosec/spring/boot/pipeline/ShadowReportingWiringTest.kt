@@ -22,9 +22,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
-import me.ahoo.cosec.runtime.shadow.CandidateStore
-import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.spi.shadow.CandidateStore
+import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration

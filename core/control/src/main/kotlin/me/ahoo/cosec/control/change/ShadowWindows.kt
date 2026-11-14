@@ -17,8 +17,8 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.shadow.ShadowOutcome
-import me.ahoo.cosec.runtime.shadow.ShadowReportReader
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 

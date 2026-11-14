@@ -33,18 +33,20 @@ object DependencyRules {
         "document" to setOf("engine", "spi", "model", "api", "annotations"),
         "runtime" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         "control" to CORE - "control",
-        "cocache" to setOf("spi", "model", "api", "annotations"),
-        "kafka" to setOf("spi", "model", "api", "annotations"),
+        // A backend implements store ports of cosec-spi and writes its formats with cosec-document (RFC 0013 §3).
+        "cocache" to setOf("spi", "document", "model", "api", "annotations"),
         "webflux" to CORE - "control",
         "webmvc" to CORE - "control",
         "gateway" to CORE - "control",
-        "openapi" to CORE - "control",
+        // A generator of documents and route maps (RFC 0013 §3): it reads the format, never the request path.
+        "openapi" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         "jwt" to CORE - "control",
         "social" to CORE - "control",
         "login" to CORE - "control",
         "ip2region" to CORE - "control",
         "micrometer" to CORE - "control",
         "opentelemetry" to CORE - "control",
+        "kafka" to CORE - "control",
         // An implementation of the IdGenerator port, and nothing more of CoSec.
         "cosid" to setOf("spi", "model", "api", "annotations"),
     )
@@ -53,18 +55,27 @@ object DependencyRules {
 
     /** Reviewed exceptions to [ALLOWED] (RFC 0011 §2, §5 and its amendment, #1140). */
     val EXCEPTIONS: List<Exception> = listOf(
-        Exception(
-            "cocache",
-            "runtime",
-            "implementation: the shadow stores implement runtime's shadow ports; CoSecJson writes the stored formats",
-        ),
         Exception("cocache", "control", "CoCacheControlStore implements the control plane's ControlStore"),
-        Exception("kafka", "runtime", "KafkaAuditListener is a DecisionListener; CoSecJson is the one mapper"),
         Exception("kafka", "control", "KafkaChangeListener is the control plane's ChangeListener"),
         Exception("jwt", "login", "jwt implements login's token issuing port (RFC 0011 §2)"),
         Exception("social", "login", "social login is a login AuthenticationProvider"),
         Exception("gateway", "webflux", "the gateway filter runs on the WebFlux bridge"),
     )
+
+    /**
+     * No backend depends on `cosec-runtime` (RFC 0013 §3): a backend implements store ports of `cosec-spi`, so a Redis
+     * store does not bring the request path. Checked on the declared main dependencies and the run-time class path.
+     * Not on the compile class path: `cosec-cocache` implements the control plane's `ControlStore`, a port that stays
+     * in its layer, through `compileOnlyApi(:control)`, and `cosec-control` brings `cosec-runtime` with it.
+     */
+    const val BACKENDS = "backends"
+    const val RUNTIME = "runtime"
+
+    /**
+     * The outer projects that only read or write documents, so `cosec-runtime` is not on their run-time class path
+     * either (RFC 0013 §3): the OpenAPI generator.
+     */
+    val DOCUMENT_ONLY: Set<String> = setOf("openapi")
 
     /** Groups whose main code never depends on these. */
     val NEVER_DEPENDED_ON: Set<String> = setOf("test", "platform")

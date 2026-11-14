@@ -43,11 +43,11 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.shadow.ShadowOutcome
-import me.ahoo.cosec.runtime.shadow.ShadowReport
-import me.ahoo.cosec.runtime.shadow.ShadowSample
-import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReport
+import me.ahoo.cosec.spi.shadow.ShadowSample
+import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

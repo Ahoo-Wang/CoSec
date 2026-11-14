@@ -49,7 +49,7 @@ import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.shadow.StoredCandidate
+import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

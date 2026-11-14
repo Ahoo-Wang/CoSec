@@ -34,10 +34,10 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.shadow.Candidate
-import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach

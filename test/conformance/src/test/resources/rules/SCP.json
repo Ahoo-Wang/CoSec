@@ -123,7 +123,7 @@
         "cocache:CoCacheControlStoreTest#an open change of an app no key can name fails the listing",
         "cocache:CoCacheControlStoreTest#a back-reference set naming an app no key can name is a format error",
         "cocache:CoCacheControlStoreTest#the referrers codec reads back what it writes and rejects anything else",
-        "runtime:ShadowSupportTest#candidates, reports and statuses read back as they were written"
+        "document:ShadowCodecTest#candidates, reports and statuses read back as they were written"
       ],
       "pending": null
     },

@@ -34,6 +34,12 @@ and have to be provisioned again.
   can depend on `me.ahoo.cosec:cosec-document` alone instead of `cosec-runtime`. `cosec-openapi` now depends on
   `cosec-document`, not `cosec-runtime`: an application that compiled against the pipeline through it adds
   `cosec-runtime`, or the starter, itself.
+- **The shadow window ports and their values are in `cosec-spi`.** `CandidateStore`, `StoredCandidate`,
+  `ShadowReportSink`, `ShadowReportReader`, `ShadowReport`, `ShadowSample`, `ShadowOutcome`, `InstanceStatus` and
+  `InstalledDocument` move from `me.ahoo.cosec.runtime.shadow` to `me.ahoo.cosec.spi.shadow`, still experimental, with
+  their names. A store of your own changes its imports and can depend on `cosec-spi` alone. `cosec-cocache` no longer
+  depends on `cosec-runtime`: an application that compiled against the pipeline through `cosec-cocache` alone adds
+  `cosec-runtime`, or the starter, itself. No stored format or Redis key changes.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

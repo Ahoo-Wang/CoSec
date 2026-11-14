@@ -31,9 +31,9 @@ class ProjectListTest {
         val GROUPS: Map<String, List<String>> = linkedMapOf(
             "api" to listOf("annotations", "api"),
             "core" to listOf("model", "engine", "spi", "document", "runtime", "control"),
-            "backends" to listOf("cocache", "kafka"),
+            "backends" to listOf("cocache"),
             "edge" to listOf("webflux", "webmvc", "gateway", "openapi"),
-            "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid"),
+            "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka"),
             "host" to listOf("spring-boot"),
             "migration" to listOf("migrate"),
             "test" to listOf("testkit", "conformance", "architecture", "e2e", "code-coverage-report"),

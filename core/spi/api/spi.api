@@ -318,6 +318,110 @@ public final class me/ahoo/cosec/spi/ratelimit/RateLimiter$Companion {
 	public final fun window (Lme/ahoo/cosec/model/decision/RateLimitSpec;)Lme/ahoo/cosec/spi/ratelimit/RateLimit;
 }
 
+public abstract interface class me/ahoo/cosec/spi/shadow/CandidateStore {
+	public abstract fun candidate (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/shadow/InstalledDocument {
+	public fun <init> (JLjava/time/Duration;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLag ()Ljava/time/Duration;
+	public final fun getRevision ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/shadow/InstanceStatus {
+	public static final field Companion Lme/ahoo/cosec/spi/shadow/InstanceStatus$Companion;
+	public static final field FORMAT_LEVEL I
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;I)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Ljava/util/Map;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAt ()Ljava/time/Instant;
+	public final fun getDocuments ()Ljava/util/Map;
+	public final fun getFormatLevel ()I
+	public final fun getInstance ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/shadow/InstanceStatus$Companion {
+}
+
+public final class me/ahoo/cosec/spi/shadow/ShadowOutcome : java/lang/Enum {
+	public static final field BASE_MISMATCH Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field BECAME_DENIED Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field BECAME_INDETERMINATE Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field BY_CHANGED Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field CANDIDATE_ERROR Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field CANDIDATE_INDETERMINATE Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field NARROWED Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field OBLIGATIONS_CHANGED Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field SAME Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static final field WIDENED Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public final fun getEffective ()Z
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+	public static fun values ()[Lme/ahoo/cosec/spi/shadow/ShadowOutcome;
+}
+
+public final class me/ahoo/cosec/spi/shadow/ShadowReport {
+	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReport$Companion;
+	public static final field MAX_SAMPLES I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/util/Set;Ljava/time/Instant;Ljava/time/Instant;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBaseRevisions ()Ljava/util/Set;
+	public final fun getCounts ()Ljava/util/Map;
+	public final fun getFirst ()Ljava/time/Instant;
+	public final fun getInstance ()Ljava/lang/String;
+	public final fun getLast ()Ljava/time/Instant;
+	public final fun getSamples ()Ljava/util/Map;
+	public final fun getWindow ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/shadow/ShadowReport$Companion {
+	public final fun isInstanceId (Ljava/lang/String;)Z
+}
+
+public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportReader {
+	public static final field Companion Lme/ahoo/cosec/spi/shadow/ShadowReportReader$Companion;
+	public abstract fun reports (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun statuses (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/shadow/ShadowReportReader$Companion {
+	public final fun getSTATUS_TTL ()Ljava/time/Duration;
+}
+
+public abstract interface class me/ahoo/cosec/spi/shadow/ShadowReportSink {
+	public abstract fun write (Lme/ahoo/cosec/spi/shadow/InstanceStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun write (Lme/ahoo/cosec/spi/shadow/ShadowReport;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/shadow/ShadowSample {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Ljava/lang/String;
+	public final fun getApp ()Ljava/lang/String;
+	public final fun getCandidateBy ()Ljava/lang/String;
+	public final fun getEnforcedBy ()Ljava/lang/String;
+	public final fun getPrincipal ()Ljava/lang/String;
+	public final fun getResource ()Ljava/lang/String;
+	public final fun getSpace ()Ljava/lang/String;
+	public final fun getTenant ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/spi/shadow/StoredCandidate {
+	public fun <init> (Ljava/lang/String;JLme/ahoo/cosec/spi/snapshot/SnapshotDocument;)V
+	public final fun getBaseRevision ()J
+	public final fun getDocument ()Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+	public final fun getWindow ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/spi/snapshot/InMemorySnapshotDocumentStore : me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore {
 	public static final field Companion Lme/ahoo/cosec/spi/snapshot/InMemorySnapshotDocumentStore$Companion;
 	public fun <init> ()V
