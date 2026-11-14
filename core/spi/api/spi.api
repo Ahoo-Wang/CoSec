@@ -524,6 +524,15 @@ public final class me/ahoo/cosec/spi/token/DelegationUnsupportedException : me/a
 	public fun <init> (Ljava/lang/String;)V
 }
 
+public final class me/ahoo/cosec/spi/token/InMemoryTokenFamilyStore : me/ahoo/cosec/spi/token/TokenFamilyStore {
+	public fun <init> ()V
+	public fun <init> (Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun create (Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun read (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun replace (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public abstract interface class me/ahoo/cosec/spi/token/RevocationReader {
 	public static final field Companion Lme/ahoo/cosec/spi/token/RevocationReader$Companion;
 	public abstract fun isRevoked (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -552,12 +561,42 @@ public final class me/ahoo/cosec/spi/token/TokenExpiredException : me/ahoo/cosec
 	public fun <init> (Ljava/lang/Throwable;)V
 }
 
+public final class me/ahoo/cosec/spi/token/TokenFamily {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Instant;JLjava/time/Instant;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAuthTime ()Ljava/time/Instant;
+	public final fun getExpiresAt ()Ljava/time/Instant;
+	public final fun getGeneration ()J
+	public final fun getId ()Ljava/lang/String;
+	public final fun getPrincipal-YkQvfWk ()Ljava/lang/String;
+	public final fun getRevoked ()Z
+	public final fun getRotatedAt ()Ljava/time/Instant;
+	public final fun getTenant-Zu1zXv4 ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun revoked ()Lme/ahoo/cosec/spi/token/TokenFamily;
+	public final fun rotated (Ljava/time/Instant;)Lme/ahoo/cosec/spi/token/TokenFamily;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class me/ahoo/cosec/spi/token/TokenFamilyStore {
+	public abstract fun create (Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun read (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun replace (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/token/TokenFamilyStore$Read {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamily;Ljava/lang/String;)V
+	public final fun getFamily ()Lme/ahoo/cosec/spi/token/TokenFamily;
+	public final fun getVersion ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/spi/token/TokenRevokedException : me/ahoo/cosec/spi/token/TokenVerificationException {
 	public fun <init> (Ljava/lang/String;)V
 }
 
 public abstract interface class me/ahoo/cosec/spi/token/TokenRevoker {
 	public abstract fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun revoke (Lme/ahoo/cosec/api/token/CompositeToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun revokeSubject-opWVSHk$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
@@ -565,6 +604,16 @@ public abstract interface class me/ahoo/cosec/spi/token/TokenRevoker {
 public final class me/ahoo/cosec/spi/token/TokenRevoker$DefaultImpls {
 	public static fun revokeSubject-opWVSHk (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun revokeSubject-opWVSHk$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/spi/token/TokenSession {
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;J)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAuthTime ()Ljava/time/Instant;
+	public final fun getGeneration ()J
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class me/ahoo/cosec/spi/token/TokenStore {
@@ -589,8 +638,8 @@ public abstract interface class me/ahoo/cosec/spi/token/TokenVerifier {
 }
 
 public final class me/ahoo/cosec/spi/token/VerifiedToken {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Map;
 	public final fun getExpiresAt ()Ljava/time/Instant;
@@ -600,6 +649,7 @@ public final class me/ahoo/cosec/spi/token/VerifiedToken {
 	public final fun getPolicies ()Ljava/util/Set;
 	public final fun getPrincipal ()Ljava/lang/String;
 	public final fun getRoles ()Ljava/util/Set;
+	public final fun getSession ()Lme/ahoo/cosec/spi/token/TokenSession;
 	public final fun getTenant ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }

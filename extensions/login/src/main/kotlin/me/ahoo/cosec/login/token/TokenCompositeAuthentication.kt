@@ -19,10 +19,19 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenFamilies
 
+/**
+ * Turns credentials into a token: the [Authentication] for their type answers the subject, and [tokenConverter] issues
+ * its pair. A subject without a session (a login, a tenant switch) starts a family in [families], signed in at
+ * [TokenSubject.authTime] or now; a refresh's subject is already in its session's next generation.
+ */
 class TokenCompositeAuthentication(
     private val compositeAuthentication: CompositeAuthentication,
-    private val tokenConverter: TokenConverter
+    private val tokenConverter: TokenConverter,
+    private val families: TokenFamilies,
 ) : Authentication<Credentials> {
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java
@@ -49,6 +58,13 @@ class TokenCompositeAuthentication(
     ): CompositeToken {
         val subject = authenticate(credentialsType, credentials)
         currentCoroutineContext().ensureActive()
-        return tokenConverter.toToken(subject)
+        val issued = subject.session?.let { subject } ?: subject.inSession(
+            families.start(
+                subject.tenant?.let(::TenantId) ?: TenantId.DEFAULT,
+                PrincipalId(subject.id),
+                subject.authTime,
+            )
+        )
+        return tokenConverter.toToken(issued)
     }
 }

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spi.token
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Instant
@@ -30,17 +31,24 @@ import java.time.Instant
 interface TokenRevoker {
 
     /**
-     * Revokes the access token so that neither it nor the refresh token bound to it can be used any more. Only that
-     * pair: a pair it was refreshed from, or one refreshed from that, stays usable; [revokeSubject] ends them all.
+     * Logs out: revokes the access token and its session (RFC 0009), so no pair of the session refreshes any more, the
+     * pairs it was refreshed from included. Other sessions of the principal are untouched; [revokeSubject] ends them all.
+     * An older generation's access token stays valid until it expires, as every access token does.
      *
-     * @param accessToken the access token to revoke
+     * @param accessToken the access token to revoke, valid and unexpired
      * @return what the revoked token said
-     * @throws TokenVerificationException if the token is invalid (including
-     * already expired -- revoke before the access token expires to also kill
-     * the bound refresh token) or already revoked
+     * @throws TokenVerificationException if the token is invalid (including expired: log out with [revoke] of the pair
+     * then) or already revoked
      */
     @Throws(TokenVerificationException::class)
     suspend fun revoke(accessToken: String): VerifiedToken
+
+    /**
+     * Logs out with the pair, for a client whose access token has expired: the refresh token is verified and must be
+     * bound to the access token, as a refresh requires; then as [revoke] of the access token.
+     */
+    @Throws(TokenVerificationException::class)
+    suspend fun revoke(token: CompositeToken): VerifiedToken
 
     /**
      * Revokes every token of [principal] in [tenant] issued before [issuedBefore], access and refresh tokens alike:

@@ -22,10 +22,12 @@ import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -114,6 +116,28 @@ internal class CoSecJwtAutoConfiguration {
             "or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
     )
 
+    /** Reached only without `cosec-cocache`, whose family store comes first: a refresh never runs without one. */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecTokenFamilyStore(): TokenFamilyStore = throw IllegalStateException(
+        "JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add cosec-cocache " +
+            "or a TokenFamilyStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
+    )
+
+    /** The refresh token families (RFC 0009): `cosec.jwt.session.*`. */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecTokenFamilies(
+        store: TokenFamilyStore,
+        jwtProperties: JwtProperties,
+        idGeneratorProvider: ObjectProvider<IdGenerator>,
+    ): TokenFamilies = TokenFamilies(
+        store,
+        jwtProperties.session.lifetime,
+        jwtProperties.session.rotationLeeway,
+        idGeneratorProvider.getIfAvailable { RandomIdGenerator },
+    )
+
     /** CoSec's own verifier: pure computation, whose answers are then checked against revocations (`TokenRevocation`). */
     @Bean
     @ConditionalOnMissingBean
@@ -141,12 +165,14 @@ internal class CoSecJwtAutoConfiguration {
         tokenVerifier: TokenVerifier,
         tokenStore: TokenStore,
         tokenRevocation: TokenRevocation,
+        tokenFamilies: TokenFamilies,
         jwtProperties: JwtProperties
     ): TokenRevoker {
         return DefaultTokenRevoker(
             tokenVerifier,
             tokenStore,
             tokenRevocation,
+            tokenFamilies,
             jwtProperties.tokenValidity.refresh
         )
     }
@@ -159,9 +185,10 @@ internal class CoSecJwtAutoConfiguration {
         @ConditionalOnBean(CompositeAuthentication::class)
         fun tokenCompositeAuthentication(
             compositeAuthentication: CompositeAuthentication,
-            tokenConverter: TokenConverter
+            tokenConverter: TokenConverter,
+            tokenFamilies: TokenFamilies,
         ): TokenCompositeAuthentication {
-            return TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
+            return TokenCompositeAuthentication(compositeAuthentication, tokenConverter, tokenFamilies)
         }
     }
 }

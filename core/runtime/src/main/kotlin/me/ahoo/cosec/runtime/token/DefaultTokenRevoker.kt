@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.token
 
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
@@ -25,13 +26,14 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * The [TokenRevoker] over a [TokenStore]: [revoke] verifies the token, refuses one already revoked ([revocation]), and
- * records its id; [revokeSubject] records the principal's revocation. A revocation store that cannot be read does not
+ * The [TokenRevoker] over a [TokenStore]: [revoke] verifies the token, refuses one already revoked ([revocation]), ends
+ * its session in [families] and records its id; [revokeSubject] records the principal's revocation. A revocation store that cannot be read does not
  * stop a logout: whether the token was already revoked is then unknown, and revoking it again is harmless.
  *
  * @param tokenVerifier verifies the token and resolves its id before revoking
  * @param tokenStore where the revocation entry is recorded
  * @param revocation the judgement that refuses a token already revoked, over the same store
+ * @param families where the token's session is ended, so no pair of it refreshes any more
  * @param revocationTtl how long each revocation entry is kept; must cover the full refresh token validity, so it never
  * expires before the bound refresh token does: the starter wires it from `cosec.jwt.token-validity.refresh`
  * @param clock the time [revokeSubject] measures a future `issuedBefore` from
@@ -40,17 +42,22 @@ class DefaultTokenRevoker @JvmOverloads constructor(
     private val tokenVerifier: TokenVerifier,
     private val tokenStore: TokenStore,
     private val revocation: TokenRevocation,
+    private val families: TokenFamilies,
     private val revocationTtl: Duration,
     private val clock: Clock = Clock.systemUTC()
 ) : TokenRevoker {
 
-    override suspend fun revoke(accessToken: String): VerifiedToken {
-        val token = tokenVerifier.verify(accessToken)
+    override suspend fun revoke(accessToken: String): VerifiedToken = revoked(tokenVerifier.verify(accessToken))
+
+    override suspend fun revoke(token: CompositeToken): VerifiedToken = revoked(tokenVerifier.refresh(token))
+
+    private suspend fun revoked(token: VerifiedToken): VerifiedToken {
         try {
             revocation.check(token)
         } catch (_: RevocationUnavailableException) {
             // Not known to be revoked yet: record it, which the write's own failure would report.
         }
+        token.session?.let { families.end(it.id) }
         tokenStore.revoke(token.id, revocationTtl)
         return token
     }

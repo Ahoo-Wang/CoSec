@@ -1,0 +1,80 @@
+{
+  "rules": [
+    "IDN-18"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "alice logs out of her other session f2; her session f1 still refreshes.",
+  "refresh": {
+    "logout": {
+      "access": {
+        "jti": "b1",
+        "sub": "alice",
+        "tenantId": "acme",
+        "iat": 1793404800,
+        "claims": {
+          "sid": "f2",
+          "auth_time": 1793404800,
+          "cosec.generation": 1
+        }
+      },
+      "refresh": {
+        "jti": "r1",
+        "sub": "b1",
+        "iat": 1793404800,
+        "claims": {
+          "cosec.token": "refresh",
+          "sid": "f2",
+          "auth_time": 1793404800,
+          "cosec.generation": 1
+        }
+      }
+    },
+    "pairs": [
+      {
+        "access": {
+          "jti": "a1",
+          "sub": "alice",
+          "tenantId": "acme",
+          "iat": 1793404800,
+          "claims": {
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 1
+          }
+        },
+        "refresh": {
+          "jti": "r1",
+          "sub": "a1",
+          "iat": 1793404800,
+          "claims": {
+            "cosec.token": "refresh",
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 1
+          }
+        }
+      }
+    ]
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 1
+    },
+    {
+      "id": "f2",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 1
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

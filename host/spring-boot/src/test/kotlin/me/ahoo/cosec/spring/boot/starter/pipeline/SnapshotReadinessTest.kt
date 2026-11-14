@@ -27,7 +27,9 @@ import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.NoTokenStore
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -62,6 +64,7 @@ class SnapshotReadinessTest {
         )
         .withPropertyValues("${JwtProperties.PREFIX}.enabled=false", "cosec.authorization.routes.location=")
         .withBean(TokenStore::class.java, { NoTokenStore })
+        .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
         .withBean(SnapshotDocumentStore::class.java, { documents })
 

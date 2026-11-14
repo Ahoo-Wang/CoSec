@@ -17,6 +17,7 @@ package me.ahoo.cosec.cache
 
 import io.lettuce.core.RedisURI
 import me.ahoo.cocache.api.ReadableCache
+import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
@@ -25,6 +26,7 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.token.TokenFamily
 
 /**
  * One CoSec instance: its own [CacheRuntime] (local caches) over a [backend] that other instances may share.
@@ -45,6 +47,10 @@ internal class CoSecTestCaches(
         factory.createCache(
             CoSecCacheSpecs.revokedSubject(keyPrefix)
         )
+    }
+
+    val tokenFamilyCache: Store<String, TokenFamily> by lazy {
+        factory.createLocked(CoSecCacheSpecs.tokenFamily(keyPrefix))
     }
 
     val membershipCache: MembershipCache by lazy { factory.createCache(CoSecCacheSpecs.membership(keyPrefix)) }
