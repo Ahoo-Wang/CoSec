@@ -34,6 +34,11 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
@@ -49,11 +54,6 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.document.Actor
-import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCodec
-import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert

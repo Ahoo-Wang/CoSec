@@ -29,6 +29,8 @@ import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
@@ -39,8 +41,6 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.document.PolicyDocumentCodec
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKeyText

@@ -52,6 +52,11 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
@@ -64,12 +69,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.document.Actor
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCodec
-import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport

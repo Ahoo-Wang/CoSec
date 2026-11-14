@@ -21,6 +21,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
@@ -44,7 +45,6 @@ import me.ahoo.cosec.runtime.event.OutcomeSummary
 import me.ahoo.cosec.runtime.event.RequestSummary
 import me.ahoo.cosec.runtime.event.SubjectSummary
 import me.ahoo.cosec.runtime.event.TraceContext
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant

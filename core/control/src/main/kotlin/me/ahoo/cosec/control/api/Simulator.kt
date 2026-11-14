@@ -18,6 +18,8 @@ package me.ahoo.cosec.control.api
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
@@ -44,8 +46,6 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.snapshot.MissingPlatformException

@@ -17,17 +17,17 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.OnMissingConfirmation
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition
-import me.ahoo.cosec.document.Actor
-import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCodec
-import me.ahoo.cosec.document.ProvenanceKind
 import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Duration
 import java.time.Instant

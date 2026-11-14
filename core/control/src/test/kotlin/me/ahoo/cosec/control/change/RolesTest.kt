@@ -27,13 +27,6 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
-import me.ahoo.cosec.model.Action
-import me.ahoo.cosec.model.AppId
-import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.SpaceId
-import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
 import me.ahoo.cosec.document.CatalogPermission
@@ -42,6 +35,13 @@ import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.document.RolePermissions
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert

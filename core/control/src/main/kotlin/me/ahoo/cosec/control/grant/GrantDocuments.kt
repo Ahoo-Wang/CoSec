@@ -16,15 +16,15 @@
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.RoleExpansion
 
 /**
  * The grant analysis's view of snapshot documents (RFC 0004 §7.1): what [GrantAnalyzer] reads from the documents the

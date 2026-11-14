@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
@@ -40,7 +41,6 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts

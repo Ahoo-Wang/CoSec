@@ -16,8 +16,8 @@
 package me.ahoo.cosec.runtime.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityFormatException.Reason

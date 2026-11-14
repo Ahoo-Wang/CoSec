@@ -34,6 +34,9 @@ import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.control.grant.ProtectedEntry
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -42,9 +45,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity

@@ -23,8 +23,8 @@ import me.ahoo.cosec.control.store.StoreFixtures.binding
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

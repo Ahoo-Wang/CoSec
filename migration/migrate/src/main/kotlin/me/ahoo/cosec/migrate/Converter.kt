@@ -16,6 +16,14 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.CatalogGroup
+import me.ahoo.cosec.document.CatalogPermission
+import me.ahoo.cosec.document.DocumentCompileException
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
@@ -40,14 +48,6 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolver
-import me.ahoo.cosec.document.Catalog
-import me.ahoo.cosec.document.CatalogGroup
-import me.ahoo.cosec.document.CatalogPermission
-import me.ahoo.cosec.document.DocumentCompileException
-import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode

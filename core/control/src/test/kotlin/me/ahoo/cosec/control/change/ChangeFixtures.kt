@@ -25,6 +25,8 @@ import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
@@ -41,8 +43,6 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.document.Actor
-import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicInteger
 

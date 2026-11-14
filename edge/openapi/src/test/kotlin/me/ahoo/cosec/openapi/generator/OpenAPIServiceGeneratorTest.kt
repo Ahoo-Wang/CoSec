@@ -20,12 +20,12 @@ import io.swagger.v3.core.util.Json31
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.PathItem
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.document.route.RouteResolution
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

@@ -32,9 +32,9 @@ import me.ahoo.cosec.cocache.ApiKeyCodec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.document.json.CoSecJson
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.JsonNode
 import java.io.IOException

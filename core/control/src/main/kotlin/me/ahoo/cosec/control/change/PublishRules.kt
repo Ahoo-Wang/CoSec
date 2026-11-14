@@ -24,9 +24,9 @@ import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.ShadowWindow
+import me.ahoo.cosec.model.Action
 
 /** What [Changes.publish] and its shadow windows decide from the change and the head alone. */
 internal object PublishRules {
