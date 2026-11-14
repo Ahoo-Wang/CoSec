@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.identity
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
 import java.time.Clock

@@ -51,7 +51,7 @@ import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.TraceContext
-import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource

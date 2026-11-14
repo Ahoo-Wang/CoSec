@@ -64,7 +64,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.StoredCandidate

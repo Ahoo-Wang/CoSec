@@ -24,7 +24,7 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
-import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.webflux.HttpFactsReader
 import me.ahoo.cosec.webflux.ReactivePipelineBridge

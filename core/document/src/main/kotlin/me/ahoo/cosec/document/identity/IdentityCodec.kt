@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.identity
+package me.ahoo.cosec.document.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson

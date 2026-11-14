@@ -16,7 +16,7 @@
 package me.ahoo.cosec.gateway
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.document.identity.IdentityCodec
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.cloud.gateway.filter.headers.HttpHeadersFilter

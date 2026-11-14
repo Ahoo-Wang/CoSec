@@ -131,7 +131,7 @@ object DocumentFormats {
 
     /**
      * The `CoSec-Identity` header a gateway forwards to the services behind it, after base64url: format v1
-     * (`IdentityCodec` in `me.ahoo.cosec.runtime.identity`). Only what the gateway verified or resolved.
+     * (`IdentityCodec` in `me.ahoo.cosec.document.identity`). Only what the gateway verified or resolved.
      */
     val identitySchema = SchemaFile(
         name = IDENTITY,

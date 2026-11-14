@@ -38,7 +38,7 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
-import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource

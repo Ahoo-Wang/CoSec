@@ -92,11 +92,11 @@ The rules behind the picture:
 - **`cosec-document`** (directory `core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and
   exchanges: the platform, app and tenant documents with their codec (`PolicyDocumentCodec`) and compiler
   (`PolicyDocumentCompiler`, an implementation of the `SnapshotCompiler` port of `cosec-spi`), `RoleExpansion`, the
-  format descriptors that generate `schema/*.schema.json` (`document.format`), route maps (`document.route`) and the
-  one Jackson mapper, `CoSecJson` (`document.json`), which is internal (`@InternalCoSecApi`). It depends on
-  `cosec-engine`, `cosec-spi` and Jackson only, so a module that reads or writes a document, such as `cosec-openapi`,
-  does not bring the request path. No Jackson type appears in a public signature of `api/` or `core/`
-  (`JacksonSignatureTest`).
+  format descriptors that generate `schema/*.schema.json` (`document.format`), route maps (`document.route`), the
+  codec of the forwarded `CoSec-Identity` header (`document.identity`) and the one Jackson mapper, `CoSecJson`
+  (`document.json`), which is internal (`@InternalCoSecApi`). It depends on `cosec-engine`, `cosec-spi` and Jackson
+  only, so a module that reads or writes a document, such as `cosec-openapi`, does not bring the request path. No
+  Jackson type appears in a public signature of `api/` or `core/` (`JacksonSignatureTest`).
 - **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
   `AuthorizationChecker`, `SnapshotSource`, token verification, the built-in authenticators and the logging audit
   sink, over the documents of `cosec-document`. Coroutines stay in this module and the adapters, Reactor only at the

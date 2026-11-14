@@ -29,6 +29,6 @@ dependencies {
     testImplementation("io.projectreactor:reactor-core")
     // HttpPathPatternParityTest compares the engine's path patterns with Spring's.
     testImplementation("org.springframework:spring-web")
-    // ProblemSchemaTest validates encoded problems, IdentitySchemaTest forwarded identities, against the generated schemas.
+    // ProblemSchemaTest validates encoded problems against the generated schema.
     testImplementation("com.networknt:json-schema-validator")
 }
