@@ -16,6 +16,7 @@ package me.ahoo.cosec.login.token
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.TokenVerifier
 
@@ -26,7 +27,9 @@ abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials>(
 /**
  * Refreshes a token pair (`authentication.md`, Refreshing tokens): [tokenVerifier] checks the pair, pure computation on
  * the caller's thread, then [revocation] reads whether the access token, or every token of its principal, was revoked,
- * suspending without blocking. The subject is what the old access token said, for the new token to say again.
+ * and [families] moves the pair's session to its next generation (only the current one refreshes; an older one presented
+ * again revokes the session; a session ends at its absolute lifetime). The subject is what the old access token said, in
+ * the next generation, for the new pair to say again.
  *
  * A token is never issued on a revocation read that failed (`IDN-14`): when the revocations cannot be read, the
  * [me.ahoo.cosec.spi.token.RevocationUnavailableException] fails the refresh, which the application answers 503. Were the
@@ -36,11 +39,12 @@ abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials>(
 class SimpleRefreshTokenAuthentication(
     private val tokenVerifier: TokenVerifier,
     private val revocation: TokenRevocation,
+    private val families: TokenFamilies,
 ) : AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
     override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
         val token = tokenVerifier.refresh(credentials)
         revocation.check(token)
-        return TokenSubject.of(token)
+        return TokenSubject.of(token, families.rotate(token))
     }
 }
 

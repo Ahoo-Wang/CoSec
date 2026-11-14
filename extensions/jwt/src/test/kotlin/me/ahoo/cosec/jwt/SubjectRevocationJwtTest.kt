@@ -22,9 +22,11 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
@@ -71,13 +73,15 @@ class SubjectRevocationJwtTest {
     // No skew: these tests place revocations to the millisecond of the tokens' `iat`.
     private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
     private val authenticator = TokenAuthenticator(verifier, tokenStore, revocationSkew = Duration.ZERO)
-    private val refresh = SimpleRefreshTokenAuthentication(verifier, revocation)
-    private val revoker = DefaultTokenRevoker(verifier, tokenStore, revocation, Duration.ofDays(7))
+    private val families = TokenFamilies(InMemoryTokenFamilyStore())
+    private val refresh = SimpleRefreshTokenAuthentication(verifier, revocation, families)
+    private val revoker = DefaultTokenRevoker(verifier, tokenStore, revocation, families, Duration.ofDays(7))
     private val tenant = TenantId("tenant")
 
     private fun issue(id: String = "alice") =
         converter.toToken(
             TokenSubject(id, null, tenant = tenant.value, roles = setOf("admin"))
+                .inSession(runBlocking { families.start(tenant, PrincipalId(id)) })
         ) as SimpleCompositeToken
 
     private fun issuedAt(token: SimpleCompositeToken): Instant = Jwts.decode(token.accessToken).issuedAtAsInstant

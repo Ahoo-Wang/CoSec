@@ -202,6 +202,25 @@ and have to be provisioned again.
   `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)` and no longer runs on a dispatcher of its own. The
   starter's `TokenVerifier` bean is the plain `JwtTokenVerifier`, and it adds a `TokenRevocation` bean. A `TokenStore` of
   your own implements the two writes as `suspend` functions, and its reads as a `RevocationReader` bean.
+- **Refresh tokens belong to sessions** (RFC 0009, round-2 review M2). A login starts a session, a family of token pairs
+  whose id, login time and generation both tokens carry (`sid`, `auth_time`, `cosec.generation`), kept in Redis under
+  `<cosec.key-prefix>:token:family:<sid>` ([Sessions](../integration/authentication.md#sessions)). Only the current pair
+  refreshes; an older one presented again ends the session; a session lasts `cosec.jwt.session.lifetime` (30 days) from
+  its login; logout ends the whole session. What changes for an application:
+  - **Every user signs in again once:** a pair issued before this version carries no session and is refused on
+    refresh (`token-invalid`); its access token works until it expires.
+  - **Issue tokens through `TokenCompositeAuthentication`**, which starts the session, or start one yourself with
+    `TokenFamilies.start` and `TokenSubject.inSession`: a pair from `TokenConverter.toToken` alone never refreshes.
+    `TokenCompositeAuthentication` and `SimpleRefreshTokenAuthentication` take a `TokenFamilies` (a starter bean).
+  - **A client keeps only the newest pair:** presenting a pair after a newer one was issued ends the session, unless it
+    happens within `cosec.jwt.session.rotation-leeway` (30 seconds) of that refresh: then it gets a pair of the newest
+    generation, so a refresh whose response was lost can be retried.
+  - **`TokenRevoker.revoke(compositeToken)`** logs out with an expired access token; `revoke(accessToken)` now ends the
+    session too. A `TokenRevoker` of your own implements both.
+  - **A tenant switch needs the access token:** `SwitchTenantCredentials.accessToken`, and
+    `AbstractSwitchTenantAuthentication` takes the `TokenVerifier`; the new token keeps the login time.
+  - **Without `cosec-cocache`, register a `TokenFamilyStore`**, or startup fails (`InMemoryTokenFamilyStore` for one
+    instance). Redis holds one key per live session.
 - **A revocation store that cannot be read is reported, never read as "not revoked"** (round-2 review H1, `IDN-14`).
   A `RevocationReader` throws `RevocationUnavailableException` when its store cannot be read; the revocation tables'
   `unknown-read` is locked to `throw`, so `cocache.caches.[RevokedTokenCache].unknown-read` fails startup. The pipeline

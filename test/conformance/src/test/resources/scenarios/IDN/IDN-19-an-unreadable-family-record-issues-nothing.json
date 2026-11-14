@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "IDN-19"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The family records cannot be read: alice's valid, unrevoked pair is refused with 503, and nothing is issued.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "refresh": {
+      "jti": "r1",
+      "sub": "a1",
+      "iat": 1793404800,
+      "claims": {
+        "cosec.token": "refresh",
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    }
+  },
+  "families": {
+    "unavailable": "Redis is down"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

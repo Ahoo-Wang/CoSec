@@ -27,10 +27,14 @@ import org.springframework.web.method.support.ModelAndViewContainer
  * included, which may resume on a thread serving another request. The starter registers it.
  *
  * A nullable parameter is null where CoSec did not handle the request; a non-null one then fails the call.
+ *
+ * Only a parameter of exactly `SecurityContext` is this resolver's: the context the adapter binds is the runtime's own,
+ * of no type an application names, so a parameter of a subtype would fail the call with a `ClassCastException`, and
+ * another resolver it belongs to would lose it.
  */
 class SecurityContextArgumentResolver : HandlerMethodArgumentResolver {
     override fun supportsParameter(parameter: MethodParameter): Boolean =
-        SecurityContext::class.java.isAssignableFrom(parameter.nestedParameterType)
+        parameter.nestedParameterType == SecurityContext::class.java
 
     override fun resolveArgument(
         parameter: MethodParameter,

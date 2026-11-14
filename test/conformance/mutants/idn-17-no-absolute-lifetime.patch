@@ -1,0 +1,28 @@
+# Rule: IDN-17
+# Mutant: a session refreshes past its lifetime as long as its record is there, so a changed role never takes effect
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+index d38f7bef..b27e4e41 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+@@ -100,9 +100,6 @@ class TokenFamilies @JvmOverloads constructor(
+     suspend fun rotate(token: VerifiedToken): Issue {
+         val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
+         val now = clock.instant()
+-        if (!session.authTime.plus(lifetime).isAfter(now)) {
+-            throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
+-        }
+         repeat(MAX_ATTEMPTS) {
+             val read = store.read(session.id)
+                 ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
+@@ -111,9 +108,6 @@ class TokenFamilies @JvmOverloads constructor(
+             if (family.revoked) {
+                 throw TokenRevokedException("The token's session has been revoked.")
+             }
+-            if (!family.expiresAt.isAfter(now)) {
+-                throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
+-            }
+             when {
+                 session.generation == family.generation -> {
+                     val next = family.rotated(now)

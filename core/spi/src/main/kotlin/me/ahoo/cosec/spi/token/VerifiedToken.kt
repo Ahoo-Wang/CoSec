@@ -58,6 +58,11 @@ class VerifiedToken(
      * or anything else the token said (a value that is not a string is kept as its JSON text), which the pipeline refuses.
      */
     val membershipMarker: String? = null,
+    /**
+     * The session the token belongs to (`sid`, `auth_time`, `cosec.generation`), null for a token that carries none:
+     * such a token is never refreshed.
+     */
+    val session: TokenSession? = null,
 ) {
     /** The `roles` claim: `role`, or `role@space`. */
     val roles: Set<String> = Collections.unmodifiableSet(LinkedHashSet(roles))

@@ -20,9 +20,12 @@ import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -47,6 +50,7 @@ class CoSecJwtAutoConfigurationTest {
             )
             .withBean(IdGenerator::class.java, { IdGenerator { "app-token-id" } })
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
@@ -70,6 +74,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
@@ -126,6 +131,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=$secret"
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
             .run(check)
@@ -155,6 +161,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.token-validity.refresh=PT72H",
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
@@ -182,6 +189,7 @@ class CoSecJwtAutoConfigurationTest {
                 "cosec.authentication.revocation.skew=PT30S",
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
@@ -217,12 +225,47 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(TokenStore::class.java, { customTokenStore })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 context.getBean(TokenStore::class.java).assert().isSameAs(customTokenStore)
+            }
+    }
+
+    /** RFC 0009: a refresh never runs without a family store, so JWT without one fails startup, naming the fix. */
+    @Test
+    fun contextFailsWithoutTokenFamilyStore() {
+        contextRunner
+            .withPropertyValues("${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_")
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                context.startupFailure!!.stackTraceToString().assert().contains(
+                    "no TokenFamilyStore keeps the refresh token families"
+                )
+            }
+    }
+
+    @Test
+    fun theSessionPropertiesReachTheFamilies() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.session.lifetime=P7D",
+                "${JwtProperties.PREFIX}.session.rotation-leeway=PT2S",
+            )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                val families = context.getBean(TokenFamilies::class.java)
+                families.lifetime.assert().isEqualTo(Duration.ofDays(7))
+                ReflectionTestUtils.getField(families, "leeway").assert().isEqualTo(Duration.ofSeconds(2))
             }
     }
 }

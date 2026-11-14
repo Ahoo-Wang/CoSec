@@ -31,6 +31,12 @@ class SecurityContextArgumentResolverTest {
     @Suppress("UNUSED_PARAMETER")
     fun handler(required: SecurityContext, optional: SecurityContext?, other: String) = Unit
 
+    /** An application's own context type, which some other resolver of the application supplies. */
+    interface TenantContext : SecurityContext
+
+    @Suppress("UNUSED_PARAMETER")
+    fun tenantHandler(tenant: TenantContext, any: Any) = Unit
+
     private val resolver = SecurityContextArgumentResolver()
     private fun parameter(index: Int) =
         MethodParameter.forExecutable(
@@ -56,6 +62,15 @@ class SecurityContextArgumentResolverTest {
         } finally {
             SecurityContextHolder.remove()
         }
+    }
+
+    /** What the adapter binds is not of an application's subtype: such a parameter is left to its own resolver. */
+    @Test
+    fun aParameterOfASubtypeOrASupertypeIsNotThisResolvers() {
+        val method = javaClass.getMethod("tenantHandler", TenantContext::class.java, Any::class.java)
+        resolver.supportsParameter(MethodParameter.forExecutable(method, 0)).assert().isFalse()
+        resolver.supportsParameter(MethodParameter.forExecutable(method, 1)).assert().isFalse()
+        resolver.supportsParameter(parameter(1)).assert().isTrue()
     }
 
     @Test

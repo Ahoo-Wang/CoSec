@@ -15,7 +15,11 @@ package me.ahoo.cosec.login.token
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenVerifier
+import java.time.Instant
 
 /**
  * Switches a signed-in principal to another tenant (`wiki/integration/authentication.md`), to issue a token for it.
@@ -23,11 +27,16 @@ import me.ahoo.cosec.spi.membership.MembershipClaims
  * Roles, policies and attributes are a tenant's: an administrator of one tenant is not one of another. So the subject
  * this answers has the [previous][SwitchTenantCredentials.context] principal's id, the target tenant, and only what
  * [switchTenant] answers for that tenant; nothing else of the previous token reaches the new one (RC1-23) but its app,
- * which the token was issued for and a user cannot change by switching tenant (`SCP-11`).
+ * which the token was issued for and a user cannot change by switching tenant (`SCP-11`), and its login time: the new
+ * token starts a session of its own, which ends when the previous one would, since the user did not sign in again
+ * (RFC 0009). The login time is read from [SwitchTenantCredentials.accessToken], which [tokenVerifier] verifies and
+ * which must be the context's principal's in the context's tenant.
  *
  * @author ahoo wang
  */
-abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantCredentials> {
+abstract class AbstractSwitchTenantAuthentication(
+    private val tokenVerifier: TokenVerifier,
+) : Authentication<SwitchTenantCredentials> {
     override val supportCredentials: Class<SwitchTenantCredentials>
         get() = SwitchTenantCredentials::class.java
 
@@ -35,7 +44,18 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
         val target = credentials.targetTenantId
         val previous = credentials.context
         check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
-        return inTarget(previous, target, switchTenant(target, previous))
+        val authTime = authTimeOf(credentials.accessToken, previous)
+        return inTarget(previous, target, switchTenant(target, previous), authTime)
+    }
+
+    /** When the user signed in, from the token they switch from, which must be the context's principal's. */
+    private fun authTimeOf(accessToken: String, previous: SecurityContext): Instant {
+        val token = tokenVerifier.verify(accessToken)
+        if (token.principal != previous.principal.id || (token.tenant ?: TenantId.DEFAULT.value) != previous.tenantId) {
+            throw TokenVerificationException("The token presented to switch tenant is not the request's principal's.")
+        }
+        val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
+        return session.authTime
     }
 
     /**
@@ -51,7 +71,12 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
         previous: SecurityContext
     ): TenantMembership
 
-    private fun inTarget(previous: SecurityContext, target: String, membership: TenantMembership): TokenSubject =
+    private fun inTarget(
+        previous: SecurityContext,
+        target: String,
+        membership: TenantMembership,
+        authTime: Instant,
+    ): TokenSubject =
         TokenSubject(
             id = previous.principal.id,
             app = previous.scope.appId.ifEmpty { null },
@@ -60,6 +85,7 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
             policies = membership.policies,
             attributes = membership.attributes,
             membershipMarker = if (membership.fromProvider) MembershipClaims.PROVIDER else null,
+            authTime = authTime,
         )
 }
 
@@ -98,4 +124,7 @@ interface SwitchTenantCredentials : Credentials {
 
     /** The context of the permitted request asking to switch: the token the user switches from. */
     val context: SecurityContext
+
+    /** The access token of that request: the new token keeps its login time (`auth_time`). */
+    val accessToken: String
 }

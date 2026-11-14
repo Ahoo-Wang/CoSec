@@ -16,6 +16,7 @@ package me.ahoo.cosec.login.token
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -28,6 +29,8 @@ import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.runtime.token.TokenFamilies
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -38,11 +41,29 @@ class TokenCompositeAuthenticationTest {
         every { toToken(any()) } returns compositeToken
     }
     private val credentials = mockk<Credentials>()
+    private val store = InMemoryTokenFamilyStore()
+    private val families = TokenFamilies(store)
+
+    /** RFC 0009: a login starts a session, at generation 1, which the issued pair carries and its end bounds. */
+    @Test
+    fun `a login starts a session`() = runTest {
+        val issued = slot<TokenSubject>()
+        every { tokenConverter.toToken(capture(issued)) } returns compositeToken
+        tokensBy(mockk { coEvery { authenticate(any()) } returns TokenSubject("alice", null, tenant = "acme") })
+            .authenticateAsToken(credentials)
+        val session = checkNotNull(issued.captured.session)
+        session.generation.assert().isEqualTo(1L)
+        val family = checkNotNull(store.read(session.id)).family
+        family.principal.value.assert().isEqualTo("alice")
+        family.tenant.value.assert().isEqualTo("acme")
+        issued.captured.notAfter.assert().isEqualTo(family.expiresAt)
+        family.expiresAt.assert().isEqualTo(session.authTime.plus(families.lifetime))
+    }
 
     private fun tokensBy(authentication: Authentication<Credentials>): TokenCompositeAuthentication {
         val authenticationProvider = DefaultAuthenticationProvider()
         authenticationProvider.register(credentials.javaClass, authentication)
-        return TokenCompositeAuthentication(CompositeAuthentication(authenticationProvider), tokenConverter)
+        return TokenCompositeAuthentication(CompositeAuthentication(authenticationProvider), tokenConverter, families)
     }
 
     @Test

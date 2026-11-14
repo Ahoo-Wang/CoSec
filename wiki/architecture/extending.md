@@ -218,6 +218,7 @@ users is in [Authentication](../integration/authentication.md).
 | Extension point | Contract |
 |---|---|
 | `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
+| `TokenFamilyStore` | The sessions of refresh tokens ([Sessions](../integration/authentication.md#sessions)): `create`, `read`, and `replace` a family only over the version read, atomically across instances. A failed read or an unconfirmed write throws. Read and written on login, refresh and logout only. |
 | `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
 
