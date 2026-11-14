@@ -337,8 +337,8 @@ header: anonymous. Otherwise never anonymous:
 - A `key` value with an unpaired UTF-16 surrogate counts in a bucket of its own, `e:` and the value escaped (`\uD800`,
   `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values count in `k:<value>`.
 - On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
-  counters have no hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure` every permit is
-  503. Upgrade; counters are `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`. A `cosec.key-prefix` with
+  counters span two keys without a hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure`
+  every permit is 503. Upgrade; a bucket is one key, `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`. A `cosec.key-prefix` with
   its own hash tag (`{cosec}`) puts every counter on one slot.
 
 ### Control-plane errors

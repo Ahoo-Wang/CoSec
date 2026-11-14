@@ -183,7 +183,7 @@ class UnpairedSurrogateKeyTest {
             val limiter = ReactiveRedisRateLimiter(
                 ReactiveStringRedisTemplate(factory),
                 "cosec:test:rate:${UUID.randomUUID()}",
-            ) { ReactiveRedisRateLimiterTest.FIXED_NOW }
+            )
             val limit = ReactiveRedisRateLimiterTest.quotaOf(1)
             limiter.tryAcquire("rule", CompiledRateLimit.keyedBucket("x?"), limit).allowed.assert().isTrue()
             limiter.tryAcquire("rule", CompiledRateLimit.keyedBucket("x\uD800"), limit).allowed

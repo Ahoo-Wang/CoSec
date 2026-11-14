@@ -46,9 +46,8 @@ object GuardAllowlist {
             "control:ControlHttpTest#a body with a duplicate key is refused",
             "control:ControlHttpTest#a field that does not parse is a 400 that names it, never an exception's message",
             "control:ControlHttpTest#a stored document that does not decode is a 500 without detail, logged with its key",
-            "cocache:ReactiveRedisRateLimiterTest#aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold",
-            "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
-            "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",
+            "cocache:ReactiveRedisRateLimiterTest#aBucketIsOneKeyThatEveryCountGivesAnExpiry",
+            "cocache:ReactiveRedisRateLimiterTest#theWindowIsRedissNotTheCallers",
             "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster",
         ),
         "startup" to setOf(

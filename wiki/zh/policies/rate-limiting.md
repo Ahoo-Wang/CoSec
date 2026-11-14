@@ -88,8 +88,10 @@ flowchart LR
 
 | 限流器 | 何时使用 | 范围 |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | classpath 中有 `cosec-cocache`，且存在 `ReactiveStringRedisTemplate` bean | 整个集群，由 Lua 脚本原子地检查并计数，不阻塞调用线程。计数器位于 `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`，两个窗口后过期。花括号是 Redis Cluster 的 hash tag：脚本一起读取的一个桶的两个窗口在同一个 slot 上，不同的桶仍分散在整个集群中。 |
+| `ReactiveRedisRateLimiter` | classpath 中有 `cosec-cocache`，且存在 `ReactiveStringRedisTemplate` bean | 整个集群，由 Lua 脚本原子地检查并计数，不阻塞调用线程。每个桶是一个 key，`<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`，保存当前与上一个窗口，在最后一次计数两个窗口后过期。脚本从 Redis 取时间，所以时钟不一致的实例也计在同一个窗口中；它只访问这一个 key，所以在 Redis Cluster 上与在单节点上一样运行。 |
 | `LocalRateLimiter` | 其他情况 | 每个 JVM 独立：有 N 个实例时，实际限制是 N 倍。最多保留 100,000 个桶，空闲一小时的桶会被丢弃；被丢弃的桶从零重新计数。 |
+
+**计数器是客户端可以撑大的内存。** 它们与文档存放在同一个 Redis 中，而这个 Redis 不得逐出（[存储](../operations/storage.md#redis-requirements)）：每个桶值一个 key，保留两个窗口。规则的 `key` 读取客户端可以选择的内容（尤其是请求头）且窗口很长时，客户端发多快的请求就能建多快的 key，并保留两个窗口；Redis 写满后拒绝一切写入，包括发布和吊销。这就是窗口至多一天的原因。请让规则的 `key` 取客户端无法成倍制造的内容（主体、可信代理报告的地址），并保持窗口较短；要让计数器完全远离文档，就给限流器一个自己的 Redis：声明一个 `RateLimiter` bean，`ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(<它自己的连接工厂>), "<prefix>:rate-limiter")`，starter 就不再创建自己的限流器。
 
 自定义的 `RateLimiter` bean 会替换两者（[扩展](../architecture/extending.md)）。每次调用受 `cosec.authorization.rate-limit.timeout`（默认 `500ms`，[配置](../operations/configuration.md)）约束；超时视为失败。
 
@@ -156,7 +158,7 @@ flowchart LR
 
 ## 发布规则 {#publishing-rules}
 
-规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、一份文档超过 64 条规则、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1` 或超过一年（`31536000`）、配额 `permitsPerSecond × windowSeconds` 超过 2⁶³、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
+规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、一份文档超过 64 条规则、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1` 或超过一天（`86400`）、配额 `permitsPerSecond × windowSeconds` 超过 2⁶³、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
 
 像其他条目一样通过控制面修改规则（[变更](./testing.md#changes)）：
 

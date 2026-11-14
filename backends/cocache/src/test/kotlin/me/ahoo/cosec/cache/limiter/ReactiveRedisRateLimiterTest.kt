@@ -26,13 +26,14 @@ import org.springframework.data.redis.connection.RedisClusterConfiguration
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
+import org.springframework.data.redis.core.RedisCallback
 import org.springframework.data.redis.core.StringRedisTemplate
 import java.util.UUID
-import kotlin.random.Random
+import java.util.concurrent.TimeUnit
 
 /**
- * RFC 0006 §8.4: the suspending Redis limiter counts atomically in Redis, against real Redis, in keys that keep a
- * bucket's two windows on one Redis Cluster slot (`OBL-4`, #1229); a failure is thrown. That it never blocks its caller
+ * RFC 0006 §8.4: the suspending Redis limiter counts atomically in Redis, against real Redis, one key per bucket, by
+ * Redis's clock (`OBL-4`); a failure is thrown. That it never blocks its caller
  * is in `SnapshotStoreBlockHoundTest`.
  */
 class ReactiveRedisRateLimiterTest {
@@ -44,20 +45,73 @@ class ReactiveRedisRateLimiterTest {
         factory.destroy()
     }
 
+    private val redis = StringRedisTemplate(factory)
+
+    /** Redis's clock, as the script reads it: `TIME`, in milliseconds. */
+    private fun redisNow(): Long {
+        val time = redis.execute(RedisCallback { it.serverCommands().time(TimeUnit.MILLISECONDS) })
+        return checkNotNull(time)
+    }
+
+    /** OBL-4: a bucket is one key, a hash of its window and counts; what is counted there is spent. */
     @Test
-    fun countsUnderTheBucketsHashTag() = runBlocking<Unit> {
-        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix) { FIXED_NOW }
+    fun aBucketIsOneKeyThatEveryCountGivesAnExpiry() = runBlocking<Unit> {
+        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
         val limit = quotaOf(2)
         limiter.tryAcquire("rule", "global", limit).remaining.assert().isEqualTo(1)
-        // `<keyPrefix>:{<ruleId>:<bucket>}:<windowIndex>`: what is counted there is spent.
-        val key = "$prefix:{rule:global}:${FIXED_NOW / RateLimiter.window(limit).windowMillis}"
-        val redis = StringRedisTemplate(factory)
-        redis.opsForValue().get(key).assert().isEqualTo("1")
-        redis.opsForValue().increment(key)
+        val key = "$prefix:rule:global"
+        redis.opsForHash<String, String>().get(key, "c").assert().isEqualTo("1")
+        redis.keys("$prefix:*").orEmpty().assert().containsExactly(key)
+        redis.opsForHash<String, String>().increment(key, "c", 1)
         val exhausted = limiter.tryAcquire("rule", "global", limit)
         exhausted.allowed.assert().isFalse()
         exhausted.remaining.assert().isZero()
         limiter.tryAcquire("rule", "k:other", limit).allowed.assert().isTrue()
+
+        // M3: a key without an expiry, however it got one, has one again after the next count.
+        redis.persist(key)
+        redis.opsForHash<String, String>().put(key, "c", "0")
+        limiter.tryAcquire("rule", "global", limit).allowed.assert().isTrue()
+        val ttl = checkNotNull(redis.getExpire(key, TimeUnit.MILLISECONDS))
+        ttl.assert().isPositive().isLessThanOrEqualTo(2 * RateLimiter.window(limit).windowMillis)
+    }
+
+    /** M3: the longest window is a day, so no counter outlives two days. */
+    @Test
+    fun aCounterOfTheLongestWindowExpiresWithinTwoDays() = runBlocking<Unit> {
+        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
+        limiter.tryAcquire(
+            "rule",
+            "k:v",
+            RateLimitSpec(1.0, RateLimitSpec.MAX_WINDOW_SECONDS)
+        ).allowed.assert().isTrue()
+        checkNotNull(redis.getExpire("$prefix:rule:k:v", TimeUnit.SECONDS))
+            .assert().isPositive().isLessThanOrEqualTo(2 * RateLimitSpec.MAX_WINDOW_SECONDS)
+    }
+
+    /**
+     * OBL-4, L1: the window is Redis's, not the caller's: the count of the window before moves to the previous window's
+     * place, an older one is dropped, and a window ahead of Redis's clock (a failover to a node behind) keeps counting.
+     */
+    @Test
+    fun theWindowIsRedissNotTheCallers() = runBlocking<Unit> {
+        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
+        val limit = quotaOf(2)
+        val window = redisNow() / RateLimiter.window(limit).windowMillis
+        val hash = redis.opsForHash<String, String>()
+
+        hash.putAll("$prefix:rule:before", mapOf("w" to "${window - 1}", "c" to "7", "p" to "0"))
+        limiter.tryAcquire("rule", "before", limit)
+        hash.entries("$prefix:rule:before").assert().containsEntry("p", "7")
+
+        hash.putAll("$prefix:rule:old", mapOf("w" to "${window - 2}", "c" to "7", "p" to "7"))
+        limiter.tryAcquire("rule", "old", limit).remaining.assert().isEqualTo(1)
+        hash.entries("$prefix:rule:old").assert().containsEntry("p", "0").containsEntry("c", "1")
+
+        hash.putAll("$prefix:rule:ahead", mapOf("w" to "${window + 5}", "c" to "1", "p" to "0"))
+        limiter.tryAcquire("rule", "ahead", limit).allowed.assert().isTrue()
+        hash.entries("$prefix:rule:ahead").assert().containsEntry("w", "${window + 5}").containsEntry("c", "2")
+        limiter.tryAcquire("rule", "ahead", limit).allowed.assert().isFalse()
     }
 
     @Test
@@ -71,51 +125,12 @@ class ReactiveRedisRateLimiterTest {
         }
     }
 
-    @Test
-    fun aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold() {
-        val random = Random(1229)
-        val prefixes = listOf("cosec:rate-limiter", "{cosec}:rate-limiter", "a{b:rate-limiter", "a}b{c}:rl", "x{", "")
-        val rules =
-            listOf("platform/rule", "platform/a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
-        fun text(length: Int) = (0 until length).map { BUCKET_CHARACTERS.random(random) }.joinToString("")
-
-        // A random prefix, unless it is one the limiter refuses: its first `{` immediately followed by `}`.
-        fun prefix(): String = generateSequence { text(random.nextInt(0, 10)) }.first { candidate ->
-            val trimmed = candidate.trimEnd(':')
-            val brace = trimmed.indexOf('{')
-            brace < 0 || trimmed.getOrNull(brace + 1) != '}'
-        }
-        val template = ReactiveStringRedisTemplate(factory)
-        repeat(10_000) {
-            val limiter =
-                ReactiveRedisRateLimiter(template, if (random.nextBoolean()) prefixes.random(random) else prefix())
-            // The engine's rule ids, or anything that does not begin with `}`.
-            val rule = if (random.nextBoolean()) rules.random(random) else text(random.nextInt(0, 6)).trimStart('}')
-            val (current, previous) = limiter.keysOf(rule, text(random.nextInt(0, 8)), random.nextLong(1, 1L shl 40))
-            SlotHash.getSlot(current).assert().describedAs("$current, $previous").isEqualTo(SlotHash.getSlot(previous))
-        }
-    }
-
-    @Test
-    fun aRuleIdThatWouldEmptyTheHashTagIsRefused() {
-        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
-        assertThrows<IllegalArgumentException> { limiter.keysOf("}rule", "global", 1) }
-        val refused = runBlocking { runCatching { limiter.tryAcquire("}rule", "global", RateLimitSpec(1.0)) } }
-        refused.exceptionOrNull().assert().isInstanceOf(IllegalArgumentException::class.java)
-    }
-
+    /** OBL-4: different buckets are different keys, which spread over a cluster's slots. */
     @Test
     fun bucketsSpreadOverTheCluster() {
         val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix)
-        val slots = (0 until 64).map { SlotHash.getSlot(limiter.keysOf("rule", "user-$it", 1).first()) }.toSet()
+        val slots = (0 until 64).map { SlotHash.getSlot(limiter.keyOf("rule", "user-$it")) }.toSet()
         slots.size.assert().isGreaterThan(32)
-    }
-
-    @Test
-    fun aPrefixWithAnEmptyHashTagIsRefused() {
-        assertThrows<IllegalArgumentException> {
-            ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), "cosec{}:rate-limiter")
-        }
     }
 
     /**
@@ -132,7 +147,7 @@ class ReactiveRedisRateLimiterTest {
             start()
         }
         try {
-            val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(cluster), prefix) { FIXED_NOW }
+            val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(cluster), prefix)
             val limit = quotaOf(2)
             runBlocking {
                 for (rule in listOf("platform/rule", "app:shop/quota", "tenant:acme/quota")) {
@@ -149,19 +164,12 @@ class ReactiveRedisRateLimiterTest {
     }
 
     companion object {
-        /** Braces, separators, a non-ASCII letter and both halves of a surrogate pair, alone or together. */
-        private const val BUCKET_CHARACTERS = "ab{}:/ \u00e9\ud83d\ude00"
-
-        /** A power of two, so that `permits / seconds * seconds` is exactly the permits. */
+        /** A power of two, so that `permits / seconds * seconds` is exactly the permits; a window that outlives a test. */
         private const val WINDOW_SECONDS = 4_096L
 
-        /** The clock of a test that counts: any instant, the same for every call, so that they share one window. */
-        const val FIXED_NOW = 1_700_000_000_250L
-
         /**
-         * [permits] for one window that outlives any test. A short one would not: the script's TTL on a counter is real
-         * time, two windows whatever the limiter's clock says, so a runner that stalls for two seconds would lose the
-         * counter even at [FIXED_NOW], and the permits would be back.
+         * [permits] for one window that outlives any test. A short one would not: a runner that stalls into the next
+         * window would find the permits back.
          */
         fun quotaOf(permits: Int): RateLimitSpec = RateLimitSpec(permits.toDouble() / WINDOW_SECONDS, WINDOW_SECONDS)
 
