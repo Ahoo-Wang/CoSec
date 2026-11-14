@@ -90,8 +90,11 @@ class StoreOfRecordOverrideTest {
     fun aCustomizerCannotWeakenTheStoreOfRecord() {
         contextRunner.withBean(CacheSpecCustomizer::class.java, { weakening }).run { context ->
             assertThat(context).hasFailed()
+            // Whichever of CoSec's caches is created first refuses it: the snapshot store or a revocation table.
+            val locked =
+                setOf(snapshot, CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
             generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
-                .any { snapshot in it && CoSecCacheSpecs.LOCKED_BY in it }.assert().isTrue()
+                .any { message -> locked.any { it in message } && CoSecCacheSpecs.LOCKED_BY in message }.assert().isTrue()
         }
     }
 
@@ -190,29 +193,27 @@ class StoreOfRecordOverrideTest {
             }
     }
 
+    /**
+     * Round-2 review H1: a failed read of a revocation table is unknown, and no property makes it absent, which would read
+     * "not revoked" to refresh as well as to the pipeline. Whether verification accepts a token then is
+     * `cosec.authentication.revocation.fail-closed`, not the cache's.
+     */
     @Test
-    fun revocationTablesReadAbsentUnlessToldToFailClosed() {
+    fun revocationTablesAlwaysReadAFailureAsUnknown() {
         contextRunner.run { context ->
             assertThat(context).hasNotFailed()
             val runtime = context.getBean(CacheRuntime::class.java)
-            runtime.effective(
-                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
-                PolicyField.UNKNOWN_READ
-            ).assert().isEqualTo("absent")
-            runtime.effective(
-                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
-                PolicyField.UNKNOWN_READ
-            ).assert().isEqualTo("absent")
+            listOf(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME).forEach {
+                runtime.effective(it, PolicyField.UNKNOWN_READ).assert().describedAs(it).isEqualTo("throw")
+            }
         }
         contextRunner
-            .withPropertyValues("cocache.caches.[${CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME}].unknown-read=throw")
+            .withPropertyValues("cocache.caches.[${CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME}].unknown-read=absent")
             .run { context ->
-                assertThat(context).hasNotFailed()
-                context.getBean(CacheRuntime::class.java)
-                    .effective(
-                        CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
-                        PolicyField.UNKNOWN_READ
-                    ).assert().isEqualTo("throw")
+                assertThat(context).hasFailed()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME in it && "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }
+                    .assert().isTrue()
             }
     }
 

@@ -27,6 +27,7 @@ import me.ahoo.cosec.opentelemetry.TracingListener
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.audit.LoggingAuditListener
+import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
@@ -161,12 +162,20 @@ class CoSecPipelineIntegrationAutoConfiguration {
         @ConditionalOnMissingBean
         fun cosecMetricsListener(registry: MeterRegistry): MetricsListener = MetricsListener(registry)
 
-        /** The listeners' own counters: drops, failures and REQUIRED failures. */
+        /**
+         * The listeners' own counters: drops, failures and REQUIRED failures; and the tokens accepted without a
+         * revocation check.
+         */
         @Bean
-        fun cosecListenerMetrics(registry: MeterRegistry, listeners: ObjectProvider<DecisionListeners>): Any =
+        fun cosecListenerMetrics(
+            registry: MeterRegistry,
+            listeners: ObjectProvider<DecisionListeners>,
+            unchecked: ObjectProvider<UncheckedRevocations>,
+        ): Any =
             object : org.springframework.beans.factory.SmartInitializingSingleton {
                 override fun afterSingletonsInstantiated() {
                     listeners.ifAvailable?.let { MetricsListener.bind(registry, it) }
+                    unchecked.ifAvailable?.let { MetricsListener.bind(registry, it) }
                 }
             }
     }

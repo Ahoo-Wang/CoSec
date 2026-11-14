@@ -130,9 +130,28 @@ and have to be provisioned again.
   `TokenSubject`, `SocialUser`, `ForwardedIdentity`, `Audit*Data`, `ShadowReport`, `ShadowSample`, `InstalledDocument`,
   `InstanceStatus` and the starter's `*Properties` lost `copy` and `componentN`. `Identity`, `Identity.Credential`,
   `TokenSubject` and the shadow records still compare by value; the others no longer define `equals`.
-- **A refresh token is refused where an access token is expected** (`IDN-13`). `JwtTokenConverter` writes
-  `cosec.token: "refresh"` on every refresh token; a token with that claim authenticates nothing. Tokens issued before
-  this version keep working until they expire.
+- **A refresh token is refused where an access token is expected, and an access token where a refresh token is**
+  (`IDN-13`). `JwtTokenConverter` writes `cosec.token: "refresh"` on every refresh token; a token with that claim
+  authenticates nothing, and a refresh reads only a token with it, whose `iat` is the access token's. Access tokens
+  issued before this version keep working until they expire; their refresh tokens, which lack the claim, no longer
+  refresh, so their users sign in again.
+- **Revocation is one judgement, and the token contracts do no blocking I/O.** `TokenVerifier` is pure computation by
+  contract. `RevocableTokenVerifier` is removed: the pipeline, refresh and logout all read revocations through
+  `TokenRevocation` (`cosec-runtime`), over the `RevocationReader`. `TokenStore` keeps only its writes, `revoke` and
+  `revokeSubject`, now `suspend`; its synchronous `isRevoked` and `subjectRevokedBefore` are gone (read them through
+  `RevocationReader`), as is `TokenStore.NoOp`. `TokenRevoker.revoke` and `revokeSubject` are `suspend`: call them from a
+  `suspend` handler instead of moving them off the event loop. `DefaultTokenRevoker` moves to
+  `me.ahoo.cosec.runtime.token` and takes the `TokenRevocation`. `SimpleRefreshTokenAuthentication(tokenVerifier)` becomes
+  `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)` and no longer runs on a dispatcher of its own. The
+  starter's `TokenVerifier` bean is the plain `JwtTokenVerifier`, and it adds a `TokenRevocation` bean. A `TokenStore` of
+  your own implements the two writes as `suspend` functions, and its reads as a `RevocationReader` bean.
+- **A revocation store that cannot be read is reported, never read as "not revoked"** (round-2 review H1, `IDN-14`).
+  A `RevocationReader` throws `RevocationUnavailableException` when its store cannot be read; the revocation tables'
+  `unknown-read` is locked to `throw`, so `cocache.caches.[RevokedTokenCache].unknown-read` fails startup. The pipeline
+  still accepts a request's token then, as before; a refresh now fails instead of issuing a token, and the control plane
+  publishes nothing on an approval whose approver's revocations cannot be read. A custom `RevocationReader` that
+  answered "not revoked" on a failure throws `RevocationUnavailableException` instead. To refuse requests too, set
+  `cosec.authentication.revocation.fail-closed: true`, which replaces `unknown-read: throw` on the revocation tables.
 - **Instance statuses carry the document format level** (RFC 0010 C5): an instance reporting without `formatLevel` is
   refused by a control plane of this version, and a shadow window reading one fails until every instance has been
   upgraded (a status expires after a minute).
@@ -584,7 +603,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
 CoCache 8 does not read CoCache 6's format. What it finds in that format fails closed, as unreadable content: a request
 that needs such a document is `503` (`SourceUnavailable`), a token or principal revoked there is `503` instead of
 `401`, and the control API answers `500`. Nothing reads such a value as absent, so a revoked token is never accepted
-again, not even through the revocation tables' "Redis failed, not revoked" degradation.
+again.
 
 | Data | Keys | On 8.0.0, before the move | `cosec-migrate cocache8` |
 |---|---|---|---|
@@ -1282,7 +1301,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractRefreshTokenAuthentication`, `AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken`, `RevocableTokenVerifier` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |

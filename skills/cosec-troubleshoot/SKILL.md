@@ -209,8 +209,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
   the log: see Rate limiting).
 - **A REQUIRED decision listener failed or timed out** (`cosec.observability.listener.required-timeout`): it turns a permit into 503.
-- **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
-  fails answers "not revoked" instead (the documented exception to fail closed).
+- **The authenticator's dependency failed** (for example the API key or revocation store); a revocation store that
+  cannot be read lets the request's token through instead (the documented exception to fail closed), unless
+  `cosec.authentication.revocation.fail-closed` is on. A refresh fails then (`RevocationUnavailableException`, `IDN-14`):
+  answer it 503 and retry once Redis answers.
 - **An id with an unpaired UTF-16 surrogate** (IDN-10, RC1-52): an authenticator gave a principal whose id, tenant,
   credential id or claimed roles hold one (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16
   surrogate`), an API key record names one (`API key [<id>] holds an id ...`), or the `MembershipProvider` answered a

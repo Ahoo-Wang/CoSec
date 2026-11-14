@@ -159,7 +159,15 @@ The listeners themselves are counted:
 | `cosec.listener.failures` | `listener` | listener calls that threw or, for `REQUIRED` ones, timed out |
 | `cosec.audit.required.failures` | none | `REQUIRED` failures on decisions they could not change (not permits) |
 
-Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny`, and on `cosec.listener.dropped`. A rise of
+So are the tokens the pipeline accepted without a revocation check, the revocation store unreadable
+([the documented exception](../guide/security-model.md#the-two-documented-exceptions)):
+
+| Meter | Tag | Counts |
+|---|---|---|
+| `cosec.revocation.unchecked` | none | tokens accepted while their revocations could not be read; each such stretch also logs `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).` at `WARN`, at most every 10 seconds |
+
+Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny`, on `cosec.listener.dropped`, and on any
+rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A rise of
 `indeterminate` with `cause=source_unavailable` means documents cannot be read
 ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
 registry ([CoCache's documentation](https://cocache.ahoo.me)).

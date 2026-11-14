@@ -1,0 +1,25 @@
+{
+  "rules": [
+    "IDN-13"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice's access token, long expired, with an access token of a principal named after its id in the refresh token's place: the pair's sub and jti agree, but the second token is no refresh token, so the refresh is refused as token-invalid.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1790000000
+    },
+    "refresh": {
+      "jti": "b1",
+      "sub": "a1",
+      "iat": 1790000000
+    }
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}

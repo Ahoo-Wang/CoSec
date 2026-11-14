@@ -13,13 +13,14 @@
 
 package me.ahoo.cosec.runtime.token
 
-import io.mockk.Runs
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.verify
-import me.ahoo.cosec.spi.token.DefaultTokenRevoker
-import me.ahoo.cosec.spi.token.TokenStore
+import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
+import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
@@ -27,29 +28,34 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
+import java.time.Instant
 
 class DefaultTokenRevokerTest {
 
     private val tokenVerifier = mockk<TokenVerifier>()
-    private val tokenStore = mockk<TokenStore>()
+    private val tokenStore = InMemoryTokenStore()
     private val revocationTtl = Duration.ofDays(7)
-    private val tokenRevoker = DefaultTokenRevoker(tokenVerifier, tokenStore, revocationTtl)
+    private val tokenRevoker = DefaultTokenRevoker(
+        tokenVerifier,
+        tokenStore,
+        TokenRevocation(tokenStore),
+        revocationTtl
+    )
 
     @Test
-    fun revoke() {
+    fun revoke() = runTest {
         val tokenPrincipal = VerifiedToken("tokenId", "alice", null, null)
         val accessToken = "accessToken"
         every { tokenVerifier.verify(accessToken) } returns tokenPrincipal
-        every { tokenStore.revoke("tokenId", revocationTtl) } just Runs
 
         val actual = tokenRevoker.revoke(accessToken)
 
         actual.assert().isSameAs(tokenPrincipal)
-        verify(exactly = 1) { tokenStore.revoke("tokenId", revocationTtl) }
+        tokenStore.revokedTokens.assert().containsEntry("tokenId", revocationTtl)
     }
 
     @Test
-    fun revokeWhenTokenInvalid() {
+    fun revokeWhenTokenInvalid() = runTest {
         val accessToken = "invalid"
         every { tokenVerifier.verify(accessToken) } throws
             TokenVerificationException("Invalid token")
@@ -57,6 +63,35 @@ class DefaultTokenRevokerTest {
         assertThrows<TokenVerificationException> {
             tokenRevoker.revoke(accessToken)
         }
-        verify(exactly = 0) { tokenStore.revoke(any(), any()) }
+        tokenStore.revokedTokens.assert().isEmpty()
+    }
+
+    /** As before the store was read through [TokenRevocation]: a token already revoked is refused, not revoked again. */
+    @Test
+    fun revokeWhenAlreadyRevoked() = runTest {
+        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null)
+        tokenRevoker.revoke("accessToken")
+
+        assertThrows<TokenRevokedException> { tokenRevoker.revoke("accessToken") }
+    }
+
+    /** A logout is not stopped by a revocation store it cannot read: it records the revocation, which it can write. */
+    @Test
+    fun revokeWhenRevocationsCannotBeRead() = runTest {
+        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null)
+        val unavailable = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = throw RevocationUnavailableException("down")
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
+        }
+
+        DefaultTokenRevoker(
+            tokenVerifier,
+            tokenStore,
+            TokenRevocation(unavailable),
+            revocationTtl
+        ).revoke("accessToken")
+
+        tokenStore.revokedTokens.assert().containsKey("tokenId")
     }
 }

@@ -15,30 +15,32 @@ package me.ahoo.cosec.runtime.token
 
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * A real [TokenStore] for tests: entries never expire, and the lifetimes asked for are recorded.
+ * A real [TokenStore] for tests, and its [RevocationReader]: entries never expire, and the lifetimes asked for are
+ * recorded.
  */
-internal class InMemoryTokenStore : TokenStore {
+internal class InMemoryTokenStore : TokenStore, RevocationReader {
     val revokedTokens = ConcurrentHashMap<String, Duration>()
     val revokedSubjects = ConcurrentHashMap<Pair<String, String>, Pair<Instant, Duration>>()
 
-    override fun revoke(tokenId: String, ttl: Duration) {
+    override suspend fun revoke(tokenId: String, ttl: Duration) {
         revokedTokens[tokenId] = ttl
     }
 
-    override fun isRevoked(tokenId: String): Boolean = revokedTokens.containsKey(tokenId)
+    override suspend fun isRevoked(tokenId: String): Boolean = revokedTokens.containsKey(tokenId)
 
-    override fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
+    override suspend fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
         revokedSubjects.merge(tenant.value to principal.value, issuedBefore to ttl) { existing, new ->
             if (existing.first.isBefore(new.first)) new else existing
         }
     }
 
-    override fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+    override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
         revokedSubjects[tenant.value to principal.value]?.first
 }

@@ -6,6 +6,7 @@ public final class me/ahoo/cosec/micrometer/MetricsListener : me/ahoo/cosec/runt
 	public static final field NAME Ljava/lang/String;
 	public static final field RESULT_TAG Ljava/lang/String;
 	public static final field SOURCE_TAG Ljava/lang/String;
+	public static final field UNCHECKED_REVOCATIONS Ljava/lang/String;
 	public fun <init> (Lio/micrometer/core/instrument/MeterRegistry;)V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;
@@ -13,6 +14,7 @@ public final class me/ahoo/cosec/micrometer/MetricsListener : me/ahoo/cosec/runt
 }
 
 public final class me/ahoo/cosec/micrometer/MetricsListener$Companion {
+	public final fun bind (Lio/micrometer/core/instrument/MeterRegistry;Lme/ahoo/cosec/runtime/authn/UncheckedRevocations;)V
 	public final fun bind (Lio/micrometer/core/instrument/MeterRegistry;Lme/ahoo/cosec/runtime/event/DecisionListeners;)V
 }
 

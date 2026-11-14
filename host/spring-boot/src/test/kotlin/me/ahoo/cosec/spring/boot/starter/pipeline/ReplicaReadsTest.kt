@@ -20,6 +20,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.NoTokenStore
 import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -91,7 +92,7 @@ class ReplicaReadsTest {
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             "cosec.authorization.routes.location=",
         )
-        .withBean(TokenStore::class.java, { TokenStore.NoOp })
+        .withBean(TokenStore::class.java, { NoTokenStore })
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
 
     @Test

@@ -16,6 +16,8 @@ package me.ahoo.cosec.login
 import io.mockk.mockk
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -30,7 +32,10 @@ internal class DefaultAuthenticationProviderTest {
                 RefreshTokenCredentials::class.java,
             )
         }
-        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(mockk())
+        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
+            mockk(),
+            TokenRevocation(RevocationReader.NONE)
+        )
         authenticationProvider.register(refreshTokenAuthentication)
         (
             authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
@@ -48,7 +53,9 @@ internal class DefaultAuthenticationProviderTest {
     /** #1222: registries share nothing. */
     @Test
     fun `a registration stays in its registry`() {
-        authenticationProvider.register(SimpleRefreshTokenAuthentication(mockk()))
+        authenticationProvider.register(
+            SimpleRefreshTokenAuthentication(mockk(), TokenRevocation(RevocationReader.NONE))
+        )
 
         DefaultAuthenticationProvider()
             .get<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(RefreshTokenCredentials::class.java)
