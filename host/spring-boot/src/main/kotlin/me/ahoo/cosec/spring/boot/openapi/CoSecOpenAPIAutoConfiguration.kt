@@ -13,11 +13,11 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.openapi
+package me.ahoo.cosec.spring.boot.openapi
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.openapi.security.BearerAuthOpenApiCustomizer
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass

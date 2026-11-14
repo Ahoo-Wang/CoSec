@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.spi.token.TokenStore
 import java.time.Duration

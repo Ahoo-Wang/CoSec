@@ -10,11 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authentication.social
+package me.ahoo.cosec.spring.boot.authentication.social
 
 import com.xkcoding.http.config.HttpConfig
-import me.ahoo.cosec.spring.boot.starter.EnabledCapable
-import me.ahoo.cosec.spring.boot.starter.authentication.LoginProperties
+import me.ahoo.cosec.spring.boot.EnabledCapable
+import me.ahoo.cosec.spring.boot.authentication.LoginProperties
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.springframework.boot.context.properties.ConfigurationProperties

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 

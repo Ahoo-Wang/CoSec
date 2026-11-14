@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.control
+package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.runtime.event.Delivery

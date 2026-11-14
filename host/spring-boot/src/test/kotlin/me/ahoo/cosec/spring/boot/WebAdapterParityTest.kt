@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.coroutines.awaitCancellation
@@ -55,8 +55,8 @@ import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.servlet.PipelineServletFilter
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.PipelineServletFilter
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest

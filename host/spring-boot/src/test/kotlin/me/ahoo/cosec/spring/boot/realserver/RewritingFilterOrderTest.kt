@@ -13,12 +13,12 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.realserver
+package me.ahoo.cosec.spring.boot.realserver
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

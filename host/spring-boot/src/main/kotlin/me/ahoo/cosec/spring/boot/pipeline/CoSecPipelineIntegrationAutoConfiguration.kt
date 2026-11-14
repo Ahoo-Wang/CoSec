@@ -13,13 +13,13 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.micrometer.MetricsListener
@@ -34,15 +34,15 @@ import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spring.boot.starter.CoSecProperties
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupTask
-import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
-import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
-import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
-import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
-import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionProperties
-import me.ahoo.cosec.spring.boot.starter.micrometer.MetricsProperties
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.audit.AuditProperties
+import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
+import me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties
+import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -119,7 +119,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
     @InternalCoSecApi
     class RateLimiting {
         @Configuration(proxyBeanMethods = false)
-        @ConditionalOnClass(name = ["me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter"])
+        @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter"])
         @ConditionalOnBean(ReactiveStringRedisTemplate::class)
         @InternalCoSecApi
         class Redis {

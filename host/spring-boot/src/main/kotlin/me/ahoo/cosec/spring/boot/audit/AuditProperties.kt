@@ -11,10 +11,10 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.audit
+package me.ahoo.cosec.spring.boot.audit
 
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
-import me.ahoo.cosec.spring.boot.starter.EnabledCapable
+import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
+import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 

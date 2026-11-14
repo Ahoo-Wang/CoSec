@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.openapi
+package me.ahoo.cosec.spring.boot.openapi
 
 import io.swagger.v3.oas.models.OpenAPI
 import org.assertj.core.api.AssertionsForInterfaceTypes

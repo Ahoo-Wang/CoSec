@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.control
+package me.ahoo.cosec.cocache.control
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -29,15 +29,15 @@ import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.createLocked
-import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
-import me.ahoo.cosec.cache.shadow.StoredCandidateCodec
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
-import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
-import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
+import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
+import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot

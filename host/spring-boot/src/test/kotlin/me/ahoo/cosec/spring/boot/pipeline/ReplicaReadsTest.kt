@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import io.lettuce.core.ReadFrom
 import io.mockk.mockk
@@ -22,11 +22,11 @@ import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.NoTokenStore
-import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.spring.boot.starter.lazily
+import me.ahoo.cosec.spring.boot.NoTokenStore
+import me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.lazily
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

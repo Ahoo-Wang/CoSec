@@ -14,7 +14,7 @@
 package me.ahoo.cosec.e2e
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.cache.MembershipLoader
+import me.ahoo.cosec.cocache.MembershipLoader
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId

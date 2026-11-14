@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.runtime.http.RemoteIpResolver

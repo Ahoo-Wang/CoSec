@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.Store
@@ -31,9 +31,9 @@ import me.ahoo.cocache.core.policy.Ttl
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
-import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
-import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
+import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -310,7 +310,7 @@ object CoSecCacheSpecs {
     /**
      * The snapshot documents (RFC 0003 §4.1): the store of record like every policy cache ([locks]), keys encoded
      * explicitly ([SnapshotKeyEncoder]), values by [SnapshotDocumentCodec], one local max age. Create it with
-     * [me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache], never through an interface proxy (RFC 0003 §10).
+     * [me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache], never through an interface proxy (RFC 0003 §10).
      *
      * Redis must not evict these keys: run it with `maxmemory-policy noeviction`. Under an `allkeys-*` policy a
      * document can vanish. An instance that had read it fails closed (RFC 0003 §4.4 F2a). An instance that reads it

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache.snapshot
+package me.ahoo.cosec.cocache.snapshot
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.ConditionalGet

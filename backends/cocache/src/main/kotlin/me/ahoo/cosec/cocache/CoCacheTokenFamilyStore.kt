@@ -13,15 +13,15 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId

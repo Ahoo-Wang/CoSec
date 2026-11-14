@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.control
+package me.ahoo.cosec.cocache.control
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncStore
@@ -23,8 +23,8 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.snapshot.SnapshotNode
-import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.snapshot.SnapshotNode
+import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.test.asserts.assert
@@ -72,7 +72,7 @@ class ControlLeaseTest {
         leases = leases,
         changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
-        candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+        candidates = node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
         appLists = node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
         clock = time.clock,

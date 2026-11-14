@@ -13,16 +13,16 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.control
+package me.ahoo.cosec.spring.boot.control
 
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.control.CoCacheControlStore
-import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
@@ -64,18 +64,18 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.CoSecProperties
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupTask
-import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.ListenerProperties
-import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
-import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
-import me.ahoo.cosec.spring.boot.starter.pipeline.credentialHeaders
-import me.ahoo.cosec.spring.boot.starter.pipeline.toOptions
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.pipeline.CoCacheRevocation
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.ListenerProperties
+import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
+import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.spring.boot.pipeline.credentialHeaders
+import me.ahoo.cosec.spring.boot.pipeline.toOptions
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -104,7 +104,7 @@ import kotlin.time.toKotlinDuration
     afterName = ["org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration"],
 )
 @ConditionalOnCoSecEnabled
-@ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
+@ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
 @Import(StartupTaskExclusion::class)

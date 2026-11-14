@@ -13,13 +13,13 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.authorization.cache
+package me.ahoo.cosec.spring.boot.authorization.cache
 
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.policy.DefaultPolicies
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
+import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.context.properties.bind.Binder

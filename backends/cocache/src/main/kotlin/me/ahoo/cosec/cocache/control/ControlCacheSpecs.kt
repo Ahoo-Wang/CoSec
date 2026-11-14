@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.control
+package me.ahoo.cosec.cocache.control
 
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.core.KeyEncoder
@@ -21,10 +21,10 @@ import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
-import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
-import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec

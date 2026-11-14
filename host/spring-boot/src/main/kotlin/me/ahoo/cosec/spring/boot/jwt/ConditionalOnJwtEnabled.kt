@@ -10,10 +10,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.jwt
+package me.ahoo.cosec.spring.boot.jwt
 
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
-import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
+import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
+import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Conditional

@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import io.lettuce.core.RedisClient
 import io.lettuce.core.codec.ByteArrayCodec
@@ -21,10 +21,10 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.ForeignFormatException
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.control.CoCacheControlStore
-import me.ahoo.cosec.cache.shadow.CoCacheCandidateStore
-import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
-import me.ahoo.cosec.cache.snapshot.SnapshotNode
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.shadow.CoCacheCandidateStore
+import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId

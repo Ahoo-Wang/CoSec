@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.Filter
 import jakarta.servlet.FilterChain
@@ -36,7 +36,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
-import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import reactor.core.scheduler.Schedulers
 import java.util.Collections
 import java.util.Enumeration

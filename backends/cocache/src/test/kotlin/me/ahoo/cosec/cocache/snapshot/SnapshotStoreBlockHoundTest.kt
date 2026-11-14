@@ -13,12 +13,12 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.snapshot
+package me.ahoo.cosec.cocache.snapshot
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
-import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
+import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.SnapshotCompiler

@@ -11,10 +11,10 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.audit.kafka
+package me.ahoo.cosec.spring.boot.audit.kafka
 
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.spring.boot.starter.EnabledCapable
+import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 import org.springframework.core.env.Environment

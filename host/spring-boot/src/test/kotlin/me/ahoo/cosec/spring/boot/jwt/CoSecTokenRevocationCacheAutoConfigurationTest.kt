@@ -10,15 +10,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.jwt
+package me.ahoo.cosec.spring.boot.jwt
 
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
-import me.ahoo.cosec.cache.CoCacheTokenFamilyStore
-import me.ahoo.cosec.cache.CoCacheTokenStore
-import me.ahoo.cosec.cache.RevokedSubjectCache
-import me.ahoo.cosec.cache.RevokedTokenCache
+import me.ahoo.cosec.cocache.CoCacheTokenFamilyStore
+import me.ahoo.cosec.cocache.CoCacheTokenStore
+import me.ahoo.cosec.cocache.RevokedSubjectCache
+import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.id.RandomIdGenerator

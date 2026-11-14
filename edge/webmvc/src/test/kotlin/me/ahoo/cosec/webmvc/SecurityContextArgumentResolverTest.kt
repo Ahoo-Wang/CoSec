@@ -12,13 +12,13 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import io.micrometer.context.ContextRegistry
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -50,11 +50,11 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.apikey.apiKeysEnabled
-import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
-import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
+import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -302,10 +302,10 @@ class CoSecPipelineAutoConfiguration {
 
 /** `CoCacheTokenStore.reader`, when `cosec-cocache` is on the classpath. */
 internal object CoCacheRevocation {
-    private val available = ClassUtils.isPresent("me.ahoo.cosec.cache.CoCacheTokenStore", null)
+    private val available = ClassUtils.isPresent("me.ahoo.cosec.cocache.CoCacheTokenStore", null)
 
     fun readerOf(store: TokenStore?): RevocationReader? =
-        if (available && store is me.ahoo.cosec.cache.CoCacheTokenStore) store.reader else null
+        if (available && store is me.ahoo.cosec.cocache.CoCacheTokenStore) store.reader else null
 }
 
 /**

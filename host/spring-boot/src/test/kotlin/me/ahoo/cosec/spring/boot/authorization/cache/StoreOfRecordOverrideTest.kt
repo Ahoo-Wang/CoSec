@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.authorization.cache
+package me.ahoo.cosec.spring.boot.authorization.cache
 
 import me.ahoo.cocache.api.CacheReadException
 import me.ahoo.cocache.api.Codec
@@ -27,16 +27,16 @@ import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
-import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
+import me.ahoo.cosec.spring.boot.CoSecAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test

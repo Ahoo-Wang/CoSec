@@ -13,14 +13,14 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.control
+package me.ahoo.cosec.cocache.control
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.snapshot.RedisTarget
-import me.ahoo.cosec.cache.snapshot.SnapshotNode
-import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.snapshot.RedisTarget
+import me.ahoo.cosec.cocache.snapshot.SnapshotNode
+import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision

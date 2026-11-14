@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.control
+package me.ahoo.cosec.spring.boot.control
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
@@ -26,12 +26,12 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
-import me.ahoo.cosec.spring.boot.starter.pipeline.ReactiveClientIp
-import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.pipeline.ReactiveClientIp
+import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.springframework.beans.factory.ObjectProvider
@@ -111,7 +111,7 @@ internal class CoSecControlRoutesAutoConfiguration {
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    @ConditionalOnClass(name = ["me.ahoo.cosec.servlet.ServletRequests"])
+    @ConditionalOnClass(name = ["me.ahoo.cosec.webmvc.ServletRequests"])
     class WebMvc {
         @Bean
         fun cosecControlRoutes(

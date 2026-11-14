@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.cosid
+package me.ahoo.cosec.spring.boot.cosid
 
 import com.auth0.jwt.JWT
 import me.ahoo.cosec.cosid.CosIdIdGenerator
@@ -22,13 +22,13 @@ import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.NoTokenStore
-import me.ahoo.cosec.spring.boot.starter.UnknownProperties
-import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.spring.boot.starter.lazily
+import me.ahoo.cosec.spring.boot.CoSecModuleCheckAutoConfiguration
+import me.ahoo.cosec.spring.boot.NoTokenStore
+import me.ahoo.cosec.spring.boot.UnknownProperties
+import me.ahoo.cosec.spring.boot.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.lazily
 import me.ahoo.cosid.spring.autoconfigure.CosIdAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.Assertions.assertThat

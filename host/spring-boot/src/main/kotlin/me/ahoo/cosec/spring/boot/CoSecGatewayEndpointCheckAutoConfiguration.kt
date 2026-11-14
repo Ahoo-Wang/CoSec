@@ -13,12 +13,12 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
-import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
-import me.ahoo.cosec.spring.boot.starter.pipeline.GatewayProperties
+import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
+import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.pipeline.GatewayProperties
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType
 import org.springframework.boot.actuate.endpoint.ExposableEndpoint
 import org.springframework.boot.actuate.endpoint.web.PathMappedEndpoints

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache.snapshot
+package me.ahoo.cosec.cocache.snapshot
 
 import me.ahoo.cocache.api.AsyncStore
 import me.ahoo.cocache.api.ConditionalGet

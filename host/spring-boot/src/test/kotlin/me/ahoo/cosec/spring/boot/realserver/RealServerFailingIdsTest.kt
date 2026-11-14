@@ -13,14 +13,14 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.realserver
+package me.ahoo.cosec.spring.boot.realserver
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
+import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert

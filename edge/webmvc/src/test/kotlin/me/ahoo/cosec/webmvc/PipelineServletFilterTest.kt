@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -38,7 +38,7 @@ import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert

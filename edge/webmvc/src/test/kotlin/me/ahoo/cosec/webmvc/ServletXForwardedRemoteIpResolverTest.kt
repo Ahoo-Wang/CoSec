@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert

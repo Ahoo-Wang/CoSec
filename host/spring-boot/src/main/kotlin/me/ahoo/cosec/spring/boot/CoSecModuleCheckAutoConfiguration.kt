@@ -13,17 +13,17 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
-import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
-import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
-import me.ahoo.cosec.spring.boot.starter.cosid.CosIdGeneratorProperties
-import me.ahoo.cosec.spring.boot.starter.jwt.ConditionalOnJwtEnabled
-import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
-import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties
+import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
+import me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties
+import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
+import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
+import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
@@ -61,7 +61,7 @@ internal class CoSecModuleCheckAutoConfiguration {
         fun cosecWebMvcModuleCheck(context: ApplicationContext): StartupTask =
             requireModule(
                 context,
-                "me.ahoo.cosec.servlet.PipelineServletFilter",
+                "me.ahoo.cosec.webmvc.PipelineServletFilter",
                 "cosec-webmvc",
                 "A Spring MVC host",
             )
@@ -104,7 +104,7 @@ internal class CoSecModuleCheckAutoConfiguration {
         fun cosecRedisApiKeyModuleCheck(context: ApplicationContext): StartupTask =
             requireModule(
                 context,
-                "me.ahoo.cosec.cache.RedisApiKeyStore",
+                "me.ahoo.cosec.cocache.RedisApiKeyStore",
                 "cosec-cocache",
                 "${ApiKeyProperties.STORE_KEY}=redis",
             )
@@ -190,7 +190,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     }
 
     companion object {
-        private const val COCACHE_MARKER = "me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore"
+        private const val COCACHE_MARKER = "me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore"
         private const val REACTIVE_REDIS_TEMPLATE = "org.springframework.data.redis.core.ReactiveStringRedisTemplate"
         private const val CACHE_RUNTIME = "me.ahoo.cocache.core.CacheRuntime"
 

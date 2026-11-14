@@ -1,6 +1,6 @@
 # Rule: IDN-9
 # Mutant: the WebFlux adapter hands on the request as it came, a client's CoSec-Identity included
-# Tests: :webflux:test --tests me.ahoo.cosec.webflux.PipelineWebFilterTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.WebAdapterParityTest
+# Tests: :webflux:test --tests me.ahoo.cosec.webflux.PipelineWebFilterTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.WebAdapterParityTest
 
 diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
 index 70d55f95..90693508 100644

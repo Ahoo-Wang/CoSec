@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization.cache
+package me.ahoo.cosec.spring.boot.authorization.cache
 
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.annotations.InternalCoSecApi

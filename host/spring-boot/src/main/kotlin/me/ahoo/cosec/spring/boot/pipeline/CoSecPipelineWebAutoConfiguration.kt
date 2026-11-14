@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -23,13 +23,13 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
-import me.ahoo.cosec.servlet.PipelineServletFilter
-import me.ahoo.cosec.servlet.SecurityContextArgumentResolver
-import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
-import me.ahoo.cosec.servlet.SuspendingHandlerHolderInterceptor
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupTask
-import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
+import me.ahoo.cosec.webmvc.PipelineServletFilter
+import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
+import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
+import me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -60,7 +60,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 internal class CoSecPipelineWebAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    @ConditionalOnClass(name = ["me.ahoo.cosec.servlet.PipelineServletFilter"])
+    @ConditionalOnClass(name = ["me.ahoo.cosec.webmvc.PipelineServletFilter"])
     class WebMvc {
         @Bean
         @ConditionalOnMissingBean

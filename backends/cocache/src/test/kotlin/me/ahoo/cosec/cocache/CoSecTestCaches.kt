@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import io.lettuce.core.RedisURI
 import me.ahoo.cocache.api.ReadableCache

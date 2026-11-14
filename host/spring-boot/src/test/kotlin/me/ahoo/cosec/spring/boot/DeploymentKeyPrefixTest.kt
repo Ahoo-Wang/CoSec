@@ -13,33 +13,33 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.MembershipLoader
-import me.ahoo.cosec.cache.RedisApiKeyReader
-import me.ahoo.cosec.cache.RedisApiKeyStore
-import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.cocache.MembershipLoader
+import me.ahoo.cosec.cocache.RedisApiKeyReader
+import me.ahoo.cosec.cocache.RedisApiKeyStore
+import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authentication.social.CoSecSocialAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authentication.social.SocialAuthenticationProperties
-import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecMembershipAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineIntegrationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
+import me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfiguration
+import me.ahoo.cosec.spring.boot.authentication.social.CoSecSocialAuthenticationAutoConfiguration
+import me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties
+import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineIntegrationAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations

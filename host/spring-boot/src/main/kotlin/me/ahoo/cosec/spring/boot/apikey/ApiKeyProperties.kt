@@ -10,11 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.apikey
+package me.ahoo.cosec.spring.boot.apikey
 
 import me.ahoo.cosec.spi.apikey.ApiKey
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
-import me.ahoo.cosec.spring.boot.starter.EnabledCapable
+import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
+import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 import org.springframework.core.env.Environment

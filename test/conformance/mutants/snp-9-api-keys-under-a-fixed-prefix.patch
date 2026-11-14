@@ -1,11 +1,11 @@
 # Rule: SNP-9
 # Mutant: API keys live under the fixed cosec:api-key prefix, so a key issued by one deployment is accepted by another
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.DeploymentKeyPrefixTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.DeploymentKeyPrefixTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/apikey/CoSecApiKeyAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/apikey/CoSecApiKeyAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt
 index 93791bb1..04499a9e 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/apikey/CoSecApiKeyAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/apikey/CoSecApiKeyAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/apikey/CoSecApiKeyAutoConfiguration.kt
 @@ -95,6 +95,6 @@ class CoSecApiKeyAutoConfiguration {
          fun redisApiKeyReader(
              redisTemplate: ReactiveStringRedisTemplate,

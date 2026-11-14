@@ -13,15 +13,15 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.realserver
+package me.ahoo.cosec.spring.boot.realserver
 
 import kotlinx.coroutines.CompletableDeferred
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.servlet.SecurityContextHolder
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.webmvc.SecurityContextHolder
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.WebApplicationType
@@ -46,8 +46,8 @@ import java.util.concurrent.TimeUnit
  * Round 2 M4: a `suspend` handler on Spring MVC, as Spring Boot configures it, resumed on the thread of another
  * request: alice's handler waits for what bob's handler completes. Spring runs `suspend` handlers on
  * `Dispatchers.Unconfined`, so alice's handler goes on on bob's thread, inside bob's filter. The `SecurityContext`
- * parameter ([me.ahoo.cosec.servlet.SecurityContextArgumentResolver]) is read from alice's request. The holder is
- * unbound in a `suspend` handler unless Spring restores it ([me.ahoo.cosec.servlet.SuspendingHandlerHolderInterceptor]),
+ * parameter ([me.ahoo.cosec.webmvc.SecurityContextArgumentResolver]) is read from alice's request. The holder is
+ * unbound in a `suspend` handler unless Spring restores it ([me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor]),
  * so it fails loudly, before and after the suspension, instead of naming bob.
  */
 class SuspendingHandlerContextTest {

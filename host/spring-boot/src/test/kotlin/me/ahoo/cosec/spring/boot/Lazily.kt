@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import org.springframework.boot.LazyInitializationBeanFactoryPostProcessor
 import org.springframework.boot.test.context.runner.AbstractApplicationContextRunner

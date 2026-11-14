@@ -11,13 +11,13 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import io.mockk.mockk
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -60,7 +60,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `a Spring MVC host without cosec-webmvc fails startup`() {
         failsNaming(
-            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.servlet.PipelineServletFilter")),
+            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.webmvc.PipelineServletFilter")),
             "cosec-webmvc",
         )
     }
@@ -69,7 +69,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     fun `a Spring MVC host with cosec-webmvc, or with CoSec off, starts`() {
         starts(servlet)
         starts(
-            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.servlet.PipelineServletFilter"))
+            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.webmvc.PipelineServletFilter"))
                 .withPropertyValues("cosec.enabled=false")
         )
     }
@@ -106,7 +106,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `Redis API keys without cosec-cocache fail startup`() {
         failsNaming(
-            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.RedisApiKeyStore"))
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.RedisApiKeyStore"))
                 .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=redis"),
             "cosec-cocache",
         )
@@ -114,7 +114,7 @@ class CoSecModuleCheckAutoConfigurationTest {
 
     @Test
     fun `API keys in memory, or turned off, need no cosec-cocache`() {
-        val noCache = plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.RedisApiKeyStore"))
+        val noCache = plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.RedisApiKeyStore"))
         starts(noCache.withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=memory"))
         starts(noCache.withPropertyValues("cosec.api-key.enabled=false", "cosec.api-key.store=redis"))
     }
@@ -208,7 +208,7 @@ class CoSecModuleCheckAutoConfigurationTest {
         ).withBean(ReactiveStringRedisTemplate::class.java, redis)
         starts(noRuntime.withPropertyValues("cosec.enabled=false"))
         starts(
-            noRuntime.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore"))
+            noRuntime.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore"))
         )
     }
 
@@ -248,7 +248,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `without cosec-cocache, or with CoSec off, no Redis template is needed`() {
         val noRedis = ApplicationContextRunner().withConfiguration(config)
-        starts(noRedis.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore")))
+        starts(noRedis.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore")))
         starts(noRedis.withPropertyValues("cosec.enabled=false"))
         starts(plain)
     }
@@ -258,7 +258,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `a Spring MVC host without cosec-webmvc fails startup lazily too`() {
         failsNaming(
-            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.servlet.PipelineServletFilter")).lazily(),
+            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.webmvc.PipelineServletFilter")).lazily(),
             "cosec-webmvc"
         )
     }
@@ -284,7 +284,7 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `Redis API keys without cosec-cocache fail startup lazily too`() {
         failsNaming(
-            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.RedisApiKeyStore"))
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.RedisApiKeyStore"))
                 .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=redis").lazily(),
             "cosec-cocache",
         )

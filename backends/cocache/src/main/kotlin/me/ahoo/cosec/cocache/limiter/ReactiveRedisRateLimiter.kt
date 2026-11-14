@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache.limiter
+package me.ahoo.cosec.cocache.limiter
 
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.model.decision.RateLimitSpec

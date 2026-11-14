@@ -13,10 +13,10 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.realserver
+package me.ahoo.cosec.spring.boot.realserver
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
+import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll

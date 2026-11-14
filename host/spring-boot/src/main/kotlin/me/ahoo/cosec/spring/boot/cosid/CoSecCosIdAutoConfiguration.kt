@@ -11,11 +11,11 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.cosid
+package me.ahoo.cosec.spring.boot.cosid
 
 import me.ahoo.cosec.cosid.CosIdIdGenerator
 import me.ahoo.cosec.spi.id.IdGenerator
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosid.runtime.CosIdRuntime
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean

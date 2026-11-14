@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.control
+package me.ahoo.cosec.spring.boot.control
 
 import io.mockk.mockk
 import jakarta.servlet.ReadListener
@@ -42,7 +42,7 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext

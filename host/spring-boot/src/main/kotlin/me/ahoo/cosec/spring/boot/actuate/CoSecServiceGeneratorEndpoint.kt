@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.actuate
+package me.ahoo.cosec.spring.boot.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
 import me.ahoo.cosec.annotations.InternalCoSecApi

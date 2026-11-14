@@ -12,12 +12,12 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.apikey
+package me.ahoo.cosec.spring.boot.apikey
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.RedisApiKeyReader
-import me.ahoo.cosec.cache.RedisApiKeyStore
+import me.ahoo.cosec.cocache.RedisApiKeyReader
+import me.ahoo.cosec.cocache.RedisApiKeyStore
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
@@ -30,9 +30,9 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipProvider
-import me.ahoo.cosec.spring.boot.starter.lazily
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
+import me.ahoo.cosec.spring.boot.lazily
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test

@@ -1,11 +1,11 @@
 # Rule: STA-3
 # Mutant: the eviction policy monitor is no longer a startup check, so under lazy initialization it reads nothing until a health probe creates it
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.SnapshotEvictionHealthIndicatorTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.SnapshotEvictionHealthIndicatorTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 index fda07fe0..dcfb3d09 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 @@ -547,7 +547,7 @@ class EvictionPolicyMonitor internal constructor(
      private val read: () -> EvictionPolicyCheck.Reading,
      private val interval: Duration,

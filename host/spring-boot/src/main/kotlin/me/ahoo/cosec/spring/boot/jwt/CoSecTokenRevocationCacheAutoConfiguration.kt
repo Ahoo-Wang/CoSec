@@ -13,22 +13,22 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.jwt
+package me.ahoo.cosec.spring.boot.jwt
 
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoCacheTokenFamilyStore
-import me.ahoo.cosec.cache.CoCacheTokenStore
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.RevokedSubjectCache
-import me.ahoo.cosec.cache.RevokedTokenCache
-import me.ahoo.cosec.cache.createLocked
+import me.ahoo.cosec.cocache.CoCacheTokenFamilyStore
+import me.ahoo.cosec.cocache.CoCacheTokenStore
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.RevokedSubjectCache
+import me.ahoo.cosec.cocache.RevokedTokenCache
+import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.CoSecProperties
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
-import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.authorization.cache.createCoSecCache
+import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -46,7 +46,7 @@ import org.springframework.context.annotation.Bean
 )
 @ConditionalOnCoSecEnabled
 @ConditionalOnJwtEnabled
-@ConditionalOnClass(name = ["me.ahoo.cosec.cache.RevokedTokenCache"])
+@ConditionalOnClass(name = ["me.ahoo.cosec.cocache.RevokedTokenCache"])
 @ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(
     RevocationProperties::class,

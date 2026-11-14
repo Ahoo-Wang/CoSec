@@ -1,11 +1,11 @@
 # Rule: STA-1
 # Mutant: cosec.cosid.generator set without a CosIdRuntime, or beside the application's own IdGenerator, starts and does nothing
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.cosid.CoSecCosIdAutoConfigurationTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.cosid.CoSecCosIdAutoConfigurationTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 index 2b8dae8b..66dcb840 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 @@ -147,7 +147,7 @@ internal class CoSecModuleCheckAutoConfiguration {
              )
              return StartupTask.OnCreation {

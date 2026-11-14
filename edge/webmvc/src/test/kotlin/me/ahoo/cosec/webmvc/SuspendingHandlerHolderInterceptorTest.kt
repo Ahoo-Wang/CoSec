@@ -12,7 +12,7 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.CacheReadException

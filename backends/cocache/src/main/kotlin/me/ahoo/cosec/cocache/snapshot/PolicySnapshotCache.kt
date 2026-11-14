@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.snapshot
+package me.ahoo.cosec.cocache.snapshot
 
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.InvalidationChannel
@@ -23,7 +23,7 @@ import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration

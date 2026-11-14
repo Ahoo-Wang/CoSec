@@ -1,11 +1,11 @@
 # Rule: SNP-3
 # Mutant: createPolicySnapshotCache creates the spec as given, so a store built outside the starter may filter keys, set per-entry lifetimes or use another codec
-# Tests: :cocache:test --tests me.ahoo.cosec.cache.CacheTtlPolicyTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
-diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt
 index 9f57e68d..eb2e3f63 100644
---- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
-+++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/PolicySnapshotCache.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt
 @@ -98,14 +98,7 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
  @InternalCoSecApi
  fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {

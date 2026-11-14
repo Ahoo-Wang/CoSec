@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Store
 import me.ahoo.cosec.model.Identifiers

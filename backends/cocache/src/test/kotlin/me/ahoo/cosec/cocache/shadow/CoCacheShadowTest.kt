@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.shadow
+package me.ahoo.cosec.cocache.shadow
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,11 +26,11 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.control.CoCacheControlStore
-import me.ahoo.cosec.cache.createLocked
-import me.ahoo.cosec.cache.snapshot.RedisTarget
-import me.ahoo.cosec.cache.snapshot.SnapshotNode
-import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.cocache.snapshot.RedisTarget
+import me.ahoo.cosec.cocache.snapshot.SnapshotNode
+import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.runtime.shadow.InstalledDocument
 import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowCodec

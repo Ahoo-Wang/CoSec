@@ -13,11 +13,11 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cocache.spring.CacheNameContributor
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -44,6 +44,6 @@ internal class CoSecAutoConfiguration {
 
     private companion object {
         const val CACHE_NAME_CONTRIBUTOR = "me.ahoo.cocache.spring.CacheNameContributor"
-        const val COSEC_CACHE_SPECS = "me.ahoo.cosec.cache.CoSecCacheSpecs"
+        const val COSEC_CACHE_SPECS = "me.ahoo.cosec.cocache.CoSecCacheSpecs"
     }
 }

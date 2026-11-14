@@ -17,7 +17,7 @@ package me.ahoo.cosec.migrate
 
 import io.lettuce.core.RedisClient
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.ApiKeyCodec
+import me.ahoo.cosec.cocache.ApiKeyCodec
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId

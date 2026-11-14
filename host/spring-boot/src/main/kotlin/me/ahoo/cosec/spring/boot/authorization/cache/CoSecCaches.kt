@@ -13,13 +13,13 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.authorization.cache
+package me.ahoo.cosec.spring.boot.authorization.cache
 
 import me.ahoo.cocache.api.ReadableCache
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.Spec
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
 
 /**
  * Creates CoSec's cache [spec] through CoCache's [CoCacheFactory], as [type].

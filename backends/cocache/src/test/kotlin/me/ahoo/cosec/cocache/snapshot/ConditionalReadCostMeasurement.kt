@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache.snapshot
+package me.ahoo.cosec.cocache.snapshot
 
 import io.lettuce.core.RedisClient
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument

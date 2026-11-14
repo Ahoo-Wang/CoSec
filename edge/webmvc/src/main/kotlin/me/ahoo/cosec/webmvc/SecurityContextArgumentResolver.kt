@@ -10,11 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.servlet
+package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import org.springframework.core.MethodParameter
 import org.springframework.web.bind.support.WebDataBinderFactory
 import org.springframework.web.context.request.NativeWebRequest

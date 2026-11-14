@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.control
+package me.ahoo.cosec.cocache.control
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncStore
@@ -27,12 +27,12 @@ import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.snapshot.RawCodec
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
-import me.ahoo.cosec.cache.snapshot.RedisTarget
-import me.ahoo.cosec.cache.snapshot.SnapshotNode
-import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.snapshot.RawCodec
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.snapshot.RedisTarget
+import me.ahoo.cosec.cocache.snapshot.SnapshotNode
+import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
@@ -95,7 +95,7 @@ class CoCacheControlStoreTest {
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
         changes = changes,
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
-        candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+        candidates = node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
         lists = lists,
         appLists = appLists,
         clock = clock,
@@ -454,7 +454,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
-                node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+                node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
                 { published += it },
@@ -499,7 +499,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
-                node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+                node.runtime.create(me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.appList(node.keyPrefix)),
                 { },

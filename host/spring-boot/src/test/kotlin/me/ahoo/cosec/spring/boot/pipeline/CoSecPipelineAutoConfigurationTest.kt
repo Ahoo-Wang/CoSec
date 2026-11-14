@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
 import io.lettuce.core.RedisURI
@@ -44,7 +44,7 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.route.RouteMap
-import me.ahoo.cosec.servlet.SecurityContextArgumentResolver
+import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -58,13 +58,13 @@ import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.NoTokenStore
-import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.control.ControlProperties
-import me.ahoo.cosec.spring.boot.starter.control.ControlRoutesWebFilter
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.NoTokenStore
+import me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfiguration
+import me.ahoo.cosec.spring.boot.control.CoSecControlRoutesAutoConfiguration
+import me.ahoo.cosec.spring.boot.control.ControlProperties
+import me.ahoo.cosec.spring.boot.control.ControlRoutesWebFilter
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

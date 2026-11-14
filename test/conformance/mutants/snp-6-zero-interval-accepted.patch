@@ -1,6 +1,6 @@
 # Rule: SNP-6
 # Mutant: a zero revalidate-interval is accepted by the options and reaches the scheduler
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfigurationTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfigurationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotOptions.kt
 index 16191a26..93fb04c8 100644

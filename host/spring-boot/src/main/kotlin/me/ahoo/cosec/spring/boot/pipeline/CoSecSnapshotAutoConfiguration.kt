@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.lettuce.core.ReadFrom
@@ -28,12 +28,12 @@ import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.shadow.CoCacheCandidateStore
-import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
-import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.shadow.CoCacheCandidateStore
+import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.ShadowListener
@@ -54,10 +54,10 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spring.boot.starter.CoSecProperties
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupTask
-import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -96,7 +96,7 @@ import java.util.concurrent.TimeUnit
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(name = ["me.ahoo.cosec.cache.snapshot.PolicySnapshotCache"])
+    @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache"])
     @ConditionalOnBean(CoCacheFactory::class)
     @InternalCoSecApi
     class Redis {
@@ -213,7 +213,7 @@ class CoSecSnapshotAutoConfiguration {
      * blocks its window.
      */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(name = ["me.ahoo.cosec.cache.shadow.CoCacheCandidateStore"])
+    @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.shadow.CoCacheCandidateStore"])
     @ConditionalOnBean(CoCacheFactory::class)
     @ConditionalOnProperty(
         prefix = RuntimeAuthorizationProperties.PREFIX + ".shadow",

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authentication
+package me.ahoo.cosec.spring.boot.authentication
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.login.Authentication

@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import io.mockk.every
 import io.mockk.mockk
@@ -27,11 +27,11 @@ import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.cache.CoCacheMembershipProvider
-import me.ahoo.cosec.cache.MembershipCache
-import me.ahoo.cosec.cache.MembershipLoader
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.CoCacheMembershipProvider
+import me.ahoo.cosec.cocache.MembershipCache
+import me.ahoo.cosec.cocache.MembershipLoader
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
@@ -77,13 +77,13 @@ import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.NoTokenStore
-import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.control.ControlMaintenanceScheduler
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.spring.boot.starter.lazily
+import me.ahoo.cosec.spring.boot.NoTokenStore
+import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
+import me.ahoo.cosec.spring.boot.control.ControlMaintenanceScheduler
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.lazily
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

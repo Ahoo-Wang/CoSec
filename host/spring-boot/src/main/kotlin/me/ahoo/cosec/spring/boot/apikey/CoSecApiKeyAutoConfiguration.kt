@@ -12,22 +12,22 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.apikey
+package me.ahoo.cosec.spring.boot.apikey
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.RedisApiKeyReader
-import me.ahoo.cosec.cache.RedisApiKeyStore
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.RedisApiKeyReader
+import me.ahoo.cosec.cocache.RedisApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipProvider
-import me.ahoo.cosec.spring.boot.starter.CoSecProperties
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupTask
-import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -86,7 +86,7 @@ internal class CoSecApiKeyAutoConfiguration {
 
     @Configuration
     @ConditionalOnProperty(value = [ApiKeyProperties.STORE_KEY], havingValue = "redis")
-    @ConditionalOnClass(name = ["me.ahoo.cosec.cache.RedisApiKeyStore"])
+    @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.RedisApiKeyStore"])
     class Redis {
         @Bean
         @ConditionalOnMissingBean

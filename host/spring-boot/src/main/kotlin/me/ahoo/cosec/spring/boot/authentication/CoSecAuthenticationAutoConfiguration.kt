@@ -10,14 +10,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authentication
+package me.ahoo.cosec.spring.boot.authentication
 
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties

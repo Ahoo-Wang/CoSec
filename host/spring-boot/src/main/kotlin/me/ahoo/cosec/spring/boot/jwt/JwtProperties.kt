@@ -10,11 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.jwt
+package me.ahoo.cosec.spring.boot.jwt
 
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.runtime.token.TokenFamilies
-import me.ahoo.cosec.spring.boot.starter.EnabledCapable
+import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue

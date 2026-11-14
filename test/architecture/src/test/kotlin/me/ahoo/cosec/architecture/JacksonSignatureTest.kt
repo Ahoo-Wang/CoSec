@@ -49,7 +49,7 @@ class JacksonSignatureTest {
     @Test
     fun `cocache carries no Reactor type in a public signature`() {
         val checked = PublicSignatures.classes { it == "cocache" }
-        checked.map { it.name }.assert().contains("me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter")
+        checked.map { it.name }.assert().contains("me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter")
         PublicSignatures.violations(checked, Regex("""(?<![\w.])reactor\.""")).assert().isEmpty()
     }
 }

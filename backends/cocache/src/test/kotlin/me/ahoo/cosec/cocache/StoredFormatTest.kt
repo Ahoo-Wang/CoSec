@@ -13,18 +13,18 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.cocache
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.control.ChangeRequestCacheCodec
-import me.ahoo.cosec.cache.control.ListedCodec
-import me.ahoo.cosec.cache.control.ReferrersCodec
-import me.ahoo.cosec.cache.control.RevisionIndexCodec
-import me.ahoo.cosec.cache.control.StageSlotCodec
-import me.ahoo.cosec.cache.shadow.ReportersCodec
-import me.ahoo.cosec.cache.shadow.ShadowReportCodec
-import me.ahoo.cosec.cache.shadow.StoredCandidateCodec
-import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.cocache.control.ChangeRequestCacheCodec
+import me.ahoo.cosec.cocache.control.ListedCodec
+import me.ahoo.cosec.cocache.control.ReferrersCodec
+import me.ahoo.cosec.cocache.control.RevisionIndexCodec
+import me.ahoo.cosec.cocache.control.StageSlotCodec
+import me.ahoo.cosec.cocache.shadow.ReportersCodec
+import me.ahoo.cosec.cocache.shadow.ShadowReportCodec
+import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
+import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest

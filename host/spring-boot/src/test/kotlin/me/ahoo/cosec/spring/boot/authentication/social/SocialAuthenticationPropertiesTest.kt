@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authentication.social
+package me.ahoo.cosec.spring.boot.authentication.social
 
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.config.AuthDefaultSource

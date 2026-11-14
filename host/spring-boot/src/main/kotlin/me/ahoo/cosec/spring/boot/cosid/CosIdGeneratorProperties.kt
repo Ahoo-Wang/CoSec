@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.cosid
+package me.ahoo.cosec.spring.boot.cosid
 
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosid.runtime.RuntimeSpec

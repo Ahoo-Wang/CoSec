@@ -10,9 +10,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authentication.social
+package me.ahoo.cosec.spring.boot.authentication.social
 
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
+import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
 /**

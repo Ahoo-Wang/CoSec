@@ -12,7 +12,7 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.authentication.social
+package me.ahoo.cosec.spring.boot.authentication.social
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
@@ -25,10 +25,10 @@ import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosec.social.justauth.RedisAuthStateCache
 import me.ahoo.cosec.social.justauth.RedisSocialStateStore
-import me.ahoo.cosec.spring.boot.starter.CoSecProperties
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
-import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
+import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.zhyd.oauth.cache.AuthStateCache
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.request.AuthDefaultRequest

@@ -13,12 +13,12 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.spring.boot.starter.pipeline
+package me.ahoo.cosec.spring.boot.pipeline
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
+import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.change.ShadowState
@@ -41,11 +41,11 @@ import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.TokenRevoker
-import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
+import me.ahoo.cosec.spring.boot.control.CoSecControlRoutesAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations

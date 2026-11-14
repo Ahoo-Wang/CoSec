@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.cache.limiter
+package me.ahoo.cosec.cocache.limiter
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert

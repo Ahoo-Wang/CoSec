@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter
+package me.ahoo.cosec.spring.boot
 
 import org.springframework.core.env.PropertySource
 import org.springframework.core.env.StandardEnvironment

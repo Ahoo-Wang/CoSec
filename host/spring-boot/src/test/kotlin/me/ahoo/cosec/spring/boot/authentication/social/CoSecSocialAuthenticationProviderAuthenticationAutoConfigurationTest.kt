@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authentication.social
+package me.ahoo.cosec.spring.boot.authentication.social
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.login.AuthenticationProvider
@@ -22,8 +22,8 @@ import me.ahoo.cosec.social.SocialProviderManager
 import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.spi.id.IdGenerator
-import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
+import me.ahoo.cosec.spring.boot.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.cache.AuthDefaultStateCache
 import me.zhyd.oauth.cache.AuthStateCache
