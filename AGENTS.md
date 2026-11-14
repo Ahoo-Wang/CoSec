@@ -35,8 +35,8 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
   `REDIS`.
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
-  (`FlatAuthorizationBenchmark`, `FlatEngineBenchmark`, `CompiledEngineBenchmark`) and the whole pipeline's
-  (`:e2e` `PipelineBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
+  (`FlatAuthorizationBenchmark`, `FlatEngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
+  (`:e2e` `PipelineBenchmark`) and a token's verification (`:jwt:jmh -PjmhIncludes=JwtVerificationBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
   `-PjmhWarmupIterations`, `-PjmhProfilers` and `-PjmhJavaVersion`, or run the jar from the module's `jmhJar`, as in
   [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
   `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`: without it the forked JVMs log at
