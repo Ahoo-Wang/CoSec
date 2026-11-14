@@ -14,9 +14,6 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.pattern.ResourcePattern
-import me.ahoo.cosec.model.Action
-import me.ahoo.cosec.model.Resource
 import java.io.ByteArrayOutputStream
 
 /**
@@ -72,42 +69,6 @@ object PathNormalizer {
      */
     @InternalCoSecApi
     fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text)
-
-    /**
-     * [resource] as enforcement reads it, or null when enforcement would refuse it: the one judgement behind what a check
-     * by host code decides (`AuthorizationChecker`, `PIP-15`) and what the control plane simulates or explains (`CTL-3`),
-     * so that neither decides what no request could be decided on. An `http` path goes through [normalize], since the
-     * engine does not resolve a dot segment and a wildcard under `/public` would match `/public/../admin`; a typed id,
-     * which no request carries as written, is held to [withinBounds], since its globs would otherwise cost more than any
-     * request's.
-     */
-    @InternalCoSecApi
-    fun enforceable(resource: Resource): Resource? {
-        val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
-            normalize(resource.id)
-        } else {
-            resource.id.takeIf(::withinBounds)
-        }
-        return when (id) {
-            null -> null
-            resource.id -> resource
-            else -> Resource(resource.type, id, resource.attributes)
-        }
-    }
-
-    /**
-     * [action] as enforcement reads a request's method (`PIP-18`), or null when enforcement would refuse it: the
-     * judgement next to [enforceable] of a resource, for a check (`PIP-15`) and the control plane (`CTL-3`). An `http`
-     * action whose verb holds a lower-case letter is refused, as a request with that method is (400); `http:HEAD` is
-     * `http:GET`, as a HEAD request is decided. Any other action, `service:verb` included, as it is.
-     */
-    @InternalCoSecApi
-    fun enforceable(action: Action): Action? = when {
-        action.namespace != ResourcePattern.HTTP_TYPE -> action
-        HttpMethods.hasLowerCase(action.verb) -> null
-        action.verb == HttpMethods.HEAD -> Action(action.namespace, HttpMethods.decidedAs(action.verb))
-        else -> action
-    }
 
     private fun hasLongSegment(path: String): Boolean {
         if (path.length <= MAX_SEGMENT_LENGTH) {
