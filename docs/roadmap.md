@@ -338,12 +338,16 @@ E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；
 |---|---|---|---|
 | runtime | `core/runtime` | 1 高、2 中、2 低 | ✅ #1311：暂存的候选不改变执行用的编译输入（`SNP-10`）；空段、`%2F`、反斜杠一律 400（`PIP-14`）；检查与执行读同一条路径（`PIP-15`） |
 | control | `core/control` | 2 中、8 低 | ✅ #1312（含“平台或 App 层删除 DENY 需要审批”，`CTL-31`） |
-| 核心 | `core/model`、`core/spi`、`core/engine` | 0 高、2 中、6 低；没有发现跳过 DENY、跨租户生效或失败即放行的常规路径 | #1318（已审核，待 JMH 与变异体重跑结果）：`ALG-10`、`DOC-6`，决定见 §9 |
+| 核心 | `core/model`、`core/spi`、`core/engine` | 0 高、2 中、6 低；没有发现跳过 DENY、跨租户生效或失败即放行的常规路径 | ✅ #1318：多个资源模式等价于每个模式各一条语句（`ALG-10`）；每份文档至多 64 条限流规则（`DOC-6`）；同名策略内容相同时求值平台的那条（`BND-7`）；删除 `SnapshotVersion`；决定见 §9 |
 | 后端与登录 | `cocache`、`kafka`、`jwt`、`login`、`social` | 1 高、4 中、6 低：撤销读降级时刷新会把已撤销的令牌换成新令牌（高）；刷新槽接受访问令牌；刷新不轮换、登出不结束会话；限流窗口无上限；OAuth `state` 可重用且不绑定浏览器 | 进行中，分四个 PR（令牌、刷新令牌族、限流与其余、社交登录） |
-| edge 与扩展 | `webflux`、`webmvc`、`gateway`、`openapi`、`ip2region`、`micrometer`、`opentelemetry`、`cosid` | 未开始 | |
+| edge 与扩展 | `webflux`、`webmvc`、`gateway`、`openapi`、`ip2region`、`micrometer`、`opentelemetry`、`cosid` | 审查中 | |
 | 宿主与工具 | `spring-boot`、`migrate`、`testkit`、`api` | 未开始 | |
 
 之后：R8 → R9 → §10 中其余的 RC 前事项 → 与维护者讨论 RC/GA。
+
+观察项（2026-11-14）：`ChangesB1Test` 的 RC1-33 用例在 #1318 的会话本地失败一次，重跑三次通过，该 PR 未改动它。再失败就按“可能放行”调查，不只重跑。
+
+R9 开始前要核对的 RC 前事项（2026-11-14 抽查，均未完成）：`cosec-migrate` 发行包作为 release 资产、macOS kqueue 排障条目、阿里云镜像推送拆成非阻塞作业、网关 512M 直接内存默认值的重新评估；播种文档未核对。已不适用的变异体在 R9 重新生成，RC 门禁跑一次全量 `mutationCheck`。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
