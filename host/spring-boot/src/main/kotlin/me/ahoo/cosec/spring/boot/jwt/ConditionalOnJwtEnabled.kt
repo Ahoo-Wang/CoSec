@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.jwt
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
@@ -26,7 +29,7 @@ import org.springframework.context.annotation.ConfigurationCondition
  * @author ahoo wang
  */
 @Conditional(OnJwtEnabled::class)
-annotation class ConditionalOnJwtEnabled {
+internal annotation class ConditionalOnJwtEnabled {
     companion object {
         const val ENABLED_KEY = JwtProperties.PREFIX + ENABLED_SUFFIX_KEY
     }

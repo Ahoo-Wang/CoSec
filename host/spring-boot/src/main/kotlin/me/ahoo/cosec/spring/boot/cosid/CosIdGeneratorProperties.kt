@@ -13,16 +13,19 @@
 
 package me.ahoo.cosec.spring.boot.cosid
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosid.runtime.RuntimeSpec
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 /** `cosec.cosid.*`: which of the application's CosId generators gives CoSec its ids (`cosec-cosid`). */
 @ConfigurationProperties(prefix = CosIdGeneratorProperties.PREFIX)
+@InternalCoSecApi
 class CosIdGeneratorProperties {
     /** The CosId generator whose ids CoSec takes, with its codec; CosId's `default` unless set. */
     var generator: String = RuntimeSpec.DEFAULT_GENERATOR
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "cosid"
         const val GENERATOR_KEY = "$PREFIX.generator"

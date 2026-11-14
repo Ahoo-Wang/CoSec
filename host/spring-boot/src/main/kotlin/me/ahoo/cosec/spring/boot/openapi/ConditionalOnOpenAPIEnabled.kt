@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.openapi
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
@@ -25,7 +28,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
     matchIfMissing = true,
     havingValue = "true",
 )
-annotation class ConditionalOnOpenAPIEnabled {
+internal annotation class ConditionalOnOpenAPIEnabled {
     companion object {
         const val ENABLED_KEY = OpenAPIProperties.Companion.PREFIX + ENABLED_SUFFIX_KEY
     }

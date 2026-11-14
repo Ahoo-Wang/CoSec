@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.social
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.token.TokenSubject
 
@@ -20,11 +23,11 @@ import me.ahoo.cosec.login.token.TokenSubject
  *
  * @author ahoo wang
  */
-class SocialAuthentication(
+class SocialAuthentication @InternalCoSecApi constructor(
     private val principalConverter: SocialUserPrincipalConverter,
     private val providers: SocialProviderManager,
 ) : Authentication<SocialCredentials> {
-    override val supportCredentials: Class<SocialCredentials>
+    override val credentialsType: Class<SocialCredentials>
         get() {
             return SocialCredentials::class.java
         }

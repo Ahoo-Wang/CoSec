@@ -11,23 +11,26 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.login
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
 
-class CompositeAuthentication(
+class CompositeAuthentication @InternalCoSecApi constructor(
     private val authenticationProvider: AuthenticationProvider
-) : Authentication<Credentials> {
-    override val supportCredentials: Class<Credentials>
-        get() = Credentials::class.java
+) : Authentication<LoginCredentials> {
+    override val credentialsType: Class<LoginCredentials>
+        get() = LoginCredentials::class.java
 
-    override suspend fun authenticate(credentials: Credentials): TokenSubject {
+    override suspend fun authenticate(credentials: LoginCredentials): TokenSubject {
         val credentialsType = credentials.javaClass
         return authenticate(credentialsType, credentials)
     }
 
-    suspend fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): TokenSubject {
-        return authenticationProvider.getRequired<Credentials, Authentication<Credentials>>(
+    suspend fun authenticate(credentialsType: Class<out LoginCredentials>, credentials: LoginCredentials): TokenSubject {
+        return authenticationProvider.getRequired<LoginCredentials, Authentication<LoginCredentials>>(
             credentialsType,
         ).authenticate(credentials)
     }

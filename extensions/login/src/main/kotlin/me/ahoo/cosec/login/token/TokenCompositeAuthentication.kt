@@ -18,7 +18,7 @@ import kotlinx.coroutines.ensureActive
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenFamilies
@@ -32,19 +32,19 @@ class TokenCompositeAuthentication(
     private val compositeAuthentication: CompositeAuthentication,
     private val tokenConverter: TokenConverter,
     private val families: TokenFamilies,
-) : Authentication<Credentials> {
-    override val supportCredentials: Class<Credentials>
-        get() = Credentials::class.java
+) : Authentication<LoginCredentials> {
+    override val credentialsType: Class<LoginCredentials>
+        get() = LoginCredentials::class.java
 
-    override suspend fun authenticate(credentials: Credentials): TokenSubject {
+    override suspend fun authenticate(credentials: LoginCredentials): TokenSubject {
         return authenticate(credentials.javaClass, credentials)
     }
 
-    suspend fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): TokenSubject {
+    suspend fun authenticate(credentialsType: Class<out LoginCredentials>, credentials: LoginCredentials): TokenSubject {
         return compositeAuthentication.authenticate(credentialsType, credentials)
     }
 
-    suspend fun authenticateAsToken(credentials: Credentials): CompositeToken {
+    suspend fun authenticateAsToken(credentials: LoginCredentials): CompositeToken {
         return authenticateAsToken(credentials.javaClass, credentials)
     }
 
@@ -53,8 +53,8 @@ class TokenCompositeAuthentication(
      * without suspending, or that caught the cancellation, answers a subject for a caller that is gone.
      */
     suspend fun authenticateAsToken(
-        credentialsType: Class<out Credentials>,
-        credentials: Credentials
+        credentialsType: Class<out LoginCredentials>,
+        credentials: LoginCredentials
     ): CompositeToken {
         val subject = authenticate(credentialsType, credentials)
         currentCoroutineContext().ensureActive()

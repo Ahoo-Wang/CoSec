@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.authentication.social
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthentication

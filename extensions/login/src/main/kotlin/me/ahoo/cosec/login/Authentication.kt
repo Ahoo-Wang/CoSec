@@ -27,16 +27,16 @@ import me.ahoo.cosec.login.token.TokenSubject
  *
  * @param C The type of credentials this authentication supports
  *
- * @see Credentials
+ * @see LoginCredentials
  * @see AuthenticationProvider
  * @see TokenSubject
  */
 @CoSecSpi
-interface Authentication<C : Credentials> {
+interface Authentication<C : LoginCredentials> {
     /**
      * The type of credentials this authentication supports.
      */
-    val supportCredentials: Class<C>
+    val credentialsType: Class<C>
 
     /**
      * Authenticates the provided credentials.

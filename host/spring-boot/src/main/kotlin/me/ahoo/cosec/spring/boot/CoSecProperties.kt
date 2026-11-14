@@ -12,12 +12,14 @@
  */
 package me.ahoo.cosec.spring.boot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
-const val ENABLED_SUFFIX_KEY = ".enabled"
+internal const val ENABLED_SUFFIX_KEY = ".enabled"
 
+@InternalCoSecApi
 interface EnabledCapable {
     val enabled: Boolean
 }
@@ -28,6 +30,7 @@ interface EnabledCapable {
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = CoSec.COSEC)
+@InternalCoSecApi
 class CoSecProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     /**

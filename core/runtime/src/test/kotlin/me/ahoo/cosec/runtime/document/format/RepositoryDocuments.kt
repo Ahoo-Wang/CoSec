@@ -73,6 +73,9 @@ object RepositoryDocuments {
             isLegacy(where, file) -> emptyList()
             // Stored bytes pinned by StoredFormatTest and the Kafka record test: not documents a user writes.
             "/src/test/resources/stored-format/" in where -> emptyList()
+            // Spring's configuration metadata of the starter, pinned by ConfigurationMetadataTest: Spring's format, not
+            // a CoSec document.
+            where == "host/spring-boot/src/test/resources/configuration-metadata.json" -> emptyList()
             // The test kit's examples: scenarios in the conformance format, and the documents they run against.
             where.startsWith("test/testkit/") && "/scenarios/" in where -> emptyList()
             where.startsWith("test/testkit/") && "/documents/" in where ->

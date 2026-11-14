@@ -2,11 +2,10 @@
 # Mutant: the eviction policy monitor is no longer a startup check, so under lazy initialization it reads nothing until a health probe creates it
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.SnapshotEvictionHealthIndicatorTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-index fda07fe0..dcfb3d09 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-@@ -547,7 +547,7 @@ class EvictionPolicyMonitor internal constructor(
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/EvictionPolicyCheck.kt
+@@ -173,7 +173,7 @@
      private val read: () -> EvictionPolicyCheck.Reading,
      private val interval: Duration,
      private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
