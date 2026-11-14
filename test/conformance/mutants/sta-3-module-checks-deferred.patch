@@ -1,6 +1,6 @@
 # Rule: STA-3
 # Mutant: the module checks' auto-configuration no longer imports the exclusion, so lazy initialization defers them
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest --tests me.ahoo.cosec.spring.boot.starter.StartupCheckTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest --tests me.ahoo.cosec.spring.boot.starter.StartupTaskTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
 index 2b8dae8b..6d22d103 100644
@@ -10,7 +10,7 @@ index 2b8dae8b..6d22d103 100644
   */
  @AutoConfiguration
  @AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
--@Import(StartupCheckExclusion::class)
+-@Import(StartupTaskExclusion::class)
  internal class CoSecModuleCheckAutoConfiguration {
      @Configuration(proxyBeanMethods = false)
      @ConditionalOnCoSecEnabled

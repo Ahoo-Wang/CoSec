@@ -66,8 +66,8 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupCheck
-import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
+import me.ahoo.cosec.spring.boot.starter.StartupTask
+import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoCacheRevocation
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
@@ -107,7 +107,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-@Import(StartupCheckExclusion::class)
+@Import(StartupTaskExclusion::class)
 internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -345,7 +345,7 @@ internal class CoSecControlAutoConfiguration {
      * one without either already fails as ambiguous when the first of them is injected.
      */
     @Bean
-    fun cosecControlAuthorizationCheck(beans: ListableBeanFactory): StartupCheck = StartupCheck.AfterSingletons {
+    fun cosecControlAuthorizationCheck(beans: ListableBeanFactory): StartupTask = StartupTask.AfterSingletons {
         for ((type, own) in NOT_REPLACEABLE) {
             val names = beans.getBeanNamesForType(type, true, false).toList()
             check(names == listOf(own)) {

@@ -28,31 +28,31 @@ import org.springframework.context.annotation.Configuration
  * listeners' metrics). No bean depends on them, so under `spring.main.lazy-initialization=true` Spring would never
  * create them: a host missing its web adapter would start with no authorization, a gateway in `gateway` mode would
  * forward every request unchecked, and Redis could evict the policy snapshot unseen. [EAGER] keeps every bean whose type
- * is a [StartupCheck] out of lazy initialization; a `@Bean` method declares one as its return type, never a bare
- * [InitializingBean] or [SmartInitializingSingleton], and its auto-configuration imports [StartupCheckExclusion], which
- * `StartupCheckTest` holds every auto-configuration to.
+ * is a [StartupTask] out of lazy initialization; a `@Bean` method declares one as its return type, never a bare
+ * [InitializingBean] or [SmartInitializingSingleton], and its auto-configuration imports [StartupTaskExclusion], which
+ * `StartupTaskTest` holds every auto-configuration to.
  */
 @InternalCoSecApi
-interface StartupCheck {
+interface StartupTask {
     /** A check that runs as its bean is created: before the beans that would fail on what it reports. */
     @InternalCoSecApi
-    fun interface OnCreation : StartupCheck, InitializingBean
+    fun interface OnCreation : StartupTask, InitializingBean
 
     /** A check that runs once every singleton exists: one that reads beans, such as the exposed endpoints. */
     @InternalCoSecApi
-    fun interface AfterSingletons : StartupCheck, SmartInitializingSingleton
+    fun interface AfterSingletons : StartupTask, SmartInitializingSingleton
 
     @InternalCoSecApi
     companion object {
-        /** Every [StartupCheck] bean is created at startup, lazy initialization or not. */
+        /** Every [StartupTask] bean is created at startup, lazy initialization or not. */
         val EAGER: LazyInitializationExcludeFilter = LazyInitializationExcludeFilter.forBeanTypes(
-            StartupCheck::class.java
+            StartupTask::class.java
         )
     }
 }
 
 /**
- * Registers [StartupCheck.EAGER]. Every auto-configuration that declares a [StartupCheck] imports it, so the exclusion
+ * Registers [StartupTask.EAGER]. Every auto-configuration that declares a [StartupTask] imports it, so the exclusion
  * is there wherever a check is, whichever auto-configurations an application excludes; imported many times, it is one
  * bean.
  */
@@ -60,12 +60,12 @@ interface StartupCheck {
 @Suppress("UtilityClassWithPublicConstructor")
 @Configuration(proxyBeanMethods = false)
 @InternalCoSecApi
-class StartupCheckExclusion {
+class StartupTaskExclusion {
     @InternalCoSecApi
     companion object {
         /** Static: `LazyInitializationBeanFactoryPostProcessor` reads it before any configuration is instantiated. */
         @JvmStatic
         @Bean
-        fun cosecStartupChecksEager(): LazyInitializationExcludeFilter = StartupCheck.EAGER
+        fun cosecStartupTasksEager(): LazyInitializationExcludeFilter = StartupTask.EAGER
     }
 }

@@ -48,15 +48,15 @@ import org.springframework.context.annotation.Import
     ]
 )
 @EnableConfigurationProperties(GatewayProperties::class)
-@Import(StartupCheckExclusion::class)
+@Import(StartupTaskExclusion::class)
 internal class CoSecGatewayEndpointCheckAutoConfiguration {
     /** After every singleton: the endpoints are known only once their beans exist. */
     @Bean
     fun cosecGatewayEndpointCheck(
         context: ApplicationContext,
         properties: GatewayProperties
-    ): StartupCheck =
-        StartupCheck.AfterSingletons {
+    ): StartupTask =
+        StartupTask.AfterSingletons {
             val endpoints = context.getBeanProvider(PathMappedEndpoints::class.java).ifAvailable
                 ?: return@AfterSingletons
             // Every path-mapped endpoint is an exposable one; any other is checked by its path, never skipped.

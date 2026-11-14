@@ -26,6 +26,9 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar
  *
  * A missing hint can only make a document or entry fail to decode or compile (RFC 0003 §4.4 F3, F4), which fails
  * closed; it never skips a statement.
+ *
+ * No native build verifies these hints yet: 8.0 supports the JDK AOT cache, not Spring AOT or native images
+ * (`wiki/operations/deployment.md`).
  */
 internal class SnapshotRuntimeHints : RuntimeHintsRegistrar {
     override fun registerHints(hints: RuntimeHints, classLoader: ClassLoader?) {
