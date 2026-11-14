@@ -127,6 +127,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   - `cosec-social`：`SocialProviderManager` 和 `SocialAuthenticationProvider` 是 `@InternalCoSecApi`，`SocialAuthentication` 和 `JustAuthProvider` 的构造器（后者用到 JustAuth 的 `AuthRequest`）也是。`JustAuthProvider.name()` 已删除：读取 `name`。
   - starter 的 `*Properties` 类和 `EnabledCapable` 是 `@InternalCoSecApi`，`@ConditionalOn*` 注解是 `internal`。契约是 `cosec.*` 配置键，它们不变。读取配置值请用 `@Value("\${cosec.jwt.enabled}")` 或 `Environment`，不要注入 CoSec 的 `*Properties` Bean；给你自己的 Bean 加条件请用 `@ConditionalOnProperty("cosec.jwt.enabled")`，不要用 `@ConditionalOnJwtEnabled`。
   - `checkMono`（`cosec-webflux`）和 `checkBlocking`（`cosec-webmvc`）位于名为 `AuthorizationCheckers` 的 Java 类中，不再是 `PipelineWebFilterKt` 和 `PipelineServletFilterKt`；Kotlin 调用方不受影响。`SuspendingHandlerHolderInterceptor` 是 `@InternalCoSecApi`：starter 会注册它。
+- **`cosec-dependencies` 不再管理 Guava 的版本**，CoSec 的模块也都不再引入 Guava。从 CoSec 的 BOM 取 Guava 版本的应用需要自己声明。
 
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 

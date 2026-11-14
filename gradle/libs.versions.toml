@@ -8,7 +8,6 @@ cocache = "8.0.0"
 # cosec-cosid only: never in cosec-dependencies, so CoSec forces no CosId version on an application
 cosid = "5.0.0"
 opentelemetry = "2.33.1"
-guava = "33.7.2-jre"
 kotlin-logging = "8.0.4"
 ognl = "3.4.17"
 java-jwt = "4.6.2"
@@ -38,7 +37,6 @@ cocache-bom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" 
 cosid-core = { module = "me.ahoo.cosid:cosid-core", version.ref = "cosid" }
 cosid-spring-boot-autoconfigure = { module = "me.ahoo.cosid:cosid-spring-boot-autoconfigure", version.ref = "cosid" }
 opentelemetry-instrumentation-bom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
-guava = { module = "com.google.guava:guava", version.ref = "guava" }
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 ognl = { module = "ognl:ognl", version.ref = "ognl" }
 java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }

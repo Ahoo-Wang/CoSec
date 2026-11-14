@@ -21,8 +21,6 @@ plugins {
 dependencies {
     implementation("tools.jackson.core:jackson-databind")
     implementation("tools.jackson.module:jackson-module-kotlin")
-    // Guava: the modules whose main code uses it declare it; the root build adds it to none.
-    implementation("com.google.guava:guava")
     // 8.0 documents are written through the snapshot store. 7.x data is read with Lettuce in CoCache 6's format
     // (CoSec7xReader, CoCache6Format), which CoCache 8 does not read.
     api(project(":cocache"))
