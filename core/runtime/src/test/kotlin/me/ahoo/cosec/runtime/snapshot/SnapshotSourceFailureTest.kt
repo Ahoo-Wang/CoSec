@@ -24,7 +24,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
-import me.ahoo.cosec.spi.snapshot.SnapshotVersion
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -83,7 +82,7 @@ class SnapshotSourceFailureTest {
             val snapshot = source.load("app-a").join()
             snapshot.policies.assert().isEqualTo(DocumentState.Absent)
             snapshot.app.assert().isEqualTo(DocumentState.Absent)
-            snapshot.version.assert().isEqualTo(SnapshotVersion(0, 0))
+            snapshot.revisions().assert().isEqualTo(0L to 0L)
             source.revalidate().join()
             source.peek("app-a")!!.policies.assert().isEqualTo(DocumentState.Absent)
         }
@@ -111,7 +110,7 @@ class SnapshotSourceFailureTest {
             val failure = source.load().join().policies.failure()
             failure.assert().isInstanceOf(SnapshotUnavailableException::class.java)
             failure.cause.assert().isInstanceOf(IllegalArgumentException::class.java)
-            source.peek()!!.version.assert().isEqualTo(SnapshotVersion(2, 0))
+            source.peek()!!.revisions().assert().isEqualTo(2L to 0L)
             // The cold read may come from a local copy, so it is confirmed at once, and a document that failed to
             // compile is always read in full and compiled again.
             metrics.compiles.assert().containsOnly(SnapshotKind.PLATFORM to false).hasSize(2)
@@ -147,7 +146,7 @@ class SnapshotSourceFailureTest {
 
             val snapshot = source.peek()!!
             snapshot.policies.failure().assert().isInstanceOf(SnapshotUnavailableException::class.java)
-            snapshot.version.shared.assert().isEqualTo(2)
+            snapshot.policiesEntry.revision.assert().isEqualTo(2)
 
             source.revalidate().join()
             source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
@@ -172,7 +171,7 @@ class SnapshotSourceFailureTest {
 
             await { source.peek("app-a")?.policies is DocumentState.Failed }
             val snapshot = source.peek("app-a")!!
-            snapshot.version.shared.assert().isEqualTo(2)
+            snapshot.policiesEntry.revision.assert().isEqualTo(2)
             generateSequence(snapshot.policies.failure()) { it.cause }
                 .any { it is StackOverflowError }.assert().isTrue()
             snapshot.appCompiled.revision.assert().isEqualTo(1)

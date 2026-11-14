@@ -19,7 +19,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
-import me.ahoo.cosec.spi.snapshot.SnapshotVersion
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -104,8 +103,8 @@ class SnapshotRevalidationTest {
             val conditionalReads = store.conditionalReads.get()
             store.reset()
 
-            source.peek("app-a")!!.version.assert().isEqualTo(SnapshotVersion(2, 2))
-            source.peek("app-b")!!.version.assert().isEqualTo(SnapshotVersion(2, 2))
+            source.peek("app-a")!!.revisions().assert().isEqualTo(2L to 2L)
+            source.peek("app-b")!!.revisions().assert().isEqualTo(2L to 2L)
             store.conditionalReads.get().assert().isEqualTo(conditionalReads + 3)
         }
     }

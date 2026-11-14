@@ -85,7 +85,6 @@ class PublicApiStabilityTest {
                 "spi.ratelimit.RateLimitResult" to value,
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
-                "spi.snapshot.SnapshotVersion" to value,
                 "runtime.token.SimpleCompositeToken" to "An access token and a refresh token: the pair is the whole of a composite token.",
             ) + listOf(
                 "audit.MovedHead", "audit.RevisionRef", "change.Approval", "change.Base", "change.ChangeRequest",

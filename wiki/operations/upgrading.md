@@ -16,6 +16,8 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **`SnapshotVersion` is removed** from `cosec-spi`: it named the two documents of 7.x. A decision event's
+  `snapshotVersion` is a `ViewVersion` (`platform`, `app`, `tenant`), as before.
 - **A rate limit window is at most a year** (`windowSeconds` up to `31536000`), and `permitsPerSecond × windowSeconds`
   at most 2⁶³: a larger window or quota overflowed the limiters' arithmetic, which failed or miscounted every request
   the rule matched. Such a document no longer decodes; `RateLimit` refuses the same values.
