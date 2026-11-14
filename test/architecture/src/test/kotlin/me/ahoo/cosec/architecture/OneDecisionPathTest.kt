@@ -59,7 +59,7 @@ class OneDecisionPathTest {
         /** `internal` to `cosec-runtime`, so loaded by name: a rename fails here rather than passing vacuously. */
         val STATUS_MAPPING: Class<*> = Class.forName("me.ahoo.cosec.runtime.StatusMapping")
 
-        val ADAPTERS = arrayOf("me.ahoo.cosec.webflux..", "me.ahoo.cosec.servlet..", "me.ahoo.cosec.gateway..")
+        val ADAPTERS = arrayOf("me.ahoo.cosec.webflux..", "me.ahoo.cosec.webmvc..", "me.ahoo.cosec.gateway..")
 
         /** The packages of the decision types. */
         val DECISIONS = arrayOf("me.ahoo.cosec.model.decision..", "me.ahoo.cosec.model")

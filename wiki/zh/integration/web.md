@@ -215,8 +215,8 @@ suspend fun order(@PathVariable id: String, security: SecurityContext): Order = 
 在其他地方，从 Servlet 请求中读取；在请求线程上的阻塞代码中，也可以从绑定到线程的持有者中读取：
 
 ```kotlin
-import me.ahoo.cosec.servlet.SecurityContextHolder
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.SecurityContextHolder
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 
 val securityContext = httpServletRequest.getSecurityContext()
 // 仅限请求线程上的阻塞代码

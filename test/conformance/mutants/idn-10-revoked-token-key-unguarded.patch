@@ -1,11 +1,11 @@
 # Rule: IDN-10
 # Mutant: a token id with an unpaired surrogate names the revocation key of the token with ? in its place
-# Tests: :cocache:test --tests me.ahoo.cosec.cache.UnpairedSurrogateKeyTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.UnpairedSurrogateKeyTest
 
-diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedTokenCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedTokenCache.kt
 index c728c1b9..87de477a 100644
---- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt
-+++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedTokenCache.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/RevokedTokenCache.kt
 @@ -41,7 +41,7 @@ interface RevokedTokenCache : Cache<String, Boolean> {
           * @throws IllegalArgumentException when [tokenId] holds one
           */

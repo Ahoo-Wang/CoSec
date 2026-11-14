@@ -299,8 +299,8 @@ suspend fun order(@PathVariable id: String, security: SecurityContext): Order = 
 Elsewhere, read it from the servlet request, or, in blocking code on the request thread, from the thread-bound holder:
 
 ```kotlin
-import me.ahoo.cosec.servlet.SecurityContextHolder
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.SecurityContextHolder
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 
 val securityContext = httpServletRequest.getSecurityContext()
 // blocking code on the request thread only

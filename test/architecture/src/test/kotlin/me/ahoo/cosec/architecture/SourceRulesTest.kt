@@ -60,9 +60,9 @@ class SourceRulesTest {
          * using class to the classes or packages it may reach.
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
-            "me.ahoo.cosec.cache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
+            "me.ahoo.cosec.cocache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
             // The ControlStore port's package, and the change values its signatures carry, with their codec.
-            "me.ahoo.cosec.cache.control" to listOf(
+            "me.ahoo.cosec.cocache.control" to listOf(
                 "me.ahoo.cosec.control.store.",
                 "me.ahoo.cosec.control.change.ChangeId",
                 "me.ahoo.cosec.control.change.ChangeRequest",

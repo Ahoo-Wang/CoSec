@@ -1,11 +1,11 @@
 # Rule: STA-3
 # Mutant: the module checks' auto-configuration no longer imports the exclusion, so lazy initialization defers them
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest --tests me.ahoo.cosec.spring.boot.starter.StartupTaskTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.CoSecModuleCheckAutoConfigurationTest --tests me.ahoo.cosec.spring.boot.StartupTaskTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 index 2b8dae8b..6d22d103 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 @@ -52,7 +52,6 @@ import org.springframework.util.ClassUtils
   */
  @AutoConfiguration

@@ -1,11 +1,11 @@
 # Rule: PIP-7
 # Mutant: the revocation tables keep a read-timeout a layer sets, so a timeout shorter than the command timeout reads "not revoked" more often
-# Tests: :cocache:test --tests me.ahoo.cosec.cache.CacheTtlPolicyTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
-diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt
 index 11526d9c..99689deb 100644
---- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
-+++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt
 @@ -280,7 +280,6 @@ object CoSecCacheSpecs {
                  constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
                  // A read that times out is unavailable, which the pipeline lets through (PIP-7): a timeout shorter than

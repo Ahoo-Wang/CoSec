@@ -42,6 +42,9 @@ const TERMS = [
   { term: 'CoCache 5', hint: '8.0 runs on CoCache 8; do not describe CoCache 5' },
   { term: '6.x', hint: '8.0 upgrades only from 7.x; leave 6.x to the docs on the `7.x` branch' },
   { term: 'StringIdGenerator', hint: 'CoSec takes its ids from `IdGenerator` (architecture/extending.md#ids)' },
+  { term: 'me.ahoo.cosec.cache', hint: 'renamed in 8.0: `me.ahoo.cosec.cocache` (`cosec-cocache`)' },
+  { term: 'me.ahoo.cosec.servlet', hint: 'renamed in 8.0: `me.ahoo.cosec.webmvc` (`cosec-webmvc`)' },
+  { term: 'me.ahoo.cosec.spring.boot.starter', hint: 'renamed in 8.0: `me.ahoo.cosec.spring.boot` (`cosec-spring-boot`)' },
   { term: 'UuidGenerator', hint: 'CoSec takes its ids from `IdGenerator` (architecture/extending.md#ids)' },
 ]
 
@@ -60,6 +63,11 @@ const ALLOWED = [
     files: ['skills/cosec-policy-author/SKILL.md'],
     terms: ['spel', 'ognl'],
     reason: 'states that conditions have no expression language ("no SpEL, no OGNL")',
+  },
+  {
+    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    terms: ['me.ahoo.cosec.cache', 'me.ahoo.cosec.servlet', 'me.ahoo.cosec.spring.boot.starter'],
+    reason: 'the upgrade entry that renames the three packages names the old ones',
   },
   {
     files: ['wiki/guide/roadmap.md', 'wiki/zh/guide/roadmap.md'],

@@ -23,7 +23,7 @@ implementation to the class that uses it.
 | `TokenStore`, `RevocationReader` | `cosec-spi`, `spi.token` | Keep revoked tokens somewhere other than Redis. | one bean of each |
 | `ApiKeyReader` | `cosec-spi`, `spi.apikey` | Look API keys up somewhere other than memory or Redis. | one bean |
 | `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
-| `MembershipLoader` | `cosec-cocache`, `cache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
+| `MembershipLoader` | `cosec-cocache`, `cocache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
 | `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive the flat audit record of each decision. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |

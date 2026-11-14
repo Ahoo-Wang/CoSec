@@ -1,0 +1,454 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
+package me.ahoo.cosec.spring.boot.control
+
+import kotlinx.coroutines.future.await
+import me.ahoo.cocache.core.CoCacheFactory
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.api.Simulator
+import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.control.audit.LoggingChangeListener
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.DocumentConfirmation
+import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.change.ChangeAuthority
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeOptions
+import me.ahoo.cosec.control.change.Changes
+import me.ahoo.cosec.control.change.ShadowOptions
+import me.ahoo.cosec.control.store.ControlMaintenance
+import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.RetentionPolicy
+import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.kafka.KafkaChangeListener
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.DocumentState
+import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.CoSecProperties
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.StartupTask
+import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.pipeline.CoCacheRevocation
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.ListenerProperties
+import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
+import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.spring.boot.pipeline.credentialHeaders
+import me.ahoo.cosec.spring.boot.pipeline.toOptions
+import org.springframework.beans.factory.ListableBeanFactory
+import org.springframework.beans.factory.ObjectProvider
+import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
+import org.springframework.core.env.Environment
+import org.springframework.kafka.core.KafkaOperations
+import java.time.Clock
+import java.time.Instant
+import kotlin.time.toKotlinDuration
+
+/**
+ * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
+ * the Redis the instances read, with its HTTP routes ([CoSecControlRoutesAutoConfiguration]). Its own checks run
+ * through the host's engine on a snapshot source apart from the data plane's, confirmed current before each check
+ * (RFC 0007 §7.2); `simulate` and `explain` evaluate with the same engine as enforcement (`CTL-3`).
+ */
+@AutoConfiguration(
+    after = [CoSecPipelineAutoConfiguration::class],
+    afterName = ["org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration"],
+)
+@ConditionalOnCoSecEnabled
+@ConditionalOnClass(
+    name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore"]
+)
+@ConditionalOnBean(PolicySnapshotCache::class)
+@EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
+@Import(StartupTaskExclusion::class)
+internal class CoSecControlAutoConfiguration {
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlStore(
+        factory: CoCacheFactory,
+        heads: PolicySnapshotCache,
+        documents: RedisSnapshotDocumentStore,
+        cosec: CoSecProperties,
+        control: ControlProperties,
+    ): ControlStore = CoCacheControlStore.create(
+        factory,
+        heads,
+        cosec.keyPrefix,
+        documents::notifyChanged,
+        // A change listed but missing this long had its first write fail.
+        missingGrace = control.revisions.orphanAge,
+    )
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecRevisions(store: ControlStore, properties: ControlProperties): Revisions = Revisions(
+        store,
+        retention = with(properties.revisions) { RetentionPolicy(maxCount, minAge, orphanAge) },
+    )
+
+    /**
+     * The snapshot source the control plane's own checks read: apart from the data plane's, so that confirming a
+     * document before a check never delays a request (RFC 0007 §7.2).
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    fun cosecControlSnapshot(
+        documents: RedisSnapshotDocumentStore,
+        attributes: AttributeProviders,
+        properties: RuntimeAuthorizationProperties,
+        environment: Environment,
+    ): ControlSnapshot {
+        val compiler = PlatformCompiler(attributes.catalog, credentialHeaders = credentialHeaders(environment))
+        val clock = Clock.systemUTC()
+        return ControlSnapshot(
+            DocumentSnapshots.source(documents, compiler, properties.snapshot.toOptions(), clock).also(compiler::bind),
+            clock,
+        )
+    }
+
+    /** Not replaceable: the control plane's own authorization never comes from an application bean. */
+    @Bean
+    fun cosecControlAuthorizer(
+        snapshot: ControlSnapshot,
+        authenticator: Authenticator,
+        attributes: AttributeProviders,
+        membershipProvider: ObjectProvider<MembershipProvider>,
+        properties: ControlProperties,
+    ): ControlAuthorizer {
+        val pipeline = Pipeline(
+            PipelineComponents(
+                authenticator = authenticator,
+                snapshots = SuspendingSnapshotSource(DocumentSnapshotViews(snapshot.source, platformRequired = true)),
+                // The application's: an approver whose memberships come from it is checked again at publish (RC1-13).
+                membershipProvider = membershipProvider.ifAvailable,
+                attributes = attributes,
+            ),
+        )
+        return PipelineControlAuthorizer(
+            AuthorizationChecker(pipeline),
+            SourceConfirmation(snapshot.source, snapshot.clock),
+            AppId(properties.appId)
+        )
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecChangeOptions(properties: ControlProperties): ChangeOptions = ChangeOptions(
+        expireAfter = properties.changes.expireAfter,
+        approvalExpireAfter = properties.approval.expireAfter,
+        fourEyes = properties.approval.fourEyes,
+        shadow = with(properties.shadow) { ShadowOptions(minDuration, minSamples, maxDuration) },
+        breakGlassMaxDuration = properties.breakGlass.maxDuration,
+    )
+
+    /** Not replaceable: the hard rules, grant analysis and approvals of every change (like [cosecControlAuthorizer]). */
+    @Bean
+    fun cosecChangeAuthority(
+        authorizer: ControlAuthorizer,
+        options: ChangeOptions,
+        properties: ControlProperties,
+        revocationReader: ObjectProvider<RevocationReader>,
+        tokenStore: ObjectProvider<TokenStore>,
+        revocation: RevocationProperties,
+        jwt: ObjectProvider<JwtProperties>,
+    ): ChangeAuthority {
+        jwt.ifAvailable?.let { checkRetention(it, properties) }
+        return ChangeAuthority(
+            authorizer,
+            options,
+            controlApp = AppId(properties.appId),
+            // The pipeline's own reader: an approver's revoked token no longer approves (RC1-11).
+            revocations = revocations(revocationReader, tokenStore),
+            revocationSkew = revocation.skew,
+        )
+    }
+
+    /** The change log, beside any listener the application registers. */
+    @Bean
+    @ConditionalOnMissingBean(LoggingChangeListener::class)
+    fun cosecLoggingChangeListener(): LoggingChangeListener = LoggingChangeListener()
+
+    /**
+     * `cosec.control.audit.kafka.*`: change events to Kafka (RFC 0007 §10.5), best effort unless `delivery=required`,
+     * which break-glass needs (§8).
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = ["me.ahoo.cosec.kafka.KafkaChangeListener"])
+    @ConditionalOnBean(KafkaOperations::class)
+    @ConditionalOnProperty(
+        value = [ControlProperties.KAFKA_AUDIT_PREFIX + ".enabled"],
+        havingValue = "true",
+        matchIfMissing = true,
+    )
+    class Kafka {
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecKafkaChangeListener(
+            kafkaOperations: KafkaOperations<String, String>,
+            properties: ControlProperties,
+            listenerProperties: ObjectProvider<ListenerProperties>,
+        ): KafkaChangeListener = with(properties.audit.kafka) {
+            // Drains on shutdown as the decision listeners do (cosec.observability.listener.drain-timeout).
+            val drainTimeout = listenerProperties.getIfAvailable { ListenerProperties() }.drainTimeout
+            KafkaChangeListener(kafkaOperations, topic, delivery, drainTimeout = drainTimeout.toKotlinDuration())
+        }
+    }
+
+    /**
+     * Every change listener, delivering until shutdown. `cosec.control.audit.kafka.delivery=required` asks for a REQUIRED
+     * Kafka record of every gated step: startup fails when that listener could not be created, rather than publishing
+     * without it.
+     */
+    @Bean(destroyMethod = "cancel")
+    @ConditionalOnMissingBean
+    fun cosecChangeListeners(
+        listeners: ObjectProvider<ChangeListener>,
+        properties: ControlProperties
+    ): ChangeListeners {
+        val all = listeners.orderedStream().toList()
+        val kafka = properties.audit.kafka
+        check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {
+            "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
+                "needs cosec-kafka, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
+        }
+        return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
+    }
+
+    /**
+     * Not replaceable: the change flow, authorized at every step. Change ids come from the application's [IdGenerator],
+     * else from [RandomIdGenerator].
+     */
+    @Bean
+    fun cosecChanges(
+        store: ControlStore,
+        revisions: Revisions,
+        authorizer: ControlAuthorizer,
+        authority: ChangeAuthority,
+        options: ChangeOptions,
+        factory: CoCacheFactory,
+        listeners: ChangeListeners,
+        idGenerator: ObjectProvider<IdGenerator>,
+        shadowReports: ObjectProvider<CoCacheShadowReports>,
+        attributes: AttributeProviders,
+        cosec: CoSecProperties,
+        environment: Environment,
+    ): Changes {
+        val ids = idGenerator.getIfAvailable { RandomIdGenerator }
+        return Changes(
+            store,
+            revisions,
+            { ChangeId(ids.generate()) },
+            authorizer,
+            options = options,
+            // Candidates compile against the host's providers and credential headers, as enforcement compiles them.
+            attributes = attributes.catalog,
+            credentialHeaders = credentialHeaders(environment),
+            authority = authority,
+            // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
+            reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
+            listeners = listeners,
+        )
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlMaintenance(
+        store: ControlStore,
+        revisions: Revisions,
+        changes: Changes,
+        properties: ControlProperties,
+    ): ControlMaintenance = ControlMaintenance(store, revisions, changes, properties.shadow.checkInterval)
+
+    /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlMaintenanceScheduler(
+        maintenance: ControlMaintenance,
+        properties: ControlProperties,
+    ): ControlMaintenanceScheduler = ControlMaintenanceScheduler(
+        maintenance,
+        reclaimInterval = properties.revisions.reclaimInterval,
+        shadowInterval = properties.shadow.checkInterval,
+    )
+
+    /** Not replaceable: every call goes through [ChangeAuthority]. */
+    @Bean
+    fun cosecControlPlane(
+        changes: Changes,
+        revisions: Revisions,
+        authority: ChangeAuthority,
+        attributes: AttributeProviders,
+        environment: Environment,
+    ): ControlPlane =
+        // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
+        DefaultControlPlane(
+            changes,
+            revisions,
+            authority,
+            Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+        )
+
+    /** Not replaceable: every route needs a request the host pipeline permitted. */
+    @Bean
+    fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
+
+    /**
+     * The beans above that are not replaceable are the only ones of their types (round 2 L6): a second one that is
+     * `@Primary`, or named as an injection point's parameter, would be injected in their place without a word. A second
+     * one without either already fails as ambiguous when the first of them is injected.
+     */
+    @Bean
+    fun cosecControlAuthorizationCheck(beans: ListableBeanFactory): StartupTask = StartupTask.AfterSingletons {
+        for ((type, own) in NOT_REPLACEABLE) {
+            val names = beans.getBeanNamesForType(type, true, false).toList()
+            check(names == listOf(own)) {
+                "The control plane's ${type.simpleName} is CoSec's own [$own], never an application bean: remove " +
+                    "${(names - own).ifEmpty { names }} (RFC 0011 D4)."
+            }
+        }
+    }
+
+    internal companion object {
+        /** The control plane's own authorization, by type and the name of CoSec's bean (see [cosecControlAuthorizationCheck]). */
+        private val NOT_REPLACEABLE = listOf(
+            ControlAuthorizer::class.java to "cosecControlAuthorizer",
+            ChangeAuthority::class.java to "cosecChangeAuthority",
+            Changes::class.java to "cosecChanges",
+            ControlPlane::class.java to "cosecControlPlane",
+            ControlHttp::class.java to "cosecControlHttp",
+        )
+
+        /**
+         * The revocations an approver is checked against at publish (RC1-11), as the pipeline reads them: a
+         * [RevocationReader] bean, else the CoCache token store's. With neither, startup fails, also when CoSec's tokens
+         * are off, where the pipeline needs no reader: the control plane never takes an approval for unrevoked by reading
+         * nothing.
+         */
+        fun revocations(
+            reader: ObjectProvider<RevocationReader>,
+            tokenStore: ObjectProvider<TokenStore>
+        ): RevocationReader {
+            reader.ifAvailable?.let { return it }
+            return checkNotNull(CoCacheRevocation.readerOf(tokenStore.ifAvailable)) {
+                "The control plane checks its approvers' revocations, but no revocation reader is available: enable " +
+                    "CoSec's tokens (${JwtProperties.PREFIX}.enabled) with cosec-cocache, or declare a RevocationReader " +
+                    "bean (RevocationReader.NONE when no approver's credential is ever revoked)."
+            }
+        }
+
+        /**
+         * An approval counts for [ControlProperties.Approval.expireAfter] and is checked at publish against the
+         * revocations of its token; a revocation is kept for the refresh token validity. A shorter one forgets a
+         * revocation while an approval it revoked still counts, so startup fails.
+         */
+        fun checkRetention(jwt: JwtProperties, control: ControlProperties) {
+            val retention = jwt.tokenValidity.refresh
+            val approvals = control.approval.expireAfter
+            check(retention >= approvals) {
+                "${JwtProperties.PREFIX}.token-validity.refresh ($retention), how long a token revocation is kept, is " +
+                    "shorter than ${ControlProperties.PREFIX}.approval.expire-after ($approvals): an approval would " +
+                    "outlive the revocation of its token. Raise the first or lower the second."
+            }
+        }
+    }
+}
+
+/** [KafkaChangeListener.NAME], as a literal: `cosec-kafka` is optional. */
+private const val KAFKA_CHANGE_LISTENER = "kafka-change-audit"
+
+/** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */
+internal class ControlSnapshot(
+    val source: SnapshotSource<CompiledDocument, CompiledDocument>,
+    /** The clock [source] dates its entries with; confirmation compares against it. */
+    val clock: Clock = Clock.systemUTC(),
+) : AutoCloseable {
+    override fun close() = source.close()
+}
+
+/**
+ * Confirms documents with a forced read of each from the store. A reload that fails keeps the installed revision and
+ * completes normally, so the future alone does not say the store answered: every entry must have been confirmed at or
+ * after this confirmation started, and must not be failed, or the check is indeterminate. A cold key may first be
+ * answered from a local copy, dated up to the store's local-copy age before its read; it gets one more forced read,
+ * which goes to the store of record. It answers the revision of each key as the source holds it now (`0` for none).
+ */
+internal class SourceConfirmation(
+    private val source: SnapshotSource<*, *>,
+    private val clock: Clock,
+) : DocumentConfirmation {
+    override suspend fun confirm(keys: Set<SnapshotKey>): Map<SnapshotKey, Any> {
+        val start = clock.instant()
+        val confirmed = HashMap<SnapshotKey, SnapshotEntry<*>>()
+        val stale = keys.map { it to source.reload(it) }
+            .mapNotNull { (key, reloading) ->
+                val entry = reloading.await()
+                confirmed[key] = entry
+                key.takeUnless { entry.isConfirmedSince(start) }
+            }
+        if (stale.isNotEmpty()) {
+            val retryStart = clock.instant()
+            stale.map { it to source.reload(it) }.forEach { (key, reloading) ->
+                val entry = reloading.await()
+                check(entry.isConfirmedSince(retryStart)) {
+                    "Snapshot document [${entry.key}] could not be confirmed current: $entry."
+                }
+                confirmed[key] = entry
+            }
+        }
+        // A forced reload makes a new entry even for a document that did not change, so an entry is not its own version:
+        // the control plane moves a document only to a higher revision, and the revision is what a batch compares.
+        return confirmed.mapValues { (_, entry) -> entry.revision }
+    }
+
+    private fun SnapshotEntry<*>.isConfirmedSince(start: Instant): Boolean =
+        state !is DocumentState.Failed && !confirmedAt.isBefore(start)
+}
