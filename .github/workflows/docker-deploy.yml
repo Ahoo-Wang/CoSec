@@ -109,7 +109,9 @@ jobs:
     name: Mirror Docker image to Aliyun
     needs: docker-deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The copy script ends by itself within about 11 minutes (3 x (60 s login + 120 s copy) + 80 s of backoff), so this
+    # limit is never what stops it: a job that hits its limit is cancelled, not failed.
+    timeout-minutes: 15
     continue-on-error: true
     permissions:
       contents: read
@@ -125,7 +127,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway
+          images: ${{ env.ALIYUN_REGISTRY }}/ahoo/cosec-gateway
           tags: |
             type=ref,event=branch
             type=ref,event=pr
