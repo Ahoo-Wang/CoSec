@@ -8,6 +8,13 @@ public final class me/ahoo/cosec/servlet/PipelineServletFilterKt {
 	public static final fun checkBlocking (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Z
 }
 
+public final class me/ahoo/cosec/servlet/SecurityContextArgumentResolver : org/springframework/web/method/support/HandlerMethodArgumentResolver {
+	public fun <init> ()V
+	public synthetic fun resolveArgument (Lorg/springframework/core/MethodParameter;Lorg/springframework/web/method/support/ModelAndViewContainer;Lorg/springframework/web/context/request/NativeWebRequest;Lorg/springframework/web/bind/support/WebDataBinderFactory;)Ljava/lang/Object;
+	public fun resolveArgument (Lorg/springframework/core/MethodParameter;Lorg/springframework/web/method/support/ModelAndViewContainer;Lorg/springframework/web/context/request/NativeWebRequest;Lorg/springframework/web/bind/support/WebDataBinderFactory;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public fun supportsParameter (Lorg/springframework/core/MethodParameter;)Z
+}
+
 public final class me/ahoo/cosec/servlet/SecurityContextHolder {
 	public static final field INSTANCE Lme/ahoo/cosec/servlet/SecurityContextHolder;
 	public static final fun getContext ()Lme/ahoo/cosec/api/context/SecurityContext;

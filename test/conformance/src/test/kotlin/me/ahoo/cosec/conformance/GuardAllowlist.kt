@@ -24,6 +24,9 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "spring-boot:SuspendingHandlerContextTest#the SecurityContext parameter is the handler's own request's",
+            "spring-boot:SuspendingHandlerContextTest#with automatic context propagation the holder is the handler's own request's",
+            "webmvc:SecurityContextArgumentResolverTest#aContextParameterIsTheRequestsWhateverTheThreadHolds",
             "runtime:ApplicationPathsTest#aContextPathWrittenOtherwiseIsRemovedSegmentBySegment",
             "runtime:ApplicationPathsTest#aUriThatDoesNotAgreeWithTheContextPathIsUnreadable",
             "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written",

@@ -241,6 +241,18 @@
         "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-21",
+      "source": "RFC 0006 §7.3; round-2 review M4",
+      "statement": "On Spring MVC, a handler's `SecurityContext` parameter is the context of the handler's own request, read from the request, in blocking, `suspend` and async handlers alike, wherever the handler resumes. Where Spring restores its thread-locals through Micrometer's context propagation, it restores `SecurityContextHolder` with them.",
+      "level": "build",
+      "guards": [
+        "spring-boot:SuspendingHandlerContextTest#the SecurityContext parameter is the handler's own request's",
+        "spring-boot:SuspendingHandlerContextTest#with automatic context propagation the holder is the handler's own request's",
+        "webmvc:SecurityContextArgumentResolverTest#aContextParameterIsTheRequestsWhateverTheThreadHolds"
+      ],
+      "pending": null
     }
   ]
 }

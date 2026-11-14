@@ -23,6 +23,7 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.servlet.PipelineServletFilter
+import me.ahoo.cosec.servlet.SecurityContextArgumentResolver
 import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.webflux.PipelineWebFilter
@@ -37,6 +38,8 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.web.method.support.HandlerMethodArgumentResolver
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
 /**
  * The web adapters over the [RequestGate]: the [Pipeline], or a service behind a gateway's `IdentityGate` (RFC 0006 §7.3): they translate the pipeline's outcome and never decide. A
@@ -69,6 +72,19 @@ internal class CoSecPipelineWebAutoConfiguration {
                     hostOf(properties),
                 )
             ).apply { order = SERVLET_FILTER_ORDER }
+
+        /** A handler's `SecurityContext` parameter, read from the request (round 2 M4). */
+        @Bean
+        @ConditionalOnMissingBean(SecurityContextArgumentResolver::class)
+        fun cosecSecurityContextArgumentResolver(): SecurityContextArgumentResolver = SecurityContextArgumentResolver()
+
+        @Bean
+        fun cosecSecurityContextArguments(resolver: SecurityContextArgumentResolver): WebMvcConfigurer =
+            object : WebMvcConfigurer {
+                override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
+                    resolvers += resolver
+                }
+            }
     }
 
     @Configuration(proxyBeanMethods = false)

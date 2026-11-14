@@ -282,17 +282,34 @@ fun currentUser(): Mono<String> =
 val securityContext = exchange.getSecurityContext()
 ```
 
-**Spring MVC**: from the thread-bound holder, or from the servlet request. The filter clears the holder when the
-request completes, so read it on the request thread, not on a thread you started yourself.
+**Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
+(`SecurityContextArgumentResolver`), which reads the context from the request, so the parameter is the context of the
+handler's own request in every kind of handler: blocking, `suspend` and async. A nullable parameter is null where CoSec
+did not handle the request.
+
+```kotlin
+@GetMapping("/orders/{id}")
+suspend fun order(@PathVariable id: String, security: SecurityContext): Order = orders.find(security.tenantId, id)
+```
+
+Elsewhere, read it from the servlet request, or, in blocking code on the request thread, from the thread-bound holder:
 
 ```kotlin
 import me.ahoo.cosec.servlet.SecurityContextHolder
 import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 
-val securityContext = SecurityContextHolder.requiredContext
-// or
 val securityContext = httpServletRequest.getSecurityContext()
+// blocking code on the request thread only
+val securityContext = SecurityContextHolder.requiredContext
 ```
+
+The holder is a thread-local, which the filter binds for the request's thread and clears when the request completes.
+A `suspend` handler is not blocking code: Spring runs it on `Dispatchers.Unconfined`, so after a suspension it goes on
+on whatever thread resumed it. When that thread serves another request (a shared `Mutex`, `Channel` or deferred value,
+a single-flight cache load), the holder there names **that request's principal**. With Micrometer's
+`io.micrometer:context-propagation` on the classpath and `spring.reactor.context-propagation=auto`, Spring restores
+the holder with its other thread-locals and it is right again; without them it is not. An async handler (`Callable`,
+`DeferredResult`) and a thread of your own see no holder at all. In all of these, use the parameter or the request.
 
 The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else
 ([Checks in code](./checks.md)).

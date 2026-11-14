@@ -16,6 +16,10 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A handler reads the security context from a `SecurityContext` parameter** (round 2 M4). The starter registers
+  `SecurityContextArgumentResolver`. `SecurityContextHolder` is for blocking code on the request thread: a `suspend`
+  handler that resumes on another request's thread read that request's context from it. With
+  `io.micrometer:context-propagation` and `spring.reactor.context-propagation=auto`, Spring now restores the holder too.
 - **Applications only read the security context** (round 2 L5). `SecurityContextHolder.setContext` and `remove`,
   `ServletRequests.setSecurityContext`, `ServerWebExchanges.setSecurityContext`, and
   `ReactiveSecurityContexts.setSecurityContext` and `writeSecurityContext` are internal API: only the adapters bind the

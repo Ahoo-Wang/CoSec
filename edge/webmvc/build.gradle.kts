@@ -20,5 +20,9 @@ dependencies {
     // checkBlocking refuses a non-blocking thread, as Reactor marks them (the Netty event loop).
     implementation("io.projectreactor:reactor-core")
     api("org.springframework:spring-webmvc")
+    // SecurityContextThreadLocalAccessor: Spring restores the holder where it restores its own thread-locals, when the
+    // application has Micrometer's context propagation; optional, so the module brings none.
+    compileOnly("io.micrometer:context-propagation")
+    testImplementation("io.micrometer:context-propagation")
     testImplementation("org.springframework:spring-test")
 }
