@@ -24,6 +24,9 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
+            "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
+            "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes",
             "openapi:OpenAPIServiceGeneratorTest#the servers path prefixes every route",
             "openapi:OpenAPIServiceGeneratorTest#servers whose path cannot be told fail generation",
             "openapi:OpenAPIServiceGeneratorTest#a path with several variables names all of them in its resource, in order",

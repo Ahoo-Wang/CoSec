@@ -151,7 +151,9 @@ endpoint, on the same threads. Every SPI here follows the same contract:
 
 An `AuthenticatedPrincipal` names its id, tenant, app (the app its credential declares, [Apps](../integration/authentication.md#apps); left out, none), membership source (the token's claims, or the
 [membership provider](#memberships)), attributes and `credential`. Conditions read the attributes as
-`subject.attributes.<name>`. `credential` (`Identity.Credential`: method `JWT` or `API_KEY`, the credential's id and
+`subject.attributes.<name>`. The principal keeps a read-only view of the map you hand over, with no copy, and every
+further check of the request decides on it: do not change the map afterwards, and put only immutable values in it
+(strings, booleans, numbers, and immutable lists and maps of them). `credential` (`Identity.Credential`: method `JWT` or `API_KEY`, the credential's id and
 its expiry, never its value) is what a gateway forwards with the identity: on a gateway, a principal without one is
 permitted but forwarded to no backend as authenticated, and one whose credential has no expiry fails the request with
 `500`.
