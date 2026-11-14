@@ -534,6 +534,19 @@ injects the only `StringRedisTemplate` and `ReactiveStringRedisTemplate`, or the
 it a template and connection factory of its own that is not the one CoSec injects (not `@Primary`)
 ([Redis requirements](./storage.md#redis-requirements)).
 
+### Startup fails on macOS with extended TCP keepalive options {#startup-fails-on-macos-with-extended-tcp-keepalive-options}
+
+```text
+Extended TCP keepalive options could not be applied. Native transports (io_uring or epoll) or a compatible NIO transport are required.
+```
+
+Only on macOS, where Lettuce picks its kqueue transport: kqueue cannot apply the extended TCP keepalive options that
+Lettuce is asked for (CoCache's Redis backend asks for them), so the Redis connection fails and the application does
+not start. Linux, and with it the gateway image and every Kubernetes node, uses epoll or io_uring and is not affected.
+For a run on macOS, make Lettuce use NIO with the system property `-Dio.lettuce.core.kqueue=false`, for example
+`JAVA_TOOL_OPTIONS=-Dio.lettuce.core.kqueue=false`. Do not turn the keepalive options off to get around it: they are
+what ends a Redis connection that died silently.
+
 ### Startup fails on the revalidation interval
 
 ```text
