@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.decision
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PolicyId
 
 sealed interface Decision {
@@ -126,7 +129,8 @@ data class RateLimitSpec(val permitsPerSecond: Double, val windowSeconds: Long =
         /** The longest window: a year of seconds (round 2 review L5), so its milliseconds never overflow. */
         const val MAX_WINDOW_SECONDS: Long = 31_536_000L
 
-        /** Whether [permitsPerSecond] x [windowSeconds] is finite and at most [Long.MAX_VALUE]. */
+        /** Whether [permitsPerSecond] x [windowSeconds] is finite and at most [Long.MAX_VALUE]. For CoSec's own types. */
+        @InternalCoSecApi
         fun fitsInLong(permitsPerSecond: Double, windowSeconds: Long): Boolean {
             val perWindow = permitsPerSecond * windowSeconds
             return perWindow.isFinite() && perWindow <= Long.MAX_VALUE.toDouble()

@@ -546,7 +546,6 @@ public final class me/ahoo/cosec/model/decision/RateLimitSpec {
 }
 
 public final class me/ahoo/cosec/model/decision/RateLimitSpec$Companion {
-	public final fun fitsInLong (DJ)Z
 }
 
 public abstract interface class me/ahoo/cosec/model/decision/StatementRef {
