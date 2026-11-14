@@ -53,8 +53,20 @@ import java.time.Instant
  * What leaves the process for a decision, pinned from the event itself: a `DecisionEvent` becomes the audit record
  * (`AuditEvents.from`), which the audit log writes as its line and the Kafka audit listener as its record value, the
  * same JSON. Moving a class the event carries (the trace and `ViewVersion` moved packages in R9) must not change a byte a
- * consumer reads. The evaluation trace is not in the record: spans, metrics and audit never carry it. The Kafka
- * listener's own pin (`stored-format/audit.json` in `cosec-kafka`) covers the send.
+ * consumer reads.
+ *
+ * Everything that carries a decision out of the process, and what pins it; a change to the event or its parts keeps
+ * this list true:
+ *
+ * | Leaves as | Built from the event by | Pinned by |
+ * |---|---|---|
+ * | the audit log line (`me.ahoo.cosec.audit`) | `AuditEvents.from`, then `CoSecJson.mapper` | this test |
+ * | the Kafka audit record value | the same | this test, and `KafkaAuditListenerTest.theRecordValueIsPinned` for the send |
+ * | spans (`TracingListener`) | attributes, not JSON | `TracingListenerTest` |
+ * | metrics (`MetricsListener`) | tags, not JSON | `MetricsListenerTest` |
+ * | problem bodies | the `Outcome`, never the event | `ProblemSchemaTest`, `ProblemBodyPropertyTest` |
+ *
+ * The evaluation trace is in none of them: only an application's own listeners read it.
  */
 class AuditRecordFormatTest {
     private val scope = run {
