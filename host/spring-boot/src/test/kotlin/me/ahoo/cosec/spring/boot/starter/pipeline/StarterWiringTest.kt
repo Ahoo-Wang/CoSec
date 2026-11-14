@@ -83,6 +83,7 @@ import me.ahoo.cosec.spring.boot.starter.control.ControlMaintenanceScheduler
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -516,6 +517,24 @@ class StarterWiringTest {
         secondBeanFailsStartup(ControlPlane::class.java) { mockk<ControlPlane>() }
     }
 
+    /**
+     * Round 2 L6: a second one marked `@Primary` would be injected without ambiguity; it fails startup too, naming CoSec's
+     * bean, and so it does under lazy initialization (`STA-3`).
+     */
+    @Test
+    fun `a primary second control-plane authorization bean fails startup, lazily too`() {
+        val authorizer = ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
+        for (runner in listOf(controlRunner, controlRunner.lazily())) {
+            runner.withBean("ownControlAuthorizer", ControlAuthorizer::class.java, { authorizer }, { it.isPrimary = true })
+                .run { context ->
+                    val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                    messages.assert().contains("The control plane's ControlAuthorizer is CoSec's own [cosecControlAuthorizer]")
+                        .contains("ownControlAuthorizer")
+                }
+        }
+        controlRunner.run { context -> context.startupFailure.assert().isNull() }
+    }
+
     private fun <T : Any> secondBeanFailsStartup(type: Class<T>, bean: () -> T) {
         controlRunner.withBean("own${type.simpleName}", type, { bean() }).run { context ->
             val cause = context.startupFailure!!.rootCause()
@@ -537,5 +556,18 @@ class StarterWiringTest {
         const val PLATFORM = ""","policies":[{"id":"members","statements":[{"effect":"allow","action":"http:*",""" +
             """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
             """"bindings":[{"id":"members","subject":"*","app":"*","space":"*","policy":"members"}]"""
+    }
+
+    /**
+     * `STA-3`: control-plane maintenance (revisions reclaimed, shadow windows closed) starts under lazy initialization
+     * as well: a `SmartLifecycle`, which Spring starts whatever lazy initialization says.
+     */
+    @Test
+    fun `control-plane maintenance starts under lazy initialization`() {
+        controlRunner.lazily().run { context ->
+            context.startupFailure.assert().isNull()
+            context.beanFactory.containsSingleton("cosecControlMaintenanceScheduler").assert().isTrue()
+            context.getBean(ControlMaintenanceScheduler::class.java).isRunning.assert().isTrue()
+        }
     }
 }

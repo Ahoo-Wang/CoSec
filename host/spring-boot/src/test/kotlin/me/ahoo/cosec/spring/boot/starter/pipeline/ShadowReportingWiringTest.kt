@@ -29,6 +29,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -128,5 +129,14 @@ class ShadowReportingWiringTest {
                 compiled.assert().isInstanceOf(Candidate.Ready::class.java)
                 compiler.current.assert().isSameAs(live)
             }
+    }
+
+    /** `STA-3`: nothing depends on the reporting, so lazily created it would never report; it is created at startup. */
+    @Test
+    fun `the reporting runs from startup under lazy initialization`() {
+        runner.lazily().run { context ->
+            context.startupFailure.assert().isNull()
+            context.beanFactory.containsSingleton("cosecShadowReporting").assert().isTrue()
+        }
     }
 }

@@ -26,5 +26,8 @@ class CosIdGeneratorProperties {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "cosid"
         const val GENERATOR_KEY = "$PREFIX.generator"
+
+        /** The bean that gives CoSec its ids from CosId, which [GENERATOR_KEY] configures. */
+        internal const val ID_GENERATOR_BEAN = "cosecIdGenerator"
     }
 }

@@ -31,6 +31,7 @@ import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
@@ -262,5 +263,55 @@ class SnapshotEvictionHealthIndicatorTest {
         val stopped = reads.get()
         Thread.sleep(100)
         reads.get().assert().isLessThanOrEqualTo(stopped + 1)
+    }
+
+    /** A backend no check can see into: the snapshot runtime's own here, so SNP-3 cannot tell whether Redis evicts. */
+    private class Opaque(backend: CoherenceBackend = InMemoryBackend()) : CoherenceBackend by backend {
+        override fun <T : Any> unwrap(type: Class<T>): T? = null
+    }
+
+    private fun opaque(vararg properties: String) = ApplicationContextRunner()
+        .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
+        .withConfiguration(
+            AutoConfigurations.of(
+                JacksonAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecTokenRevocationCacheAutoConfiguration::class.java,
+                CoSecJwtAutoConfiguration::class.java,
+                CoSecPipelineIntegrationAutoConfiguration::class.java,
+                CoSecMembershipAutoConfiguration::class.java,
+                CoSecSnapshotAutoConfiguration::class.java,
+                CoSecPipelineAutoConfiguration::class.java,
+            ),
+        )
+        .withPropertyValues(
+            "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            "cosec.authorization.routes.location=",
+            *properties,
+        )
+        .withBean(CacheRuntime::class.java, { CacheRuntime.builder().backend(Opaque()).build() })
+
+    /** `STA-3`: SNP-3 runs under lazy initialization, where nothing asks for its check. */
+    @Test
+    fun `an eviction policy that cannot be read fails startup, lazily too`() {
+        for (runner in listOf(opaque(), opaque().lazily())) {
+            runner.run { context ->
+                val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                messages.assert().contains("Cannot tell whether Redis may evict CoSec's policy snapshot")
+            }
+        }
+    }
+
+    /**
+     * `STA-3`: under lazy initialization the monitor still reads from startup on, not from the first health probe that
+     * would create it: a Redis that starts evicting is logged although no one asks.
+     */
+    @Test
+    fun `the monitor runs from startup under lazy initialization`() {
+        opaque("cosec.authorization.snapshot.eviction-check=warn").lazily().run { context ->
+            context.startupFailure.assert().isNull()
+            context.beanFactory.containsSingleton("cosecEvictionPolicyMonitor").assert().isTrue()
+            context.beanFactory.containsSingleton("cosecSnapshotEvictionHealthIndicator").assert().isFalse()
+        }
     }
 }

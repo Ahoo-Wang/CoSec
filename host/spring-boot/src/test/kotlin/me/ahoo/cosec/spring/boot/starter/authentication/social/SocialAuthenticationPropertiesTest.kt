@@ -17,6 +17,9 @@ import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.junit.jupiter.api.Test
 import java.util.UUID
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.context.annotation.Configuration
 
 class SocialAuthenticationPropertiesTest {
 
@@ -32,5 +35,33 @@ class SocialAuthenticationPropertiesTest {
         authConfig.clientId.assert().isEqualTo(provider.clientId)
         authConfig.clientSecret.assert().isEqualTo(provider.clientSecret)
         authConfig.redirectUri.assert().isEqualTo(provider.redirectUri)
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(SocialAuthenticationProperties::class)
+    class Bound
+
+    private val runner = ApplicationContextRunner().withUserConfiguration(Bound::class.java).withPropertyValues(
+        "cosec.authentication.login.social.registration.github.type=github",
+        "cosec.authentication.login.social.registration.github.client-id=id",
+    )
+
+    /** Round 2 L4: a misspelt field inside a registration fails startup instead of leaving the provider as it was. */
+    @Test
+    fun `an unknown field of a registration fails startup`() {
+        runner.withPropertyValues("cosec.authentication.login.social.registration.github.pcke=true").run { context ->
+            val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+            messages.assert().contains("cosec.authentication.login.social.registration.github.pcke")
+        }
+    }
+
+    @Test
+    fun `the known fields of a registration bind`() {
+        runner.withPropertyValues("cosec.authentication.login.social.registration.github.pkce=true").run { context ->
+            context.startupFailure.assert().isNull()
+            val github = context.getBean(SocialAuthenticationProperties::class.java).registration.getValue("github")
+            github.pkce.assert().isTrue()
+            github.clientId.assert().isEqualTo("id")
+        }
     }
 }

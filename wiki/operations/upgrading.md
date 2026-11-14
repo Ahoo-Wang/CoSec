@@ -16,6 +16,23 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **The starter's startup checks run under lazy initialization** (`STA-3`). With `spring.main.lazy-initialization=true`
+  no check ran: a Spring MVC host without `cosec-webmvc` started with no authorization, a Spring Cloud Gateway host in
+  `gateway` mode forwarded every request unchecked, and Redis's eviction policy, replica reads, exposed actuator endpoints,
+  API keys without a `MembershipProvider` and unknown `cosec.*` properties went unchecked. They now fail startup as they
+  do without lazy initialization. A configuration that started only because they were skipped no longer does: fix what
+  the message names.
+- **A social login registration with an unknown field fails startup** (round 2 L4). A misspelt field under
+  `cosec.authentication.login.social.registration.<name>` (`pcke`, `scope`) was ignored, leaving the provider configured
+  otherwise than meant; the message now names the key. Rename or remove it.
+- **`cosec.cosid.generator` that does nothing fails startup** (round 2 L7). Set without a `CosIdRuntime` bean, or beside
+  an `IdGenerator` bean of the application's own, it was ignored and CoSec kept its random ids. Configure CosId, or
+  remove the property.
+- **Two in-memory API keys with one hash fail startup** (round 2 L5). The key authenticated as whichever entry came last
+  in `cosec.api-key.keys`; keep one entry per key.
+- **The control plane's authorization beans cannot be replaced, `@Primary` or not** (round 2 L6). A second
+  `ControlAuthorizer`, `ChangeAuthority`, `Changes`, `ControlPlane` or `ControlHttp` bean marked `@Primary`, or named as
+  an injection point's parameter, was injected in place of CoSec's; it now fails startup, as a plain second bean did.
 - **A generated route map sits at the `servers` path, and its resources name every path variable** (round 2 L4). The
   `cosecServiceGenerator` endpoint dropped a server path (`/api/v1`), so its routes matched no request and every
   request was in the `http` namespace; and `/users/{id}/avatar/{size}` was the resource `user/{size}`, one resource for

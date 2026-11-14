@@ -23,7 +23,9 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.NoTokenStore
+import me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.UnknownProperties
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -137,5 +139,43 @@ class CoSecCosIdAutoConfigurationTest {
                 val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice", null))
                 JWT.decode(token.accessToken).id.assert().startsWith("T")
             }
+    }
+
+    /** Round 2 L7: `cosec.cosid.generator` set and CoSec's ids not from CosId is a property that does nothing. */
+    private val checked = ApplicationContextRunner().withConfiguration(
+        AutoConfigurations.of(
+            CoSecModuleCheckAutoConfiguration::class.java,
+            CoSecCosIdAutoConfiguration::class.java,
+            CosIdAutoConfiguration::class.java,
+        ),
+    ).withPropertyValues("cosec.cosid.generator=trace", "cosec.pipeline.mode=gateway", "cosec.jwt.enabled=false")
+
+    private fun failsNamingCosId(runner: ApplicationContextRunner) = runner.run { context ->
+        val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+        messages.assert().contains("cosec.cosid.generator is set, but CoSec's ids do not come from CosId")
+    }
+
+    @Test
+    fun `a generator named without a CosId runtime fails startup`() {
+        failsNamingCosId(
+            ApplicationContextRunner()
+                .withConfiguration(
+                    AutoConfigurations.of(CoSecModuleCheckAutoConfiguration::class.java, CoSecCosIdAutoConfiguration::class.java)
+                )
+                .withPropertyValues("cosec.cosid.generator=order", "cosec.pipeline.mode=gateway", "cosec.jwt.enabled=false"),
+        )
+    }
+
+    @Test
+    fun `a generator named beside the application's own IdGenerator fails startup`() {
+        failsNamingCosId(checked.withPropertyValues(*cosId).withBean(IdGenerator::class.java, { IdGenerator { "application-id" } }))
+    }
+
+    @Test
+    fun `a generator named with a CosId runtime starts, and one that does nothing fails lazily too`() {
+        checked.withPropertyValues(*cosId).run { context -> assertThat(context).hasNotFailed() }
+        failsNamingCosId(
+            checked.withPropertyValues(*cosId).withBean(IdGenerator::class.java, { IdGenerator { "application-id" } }).lazily()
+        )
     }
 }

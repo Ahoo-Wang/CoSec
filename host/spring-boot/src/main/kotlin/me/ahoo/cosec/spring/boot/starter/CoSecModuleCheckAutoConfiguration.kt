@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
@@ -21,7 +24,7 @@ import me.ahoo.cosec.spring.boot.starter.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.starter.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
-import org.springframework.beans.factory.InitializingBean
+
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
@@ -34,6 +37,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.ConfigurationCondition
+import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
 import org.springframework.util.ClassUtils
 
@@ -48,13 +52,14 @@ import org.springframework.util.ClassUtils
  */
 @AutoConfiguration
 @AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
+@Import(StartupCheckExclusion::class)
 internal class CoSecModuleCheckAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     class WebMvc {
         @Bean
-        fun cosecWebMvcModuleCheck(context: ApplicationContext): InitializingBean =
+        fun cosecWebMvcModuleCheck(context: ApplicationContext): StartupCheck =
             requireModule(
                 context,
                 "me.ahoo.cosec.servlet.PipelineServletFilter",
@@ -69,7 +74,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     @ConditionalOnMissingClass(GATEWAY_GLOBAL_FILTER)
     class WebFlux {
         @Bean
-        fun cosecWebFluxModuleCheck(context: ApplicationContext): InitializingBean =
+        fun cosecWebFluxModuleCheck(context: ApplicationContext): StartupCheck =
             requireModule(
                 context,
                 "me.ahoo.cosec.webflux.PipelineWebFilter",
@@ -83,7 +88,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     @ConditionalOnClass(name = [GATEWAY_GLOBAL_FILTER])
     class Gateway {
         @Bean
-        fun cosecGatewayModuleCheck(context: ApplicationContext): InitializingBean =
+        fun cosecGatewayModuleCheck(context: ApplicationContext): StartupCheck =
             requireModule(
                 context,
                 "me.ahoo.cosec.gateway.IdentityStripFilter",
@@ -97,7 +102,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     @ConditionalOnProperty(value = [ApiKeyProperties.STORE_KEY], havingValue = "redis")
     class RedisApiKeys {
         @Bean
-        fun cosecRedisApiKeyModuleCheck(context: ApplicationContext): InitializingBean =
+        fun cosecRedisApiKeyModuleCheck(context: ApplicationContext): StartupCheck =
             requireModule(
                 context,
                 "me.ahoo.cosec.cache.RedisApiKeyStore",
@@ -110,7 +115,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     class RequiredKafkaAudit {
         @Bean
-        fun cosecKafkaAuditModuleCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+        fun cosecKafkaAuditModuleCheck(context: ApplicationContext): StartupCheck = StartupCheck.OnCreation {
             if (kafkaAuditDelivery(context.environment) == Delivery.REQUIRED) {
                 requireModule(
                     context,
@@ -122,19 +127,33 @@ internal class CoSecModuleCheckAutoConfiguration {
         }
     }
 
-    /** A CosId generator named for CoSec's ids, which would otherwise be CoSec's own without a word. */
+    /**
+     * A CosId generator named for CoSec's ids, which would otherwise be CoSec's own without a word: the module must be
+     * there, and CoSec's ids must then come from it. A property that is set and does nothing fails startup, as an unknown
+     * `cosec.*` property does: without a `CosIdRuntime`, or beside an `IdGenerator` bean of the application's, the
+     * generator it names would never be read (round 2 L7).
+     */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
     @ConditionalOnProperty(value = [CosIdGeneratorProperties.GENERATOR_KEY])
     class CosIdGenerator {
         @Bean
-        fun cosecCosIdModuleCheck(context: ApplicationContext): InitializingBean =
-            requireModule(
+        fun cosecCosIdModuleCheck(context: ApplicationContext): StartupCheck {
+            val module = requireModule(
                 context,
                 "me.ahoo.cosec.cosid.CosIdIdGenerator",
                 "cosec-cosid",
                 CosIdGeneratorProperties.GENERATOR_KEY,
             )
+            return StartupCheck.OnCreation {
+                module.afterPropertiesSet()
+                check(context.containsBean(CosIdGeneratorProperties.ID_GENERATOR_BEAN)) {
+                    "${CosIdGeneratorProperties.GENERATOR_KEY} is set, but CoSec's ids do not come from CosId: there is no " +
+                        "CosIdRuntime bean (configure CosId, me.ahoo.cosid:cosid-spring-boot-starter), or an IdGenerator " +
+                        "bean of the application's own gives them. Configure CosId, or remove the property (STA-1)."
+                }
+            }
+        }
     }
 
     /**
@@ -151,7 +170,7 @@ internal class CoSecModuleCheckAutoConfiguration {
     @Conditional(OnCoCacheUsed::class)
     class CoCacheRedis {
         @Bean
-        fun cosecCoCacheRedisCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+        fun cosecCoCacheRedisCheck(context: ApplicationContext): StartupCheck = StartupCheck.OnCreation {
             val present = ClassUtils.isPresent(REACTIVE_REDIS_TEMPLATE, context.classLoader) &&
                 context.getBeanNamesForType(ClassUtils.forName(REACTIVE_REDIS_TEMPLATE, context.classLoader)).isNotEmpty()
             check(present) {
@@ -161,7 +180,7 @@ internal class CoSecModuleCheckAutoConfiguration {
         }
 
         @Bean
-        fun cosecCoCacheStarterCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+        fun cosecCoCacheStarterCheck(context: ApplicationContext): StartupCheck = StartupCheck.OnCreation {
             val present = ClassUtils.isPresent(CACHE_RUNTIME, context.classLoader) &&
                 context.getBeanNamesForType(ClassUtils.forName(CACHE_RUNTIME, context.classLoader)).isNotEmpty()
             check(present) {
@@ -181,8 +200,8 @@ internal class CoSecModuleCheckAutoConfiguration {
             className: String,
             artifact: String,
             what: String,
-        ): InitializingBean =
-            InitializingBean {
+        ): StartupCheck.OnCreation =
+            StartupCheck.OnCreation {
                 check(ClassUtils.isPresent(className, context.classLoader)) {
                     "$what needs $artifact (me.ahoo.cosec:$artifact) on the classpath: add it to the application's " +
                         "dependencies (STA-1)."
