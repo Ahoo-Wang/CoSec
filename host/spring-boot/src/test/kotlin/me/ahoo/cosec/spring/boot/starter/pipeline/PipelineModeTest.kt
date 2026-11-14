@@ -84,10 +84,12 @@ class PipelineModeTest {
         gateway.withPropertyValues(
             "${JwtProperties.PREFIX}.enabled=true",
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
-        ).withBean(TokenStore::class.java, { mockk<TokenStore>() }).run { context ->
-            context.startupFailure.assert().isNull()
-            context.getBeansOfType(TokenConverter::class.java).assert().hasSize(1)
-        }
+        ).withBean(TokenStore::class.java, { mockk<TokenStore>() })
+            // A service that issues tokens reads their revocations, for refresh and logout.
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE }).run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBeansOfType(TokenConverter::class.java).assert().hasSize(1)
+            }
     }
 
     @Test

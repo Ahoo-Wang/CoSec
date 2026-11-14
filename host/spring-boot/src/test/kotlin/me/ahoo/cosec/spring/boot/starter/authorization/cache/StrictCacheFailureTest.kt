@@ -89,8 +89,9 @@ class StrictCacheFailureTest {
                     .cause.assert().isInstanceOf(CacheReadException::class.java)
                 assertThrows<ExecutionException> { store.readIfChanged(SnapshotKey.Platform, null).get() }
                     .cause.assert().isInstanceOf(CacheReadException::class.java)
-                // the revocation check reads "not revoked" on purpose (documented, unknown-read: absent)
-                context.getBean(RevokedTokenCache::class.java)["jti"].assert().isNull()
+                // the revocation tables report the failure too, never "not revoked" (round-2 review H1): what it means
+                // is the caller's (PIP-7, IDN-14)
+                assertThrows<CacheReadException> { context.getBean(RevokedTokenCache::class.java)["jti"] }
             }
     }
 
