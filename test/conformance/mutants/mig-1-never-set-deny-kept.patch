@@ -1,0 +1,17 @@
+# Rule: MIG-1
+# Mutant: a DENY on a part only 7.x filled (but ipRegion) is kept although it never holds in 8.0 (round 2 addition C)
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.Round2ConversionTest --tests me.ahoo.cosec.migrate.ConditionTranslatorTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt
+index a21f4e3e..3dc7d46a 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt
+@@ -437,7 +437,7 @@ internal class PartTranslation(
+                 "a condition that holds when part [${mapped.part}] is empty: 7.x held it only when " +
+                     "${mapped.setBy7x} gave the part no value; 8.0 sets no such attribute, so it would hold " +
+                     "for every request"
+-            deny -> "in the DENY direction, $setBy, so this condition never holds"
++            deny && mapped.part == Parts.IP_REGION -> "in the DENY direction, $setBy, so this condition never holds"
+             statementDeny ->
+                 "under a negation in a DENY, $setBy, so this condition never holds and the DENY would " +
+                     "hold for every request"
