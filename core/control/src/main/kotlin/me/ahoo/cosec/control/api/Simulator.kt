@@ -83,10 +83,6 @@ data class SimulatedRequest(
     val breakGlass: Boolean = true,
 )
 
-/** The revisions of the documents to decide on (RFC 0006 §9.2's `snapshotVersion`): what an audit event records. */
-@InternalCoSecApi
-data class SnapshotVersion(val platform: Long, val app: Long?, val tenant: Long?)
-
 /** The documents a decision read, compiled, with their revisions: what [Simulator.evaluate] decides on. */
 @InternalCoSecApi
 class Documents(val platform: PolicyDocument?, val app: PolicyDocument?, val tenant: PolicyDocument?)
@@ -199,7 +195,7 @@ class Simulator(
     /** An evaluation, and the documents its view read with their revisions. */
     internal class Decided(val evaluation: FlatEvaluation, scope: Scope, version: ViewVersion) {
         /** The revisions the view read: an app's only when it took the app's document (its revision, 0 for none). */
-        val version = SnapshotVersion(version.platform, version.app, version.tenant ?: 0)
+        val version = ViewVersion(version.platform, version.app, version.tenant ?: 0)
 
         /** The documents the view read: the platform's, the tenant's, and the app's when it took it. */
         val read: List<SnapshotKey> = listOfNotNull(

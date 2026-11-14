@@ -56,10 +56,11 @@
           "type": "string"
         },
         "rateLimits": {
-          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends. At most 64 (DOC-6): each one a permit matches costs it a call to the limiter.",
           "items": {
             "$ref": "#/definitions/rateLimit"
           },
+          "maxItems": 64,
           "type": "array"
         },
         "revision": {
@@ -685,10 +686,11 @@
           "type": "string"
         },
         "rateLimits": {
-          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends. At most 64 (DOC-6): each one a permit matches costs it a call to the limiter.",
           "items": {
             "$ref": "#/definitions/rateLimit"
           },
+          "maxItems": 64,
           "type": "array"
         },
         "revision": {
@@ -948,6 +950,7 @@
         },
         "windowSeconds": {
           "default": 1,
+          "maximum": 31536000,
           "minimum": 1,
           "type": "integer"
         }
@@ -1139,10 +1142,11 @@
           "type": "string"
         },
         "rateLimits": {
-          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends. At most 64 (DOC-6): each one a permit matches costs it a call to the limiter.",
           "items": {
             "$ref": "#/definitions/rateLimit"
           },
+          "maxItems": 64,
           "type": "array"
         },
         "revision": {

@@ -3,12 +3,12 @@
 # Tests: :spi:test --tests me.ahoo.cosec.spi.token.VerifiedTokenTest :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
-index 2d817e49..f57c228f 100644
+index 54623487..2bbc214b 100644
 --- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
 +++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
-@@ -72,7 +72,6 @@ class VerifiedToken(
-             Identifiers.isReserved(principal) -> invalid("names a subject reserved for CoSec")
-             tenant != null && tenant.isEmpty() -> invalid("names an empty tenant")
+@@ -78,7 +78,6 @@ class VerifiedToken(
+                 "names a tenant that cannot be a tenant id"
+             )
              app != null && !ScopeResolver.isValidAppId(app) -> invalid("declares an app that cannot be an app id")
 -            !wellFormed() -> invalid("claims an id with an unpaired UTF-16 surrogate")
          }

@@ -80,6 +80,7 @@ PR 都是破坏性变更，标题要带 `!`
 | `Attribute.Kind` | 新的目录属性 |
 | `ProblemType` | 新的 problem，例如 `413` 或 `415` |
 | `Obligation` | 新的义务种类 |
+| `Cause` | 决策为 Indeterminate 的新原因，例如一个会失败的新端口；`DecisionListener` 从决策事件中读到它 |
 | `ChangeEvent.Kind` | 新的变更事件种类 |
 
 这里没有列出的集合在 8.0 GA 之后不会增加成员。公共 `data class` 只会是不会增长的值，即形状固定的记录（`PublicApiStabilityTest` 读取已评审的清单）；可能增长的记录是普通类，新增字段时增加一个构造器。

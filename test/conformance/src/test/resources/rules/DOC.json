@@ -51,6 +51,16 @@
         "control:ControlHttpTest#a body with a duplicate key is refused"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-6",
+      "source": "RFC 0006 §8.1; round 2 review M2",
+      "statement": "A document holds at most 64 rate limit rules, whatever its kind: every rule a permitted request matches costs the pipeline one call to the rate limiter, so a document with more does not compile (a stored one is installed as failed, and the control plane answers a change with a COMPILE finding, 422).",
+      "level": "engine",
+      "guards": [
+        "engine:CompiledDocumentTest#a document holds at most its rate limit rules"
+      ],
+      "pending": null
     }
   ]
 }

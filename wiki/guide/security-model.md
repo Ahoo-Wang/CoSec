@@ -97,6 +97,15 @@ statements has matched on its action and resource. When it does not hold, none o
 DENYs included. When it throws, a DENY reached through it counts as a failed DENY (Indeterminate), an ALLOW as no
 match. A DENY that must always apply belongs in a policy without a condition.
 
+### Statements with several resource patterns
+
+A statement with several resource patterns means exactly what one statement per pattern would mean. When its
+condition reads a [path variable](../policies/language.md#path-variables) and the request matches more than one of
+its patterns, the condition is tested under each matching pattern's captures in written order: one holding is a
+match; when none holds and one of them failed, the statement failed (a DENY makes the decision Indeterminate, an
+ALLOW counts as no match). Writing the patterns in another order never changes the decision, and a DENY never
+misses a request that one of its patterns would have denied on its own.
+
 ## Deny first
 
 An ALLOW never wins over a matching DENY. Every candidate's DENY statements are evaluated before any ALLOW

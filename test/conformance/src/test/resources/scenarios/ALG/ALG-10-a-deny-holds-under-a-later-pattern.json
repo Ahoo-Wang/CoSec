@@ -1,0 +1,76 @@
+{
+  "rules": [
+    "ALG-10"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "GET /a/b matches /a/{v} with v = b and /{v}/b with v = a: the DENY's condition holds under the second pattern, so the DENY decides, as two statements of one pattern each would.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-a",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": [
+                "http:path:/a/{v}",
+                "http:path:/{v}/b"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.v",
+                  "a"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:no-a",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-a"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/a/b"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-a",
+      "statement": 0,
+      "via": {
+        "binding": "g:no-a",
+        "document": "platform"
+      }
+    }
+  }
+}

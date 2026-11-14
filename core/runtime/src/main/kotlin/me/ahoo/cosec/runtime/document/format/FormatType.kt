@@ -54,6 +54,7 @@ class BooleanType(override val description: String? = null) : FormatType
 class IntegerType(
     val minimum: Long? = null,
     val const: Long? = null,
+    val maximum: Long? = null,
     override val description: String? = null,
 ) : FormatType
 
@@ -67,6 +68,7 @@ class NumberType(
 class ArrayType(
     val items: FormatType,
     val minItems: Int? = null,
+    val maxItems: Int? = null,
     val uniqueItems: Boolean = false,
     override val description: String? = null,
 ) : FormatType

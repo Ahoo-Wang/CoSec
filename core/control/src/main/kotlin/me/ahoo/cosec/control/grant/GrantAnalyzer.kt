@@ -53,8 +53,9 @@ import me.ahoo.cosec.model.decision.StatementRef
  * 2. contains its action and its resource ([PatternContainment]);
  * 3. has a condition that, with the grantor's own attributes substituted (`specialize`), is true or is implied by the
  *    fragment's condition ([ConditionContainment.implies]). A condition that reads a variable needs the fragment's
- *    resource to capture it at the same position, and every other resource of the ALLOW to be disjoint from the
- *    fragment's, so the value is the same; one that reads an external attribute is never comparable;
+ *    resource to capture it at the same position: a statement holds under any one of its matching resources'
+ *    captures (`ALG-10`), so the one that contains the fragment's suffices; one that reads an external attribute is
+ *    never comparable;
  *
  * and, when the grantor holds that ALLOW through a binding with `expiresAt`, the fragment's own grant ends no later
  * (RC1-3); and no DENY that binds the grantor other than through `Anyone` (Q8) may overlap it. Everything else is
@@ -229,9 +230,9 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         }
         val checked = condition?.let { check(it) ?: return false }
         return statement.resources.all { resource ->
-            previous.resources.withIndex().any { (index, outer) ->
+            previous.resources.any { outer ->
                 val containment = PatternContainment.contains(outer, resource) as? ResourceContainment.Contained
-                containment != null && implied(checked, previousCondition, previous.resources, index, resource) {
+                containment != null && implied(checked, previousCondition) {
                     Specialization(checker, { null }, renames = containment.variables)
                 }
             }
@@ -400,10 +401,9 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
         fragment: GrantFragment,
         granted: CheckedCondition?,
     ): Boolean {
-        val resources = held.statement.resources
-        return resources.withIndex().any { (index, outer) ->
+        return held.statement.resources.any { outer ->
             val containment = PatternContainment.contains(outer, fragment.resource) as? ResourceContainment.Contained
-            containment != null && implied(granted, held.condition, resources, index, fragment.resource) {
+            containment != null && implied(granted, held.condition) {
                 Specialization(
                     checker,
                     grantorConstants(grantor, fragment.tenant, scope),
@@ -415,27 +415,19 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
     }
 
     /**
-     * Whether [outer] (the condition of a statement whose resource [index] of [resources] contains [inner]),
-     * specialized, holds on every request that matches [inner] and satisfies [inner condition][condition].
+     * Whether [outer] (the condition of a statement one of whose resources contains the inner one), specialized, holds
+     * on every request that matches the inner resource and satisfies [condition].
      */
     private fun implied(
         condition: CheckedCondition?,
         outer: Condition?,
-        resources: List<ResourcePattern>,
-        index: Int,
-        inner: ResourcePattern,
         specialization: () -> Specialization,
     ): Boolean {
         if (outer == null) {
             return true
         }
-        // The variables of a statement come from the resource that matched: only one may match.
-        if (readsVariables(outer) && resources.indices.any {
-                it != index && !PatternContainment.disjoint(resources[it], inner)
-            }
-        ) {
-            return false
-        }
+        // A statement holds under any of its matching resources' captures (ALG-10): resource [index] contains [inner],
+        // so it matches every request [inner] does, and the condition read under its captures is enough.
         val specialized = specialization()
         return when (val folded = specialized.fold(outer)) {
             Folded.True -> true
@@ -565,23 +557,6 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
             val keys = IndexKeys.of(condition, attribute) as? IndexKeys.Only ?: return null
             return if (keys.folded) null else keys.values.filter { it != Match.WILDCARD }
         }
-
-        fun readsVariables(condition: Condition): Boolean = when (condition) {
-            is Condition.And -> condition.conditions.any(::readsVariables)
-            is Condition.Or -> condition.conditions.any(::readsVariables)
-            is Condition.Not -> readsVariables(condition.condition)
-            is Condition.Eq -> variable(condition.attribute) ||
-                (condition.value as? Operand.Attr)?.let { variable(it.path) } == true
-
-            is Condition.In -> variable(condition.attribute)
-            is Condition.Contains -> variable(condition.attribute)
-            is Condition.Prefix -> variable(condition.attribute)
-            is Condition.Cidr -> variable(condition.attribute)
-            is Condition.Exists -> variable(condition.attribute)
-            is Condition.Time -> false
-        }
-
-        fun variable(path: String): Boolean = path.startsWith(Kind.RESOURCE_VAR.path)
 
         /** A rendering of [condition] as written: equal renderings are the same condition. */
         fun written(condition: Condition): String = when (condition) {

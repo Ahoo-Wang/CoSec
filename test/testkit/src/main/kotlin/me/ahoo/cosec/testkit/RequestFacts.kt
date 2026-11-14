@@ -17,7 +17,6 @@ package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
@@ -25,11 +24,9 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput
-import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.scope.Scope
-import java.net.URI
-import java.net.URISyntaxException
+import me.ahoo.cosec.runtime.http.uriHost
 
 /**
  * What the statements of a scenario read about its request: the attribute catalog of RFC 0005 §3.2, filled from the
@@ -53,25 +50,24 @@ internal class RequestFacts(
     val headers: Map<String, String>,
     val requestAttributes: Map<String, String>,
 ) {
-    /** The input of a condition; [captures] are the variables of the statement's resource pattern, if any. */
-    fun input(captures: Captures?): ConditionInput = FactsInput(this, captures)
+    private val facts: ConditionInput = FactsInput(this)
 
     /**
      * The host attributes of the engine's request: the engine answers the rest itself. A read of
      * `request.attributes.<FAULT><message>` throws [ScenarioFault] (see [DocumentSnapshotCompiler]).
      */
-    val host: ConditionInput = object : ConditionInput by FactsInput(this, null) {
+    val host: ConditionInput = object : ConditionInput by facts {
         override fun string(attribute: Attribute): String? {
             if (attribute.kind == Kind.REQUEST_ATTRIBUTE && attribute.name.startsWith(FAULT)) {
                 throw ScenarioFault(attribute.name.removePrefix(FAULT))
             }
-            return input(null).string(attribute)
+            return facts.string(attribute)
         }
     }
 }
 
 /** An absent attribute reads as null (RFC 0005 §3.4). */
-private class FactsInput(private val facts: RequestFacts, private val captures: Captures?) : ConditionInput {
+private class FactsInput(private val facts: RequestFacts) : ConditionInput {
     @Suppress("CyclomaticComplexMethod")
     override fun string(attribute: Attribute): String? = when (attribute.kind) {
         Kind.SUBJECT_ID -> if (facts.authenticated) facts.principal else null
@@ -84,13 +80,12 @@ private class FactsInput(private val facts: RequestFacts, private val captures: 
         Kind.RESOURCE_TYPE -> facts.resource.type
         Kind.RESOURCE_ID -> facts.resource.id
         Kind.RESOURCE_ATTRIBUTE -> facts.resource.attributes[attribute.name]
-        Kind.RESOURCE_VAR -> captures?.get(attribute.name)
         Kind.ENVIRONMENT_DEVICE -> facts.device
         Kind.HTTP_HEADER -> facts.headers[attribute.name]
         Kind.HTTP_ORIGIN -> facts.headers[ORIGIN]
         Kind.HTTP_REFERER -> facts.headers[REFERER]
-        Kind.HTTP_ORIGIN_HOST -> facts.headers[ORIGIN]?.let(::host)
-        Kind.HTTP_REFERER_HOST -> facts.headers[REFERER]?.let(::host)
+        Kind.HTTP_ORIGIN_HOST -> facts.headers[ORIGIN]?.let(::uriHost)
+        Kind.HTTP_REFERER_HOST -> facts.headers[REFERER]?.let(::uriHost)
         Kind.REQUEST_ATTRIBUTE -> facts.requestAttributes[attribute.name]
         else -> null
     }
@@ -119,12 +114,6 @@ private class FactsInput(private val facts: RequestFacts, private val captures: 
         if (attribute.kind == Kind.ENVIRONMENT_TIME) facts.time else ConditionInput.NO_TIME
 
     // As the runtime's HttpAttributes reads it: the URL's host folded to ASCII lower case, null when there is none.
-    private fun host(url: String): String? = try {
-        URI(url).host?.let(HttpNames::fold)
-    } catch (_: URISyntaxException) {
-        null
-    }
-
     private companion object {
         const val ORIGIN = "origin"
         const val REFERER = "referer"

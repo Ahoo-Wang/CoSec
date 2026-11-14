@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.PLATO
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
@@ -85,7 +86,7 @@ class HeadRegressionTest {
         action = Action("order", "read"),
         resource = Resource("order", "1", emptyMap()),
         time = StoreFixtures.START.toEpochMilli(),
-    ) to SnapshotVersion(0, null, at)
+    ) to ViewVersion(0, null, at)
 
     private suspend fun assertNotRead(revision: Long) {
         revisions.history(ACME).map { it.revision }.assert().doesNotContain(revision)

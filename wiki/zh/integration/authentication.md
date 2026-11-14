@@ -237,7 +237,7 @@ cosec:
 
 ## 租户 {#tenants}
 
-主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空或不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为租户 id 为空的主体签发令牌。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
+主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空、不是字符串（数字、`null`、对象），或不能作为租户 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为这样的租户签发令牌。租户不能作为租户 id 的 API key 加载失败（`503`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
 要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户（不属于时抛出异常以拒绝），并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。
 

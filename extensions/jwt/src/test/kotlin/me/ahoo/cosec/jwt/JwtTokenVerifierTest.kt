@@ -200,6 +200,16 @@ class JwtTokenVerifierTest {
         }
     }
 
+    /** A tenant that cannot name a tenant document is invalid too, before any document is read (IDN-11). */
+    @Test
+    fun aTenantIdThatCannotBeATenantIsInvalid() {
+        for (tenant in listOf(" ", "*", "a:b", "x".repeat(129))) {
+            val access = signed { withClaim("tenantId", tenant) }
+            val thrown = assertThrows(TokenVerificationException::class.java) { jwtTokenVerifier.verify(access) }
+            assertFalse(thrown is TokenExpiredException)
+        }
+    }
+
     /**
      * A `roles` or `policies` claim that is not an array of strings, or an `attributes` claim that is not an object, is
      * an invalid token (401, `PIP-6`), never a principal with fewer roles than it was given, and never a 500. Absent

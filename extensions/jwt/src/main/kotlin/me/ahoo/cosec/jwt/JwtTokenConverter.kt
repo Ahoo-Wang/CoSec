@@ -24,6 +24,7 @@ import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.json.JsonMapper
 import java.time.Duration
 import java.util.*
@@ -134,6 +135,9 @@ class JwtTokenConverter(
         require(wellFormed(subject)) {
             "Principal [$printableId] holds an unpaired UTF-16 surrogate in its id, tenant, roles, policies or " +
                 "attributes: a token cannot carry it."
+        }
+        require(subject.tenant?.let(SnapshotKey.Tenant::isValidTenantId) != false) {
+            "Principal [$printableId] names a tenant that cannot be a tenant id: a token cannot carry it."
         }
     }
 

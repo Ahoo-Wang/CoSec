@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IndexKeys
+import java.util.Collections
 
 /**
  * A statement ready to evaluate (RFC 0005 §6.1). Only [PolicyCompiler] builds one, so every statement in the engine
@@ -68,9 +69,21 @@ class CompiledStatement internal constructor(
         it.kind == Attribute.Kind.RESOURCE_VAR
     }
 
-    val actionPatterns: List<ActionPattern> get() = actions.asList()
+    /**
+     * Whether [condition] is tested against each matching resource pattern's captures in turn (`ALG-10`): it reads a
+     * captured variable, and more than one pattern can capture it. Decided here, so every other statement matches its
+     * resource once, as before. For those one corner differs from "one statement per pattern", on purpose: a pattern
+     * that fails to match (a path that does not decode) fails the statement only when no other pattern matches, so a
+     * statement another pattern matches misses on a false condition rather than failing. The pipeline answers such a
+     * path 400 before authorization, so only a host check reaches it.
+     */
+    internal val eachPattern: Boolean = captures && resources.size > 1
 
-    val resourcePatterns: List<ResourcePattern> get() = resources.asList()
+    /** Read-only, made once: the statement is shared by every evaluation (round 2 review L4). */
+    val actionPatterns: List<ActionPattern> = Collections.unmodifiableList(actions.toList())
+
+    /** Read-only, made once, as [actionPatterns]. */
+    val resourcePatterns: List<ResourcePattern> = Collections.unmodifiableList(resources.toList())
 
     internal fun keyAttribute(index: Int): Attribute = keyAttributes[index]
 
@@ -94,22 +107,12 @@ class CompiledStatement internal constructor(
     }
 
     /**
-     * What the statement means, as text: two statements with the same content decide every request alike. Patterns
-     * are compared as written with their options, conditions by their canonical form.
+     * Whether [other] means the same: its name, effect, action patterns, resource patterns with their options and
+     * condition (by its canonical form) and [onMissing], each compared as a value, in order.
      */
-    internal val content: String = buildString {
-        append(name.length).append(':').append(name).append('|').append(effect).append('|')
-        actions.joinTo(this, ",")
-        append('|')
-        resources.joinTo(this, ",") { resource ->
-            if (resource is ResourcePattern.Http) {
-                "$resource(${resource.path.caseSensitive},${resource.path.decodeAndParseSegments})"
-            } else {
-                resource.toString()
-            }
-        }
-        append('|').append(condition?.canonical ?: "").append('|').append(onMissing)
-    }
+    internal fun sameContent(other: CompiledStatement): Boolean =
+        other.name == name && other.effect === effect && other.actions.contentEquals(actions) &&
+            other.resources.contentEquals(resources) && other.condition == condition && other.onMissing === onMissing
 
     override fun toString(): String = "$effect $name ${actionPatterns}${resourcePatterns}${condition ?: ""}"
 }

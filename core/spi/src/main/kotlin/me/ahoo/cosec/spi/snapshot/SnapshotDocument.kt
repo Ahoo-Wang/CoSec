@@ -126,9 +126,3 @@ class SnapshotDigest(val algorithm: String, bytes: ByteArray) {
         }
     }
 }
-
-/**
- * The revisions of the two documents one evaluation read (RFC 0003 §3.4). [scoped] is 0 when the evaluation needed
- * no app document or the app has none. Phase 4 renames the pair to `(platform, tenant)`.
- */
-data class SnapshotVersion(val shared: Long, val scoped: Long)

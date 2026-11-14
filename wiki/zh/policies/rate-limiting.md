@@ -63,11 +63,13 @@ flowchart LR
 - 应用文档的规则，当请求读取了该文档时：请求有应用，且主体在请求空间中拥有角色，或租户的文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体（[角色权限](./role-permissions.md#app-documents)）；
 - 租户文档的规则，对该租户的请求。
 
-它们按这个顺序运行，同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。规则是叠加的：租户或应用规则永远不会替换或放宽平台规则，即使 id 相同；只有请求匹配的每条规则都还有许可时，请求才能通过。
+它们按这个顺序运行：先平台，再应用，最后租户；同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。平台规则最先运行，所以平台规则在任何应用或租户规则消耗许可之前就限制住请求。规则是叠加的：租户或应用规则永远不会替换或放宽平台规则，即使 id 相同；只有请求匹配的每条规则都还有许可时，请求才能通过。
+
+被放行的请求每匹配一条规则，就要调用一次限流器，逐条依次调用；使用 Redis 限流器时，每条一次往返。所以一份文档至多 64 条规则（`DOC-6`）：超过的文档无法编译，控制面对会产生这种文档的变更给出 `COMPILE` 发现，返回 `422`。请让一个请求匹配的规则保持少量；一条带 `key` 的规则可以代替许多只在计数对象上不同的规则。
 
 ## 键 {#keys}
 
-`key` 指定用哪个属性的值来选择桶：[属性目录](./language.md#attributes)中的 String 或 Ip 属性，例如 `environment.ip`、`subject.id`、`scope.tenant`、`subject.attributes.plan` 或 `resource.var.orderId`。`resource.var.<name>` 键必须被规则的每个资源模式捕获。
+`key` 指定用哪个属性的值来选择桶：[属性目录](./language.md#attributes)中的 String 或 Ip 属性，例如 `environment.ip`、`subject.id`、`scope.tenant`、`subject.attributes.plan` 或 `resource.var.orderId`。`resource.var.<name>` 键必须被规则的每个资源模式捕获；匹配多个模式时，取书写顺序中第一个使规则条件成立的模式的值（[路径变量](./language.md#path-variables)）。
 
 | `key` | 桶 |
 |---|---|
@@ -154,7 +156,7 @@ flowchart LR
 
 ## 发布规则 {#publishing-rules}
 
-规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1`、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
+规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、一份文档超过 64 条规则、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1` 或超过一年（`31536000`）、配额 `permitsPerSecond × windowSeconds` 超过 2⁶³、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
 
 像其他条目一样通过控制面修改规则（[变更](./testing.md#changes)）：
 

@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Identifiers
@@ -507,9 +508,9 @@ class ControlHttp(private val plane: ControlPlane) {
         )
     }
 
-    private fun version(node: JsonNode): SnapshotVersion {
+    private fun version(node: JsonNode): ViewVersion {
         node.only("at", "platform", "app", "tenant")
-        return SnapshotVersion(node.long("platform"), node.optLong("app"), node.optLong("tenant"))
+        return ViewVersion(node.long("platform"), node.optLong("app"), node.optLong("tenant"))
     }
 
     /** The `deny-nomatch` confirmations a request carries (RFC 0007 §9.5); none when it has no such field. */

@@ -127,7 +127,8 @@ internal object CandidateOrder {
     /**
      * An id both the tenant and the platform define resolves only when both have the same content, `attachable`
      * included; otherwise it is ambiguous: preferring the tenant's would let it replace a platform DENY, preferring the
-     * platform's would let it override the tenant's (RFC 0007 N2, Q15).
+     * platform's would let it override the tenant's (RFC 0007 N2, Q15). When it resolves, the platform's copy is the one
+     * evaluated, so that the comparison of contents never decides which rules apply.
      */
     private fun attachments(
         request: FlatRequest,
@@ -149,7 +150,8 @@ internal object CandidateOrder {
                 visitor.ambiguous(id)
                 continue
             }
-            val policy = (own ?: shared)?.takeIf { it.attachable }
+            // The same content in both layers: the platform's copy decides, so the comparison never chooses the rules.
+            val policy = (shared ?: own)?.takeIf { it.attachable }
             if (policy == null) {
                 visitor.missing(id)
             } else if (visitor.candidate(policy, policy.attached)) {
@@ -209,19 +211,42 @@ internal object CandidateOrder {
                 visitor.expired(entry.via)
                 continue
             }
-            if (entry.checksPlatform && platform.policy(entry.policyId)?.sameContent(entry.local!!) == false) {
-                visitor.ambiguous(entry.policyId)
-                continue
-            }
-            val policy = entry.local ?: platform.policy(entry.policyId)
-                ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
-            if (policy == null) {
-                visitor.missing(entry.policyId)
-            } else if (candidate(visitor, policy, entry)) {
+            val policy = resolve(entry, platform, app, visitor) ?: continue
+            if (candidate(visitor, policy, entry)) {
                 return true
             }
         }
         return false
+    }
+
+    /**
+     * The policy [entry] names, or null when the id is ambiguous or missing, as [visitor] is told. A tenant's own copy
+     * of a platform policy resolves to the platform's: the comparison of contents decides whether the id resolves,
+     * never which rules apply.
+     */
+    private fun resolve(
+        entry: BoundEntry,
+        platform: CompiledDocument,
+        app: CompiledDocument?,
+        visitor: CandidateVisitor,
+    ): CompiledPolicy? {
+        val local = entry.local
+        if (local != null) {
+            val shared = if (entry.checksPlatform) platform.policy(entry.policyId) else null
+            if (shared == null) {
+                return local
+            }
+            if (shared.sameContent(local)) {
+                return shared
+            }
+            visitor.ambiguous(entry.policyId)
+            return null
+        }
+        val policy = platform.policy(entry.policyId) ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
+        if (policy == null) {
+            visitor.missing(entry.policyId)
+        }
+        return policy
     }
 
     /**
