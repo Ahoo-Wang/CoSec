@@ -164,7 +164,9 @@ class PipelineTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = ["/public/../admin", "/public/%2e%2e/admin", "/a/%zz", "/public/..;/admin"])
+    @ValueSource(
+        strings = ["/public/../admin", "/public/%2e%2e/admin", "/a/%zz", "/public/..;/admin", "//admin", "/admin%2Fx"]
+    )
     fun ambiguousPathIsInvalidRequestBeforeAuthentication(path: String) = runTest {
         var authenticated = false
         val engine = StubEngine(PERMIT)

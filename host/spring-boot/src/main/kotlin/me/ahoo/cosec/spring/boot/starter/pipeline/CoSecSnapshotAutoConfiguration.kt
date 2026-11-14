@@ -237,7 +237,7 @@ class CoSecSnapshotAutoConfiguration {
             cosec: CoSecProperties,
         ): CandidateSource {
             val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
-            return CachingCandidateSource(store, compiler::compile)
+            return CachingCandidateSource(store, compiler::compileCandidate)
         }
 
         @Bean

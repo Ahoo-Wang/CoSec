@@ -188,7 +188,8 @@ evaluate or check: `simulate`, `explain`, `analyze` and `changes`, under `cosec.
   and every `(platform)` principal spends the platform's. Permit the control paths in the pipeline only to principals
   bound to a control role, so that no other principal can hold off a tenant's administrators.
 - An exhausted bucket answers `429` before the control API does any work. The control API serves only these exact
-  paths: one with a trailing `/` or an empty segment (`//`) is a `404`, so the patterns cover every request it serves.
+  paths: one with a trailing `/` is a `404`, and the pipeline refuses one with an empty segment (`//`) with `400`, so
+  the patterns cover every request it serves.
 - Leave the break-glass routes (`/break-glass` and below) out of it: give them a rule of their own, or none, so that
   a spent bucket never holds off an emergency revoke. `changes/*` still covers three steps of break-glass: the
   `:publish` that makes an approved break-glass grant take effect, the `:publish` that recovers a stalled revoke, and

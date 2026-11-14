@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "PIP-14"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A trailing separator is no empty segment before the end: the path is decided as written, and the DENY on one segment under /admin does not read /admin/x/.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/*"
+            }
+          ]
+        },
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        },
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/admin/x/"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

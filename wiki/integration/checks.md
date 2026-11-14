@@ -35,7 +35,9 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 - `action` is `service:verb`, as the route map names it (`order:cancel`), or `http:<METHOD>` for an unmapped route.
   A string without `:` is `false`.
 - `resource` is a typed resource, `type/id` (`order/42`), or a path starting with `/` (`/orders/42`), which is an
-  `http` resource.
+  `http` resource. It is read as the pipeline reads a request: its path parameters are removed, a path the pipeline
+  [refuses with `400`](./web.md#the-request-path) is `false`, and so is any resource over a request path's length
+  bounds. So a check never permits a path no request could be permitted for, even one built from client input.
 
 A service behind the gateway in `cosec.pipeline.mode=gateway` has no checker: it holds no policies to decide with
 ([Services behind the gateway](./web.md#services-behind-the-gateway)). Check there through the gateway's decision, or
@@ -77,7 +79,7 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 | Decision | When | `check` |
 |---|---|---|
 | `Permit(by)` | An ALLOW matched and no DENY did. `by` is the statement that permitted: `policy`, `index`, `name`, and `via`, how the policy applied. `BindingRef.Bound(id, document)` is a binding, in a `PLATFORM`, `APP` or `TENANT` document; `BindingRef.Attached(policy)` is a policy the principal's memberships attach. | `true` |
-| `Deny(by)` | A DENY matched (`by` is that statement), the tenant's platform boundary refused the permit (`StatementRef.Boundary`), or nothing matched (`null`). A `SecurityContext` the pipeline did not build, or an action without `:`, is `Deny(null)` too. | `false` |
+| `Deny(by)` | A DENY matched (`by` is that statement), the tenant's platform boundary refused the permit (`StatementRef.Boundary`), or nothing matched (`null`). A `SecurityContext` the pipeline did not build, an action without `:`, or a resource the pipeline would refuse is `Deny(null)` too. | `false` |
 | `Indeterminate(cause)` | No decision could be made: a document could not be read, a DENY failed, the check itself failed, or only break-glass would permit. A failure of the check is logged as a warning and reported as `SourceUnavailable(PLATFORM, error)`, whatever failed: read `error`, not the document kind. | `false` |
 
 Use it to record what allowed an action your code takes, such as "permitted by role binding `order-admins` of the app

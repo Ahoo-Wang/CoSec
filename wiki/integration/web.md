@@ -106,9 +106,16 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
 - **not decoded**: the resource of an unmapped request is the path as received, percent-escapes included. How
   patterns match encoded paths is in [Policy language](../policies/language.md);
 - **rejected with `400` `invalid-request`**, before authentication, when after removing path parameters and
-  decoding once it has a `.` or `..` segment (also with an encoded `;`, and with `\` or `%5C` as a separator), when
+  decoding once it has a `.` or `..` segment (also with an encoded `;`), when
   it has a malformed percent-escape, when it is longer than 2048 characters, or when a segment is longer than 256
-  characters. So `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected.
+  characters. So `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected;
+- **rejected the same way** when it has an empty segment before its end (`//admin`, `/admin//x`, or `/;x/admin`, which
+  removing the path parameter makes `//admin`), an encoded separator (`%2F` or `%2f`), or a backslash (`\`, `%5C` or
+  `%5c`). A pattern reads these as segments of their own or as part of one, so a `DENY` under `/admin` would not match
+  them, while a backend that merges slashes, decodes separators or reads `\` as `/` serves them as `/admin/...`. A
+  separator encoded twice (`%252F`, `%255C`) decodes once, to text, and is decided;
+- **kept with a trailing `/`**: `/admin/` is its own path, as in Spring's routing. A pattern written `/admin` does not
+  match it, and `/admin/**` does.
 
 ## Route maps
 

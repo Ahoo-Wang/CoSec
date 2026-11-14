@@ -36,6 +36,26 @@ and have to be provisioned again.
   decision. A DENY written this way now denies at least what it did; an ALLOW may permit more. A rate limit rule keyed
   by a variable takes it from the first pattern under whose captures its condition holds. To check: search your
   documents for statements with several `resource` patterns whose `condition` reads `resource.var.*`.
+- **A path with an empty segment, an encoded separator or a backslash is a `400`** (`PIP-14`). `//admin`, `/admin//x`,
+  `/;x/admin`, `/admin%2Fx`, `/admin\x` and `/admin%5Cx` were decided as paths of their own, so a `DENY` under `/admin` did not match them, while a backend
+  that merges slashes, decodes separators or reads `\` as `/` served them as `/admin/...`. A trailing `/` is unchanged: `/admin/` stays
+  its own path. Requests that were served before and are refused now:
+  - a `\` in a path, raw or encoded: no client is expected to send one, as browsers turn it into `/`;
+  - a `/` encoded inside a path variable, such as `/files/a%2Fb.txt` or `/repos/group%2Fproject`: send the value in the
+    query, or encode its `/` twice (`%252F`), which the pipeline decodes once, to the text `%2F`, and the application
+    decodes again;
+  - a URL whose parts were joined with a `/` each (`https://host/api/` + `/orders`): fix the client;
+  - a path parameter alone in a segment before the last (`/;jsessionid=x/orders`): URL rewriting puts it at the end of
+    the last segment (`/orders;jsessionid=x`), which is still accepted.
+
+  There is no switch to accept them: a pattern cannot say what a backend will make of these paths, so deciding them
+  would bring the bypass back.
+- **A check refuses what enforcement refuses** (`PIP-15`). `AuthorizationChecker.check` and `decide` now read a path as
+  the pipeline reads a request: one the pipeline answers `400` for is a deny, as is any resource over a request path's
+  length bounds. Before, `/public/../admin` could be permitted by an `ALLOW` under `/public`.
+- **Shadow windows count two more outcomes**: `BECAME_DENIED` and `OBLIGATIONS_CHANGED` were counted as `SAME`, and a
+  publish must now acknowledge them. Finish or abandon open windows before a rolling upgrade: an instance of the
+  previous version cannot read a report that holds them.
 - **Tokens and API keys declare their app** (batch R7b, RFC 0012 §3.5, `SCP-11`). A token's `aud` and an API key's `app`
   name the app the credential belongs to, and `ScopeResolver` compares them with the host's: a host with an app
   (`cosec.authorization.scope.app-id`, or a route's `cosec-app-id`) refuses a credential declaring another app, or none,

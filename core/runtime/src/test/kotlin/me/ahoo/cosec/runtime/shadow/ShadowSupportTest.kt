@@ -88,6 +88,16 @@ class ShadowSupportTest {
         source.failures.assert().isEqualTo(1)
     }
 
+    /** RC1-43: a document that compiles on the control plane can overflow a smaller stack here. */
+    @Test
+    fun `a candidate whose compilation overflows the stack is a failed one`() = runBlocking<Unit> {
+        val source = CachingCandidateSource(
+            { StoredCandidate("w", 4, document) },
+            { _, _ -> throw StackOverflowError() }
+        )
+        (source.candidate(acme) as Candidate.Failed).window.assert().isEqualTo("w")
+    }
+
     @Test
     fun `a candidate that does not compile is a failed one`() = runBlocking<Unit> {
         val source = CachingCandidateSource(

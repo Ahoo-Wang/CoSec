@@ -43,6 +43,7 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
@@ -67,6 +68,8 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.cosec.runtime.route.RouteMapException
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -176,6 +179,11 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       | { "failClosed": { "tenants": ["acme"], "maxLagSeconds": 300 }, "lagSeconds": 301 },
  *                       // the host's DocumentSnapshotViews over a SnapshotSource that loaded the documents
  *                       // lagSeconds before the request
+ *                       | { "platformChange": { "staged": {...} } | { "published": {...} } },
+ *                       // the same source, after that platform document was staged and compiled as the shadow
+ *                       // comparison compiles a candidate, or published, and the installed documents loaded again
+ * // A check of the permitted request (AuthorizationChecker): the outcome's "check" is the decision's kind
+ * "check":              { "action": "http:GET", "resource": "/orders/1" },
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
  *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000,
  *                         // the API key header, which the documents are compiled against too (CND-5)
@@ -205,7 +213,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
@@ -278,7 +286,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             val apiKeyHeader = node.get("options")?.get("apiKeyHeader")?.text() ?: DEFAULT_API_KEY_HEADER
             return throughGateway(pipeline, http, facts.host, it, apiKeyHeader)
         }
-        return answered(runBlocking { pipeline.evaluate(facts) }, node.has("identity"))
+        return runBlocking {
+            val outcome = pipeline.evaluate(facts)
+            answered(outcome, node.has("identity"), node.get("check")?.let { checked(pipeline, outcome, it) })
+        }
+    }
+
+    /** The kind of decision of `"check"`, for the request [outcome] permitted; null when it did not. */
+    private suspend fun checked(pipeline: Pipeline, outcome: PipelineOutcome, check: JsonNode): String? {
+        check.only("action", "resource")
+        val security = outcome.security ?: return null
+        val decision = AuthorizationChecker(pipeline)
+            .decide(security.securityContext, check.required("action").text(), check.required("resource").text())
+        return decision.javaClass.simpleName
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -440,12 +460,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
 
     /** The outcome; with [gateway], a gateway's pipeline that forwards identities, also what it forwards. */
-    private fun answered(outcome: PipelineOutcome, gateway: Boolean): Outcome =
+    private fun answered(outcome: PipelineOutcome, gateway: Boolean, check: String? = null): Outcome =
         Outcome.Answered(
             outcome.status,
             outcome.proceed,
             outcome.problem?.type?.slug,
             if (gateway) forwarded(outcome) else false to null,
+            check = check,
         )
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
@@ -697,39 +718,75 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node: JsonNode?,
         attributes: AttributeProviders,
         reach: () -> Unit,
-    ): SnapshotViews = node?.takeIf { it.has("failClosed") }?.let { freshness(documents, it, attributes) }
-        ?: views(snapshot, documents, node, reach)
+    ): SnapshotViews = when {
+        node?.has("failClosed") == true -> freshness(documents, node, attributes)
+        node?.has("platformChange") == true -> platformChange(documents, node, attributes)
+        else -> views(snapshot, documents, node, reach)
+    }
+
+    /** [body] as a stored document of [revision]. */
+    private fun stored(body: JsonNode, revision: Long): SnapshotDocument {
+        val text = (body.deepCopy() as ObjectNode)
+            .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", revision).put("publishedAt", NOW)
+        return SnapshotDocument(
+            SnapshotDocument.DOCUMENT_SCHEMA,
+            revision,
+            Instant.parse(NOW),
+            text.toString().encodeToByteArray()
+        )
+    }
+
+    /** Puts the scenario's documents in [store]; the keys of the app and tenant ones. */
+    private fun install(store: InMemorySnapshotDocumentStore, documents: JsonNode): List<SnapshotKey> {
+        val keys = ArrayList<SnapshotKey>()
+        documents.get("platform")?.let { store.put(SnapshotKey.Platform, stored(it, 1)) }
+        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
+            val key = SnapshotKey.Tenant(id)
+            keys += key
+            store.put(key, stored(body, 1))
+        }
+        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
+            val key = SnapshotKey.App(id)
+            keys += key
+            store.put(key, stored(body, 1))
+        }
+        return keys
+    }
+
+    /**
+     * `SNP-10`: the documents installed, then a change of the platform document, staged or published. Each installed
+     * document is loaded again afterwards, so that whatever the change set off has ended before the request.
+     */
+    private fun platformChange(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
+        node.only("platformChange")
+        val change = node.required("platformChange")
+        change.only("staged", "published")
+        val store = InMemorySnapshotDocumentStore()
+        val keys = install(store, documents)
+        val compiler = PlatformCompiler(attributes.catalog)
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions().lagWarn.minusSeconds(1))
+        val source = DocumentSnapshots.source(store, compiler, options).also(compiler::bind)
+        source.load().join()
+        source.loadAll(keys).join()
+        change.get("staged")?.let { body ->
+            val staged = StoredCandidate("window", 1, stored(body, 2))
+            val candidates = CachingCandidateSource({ staged }, compiler::compileCandidate)
+            runBlocking { candidates.candidate(SnapshotKey.Platform) }
+        }
+        change.get("published")?.let { body ->
+            store.put(SnapshotKey.Platform, stored(body, 2))
+            source.reload(SnapshotKey.Platform).join()
+        }
+        keys.forEach { source.reload(it).join() }
+        return DocumentSnapshotViews(source, platformRequired = true)
+    }
 
     private fun freshness(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
         node.only("failClosed", "lagSeconds")
         val failClosed = node.required("failClosed")
         failClosed.only("tenants", "maxLagSeconds")
         val store = InMemorySnapshotDocumentStore()
-        fun put(key: SnapshotKey, body: JsonNode) {
-            val stored = (body.deepCopy() as ObjectNode)
-                .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", 1).put("publishedAt", NOW)
-            store.put(
-                key,
-                SnapshotDocument(
-                    SnapshotDocument.DOCUMENT_SCHEMA,
-                    1,
-                    Instant.parse(NOW),
-                    stored.toString().encodeToByteArray()
-                )
-            )
-        }
-        val keys = ArrayList<SnapshotKey>()
-        documents.get("platform")?.let { put(SnapshotKey.Platform, it) }
-        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
-            val key = SnapshotKey.Tenant(id)
-            keys += key
-            put(key, body)
-        }
-        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
-            val key = SnapshotKey.App(id)
-            keys += key
-            put(key, body)
-        }
+        val keys = install(store, documents)
         val clock = MovingClock(Instant.parse(NOW))
         val maxLag = java.time.Duration.ofSeconds(failClosed.required("maxLagSeconds").asLong())
         // The periodic pass cannot be turned off (SNP-6): the longest the bounds allow, so it never runs within a
