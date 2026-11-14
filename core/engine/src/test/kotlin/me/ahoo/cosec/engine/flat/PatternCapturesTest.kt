@@ -210,4 +210,81 @@ class PatternCapturesTest {
         outcome("several").error.assert().isInstanceOf(IllegalArgumentException::class.java)
         outcome("several").afterDecision.assert().isTrue()
     }
+
+    /** A path no pattern can decode defers to the policy condition, as for a one-pattern statement. */
+    @Test
+    fun `a pattern that fails to match defers to the policy condition`() {
+        fun deny(policyCondition: Condition?) = compiler.compile(
+            PolicyId("deny"),
+            policyCondition,
+            listOf(
+                StatementSource(
+                    "d",
+                    Effect.DENY,
+                    listOf("*"),
+                    listOf(ResourceSource("http:path:/a/{v}"), ResourceSource("http:path:/{v}/b")),
+                    vIsA,
+                ),
+            ),
+        )
+        decide(deny(Condition.Eq("scope.app", Literal.Str("elsewhere"))), path = "/a/%zz")
+            .assert().isInstanceOf(Decision.Permit::class.java)
+        // Each evaluation decodes the path anew, so each failure is its own exception: compare what failed.
+        for (policyCondition in listOf(Condition.Eq("scope.app", Literal.Str("app")), null)) {
+            val policy = deny(policyCondition)
+            val bindings = listOf(anyone("b-deny", "deny"), anyone("b-allow", "allow"))
+            val view = SnapshotView(CompiledDocument.platform(listOf(policy, allowAll), bindings), null, tenant())
+            for (level in TraceLevel.entries) {
+                val failed = CoSecFlatEngine.evaluate(flatRequest(path = "/a/%zz"), view, level).decision
+                ((failed as Decision.Indeterminate).cause as Cause.MatcherFailed).error
+                    .assert().isInstanceOf(IllegalArgumentException::class.java)
+            }
+        }
+    }
+
+    /** A rule's key skips a pattern under whose captures its condition fails, and reads the next one that holds. */
+    @Test
+    fun `a rate limit key skips a pattern whose condition fails`() {
+        val key = "patterns-key-fails"
+        Probes.register(key, Probes.Probe(CallLog(), key) { throw IllegalStateException("broken") })
+        // Under /a/{v} (v = b) the condition fails reading the attribute; under /{v}/b (v = a) it holds.
+        val condition = Condition.Or(
+            listOf(
+                Condition.And(
+                    listOf(
+                        Condition.Eq("resource.var.v", Literal.Str("b")),
+                        Condition.Exists("request.attributes.$key")
+                    )
+                ),
+                vIsA,
+            ),
+        )
+        val rule = compiler.rateLimit(
+            DocumentKind.PLATFORM,
+            "",
+            RateLimitSource(
+                "by-v",
+                StatementSource(
+                    "by-v",
+                    Effect.ALLOW,
+                    listOf("*"),
+                    listOf(ResourceSource("http:path:/a/{v}"), ResourceSource("http:path:/{v}/b")),
+                    condition,
+                ),
+                "resource.var.v",
+                RateLimitSpec(10.0),
+            ),
+        )
+        val platform = CompiledDocument.platform(listOf(allowAll), listOf(anyone("b-allow", "allow")), listOf(rule))
+        val view = SnapshotView(platform, null, tenant())
+        val decisions = TraceLevel.entries.map {
+            CoSecFlatEngine.evaluate(
+                flatRequest(path = "/a/b"),
+                view,
+                it
+            ).decision
+        }
+        val obligation = (decisions.distinct().single() as Decision.Permit).obligations.single() as Obligation.RateLimit
+        obligation.bucket.assert().isEqualTo(CompiledRateLimit.keyedBucket("a"))
+    }
 }

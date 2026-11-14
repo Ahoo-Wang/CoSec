@@ -86,6 +86,26 @@ class SameContentTest {
     @Test
     fun `every part of a statement counts`() {
         val base = policy(http("/a"))
+        base.sameContent(base).assert().isTrue()
+        base.sameContent(
+            compiler.compile(
+                PolicyId("other"),
+                null,
+                listOf(StatementSource("s", Effect.DENY, listOf("*"), listOf(http("/a")))),
+                true
+            )
+        ).assert().isFalse()
+        base.sameContent(
+            compiler.compile(
+                PolicyId("no-admin"),
+                null,
+                listOf(
+                    StatementSource("s", Effect.DENY, listOf("*"), listOf(http("/a"))),
+                    StatementSource("t", Effect.DENY, listOf("*"), listOf(http("/a"))),
+                ),
+                attachable = true,
+            )
+        ).assert().isFalse()
         base.sameContent(policy(http("/a"))).assert().isTrue()
         base.sameContent(policy(http("/a", caseSensitive = false))).assert().isFalse()
         base.sameContent(policy(http("/a", decode = false))).assert().isFalse()
