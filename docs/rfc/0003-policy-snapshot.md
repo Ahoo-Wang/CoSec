@@ -114,9 +114,9 @@ RFC 0001 是目标架构，对第 3 阶段的描述有几处彼此矛盾，或�
 
 ### 3.1 现状：数据怎么存、怎么读
 
-以 `main` @ `a130eb90` 为准（[`CoSecCacheSpecs`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)、
-[`RedisPolicyRepository`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt)、
-[`RedisAppRolePermissionRepository`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt)）：
+以 `main` @ `a130eb90` 为准（[`CoSecCacheSpecs`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt)、
+[`RedisPolicyRepository`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisPolicyRepository.kt)、
+[`RedisAppRolePermissionRepository`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/RedisAppRolePermissionRepository.kt)）：
 
 | 缓存 | Redis key | 值 | 谁写 | 每个请求怎么读 |
 |---|---|---|---|---|
@@ -126,7 +126,7 @@ RFC 0001 是目标架构，对第 3 阶段的描述有几处彼此矛盾，或�
 | `RolePermissionCache` | `<p>:app:role:permission:<appId>:<roleId>[@<spaceId>]` | 一个角色在一个应用、一个空间的权限 id | 应用直接写这个 bean | 角色层：`getAll(作用域内的每个角色)` |
 
 四个缓存都是 `storeOfRecord()`：`ttl = null`、`ReadFailureMode.THROW`、`ForeignFormatMode.FAIL`，由 `CacheTtlPolicyTest`、
-`StrictCacheFailureTest` 守护。读取经 `Cache.async()`，再由 [`toLocalFirstMono`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/CacheFutures.kt)
+`StrictCacheFailureTest` 守护。读取经 `Cache.async()`，再由 [`toLocalFirstMono`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheFutures.kt)
 转成 `Mono`：L2 命中在调用方线程上完成，未命中则在 `boundedElastic` 上继续。由 `LocalCacheFastPathTest` 守护。
 
 可以看出三点：
