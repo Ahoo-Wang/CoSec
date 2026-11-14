@@ -44,6 +44,7 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.route.RouteMap
+import me.ahoo.cosec.servlet.SecurityContextArgumentResolver
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -246,6 +247,28 @@ class CoSecPipelineAutoConfigurationTest {
             )
             .withPropertyValues("cosec.authorization.routes.location=", "cosec.authorization.scope.app-id=order")
             .run { context -> context.getBean(FilterRegistrationBean::class.java).filter.assert().isNotNull() }
+    }
+
+    /**
+     * Round 2 M4: Micrometer's context propagation is optional. Without it a servlet host starts, with the argument
+     * resolver and the interceptor, and nothing loads the accessor that implements its interface.
+     */
+    @Test
+    fun `a servlet host starts without context propagation`() {
+        WebApplicationContextRunner()
+            .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "io.micrometer.context"))
+            .withConfiguration(
+                AutoConfigurations.of(
+                    CoSecSnapshotAutoConfiguration::class.java,
+                    CoSecPipelineAutoConfiguration::class.java,
+                    CoSecPipelineWebAutoConfiguration::class.java,
+                ),
+            )
+            .withPropertyValues("cosec.authorization.routes.location=", "cosec.authorization.scope.app-id=order")
+            .run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBean(SecurityContextArgumentResolver::class.java).assert().isNotNull()
+            }
     }
 
     @Test
