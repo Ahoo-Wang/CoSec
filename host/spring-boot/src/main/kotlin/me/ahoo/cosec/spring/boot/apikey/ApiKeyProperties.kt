@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.apikey
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.EnabledCapable
@@ -29,6 +32,7 @@ import java.time.Instant
  * do not carry, stops startup instead of being ignored with more or less access than its author meant.
  */
 @ConfigurationProperties(ApiKeyProperties.PREFIX, ignoreUnknownFields = false)
+@InternalCoSecApi
 class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
@@ -42,17 +46,20 @@ class ApiKeyProperties(
     var keys: List<Key> = emptyList(),
 ) : EnabledCapable {
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX: String = "cosec.api-key"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
         const val STORE_KEY: String = "$PREFIX.store"
     }
 
+    @InternalCoSecApi
     enum class Store {
         MEMORY,
         REDIS,
     }
 
+    @InternalCoSecApi
     class Key(
         var id: String = "",
         /** SHA-256 of the key, hex-encoded. Never configure the key itself. */

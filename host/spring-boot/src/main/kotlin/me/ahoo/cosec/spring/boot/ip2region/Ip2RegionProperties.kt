@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.ip2region
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -19,6 +20,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 
 /** `cosec.ip2region.*`: the `ext.ip2region.*` attribute provider (`cosec-ip2region`). */
 @ConfigurationProperties(prefix = Ip2RegionProperties.PREFIX)
+@InternalCoSecApi
 class Ip2RegionProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     /**
@@ -29,6 +31,7 @@ class Ip2RegionProperties(
     var ipv6Location: String? = null,
 ) : EnabledCapable {
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "ip2region"
     }

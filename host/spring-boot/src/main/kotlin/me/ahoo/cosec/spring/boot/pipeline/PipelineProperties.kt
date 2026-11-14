@@ -31,6 +31,7 @@ import java.time.Duration
 
 /** `cosec.pipeline.*` (RFC 0006 X8): the request pipeline's own bounds. */
 @ConfigurationProperties(prefix = PipelineProperties.PREFIX)
+@InternalCoSecApi
 class PipelineProperties {
     /** The whole evaluation of one request; past it the request is answered 503. */
     var timeout: Duration = Duration.ofSeconds(5)
@@ -59,8 +60,10 @@ class PipelineProperties {
     /** `cosec.pipeline.identity.*`: how a service behind a gateway reads the identity forwarded to it. */
     val identity = Identity()
 
+    @InternalCoSecApi
     enum class Mode { ENFORCE, GATEWAY }
 
+    @InternalCoSecApi
     class Identity {
         /** An identity older than this (plus `cosec.authentication.revocation.skew`) is refused: 401 `token-expired`. */
         var maxAge: Duration = Duration.ofSeconds(60)
@@ -69,6 +72,7 @@ class PipelineProperties {
         var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
     }
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "pipeline"
         const val MODE_KEY = "$PREFIX.mode"
@@ -89,6 +93,7 @@ internal fun credentialHeaders(environment: Environment): Set<String> = setOf(
 
 /** `cosec.gateway.*`: what a Spring Cloud Gateway host lets through besides its routes. */
 @ConfigurationProperties(prefix = GatewayProperties.PREFIX)
+@InternalCoSecApi
 class GatewayProperties {
     /**
      * Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize
@@ -97,6 +102,7 @@ class GatewayProperties {
      */
     var unprotectedEndpoints: Set<String> = emptySet()
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "gateway"
         const val UNPROTECTED_ENDPOINTS_KEY = "$PREFIX.unprotected-endpoints"
@@ -105,6 +111,7 @@ class GatewayProperties {
 
 /** `cosec.gateway.identity.*`: what a gateway forwards to the services behind it (`CoSec-Identity`). */
 @ConfigurationProperties(prefix = GatewayIdentityProperties.PREFIX)
+@InternalCoSecApi
 class GatewayIdentityProperties {
     /**
      * Whether a gateway forwards the verified identity: to a `lb://` route, or a route with metadata
@@ -126,6 +133,7 @@ class GatewayIdentityProperties {
      */
     var forwardAuthorization: Boolean = false
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "gateway.identity"
     }
@@ -136,6 +144,7 @@ class GatewayIdentityProperties {
  * host's app, the per-stage timeouts, the route map and the policy snapshot.
  */
 @ConfigurationProperties(prefix = RuntimeAuthorizationProperties.PREFIX)
+@InternalCoSecApi
 class RuntimeAuthorizationProperties {
     val scope = Scope()
     val remoteIp = RemoteIp()
@@ -146,11 +155,13 @@ class RuntimeAuthorizationProperties {
     val snapshot = Snapshot()
     val shadow = Shadow()
 
+    @InternalCoSecApi
     class Scope {
         /** The app this host serves (RFC 0004 §4.6); unset when requests declare their app. */
         var appId: String? = null
     }
 
+    @InternalCoSecApi
     class RemoteIp {
         /**
          * How many proxy hops of `X-Forwarded-For` to trust: `0` ignores the header (a directly exposed host), `N` takes
@@ -159,8 +170,10 @@ class RuntimeAuthorizationProperties {
         var maxTrustedIndex: Int = 1
     }
 
+    @InternalCoSecApi
     class Timed(var timeout: Duration)
 
+    @InternalCoSecApi
     class Routes {
         /**
          * The route maps WebFlux and WebMvc hosts load (RFC 0005 §5.3), comma-separated resource locations; a location
@@ -170,11 +183,13 @@ class RuntimeAuthorizationProperties {
          */
         var location: String? = null
 
+        @InternalCoSecApi
         companion object {
             const val DEFAULT_LOCATION = "classpath:cosec-routes.json"
         }
     }
 
+    @InternalCoSecApi
     class Snapshot {
         /**
          * How long an instance serves its local copy of a document before it asks Redis again; the one value for the
@@ -202,6 +217,7 @@ class RuntimeAuthorizationProperties {
         /** What a Redis whose `maxmemory-policy` is not `noeviction`, or cannot be read, does to startup (`SNP-3`). */
         var evictionCheck: EvictionCheck = EvictionCheck.FAIL
 
+        @InternalCoSecApi
         class FailClosed {
             var tenants: Set<String> = emptySet()
             var maxLag: Duration = Duration.ofMinutes(30)
@@ -212,6 +228,7 @@ class RuntimeAuthorizationProperties {
      * The data plane's part of the control plane's shadow windows (RFC 0007 §6.4), with `cosec-cocache`: sampled
      * requests are evaluated again on the staged candidates, and this instance reports what it saw.
      */
+    @InternalCoSecApi
     class Shadow {
         /**
          * Off, this instance takes no part in shadow windows: it reports no samples and no `CANDIDATE_ERROR`, so its
@@ -232,6 +249,7 @@ class RuntimeAuthorizationProperties {
         var instanceId: String = ""
     }
 
+    @InternalCoSecApi
     enum class EvictionCheck {
         /** Refuse to start. */
         FAIL,
@@ -243,6 +261,7 @@ class RuntimeAuthorizationProperties {
         WARN,
     }
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
     }
@@ -250,6 +269,7 @@ class RuntimeAuthorizationProperties {
 
 /** `cosec.authentication.revocation.*` (RFC 0004 §4.5.3). */
 @ConfigurationProperties(prefix = RevocationProperties.PREFIX)
+@InternalCoSecApi
 class RevocationProperties {
     /** How much earlier than a subject revocation a token may have been issued and still be revoked by it. */
     var skew: Duration = Duration.ofSeconds(5)
@@ -265,6 +285,7 @@ class RevocationProperties {
     @InternalCoSecApi
     var cache: CacheConfiguration = CacheConfiguration()
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authentication.revocation"
     }
@@ -272,6 +293,7 @@ class RevocationProperties {
 
 /** `cosec.observability.listener.*` (RFC 0006 X8): the bound on REQUIRED decision listeners, the queues of BEST_EFFORT ones. */
 @ConfigurationProperties(prefix = ListenerProperties.PREFIX)
+@InternalCoSecApi
 class ListenerProperties {
     /** How long one REQUIRED listener may take; past it a permit becomes 503. */
     var requiredTimeout: Duration = Duration.ofSeconds(1)
@@ -282,6 +304,7 @@ class ListenerProperties {
     /** On shutdown, how long queued events still go out before the rest is dropped. */
     var drainTimeout: Duration = Duration.ofSeconds(5)
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "observability.listener"
     }

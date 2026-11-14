@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.social
 
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.social.justauth.JustAuthCredentials
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -33,7 +36,7 @@ internal class SocialAuthenticationTest {
                 coEvery { authorize() } returns SocialAuthorization("authorizeUrl", "binding")
             }
         )
-        authentication.supportCredentials.assert().isEqualTo(SocialCredentials::class.java)
+        authentication.credentialsType.assert().isEqualTo(SocialCredentials::class.java)
         authentication.authorize("authorize").url.assert().isEqualTo("authorizeUrl")
         SocialAuthorization("u", "b").setCookie("/login/callback")
             .assert().isEqualTo(

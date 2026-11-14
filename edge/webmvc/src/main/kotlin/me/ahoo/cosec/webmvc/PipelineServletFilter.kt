@@ -25,9 +25,7 @@ import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemEncoder
 import me.ahoo.cosec.runtime.RequestGate
@@ -38,7 +36,6 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
-import reactor.core.scheduler.Schedulers
 import java.util.Collections
 import java.util.Enumeration
 
@@ -177,15 +174,4 @@ internal class ForwardedHeadersRequest private constructor(
                 ForwardedHeadersRequest(request, forward)
             }
     }
-}
-
-/**
- * [AuthorizationChecker.check] for servlet code (RFC 0006 §7.6): blocks the calling request thread. Refuses to run on
- * a non-blocking thread, such as a Netty event loop: use `checkMono` from `cosec-webflux` there.
- */
-fun AuthorizationChecker.checkBlocking(security: SecurityContext, action: String, resource: String): Boolean {
-    check(!Schedulers.isInNonBlockingThread()) {
-        "checkBlocking would block the non-blocking thread [${Thread.currentThread().name}]; use checkMono."
-    }
-    return runBlocking { check(security, action, resource) }
 }

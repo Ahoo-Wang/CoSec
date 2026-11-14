@@ -13,13 +13,13 @@
 
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.LoginCredentials
 
 /**
  * A provider's callback. [binding] is the value of the browser's binding cookie ([SocialAuthorization.setCookie]), which
  * the sign-in it started must carry back; empty when the browser sent none, which refuses the callback.
  */
-interface SocialCredentials : Credentials {
+interface SocialCredentials : LoginCredentials {
     val provider: String
 
     val binding: String

@@ -13,12 +13,10 @@
 package me.ahoo.cosec.login
 
 /**
- * Base marker interface for authentication credentials.
- *
- * Credentials are pieces of information used to verify identity,
- * such as username/password, API keys, or tokens.
+ * What a login request presents to [Authentication]: a password, a refresh token, a social provider's code. Not
+ * `me.ahoo.cosec.spi.authn.Credentials`, which is what an ordinary request carries (its token or API key) for the
+ * pipeline's `Authenticator`.
  *
  * @see Authentication
- * @see me.ahoo.cosec.api.token.RefreshTokenCredentials
  */
-interface Credentials
+interface LoginCredentials

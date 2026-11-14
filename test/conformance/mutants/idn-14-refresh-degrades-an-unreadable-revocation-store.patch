@@ -2,12 +2,11 @@
 # Mutant: refresh reads a revocation store it cannot read as "not revoked", and issues a token on that read
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.SimpleRefreshTokenAuthenticationTest
 
-diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt
-index 09b160d4..adc05b09 100644
---- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt
-+++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt
-@@ -43,7 +43,10 @@ class SimpleRefreshTokenAuthentication(
- ) : AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
+@@ -41,7 +41,10 @@
+ 
      override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
          val token = tokenVerifier.refresh(credentials)
 -        revocation.check(token)

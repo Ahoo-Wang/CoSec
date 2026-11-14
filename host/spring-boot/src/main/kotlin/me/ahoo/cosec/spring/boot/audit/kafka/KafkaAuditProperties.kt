@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.audit.kafka
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -20,6 +23,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 import org.springframework.core.env.Environment
 
 @ConfigurationProperties(KafkaAuditProperties.PREFIX)
+@InternalCoSecApi
 class KafkaAuditProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     @DefaultValue(DEFAULT_TOPIC) var topic: String = DEFAULT_TOPIC,
@@ -27,6 +31,7 @@ class KafkaAuditProperties(
     @DefaultValue("best-effort") var delivery: Delivery = Delivery.BEST_EFFORT,
 ) : EnabledCapable {
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX: String = "cosec.audit.kafka"
         const val DEFAULT_TOPIC: String = "cosec-audit"

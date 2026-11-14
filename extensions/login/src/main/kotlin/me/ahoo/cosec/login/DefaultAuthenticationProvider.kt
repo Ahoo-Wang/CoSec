@@ -13,6 +13,7 @@
 package me.ahoo.cosec.login
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.util.concurrent.ConcurrentHashMap
 
 private val log = KotlinLogging.logger {}
@@ -21,38 +22,39 @@ private val log = KotlinLogging.logger {}
  * The registry of [Authentication]s. One instance per application: the starter assembles one for each Spring context,
  * so what one context registers or closes never reaches another (#1222).
  *
- * A credentials type finds the [Authentication] registered for it, else the one whose [Authentication.supportCredentials]
+ * A credentials type finds the [Authentication] registered for it, else the one whose [Authentication.credentialsType]
  * it is assignable to. When more than one is, [get] fails rather than pick by registration order: which authentication
  * checks a login must never depend on it.
  *
  * @author ahoo wang
  */
+@InternalCoSecApi
 class DefaultAuthenticationProvider : AuthenticationProvider {
     private val authenticationMaps:
-        MutableMap<Class<out Credentials>, Authentication<out Credentials>> = ConcurrentHashMap()
+        MutableMap<Class<out LoginCredentials>, Authentication<out LoginCredentials>> = ConcurrentHashMap()
 
-    override fun <C : Credentials, A : Authentication<C>> register(
+    override fun <C : LoginCredentials, A : Authentication<C>> register(
         credentialsType: Class<C>,
         authentication: A
     ) {
         log.info {
-            "Register Authentication: $authentication for Credentials: $credentialsType."
+            "Register Authentication: $authentication for LoginCredentials: $credentialsType."
         }
         authenticationMaps[credentialsType] = authentication
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <C : Credentials, A : Authentication<C>> get(
-        credentialsType: Class<out Credentials>
+    override fun <C : LoginCredentials, A : Authentication<C>> get(
+        credentialsType: Class<out LoginCredentials>
     ): A? {
         val authentication = authenticationMaps[credentialsType] as A?
         if (authentication != null) {
             return authentication
         }
         // Which one supports a type registered for none of them is not a matter of order (round-2 review L3).
-        val supporting = authenticationMaps.values.filter { it.supportCredentials.isAssignableFrom(credentialsType) }
+        val supporting = authenticationMaps.values.filter { it.credentialsType.isAssignableFrom(credentialsType) }
         check(supporting.size <= 1) {
-            "Credentials [${credentialsType.name}] are supported by more than one Authentication " +
+            "LoginCredentials [${credentialsType.name}] are supported by more than one Authentication " +
                 "(${supporting.joinToString { it.javaClass.name }}): register the one for this type."
         }
         return supporting.singleOrNull() as A?

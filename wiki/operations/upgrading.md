@@ -363,6 +363,43 @@ and have to be provisioned again.
     its beans' types (`RedisApiKeyStore`, `CoCacheMembershipProvider`, ...) to use them. The cache names in
     `cocache.caches.[<CacheName>]` do not change.
 
+- **The public API of the starter, `cosec-login`, `cosec-social` and the web adapters is classified for 8.0** (R9):
+  - **`cosec-login`'s `Credentials` is `LoginCredentials`, and `Authentication.supportCredentials` is
+    `credentialsType`.** Two public `Credentials` in one product named different things: the pipeline's
+    (`me.ahoo.cosec.spi.authn.Credentials`, a request's token or API key) keeps its name. An `Authentication` of your own
+    changes like this:
+
+    ```kotlin
+    // before
+    data class PasswordCredentials(val username: String, val password: String) : Credentials
+    class PasswordAuthentication : Authentication<PasswordCredentials> {
+        override val supportCredentials = PasswordCredentials::class.java
+        // ...
+    }
+    // after
+    data class PasswordCredentials(val username: String, val password: String) : LoginCredentials
+    class PasswordAuthentication : Authentication<PasswordCredentials> {
+        override val credentialsType = PasswordCredentials::class.java
+        // ...
+    }
+    ```
+
+  - `AbstractRefreshTokenAuthentication` is removed: `SimpleRefreshTokenAuthentication` implements
+    `Authentication<RefreshTokenCredentials>` itself. `AuthenticationProvider`, `DefaultAuthenticationProvider` and
+    `CompositeAuthentication`'s constructor are `@InternalCoSecApi`: the starter registers every `Authentication`
+    bean.
+  - `cosec-social`: `SocialProviderManager` and `SocialAuthenticationProvider` are `@InternalCoSecApi`, as are the
+    constructors of `SocialAuthentication` and `JustAuthProvider` (which named JustAuth's `AuthRequest`).
+    `JustAuthProvider.name()` is removed: read `name`.
+  - The starter's `*Properties` classes and `EnabledCapable` are `@InternalCoSecApi`, and its `@ConditionalOn*`
+    annotations are `internal`. The `cosec.*` keys are the contract and do not change. Read a value with
+    `@Value("\${cosec.jwt.enabled}")` or the `Environment` instead of injecting a CoSec `*Properties` bean, and
+    condition a bean of your own with `@ConditionalOnProperty("cosec.jwt.enabled")` instead of
+    `@ConditionalOnJwtEnabled`.
+  - `checkMono` (`cosec-webflux`) and `checkBlocking` (`cosec-webmvc`) are in Java classes named
+    `AuthorizationCheckers`, no longer `PipelineWebFilterKt` and `PipelineServletFilterKt`; Kotlin callers do not
+    notice. `SuspendingHandlerHolderInterceptor` is `@InternalCoSecApi`: the starter registers it.
+
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
@@ -1588,8 +1625,8 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 
 | 7.x package | 8.0 package (module) | Types |
 |---|---|---|
-| `me.ahoo.cosec.api.authentication`, `me.ahoo.cosec.authentication` | `me.ahoo.cosec.login` (`cosec-login`) | `Authentication`, `AuthenticationProvider`, `Credentials`, `CompositeAuthentication`, `DefaultAuthenticationProvider` |
-| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractRefreshTokenAuthentication`, `AbstractSwitchTenantAuthentication` |
+| `me.ahoo.cosec.api.authentication`, `me.ahoo.cosec.authentication` | `me.ahoo.cosec.login` (`cosec-login`) | `Authentication`, `Credentials` (now `LoginCredentials`), `CompositeAuthentication` |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
@@ -1645,6 +1682,8 @@ Code that uses any of these no longer compiles or is no longer called.
 | `CoSecAuthorizationCustomizer` | Beans of `Authenticator`, `DecisionListener`, `AttributeProvider`, `MembershipProvider`, `RateLimiter`. |
 | `Policy`, `Statement`, `PermissionVerifier`, `ActionMatcher`, `ConditionMatcher`, `AppPermission`, `AppRolePermission`, `RolePermission` and the rest of `cosec-api`'s policy and permission model | Documents ([policy language](../policies/language.md)). A `Statement` that overrode `verify` has no counterpart. |
 | `ActionMatcherFactory`, `ConditionMatcherFactory`, `MatcherFactoryRegistry`, the built-in matchers, OGNL and SpEL | Built-in actions and conditions only. A value a custom condition read comes from an `AttributeProvider` ([Extending](../architecture/extending.md)). |
+| `AuthenticationProvider`, `DefaultAuthenticationProvider` | Declare `Authentication` beans: the starter registers them. |
+| `AbstractRefreshTokenAuthentication` | `SimpleRefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
 | `ApiKeyStore` | `ApiKeyReader` to look keys up; the `InMemoryApiKeyStore` or `RedisApiKeyStore` bean to manage them. |
 | `BlockingAware` | None: no condition runs code. Blocking lookups go into an `AttributeProvider`, which suspends. |
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |

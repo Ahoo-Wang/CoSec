@@ -1,0 +1,727 @@
+{
+  "groups": [
+    {
+      "name": "cosec",
+      "sourceType": "me.ahoo.cosec.spring.boot.CoSecProperties",
+      "type": "me.ahoo.cosec.spring.boot.CoSecProperties"
+    },
+    {
+      "name": "cosec.api-key",
+      "sourceType": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties",
+      "type": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties"
+    },
+    {
+      "name": "cosec.audit",
+      "sourceType": "me.ahoo.cosec.spring.boot.audit.AuditProperties",
+      "type": "me.ahoo.cosec.spring.boot.audit.AuditProperties"
+    },
+    {
+      "name": "cosec.audit.kafka",
+      "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
+      "type": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties"
+    },
+    {
+      "name": "cosec.authentication.login",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
+      "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties"
+    },
+    {
+      "name": "cosec.authentication.login.social",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
+      "type": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties"
+    },
+    {
+      "name": "cosec.authentication.revocation",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties"
+    },
+    {
+      "name": "cosec.authentication.revocation.cache",
+      "sourceMethod": "getCache()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
+      "type": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration"
+    },
+    {
+      "name": "cosec.authorization",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties"
+    },
+    {
+      "name": "cosec.authorization.attributes",
+      "sourceMethod": "getAttributes()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed"
+    },
+    {
+      "name": "cosec.authorization.membership",
+      "sourceMethod": "getMembership()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed"
+    },
+    {
+      "name": "cosec.authorization.rate-limit",
+      "sourceMethod": "getRateLimit()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed"
+    },
+    {
+      "name": "cosec.authorization.remote-ip",
+      "sourceMethod": "getRemoteIp()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$RemoteIp"
+    },
+    {
+      "name": "cosec.authorization.routes",
+      "sourceMethod": "getRoutes()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Routes"
+    },
+    {
+      "name": "cosec.authorization.scope",
+      "sourceMethod": "getScope()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Scope"
+    },
+    {
+      "name": "cosec.authorization.shadow",
+      "sourceMethod": "getShadow()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow"
+    },
+    {
+      "name": "cosec.authorization.snapshot",
+      "sourceMethod": "getSnapshot()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot"
+    },
+    {
+      "name": "cosec.authorization.snapshot.fail-closed",
+      "sourceMethod": "getFailClosed()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed"
+    },
+    {
+      "name": "cosec.control",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties"
+    },
+    {
+      "name": "cosec.control.approval",
+      "sourceMethod": "getApproval()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Approval"
+    },
+    {
+      "name": "cosec.control.audit",
+      "sourceMethod": "getAudit()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit"
+    },
+    {
+      "name": "cosec.control.audit.kafka",
+      "sourceMethod": "getKafka()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka"
+    },
+    {
+      "name": "cosec.control.break-glass",
+      "sourceMethod": "getBreakGlass()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$BreakGlass"
+    },
+    {
+      "name": "cosec.control.changes",
+      "sourceMethod": "getChanges()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Changes"
+    },
+    {
+      "name": "cosec.control.http",
+      "sourceMethod": "getHttp()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http"
+    },
+    {
+      "name": "cosec.control.revisions",
+      "sourceMethod": "getRevisions()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions"
+    },
+    {
+      "name": "cosec.control.shadow",
+      "sourceMethod": "getShadow()",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow"
+    },
+    {
+      "name": "cosec.cosid",
+      "sourceType": "me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties",
+      "type": "me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties"
+    },
+    {
+      "name": "cosec.gateway",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.GatewayProperties"
+    },
+    {
+      "name": "cosec.gateway.identity",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayIdentityProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.GatewayIdentityProperties"
+    },
+    {
+      "name": "cosec.ip2region",
+      "sourceType": "me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties",
+      "type": "me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties"
+    },
+    {
+      "name": "cosec.jwt",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
+      "type": "me.ahoo.cosec.spring.boot.jwt.JwtProperties"
+    },
+    {
+      "name": "cosec.jwt.session",
+      "sourceMethod": "getSession()",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
+      "type": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session"
+    },
+    {
+      "name": "cosec.jwt.token-validity",
+      "sourceMethod": "getTokenValidity()",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
+      "type": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$TokenValidity"
+    },
+    {
+      "name": "cosec.metrics",
+      "sourceType": "me.ahoo.cosec.spring.boot.micrometer.MetricsProperties",
+      "type": "me.ahoo.cosec.spring.boot.micrometer.MetricsProperties"
+    },
+    {
+      "name": "cosec.observability.listener",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties"
+    },
+    {
+      "name": "cosec.openapi",
+      "sourceType": "me.ahoo.cosec.spring.boot.openapi.OpenAPIProperties",
+      "type": "me.ahoo.cosec.spring.boot.openapi.OpenAPIProperties"
+    },
+    {
+      "name": "cosec.pipeline",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties"
+    },
+    {
+      "name": "cosec.pipeline.identity",
+      "sourceMethod": "getIdentity()",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Identity"
+    },
+    {
+      "name": "management.endpoint.cosec-service-generator",
+      "sourceType": "me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpoint",
+      "type": "me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpoint"
+    }
+  ],
+  "hints": [],
+  "properties": [
+    {
+      "name": "cosec.api-key.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "Keys of the in-memory store, by their SHA-256 hash. Ignored with the Redis store.",
+      "name": "cosec.api-key.keys",
+      "sourceType": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties",
+      "type": "java.util.List<me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties$Key>"
+    },
+    {
+      "description": "Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`), under `<cosec.key-prefix>:api-key`.",
+      "name": "cosec.api-key.store",
+      "sourceType": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties",
+      "type": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties$Store"
+    },
+    {
+      "name": "cosec.audit.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.audit.AuditProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "`required` makes a permit wait for the broker's acknowledgement; best effort by default (RFC 0006 \u00a79.2).",
+      "name": "cosec.audit.kafka.delivery",
+      "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
+      "type": "me.ahoo.cosec.runtime.event.Delivery"
+    },
+    {
+      "name": "cosec.audit.kafka.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "name": "cosec.audit.kafka.topic",
+      "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "name": "cosec.authentication.login.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "name": "cosec.authentication.login.social.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "name": "cosec.authentication.login.social.registration",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
+      "type": "java.util.Map<java.lang.String,me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties$Provider>"
+    },
+    {
+      "name": "cosec.authentication.revocation.cache.expire-after-access",
+      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authentication.revocation.cache.initial-capacity",
+      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
+      "type": "java.lang.Integer"
+    },
+    {
+      "name": "cosec.authentication.revocation.cache.local-max-age",
+      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authentication.revocation.cache.maximum-size",
+      "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
+      "type": "java.lang.Long"
+    },
+    {
+      "description": "Whether a request's token is refused (503) while the revocations cannot be read, instead of accepted: the documented exception to failing closed, which applies to verifying a token only. Refresh always fails then.",
+      "name": "cosec.authentication.revocation.fail-closed",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "How much earlier than a subject revocation a token may have been issued and still be revoked by it.",
+      "name": "cosec.authentication.revocation.skew",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.attributes.timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.membership.timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.rate-limit.timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How many proxy hops of `X-Forwarded-For` to trust: `0` ignores the header (a directly exposed host), `N` takes the entry the closest of N trusted proxies appended.",
+      "name": "cosec.authorization.remote-ip.max-trusted-index",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$RemoteIp",
+      "type": "java.lang.Integer"
+    },
+    {
+      "description": "The route maps WebFlux and WebMvc hosts load (RFC 0005 \u00a75.3), comma-separated resource locations; a location that does not exist, or a map with no routes, fails startup. Unset, the host runs without a route map, every request in the `http` namespace, unless [DEFAULT_LOCATION] exists: then startup fails, so that a map someone shipped is never left out without a word. Empty runs without a route map on purpose.",
+      "name": "cosec.authorization.routes.location",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Routes",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "The app this host serves (RFC 0004 \u00a74.6); unset when requests declare their app.",
+      "name": "cosec.authorization.scope.app-id",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Scope",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "Off, this instance takes no part in shadow windows: it reports no samples and no `CANDIDATE_ERROR`, so its traffic counts for nothing in a window.",
+      "name": "cosec.authorization.shadow.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "This instance's id in reports and statuses; a random one when empty. Unique per running instance, and only letters, digits, `.`, `_` and `-` (it ends a Redis key); any other id fails startup.",
+      "name": "cosec.authorization.shadow.instance-id",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "How often this instance writes its reports and its status.",
+      "name": "cosec.authorization.shadow.report-interval",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "The share of requests evaluated again on the candidates, from 0 to 1.",
+      "name": "cosec.authorization.shadow.sample-rate",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Shadow",
+      "type": "java.lang.Double"
+    },
+    {
+      "name": "cosec.authorization.snapshot.cold-load-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.snapshot.compile-threads",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Integer"
+    },
+    {
+      "description": "What a Redis whose `maxmemory-policy` is not `noeviction`, or cannot be read, does to startup (`SNP-3`).",
+      "name": "cosec.authorization.snapshot.eviction-check",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$EvictionCheck"
+    },
+    {
+      "name": "cosec.authorization.snapshot.fail-closed.max-lag",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.snapshot.fail-closed.tenants",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed",
+      "type": "java.util.Set<java.lang.String>"
+    },
+    {
+      "name": "cosec.authorization.snapshot.lag-escalate",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.snapshot.lag-warn",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How long an instance serves its local copy of a document before it asks Redis again; the one value for the snapshot cache's local tier, whatever a cache customizer or `cocache.*` property sets.",
+      "name": "cosec.authorization.snapshot.local-max-age",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.authorization.snapshot.max-apps",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Integer"
+    },
+    {
+      "name": "cosec.authorization.snapshot.max-tenants",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.lang.Integer"
+    },
+    {
+      "name": "cosec.authorization.snapshot.prewarm-apps",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.util.List<java.lang.String>"
+    },
+    {
+      "name": "cosec.authorization.snapshot.prewarm-tenants",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.util.List<java.lang.String>"
+    },
+    {
+      "description": "How often a pass starts that confirms every installed document against Redis; while a pass is still in flight, the next starts as soon as it ends. A change whose invalidation was lost is installed by the first pass that reaches its document (`SNP-6`). At least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup.",
+      "name": "cosec.authorization.snapshot.revalidate-interval",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "The app control-plane actions are authorized in (RFC 0007 \u00a77.2).",
+      "name": "cosec.control.app-id",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "name": "cosec.control.approval.expire-after",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Approval",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "Whether the trust root's own changes are analyzed too (RFC 0007 Q10): what the analysis cannot prove needs a second administrator's approval. A change that escalates needs one either way.",
+      "name": "cosec.control.approval.four-eyes",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Approval",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "`required` makes publishing and break-glass wait for the broker; break-glass needs one REQUIRED listener.",
+      "name": "cosec.control.audit.kafka.delivery",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka",
+      "type": "me.ahoo.cosec.runtime.event.Delivery"
+    },
+    {
+      "name": "cosec.control.audit.kafka.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "name": "cosec.control.audit.kafka.topic",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "How long every REQUIRED change listener together may take to record a gated step before it fails (503).",
+      "name": "cosec.control.audit.required-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "The longest a break-glass binding may last; at most 24 hours.",
+      "name": "cosec.control.break-glass.max-duration",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$BreakGlass",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "An open change request expires this long after it was proposed.",
+      "name": "cosec.control.changes.expire-after",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Changes",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "Where the control API is served (RFC 0007 \u00a710.2): its routes are under `{base-path}/v1`.",
+      "name": "cosec.control.http.base-path",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "The largest request body the WebMvc routes read; a larger one is answered 400 unread. Twice a document's 8 MB cap (RFC 0003 Q14), for the JSON around it. WebFlux hosts are bounded by `spring.codec.max-in-memory-size`.",
+      "name": "cosec.control.http.max-body-size",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http",
+      "type": "org.springframework.util.unit.DataSize"
+    },
+    {
+      "name": "cosec.control.revisions.max-count",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
+      "type": "java.lang.Integer"
+    },
+    {
+      "name": "cosec.control.revisions.min-age",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.control.revisions.orphan-age",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How often each instance tries to reclaim; one instance at a time does each document.",
+      "name": "cosec.control.revisions.reclaim-interval",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How often shadowing changes are looked at, by one instance at a time; a window closes up to this late.",
+      "name": "cosec.control.shadow.check-interval",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.control.shadow.max-duration",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.control.shadow.min-duration",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.control.shadow.min-samples",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
+      "type": "java.lang.Long"
+    },
+    {
+      "description": "The CosId generator whose ids CoSec takes, with its codec; CosId's `default` unless set.",
+      "name": "cosec.cosid.generator",
+      "sourceType": "me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "name": "cosec.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.CoSecProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "The token claims forwarded besides the identity, such as `name` and `email`: strings, numbers, booleans.",
+      "name": "cosec.gateway.identity.claims",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayIdentityProperties",
+      "type": "java.util.Set<java.lang.String>"
+    },
+    {
+      "description": "Whether a gateway forwards the verified identity: to a `lb://` route, or a route with metadata `cosec-identity: true`; never to one with `cosec-identity: false` (RC1-49).",
+      "name": "cosec.gateway.identity.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayIdentityProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "Whether the client's credentials still go downstream, to the routes that receive the identity: the `Authorization` header, the API key header (`cosec.pipeline.api-key-header`) and the `authorization` query parameter (RC1-5). Off: a service behind needs none. Turn it on only for services that verify the token again or call other APIs on the user's behalf.",
+      "name": "cosec.gateway.identity.forward-authorization",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayIdentityProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "A larger identity fails the request closed (500) rather than being cut.",
+      "name": "cosec.gateway.identity.max-size",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayIdentityProperties",
+      "type": "org.springframework.util.unit.DataSize"
+    },
+    {
+      "description": "Actuator endpoints that may be exposed over HTTP on the gateway's application port, where CoSec does not authorize them, because something else protects them. Any other one but `health` fails startup (`STA-2`, RC1-48); `gateway`, which writes routes, is never accepted here.",
+      "name": "cosec.gateway.unprotected-endpoints",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.GatewayProperties",
+      "type": "java.util.Set<java.lang.String>"
+    },
+    {
+      "name": "cosec.ip2region.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "Where the IPv6 `.xdb` database is (a Spring resource location, `file:` or `classpath:`), loaded beside the bundled IPv4 one. Unset, an IPv6 client's region is unavailable: a DENY on it is Indeterminate, never skipped (round 2 M5). A location that does not exist fails startup.",
+      "name": "cosec.ip2region.ipv6-location",
+      "sourceType": "me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "name": "cosec.jwt.algorithm",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
+      "type": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Algorithm"
+    },
+    {
+      "name": "cosec.jwt.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "name": "cosec.jwt.secret",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "How long a session lasts from its login, however often it is refreshed; then the user signs in again.",
+      "name": "cosec.jwt.session.lifetime",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How long after a refresh the pair it replaced is answered at the current generation: the window a client has to retry a refresh whose response it lost.",
+      "name": "cosec.jwt.session.rotation-leeway",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Session",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.jwt.token-validity.access",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$TokenValidity",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.jwt.token-validity.refresh",
+      "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$TokenValidity",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane records, shadow reports, token revocations, memberships (`<p>:snapshot:\u2026`, `<p>:control:\u2026`, `<p>:token:\u2026`, \u2026), API keys (`<p>:api-key:\u2026`) and rate limit counters (`<p>:rate-limiter:\u2026`). Two deployments on one Redis that differ in it share nothing. A trailing `:` is ignored.",
+      "name": "cosec.key-prefix",
+      "sourceType": "me.ahoo.cosec.spring.boot.CoSecProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "name": "cosec.metrics.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.micrometer.MetricsProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "On shutdown, how long queued events still go out before the rest is dropped.",
+      "name": "cosec.observability.listener.drain-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it.",
+      "name": "cosec.observability.listener.queue-capacity",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
+      "type": "java.lang.Integer"
+    },
+    {
+      "description": "How long one REQUIRED listener may take; past it a permit becomes 503.",
+      "name": "cosec.observability.listener.required-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.ListenerProperties",
+      "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.openapi.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.openapi.OpenAPIProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "Whether a token may come in the `authorization` cookie; off, since a browser sends a cookie on its own, on a cross-site request too. Turn it on only with your own CSRF defense.",
+      "name": "cosec.pipeline.allow-cookie-token",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "Whether a token may come in the query string; off, since URLs end up in logs.",
+      "name": "cosec.pipeline.allow-query-token",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "description": "The header an API key comes in. No document may read it (`CND-5`, [credentialHeaders]).",
+      "name": "cosec.pipeline.api-key-header",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "Authenticating the request's credentials.",
+      "name": "cosec.pipeline.authentication-timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "An identity older than this (plus `cosec.authentication.revocation.skew`) is refused: 401 `token-expired`.",
+      "name": "cosec.pipeline.identity.max-age",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Identity",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "A larger header is refused: 400 `invalid-request`.",
+      "name": "cosec.pipeline.identity.max-size",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Identity",
+      "type": "org.springframework.util.unit.DataSize"
+    },
+    {
+      "description": "`enforce` decides with policies; `gateway` trusts the identity the gateway in front forwards (`CoSec-Identity`).",
+      "name": "cosec.pipeline.mode",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties$Mode"
+    },
+    {
+      "description": "The whole evaluation of one request; past it the request is answered 503.",
+      "name": "cosec.pipeline.timeout",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "java.time.Duration"
+    },
+    {
+      "description": "How much of an evaluation's trace decision events carry.",
+      "name": "cosec.pipeline.trace-level",
+      "sourceType": "me.ahoo.cosec.spring.boot.pipeline.PipelineProperties",
+      "type": "me.ahoo.cosec.engine.TraceLevel"
+    },
+    {
+      "defaultValue": "unrestricted",
+      "description": "Permitted level of access for the cosecServiceGenerator endpoint.",
+      "name": "management.endpoint.cosec-service-generator.access",
+      "sourceType": "me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpoint",
+      "type": "org.springframework.boot.actuate.endpoint.Access"
+    }
+  ]
+}
