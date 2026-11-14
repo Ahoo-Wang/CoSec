@@ -328,7 +328,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | H3（✅ #1293） | starter 与后端 | #1234 #1238 #1242 #1271 #1236 #1223 |
 | H4（✅ #1296） | edge、testkit、工具 | #1249 #1257 #1261 #1262 #1276 #1258 |
 
-E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270。
+E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；R7a 增加 #1237 #1250；R7c 增加 #1222；R9 删除 `cosec-migrate cocache8`，同时解决 #1269 #1270（#1351，审核中：命令与 `CoCache8Upgrade` 删除，`CoCache6Format` 保留给 `convert --from-redis`；`publish` 遇到未完成升级的标记时拒绝；恢复提示不再打印 Redis 地址里的凭据）。
 
 **2026-11-09 暂停（额度不足）**：第二轮审查的 runtime（1 高 2 中 2 低）、control（2 中 8 低）已审，修复在 Draft PR #1311（runtime）与 #1312（control）上，PR 描述列出了发现和待办；control 的 M2（删除 DENY 需要审批）未开始。恢复顺序：完成并合入这两批修复 → 第二轮审查其余 4 组（model、spi、engine；后端与 jwt、login、social；edge 与其余扩展；spring-boot、migrate、testkit、api）→ R8 → R9。`RevisionIndexCodec` 为早期构建省略 `reclaiming` 的写法并入 R2。
 

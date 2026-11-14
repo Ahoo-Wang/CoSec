@@ -342,7 +342,7 @@ cosec-cocache（CoCacheControlStore）──────────┘      cos
 
 ### 5.2 数据
 
-> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`ControlStore` 的 Redis 实现（`CoCacheControlStore`）现在基于 CoCache 8.0.0 的 `Store`：条件写（原文的 `putIfMatch`）是 CoCache 8 的条件写，仍只对一个 key 做比较并交换；新增的条件删除 `Store.deleteIfMatch` 让候选的撤回与租约的释放只删自己写的那一个（审计批次 E2a，#1268，规则 `CTL-26`）。摘要是 SHA-256，写作 `SHA-256:<64 位十六进制>`：修订记录的 key、修订索引、`provenance.parent.digest`、变更的 `base.digest` 与 `checkedWith`。CoCache 6 写的控制面记录读出即 500，由 `cosec-migrate cocache8` 删除，历史从重新发布的文档重新开始。
+> **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：`ControlStore` 的 Redis 实现（`CoCacheControlStore`）现在基于 CoCache 8.0.0 的 `Store`：条件写（原文的 `putIfMatch`）是 CoCache 8 的条件写，仍只对一个 key 做比较并交换；新增的条件删除 `Store.deleteIfMatch` 让候选的撤回与租约的释放只删自己写的那一个（审计批次 E2a，#1268，规则 `CTL-26`）。摘要是 SHA-256，写作 `SHA-256:<64 位十六进制>`：修订记录的 key、修订索引、`provenance.parent.digest`、变更的 `base.digest` 与 `checkedWith`。CoCache 6 写的控制面记录读出即 500，由 `cosec-migrate cocache8` 删除，历史从重新发布的文档重新开始。（2026-11-14 修订，#1351：该命令在 GA 的工具里已删除，alpha 部署用 `8.0.0-alpha.4` 的 `cosec-migrate` 完成这次升级；GA 的 `publish` 遇到未完成升级留下的 `<prefix>:meta:cocache8` 标记时拒绝写入。）
 
 | 数据 | CoCache 缓存 | Redis key（`<p>` 是 key 前缀） | 写入 | 读者 | 丢失的后果 |
 |---|---|---|---|---|---|
