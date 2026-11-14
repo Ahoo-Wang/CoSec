@@ -437,6 +437,14 @@ CoSec 注入的那个 Redis 模板（消息里点名的那个）背后的 Lettuc
 `upstream`，或者去掉你的 `LettuceClientConfigurationBuilderCustomizer` 在该模板的连接工厂上设置的 `ReadFrom`。若要从副本读
 其他数据，请为它另配一个模板与连接工厂，且不是 CoSec 注入的那个（不加 `@Primary`）（[Redis 要求](./storage.md#redis-requirements)）。
 
+### macOS 上因扩展 TCP keepalive 选项启动失败 {#startup-fails-on-macos-with-extended-tcp-keepalive-options}
+
+```text
+Extended TCP keepalive options could not be applied. Native transports (io_uring or epoll) or a compatible NIO transport are required.
+```
+
+只发生在 macOS：Lettuce 在那里选用 kqueue 传输，而 kqueue 无法应用 Lettuce 被要求设置的扩展 TCP keepalive 选项（CoCache 的 Redis 后端会要求它们），于是 Redis 连接失败，应用无法启动。Linux 用 epoll 或 io_uring，所以网关镜像和 Kubernetes 节点都不受影响。在 macOS 上运行时，用系统属性 `-Dio.lettuce.core.kqueue=false` 让 Lettuce 改用 NIO，例如 `JAVA_TOOL_OPTIONS=-Dio.lettuce.core.kqueue=false`。不要为了绕过它而关掉 keepalive 选项：正是它们让默默断开的 Redis 连接得以结束。
+
 ### 重新确认间隔导致启动失败 {#startup-fails-on-the-revalidation-interval}
 
 ```text
