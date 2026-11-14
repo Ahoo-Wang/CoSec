@@ -73,7 +73,7 @@ sealed interface Cause {
 
     /**
      * External attributes a statement needed could not be fetched (RFC 0006 §5.4.3): their provider failed, timed out,
-     * or they were not in the attribute plan. [at] is the first statement that needed them, or null when no statement
+     * or they were not in the attribute plan; or `environment.ip`, when the host reported no address (`PIP-17`). [at] is the first statement that needed them, or null when no statement
      * did, such as an unreadable blacklist (§5.4.4).
      */
     data class AttributeUnavailable(val attributes: Set<String>, val at: StatementRef.Policy?) : Cause

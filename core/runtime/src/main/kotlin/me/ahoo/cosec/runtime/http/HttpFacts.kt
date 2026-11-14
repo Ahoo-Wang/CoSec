@@ -31,7 +31,11 @@ class HttpFacts(
     val rawQuery: String?,
     val headers: Headers,
     val cookies: Cookies,
-    /** The peer address, before any forwarded-for resolution. */
+    /**
+     * The client address, read once by the adapter's [RemoteIpResolver] as the starter decides (`PIP-16`): the peer, the
+     * trusted `X-Forwarded-For` entry or what the server resolved, written as an address alone ([ClientAddress]). Not
+     * an address (`unknown`) when it could not be read: `environment.ip` is then unavailable (`PIP-17`).
+     */
     val remoteAddress: String,
     /**
      * The app the host is configured for (RFC 0004 §4.6, [HostScope]): `cosec.authorization.scope.app-id`. On a gateway,

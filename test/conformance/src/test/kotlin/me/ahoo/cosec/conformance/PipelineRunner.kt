@@ -150,7 +150,8 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * ```jsonc
  * "documents":          { "platform": {...}, "apps": {...}, "tenants": {...}, "unavailable": ["tenant", ...] },
  * "http":               { "method": "GET", "path": "/orders", "query": "a=b", "headers": { "<name>": "v" | ["v", ...] },
- *                         "hostApp": null, "requestAttributes": { "<name>": "v" } },
+ *                         "hostApp": null, "requestAttributes": { "<name>": "v" },
+ *                         "remoteAddress": "10.0.0.1" (the client address the adapter read; "unknown" when it could not) },
  * "authentication":     { "result": "token" | "anonymous" | "authenticated" | "rejected" | "unavailable" | "throws" | "hangs",
  *                         "reason": "TOKEN_EXPIRED", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                         "membership": "provider" },
@@ -958,7 +959,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun facts(node: JsonNode): HttpFacts {
-        node.only("method", "path", "query", "headers", "cookies", "hostApp", "requestAttributes")
+        node.only("method", "path", "query", "headers", "cookies", "hostApp", "requestAttributes", "remoteAddress")
         val headers = node.get("headers")?.fields().orEmpty().mapValues { (_, value) ->
             if (value.isArray) value.strings() else listOf(value.text())
         }
@@ -968,7 +969,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             rawQuery = node.get("query")?.textOrNull(),
             headers = Headers.of(headers),
             cookies = Cookies.of(cookies(node)),
-            remoteAddress = REMOTE_ADDRESS,
+            remoteAddress = node.get("remoteAddress")?.text() ?: REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
             requestAttributes = node.get(
                 "requestAttributes"

@@ -75,4 +75,9 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
     testImplementation("me.ahoo.cocache:cocache-test")
     testImplementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
+    // The real-server parity suite (PIP-1, PIP-16): Tomcat, Jetty and Reactor Netty as Spring Boot builds and customizes
+    // them, requests sent as raw bytes. Test only.
+    testImplementation(libs.spring.boot.tomcat)
+    testImplementation(libs.spring.boot.jetty)
+    testImplementation(libs.spring.boot.reactor.netty)
 }
