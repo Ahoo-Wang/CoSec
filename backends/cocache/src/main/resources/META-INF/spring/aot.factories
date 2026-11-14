@@ -12,4 +12,4 @@
 #
 
 org.springframework.aot.hint.RuntimeHintsRegistrar=\
-me.ahoo.cosec.cache.snapshot.SnapshotRuntimeHints
+me.ahoo.cosec.cocache.snapshot.SnapshotRuntimeHints

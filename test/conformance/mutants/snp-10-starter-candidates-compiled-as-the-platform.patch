@@ -1,11 +1,11 @@
 # Rule: SNP-10
 # Mutant: the starter compiles staged candidates with the entry point of the enforced source
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.ShadowReportingWiringTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ShadowReportingWiringTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 index 94be74a6..f135c45f 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 @@ -237,7 +237,7 @@ class CoSecSnapshotAutoConfiguration {
              cosec: CoSecProperties,
          ): CandidateSource {

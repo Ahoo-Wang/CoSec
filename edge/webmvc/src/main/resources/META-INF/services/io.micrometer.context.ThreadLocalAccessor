@@ -1,1 +1,1 @@
-me.ahoo.cosec.servlet.SecurityContextThreadLocalAccessor
+me.ahoo.cosec.webmvc.SecurityContextThreadLocalAccessor

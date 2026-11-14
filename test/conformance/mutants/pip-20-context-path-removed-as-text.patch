@@ -1,11 +1,11 @@
 # Rule: PIP-20
 # Mutant: the servlet adapter removes the context path as text: on Jetty /%61pp/orders/1 is decided as /app/orders/1 and passes a DENY on /orders
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.RealServerContextPathTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RealServerContextPathTest
 
-diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
 index 2e240faf..51b99a7e 100644
---- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt
-+++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/PipelineServletFilter.kt
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
 @@ -56,7 +56,7 @@ internal object ServletHttpFactsReader {
          return HttpFacts(
              method = request.method,

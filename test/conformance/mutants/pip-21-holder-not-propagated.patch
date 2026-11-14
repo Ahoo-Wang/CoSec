@@ -1,11 +1,11 @@
 # Rule: PIP-21
 # Mutant: the holder is not registered for context propagation: Spring restores its own thread-locals and leaves the holder to the thread's request
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.SuspendingHandlerContextTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.SuspendingHandlerContextTest
 
 diff --git a/edge/webmvc/src/main/resources/META-INF/services/io.micrometer.context.ThreadLocalAccessor b/edge/webmvc/src/main/resources/META-INF/services/io.micrometer.context.ThreadLocalAccessor
 index 4abb60e1..35239c82 100644
 --- a/edge/webmvc/src/main/resources/META-INF/services/io.micrometer.context.ThreadLocalAccessor
 +++ b/edge/webmvc/src/main/resources/META-INF/services/io.micrometer.context.ThreadLocalAccessor
 @@ -1 +1 @@
--me.ahoo.cosec.servlet.SecurityContextThreadLocalAccessor
-+# me.ahoo.cosec.servlet.SecurityContextThreadLocalAccessor
+-me.ahoo.cosec.webmvc.SecurityContextThreadLocalAccessor
++# me.ahoo.cosec.webmvc.SecurityContextThreadLocalAccessor

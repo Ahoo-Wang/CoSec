@@ -1,6 +1,6 @@
 # Rule: SCP-10
 # Mutant: an app key takes any id without ':', as before R1-6, so the control plane takes app ids the data plane never reads
-# Tests: :cocache:test --tests me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoderTest :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoderTest :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest
 
 diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt
 index a6bf6eaa..31ba4394 100644

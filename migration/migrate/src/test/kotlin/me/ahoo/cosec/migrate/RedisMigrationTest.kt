@@ -23,9 +23,9 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
-import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
 import me.ahoo.cosec.migrate.Fixtures7x.policy
@@ -328,7 +328,7 @@ class RedisMigrationTest {
         ).first.assert().isEqualTo(MigrateMain.OK)
         val documents = ConvertedDirectory.read(out)
         val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-        val store = me.ahoo.cosec.cache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
         // A first run that stopped after the platform document.
         DocumentPublisher(store).publish(mapOf(SnapshotKey.Platform to documents.getValue(SnapshotKey.Platform)))
         val (refused, refusedOutput) = run(

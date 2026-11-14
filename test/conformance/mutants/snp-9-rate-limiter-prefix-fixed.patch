@@ -1,11 +1,11 @@
 # Rule: SNP-9
 # Mutant: the rate limiter counts under the fixed cosec:rate-limiter prefix, shared by every deployment
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.DeploymentKeyPrefixTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.DeploymentKeyPrefixTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
 index 9e9ff61e..aefc69c4 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineIntegrationAutoConfiguration.kt
 @@ -107,7 +107,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
              @Bean
              @ConditionalOnMissingBean

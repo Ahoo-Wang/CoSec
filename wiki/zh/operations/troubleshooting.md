@@ -242,7 +242,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 ```
 
 每个实例每个 [`revalidate-interval`](./configuration.md#snapshot) 在自己的线程上读取每个 Redis 节点的
-`maxmemory-policy`；某个节点开始允许驱逐时，`me.ahoo.cosec.spring.boot.starter.pipeline.EvictionPolicyMonitor` 以 `ERROR`
+`maxmemory-policy`；某个节点开始允许驱逐时，`me.ahoo.cosec.spring.boot.pipeline.EvictionPolicyMonitor` 以 `ERROR`
 记录上面这一行：有人执行了 `CONFIG SET maxmemory-policy`、Redis 切换到了另一种配置的节点，或某个节点以另一份配置重启。
 `cosecSnapshotEviction` 健康指示器随之为 `DOWN`，`eviction` 详情里是同样的文本。请求照常决策；Redis 驱逐的应用文档或租户
 文档，会被下一个加载它的实例读成不存在。在每个节点上重新设置 `noeviction`；下一次读取之后指示器变回 `UP`，实例以 `INFO`

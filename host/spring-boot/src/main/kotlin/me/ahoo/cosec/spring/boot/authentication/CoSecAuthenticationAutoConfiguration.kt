@@ -1,0 +1,63 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package me.ahoo.cosec.spring.boot.authentication
+
+import me.ahoo.cosec.login.Authentication
+import me.ahoo.cosec.login.AuthenticationProvider
+import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.DefaultAuthenticationProvider
+import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
+import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.ApplicationContext
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Primary
+
+/**
+ * CoSec AutoConfiguration .
+ *
+ * @author ahoo wang
+ */
+@AutoConfiguration
+@ConditionalOnCoSecEnabled
+@ConditionalOnLoginEnabled
+@EnableConfigurationProperties(
+    LoginProperties::class,
+)
+internal class CoSecAuthenticationAutoConfiguration {
+    /**
+     * This context's own registry of its own beans (#1222). The composites depend on this bean, so `getBeansOfType`
+     * leaves them out as beans in creation: a composite in the registry would dispatch to itself.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    fun authenticationProvider(
+        applicationContext: ApplicationContext
+    ): AuthenticationProvider {
+        val authenticationProvider = DefaultAuthenticationProvider()
+        applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
+            @Suppress("UNCHECKED_CAST")
+            it as Authentication<Credentials>
+            authenticationProvider.register(it)
+        }
+        return authenticationProvider
+    }
+
+    @Bean
+    @Primary
+    fun compositeAuthentication(authenticationProvider: AuthenticationProvider): CompositeAuthentication {
+        return CompositeAuthentication(authenticationProvider)
+    }
+}

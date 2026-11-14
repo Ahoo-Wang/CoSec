@@ -16,6 +16,14 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **Three packages follow their modules' names.** `me.ahoo.cosec.cache` (`cosec-cocache`) is now
+  `me.ahoo.cosec.cocache`, `me.ahoo.cosec.servlet` (`cosec-webmvc`) is `me.ahoo.cosec.webmvc`, and
+  `me.ahoo.cosec.spring.boot.starter` (`cosec-spring-boot`) is `me.ahoo.cosec.spring.boot`. Sub-packages keep their
+  names under the new root; no class, artifact id, `cosec.*` property, bean name or Redis key changes. In an
+  application, change the imports; the names of auto-configuration classes in `spring.autoconfigure.exclude` and in
+  `@ConditionalOnClass(name = ...)` strings (`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` is now
+  `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`); and the logger names in its logging configuration
+  (`logging.level.me.ahoo.cosec.cache` is now `logging.level.me.ahoo.cosec.cocache`).
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
@@ -1515,7 +1523,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
-| `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet` (`cosec-webmvc`) | `SecurityContextHolder` |
+| `me.ahoo.cosec.context` | `me.ahoo.cosec.webmvc` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
 | `me.ahoo.cosec.audit` | `me.ahoo.cosec.runtime.audit` (`cosec-runtime`) | `LoggingAuditEventSink`, `AuditEventData` |

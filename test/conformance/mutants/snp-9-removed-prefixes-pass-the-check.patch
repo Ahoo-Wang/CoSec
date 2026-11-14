@@ -1,11 +1,11 @@
 # Rule: SNP-9
 # Mutant: a key named key-prefix passes the unknown-property check, so an environment written for a replaced prefix starts and the revocations under it are no longer read
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.UnknownPropertiesTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.UnknownPropertiesTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/UnknownProperties.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/UnknownProperties.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/UnknownProperties.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/UnknownProperties.kt
 index c13a720e..3e523860 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/UnknownProperties.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/UnknownProperties.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/UnknownProperties.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/UnknownProperties.kt
 @@ -54,7 +54,7 @@ class UnknownProperties(
  
      /** Fails startup when [environment] has keys CoSec does not read. */

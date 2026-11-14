@@ -1,11 +1,11 @@
 # Rule: OBL-4
 # Mutant: a new window drops the previous window's count instead of weighing it, so a bucket allows twice its quota across a window boundary
-# Tests: :cocache:test --tests me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiterTest
 
-diff --git a/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua b/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua
+diff --git a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
 index f9339102..4f2b1e92 100644
---- a/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua
-+++ b/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua
+--- a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
++++ b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
 @@ -28,7 +28,7 @@ local previous = tonumber(stored[3]) or 0
  if counted == nil or counted < window - 1 then
    current, previous = 0, 0

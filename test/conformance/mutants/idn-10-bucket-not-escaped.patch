@@ -1,6 +1,6 @@
 # Rule: IDN-10
 # Mutant: a rate limit key value with an unpaired surrogate counts in the bucket of the value with ? in its place
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RateLimitObligationTest :cocache:test --tests me.ahoo.cosec.cache.UnpairedSurrogateKeyTest
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RateLimitObligationTest :cocache:test --tests me.ahoo.cosec.cocache.UnpairedSurrogateKeyTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
 index abb60a5f..21e8dfa3 100644

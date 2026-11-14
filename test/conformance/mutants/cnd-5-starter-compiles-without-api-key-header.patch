@@ -1,11 +1,11 @@
 # Rule: CND-5
 # Mutant: the starter's data-plane compiler is not told the renamed API key header, so documents reading it compile
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.StarterWiringTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.StarterWiringTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 index d7514bf7..5754519f 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 @@ -204,7 +204,7 @@ class CoSecSnapshotAutoConfiguration {
      @Bean
      @ConditionalOnMissingBean
