@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.control.store
 
@@ -23,6 +23,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.control.change.ALICE_OP
 import me.ahoo.cosec.control.change.ChangeHarness
 import me.ahoo.cosec.control.change.ChangeRejectedException

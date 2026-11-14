@@ -345,6 +345,24 @@ and have to be provisioned again.
     internal: `RouteMap.resolve` answers them.
   - `InstanceStatus.FORMAT_LEVEL` is no longer a `const`.
 
+- **The public API of `cosec-control` and `cosec-cocache` is classified for 8.0** (R9):
+  - `ControlStore`, `InMemoryControlStore`, `CoCacheControlStore` and the records a store keeps (`ChangeRequest`,
+    `ChangeRequestCodec`, `ChangeState`, `Base`, `Approval`, `CheckedApps`, `Finding`, `Severity`, `Operation`,
+    `ShadowState`, `StageSlot`, `AppList`, `PendingRecord`, `RevisionEntry`, `RevisionIndex`, `StoredDocument`,
+    `Versioned`, `HeadWrite`), with the shadow window ports and their reports (`CandidateStore`, `ShadowReportSink`,
+    `ShadowReportReader`, `CoCacheShadowReports`, `InstanceStatus`, `InstalledDocument`, `ShadowReport`,
+    `ShadowSample`, `StoredCandidate`, `ShadowOutcome`) and `ProvenanceKind`, are `@ExperimentalCoSecApi`: a store of your
+    own opts in. `ChangeListener`, `ChangeEvent` and what it carries stay stable; `Escalation` and `Confirmation` are no
+    longer `data class`es (no `copy`, no `componentN`; equality is unchanged).
+  - The CoCache caches (`RevokedTokenCache`, `RevokedSubjectCache`, `MembershipCache`, `PolicySnapshotCache`) are
+    `@InternalCoSecApi`, as are the constructors and factories of `cosec-cocache`'s classes that take CoCache or Spring
+    Data types (`CoCacheTokenStore`, `CoCacheMembershipProvider`, `CoCacheTokenFamilyStore`, `RedisApiKeyReader`,
+    `RedisApiKeyStore`, `ReactiveRedisRateLimiter`, `RedisSnapshotDocumentStore` and its digest helpers,
+    `CoCacheControlStore.create`, `CoCacheShadowReports.create`) and the `DEFAULT_*_KEY_PREFIX` constants. Only
+    `CoSecCacheSpecs`, internal already, could build those caches: the starter builds them, and an application declares
+    its beans' types (`RedisApiKeyStore`, `CoCacheMembershipProvider`, ...) to use them. The cache names in
+    `cocache.caches.[<CacheName>]` do not change.
+
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference

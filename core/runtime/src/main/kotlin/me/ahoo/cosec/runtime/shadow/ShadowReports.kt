@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.shadow
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -24,6 +25,7 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /** How a sampled request came out on the candidate, against the enforced documents (RFC 0007 §6.4). */
+@ExperimentalCoSecApi
 enum class ShadowOutcome {
     /** The same decision, by the same statement. */
     SAME,
@@ -64,6 +66,7 @@ enum class ShadowOutcome {
  * One sampled request (RFC 0007 §6.4): the fields a decision event has (RFC 0006 §9.2), and the statements that decided
  * on each side, never a header, a token or an attribute value.
  */
+@ExperimentalCoSecApi
 class ShadowSample(
     val tenant: String,
     val principal: String,
@@ -97,6 +100,7 @@ class ShadowSample(
  * the base revisions it compared against, and the first and last sample times. Cumulative: each write replaces the
  * instance's previous report for the window.
  */
+@ExperimentalCoSecApi
 class ShadowReport(
     val window: String,
     val instance: String,
@@ -150,6 +154,7 @@ class ShadowReport(
 }
 
 /** A document an instance has installed (RFC 0007 §6.5): its revision, and how long since it was last confirmed. */
+@ExperimentalCoSecApi
 class InstalledDocument(val revision: Long, val lag: Duration) {
     private fun fields(): List<Any?> = listOf(revision, lag)
 
@@ -161,6 +166,7 @@ class InstalledDocument(val revision: Long, val lag: Duration) {
 }
 
 /** What an instance reported having installed, at [at] (RFC 0007 §6.5). */
+@ExperimentalCoSecApi
 class InstanceStatus(
     val instance: String,
     val at: Instant,
@@ -193,6 +199,7 @@ class InstanceStatus(
 
 /** Where each instance writes its shadow reports and its status (RFC 0007 §6.4, §6.5). */
 @CoSecSpi
+@ExperimentalCoSecApi
 interface ShadowReportSink {
     suspend fun write(report: ShadowReport)
 
@@ -201,6 +208,7 @@ interface ShadowReportSink {
 
 /** What the control plane reads back: every instance's report of a window, and the statuses written recently. */
 @CoSecSpi
+@ExperimentalCoSecApi
 interface ShadowReportReader {
     suspend fun reports(window: String): List<ShadowReport>
 

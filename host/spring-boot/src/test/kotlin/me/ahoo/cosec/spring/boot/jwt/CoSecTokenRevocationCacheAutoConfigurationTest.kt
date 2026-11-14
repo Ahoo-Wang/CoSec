@@ -10,11 +10,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.jwt
 
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoCacheTokenFamilyStore
 import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.cocache.RevokedSubjectCache

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache
 
 import kotlinx.coroutines.future.await
@@ -18,6 +20,7 @@ import me.ahoo.cocache.api.CacheReadException
 import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.core.ForeignFormatException
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader

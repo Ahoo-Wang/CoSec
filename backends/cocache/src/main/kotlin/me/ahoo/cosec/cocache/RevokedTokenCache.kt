@@ -32,7 +32,9 @@ import me.ahoo.cosec.model.Identifiers
  * @author ahoo wang
  * @see CoCacheTokenStore
  */
+@InternalCoSecApi
 interface RevokedTokenCache : Store<String, Boolean> {
+    @InternalCoSecApi
     companion object {
         /** Bounds how long a "not revoked" lookup is cached locally if an invalidation message is lost. */
         const val MISSING_TTL_SECONDS = 30L

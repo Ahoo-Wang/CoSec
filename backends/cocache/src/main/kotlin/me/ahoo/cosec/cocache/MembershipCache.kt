@@ -33,7 +33,9 @@ import java.util.Collections
  * [CoCacheMembershipProvider] with the loader on each call (an externally sourced CoCache `Cache`). Not the store of
  * record: entries expire, but a failed read throws (see [CoSecCacheSpecs.membership]).
  */
+@InternalCoSecApi
 interface MembershipCache : Cache<String, Memberships> {
+    @InternalCoSecApi
     companion object {
         /** The same unambiguous subject key as [RevokedSubjectCache.key]. */
         fun key(tenant: TenantId, principal: PrincipalId): String = RevokedSubjectCache.key(tenant, principal)

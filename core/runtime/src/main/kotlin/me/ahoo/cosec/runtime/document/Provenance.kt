@@ -11,10 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -71,6 +72,7 @@ data class ParentRevision(val revision: Long, val digest: String) {
 }
 
 /** How a revision came to be (RFC 0007 §5.3). */
+@ExperimentalCoSecApi
 enum class ProvenanceKind {
     PUBLISH,
     ROLLBACK,

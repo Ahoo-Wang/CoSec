@@ -14,12 +14,14 @@
 package me.ahoo.cosec.cocache.limiter
 
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 
+@InternalCoSecApi
 const val DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX = "cosec:rate-limiter"
 
 /**
@@ -32,7 +34,7 @@ const val DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX = "cosec:rate-limiter"
  *
  * A Redis failure is thrown; the rule's `strictFailure` decides what it means.
  */
-class ReactiveRedisRateLimiter(
+class ReactiveRedisRateLimiter @InternalCoSecApi constructor(
     private val template: ReactiveStringRedisTemplate,
     keyPrefix: String = DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX,
 ) : RateLimiter {
@@ -59,7 +61,7 @@ class ReactiveRedisRateLimiter(
      */
     internal fun keyOf(ruleId: String, bucket: String): String = "$keyPrefix:$ruleId:$bucket"
 
-    companion object {
+    private companion object {
         /** Script resource next to this class, in the module resources. */
         private const val SCRIPT_PATH = "redis-rate-limiter.lua"
 

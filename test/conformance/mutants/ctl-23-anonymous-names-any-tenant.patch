@@ -2,11 +2,10 @@
 # Mutant: a request without a principal may name any tenant, and is decided on (0) under its name
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 0f98c085..d66f884f 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -350,7 +350,7 @@ class DefaultControlPlane(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+@@ -244,7 +244,7 @@
          val tenant = simulator.tenantOf(request)
          val key = SnapshotKey.Tenant(tenant.value)
          authority.require(operator, key, action)

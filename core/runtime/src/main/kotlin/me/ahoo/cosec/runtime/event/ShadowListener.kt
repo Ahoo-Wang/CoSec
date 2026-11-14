@@ -11,12 +11,13 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.event
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine

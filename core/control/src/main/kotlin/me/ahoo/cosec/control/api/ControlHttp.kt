@@ -751,6 +751,7 @@ class ControlHttp(private val plane: ControlPlane) {
         requireRequest(unknown.isEmpty()) { "Unknown fields $unknown in [$name]." }
     }
 
+    @InternalCoSecApi
     companion object {
         private const val UNPAIRED_SURROGATE = "The request holds a string with an unpaired UTF-16 surrogate, which " +
             "no id may hold (IDN-10)."

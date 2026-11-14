@@ -2,11 +2,10 @@
 # Mutant: a simulated http path is checked against enforcement's normalization, then decided as given
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 671c94b7..e9d8370f 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -408,7 +408,7 @@ class DefaultControlPlane(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+@@ -266,7 +266,7 @@
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */

@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
@@ -59,6 +60,7 @@ value class ChangeId(val value: String) {
  * SHADOWING, AWAITING_APPROVAL, READY -> CONFLICTED when the base changes; CONFLICTED -> DRAFT by rebase
  * ```
  */
+@ExperimentalCoSecApi
 enum class ChangeState {
     /** Proposed, with the findings of its last check; not checked clean. */
     DRAFT,
@@ -93,6 +95,7 @@ enum class ChangeState {
  * [EntryDigest] of the entry as the author last saw it: the operation applies only if the entry is still that, so a
  * replay on a newer head (a rebase) fails instead of overwriting what someone else changed.
  */
+@ExperimentalCoSecApi
 sealed interface Operation {
     /** Adds the policy, or replaces the one of the same id. */
     @InternalCoSecApi
@@ -139,6 +142,7 @@ sealed interface Operation {
 }
 
 /** How bad a finding is: an error keeps the change from being checked clean, a warning is shown at publish. */
+@ExperimentalCoSecApi
 enum class Severity { ERROR, WARNING }
 
 /**
@@ -146,6 +150,7 @@ enum class Severity { ERROR, WARNING }
  * `COMPILE`, `IF_MATCH`, `OPERATION`, `REFERENCES`); [status] is the HTTP status the control API answers it with
  * (RFC 0007 §10.2).
  */
+@ExperimentalCoSecApi
 data class Finding(
     val check: String,
     val path: String,
@@ -155,6 +160,7 @@ data class Finding(
 )
 
 /** The head a change was made on: its revision and digest; revision 0 and no digest for a document not yet published. */
+@ExperimentalCoSecApi
 data class Base(val revision: Long, val digest: SnapshotDigest?) {
     init {
         require(
@@ -175,6 +181,7 @@ data class Base(val revision: Long, val digest: SnapshotDigest?) {
  * documents the candidate was compiled and analyzed with; publishing checks again on the current heads, and once it has
  * written, looks whether one of them moved in between (RC1-33).
  */
+@ExperimentalCoSecApi
 data class ChangeRequest(
     val id: ChangeId,
     val key: SnapshotKey,
@@ -208,6 +215,7 @@ data class ChangeRequest(
 }
 
 /** The app list a check read: its [digest], `null` when there was none. */
+@ExperimentalCoSecApi
 data class CheckedApps(val digest: SnapshotDigest?)
 
 /** Where a document's staging slot is (RFC 0007 §5.5): the change holding it, `null` when it is free. */
@@ -218,12 +226,22 @@ data class CheckedApps(val digest: SnapshotDigest?)
  * break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an approval covers the
  * escalations whose subjects it lists.
  */
-data class Escalation(val subject: String, val reason: String, val detail: String = "") {
+class Escalation(val subject: String, val reason: String, val detail: String = "") {
     /**
      * Shown to the approver, never itself a reason to approve: the tenant bindings an app change widens (RC1-34). Their
      * own change after an approval does not send the change back, since what was approved is widening the policy.
      */
     val informational: Boolean get() = reason == TENANT_BINDING
+
+    // A plain class, not a `data class`: a `ChangeEvent` carries it, so it is stable, and a field it gains is a new
+    // constructor (RFC 0010 C4). It compares by value, as the change records it is part of do.
+    override fun equals(other: Any?): Boolean =
+        this === other || other is Escalation && subject == other.subject && reason == other.reason &&
+            detail == other.detail
+
+    override fun hashCode(): Int = (subject.hashCode() * 31 + reason.hashCode()) * 31 + detail.hashCode()
+
+    override fun toString(): String = "Escalation(subject=$subject, reason=$reason, detail=$detail)"
 
     companion object {
         const val TENANT_BINDING = "TENANT_BINDING"
@@ -242,6 +260,7 @@ data class Escalation(val subject: String, val reason: String, val detail: Strin
  * the approver, with the [memberships] and [attributes] they approved with, still holds `cosec:approve` on the
  * document: publishing checks that again (review K3). An approval without them cannot be checked, so it does not count.
  */
+@ExperimentalCoSecApi
 data class Approval(
     val approver: Actor,
     val at: Instant,
@@ -273,6 +292,7 @@ data class Approval(
  * A change's shadow window (RFC 0007 §6.4): [window] names it in the candidate and in every instance's report; [closed]
  * is what the reports summed to when it closed, and stays as the evidence the publisher acknowledges.
  */
+@ExperimentalCoSecApi
 data class ShadowState(
     val window: String,
     val startedAt: Instant,
@@ -307,6 +327,7 @@ data class ShadowSummary(
 @InternalCoSecApi
 data class ShadowAck(val window: String, val counts: Map<String, Long>)
 
+@ExperimentalCoSecApi
 data class StageSlot(val holder: ChangeId?, val since: Instant?) {
     companion object {
         val FREE: StageSlot = StageSlot(null, null)

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.cocache.shadow
 
@@ -25,6 +25,7 @@ import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.api.spi.Digest
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.createLocked
