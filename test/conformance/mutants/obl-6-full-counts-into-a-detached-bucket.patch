@@ -1,0 +1,17 @@
+# Rule: OBL-6
+# Mutant: a full local limiter counts a new bucket into one it does not keep, so the rule passes uncounted instead of failing to count
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.RateLimitObligationTest --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+@@ -139,7 +139,8 @@
+         if (!swept) {
+             sweepStep(now)
+         }
+-        return tryAdmit(key, rule, windowMillis, now) ?: throw LimiterFullException(
++        @Suppress("UNREACHABLE_CODE", "USELESS_ELVIS")
++        return tryAdmit(key, rule, windowMillis, now) ?: return Window(windowMillis, now) ?: throw LimiterFullException(
+             "The local rate limiter holds its maximum of buckets (rule [${key.ruleId}]: " +
+                 "${rule.get()} of $maximumBucketsPerRule, all: ${admitted.get()} of $maximumBuckets)."
+         )

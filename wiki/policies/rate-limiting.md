@@ -123,7 +123,7 @@ refused requests are not counted.
 | Limiter | Used when | Scope |
 |---|---|---|
 | `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Each bucket is one key, `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`, which holds its current and previous window and expires two windows after its last count. The script takes the time from Redis, so instances whose clocks differ count in the same window, and it touches only that key, so it runs on a Redis Cluster as on one node. |
-| `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. Keeps at most 100,000 buckets and drops buckets idle for an hour; a dropped bucket starts again from zero. |
+| `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. A bucket is removed once it has been idle for an hour and for two of its rule's windows, when its count can no longer refuse a request. At most 100,000 buckets in all and 50,000 of one rule ([below](#the-local-limiter-is-bounded)). |
 
 **The counters are memory a client can grow.** They live in the same Redis as the documents, which must not evict
 ([Storage](../operations/storage.md#redis-requirements)): one key per bucket value, for two windows. A rule whose `key`
@@ -134,6 +134,23 @@ address a trusted proxy reports) and keep windows short; to keep the counters aw
 the limiter a Redis of its own: declare a `RateLimiter` bean,
 `ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(<a connection factory of its own>), "<prefix>:rate-limiter")`, and
 the starter's is not created.
+
+
+### The local limiter is bounded
+
+`LocalRateLimiter` keeps its counters in the instance's memory, at most 100,000 buckets in all and 50,000 of one rule
+(`OBL-6`). It never removes a bucket to make room: the count is the state the rule exists to keep, and dropping it
+would give its key fresh permits (`OBL-5`). So a full limiter cannot count a new bucket, and the rule's `strictFailure`
+decides as for any [failing limiter](#failure-behavior): a strict rule answers `503`, a lenient one is skipped. The log
+line `Rate limiter unavailable: rule [<id>] ...` then carries
+`The local rate limiter holds its maximum of buckets (rule [<id>]: <n> of <max>, all: <n> of <max>).` Buckets that
+already exist keep counting.
+
+A rule whose `key` reads something a client can vary fills only its own share: the other rules keep admitting new
+buckets. It limits nothing, though: each new value is a fresh bucket, and once the rule's share is full every new value
+is skipped (lenient) or refused (strict). Key local rules on what a client cannot multiply, as for Redis. Other bounds
+take a `RateLimiter` bean of your own, `LocalRateLimiter(maximumBuckets = ..., maximumBucketsPerRule = ...)`; the
+per-rule bound defaults to half the total.
 
 Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has
 `cosec.authorization.rate-limit.timeout` (default `500ms`, [Configuration](../operations/configuration.md)); a call
@@ -156,8 +173,8 @@ A request that matched no rule, or whose rules were all skipped, has none of the
 
 ## Failure behavior
 
-A rule cannot be counted when the limiter fails (Redis unreachable, a script error), times out, is not configured, or
-the rule's bucket cannot be read. Its `strictFailure` decides:
+A rule cannot be counted when the limiter fails (Redis unreachable, a script error, a [full local limiter](#the-local-limiter-is-bounded)),
+times out, is not configured, or the rule's bucket cannot be read. Its `strictFailure` decides:
 
 | `strictFailure` | The request |
 |---|---|

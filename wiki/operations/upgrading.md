@@ -362,6 +362,18 @@ and have to be provisioned again.
     `CoSecCacheSpecs`, internal already, could build those caches: the starter builds them, and an application declares
     its beans' types (`RedisApiKeyStore`, `CoCacheMembershipProvider`, ...) to use them. The cache names in
     `cocache.caches.[<CacheName>]` do not change.
+- **`LocalRateLimiter` keeps every count that can still refuse a request, and a full one cannot count** (`OBL-5`,
+  `OBL-6`). It dropped a bucket idle for an hour, so a rule with a longer window (up to a day) let a client back in
+  after an hour's pause, and evicted buckets by size, so a flood of new keys on one rule reset the counts of every rule.
+  Now a bucket is removed only once it has been idle for an hour and for two of its rule's windows, and never to make
+  room. The limiter holds at most 100,000 buckets and 50,000 of one rule; a new bucket beyond either cannot be counted,
+  so the rule's `strictFailure` decides: a strict rule answers `503` (`RateLimiterUnavailable`), a lenient one is
+  skipped. Before, it was counted from zero. If a rule keyed on something a client can vary now answers `503`, key it on
+  the principal or a trusted address instead ([The local limiter is
+  bounded](../policies/rate-limiting.md#the-local-limiter-is-bounded)). `LocalRateLimiter`'s constructor takes a new second
+  parameter, `maximumBucketsPerRule`, before `expireAfterAccess` and `clock`: calls by name are unchanged, positional
+  ones change. `cosec-runtime` no longer brings Guava: an
+  application that used it through CoSec declares it itself.
 
 - **The public API of the starter, `cosec-login`, `cosec-social` and the web adapters is classified for 8.0** (R9):
   - **`cosec-login`'s `Credentials` is `LoginCredentials`, and `Authentication.supportCredentials` is

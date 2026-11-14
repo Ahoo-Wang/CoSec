@@ -216,7 +216,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   the request sent that header more than once with different values (`Header [<name>] arrived with different
   values`); an ALLOW on it then does not match. One value repeated reads as that value.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
-  the log: see Rate limiting).
+  the log: see Rate limiting; without Redis, a full `LocalRateLimiter`: see Rate limiting).
 - **A REQUIRED decision listener failed or timed out** (`cosec.observability.listener.required-timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation store that
   cannot be read lets the request's token through instead (the documented exception to fail closed), unless
@@ -350,6 +350,11 @@ header: anonymous. Otherwise never anonymous:
 - Denied requests never spend permits. A rule that never applies has a non-matching action (namespace), resource or
   condition. Rules count per document: an app's or tenant's rule has its own buckets.
 - A limiter failure skips the rule unless `strictFailure: true` (then 503, not 429).
+- The per-JVM `LocalRateLimiter` holds at most 100,000 buckets, 50,000 of one rule (OBL-6), and never evicts one to
+  make room. When full, a new key cannot be counted: `The local rate limiter holds its maximum of buckets (rule [<id>]:
+  ...)` in the stack trace of `Rate limiter unavailable`, and the rule's `strictFailure` decides (503 or skipped);
+  existing buckets keep counting. Typically the rule's `key` reads something a client varies: key it on the principal
+  or a trusted address. A bucket is removed only after an hour idle and two of its rule's windows (OBL-5).
 - A `key` value with an unpaired UTF-16 surrogate counts in a bucket of its own, `e:` and the value escaped (`\uD800`,
   `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values count in `k:<value>`.
 - On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
