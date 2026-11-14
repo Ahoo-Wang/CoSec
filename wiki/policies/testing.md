@@ -610,7 +610,7 @@ documents as JSON text.
 | `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
 | `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
-| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `what` (`method`, `path`). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
+| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
 
 `http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
 `Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API

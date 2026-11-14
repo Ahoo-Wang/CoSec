@@ -72,14 +72,14 @@ class KitEnforcementTest {
     fun `a lower-case method is refused, by the kit as by the pipeline`() {
         val (outcome, status) = both("get", "/x")
         status.assert().isEqualTo(400)
-        outcome.describe().assert().isEqualTo("""{"decision":"InvalidRequest","what":"method"}""")
+        outcome.describe().assert().isEqualTo("""{"decision":"InvalidRequest","refused":"action"}""")
     }
 
     @Test
     fun `a path the pipeline refuses is refused by the kit too`() {
         val (outcome, status) = both("GET", "/public/../admin/x")
         status.assert().isEqualTo(400)
-        outcome.describe().assert().isEqualTo("""{"decision":"InvalidRequest","what":"path"}""")
+        outcome.describe().assert().isEqualTo("""{"decision":"InvalidRequest","refused":"resource"}""")
     }
 
     /** The negative side: what the pipeline decides, the kit decides alike. */
@@ -152,5 +152,19 @@ class KitEnforcementTest {
         val unreported = converted(directory, "租".repeat(30), report = false)
         val error = assertThrows<ScenarioFormatException> { PolicyTestKit.load(unreported) }
         error.message.assert().contains("report.json")
+    }
+
+    /** A hand-written id with a `~`: its file name writes it URL-encoded, and a literal one is told so. */
+    @Test
+    fun `a literal tilde in a file name names both readings`(@TempDir directory: Path) {
+        directory.resolve("tenants").createDirectories().resolve("my~tenant.json").writeText("{}")
+        val literal = assertThrows<ScenarioFormatException> { PolicyTestKit.load(directory) }
+        literal.message.assert().contains("report.json").contains("%7E")
+        val tenants = directory.resolve("tenants")
+        tenants.resolve("my~tenant.json").toFile().renameTo(tenants.resolve("my%7Etenant.json").toFile())
+        PolicyTestKit.load(directory).check(
+            "my~tenant",
+            """{"credential":{"tenant":"my~tenant"},"request":{"action":"order:read"},"expect":{"decision":"Deny"}}""",
+        )
     }
 }

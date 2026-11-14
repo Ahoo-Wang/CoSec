@@ -69,11 +69,22 @@ sealed interface EngineOutcome {
     class NotCompiled(val error: String) : EngineOutcome
 
     /**
-     * Enforcement refuses the request before any decision (`400 invalid-request`): an `http` action whose method holds a
-     * lower-case letter, or a path the pipeline refuses, such as one with a dot segment (`PIP-14`, `PIP-18`). [what] is
-     * `method` or `path`.
+     * Enforcement refuses the request before any decision (`400 invalid-request`, `PIP-15`): [refused] names the part
+     * of the scenario's request it refuses, as the scenario names it.
      */
-    class InvalidRequest(val what: String) : EngineOutcome
+    class InvalidRequest(val refused: RequestPart) : EngineOutcome
+
+    /** A part of a scenario's request, rendered in lower case in `expect` (`"refused": "action"`). */
+    enum class RequestPart {
+        /** An `http` action whose method holds a lower-case letter (`PIP-18`). */
+        ACTION,
+
+        /**
+         * A resource enforcement refuses: an `http` path the pipeline answers 400 for, such as one with a dot segment
+         * (`PIP-14`), or a typed resource id beyond the bounds of a request path.
+         */
+        RESOURCE,
+    }
 
     /**
      * This outcome in the scenario syntax, as `expect` writes it: `{"decision":"Deny","by":null}`, for an assertion
@@ -212,7 +223,9 @@ class EngineScenarios(
 
     /** What enforcement refuses of [request]: its method, or else its path. */
     private fun refused(request: JsonNode): EngineOutcome =
-        EngineOutcome.InvalidRequest(if (Enforceable.action(action(request)) == null) "method" else "path")
+        EngineOutcome.InvalidRequest(
+            if (Enforceable.action(action(request)) == null) EngineOutcome.RequestPart.ACTION else EngineOutcome.RequestPart.RESOURCE
+        )
 
     private fun action(request: JsonNode): Action = (request.get("action")?.text() ?: "order:read").let {
         Action(it.substringBefore(':'), it.substringAfter(':'))

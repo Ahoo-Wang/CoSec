@@ -376,7 +376,7 @@ class PolicyTest {
 | `credential` | 主体：`tenant`（默认 `acme`）、`id`（默认 `alice`）、`roles`（`role` 或 `role@space`）、`policies`（附加策略）、`attributes`；匿名调用方用 `"anonymous": true`。 |
 | `membershipProvider` | `MembershipProvider` 返回的成员关系，按管道的方式与凭证中的合并：按空间分组的 `roles`（`{"": ["reader"]}`）和 `attachments`；或 `{"fails": "message"}`。 |
 | `request` | `action`（默认 `order:read`）、`resource`（`type`、`id`、`attributes`；默认 `order/1`）、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
-| `expect` | `decision`：`Permit`、`Deny`、`Indeterminate`、`Rejected` 或 `InvalidRequest`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause`、`reason` 或 `what`（`method`、`path`）。必填：没有 `decision` 的 `expect` 是错误，因为它无论决策如何都会通过。 |
+| `expect` | `decision`：`Permit`、`Deny`、`Indeterminate`、`Rejected` 或 `InvalidRequest`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause`、`reason` 或 `refused`（`action`：含小写字母的 `http` 方法；`resource`：管道拒绝的路径，或超出请求路径上限的类型化 id）。必填：没有 `decision` 的 `expect` 是错误，因为它无论决策如何都会通过。 |
 
 `http.origin.host` 和 `http.referer.host` 读取 `headers` 的方式与实例一致：取 `Origin` 或 `Referer` URL 的主机并折叠为 ASCII 小写，`https://EXAMPLE.com` 即 `example.com`。`cosec-testkit` 会带上其 API 用到的依赖（引擎和 JUnit 的 `DynamicTest`）：应用只需声明上面那一条依赖。场景和文档以文本或文件传入，测试工具的 API 不含任何 Jackson 类型。
 

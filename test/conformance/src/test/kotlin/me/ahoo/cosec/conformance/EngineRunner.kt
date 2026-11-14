@@ -30,7 +30,7 @@ class EngineRunner(private val scenarios: EngineScenarios = EngineScenarios()) :
         is EngineOutcome.Rejected -> Outcome.Rejected(outcome.reason)
         is EngineOutcome.NotCompiled -> Outcome.NotCompiled(outcome.error)
         // The suite's engine-level scenarios state what the engine decides: they are never read as requests.
-        is EngineOutcome.InvalidRequest -> error("An engine-level scenario is never refused: ${outcome.what}")
+        is EngineOutcome.InvalidRequest -> error("An engine-level scenario is never refused: ${outcome.refused}")
     }
 
     private companion object {

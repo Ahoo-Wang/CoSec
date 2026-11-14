@@ -65,8 +65,8 @@ import kotlin.io.path.relativeTo
  *
  * Requests name their action and resource; the test kit does not evaluate HTTP requests through a route map. It reads
  * them as enforcement reads a request (`PIP-15`, `PIP-18`): `http:HEAD` is decided as `http:GET`, an `http` path is
- * normalized, and what the pipeline answers `400` (a lower-case method, a path with a dot segment) is
- * [EngineOutcome.InvalidRequest], `{ "decision": "InvalidRequest" }`. An `expect` must name a `decision`.
+ * normalized, and what the pipeline answers `400` (a lower-case method, a path with a dot segment, a typed id beyond
+ * a request path's bounds) is [EngineOutcome.InvalidRequest], `{ "decision": "InvalidRequest", "refused": "action" }`. An `expect` must name a `decision`.
  */
 @ExperimentalCoSecApi
 class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) {
@@ -172,8 +172,9 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
                 val name = file.name.removeSuffix(".$JSON")
                 val id = ids[relative] ?: if (BOUNDED_SEPARATOR in name) {
                     throw ScenarioFormatException(
-                        "$relative is a shortened file name, whose id only $REPORT_FILE records: keep the report " +
-                            "cosec-migrate convert wrote beside the documents",
+                        "$relative holds `~`, which a file name of an id never does: either cosec-migrate convert " +
+                            "shortened it, and its id is in the $REPORT_FILE convert wrote beside the documents (keep " +
+                            "it there), or the id holds a `~`, which its file name writes URL-encoded, as %7E",
                     )
                 } else {
                     URLDecoder.decode(name, Charsets.UTF_8)

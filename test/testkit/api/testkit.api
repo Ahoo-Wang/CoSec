@@ -18,9 +18,9 @@ public final class me/ahoo/cosec/testkit/EngineOutcome$DefaultImpls {
 }
 
 public final class me/ahoo/cosec/testkit/EngineOutcome$InvalidRequest : me/ahoo/cosec/testkit/EngineOutcome {
-	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;)V
 	public fun describe ()Ljava/lang/String;
-	public final fun getWhat ()Ljava/lang/String;
+	public final fun getRefused ()Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
 }
 
 public final class me/ahoo/cosec/testkit/EngineOutcome$NotCompiled : me/ahoo/cosec/testkit/EngineOutcome {
@@ -33,6 +33,14 @@ public final class me/ahoo/cosec/testkit/EngineOutcome$Rejected : me/ahoo/cosec/
 	public fun <init> (Lme/ahoo/cosec/model/scope/ScopeResolution$Rejected$Reason;)V
 	public fun describe ()Ljava/lang/String;
 	public final fun getReason ()Lme/ahoo/cosec/model/scope/ScopeResolution$Rejected$Reason;
+}
+
+public final class me/ahoo/cosec/testkit/EngineOutcome$RequestPart : java/lang/Enum {
+	public static final field ACTION Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
+	public static final field RESOURCE Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
+	public static fun values ()[Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
 }
 
 public final class me/ahoo/cosec/testkit/PipelineFixture : java/lang/AutoCloseable {

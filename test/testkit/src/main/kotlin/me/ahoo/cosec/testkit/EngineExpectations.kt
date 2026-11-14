@@ -36,7 +36,7 @@ import tools.jackson.databind.node.ObjectNode
  * { "decision": "Indeterminate", "cause": { "type": "MissingPolicies", "policies": ["p"] } }
  * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
  * { "decision": "NotCompiled", "error": "a part of the error message" }
- * { "decision": "InvalidRequest", "what": "method" | "path" }          // enforcement answers 400
+ * { "decision": "InvalidRequest", "refused": "action" | "resource" }   // enforcement answers 400
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
@@ -89,8 +89,11 @@ object EngineExpectations {
         is EngineOutcome.Decided -> render(outcome.decision)
         is EngineOutcome.Rejected -> json.objectNode().put("decision", "Rejected").put("reason", outcome.reason.name)
         is EngineOutcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
-        is EngineOutcome.InvalidRequest -> json.objectNode().put("decision", "InvalidRequest").put("what", outcome.what)
+        is EngineOutcome.InvalidRequest -> invalidRequest(outcome)
     }
+
+    private fun invalidRequest(outcome: EngineOutcome.InvalidRequest): JsonNode =
+        json.objectNode().put("decision", "InvalidRequest").put("refused", outcome.refused.name.lowercase())
 
     fun render(decision: Decision): JsonNode = when (decision) {
         is Decision.Permit -> json.objectNode().put("decision", "Permit").set("by", ref(decision.by))
