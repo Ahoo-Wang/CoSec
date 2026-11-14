@@ -15,7 +15,8 @@ decision.
 With the starter you extend CoSec by declaring a Spring bean. Some extension points collect every bean of their type;
 the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, assemble a
 `Pipeline` from `PipelineComponents`, with the documents from `SuspendingSnapshotSource.of(store)`, and pass your
-implementation to the class that uses it.
+implementation to the class that uses it. That assembly is `@ExperimentalCoSecApi` ([Stability levels](#stability-levels));
+tests get a real pipeline from `PipelineFixture` (`cosec-testkit`).
 
 | Extension point | Module, package | Implement it to | The starter takes |
 |---|---|---|---|
@@ -65,7 +66,7 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit`, that is `PolicyTestKit`, `PipelineFixture`, `EngineOutcome` and their exceptions. | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline`'s constructor and `evaluate`, `RequestGate`, `PipelineComponents`, `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`, `DecisionListeners`, `IdentityIssuer`, `IdentityGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`, `CoSecParameters.read`); and the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
@@ -103,6 +104,7 @@ one has an `else`, and a listener or store never relies on the set being complet
 | `Obligation` | a new kind of obligation |
 | `Cause` | a new reason a decision is Indeterminate, such as a new port that can fail; a `DecisionListener` reads it from a decision event |
 | `ChangeEvent.Kind` | a new kind of change event |
+| `OutcomeSummary.Reason` | a new reason an outcome was answered, such as the refusal of a new kind of obligation |
 
 A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot
 grow, a record with a fixed shape (`PublicApiStabilityTest` reads the reviewed list); a record that can grow is a plain
@@ -432,8 +434,8 @@ fun cosecIdGenerator(ids: MyIds): IdGenerator = IdGenerator { ids.next() }
 ```
 
 Pick a generator that never waits for its store, such as a Snowflake one, since `generate` runs on the event loop.
-Without Spring, pass it as `PipelineComponents(idGenerator = …)`, `IdentityGate(idGenerator = …)` and the first
-argument of `JwtTokenConverter`.
+Without Spring, pass it as `PipelineComponents(idGenerator = …)`, `IdentityGate(idGenerator = …)` (both experimental)
+and the first argument of `JwtTokenConverter`.
 
 ## Bridge context
 
@@ -522,6 +524,12 @@ service's terms. Mapped requests get the route's action; every other request kee
 
 The file is read strictly: an unknown or missing field fails it
 ([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMapCodec.kt)).
+
+In code, `RouteMapCodec` (`me.ahoo.cosec.runtime.route`) reads them: `load(listOf(location to bytes))` gives the
+`RouteMap` the pipeline uses, with the same checks as startup, and `decode(bytes, location)` one `RouteMapDocument`.
+`RouteMap.of(routes)` builds one from `RouteMap.Located` routes, and `resolve(method, path)` answers what the pipeline
+would give a request: `Mapped` (the route, its action and resource), `Unmapped`, or `Invalid` (a `400`). A test of
+your own route maps loads them so, or through `PipelineFixture(routes = …)`.
 App documents and catalogs are in [Role permissions](../policies/role-permissions.md).
 
 **Next:** how to propose and land a change, in [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md), and the build rules and invariants for changing CoSec, in [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md).

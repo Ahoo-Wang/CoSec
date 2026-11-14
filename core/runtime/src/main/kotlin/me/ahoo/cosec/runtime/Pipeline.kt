@@ -95,7 +95,7 @@ private val log = KotlinLogging.logger {}
  * finishes on its calling thread without a dispatch (§7.2).
  */
 @OptIn(InternalCoSecApi::class)
-class Pipeline(components: PipelineComponents) : RequestGate {
+class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents) : RequestGate {
     private val authenticator = components.authenticator
     private val snapshots = components.snapshots
     private val engine = components.engine
@@ -159,6 +159,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
      * everything else, a defect included, becomes one. An [Error] propagates too: the host answers it (§7.4).
      */
+    @ExperimentalCoSecApi
     override suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = requestId(facts)
         // The trace the bridge captured (§7.5): its id goes into problem bodies and decision events.

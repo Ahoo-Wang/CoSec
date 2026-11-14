@@ -166,6 +166,8 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `CoSec-Device-Id` | 调用方的设备。除非策略或黑名单读取它，否则仅供参考。 | `environment.device` |
 | `CoSec-Request-Id` | 仅限请求头：请求 id（[响应头](#response-headers)）。 | |
 
+在代码中，这些请求头的名字是 `CoSecParameters.SPACE_ID`、`DEVICE_ID` 和 `REQUEST_ID`（`me.ahoo.cosec.runtime.http`），供你自己发送或转发它们的客户端或过滤器使用。
+
 客户端不声明请求属于哪个应用：`scope.app` 来自凭证和宿主（[应用](./authentication.md#apps)）。
 
 读取规则：
@@ -179,7 +181,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 ## 访问安全上下文 {#accessing-the-security-context}
 
-对继续处理的请求，适配器绑定一个根据管道结果构建的 `SecurityContext`（`me.ahoo.cosec.api.context`）。被拒绝的请求永远不会到达你的处理器。
+对继续处理的请求，适配器绑定一个根据管道结果构建的 `SecurityContext`（`me.ahoo.cosec.api.context`）。被拒绝的请求永远不会到达你的处理器。它的 `principal` 是 `CoSecPrincipal`（`me.ahoo.cosec.api.principal`），`scope` 是 `SecurityScope`（`me.ahoo.cosec.api.context`）。
 
 | 成员 | 内容 |
 |---|---|

@@ -181,8 +181,13 @@ class InstanceStatus(
     override fun toString(): String = "InstanceStatus(${fields().joinToString()})"
 
     companion object {
-        /** The document format level of this version: 8.0 reads level 1. */
-        const val FORMAT_LEVEL: Int = 1
+        /**
+         * The document format level of this version: 8.0 reads level 1. Not a `const`, so that code compiled against one
+         * release reads the level of the release it runs on.
+         */
+        @JvmField
+        @Suppress("MayBeConst") // on purpose: a const is inlined into the caller's class file
+        val FORMAT_LEVEL: Int = 1
     }
 }
 

@@ -46,6 +46,7 @@ abstract class XForwardedRemoteIpResolver<R>(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         const val X_FORWARDED_FOR = "X-Forwarded-For"
         const val DELIMITER = ','

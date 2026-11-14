@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -98,6 +99,7 @@ interface SnapshotViews {
  * RFC 0006 §5.5.1: the installed view without suspending, else the loaded one. When the tenant's document needs the
  * app's although the scope has no roles ([ViewKey.withAppFor], RC1-17), the view with it, the same way.
  */
+@ExperimentalCoSecApi
 class SuspendingSnapshotSource @InternalCoSecApi constructor(
     private val views: SnapshotViews,
     private val closeable: AutoCloseable? = null,

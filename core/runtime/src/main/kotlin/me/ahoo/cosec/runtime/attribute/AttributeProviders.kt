@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.attribute
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.engine.flat.ExternalValues
@@ -34,6 +35,7 @@ private val log = KotlinLogging.logger {}
  * Every path is an `ext.<provider>.<name>` path of an external type, declared once across all providers; the blacklist
  * attributes ([BlacklistAttributeProvider.ATTRIBUTES]) only in stage A.
  */
+@ExperimentalCoSecApi
 class AttributeProviders(providers: List<AttributeProvider>) {
     /** One provider and what it declares in one [stage]. */
     internal class Registered(

@@ -145,6 +145,7 @@ class ShadowRecorder(
 }
 
 /** One window as [ShadowRecorder.windows] lists it: the document it is a candidate of, its report, and its samples. */
+@InternalCoSecApi
 class RecordedWindow(val key: SnapshotKey, val report: ShadowReport, val recorded: Long)
 
 /**

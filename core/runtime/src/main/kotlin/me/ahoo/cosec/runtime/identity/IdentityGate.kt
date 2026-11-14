@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.identity
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Action
@@ -68,6 +69,7 @@ private val log = KotlinLogging.logger {}
  * - otherwise the request proceeds as that principal, in that scope, with those roles; never as anonymous instead.
  */
 @OptIn(InternalCoSecApi::class)
+@ExperimentalCoSecApi
 class IdentityGate(
     /** `cosec.pipeline.identity.max-size`. */
     private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,

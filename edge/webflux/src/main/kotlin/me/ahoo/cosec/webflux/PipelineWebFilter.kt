@@ -11,12 +11,13 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.webflux
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.scope.HostScope
@@ -157,7 +158,7 @@ internal fun forwarded(exchange: ServerWebExchange, outcome: Outcome): ServerWeb
 }
 
 /** The WebFlux filter over the coroutine pipeline (RFC 0006 §7.3). */
-class PipelineWebFilter(
+class PipelineWebFilter @InternalCoSecApi constructor(
     pipeline: RequestGate,
     contributors: List<BridgeContextContributor> = emptyList(),
     remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,

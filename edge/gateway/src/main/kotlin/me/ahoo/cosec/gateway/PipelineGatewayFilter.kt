@@ -11,10 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.gateway
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.model.scope.HostScope
@@ -58,7 +59,7 @@ import java.net.URI
  *   `lb:ws://`) does: whoever runs one is inside the trust boundary, any other host might be a third party.
  */
 @OptIn(InternalCoSecApi::class)
-class PipelineGatewayFilter(
+class PipelineGatewayFilter @InternalCoSecApi constructor(
     pipeline: Pipeline,
     contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,

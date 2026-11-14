@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

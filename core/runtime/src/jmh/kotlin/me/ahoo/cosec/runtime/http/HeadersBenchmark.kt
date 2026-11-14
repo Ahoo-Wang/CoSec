@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Param
 import org.openjdk.jmh.annotations.Setup

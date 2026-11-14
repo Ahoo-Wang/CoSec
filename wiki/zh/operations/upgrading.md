@@ -95,6 +95,11 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   - `SnapshotDocument.DOCUMENT_SCHEMA` 不再是 `const`，已编译的代码读取的是运行时 CoSec 的 schema。用它初始化的 `const val` 不再能编译：改为 `val`。
   - 以下现在是内部 API（`@InternalCoSecApi`）：`Environment`、条件字面量（`Literal`）、`Attribute` 及其 `Kind`、`ScopeResolver`、`ScopeSubject`、`SubjectRevocation`、`IdentityFormatException`、`IdentityOverflowException` 和 `Identifiers.isUnpairedSurrogateAt`。`ScopeResolution.Resolved` 和 `ScopeResolution.Rejected` 的构造器是内部的；`ScopeResolution.Rejected.Reason` 保留。
 
+- **`cosec-runtime` 和 Web 适配器的公开 API 已按 8.0 归类**（R9）。使用 starter 时运行时没有变化；在代码中：
+  - 不使用 Spring 组装管道是实验性的。`Pipeline` 的构造器和 `evaluate`、`RequestGate`、`PipelineComponents`、`PipelineOptions`、`SnapshotOptions`、`SuspendingSnapshotSource`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity` 和 `CoSecParameters.read` 是 `@ExperimentalCoSecApi`：用 `@OptIn(ExperimentalCoSecApi::class)` 选择使用。用这种方式构建管道的测试改从 `PipelineFixture`（`cosec-testkit`）获得管道。`Pipeline` 本身、`AuthorizationChecker(pipeline)`、`ProblemType` 和 `CoSecParameters` 的请求头名保持稳定。
+  - 以下现在是内部 API（`@InternalCoSecApi`）：`IdentityCodec`（契约是 [Web 集成](../integration/web.md)中的 `CoSec-Identity` 格式）、`RemoteIpResolver`、`PathNormalizer`、`HttpAttributes`、`PolicyDocument.attributes`、`PolicyDocumentCodec.encode`、`ATTRIBUTE_TYPES`、`WILDCARD` 和 `SCHEMA`、`PolicyDocumentCompiler` 的上限、`PERMISSION_PREFIX` 和 `permissionPrefix`，以及接收 `RequestSecurity` 的 `AuthorizationChecker.check` 和 `decide`（接收 `SecurityContext` 与字符串的保留）。`PipelineWebFilter`、`PipelineServletFilter` 和 `PipelineGatewayFilter` 的构造器（使用 starter 的 Bean，不要自己声明）、`LoggingAuditEventSink(KLogger)`（无参构造器保留）和 `MetricsListener.bind(registry, listeners)` 也是。`RouteResolution.Mapped` 和 `Invalid` 的构造器是内部的：由 `RouteMap.resolve` 给出。
+  - `InstanceStatus.FORMAT_LEVEL` 不再是 `const`。
+
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。

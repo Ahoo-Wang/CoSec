@@ -63,7 +63,10 @@ import java.time.Instant
 object PolicyDocumentCodec {
     /** The format of platform, app and tenant documents: the `schema` they declare. */
     @JvmField
+    @InternalCoSecApi
     val SCHEMA: Int = SnapshotDocument.DOCUMENT_SCHEMA
+
+    @InternalCoSecApi
     const val WILDCARD: String = Match.WILDCARD
 
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -80,6 +83,7 @@ object PolicyDocumentCodec {
     )
 
     /** The types an external attribute can be declared with, by their document name. */
+    @InternalCoSecApi
     val ATTRIBUTE_TYPES: Map<String, AttributeType> = linkedMapOf(
         "string" to AttributeType.STRING,
         "bool" to AttributeType.BOOL,
@@ -472,6 +476,7 @@ object PolicyDocumentCodec {
     @InternalCoSecApi
     fun decodeAttributes(tree: JsonNode, path: String = ROOT): List<Attribute> = attributes(DocumentNode(tree, path))
 
+    @InternalCoSecApi
     fun encode(document: PolicyDocument): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(document))
 
     @InternalCoSecApi

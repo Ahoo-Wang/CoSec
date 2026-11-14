@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.Action
@@ -87,12 +90,13 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         }
     }
 
-    /** As [check], with the action and resource given as the engine reads them. */
+    /** As [check], with the action and resource given as the engine reads them. CoSec's own: the control plane's. */
+    @InternalCoSecApi
     suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Boolean =
         decide(security, action, resource) is Decision.Permit
 
-    /** As [decide], with the action and resource given as the engine reads them. */
-    @OptIn(InternalCoSecApi::class)
+    /** As [decide], with the action and resource given as the engine reads them. CoSec's own: the control plane's. */
+    @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
         val decidable = Enforceable.resource(resource) ?: return Decision.Deny(null)
         val decidedAs = Enforceable.action(action) ?: return Decision.Deny(null)

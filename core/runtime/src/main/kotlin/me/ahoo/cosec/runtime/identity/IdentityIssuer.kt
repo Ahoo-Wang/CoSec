@@ -11,8 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.identity
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.spi.identity.Identity
 import java.time.Clock
@@ -25,6 +29,7 @@ import java.time.Clock
  * An anonymous permit forwards nothing, so a service has exactly one way to be anonymous: no header. Nor does a
  * principal whose authenticator names no credential. An identity larger than [maxBytes] fails the request closed.
  */
+@ExperimentalCoSecApi
 class IdentityIssuer(
     /** `cosec.gateway.identity.claims`: the token claims forwarded, strings, numbers and booleans only. */
     private val claims: Set<String> = emptySet(),

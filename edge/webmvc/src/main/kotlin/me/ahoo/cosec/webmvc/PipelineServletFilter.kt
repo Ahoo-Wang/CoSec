@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.webmvc
 
@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletRequestWrapper
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.scope.HostScope
@@ -77,7 +78,7 @@ internal object ServletHttpFactsReader {
  * The permitted request's `SecurityContext` is bound to [SecurityContextHolder] and the request for the chain, and
  * removed once the request completes, whatever happens.
  */
-class PipelineServletFilter(
+class PipelineServletFilter @InternalCoSecApi constructor(
     private val pipeline: RequestGate,
     private val contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,

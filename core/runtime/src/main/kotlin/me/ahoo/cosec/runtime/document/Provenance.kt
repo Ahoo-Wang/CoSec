@@ -80,7 +80,11 @@ enum class ProvenanceKind {
     BOOTSTRAP,
 }
 
-/** A principal that published or approved a revision. */
+/**
+ * A principal that published or approved a revision: its tenant and its id, which is all an actor is. A value that does
+ * not grow (RFC 0010 C4): when delegation comes (RFC 0009 §7, RFC 8693 `act`), who acted on whose behalf is a value of its
+ * own beside the actor, not a field of it.
+ */
 data class Actor(val tenant: TenantId, val principal: PrincipalId) {
     init {
         require(

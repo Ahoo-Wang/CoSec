@@ -11,10 +11,11 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.ForwardedIdentity
 import me.ahoo.cosec.api.context.SecurityContext
@@ -39,6 +40,7 @@ import me.ahoo.cosec.spi.identity.Identity
  * its memberships, and the scope `ScopeResolver` validated. The adapters expose it as [securityContext]; the
  * [AuthorizationChecker] evaluates further actions as it.
  */
+@ExperimentalCoSecApi
 class RequestSecurity internal constructor(
     val requestId: String,
     val principal: AuthenticatedPrincipal?,

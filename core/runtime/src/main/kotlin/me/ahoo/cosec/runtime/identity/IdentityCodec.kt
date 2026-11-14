@@ -51,6 +51,7 @@ import java.util.Base64
  * (RC1-52) or a header over the size limit is refused, never read as anonymous. The `cosec-identity` format descriptor
  * (`schema/cosec-identity.schema.json`) describes the JSON.
  */
+@InternalCoSecApi
 object IdentityCodec {
     /** The header the gateway sets on a permitted request, and strips from every request it receives. */
     const val HEADER = "CoSec-Identity"

@@ -12,8 +12,6 @@ public final class me/ahoo/cosec/webflux/OrderedCorsWebFilter$Companion {
 public final class me/ahoo/cosec/webflux/PipelineWebFilter : me/ahoo/cosec/webflux/ReactivePipelineBridge, org/springframework/core/Ordered, org/springframework/web/server/WebFilter {
 	public static final field Companion Lme/ahoo/cosec/webflux/PipelineWebFilter$Companion;
 	public static final field REACTIVE_AUTHORIZATION_FILTER_ORDER I
-	public fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun filter (Lorg/springframework/web/server/ServerWebExchange;Lorg/springframework/web/server/WebFilterChain;)Lreactor/core/publisher/Mono;
 	public fun getOrder ()I
 }

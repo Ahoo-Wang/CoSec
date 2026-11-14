@@ -108,6 +108,23 @@ class PublicApiStabilityTest {
             .isEmpty()
     }
 
+    /**
+     * What is stable promises its whole signature for 8.x, so it names nothing that may change in a minor release: a
+     * member that needs an experimental type is experimental itself. The compiler does not say so once a file opts in.
+     */
+    @Test
+    fun `no stable public signature names an experimental type`() {
+        val all = PublicSignatures.classes(::published)
+        val experimental = all.filter(::isExperimental).map { it.name }.toSet()
+        all.map { it.name }.assert().contains("me.ahoo.cosec.testkit.PipelineFixture")
+        val named = Regex(experimental.joinToString("|", """(?<![\w.$])(?:""", """)(?![\w$])""") { Regex.escape(it) })
+        val violations = PublicSignatures.violations(all.filterNot(::isExperimental), named, stableOnly = true)
+            .filterNot { " extends " in it }
+        violations.assert()
+            .describedAs("stable signatures naming @ExperimentalCoSecApi types; mark the member, or promote the type")
+            .isEmpty()
+    }
+
     @Test
     fun `a public data class of a published module is a reviewed value`() {
         val dataClasses = PublicSignatures.classes(::published)
