@@ -28,8 +28,9 @@ description: "CoSec 8.0 改变什么、发布前还剩哪些里程碑，以及 7
 - CoSec 写的错误响应一律使用 **RFC 9457 problem+json**（RFC 0006 Q27）。
 - **控制面**：修订记录、发布前的影子窗口，以及授出分析，保证任何人授出的权限不超过自己持有的
   （[RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md)）。
-- 设计上**支持 AOT**
+- 网关镜像使用 **JDK AOT 缓存**，CI 在每次构建时启动它并发送请求
   （[RFC 0001 §3.10](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)）。
+  8.0 没有测试 Spring AOT 与原生镜像，不支持它们；计划在之后的 8.x 版本中支持。
 
 7.x 应用必须迁移：策略、权限和配置的形状都会改变，`cosec-migrate` 把 7.x 数据转换成 8.0 的格式。8.0 装配完成时，
 [升级](../operations/upgrading.md)会列出每一项改变及其迁移方法。

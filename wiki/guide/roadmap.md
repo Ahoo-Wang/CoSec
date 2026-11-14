@@ -32,8 +32,9 @@ Correctness is defined by the 8.0 specification and checked by a conformance sui
 - **RFC 9457 problem+json** for every error response CoSec writes (RFC 0006 Q27).
 - **A control plane** with revisions, shadow windows before publishing, and grant analysis so no one can grant more
   than they hold ([RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md)).
-- **AOT-friendly** by design
-  ([RFC 0001 §3.10](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)).
+- **A JDK AOT cache** for the gateway image, which CI starts and sends requests to on every build
+  ([RFC 0001 §3.10](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)). Spring AOT
+  and native images are not tested in 8.0 and not supported; they are planned for a later 8.x release.
 
 7.x applications have to migrate: policies, permissions and configuration change shape, and `cosec-migrate`
 converts 7.x data to the 8.0 format. [Upgrading](../operations/upgrading.md) will list every change and how to
