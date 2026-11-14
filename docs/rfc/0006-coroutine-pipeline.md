@@ -405,6 +405,11 @@ fun Engine.plan(request: AuthzRequest, view: SnapshotView): AttributePlan
 属性 `ext.ip2region.country`、`.province`、`.city`、`.isp`（本地内存库，不挂起）。转换工具把 7.x 中读 `request.attributes.ipRegion*` 的条件改写为这些路径；
 其余 `RequestAttributesAppender`（例如 Gateway 的路由 id）不是外部属性，仍经 `HttpFacts.requestAttributes` 进入 `request.attributes.*`。
 
+> **2026-11-14 修订（第二轮审查，M5，#1330，`ATR-9`）**：提供者按 IP 版本各加载一个库（版本读自库的头部；随包的库是 IPv4 的，IPv6 的库由应用经
+> `cosec.ip2region.ipv6-location` 给出）。没有任何已加载的库覆盖的地址（没有 IPv6 库时的 IPv6 地址，或请求没有地址）回答**取不到**（抛出），不是缺失；
+> 库覆盖该地址但不知道某个字段时，该字段缺失。地域封禁因此按任何取不到的外部属性来决策：Indeterminate，或语句的 `onMissing`，不会因为客户端改用 IPv6 而被绕过。
+> 这个回答是稳态而不是故障：异常不带栈，管道对同一个提供者的失败按间隔限量记录日志，每个请求的原因在决策里（`Cause.AttributeUnavailable`）。
+
 ### 5.5 挂起包装
 
 #### 5.5.1 `SnapshotSource`
@@ -631,6 +636,11 @@ CoSec-Request-Id: 0TEC7Hw00001zR0
 | trace id 与审计主体一致（RFC 0001 §3.8） | 三个适配器对同一请求产生的 `DecisionEvent` 中，`traceId`、`subject`、`scope`、`requestId` 相同；2026-10-26 修订：响应体的 `requestId`、`traceId` 与事件中的相同 | `WebAdapterParityTest` 新增断言，用一个记录事件的测试监听器 |
 | 比较器不复制状态规则 | `DecisionParity` 的 Pipeline 模式（§11.2）直接比较两边的 `Outcome` 与 `SecurityDecision`，状态由各自的映射给出 | `DecisionParityTest` |
 
+> **2026-11-14 修订（第二轮审查，M6，#1330，`PIP-23`）**：抛出的 `IdGenerator` 不带走回答。请求 id 与决策事件 id 在 `StatusMapping` 作答的地方生成，
+> 管道与身份网关在生成器抛出时改用随机 id，并按间隔限量记录 WARN；结果仍是 `StatusMapping` 的，三个适配器一致，带 `CoSec-Request-Id` 与决策事件。
+> `CosIdIdGenerator` 对 CosId 的失败（时钟回拨、丢失机器号、号段取不到）同样回答随机 id，这也覆盖管道之外的 id（`jti`、变更 id）。
+> CosId 5 不暴露生成器的时钟回拨策略，CoSec 无法在启动时检查；`wiki/architecture/extending.md` 建议选用失败而不是等待的策略。
+
 ---
 
 ## 7. 协程
@@ -691,6 +701,14 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
 - 不在已经是协程的上下文里调用 `runBlocking`：Servlet 过滤器运行在容器线程上，不是协程。Spring MVC 的挂起控制器方法在过滤器之后执行，与此无关。
 - 允许的请求：WebFlux 把校验后的 `SecurityContext` 写进 Reactor `Context` 和 exchange 属性（现在的 `writeSecurityContext`、`setSecurityContext`），WebMvc 写进
   `SecurityContextHolder` 并在 `finally` 中清除（现在的 [`AuthorizationFilter`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt) 已经这样做）。
+
+> **2026-11-14 修订（第二轮审查，#1329，`PIP-21`、`PIP-22`）**：应用代码里的安全上下文。
+> - **只读。** 应用只读取 `SecurityContext`；写入它的函数是内部 API，只有适配器调用。
+> - **处理器参数。** WebMvc 把上下文绑定到 `SecurityContextHolder` 和请求上，并在 `finally` 中清除；处理器以 `SecurityContext` 参数读取，
+>   由 `SecurityContextArgumentResolver` 从请求解析，不经过线程（`PIP-21`）。
+> - **挂起处理器。** 挂起的处理器可能在另一个请求的线程上恢复。Spring 会在恢复时还原 holder 的情形（上下文传播加 Reactor 的自动传播，
+>   经 `SecurityContextThreadLocalAccessor`）保持绑定；其余情形在挂起处理器运行之前解绑 holder，读取因此失败，而不是答出另一个请求的上下文（`PIP-22`）。
+>   starter 不替应用打开全局的自动上下文传播。
 
 > **实现说明（2026-11-03，#1194，RC 修复批次 C）**：网关的身份与凭据，以下几处补充本节：
 > - **身份转发按 scheme 选择加入（IDN-7，RC1-49）。**

@@ -368,6 +368,10 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 > 捕获值含 `/`（解码后的 `%2F`）在认证之前返回 400 `invalid-request`（`RTE-2`）。生成器是 `OpenAPIServiceGenerator`（路由映射与应用文档）；7.x 的生成器留到
 > S1 把 actuator 的生成端点改接新生成器、S4 删除。`cosec.authorization.routes.location` 的装配属于 S1。
 
+> **2026-11-14 修订（第二轮审查，L4，#1330，`RTE-4`）**：生成的路由是文档 `servers` 的路径（去掉宿主的 context path，springdoc 会把它写进 server URL，
+> 而宿主不对它授权）后接 operation 的路径；`servers` 的路径不一致，或路径里有 server 变量时，生成失败。生成的资源是 `<service>/{v1}/{v2}/...`，
+> 按顺序包含路径里的每一个变量，不再只取最后一个（否则 `/users/{id}/avatar/{size}` 对所有用户是同一个资源），仍可用 `x-cosec-resource` 覆盖。
+
 > **实现说明（2026-10-27，#1097）**：路由映射的装配在 S1a（未登记，S1b 登记）：WebMvc 与 WebFlux 从 `cosec.authorization.routes.location` 加载进 `Pipeline` 的 `routes`，网关不加载；默认位置缺失使启动失败，空的位置表示有意不用路由映射。actuator 的生成端点是 `cosecServiceGenerator/{routes|app}`（`OpenAPIServiceGenerator`），7.x 的生成端点留到 S1b 删除。
 
 ### 5.4 代码内检查
