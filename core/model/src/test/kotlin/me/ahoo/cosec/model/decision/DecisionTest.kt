@@ -63,7 +63,7 @@ class DecisionTest {
     /** Round 2 review L5: a quota the limiters' window arithmetic can hold, and nothing larger. */
     @Test
     fun `a rate limit spec is bounded`() {
-        RateLimitSpec(1.0, RateLimitSpec.MAX_WINDOW_SECONDS).windowSeconds.assert().isEqualTo(31_536_000L)
+        RateLimitSpec(1.0, RateLimitSpec.MAX_WINDOW_SECONDS).windowSeconds.assert().isEqualTo(86_400L)
         assertThrownBy<IllegalArgumentException> { RateLimitSpec(1.0, RateLimitSpec.MAX_WINDOW_SECONDS + 1) }
         assertThrownBy<IllegalArgumentException> { RateLimitSpec(1.0, 1L shl 61) }
         assertThrownBy<IllegalArgumentException> { RateLimitSpec(1e300, 1_000) }

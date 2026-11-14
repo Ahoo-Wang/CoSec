@@ -110,8 +110,8 @@ public final class me/ahoo/cosec/cache/control/CoCacheControlStore$Companion {
 
 public final class me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter : me/ahoo/cosec/spi/ratelimit/RateLimiter {
 	public static final field Companion Lme/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter$Companion;
-	public fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;Lkotlin/jvm/functions/Function0;)V
-	public synthetic fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun tryAcquire (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

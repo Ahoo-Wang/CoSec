@@ -30,7 +30,7 @@ import java.time.Duration
 
 /**
  * The CoCache store of snapshot documents (RFC 0003 §4.1): one Redis key per document,
- * `<keyPrefix>:snapshot:policies`, `<keyPrefix>:snapshot:platform`, `<keyPrefix>:snapshot:app:<appId>` and
+ * `<keyPrefix>:snapshot:platform`, `<keyPrefix>:snapshot:app:<appId>` and
  * `<keyPrefix>:snapshot:tenant:<tenantId>`.
  *
  * It is the `Store` [CoCacheFactory.create] returns, not an interface proxy (RFC 0003 §10): native images need no proxy

@@ -22,9 +22,15 @@ and have to be provisioned again.
   its lookup (`503`) and a configured one fails startup.
 - **`SnapshotVersion` is removed** from `cosec-spi`: it named the two documents of 7.x. A decision event's
   `snapshotVersion` is a `ViewVersion` (`platform`, `app`, `tenant`), as before.
-- **A rate limit window is at most a year** (`windowSeconds` up to `31536000`), and `permitsPerSecond × windowSeconds`
-  at most 2⁶³: a larger window or quota overflowed the limiters' arithmetic, which failed or miscounted every request
-  the rule matched. Such a document no longer decodes; `RateLimit` refuses the same values.
+- **A rate limit window is at most a day** (`windowSeconds` up to `86400`), and `permitsPerSecond × windowSeconds`
+  at most 2⁶³: a larger quota overflowed the limiters' arithmetic, and a longer window kept one Redis key per bucket
+  value for two windows in a Redis that must not evict (round-2 review M3). Such a document no longer decodes;
+  `RateLimit` refuses the same values. To migrate: express a daily or longer quota as a per-second rate over a day.
+- **The Redis rate limiter keeps one key per bucket and counts by Redis's clock** (round-2 review L1). A bucket is now
+  the hash `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`, not a key per window
+  (`...:{<rule>:<bucket>}:<window>`), and the script takes the time from Redis, so instances whose clocks differ no
+  longer count apart. Counters written by an earlier version are not read and expire on their own: a bucket starts
+  from zero once, at the upgrade. `ReactiveRedisRateLimiter` no longer takes a `clock`.
 - **A document holds at most 64 rate limit rules** (`DOC-6`). Every rule a permitted request matches costs one call
   to the limiter, so a document with more no longer compiles: a stored one is installed as failed (its requests are
   `503`), and the control plane refuses a change that would make one with `422`. To migrate: merge rules that differ

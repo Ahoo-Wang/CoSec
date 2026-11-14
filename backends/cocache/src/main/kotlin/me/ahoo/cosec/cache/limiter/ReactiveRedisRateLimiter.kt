@@ -24,54 +24,40 @@ const val DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX = "cosec:rate-limiter"
 
 /**
  * The cluster-wide [RateLimiter] of the coroutine pipeline (RFC 0006 §8.4): a sliding-window counter kept in Redis, checked
- * and counted atomically by a Lua script (`redis-rate-limiter.lua`). Counters live under
- * `<keyPrefix>:{<ruleId>:<bucket>}:<windowIndex>` ([keysOf]). The script reads a bucket's current and previous window
- * together, so both keys carry the same hash tag and Redis Cluster keeps them on one slot, while different buckets
- * still spread over the cluster (#1229). Run through the reactive template and awaited: the caller's thread never waits
- * for Redis, and Reactor stays inside this class (RFC 0006 K9).
+ * and counted atomically by a Lua script (`redis-rate-limiter.lua`). Each bucket is one key, `<keyPrefix>:<ruleId>:<bucket>`
+ * ([keyOf]), a hash of the window it counts in and that window's and the previous window's counts, which lives two
+ * windows. The script takes the time from Redis, so instances whose clocks differ count in the same window, and touches
+ * only that key, so it runs on a Redis Cluster as on one node (`OBL-4`). Run through the reactive template and awaited:
+ * the caller's thread never waits for Redis, and Reactor stays inside this class (RFC 0006 K9).
  *
  * A Redis failure is thrown; the rule's `strictFailure` decides what it means.
  */
 class ReactiveRedisRateLimiter(
     private val template: ReactiveStringRedisTemplate,
     keyPrefix: String = DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX,
-    private val clock: () -> Long = System::currentTimeMillis,
 ) : RateLimiter {
     private val keyPrefix: String = keyPrefix.trimEnd(':')
 
-    init {
-        // Redis hashes a key whose first `{` is followed by `}` whole: the two windows would land on different slots.
-        val brace = this.keyPrefix.indexOf('{')
-        require(brace < 0 || this.keyPrefix.getOrNull(brace + 1) != '}') {
-            "The rate limiter's key prefix [${this.keyPrefix}] holds an empty hash tag '{}'; Redis Cluster would put " +
-                "a bucket's two windows on different slots."
-        }
-    }
-
     override suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult {
         val rateLimit = RateLimiter.window(limit)
-        val nowMillis = clock()
-        val windowIndex = nowMillis / rateLimit.windowMillis
         val reply = template.execute(
             SCRIPT,
-            keysOf(ruleId, bucket, windowIndex),
-            listOf(rateLimit.limitPerWindow.toString(), rateLimit.windowMillis.toString(), nowMillis.toString()),
+            listOf(keyOf(ruleId, bucket)),
+            listOf(rateLimit.limitPerWindow.toString(), rateLimit.windowMillis.toString()),
         ).next().toFuture().await() ?: error("Redis rate limiter script returned no reply.")
         val allowed = reply[0] == 1L
         val estimate = reply[1] / ESTIMATE_SCALE
-        return rateLimit.resultOf(allowed, estimate, nowMillis)
+        // The window's position comes from Redis's clock: what remains of it, as the elapsed part of a window.
+        val elapsed = rateLimit.windowMillis - reply[2]
+        return rateLimit.resultOf(allowed, estimate, elapsed)
     }
 
     /**
-     * The keys of [bucket]'s current and previous window. They differ only after the hash tag, so they share a slot
-     * whatever the prefix, rule id and bucket hold: a `}` in the rule id or the bucket ends the tag at the same place in
-     * both. Only a rule id that begins with `}` would empty the tag, and it is refused; the engine's never do (`OBL-4`).
+     * The key of [bucket] of rule [ruleId]. A rule id is `platform/<id>`, `app:<app>/<id>` or `tenant:<tenant>/<id>`
+     * (`CompiledRateLimit.counterId`): neither its own id nor the app or tenant holds a `:`, so the rule id ends at the
+     * first `:` after its document's, and no two rules and buckets share a key.
      */
-    internal fun keysOf(ruleId: String, bucket: String, windowIndex: Long): List<String> {
-        require(!ruleId.startsWith('}')) { "Rate limit rule id [$ruleId] would empty the counters' hash tag." }
-        val base = "$keyPrefix:{$ruleId:$bucket}"
-        return listOf("$base:$windowIndex", "$base:${windowIndex - 1}")
-    }
+    internal fun keyOf(ruleId: String, bucket: String): String = "$keyPrefix:$ruleId:$bucket"
 
     companion object {
         /** Script resource next to this class, in the module resources. */
