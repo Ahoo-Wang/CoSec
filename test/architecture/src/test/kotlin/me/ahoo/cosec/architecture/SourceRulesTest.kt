@@ -78,6 +78,13 @@ class SourceRulesTest {
             ),
         )
 
+        /**
+         * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats. A
+         * backend stores bytes (`SnapshotDocument`) and never reads what a document grants, so the codecs, the compiler
+         * and `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
+         */
+        val BACKEND_DOCUMENT_REACH: List<String> = listOf("me.ahoo.cosec.document.json.CoSecJson")
+
         /** The main source files of [project], by extension. */
         fun mainSources(project: String, extensions: Set<String> = setOf("kt", "java")): List<Path> {
             val main = Projects.directory(project).resolve("src/main")
@@ -91,13 +98,6 @@ class SourceRulesTest {
 
         fun projectOf(javaClass: JavaClass): String? = Projects.projectOfPackage(javaClass.packageName)
     }
-
-    /**
-     * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats. A
-     * backend stores bytes (`SnapshotDocument`) and never reads what a document grants, so the codecs, the compiler and
-     * `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
-     */
-    private val BACKEND_DOCUMENT_REACH = listOf("me.ahoo.cosec.document.json.CoSecJson")
 
     /** A package (ending in `.`) reaches what is in it; a class reaches itself and its nested classes. */
     private fun reach(target: String, allowed: String): Boolean =
