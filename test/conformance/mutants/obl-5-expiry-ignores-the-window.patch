@@ -1,0 +1,16 @@
+# Rule: OBL-5
+# Mutant: a local bucket expires after its idle time even when that is shorter than its rule's window, so a client that pauses within its window starts from zero
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterCountsTest --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+@@ -63,7 +63,7 @@
+         var previous = 0L
+         var retired = false
+ 
+-        fun removable(now: Long, expireMillis: Long): Boolean = now - lastAccess > maxOf(expireMillis, 2 * windowMillis)
++        fun removable(now: Long, expireMillis: Long): Boolean = now - lastAccess > expireMillis
+     }
+ 
+     /** Thrown when a new bucket cannot be admitted: the rule cannot be counted, so its `strictFailure` decides. */

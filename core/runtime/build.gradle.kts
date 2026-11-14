@@ -14,8 +14,6 @@
 // The coroutine request pipeline (RFC 0006 §5.1), the snapshot source and the policy documents (RFC 0011 §3). Jackson is
 // an implementation detail here (RFC 0011 D3); Reactor and Spring never are (§5).
 dependencies {
-    // Guava: the modules whose main code uses it declare it; the root build adds it to none.
-    implementation("com.google.guava:guava")
     api(project(":engine"))
     api(project(":spi"))
     api(project(":annotations"))
