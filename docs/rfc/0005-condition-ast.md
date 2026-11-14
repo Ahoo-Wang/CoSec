@@ -298,6 +298,10 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
   "condition": { "eq": ["resource.var.orderId", { "attr": "subject.attributes.orderId" }] } }
 ```
 
+> **2026-11-14 修订（第二轮审查，宿主与工具组，#1342，`DOC-8`）**：没有任何请求会有的 `http` 动作不编译：`http:HEAD`（HEAD 请求按 `http:GET` 决策，`PIP-18`），
+> 以及动词含 ASCII 小写字母的动作（这样的方法在决策之前就被拒绝）。语句、限流规则和目录里的简写权限都适用；`http:*`、大写动词和其他服务的小写动词（`order:head`）不受影响。
+> 理由：这样的 DENY 是作者以为堵上了的洞。数据面与控制面共用一个编译器，所以已存储的含这种语句的文档不再加载（失败即拒绝），`upgrading.md` 写明怎么找和改。
+
 - 动作模式：`service:verb`、`service:*`、`*`。不允许其他通配，所以动作的包含判断是平凡的。
 - 资源模式：`type/段/段...`，段是字面量、`*`（一段）、`{name}`（一段并捕获）、末尾的 `**`（任意多段）。捕获的变量进 `resource.var.<name>`，只在本语句可见（P6）。
 - `service` 与 `type` 的命名由 `Catalog` 声明（RFC 0004 §4.9）；控制面（第 6 阶段）据此校验，本阶段编译器只检查语法。
@@ -465,6 +469,14 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 ### 7.1 条件
 
 转换工具（RFC 0004 §8）逐个翻译，只做精确翻译；"拒绝"即报告位置并使转换失败。
+
+> **2026-11-14 修订（第二轮审查，宿主与工具组，#1342，`MIG-1`）**：转换的性质现在是一条有编号的规则：按 8.0 的执行路径实际会填的事实来比较，转换后的 DENY 不比 7.x 的窄，
+> ALLOW 不比 7.x 的宽；唯一的例外是 HEAD 请求在 GET 被允许的地方被允许，转换时报告一次（`PIP-18`）。不能按方向翻译的一律拒绝，不静默丢弃。由此新增三条：
+> - **只有 7.x 才填的部件**（`request.attributes.*`，网关的路由 id 除外；以及 `resource.*`，7.x 经 `RequestAttributesAppender` 填）在 8.0 永远缺失，其上的条件是常量。
+>   只有一种情形翻译：ALLOW 方向上再也不会成立的条件，记录为收窄。其余都拒绝：恒真的条件（两个方向都拒绝，ALLOW 会对所有请求成立，DENY 会拒绝范围内的所有请求）、
+>   DENY 方向上恒假的条件、DENY 里对恒假条件取否定。`ipRegion` 的国家前缀是例外，见 RFC 0006 §5.4.5。
+> - **方法 HEAD** 按方向翻译：DENY 的方法含 HEAD 而不含 GET 时拒绝；HEAD 与 GET 并列时去掉 HEAD；只含 HEAD 的 ALLOW 丢弃并记录。`request.method` 上的条件同理。
+> - 差分测试增加“8.0 一侧只喂执行路径会填的事实”的情形；此前两侧喂相同的属性，看不到上面的问题。
 
 | 7.x 类型 | 翻译 | 说明 |
 |---|---|---|
