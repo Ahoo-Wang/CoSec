@@ -266,7 +266,7 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 |---|---|---|---|
 | `cosec.observability.listener.required-timeout` | duration | `1s` | How long one `REQUIRED` decision listener may take. A failure or timeout turns a permit into `503`. |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | Events one `BEST_EFFORT` listener may have waiting. A full queue drops the next event and counts it (`cosec.listener.dropped`). |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. The Kafka audit listener gets as long again for the sends it still holds. |
+| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. The Kafka audit listener, and the control plane's Kafka change listener, get as long again for the sends they still hold. |
 
 ## Control plane
 
