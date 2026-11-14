@@ -16,6 +16,13 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **The test kit reads a request as enforcement does** (round 2 M2, `PIP-15`). `PolicyTestKit` decided `http:HEAD`, a
+  lower-case method and a path with a dot segment as written, so it confirmed a DENY on `http:HEAD` that the pipeline,
+  which decides HEAD as GET, never applies. It now decides HEAD as GET and normalizes paths, and answers
+  `{"decision": "InvalidRequest"}` where the pipeline answers `400`: rewrite such scenarios, and a statement on
+  `http:HEAD` as one on `http:GET`. An `expect` must name a `decision` (an empty one passed whatever was decided), and a
+  directory of shortened file names needs the `report.json` `cosec-migrate convert` wrote beside it. The experimental
+  `evaluate(JsonNode)` and `check(String, JsonNode)` are gone: pass the scenario as text, `check(name, json)`.
 - **A generated route map sits at the `servers` path, and its resources name every path variable** (round 2 L4). The
   `cosecServiceGenerator` endpoint dropped a server path (`/api/v1`), so its routes matched no request and every
   request was in the `http` namespace; and `/users/{id}/avatar/{size}` was the resource `user/{size}`, one resource for

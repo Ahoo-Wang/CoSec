@@ -13,6 +13,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **测试工具按执行的方式读取请求**（第 2 轮 M2，`PIP-15`）。此前 `PolicyTestKit` 按原样判定 `http:HEAD`、含小写字母的方法和带点段的路径，所以会确认一条 `http:HEAD` 上的 DENY，而管道把 HEAD 按 GET 判定，从不应用它。现在它把 HEAD 按 GET 判定、规范化路径，并在管道回答 `400` 时给出 `{"decision": "InvalidRequest"}`：请改写这样的场景，并把 `http:HEAD` 上的语句改写为 `http:GET` 上的。`expect` 必须写出 `decision`（此前空的 `expect` 无论决策如何都会通过）；文件名被缩短的目录需要 `cosec-migrate convert` 在旁边写下的 `report.json`。实验性的 `evaluate(JsonNode)` 和 `check(String, JsonNode)` 已删除：以文本传入场景，用 `check(name, json)`。
 - **生成的路由映射位于 `servers` 路径之下，资源包含路径的每个变量**（第 2 轮 L4）。`cosecServiceGenerator` 端点丢掉了服务器路径（`/api/v1`），生成的路由匹配不到任何请求，所有请求都落在 `http` 命名空间；`/users/{id}/avatar/{size}` 的资源是 `user/{size}`，所有用户共用一个资源。现在路由以服务器路径开头（不含上下文路径），资源是 `user/{id}/{size}`：重新生成路由映射，并改写策略中按生成结果写的资源。多个服务器路径不同，或路径含服务器变量时，生成失败。
 - **ip2region：无法定位的是取不到**（第 2 轮 M5）。只有随附的 IPv4 数据库时，IPv6 客户端没有国家，写成 `country in [...]` 的地域封锁 DENY 会放行它；现在它是取不到，这条 DENY 使请求返回 `503`（或者用 `onMissing: nomatch` 放行）。用 `cosec.ip2region.ipv6-location` 加载 IPv6 数据库。`Ip2RegionAttributeProvider` 改为接收数据库列表，每个数据库的版本取自其文件头，不再接收单个数据库和版本。
 - **失败的 `IdGenerator` 只损失它自己的 id**（`PIP-23`）。此前抛出异常的生成器（时钟回拨后 CosId 的 `ClockBackwardsException`）会在得出任何结果之前离开管道：没有问题体，没有 `CoSec-Request-Id`，没有决策事件，各适配器各自应答。现在以随机 id 代替，并至多每十秒记录一次 WARN；`CosIdIdGenerator` 对 CosId 的失败也是如此。请把 CosId 的时钟回拨策略配置为失败而不是等待。

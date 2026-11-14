@@ -73,8 +73,8 @@ class ApiVariantTest {
         val named = LIBRARIES.filter { project ->
             PublicSignatures.violations(PublicSignatures.classes { it == project }, JACKSON).isNotEmpty()
         }
-        // The rule sees the policy test kit, whose scenario entry points take a JsonNode.
-        named.assert().contains("testkit")
+        // Since round 2 L9 none does: the test kit, which this rule was written for, takes scenarios as text. One that
+        // names Jackson again must export it.
         named.filter { JACKSON_DATABIND !in facts(it, "module") }.assert().isEmpty()
     }
 }

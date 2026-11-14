@@ -31,6 +31,18 @@ class JacksonSignatureTest {
     }
 
     /**
+     * The test kit is what applications write their policy tests against for the whole 8.x line (round 2 L9): its API
+     * takes scenarios and documents as text and files, never Jackson's tree, so a Jackson major upgrade does not break
+     * them. The conformance suite's tree-level entry points are `@InternalCoSecApi`.
+     */
+    @Test
+    fun `the test kit carries no Jackson type in a public signature`() {
+        val checked = PublicSignatures.classes { it == "testkit" }
+        checked.map { it.name }.assert().contains("me.ahoo.cosec.testkit.PolicyTestKit")
+        PublicSignatures.violations(checked, Regex("""tools\.jackson\.""")).assert().isEmpty()
+    }
+
+    /**
      * `cocache` reads Redis through Spring Data Redis's reactive API (the reviewed Reactor exception of
      * `SourceRulesTest`), and keeps it inside: its public API is the suspending SPIs, so no Reactor type reaches a caller.
      */

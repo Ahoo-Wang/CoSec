@@ -34,6 +34,7 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
 import kotlin.io.path.readBytes
+import kotlin.io.path.readText
 
 /**
  * The samples of the scenario pages (`wiki/examples/<scenario>/`) are real: the documents compile, the scenarios decide
@@ -77,7 +78,7 @@ class DocumentationExamplesTest {
         files.assert().describedAs("scenarios of $name").isNotEmpty()
         return files.map { file ->
             val label = "$name: ${scenarios.relativize(file)}"
-            DynamicTest.dynamicTest(label) { kit().check(label, ScenarioJson.read(file)) }
+            DynamicTest.dynamicTest(label) { kit().check(label, file.readText()) }
         }
     }
 
