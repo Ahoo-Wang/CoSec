@@ -316,8 +316,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R7a 审计记录（✅ #1297） | `authorization.source` 改用绑定词汇，删死字段和 `PolicyType`；`KafkaAuditListener.destroy()` 要等队列写完（R3 发现） | 与 G1 对齐 |
 | R7b 主体与令牌契约（✅ #1302） | 验证结果与签发输入改成不可变值，删 `Delegated` 链；`SecurityContext` 只读；删 `RoleCapable` 等；`authenticated` 显式；token 绑定 App（RFC 0012 §3.5）；`AttributeRequest` 带上租户后删除 `Subject.tenantId`（R3 发现） | ABI 冻结前 |
 | R7c 登录协程化（✅ #1303） | `cosec-login`、`cosec-social` 转 `suspend`，注册表改实例 | R7b 之后 |
-| R8 包名对齐（#1348，已审核，自动合并中） | `me.ahoo.cosec.cache` → `cocache`、`me.ahoo.cosec.servlet` → `webmvc`、`me.ahoo.cosec.spring.boot.starter` → `spring.boot`；165 个文件只移动，46 个变异体补丁改路径，三个 ABI 转储只有改名 | 其余批次之后，ABI 冻结前 |
-| R9 GA 收尾 | 最后一次 v7/v8 门禁后删除工作流；文档守卫词表；alpha 升级章节；路线图页；`guava` | GA tag 前 |
+| R8 包名对齐（✅ #1348） | `me.ahoo.cosec.cache` → `cocache`、`me.ahoo.cosec.servlet` → `webmvc`、`me.ahoo.cosec.spring.boot.starter` → `spring.boot`；165 个文件只移动，46 个变异体补丁改路径，三个 ABI 转储只有改名 | 其余批次之后，ABI 冻结前 |
+| R9 GA 收尾（进行中） | ✅ 删除 `cosec-migrate cocache8`（#1351）；公共声明归类（方案已分诊，六个 PR，决定见 §9）；JWT 验证基准；`guava`；文档守卫词表；`MutationCheckTest` 支持 `git.exe`。打 GA tag 时、由维护者发话：最后一次 v7/v8 门禁后删除工作流，删除升级文档的 alpha 章节；路线图页 | GA tag 前 |
 
 **未关闭 issue 的分批**（2026-11-08 按摘要分诊，都自述 P2/P3，没有放行类问题；每个修复先复现）：
 
@@ -480,6 +480,7 @@ R9 开始前要核对的 RC 前事项（2026-11-14，由一个并行的 Sonnet �
 | **挂起处理器里的 `SecurityContextHolder`**（edge 组的 M4）：默认配置下，被另一个请求唤醒的挂起处理器从 holder 读到的是那个请求的主体。保留 holder（阻塞代码需要它，删掉只会让应用自己写同样有隐患的 ThreadLocal）；处理器里推荐以参数注入 `SecurityContext`；为 holder 注册上下文传播的访问器；上下文传播不会恢复 holder 时，在挂起处理器运行前解绑它，使读取明确失败而不是答出别人的主体。starter 不替应用打开全局的自动上下文传播。剩下的一种情形写进文档：在阻塞处理器的请求线程上被唤醒、且只在唤醒后才读 holder | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；`wiki/integration/web.md` |
 | **第二轮审查（宿主与工具）的协调者决定**：一道保护不能被静默关掉，文档里不能有不可能生效的语句。starter 的启动检查有自己的类型，不受 `spring.main.lazy-initialization` 影响（`STA-3`）。`http` 动作的动词恰为 `HEAD` 或含小写字母时文档不编译（`DOC-8`）：HEAD 按 GET 决策，这样的 DENY 是作者以为堵上了的洞；转换工具对只含 HEAD 的 7.x DENY 拒绝转换，对只含 HEAD 的 ALLOW 丢弃并在报告里说明。测试工具经 `Enforceable` 决策，与管道一致；保持 experimental，公共签名里不出现 Jackson。`AuthenticatedPrincipal` 的属性在构造时成为不可修改的视图，JWT 解析出的嵌套集合不可变。社交登录注册项的未知字段、设置了却不生效的 `cosec.cosid.generator`、重复的内存 API Key hash 都使启动失败。8.0 不支持 Spring AOT 与原生镜像（未测试），支持的是网关镜像的 JDK AOT 缓存；原生镜像留到 8.x | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；修复合入时修订 [RFC 0006](rfc/0006-coroutine-pipeline.md) §12 与 [RFC 0005](rfc/0005-condition-ast.md) |
 | **宿主与工具组的后续决定**：7.x 按请求属性写的条件，8.0 的执行路径不填这些属性，转换后永远不匹配；转换工具按方向处理：DENY 拒绝转换，ALLOW 收窄并记录。`ipRegion` 只翻译一种形状：国家前缀（`startsWith "X\|"`）成为 `ext.ip2region.country` 等于 X，并在平台文档里声明该属性；其余形状不做四个属性的合取（地区字段读不到，`0` 字段在 8.0 是缺失）。测试工具场景里的外部属性（`ext.*` 的目录、取值与“取不到”）放到 8.1，设计已有。网关镜像的 512M 直接内存默认值保持：它是上限不是预留，只有裸跑 `docker run` 用到，没有带请求体流量下的实测，实测随端到端基线在 GA 后做 | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；[RFC 0006](rfc/0006-coroutine-pipeline.md) §5.4.5 |
+| **公共声明归类（R9，ABI 冻结前）的协调者决定**：衡量标准是 wiki 写到的才算 API。313 个公共顶层类型里 201 个保持稳定或 SPI，51 个转为 `@ExperimentalCoSecApi`，56 个转为内部，约 1,400 行转储退出冻结；不涉及任何安全性质。D1：不经 Spring 手工装配 `Pipeline` 的那一组类型（`PipelineComponents`、`SnapshotOptions`、`HttpFacts`、`Outcome` 等 17 个）转为实验性，文档指向 `PipelineFixture`；8.1 转稳定时改用构建器。D2：`cosec-cocache` 的四个缓存接口与带 CoCache、Spring Data 类型的构造器转为内部（应用本来就无法构造它们），缓存名不变。D3：`ControlStore`、影子端口及其记录转为实验性，`ChangeListener` 与 `ChangeEvent` 保持稳定。D4：starter 的 `*Properties` 类与 `@ConditionalOn*` 注解退出 API，契约是属性键。D5：评估轨迹移到 `engine.trace` 并转为实验性，`ViewVersion` 移到 `engine` 保持稳定。D6（SPI 变更）：`login.Credentials` 改名 `LoginCredentials`，`Authentication.supportCredentials` 改名 `credentialsType`：一个产品里两个公开的 `Credentials` 冻结后再也改不了。D7：调用方会内联的版本号常量改为 `val`。D8（SPI 变更）：`ApiKeyStore` 不再是 SPI（请求从不读它，文档只列 `ApiKeyReader`）。附加原则：应用自己的测试需要构造的类型保持可达，SPI 实现者和监听器作者不 opt-in 内部 API 也能做单元测试 | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；方案在协调者笔记 `r9-api-classification.md`；D1、D4、D6 已单独告知维护者 |
 
 ## 10. 尚未派发的下一步
 
