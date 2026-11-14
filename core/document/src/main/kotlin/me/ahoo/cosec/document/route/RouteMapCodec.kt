@@ -22,9 +22,6 @@ import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 
-/** A route map file (`cosec-routes.json`, RFC 0005 §5.3): the routes of one service. */
-class RouteMapDocument(val service: String, val routes: List<Route>)
-
 /**
  * Reads and writes route map files, strictly: a repeated key, an unknown field, a missing one, a value of the wrong
  * JSON type or a map with no routes fails the whole file with [RouteMapException], naming the location and JSON path.

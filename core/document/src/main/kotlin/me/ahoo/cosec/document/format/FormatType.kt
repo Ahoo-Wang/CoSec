@@ -140,21 +140,3 @@ class Ref(val file: String, val definition: String? = null) : FormatType {
 
     override fun toString(): String = if (definition == null) file else "$file#$definition"
 }
-
-/** One generated `schema/<name>.schema.json`. */
-@InternalCoSecApi
-class SchemaFile(
-    val name: String,
-    val title: String,
-    /** Null for a file that only holds shared definitions. */
-    val root: FormatType?,
-    val definitions: Map<String, FormatType> = emptyMap(),
-    val description: String? = null,
-) {
-    val fileName: String get() = "$name.schema.json"
-
-    fun ref(definition: String? = null): Ref {
-        require(definition == null || definition in definitions) { "$fileName has no definition [$definition]." }
-        return Ref(fileName, definition)
-    }
-}

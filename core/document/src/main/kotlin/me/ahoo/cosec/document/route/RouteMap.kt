@@ -23,36 +23,11 @@ import me.ahoo.cosec.engine.pattern.InvalidPatternException
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
-import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.Resource
 
 // The methods of the HEAD fallback (PIP-18); the pipeline's own method rules are `HttpMethods`, in cosec-runtime.
 private const val HEAD = "HEAD"
 private const val GET = "GET"
-
-/** A route map that does not load: malformed, or with routes that could answer one request two ways. */
-class RouteMapException(message: String, cause: Throwable? = null) : CoSecException(message, cause)
-
-/**
- * One route of a route map (RFC 0005 §5.3): requests with [method] whose path [path] matches have the action
- * [action] (`service:verb`) on the resource [resource], a typed resource template such as `order/{orderId}` whose
- * variables are captures of [path].
- */
-class Route(val method: String, val path: String, val action: String, val resource: String)
-
-/** What a route map says about one request. */
-sealed interface RouteResolution {
-    /** No route matches: the request stays in the `http` namespace (RFC 0005 §5.3, `ACT-2`). */
-    data object Unmapped : RouteResolution
-
-    class Mapped internal constructor(val route: Route, val action: Action, val resource: Resource) : RouteResolution
-
-    /**
-     * A route matches, but a value it captured cannot be part of a typed resource id: it holds `/` (a decoded
-     * `%2F`), which would change the id's segments. The request is refused, never evaluated as another resource.
-     */
-    class Invalid internal constructor(val reason: String) : RouteResolution
-}
 
 /**
  * The routes of a service, from its route maps (`cosec-routes.json`, RFC 0005 §5.3). A request whose method and path

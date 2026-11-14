@@ -17,8 +17,6 @@ package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**
@@ -80,19 +78,6 @@ enum class ProvenanceKind {
     EXPIRE,
     MIGRATE,
     BOOTSTRAP,
-}
-
-/**
- * A principal that published or approved a revision: its tenant and its id, which is all an actor is. A value that does
- * not grow (RFC 0010 C4): when delegation comes (RFC 0009 §7, RFC 8693 `act`), who acted on whose behalf is a value of its
- * own beside the actor, not a field of it.
- */
-data class Actor(val tenant: TenantId, val principal: PrincipalId) {
-    init {
-        require(
-            tenant.value.isNotEmpty() && principal.value.isNotEmpty()
-        ) { "An actor names its tenant and principal." }
-    }
 }
 
 /** The shadow window of the change: its id, or that it was skipped (`cosec:skip-shadow`, RFC 0007 §6.4). */

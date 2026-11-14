@@ -25,7 +25,6 @@ import me.ahoo.cosec.engine.flat.CompiledRateLimit
 import me.ahoo.cosec.engine.flat.PolicyCompiler
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.AppId
-import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SubjectRef
@@ -39,17 +38,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-
-/** A document that decodes but does not compile; it is never installed, and every request needing it fails closed. */
-class DocumentCompileException @InternalCoSecApi constructor(
-    val document: String,
-    @InternalCoSecApi val errors: List<CompileError>,
-    cause: Throwable? = null,
-) :
-    CoSecException(
-        "The $document document does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" },
-        cause,
-    )
 
 /**
  * Compiles platform, app and tenant documents ([PolicyDocument]) into the engine's [CompiledDocument]s (RFC 0004 §7,

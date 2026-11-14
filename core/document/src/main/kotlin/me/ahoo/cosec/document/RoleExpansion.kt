@@ -324,27 +324,6 @@ object RoleExpansion {
     }
 }
 
-/** [document] and where each entry it derived was written; the compiler and the checks report errors there. */
-@InternalCoSecApi
-class Expansion internal constructor(
-    val document: PolicyDocument,
-    private val ownPolicies: Int,
-    private val policySources: List<String>,
-    private val ownBindings: Int,
-    private val bindingSources: List<String>,
-) {
-    /** Whether the policy at [index] of [document] is derived from a catalog entry. */
-    fun derivedPolicy(index: Int): Boolean = index >= ownPolicies
-
-    /** The JSON path the policy at [index] of [document] was written at. */
-    fun policyPath(index: Int): String =
-        if (derivedPolicy(index)) policySources[index - ownPolicies] else "$.policies[$index]"
-
-    /** The JSON path the binding at [index] of [document] was written at. */
-    fun bindingPath(index: Int): String =
-        if (index >= ownBindings) bindingSources[index - ownBindings] else "$.bindings[$index]"
-}
-
 internal fun PolicyDocument.describe(): String = when (kind) {
     DocumentKind.PLATFORM -> "platform"
     DocumentKind.APP -> "app $owner"

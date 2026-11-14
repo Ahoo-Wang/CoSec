@@ -18,14 +18,9 @@ package me.ahoo.cosec.document
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
-import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.Attribute
-import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
 import java.time.Instant
@@ -98,87 +93,6 @@ class PolicyDocument @InternalCoSecApi constructor(
         }
         require(attributes == null || attributes.all { it.external }) { "Declared attributes are external." }
         roles.firstNotNullOfOrNull { it.shapeProblem(kind) }?.let { throw IllegalArgumentException(it) }
-    }
-}
-
-/** A policy as a document writes it. */
-@InternalCoSecApi
-class PolicyDefinition(
-    val id: PolicyId,
-    val attachable: Boolean,
-    val condition: Condition?,
-    val statements: List<StatementSource>,
-    /** A platform boundary (RFC 0007 §7.6): only ALLOWs, never bound or attached. */
-    val boundary: Boolean = false,
-)
-
-/**
- * An app's permission catalog (RFC 0004 §4.9, RFC 0012 §4): for UIs, generators and validation. An entry that writes
- * [CatalogPermission.actions] defines a permission; [RoleExpansion.effective] turns it into a policy, and evaluation
- * reads only that.
- */
-@InternalCoSecApi
-class Catalog(val groups: List<CatalogGroup>)
-
-@InternalCoSecApi
-class CatalogGroup(
-    val name: String,
-    val description: String? = null,
-    /**
-     * Whether the group's permissions apply in any space a role holding them applies in. A permission written with
-     * `action` in a group that is not spaced applies only in the default space (RFC 0012 §4.2). Informational for a
-     * hand-written policy, whose author writes that restriction.
-     */
-    val spaced: Boolean = false,
-    val permissions: List<CatalogPermission>,
-)
-
-@InternalCoSecApi
-class CatalogPermission(
-    val id: String,
-    val name: String? = null,
-    val description: String? = null,
-    /** The action patterns of the permission this entry defines (RFC 0012 §4.1); null when it defines none. */
-    val actions: List<String>? = null,
-    /** Its resources, which need [actions]; empty for any resource. */
-    val resources: List<ResourceSource> = emptyList(),
-)
-
-/** What a role grants (RFC 0012 §5). */
-@InternalCoSecApi
-sealed interface RolePermissions {
-    /** `"*"`: every permission the catalog defines, as it grows. Only in an app document (RFC 0012 §5.1). */
-    @InternalCoSecApi
-    data object All : RolePermissions
-
-    /** These permissions, by their catalog ids; possibly none. */
-    @InternalCoSecApi
-    data class Listed(val ids: List<String>) : RolePermissions
-}
-
-/**
- * A role of an app (RFC 0012 §5): which permissions it grants. A system role, in its app's document, has neither [app]
- * nor [space]; a custom role, in a tenant document, names its [app] and, optionally, the one [space] it applies in.
- */
-@InternalCoSecApi
-class RoleDefinition(
-    val id: RoleId,
-    val permissions: RolePermissions,
-    val name: String? = null,
-    val description: String? = null,
-    val app: AppId? = null,
-    val space: SpaceId? = null,
-) {
-    /** Why a document of [kind] cannot hold this role; null when it can. */
-    @InternalCoSecApi
-    fun shapeProblem(kind: DocumentKind): String? = when {
-        kind == DocumentKind.PLATFORM -> "role [${id.value}]: the platform document has no roles"
-        kind == DocumentKind.APP && (app != null || space != null) ->
-            "role [${id.value}]: a system role belongs to its document's app and names no app or space"
-        kind == DocumentKind.TENANT && app == null -> "role [${id.value}]: a tenant's role names its app"
-        kind == DocumentKind.TENANT && permissions == RolePermissions.All ->
-            "role [${id.value}]: \"*\" is only for a system role; a tenant's role lists its permissions"
-        else -> null
     }
 }
 
