@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding
@@ -90,7 +91,7 @@ data class Simulation(
 
 /** A decision at the revisions an audit event recorded, or on the current heads. */
 @InternalCoSecApi
-data class Explanation(val version: SnapshotVersion, val decision: DecisionView, val trace: TraceView?)
+data class Explanation(val version: ViewVersion, val decision: DecisionView, val trace: TraceView?)
 
 /** Which bindings could permit, and which DENYs could deny, [action] on [resource] in a scope of [tenant] (§10.3). */
 @InternalCoSecApi
@@ -180,7 +181,7 @@ interface ControlPlane {
 
     suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId? = null): Simulation
 
-    suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion? = null): Explanation
+    suspend fun explain(operator: Operator, request: SimulatedRequest, at: ViewVersion? = null): Explanation
 
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport
 
@@ -337,14 +338,14 @@ class DefaultControlPlane(
         )
     }
 
-    override suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion?): Explanation {
+    override suspend fun explain(operator: Operator, request: SimulatedRequest, at: ViewVersion?): Explanation {
         val decidable = decidable(operator, request, ControlActions.EXPLAIN)
         val tenant = decidable.tenant
         val explained = decidable.request
         val scope = resolved(explained)
         if (scope == null) {
             val rejected = rejected(explained)
-            return Explanation(at ?: SnapshotVersion(0, null, 0), rejected.enforced, null)
+            return Explanation(at ?: ViewVersion(0, null, 0), rejected.enforced, null)
         }
         // The tenant's document at the revision decided on first: it decides, by enforcement's rule, whether the app's
         // was read (RC1-17), so the app revision an audit event recorded is the one explained.

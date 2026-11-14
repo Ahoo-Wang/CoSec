@@ -887,7 +887,7 @@ class GrantAnalyzerTest {
         }
 
         @Test
-        fun `a variable read through overlapping resources of the grantor is not comparable`() {
+        fun `a variable read through overlapping resources of the grantor is read under the one that contains the grant`() {
             val own = eqAttr("resource.var.owner", "subject.id")
             fun held(vararg resources: String) = GrantDocument(
                 policies = listOf(policy("own", allow(listOf("doc:read"), resources.toList(), own))),
@@ -895,11 +895,11 @@ class GrantAnalyzerTest {
             )
             val grant = allow("doc:read", "doc/{o}/y", eq("resource.var.o", "gina"))
             grantWith(grant, held("doc/{owner}/**", "file/{owner}")).assertContained()
-            // doc/x/y matches both of the grantor's resources, which capture different values there.
-            grantWith(
-                grant,
-                held("doc/{owner}/**", "doc/x/{owner}")
-            ).assertUnknown(UnknownReason.NOT_COVERED, Shortfall.CONDITION)
+            // The grant's resource overlaps both of the grantor's (doc/x/y matches both, which capture different values
+            // there). A statement holds under any of its matching resources' captures (ALG-10), so doc/{owner}/**,
+            // which contains the grant's resource, is enough, in either order.
+            grantWith(grant, held("doc/{owner}/**", "doc/x/{owner}")).assertContained()
+            grantWith(grant, held("doc/x/{owner}", "doc/{owner}/**")).assertContained()
         }
 
         @Test

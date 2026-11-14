@@ -1,0 +1,17 @@
+# Rule: ALG-10
+# Mutant: a statement whose condition reads captures tries only the first matching pattern
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.PatternCapturesTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index 832b4108..59faeea1 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -419,7 +419,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+         if (!statement.admits(this)) {
+             return CONDITION_MISS
+         }
+-        if (statement.eachPattern) {
++        if (statement.eachPattern && statement.resources.size == 1) {
+             return stepEachPattern(policy, statement)
+         }
+         var failure: Throwable? = null

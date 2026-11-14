@@ -207,6 +207,46 @@ class CompiledDocumentTest {
         }
     }
 
+    /**
+     * `DOC-6`: every rule a permit matches costs the pipeline one limiter call, so a document holds at most
+     * [CompiledDocument.MAX_RATE_LIMIT_RULES] of them, whatever its kind.
+     */
+    @Test
+    fun `a document holds at most its rate limit rules`() {
+        val compiler = PolicyCompiler()
+        fun rules(kind: DocumentKind, owner: String, count: Int) = (0 until count).map {
+            compiler.rateLimit(
+                kind,
+                owner,
+                RateLimitSource("r$it", StatementSource("r$it", Effect.DENY, listOf("*")), null, RateLimitSpec(1.0))
+            )
+        }
+        val max = CompiledDocument.MAX_RATE_LIMIT_RULES
+        max.assert().isEqualTo(64)
+        CompiledDocument.platform(
+            emptyList(),
+            emptyList(),
+            rules(DocumentKind.PLATFORM, "", max)
+        ).rateLimits.assert().hasSize(max)
+        CompiledDocument.app(AppId("app"), emptyList(), emptyList(), rules(DocumentKind.APP, "app", max))
+        CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), rules(DocumentKind.TENANT, "acme", max))
+        val message = "holds ${max + 1} rate limit rules, more than $max"
+        rejects(
+            message
+        ) { CompiledDocument.platform(emptyList(), emptyList(), rules(DocumentKind.PLATFORM, "", max + 1)) }
+        rejects(message) {
+            CompiledDocument.app(AppId("app"), emptyList(), emptyList(), rules(DocumentKind.APP, "app", max + 1))
+        }
+        rejects(message) {
+            CompiledDocument.tenant(
+                TenantId("acme"),
+                emptyList(),
+                emptyList(),
+                rules(DocumentKind.TENANT, "acme", max + 1)
+            )
+        }
+    }
+
     /** RC1-38 (`PIP-12`): every header a document's conditions and rate limit keys read, whatever the effect. */
     @Test
     fun `a document knows the headers it reads`() {

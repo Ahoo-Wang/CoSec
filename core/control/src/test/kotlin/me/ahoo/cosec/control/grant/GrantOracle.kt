@@ -62,22 +62,6 @@ class OracleRequest(
         "${subject.id}@${app.value}/${space.value} ${action.namespace}:${action.verb} ${resource.type}:${resource.id} ip=$ip $headers"
 }
 
-/**
- * Which captures a statement with several matching resources reads. The engine reads one of them; which one is not
- * the analysis's to rely on, so the soundness properties check the strictest reading on the side that must be
- * permitted and the most permissive one on the side that was granted.
- */
-enum class CaptureReading {
-    /** Matches if the condition holds for the captures of some matching resource. */
-    ANY,
-
-    /** Matches if the condition holds for the captures of every matching resource. */
-    ALL,
-
-    /** The captures of the first matching resource. */
-    FIRST,
-}
-
 enum class OracleDecision { PERMIT, DENY, INDETERMINATE }
 
 /**
@@ -89,8 +73,6 @@ enum class OracleDecision { PERMIT, DENY, INDETERMINATE }
  * read as the engine reads them, as their `toString()`.
  */
 class GrantOracle(
-    private val allowReading: CaptureReading,
-    private val denyReading: CaptureReading,
     /** Leave out what binds every subject alike: DENYs and unresolved policies reached through `Anyone` (Q8). */
     private val ignoreAnyone: Boolean,
     /**
@@ -128,8 +110,7 @@ class GrantOracle(
         for (statement in policy.statements) {
             if (statement.effect == Effect.DENY && !denies) continue
             val condition = both(policy.condition, statement.condition)
-            val reading = if (statement.effect == Effect.DENY) denyReading else allowReading
-            if (matches(statement, condition, request, reading)) {
+            if (matches(statement, condition, request)) {
                 if (statement.effect == Effect.DENY) return Effect.DENY
                 allowed = true
             }
@@ -206,7 +187,11 @@ class GrantOracle(
         }
     }
 
-    fun matches(statement: GrantStatement, condition: Condition?, request: OracleRequest, reading: CaptureReading): Boolean {
+    /**
+     * Whether [statement] with [condition] matches [request]: an action matches, and the condition holds under the
+     * captures of some matching resource (`ALG-10`).
+     */
+    fun matches(statement: GrantStatement, condition: Condition?, request: OracleRequest): Boolean {
         if (statement.actions.none { it.matches(request.action) }) return false
         val captures = statement.resources.mapNotNull { pattern ->
             try {
@@ -219,11 +204,7 @@ class GrantOracle(
         if (condition == null) return true
         val checked = (checker.check(condition) as CheckResult.Valid).condition
         fun holds(variables: Map<String, String>) = checked.evaluate(Input(request, variables))
-        return when (reading) {
-            CaptureReading.ANY -> captures.any(::holds)
-            CaptureReading.ALL -> captures.all(::holds)
-            CaptureReading.FIRST -> holds(captures.first())
-        }
+        return captures.any(::holds)
     }
 
     private class Input(private val request: OracleRequest, private val variables: Map<String, String>) : ConditionInput {

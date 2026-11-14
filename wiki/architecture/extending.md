@@ -101,6 +101,7 @@ one has an `else`, and a listener or store never relies on the set being complet
 | `Attribute.Kind` | a new catalog attribute |
 | `ProblemType` | a new problem, such as `413` or `415` |
 | `Obligation` | a new kind of obligation |
+| `Cause` | a new reason a decision is Indeterminate, such as a new port that can fail; a `DecisionListener` reads it from a decision event |
 | `ChangeEvent.Kind` | a new kind of change event |
 
 A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot

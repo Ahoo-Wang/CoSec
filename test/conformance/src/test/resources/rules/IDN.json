@@ -133,7 +133,7 @@
     {
       "id": "IDN-11",
       "source": "RFC 0004 §4.5.1 (RC1-22, R5)",
-      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. CoSec's issuer refuses to sign a token with an empty tenant.",
+      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. A claim that cannot name a tenant document (blank, `*`, holding `:` or a control character, longer than 128 characters: the rule of `SnapshotKey.Tenant`) makes the token invalid as well, and an API key record with such a tenant fails (503), so every credential applies one rule. CoSec's issuer refuses to sign a token with an empty tenant or one it would refuse.",
       "level": "pipeline",
       "pending": null,
       "guards": [
@@ -143,7 +143,11 @@
         "runtime:TokenAuthenticatorTest#aTokenClaimingAnEmptyTenantIsInvalid",
         "spi:VerifiedTokenTest#verifyAndRefreshRefuseAnEmptyTenant",
         "runtime:TokenAuthenticatorTest#aTokenWithoutTenantIsInTheDefaultTenant",
-        "runtime:MembershipClaimsTest#aBlankTenantIsRefusedByTheScope"
+        "runtime:MembershipClaimsTest#aBlankTenantIsRefusedByTheScope",
+        "spi:VerifiedTokenTest#aTenantThatCannotNameATenantIsRefused",
+        "spi:ApiKeyReaderTest#aKeyBelongsToATenantAndAPrincipal",
+        "jwt:JwtTokenVerifierTest#aTenantIdThatCannotBeATenantIsInvalid",
+        "jwt:JwtTokenConverterTest#aTenantThatCannotBeATenantIdIsNotIssued"
       ]
     },
     {

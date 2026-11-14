@@ -16,7 +16,9 @@
 package me.ahoo.cosec.runtime.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.BINDING
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.CATALOG
@@ -265,8 +267,9 @@ internal object PolicyDocumentFormats {
 
     private val rateLimits = Field(
         "rateLimits",
-        ArrayType(ref(SNAPSHOT_DOCUMENT, "rateLimit")),
-        description = "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+        ArrayType(ref(SNAPSHOT_DOCUMENT, "rateLimit"), maxItems = CompiledDocument.MAX_RATE_LIMIT_RULES),
+        description = "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends. At most " +
+            "${CompiledDocument.MAX_RATE_LIMIT_RULES} (DOC-6): each one a permit matches costs it a call to the limiter.",
     )
 
     private val documentSections = listOf(
@@ -499,7 +502,7 @@ internal object PolicyDocumentFormats {
                         "an absent value: the empty bucket.",
                 ),
                 Field("permitsPerSecond", NumberType(exclusiveMinimum = 0), required = true),
-                Field("windowSeconds", IntegerType(minimum = 1), default = 1),
+                Field("windowSeconds", IntegerType(minimum = 1, maximum = RateLimitSpec.MAX_WINDOW_SECONDS), default = 1),
                 Field(
                     "strictFailure",
                     BooleanType(),
