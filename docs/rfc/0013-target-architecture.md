@@ -86,6 +86,7 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
 | `runtime.snapshot.SnapshotCompiler` | `spi.snapshot` | 快照源的端口；移走之后 `document` 不再认识 `runtime` |
 | `runtime.shadow` 的端口与记录（`ShadowReportSink`、`ShadowReportReader`、`InMemoryShadowReports`、`CandidateStore`、`StoredCandidate` 及其值） | `spi.shadow`，仍是 `@ExperimentalCoSecApi` | AGENTS.md 的规则：签名只用到普通值的端口放在 `spi`。`Candidate`（签名里有 `engine.CompiledDocument`）、候选来源与记录器留在 `runtime.shadow` |
 | `runtime.shadow.ShadowCodec` | `me.ahoo.cosec.document.shadow`，`@InternalCoSecApi` | 它用 Jackson，`spi` 不解析 Jackson；`cocache` 与控制面的内存存储必须用它写出同样的字节，两者都依赖 `document` |
+| `runtime.identity.IdentityCodec` | `me.ahoo.cosec.document.identity`，仍是 `@InternalCoSecApi` | `CoSec-Identity` 头是一种交换格式；编解码器只用到 `model`、`spi.identity`、mapper，它的格式描述符本来就随 `document.format` 走。`IdentityGate`、`IdentityIssuer` 是请求路径上的行为，留在 `runtime.identity` |
 | `runtime.token` 的签发一侧（`TokenFamilies`、撤销器、令牌对） | `cosec-login`，包 `me.ahoo.cosec.login.token` | `runtime.token` 只留验证（`CoSecTokenVerifier`、`TokenRevocation`） |
 | `backends/kafka` | `extensions/kafka`（项目名 `:kafka`、构件 `cosec-kafka` 不变） | 它实现的是 `DecisionListener` 与 `ChangeListener`，和 `micrometer`、`opentelemetry` 同类；放在 `backends/` 只是历史 |
 
@@ -132,7 +133,7 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
 | `kafka` 依赖 `runtime` 的 `DecisionListener`，规则对它不成立 | 不给例外，把它移到 `extensions/`：规则不成立说明的是分类错了，不是规则要开口子 |
 | `migrate` 经 `control` 仍有 `runtime` | 原文“不再依赖”说过头了，改为“不再 import、不再声明” |
 | `cocache` 的编译类路径仍解析到 `runtime` | 规则写成上面的三项断言，不查编译类路径，并在规则的 KDoc 里写明原因 |
-| `SchemaConformanceTest` 用 `runtime.identity.IdentityCodec` 解码身份格式 | 这一例移到 `cosec-runtime` 的测试里，挨着 `IdentityCodec`，与 `ProblemSchemaTest` 绑定 problem 格式的做法相同；不让 `document` 的测试反过来依赖 `runtime` |
+| `SchemaConformanceTest` 用 `runtime.identity.IdentityCodec` 解码身份格式 | 把 `IdentityCodec` 移进 `cosec-document`（`document.identity`），测试原样留下。先定的是把这一例移到 `runtime` 的测试里，实现方发现它与生成器和变异机制（约 440 行测试代码）缠在一起，只能靠 test fixtures 或让 `document` 的测试反过来依赖 `runtime`；缠在一起说明的是切错了：格式描述符与它的编解码器一起变，应当在同一个模块。problem 格式不同，它的写出方是 `StatusMapping`，属于请求路径，由 `runtime` 的 `ProblemSchemaTest` 自上而下绑定 |
 | `ProblemSchemaTest` 跨模块调用 `internal` 的 `JsonSchemaWriter` | 改为 `@InternalCoSecApi`，不进 ABI 清单 |
 
 同时确认：`SnapshotCompiler` 只移接口本身，不带 `@CoSecSpi`（它是 CoSec 自己实现的内部端口）；`RouteMap` 的 HEAD 回落只用到两个方法名，在文件内各留一个私有常量，
