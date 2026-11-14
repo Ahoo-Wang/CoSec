@@ -74,13 +74,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to AliyunCR
-        uses: docker/login-action@v4
-        with:
-          registry: registry.cn-shanghai.aliyuncs.com
-          username: ${{ secrets.ALIYUN_CR_USERNAME }}
-          password: ${{ secrets.ALIYUN_CR_TOKEN }}
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v6
@@ -88,7 +81,6 @@ jobs:
           images: |
             ahoowang/cosec-gateway
             ghcr.io/ahoo-wang/cosec-gateway
-            registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -103,9 +95,81 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Aliyun ACR rejects OCI 1.1 empty-descriptor attestation manifests (application/vnd.oci.empty.v1+json)
+          # Aliyun ACR rejects OCI 1.1 empty-descriptor attestation manifests (application/vnd.oci.empty.v1+json), and
+          # aliyun-sync below copies this manifest as it is.
           provenance: false
           sbom: false
+
+  # A mirror, not a gate: registry.cn-shanghai.aliyuncs.com regularly hangs or resets the connection (it hit the
+  # 30-minute timeout on main and failed pull requests with "connection reset by peer"). So it copies what the job above
+  # pushed to ghcr instead of building twice, retries with a backoff, and its failure never reds the run: nothing
+  # `needs` it, and `continue-on-error` keeps a failed or timed out mirror from failing the workflow. Look for a red
+  # step here when the Chinese mirror is behind.
+  aliyun-sync:
+    name: Mirror Docker image to Aliyun
+    needs: docker-deploy
+    runs-on: ubuntu-latest
+    # Sized from measured runs: a cold copy of the whole image (about 800 MB for both platforms) took 5 min 25 s, a copy
+    # of what Aliyun already holds about 5 s, and the old single-job push of only the changed layers about 20 s. A
+    # copy attempt gets 10 minutes; the script ends by itself within about 35 (3 x (60 s login + 600 s copy) + 80 s of
+    # backoff), so this limit, 40 minutes, is never what stops it: a job that hits its limit is cancelled, not failed.
+    timeout-minutes: 40
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+    env:
+      ALIYUN_REGISTRY: registry.cn-shanghai.aliyuncs.com
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # The same tags as the push above, for the mirror only.
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.ALIYUN_REGISTRY }}/ahoo/cosec-gateway
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy the image to AliyunCR
+        env:
+          ALIYUN_CR_USERNAME: ${{ secrets.ALIYUN_CR_USERNAME }}
+          ALIYUN_CR_TOKEN: ${{ secrets.ALIYUN_CR_TOKEN }}
+          SOURCE: ${{ needs.docker-deploy.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -uo pipefail
+          tag_args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && tag_args+=(--tag "$tag")
+          done <<<"$TAGS"
+          # A cancelled attempt keeps the blobs it finished (the next one skips them), and loses the one in flight.
+          copy() {
+            echo "$ALIYUN_CR_TOKEN" | timeout 60 docker login "$ALIYUN_REGISTRY" --username "$ALIYUN_CR_USERNAME" --password-stdin \
+              && timeout 600 docker buildx imagetools create "${tag_args[@]}" "$SOURCE" \
+              && docker buildx imagetools inspect "${tag_args[1]}"
+          }
+          for delay in 0 20 60; do
+            sleep "$delay"
+            if copy; then
+              exit 0
+            fi
+            echo "::warning::Copying to $ALIYUN_REGISTRY failed; retrying."
+          done
+          echo "::error::The mirror at $ALIYUN_REGISTRY is behind; the images on ghcr and Docker Hub are current."
+          exit 1
 
   # RFC 0008 §3.9, RC prerequisite 5: the image just pushed starts on its AOT cache (-XX:AOTMode=on fails instead of
   # falling back) against a real Redis, and answers the smoke requests on the 8.0 path.
