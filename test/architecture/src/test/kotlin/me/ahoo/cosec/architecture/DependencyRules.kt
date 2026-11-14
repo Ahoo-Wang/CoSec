@@ -38,7 +38,8 @@ object DependencyRules {
         "webflux" to CORE - "control",
         "webmvc" to CORE - "control",
         "gateway" to CORE - "control",
-        "openapi" to CORE - "control",
+        // A generator of documents and route maps (RFC 0013 §3): it reads the format, never the request path.
+        "openapi" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         "jwt" to CORE - "control",
         "social" to CORE - "control",
         "login" to CORE - "control",
@@ -69,6 +70,12 @@ object DependencyRules {
      */
     const val BACKENDS = "backends"
     const val RUNTIME = "runtime"
+
+    /**
+     * The outer projects that only read or write documents, so `cosec-runtime` is not on their run-time class path
+     * either (RFC 0013 §3): the OpenAPI generator.
+     */
+    val DOCUMENT_ONLY: Set<String> = setOf("openapi")
 
     /** Groups whose main code never depends on these. */
     val NEVER_DEPENDED_ON: Set<String> = setOf("test", "platform")
