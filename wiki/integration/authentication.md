@@ -31,9 +31,10 @@ The access token carries the principal, so authenticating a request needs no loo
 | `aud` | The app the token is for ([Apps](#apps)). One value; anything else makes the token invalid. Left out when it is issued for no app. |
 | `cosec.membership` | `"provider"` in place of `roles` and `policies`, when they come from a `MembershipProvider` ([Memberships](#memberships)). Left out otherwise. |
 | `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
+| `sid`, `auth_time`, `cosec.generation` | The session the pair belongs to ([Sessions](#sessions)): its id, when its user signed in (seconds), and which generation of it the pair is. On both tokens of a pair. |
 
-The refresh token carries only its own `jti`, `iat`, `exp`, `cosec.token: "refresh"` and, as `sub`, the `jti` of the
-access token it belongs to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
+The refresh token carries only its own `jti`, `iat`, `exp`, `cosec.token: "refresh"`, the session claims and, as `sub`,
+the `jti` of the access token it belongs to. Token ids come from the application's `IdGenerator` bean if it has one (for example over CosId), otherwise
 from `RandomIdGenerator` ([Ids](../architecture/extending.md#ids)). The lifetimes are
 `cosec.jwt.token-validity.access` (10 minutes) and `cosec.jwt.token-validity.refresh` (7 days).
 
@@ -220,8 +221,39 @@ the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`).
 `cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
 and social login included; requests are authenticated by the pipeline either way. The login path must be reachable by
 anonymous callers, so it needs an `Anyone` binding that permits it, as in the
-[Quick start](../guide/quick-start.md#write-a-first-policy). To issue tokens yourself, for example with a custom
-lifetime, call `TokenConverter.toToken(principal)` or `toToken(principal, accessValidity, refreshValidity)`.
+[Quick start](../guide/quick-start.md#write-a-first-policy). `authenticateAsToken` starts a [session](#sessions) for
+the subject. `TokenConverter.toToken(subject)` alone issues a pair outside any session, which never refreshes: to issue
+a refreshable pair yourself, start its session first,
+`converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`.
+
+## Sessions
+
+A login starts a **session**, a family of token pairs: an id (`sid`), the time its user signed in (`auth_time`) and a
+generation (`cosec.generation`), which both tokens of every pair carry. The session is kept in Redis
+(`<cosec.key-prefix>:token:family:<sid>`, [Storage](../operations/storage.md#redis-keys)), one key per live session, read
+and written only when a token is refreshed or revoked, never on a request.
+
+- **A refresh rotates the session.** Only the current generation moves it on, to the next generation. Two refreshes of
+  one pair at once, on one instance or many, move it once, and both get a pair.
+- **The pair just replaced is answered for `cosec.jwt.session.rotation-leeway` (30 seconds).** Presented within that
+  time after the session moved, it gets a new pair of the current generation, and the session does not move. This is
+  the retry window: a refresh whose response never reached the client (a lost connection, an instance that failed after
+  recording it) is retried with the pair the client still holds, and two tabs refreshing the same pair both end with a
+  usable pair. The window opens when the session moved and does not slide. Its cost: whoever holds the replaced pair
+  within it gets a fresh pair, as often as they ask until it closes; that holder had the current pair a moment earlier.
+- **An older generation presented again ends the session**, as does the pair just replaced once the leeway has passed.
+  It means a pair was copied and used after its owner refreshed: the whole session is revoked, and every pair of it is
+  refused from then on. A copy answered within the leeway is a second pair of the current generation, so it is caught
+  the same way: whichever of the two refreshes second, after the leeway, ends the session. A longer leeway gives clients
+  more time to retry and a copy more time to be answered; set it to cover your clients' timeout and one retry.
+- **A session lasts `cosec.jwt.session.lifetime` (30 days) from its login**, however often it is refreshed: then a refresh
+  is refused (`token-expired`) and the user signs in again. No token of a pair outlives its session. Roles carried in the
+  token take effect at the next login, so this is also the latest a changed role applies.
+- **The request path does not read sessions.** An access token of an older generation stays valid until it expires, as
+  every access token does: keep `cosec.jwt.token-validity.access` short. To stop access tokens at once, revoke them
+  ([Logout and revocation](#logout-and-revocation)).
+- **It fails closed.** A session that cannot be read, or a refresh that cannot be recorded, issues nothing (the
+  refresh throws: answer `503`); a session that is unknown is refused (`token-invalid`).
 
 ## Refreshing tokens
 
@@ -231,24 +263,26 @@ A client whose access token expired sends both tokens back. `TokenVerifier.refre
 - it is a refresh token (`cosec.token: "refresh"`, `IDN-13`): an access token in its place is refused, even one whose
   `sub`, a principal id, is the access token's `jti`;
 - the access token, which may be expired, is validly signed with the same key;
-- the refresh token belongs to that access token: its `sub` is the access token's `jti`, and its `iat` the access
-  token's, as `JwtTokenConverter` issues the two together.
+- the refresh token belongs to that access token: its `sub` is the access token's `jti`, its `iat` the access token's,
+  and it carries the same session, as `JwtTokenConverter` issues the two together.
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
-throws its subclass `RefreshTokenMismatchException`. Revocation is not the verifier's question: the caller checks next
-that the access token was not revoked, and neither were its principal's tokens (`SimpleRefreshTokenAuthentication`
-does, below). It returns the principal from the old access token; issue new
-tokens for it with `TokenConverter.toToken`. Refreshing a [delegation token](#tokens) (one with an `act` claim) fails
-too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
-`SimpleRefreshTokenAuthentication` does the check above as an `Authentication`, so with it declared as a bean, a
-refresh is a login with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's
-thread, which is pure computation, and reads revocations through `TokenRevocation`, the starter's bean, which judges them
-as the pipeline does; nothing blocks:
+throws its subclass `RefreshTokenMismatchException`. Refreshing a [delegation token](#tokens) (one with an `act` claim)
+fails too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
+
+`SimpleRefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
+with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's thread, which is pure
+computation; checks through `TokenRevocation` that the access token was not revoked, and neither were its principal's
+tokens; and rotates the session through `TokenFamilies` ([Sessions](#sessions)). The new pair says what the old access
+token said, in the next generation. Nothing blocks:
 
 ```kotlin
 @Bean
-fun refreshTokenAuthentication(tokenVerifier: TokenVerifier, tokenRevocation: TokenRevocation) =
-    SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+) = SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -258,32 +292,32 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
     authentication.authenticateAsToken(credentials)
 ```
 
-Two things a refresh does not do:
+A refresh is refused with `token-revoked` when the session was ended (by a logout, or because an older generation was
+presented), `token-expired` when the session's lifetime is over, `token-invalid` when the pair belongs to no session (a pair issued
+before sessions existed, or outside one). It throws anything else, a store that cannot be read above all: answer
+`503`, and nothing was issued.
 
-- **It does not re-read the user.** The new token carries the claims of the old one. To pick up changed roles on
-  refresh, write your own `Authentication` for refresh credentials that verifies them with `TokenVerifier.refresh`
-  and then loads the user.
-- **It does not invalidate the old refresh token.** A refresh token stays usable until it expires, and every refresh
-  issues a pair with a refresh token of its own: one pair refreshed again and again lasts as long as its user keeps
-  refreshing. Revoking an access token blocks that token and the refresh token bound to it, not the pairs refreshed
-  from it or before it (see [Logout and revocation](#logout-and-revocation)).
+A refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed roles on
+refresh, write your own `Authentication` for refresh credentials that verifies them with `TokenVerifier.refresh`,
+rotates the session with `TokenFamilies.rotate` and then loads the user.
 
 ## Logout and revocation
 
 JWTs are stateless: without extra work a token stays valid until it expires. So that logout takes effect at once,
-revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenStore` and a `RevocationReader` bean of
-your own. With JWT enabled and neither, startup fails: a logout that silently does nothing is not an option. A
-service that only verifies tokens it never revokes still needs the reader; one that issues no tokens and reads none
-can set `cosec.jwt.enabled=false`.
+revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenStore`, a `RevocationReader` and a
+`TokenFamilyStore` bean of your own. With JWT enabled and any of them missing, startup fails: a logout that silently
+does nothing is not an option. A service that only verifies tokens it never revokes still needs the reader; one that
+issues no tokens and reads none can set `cosec.jwt.enabled=false`.
 
-From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, then records its `jti`
-in Redis for the refresh token's lifetime. From then on every instance rejects the access token as `token-revoked`,
-and refreshing it fails. That is all a logout ends: the pair the client presents. A pair the session was refreshed
-from, and any pair refreshed from that one, stays usable, so a pair that was copied earlier outlives the logout; so
-does any other session of the user. Revoke before the access token expires: an expired token cannot be revoked, and its
-refresh token then stays usable. To end every session of a user, after a compromise for one, call
-[`revokeSubject`](#revoking-every-token-of-a-principal). Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
-revoke. `TokenRevoker`'s calls suspend and never block: call them from a `suspend` handler, on any thread.
+From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, ends its session, and records
+its `jti` in Redis for the refresh token's lifetime. From then on every instance rejects that access token as
+`token-revoked`, and no pair of the session refreshes, the pairs it was refreshed from included: a pair copied earlier
+does not outlive the logout. An access token of an older generation of the session stays valid until it expires, as
+[sessions](#sessions) say. Other sessions of the user are untouched; to end every one, after a compromise for one, call
+[`revokeSubject`](#revoking-every-token-of-a-principal). When the access token has expired, log out with the pair,
+`TokenRevoker.revoke(compositeToken)`: the refresh token is verified, and must belong to the access token, as a refresh
+requires. Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to revoke.
+`TokenRevoker`'s calls suspend and never block: call them from a `suspend` handler, on any thread.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 
@@ -427,14 +461,16 @@ tenant cannot be one fails to load (`503`). The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
-To let a user switch tenants, extend `AbstractSwitchTenantAuthentication` and implement
+To let a user switch tenants, extend `AbstractSwitchTenantAuthentication`, passing it the `TokenVerifier` bean, and implement
 `switchTenant(targetTenantId, previous)`, with `previous` the `SecurityContext` of the request asking: check that the user belongs to the target tenant (throw to refuse), and answer what it
 holds there, looked up for that tenant: a `TenantMembership` of its roles, policies and attributes in the target
 tenant, or `TenantMembership.fromProvider()` when your `MembershipProvider` answers for it. Then issue a new token for
 the `TokenSubject` `authenticate` returns. It has the previous principal's id, the target tenant and only that
 membership: roles belong to a tenant, so none of the previous token's roles, policies or attributes reach the new one
 (an administrator of one tenant is not one of another). It keeps the previous token's app: switching tenant never
-changes the app a token is for.
+changes the app a token is for. The switch reads `auth_time` from `SwitchTenantCredentials.accessToken`, the token of the
+request asking, which must be the request's principal's: the new token starts a session of its own, which keeps that
+login time, so it ends when the previous one would. The user did not sign in again.
 
 ## Apps
 

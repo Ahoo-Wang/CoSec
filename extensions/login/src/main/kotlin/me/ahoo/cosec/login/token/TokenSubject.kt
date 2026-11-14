@@ -13,7 +13,10 @@
 
 package me.ahoo.cosec.login.token
 
+import me.ahoo.cosec.runtime.token.TokenFamilies
+import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.VerifiedToken
+import java.time.Instant
 
 /**
  * What a new token says about whom it is issued for: the one input of a [TokenConverter], an immutable value.
@@ -38,8 +41,23 @@ class TokenSubject(
      * to have the `MembershipProvider` answer for the token's memberships, null when the token carries its own.
      */
     val membershipMarker: String? = null,
+    /**
+     * The session the pair belongs to (`sid`, `auth_time`, `cosec.generation`), null to start one: issuing through
+     * [TokenCompositeAuthentication] starts a family for a subject without one, signed in at [authTime].
+     */
+    val session: TokenSession? = null,
+    /** When the user signed in, for a subject without a [session]: null is now; a tenant switch keeps the earlier time. */
+    val authTime: Instant? = null,
+    /** The latest the pair may be valid until: its session's end. Null is no bound but the converter's validities. */
+    val notAfter: Instant? = null,
 ) {
-    private fun fields(): List<Any?> = listOf(id, app, tenant, roles, policies, attributes, membershipMarker)
+    private fun fields(): List<Any?> =
+        listOf(id, app, tenant, roles, policies, attributes, membershipMarker, session, authTime, notAfter)
+
+    /** This subject in [issue]'s session, bounded by its end. */
+    fun inSession(issue: TokenFamilies.Issue): TokenSubject = TokenSubject(
+        id, app, tenant, roles, policies, attributes, membershipMarker, issue.session, null, issue.notAfter
+    )
 
     override fun equals(other: Any?): Boolean = other is TokenSubject && other.fields() == fields()
 
@@ -48,8 +66,11 @@ class TokenSubject(
     override fun toString(): String = "TokenSubject(${fields().joinToString()})"
 
     companion object {
-        /** What the token [token] said, so that refreshing it says the same, its app and tenant included. */
-        fun of(token: VerifiedToken): TokenSubject = TokenSubject(
+        /**
+         * What the token [token] said, so that refreshing it says the same, its app and tenant included; in [issue]'s
+         * session when one is given.
+         */
+        fun of(token: VerifiedToken, issue: TokenFamilies.Issue? = null): TokenSubject = TokenSubject(
             id = token.principal,
             app = token.app,
             tenant = token.tenant,
@@ -57,6 +78,8 @@ class TokenSubject(
             policies = token.policies,
             attributes = token.attributes,
             membershipMarker = token.membershipMarker,
+            session = issue?.session,
+            notAfter = issue?.notAfter,
         )
     }
 }

@@ -10,20 +10,37 @@
       "jti": "a1",
       "sub": "alice",
       "tenantId": "acme",
-      "iat": 1790000000
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
     },
     "refresh": {
       "jti": "r1",
       "sub": "a1",
-      "iat": 1790000000,
+      "iat": 1793404800,
       "claims": {
-        "cosec.token": "refresh"
+        "cosec.token": "refresh",
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
       }
     }
   },
   "revocations": {
     "tokens": []
   },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 1
+    }
+  ],
   "expect": {
     "status": 200,
     "proceed": true

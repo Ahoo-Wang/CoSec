@@ -32,7 +32,7 @@ class UncheckedRevocations(private val interval: Duration = DEFAULT_INTERVAL) {
     val count: Long get() = accepted.get()
 
     internal fun record(unavailable: RevocationUnavailableException) {
-        accepted.incrementAndGet()
+        val total = accepted.incrementAndGet()
         val now = System.nanoTime()
         val previous = lastWarning.get()
         if (previous != Long.MIN_VALUE && now - previous < interval.toNanos()) {
@@ -40,7 +40,7 @@ class UncheckedRevocations(private val interval: Duration = DEFAULT_INTERVAL) {
         }
         if (lastWarning.compareAndSet(previous, now)) {
             log.warn(unavailable) {
-                "Token revocations cannot be read: tokens are accepted without a revocation check ( so far)."
+                "Token revocations cannot be read: tokens are accepted without a revocation check ($total so far)."
             }
         }
     }

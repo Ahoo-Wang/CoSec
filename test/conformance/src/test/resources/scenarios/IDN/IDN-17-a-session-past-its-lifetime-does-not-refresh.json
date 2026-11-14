@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "IDN-17"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice signed in 31 days ago; her session's lifetime is 30 days, so her current pair is refused, and she signs in again.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1790812800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1790812800,
+        "cosec.generation": 1
+      }
+    },
+    "refresh": {
+      "jti": "r1",
+      "sub": "a1",
+      "iat": 1790812800,
+      "claims": {
+        "cosec.token": "refresh",
+        "sid": "f1",
+        "auth_time": 1790812800,
+        "cosec.generation": 1
+      }
+    }
+  },
+  "families": [],
+  "expect": {
+    "status": 401,
+    "type": "token-expired"
+  }
+}

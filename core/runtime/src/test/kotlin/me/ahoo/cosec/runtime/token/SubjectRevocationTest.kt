@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
@@ -59,8 +60,16 @@ class SubjectRevocationTest {
 
     // No skew: these tests place tokens to the millisecond of the revocation; the skew has its own test.
     private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
+    private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val revoker =
-        DefaultTokenRevoker(verifier, tokenStore, revocation, refreshValidity, Clock.fixed(now, ZoneOffset.UTC))
+        DefaultTokenRevoker(
+            verifier,
+            tokenStore,
+            revocation,
+            families,
+            refreshValidity,
+            Clock.fixed(now, ZoneOffset.UTC)
+        )
 
     private fun assertRevoked(principal: VerifiedToken, judgement: TokenRevocation = revocation) {
         assertThrows<TokenRevokedException> { runBlocking { judgement.check(principal) } }
@@ -169,7 +178,7 @@ class SubjectRevocationTest {
     @Test
     fun issuedBeforeDefaultsToNow() = runTest {
         val before = Instant.now()
-        DefaultTokenRevoker(verifier, tokenStore, revocation, refreshValidity).revokeSubject(tenant, alice)
+        DefaultTokenRevoker(verifier, tokenStore, revocation, families, refreshValidity).revokeSubject(tenant, alice)
 
         tokenStore.subjectRevokedBefore(tenant, alice)!!.isBefore(before).assert().isFalse()
     }
@@ -179,7 +188,7 @@ class SubjectRevocationTest {
         val writesTokensOnly = object : TokenStore {
             override suspend fun revoke(tokenId: String, ttl: Duration) = Unit
         }
-        val revoker = DefaultTokenRevoker(verifier, writesTokensOnly, revocation, refreshValidity)
+        val revoker = DefaultTokenRevoker(verifier, writesTokensOnly, revocation, families, refreshValidity)
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }
     }
@@ -188,6 +197,8 @@ class SubjectRevocationTest {
     fun aRevokerThatCannotRevokeSubjectsFails() = runTest {
         val revoker = object : TokenRevoker {
             override suspend fun revoke(accessToken: String): VerifiedToken = throw UnsupportedOperationException()
+
+            override suspend fun revoke(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
         }
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }
