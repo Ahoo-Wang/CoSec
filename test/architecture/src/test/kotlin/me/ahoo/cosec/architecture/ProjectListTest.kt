@@ -30,7 +30,7 @@ class ProjectListTest {
         /** The project list (RFC 0011 §3). `settings.gradle.kts` includes exactly these. */
         val GROUPS: Map<String, List<String>> = linkedMapOf(
             "api" to listOf("annotations", "api"),
-            "core" to listOf("model", "engine", "spi", "runtime", "control"),
+            "core" to listOf("model", "engine", "spi", "document", "runtime", "control"),
             "backends" to listOf("cocache", "kafka"),
             "edge" to listOf("webflux", "webmvc", "gateway", "openapi"),
             "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid"),

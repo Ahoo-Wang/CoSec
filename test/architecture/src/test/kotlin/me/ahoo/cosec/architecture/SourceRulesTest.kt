@@ -56,8 +56,8 @@ class SourceRulesTest {
         private val NOT_IN_CORE = listOf("jakarta.servlet.", "io.lettuce.", "redis.clients.", "org.springframework.")
 
         /**
-         * What `cocache` and `kafka` may use of `runtime` and `control` (#1140, and the mapper entry): package of the
-         * using class to the classes or packages it may reach.
+         * What `cocache` and `kafka` may use of `runtime` and `control` (#1140): package of the using class to the
+         * classes or packages it may reach. The mapper is in `cosec-document`, outside both (RFC 0013 §3).
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
             "me.ahoo.cosec.cocache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
@@ -77,9 +77,6 @@ class SourceRulesTest {
                 "me.ahoo.cosec.control.audit.",
             ),
         )
-
-        /** The one entry every backend class has (the mapper allowlist entry): the mapper factory and nothing else. */
-        const val MAPPER = "me.ahoo.cosec.document.json.CoSecJson"
 
         /** The main source files of [project], by extension. */
         fun mainSources(project: String, extensions: Set<String> = setOf("kt", "java")): List<Path> {
@@ -131,11 +128,10 @@ class SourceRulesTest {
     }
 
     @Test
-    fun `backends reach into runtime and control only through the listed ports and the mapper`() {
+    fun `backends reach into runtime and control only through the listed ports`() {
         violations { project, target ->
             Projects.groupOf(project) == "backends" &&
-                (target.startsWith("me.ahoo.cosec.runtime.") || target.startsWith("me.ahoo.cosec.control.")) &&
-                target != MAPPER && !target.startsWith("$MAPPER\$")
+                (target.startsWith("me.ahoo.cosec.runtime.") || target.startsWith("me.ahoo.cosec.control."))
         }.filterNot { violation ->
             val origin = violation.substringBefore(" -> ")
             val target = violation.substringAfter(" -> ")
