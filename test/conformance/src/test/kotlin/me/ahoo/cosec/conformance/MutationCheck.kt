@@ -89,12 +89,15 @@ object MutationCheck {
         }
     }
 
+    /** `git` as found on the `PATH` (`git.exe` on Windows). */
+    private val git: String by lazy { Executables.find("git")?.toString() ?: error("git is not on the PATH") }
+
     private fun check(root: Path, mutant: Mutant): MutantResult {
         val worktree = Files.createTempDirectory("cosec-mutant-${mutant.name}-")
         Files.delete(worktree)
         command(
             root,
-            "git",
+            git,
             "worktree",
             "add",
             "--detach",
@@ -102,7 +105,7 @@ object MutationCheck {
             "HEAD"
         ).requireSuccess("git worktree add")
         try {
-            if (command(worktree, "git", "apply", "--whitespace=nowarn", mutant.patch.toAbsolutePath().toString()) != 0) {
+            if (command(worktree, git, "apply", "--whitespace=nowarn", mutant.patch.toAbsolutePath().toString()) != 0) {
                 return MutantResult.DOES_NOT_APPLY
             }
             if (gradle(worktree, mutant.compileTasks) != 0) {
@@ -111,7 +114,7 @@ object MutationCheck {
             gradle(worktree, listOf("--continue") + mutant.tests)
             return if (failedTests(worktree) > 0) MutantResult.KILLED else MutantResult.SURVIVED
         } finally {
-            command(root, "git", "worktree", "remove", "--force", worktree.toString())
+            command(root, git, "worktree", "remove", "--force", worktree.toString())
         }
     }
 
@@ -123,7 +126,7 @@ object MutationCheck {
     }
 
     private fun gradle(directory: Path, tasks: List<String>): Int =
-        command(directory, listOf("./gradlew", "--no-daemon", "--build-cache", "-q") + tasks)
+        command(directory, listOf(Executables.gradleWrapper(directory), "--no-daemon", "--build-cache", "-q") + tasks)
 
     private fun command(directory: Path, vararg command: String): Int = command(directory, command.toList())
 
