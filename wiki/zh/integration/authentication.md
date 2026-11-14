@@ -168,7 +168,8 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 每个已认证的请求都会以非阻塞方式检查吊销。这个检查有三点值得注意：
 
 - **“未吊销”在本地缓存 30 秒**（`cosec.authentication.revocation.cache.*`）。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
-- **降级读取视为“未吊销”。** Redis 无法读取时，吊销缓存按记录不存在回答，令牌被接受。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小。
+- **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`），流水线在校验令牌时放行它。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。
+- **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`SimpleRefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答。
 - **其他任何错误都会让请求失败。** Redis 返回但 CoSec 无法解码的吊销记录，或自定义 `RevocationReader` 抛出的错误，结果都是 `503`，绝不会接受令牌。
 
 ### 吊销主体的全部令牌 {#revoking-every-token-of-a-principal}
@@ -180,7 +181,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 - `iat` 来自签发方的时钟，`issuedBefore` 来自执行吊销的实例的时钟。为了防止时钟偏快的签发方给吊销前签发的令牌打上更晚的 `iat`，请求还会拒绝在 `issuedBefore` 之后 `cosec.authentication.revocation.skew`（5 秒）内签发的令牌。在这个窗口内重新登录的用户需要再登录一次。[刷新](#refreshing-tokens)使用同样的偏差，因此这样的令牌也无法刷新成新令牌。
 - 该记录在 `issuedBefore` 之后再保留一个刷新令牌有效期。之后以更早的 `issuedBefore` 再次调用不会缩短它，即使两个实例同时吊销同一主体也是如此。
 - 它需要与吊销单个令牌相同的存储。无法记录它的 `TokenStore` 会抛出 `UnsupportedOperationException`，而不是什么都不做。
-- 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；降级读取时令牌被接受。
+- 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；存储无法读取时，请求的令牌被接受，刷新则失败。
 
 ## API key {#api-keys}
 

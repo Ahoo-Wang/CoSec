@@ -79,12 +79,14 @@
     {
       "id": "PIP-7",
       "source": "AGENTS.md (Fail closed); RFC 0006 §5.3.2",
-      "statement": "Only the revocation store's own degraded read may count a token as not revoked (the documented exception to failing closed); an error the revocation check reports fails the request with 503, never accepts the token.",
+      "statement": "Only verifying a request's token may count it as not revoked while the revocation store cannot be read (the reader throws RevocationUnavailableException: the documented exception to failing closed, which cosec.authentication.revocation.fail-closed turns off); a reader never answers \"not revoked\" for a read that failed, and any other error the revocation check reports fails the request with 503, never accepts the token.",
       "level": "pipeline",
       "guards": [
-        "cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
+        "cocache:CoCacheRevocationReaderTest#anUnreadableStoreIsUnavailable",
+        "runtime:TokenAuthenticatorTest#anUnavailableRevocationStoreAcceptsTheTokenItVerifies",
         "runtime:TokenAuthenticatorTest#otherFailuresPropagate",
         "cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout",
+        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
         "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked"
       ],
       "pending": null

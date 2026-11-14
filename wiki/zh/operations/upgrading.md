@@ -41,6 +41,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **`PolicyDocumentCompiler.compile` 成为内部 API。** CI 检查调用 `validate`；`forPlatform(platform)` 是对应的重载。
 - **公共 `data class` 现在只是不会增长的值**（RFC 0010 C4）：`Identity`、`Identity.Credential`、`TokenSubject`、`SocialUser`、`ForwardedIdentity`、`Audit*Data`、`ShadowReport`、`ShadowSample`、`InstalledDocument`、`InstanceStatus` 以及 starter 的 `*Properties` 失去了 `copy` 和 `componentN`。`Identity`、`Identity.Credential`、`TokenSubject` 和影子记录仍按值比较；其余的不再定义 `equals`。
 - **需要访问令牌的地方拒绝刷新令牌**（`IDN-13`）。`JwtTokenConverter` 在每个刷新令牌上写 `cosec.token: "refresh"`，带该声明的令牌不会完成认证。此前签发的令牌在过期前继续有效。
+- **无法读取的吊销存储会被如实报告，绝不读成“未吊销”**（第二轮复审 H1，`IDN-14`）。存储无法读取时，`RevocationReader` 抛出 `RevocationUnavailableException`；吊销表的 `unknown-read` 锁定为 `throw`，设置 `cocache.caches.[RevokedTokenCache].unknown-read` 会让启动失败。此时流水线仍像以前一样接受请求的令牌；刷新改为失败而不签发令牌，审批人的吊销无法读取时，控制面不发布任何东西。读取失败时回答“未吊销”的自定义 `RevocationReader` 改为抛出 `RevocationUnavailableException`。若请求也要拒绝，请设置 `cosec.authentication.revocation.fail-closed: true`，它取代了吊销表上的 `unknown-read: throw`。
 - **吊销只有一个判断，令牌契约不做阻塞 I/O。** 按契约，`TokenVerifier` 是纯计算。`RevocableTokenVerifier` 已移除：流水线、刷新和登出都通过 `TokenRevocation`（`cosec-runtime`）读取 `RevocationReader` 中的吊销。`TokenStore` 只保留写入 `revoke` 和 `revokeSubject`，二者改为 `suspend`；同步的 `isRevoked`、`subjectRevokedBefore` 已移除（请通过 `RevocationReader` 读取），`TokenStore.NoOp` 也已移除。`TokenRevoker.revoke` 和 `revokeSubject` 改为 `suspend`：从 `suspend` 处理函数中调用即可，无需再移出事件循环。`DefaultTokenRevoker` 移到 `me.ahoo.cosec.runtime.token`，并接收 `TokenRevocation`。`SimpleRefreshTokenAuthentication(tokenVerifier)` 改为 `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)`，不再使用自己的调度器。starter 的 `TokenVerifier` Bean 是普通的 `JwtTokenVerifier`，另外提供一个 `TokenRevocation` Bean。自定义的 `TokenStore` 以 `suspend` 函数实现两个写入，读取则作为 `RevocationReader` Bean 提供。
 - **实例状态携带文档格式级别**（RFC 0010 C5）：没有 `formatLevel` 的实例状态会被本版本的控制面拒绝，读取到它的影子窗口会失败，直到所有实例升级完毕（状态一分钟后过期）。
 
@@ -192,7 +193,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 8.0.0-alpha.2 经 CoCache 6 在 Redis 中保存数据；8.0.0 经 CoCache 8 保存，key 不变，但 CoCache 8 读不了 CoCache 6 的格式。它
 在这种格式中读到的内容按读不懂的内容处理，失败即拒绝：需要这种文档的请求是 `503`（`SourceUnavailable`），在其中被吊销的令牌
 或主体是 `503` 而不是 `401`，控制面 API 回答 `500`。没有任何读取会把这样的值当作不存在，所以被吊销的令牌绝不会重新被接受，
-吊销表“Redis 失败时视为未吊销”的降级也不会。
+吊销表也不会。
 
 | 数据 | Key | 迁移之前，在 8.0.0 上 | `cosec-migrate cocache8` |
 |---|---|---|---|

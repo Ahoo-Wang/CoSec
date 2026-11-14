@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime.token
 
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -25,7 +26,8 @@ import java.time.Instant
 
 /**
  * The [TokenRevoker] over a [TokenStore]: [revoke] verifies the token, refuses one already revoked ([revocation]), and
- * records its id; [revokeSubject] records the principal's revocation.
+ * records its id; [revokeSubject] records the principal's revocation. A revocation store that cannot be read does not
+ * stop a logout: whether the token was already revoked is then unknown, and revoking it again is harmless.
  *
  * @param tokenVerifier verifies the token and resolves its id before revoking
  * @param tokenStore where the revocation entry is recorded
@@ -44,7 +46,11 @@ class DefaultTokenRevoker @JvmOverloads constructor(
 
     override suspend fun revoke(accessToken: String): VerifiedToken {
         val token = tokenVerifier.verify(accessToken)
-        revocation.check(token)
+        try {
+            revocation.check(token)
+        } catch (_: RevocationUnavailableException) {
+            // Not known to be revoked yet: record it, which the write's own failure would report.
+        }
         tokenStore.revoke(token.id, revocationTtl)
         return token
     }

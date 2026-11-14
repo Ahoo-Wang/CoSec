@@ -115,6 +115,13 @@ and have to be provisioned again.
   `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)` and no longer runs on a dispatcher of its own. The
   starter's `TokenVerifier` bean is the plain `JwtTokenVerifier`, and it adds a `TokenRevocation` bean. A `TokenStore` of
   your own implements the two writes as `suspend` functions, and its reads as a `RevocationReader` bean.
+- **A revocation store that cannot be read is reported, never read as "not revoked"** (round-2 review H1, `IDN-14`).
+  A `RevocationReader` throws `RevocationUnavailableException` when its store cannot be read; the revocation tables'
+  `unknown-read` is locked to `throw`, so `cocache.caches.[RevokedTokenCache].unknown-read` fails startup. The pipeline
+  still accepts a request's token then, as before; a refresh now fails instead of issuing a token, and the control plane
+  publishes nothing on an approval whose approver's revocations cannot be read. A custom `RevocationReader` that
+  answered "not revoked" on a failure throws `RevocationUnavailableException` instead. To refuse requests too, set
+  `cosec.authentication.revocation.fail-closed: true`, which replaces `unknown-read: throw` on the revocation tables.
 - **Instance statuses carry the document format level** (RFC 0010 C5): an instance reporting without `formatLevel` is
   refused by a control plane of this version, and a shadow window reading one fails until every instance has been
   upgraded (a status expires after a minute).
@@ -566,7 +573,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
 CoCache 8 does not read CoCache 6's format. What it finds in that format fails closed, as unreadable content: a request
 that needs such a document is `503` (`SourceUnavailable`), a token or principal revoked there is `503` instead of
 `401`, and the control API answers `500`. Nothing reads such a value as absent, so a revoked token is never accepted
-again, not even through the revocation tables' "Redis failed, not revoked" degradation.
+again.
 
 | Data | Keys | On 8.0.0, before the move | `cosec-migrate cocache8` |
 |---|---|---|---|

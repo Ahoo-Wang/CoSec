@@ -16,6 +16,10 @@ package me.ahoo.cosec.runtime.token
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -24,6 +28,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
+import java.time.Instant
 
 class DefaultTokenRevokerTest {
 
@@ -68,5 +73,25 @@ class DefaultTokenRevokerTest {
         tokenRevoker.revoke("accessToken")
 
         assertThrows<TokenRevokedException> { tokenRevoker.revoke("accessToken") }
+    }
+
+    /** A logout is not stopped by a revocation store it cannot read: it records the revocation, which it can write. */
+    @Test
+    fun revokeWhenRevocationsCannotBeRead() = runTest {
+        every { tokenVerifier.verify("accessToken") } returns VerifiedToken("tokenId", "alice", null, null)
+        val unavailable = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = throw RevocationUnavailableException("down")
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
+        }
+
+        DefaultTokenRevoker(
+            tokenVerifier,
+            tokenStore,
+            TokenRevocation(unavailable),
+            revocationTtl
+        ).revoke("accessToken")
+
+        tokenStore.revokedTokens.assert().containsKey("tokenId")
     }
 }

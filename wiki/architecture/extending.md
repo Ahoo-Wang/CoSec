@@ -223,8 +223,10 @@ With `cosec-cocache`, the starter wires `CoCacheTokenStore` and its reader. With
 register a `TokenStore` and a `RevocationReader` (or set `cosec.jwt.enabled=false`). Registering
 `RevocationReader.NONE` is an explicit choice to revoke nothing.
 
-The revocation read is one of the two documented exceptions to failing closed: a store whose degraded read cannot answer
-reports "not revoked" itself. Anything a `RevocationReader` throws still answers `503`. The exceptions are listed in the
+A `RevocationReader` reports what it knows: when its store cannot be read, it throws `RevocationUnavailableException`,
+never "not revoked". What that means is the caller's: `TokenAuthenticator`, verifying a request's token, lets the token
+through, one of the two documented exceptions to failing closed; refresh, which issues a token, fails (`IDN-14`). Anything
+else a `RevocationReader` throws answers `503`. The exceptions are listed in the
 [security model](../guide/security-model.md).
 
 ## Memberships

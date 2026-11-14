@@ -1,0 +1,33 @@
+{
+  "rules": [
+    "IDN-14"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The access token was revoked at logout, and the store answers: the refresh is refused as token-revoked.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1790000000
+    },
+    "refresh": {
+      "jti": "r1",
+      "sub": "a1",
+      "iat": 1790000000,
+      "claims": {
+        "cosec.token": "refresh"
+      }
+    }
+  },
+  "revocations": {
+    "tokens": [
+      "a1"
+    ]
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-revoked"
+  }
+}

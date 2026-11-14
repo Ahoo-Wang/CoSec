@@ -148,7 +148,7 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 
 使用 `cosec-cocache` 时，starter 装配 `CoCacheTokenStore` 及其读取器。不使用时，除非你注册了 `TokenStore` 和 `RevocationReader`（或设置 `cosec.jwt.enabled=false`），JWT 会让启动失败。注册 `RevocationReader.NONE` 是明确选择不吊销任何令牌。
 
-吊销读取是失败即拒绝的两个有文档说明的例外之一：存储在降级读取无法应答时，自己报告“未吊销”。`RevocationReader` 抛出的任何异常仍然应答 `503`。这些例外列在[安全模型](../guide/security-model.md)中。
+`RevocationReader` 只报告它知道的事实：存储无法读取时，它抛出 `RevocationUnavailableException`，绝不回答“未吊销”。这意味着什么由调用方决定：`TokenAuthenticator` 校验请求的令牌时放行该令牌，这是失败即拒绝的两个有文档说明的例外之一；会签发令牌的刷新则失败（`IDN-14`）。`RevocationReader` 抛出的其他任何异常都应答 `503`。这些例外列在[安全模型](../guide/security-model.md)中。
 
 ## 成员关系 {#memberships}
 

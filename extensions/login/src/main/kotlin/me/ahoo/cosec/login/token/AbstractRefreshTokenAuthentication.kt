@@ -27,6 +27,11 @@ abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials>(
  * Refreshes a token pair (`authentication.md`, Refreshing tokens): [tokenVerifier] checks the pair, pure computation on
  * the caller's thread, then [revocation] reads whether the access token, or every token of its principal, was revoked,
  * suspending without blocking. The subject is what the old access token said, for the new token to say again.
+ *
+ * A token is never issued on a revocation read that failed (`IDN-14`): when the revocations cannot be read, the
+ * [me.ahoo.cosec.spi.token.RevocationUnavailableException] fails the refresh, which the application answers 503. Were the
+ * refresh to read it as "not revoked", the new token would carry neither a revoked id nor an `iat` before a principal's
+ * revocation, and would outlive both.
  */
 class SimpleRefreshTokenAuthentication(
     private val tokenVerifier: TokenVerifier,

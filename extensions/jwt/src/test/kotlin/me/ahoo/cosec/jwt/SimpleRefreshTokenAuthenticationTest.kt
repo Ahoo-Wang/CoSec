@@ -22,6 +22,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -90,5 +91,27 @@ class SimpleRefreshTokenAuthenticationTest {
             SimpleRefreshTokenAuthentication(verifier, TokenRevocation(revocations)).authenticate(credentials(old))
         }
         verifying.assert().isSameAs(Thread.currentThread())
+    }
+
+    /**
+     * IDN-14 (round-2 review H1): a token is never issued on a revocation read that failed. Read as "not revoked", a
+     * logged-out or revoked pair refreshed during a Redis outage would become a pair no revocation names.
+     */
+    @Test
+    fun `a refresh is refused when the revocations cannot be read`(): Unit = runBlocking {
+        val unavailable = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = throw RevocationUnavailableException("down")
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                throw RevocationUnavailableException("down")
+        }
+        val old = jwtTokenConverter.toToken(TokenSubject("alice", null))
+
+        assertThrows<RevocationUnavailableException> {
+            SimpleRefreshTokenAuthentication(
+                jwtTokenVerifier,
+                TokenRevocation(unavailable)
+            ).authenticate(credentials(old))
+        }
     }
 }

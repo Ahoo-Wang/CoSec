@@ -547,6 +547,11 @@ public final class me/ahoo/cosec/spi/token/RevocationReader$Companion {
 	public final fun getNONE ()Lme/ahoo/cosec/spi/token/RevocationReader;
 }
 
+public final class me/ahoo/cosec/spi/token/RevocationUnavailableException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
 public final class me/ahoo/cosec/spi/token/SubjectRevocation {
 	public static final field INSTANCE Lme/ahoo/cosec/spi/token/SubjectRevocation;
 	public final fun getDEFAULT_SKEW ()Ljava/time/Duration;

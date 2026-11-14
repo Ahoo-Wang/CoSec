@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -52,9 +53,12 @@ import java.time.Duration
  * - Break-glass (RFC 0009 §4.2, `BRK-8`): only when [verifier] is CoSec's own ([CoSecTokenVerifier]), whose credential
  *   is then [Identity.Method.JWT]. Any other verifier's credential is named [method], and never gets break-glass.
  *
- * Revocation is judged by [TokenRevocation], as refresh and logout judge it. A [RevocationReader] that cannot be read
- * answers "not revoked" itself, the documented exception to fail closed; anything it or [verifier] throws otherwise
- * reaches the pipeline, which answers 503.
+ * Revocation is judged by [TokenRevocation], as refresh and logout judge it. A [RevocationReader] that cannot read its
+ * store throws [RevocationUnavailableException], and this is the one place that lets a token through on it: the token is
+ * verified, signed and unexpired, and refusing every authenticated request during a Redis outage would be worse. That is
+ * the documented exception to failing closed (PIP-7), which [acceptUnavailableRevocations] false turns off (503).
+ * Nothing that issues a token reads it so (`IDN-14`). Anything else [revocations] or [verifier] throws reaches the
+ * pipeline, which answers 503.
  */
 class TokenAuthenticator(
     private val verifier: TokenVerifier,
@@ -66,6 +70,11 @@ class TokenAuthenticator(
      * subject revocation also revokes tokens issued up to this long after it ([SubjectRevocation.revokes]).
      */
     private val revocationSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
+    /**
+     * Whether a token is accepted while its revocations cannot be read (`cosec.authentication.revocation.fail-closed`
+     * false, the default); false answers the request 503 instead.
+     */
+    private val acceptUnavailableRevocations: Boolean = true,
 ) : Authenticator {
     /** Whether [verifier] verifies CoSec's own tokens, which alone may use break-glass (RC1-26). */
     private val ownTokens = verifier is CoSecTokenVerifier
@@ -100,6 +109,8 @@ class TokenAuthenticator(
             revocation.check(token)
         } catch (_: TokenRevokedException) {
             return REVOKED
+        } catch (unavailable: RevocationUnavailableException) {
+            if (!acceptUnavailableRevocations) throw unavailable
         }
         val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
         val id = PrincipalId(token.principal)

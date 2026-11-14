@@ -158,6 +158,7 @@ class CoSecPipelineAutoConfiguration {
                 JwtTokenVerifier(it),
                 revocationReader(revocationReader, tokenStore),
                 revocationSkew = revocationProperties.skew,
+                acceptUnavailableRevocations = !revocationProperties.failClosed,
             )
         } ?: NO_TOKEN
         val apiKeys = if (apiKeysEnabled(environment)) {

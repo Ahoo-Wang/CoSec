@@ -281,11 +281,15 @@ Every authenticated request checks revocation, without blocking. Three propertie
 - **"Not revoked" is cached locally for 30 seconds** (`cosec.authentication.revocation.cache.*`). A revocation through
   `TokenRevoker` invalidates that answer on every instance at once. If the invalidation message is lost, or the
   revocation is written to Redis some other way, an instance may accept the token for up to 30 seconds more.
-- **A degraded read counts as "not revoked".** When Redis cannot be read, the revocation caches answer as for a
-  missing entry, and the token is accepted. This is one of
+- **While Redis cannot be read, a request's token is accepted.** The revocation reader says it cannot read
+  (`RevocationUnavailableException`), and the pipeline, verifying the token, lets it through. This is one of
   [the two documented exceptions](../guide/security-model.md#the-two-documented-exceptions) to failing closed: the
   signature and expiry are still checked, and rejecting every authenticated request during a Redis outage would be
-  worse. Keep access tokens short-lived so this window stays small.
+  worse. Keep access tokens short-lived so this window stays small, or set
+  `cosec.authentication.revocation.fail-closed: true` to answer `503` instead.
+- **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
+  issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
+  `SimpleRefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
 - **Any other error fails the request.** A revocation entry that Redis returns but CoSec cannot decode, or an error
   a custom `RevocationReader` throws, is `503`, never an accepted token.
 
@@ -309,7 +313,7 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
 - It needs the same store as revoking one token. A `TokenStore` that cannot record it throws
   `UnsupportedOperationException` instead of doing nothing.
 - The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is
-  lost, and the token is accepted on a degraded read.
+  lost; a request's token is accepted, and a refresh fails, while the store cannot be read.
 
 ## API keys
 

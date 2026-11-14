@@ -170,15 +170,15 @@ that should have been a Deny goes unnoticed.
 Two checks let a request through when their backend fails, because failing closed would turn a Redis outage into a
 full outage while protecting little:
 
-- **Token revocation, on a degraded read.** When the revocation store cannot be read, the revocation tables' degraded
-  read (`unknown-read: absent`, which CoSec declares on them) answers "not revoked". The token's signature and expiry are
-  still checked, so the exposure is bounded by the access token lifetime. Only this degraded read counts a token as
-  not revoked: an error the revocation check reports fails the
-  request with `503`, and a revocation entry that cannot be decoded fails the read too
-  ([Logout and revocation](../integration/authentication.md#logout-and-revocation)). The control plane reads an
-  approver's revocations the same way when it publishes, and there the exposure is bounded by
-  `cosec.control.approval.expire-after` (72 hours), how long an approval counts, not by the token's lifetime; any
-  other failure to read them publishes nothing (`503`) ([Testing policies](../policies/testing.md#approval)).
+- **Token revocation, while verifying a request's token.** When the revocation store cannot be read, the reader says
+  so (`RevocationUnavailableException`), and the pipeline, verifying the request's token, accepts it. The token's
+  signature and expiry are still checked, so the exposure is bounded by the access token lifetime. The exception covers
+  verification only: refresh, which issues a token, fails when it cannot read the revocations (`IDN-14`), since a token
+  issued then would be named by no revocation and outlive the outage; the control plane, checking an approver, publishes
+  nothing (`503`, [Testing policies](../policies/testing.md#approval)). Any other error the revocation check reports
+  fails the request with `503`, and a revocation entry that cannot be decoded fails the read too
+  ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
+  `cosec.authentication.revocation.fail-closed: true` turns the exception off: the request is `503` instead.
 - **Rate limit rules without `strictFailure`.** When a rule cannot be counted (its limiter fails, times out or is
   missing), it is skipped. A rule with `"strictFailure": true` refuses the request with `503` instead. Rate limits
   only apply to requests the policies already permitted, so skipping one never grants what the policies did not

@@ -24,16 +24,25 @@ import java.time.Instant
  * suspend functions that never block the calling thread, which may be an event loop. The pipeline, refresh and
  * [TokenRevoker] all read it, through one judgement (`TokenRevocation` in `cosec-runtime`).
  *
- * A store that cannot be read follows the documented exception to "fail closed" (AGENTS.md): it answers "not revoked"
- * itself, as `CoSecCacheSpecs` configures the revocation caches to do. Anything an implementation throws fails the
- * request with 503.
+ * A reader reports what it knows and never decides what a failure means: when its store cannot be read it throws
+ * [RevocationUnavailableException], never "not revoked". The caller decides: the pipeline's `TokenAuthenticator` lets the
+ * token it verifies through (the documented exception to failing closed, AGENTS.md), refresh fails (`IDN-14`). Anything
+ * else it throws is an error, which fails the request with 503.
  */
 @CoSecSpi
 interface RevocationReader {
-    /** Whether the token with id [tokenId] (jti) has been revoked. */
+    /**
+     * Whether the token with id [tokenId] (jti) has been revoked.
+     *
+     * @throws RevocationUnavailableException when the store cannot be read
+     */
     suspend fun isRevoked(tokenId: String): Boolean
 
-    /** The instant before which the tokens of [principal] in [tenant] are revoked, or null when none are. */
+    /**
+     * The instant before which the tokens of [principal] in [tenant] are revoked, or null when none are.
+     *
+     * @throws RevocationUnavailableException when the store cannot be read
+     */
     suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant?
 
     companion object {

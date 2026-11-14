@@ -27,7 +27,9 @@ import java.time.Duration
  * pipeline's `TokenAuthenticator`, refresh and [DefaultTokenRevoker] all ask it, so a token one of them refuses
  * none of them accepts.
  *
- * It never decides what a failed read means: whatever [revocations] throws reaches the caller.
+ * It never decides what a failed read means: whatever [revocations] throws reaches the caller, an unavailable store as
+ * [me.ahoo.cosec.spi.token.RevocationUnavailableException]. The pipeline's verification may let a token through on it
+ * (PIP-7); refresh, which issues one, never does (`IDN-14`).
  *
  * @param skew `cosec.authentication.revocation.skew`: how far ahead of the revoking clock an issuer's clock may run
  */
@@ -43,6 +45,7 @@ class TokenRevocation(
      * Returns when [token] is not revoked.
      *
      * @throws TokenRevokedException when its id, or its principal's tokens issued before it, were revoked
+     * @throws me.ahoo.cosec.spi.token.RevocationUnavailableException when the revocations cannot be read
      */
     suspend fun check(token: VerifiedToken) {
         if (revocations.isRevoked(token.id)) {

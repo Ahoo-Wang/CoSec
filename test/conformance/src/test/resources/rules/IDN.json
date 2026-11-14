@@ -167,6 +167,18 @@
       "guards": [
         "jwt:JwtTokenVerifierTest#aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected"
       ]
+    },
+    {
+      "id": "IDN-14",
+      "source": "Round-2 review H1 (2026-11-13); RFC 0009 §5",
+      "statement": "A token is never issued on a revocation read that failed: a refresh whose revocations cannot be read (RevocationUnavailableException) fails, never reads the old token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:SimpleRefreshTokenAuthenticationTest#a refresh is refused when the revocations cannot be read",
+        "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
+        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
+      ]
     }
   ]
 }

@@ -253,6 +253,12 @@ class RevocationProperties {
     /** How much earlier than a subject revocation a token may have been issued and still be revoked by it. */
     var skew: Duration = Duration.ofSeconds(5)
 
+    /**
+     * Whether a request's token is refused (503) while the revocations cannot be read, instead of accepted: the
+     * documented exception to failing closed, which applies to verifying a token only. Refresh always fails then.
+     */
+    var failClosed: Boolean = false
+
     /** The local tier of the token and subject revocation caches. */
     @NestedConfigurationProperty
     @InternalCoSecApi
